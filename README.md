@@ -28,17 +28,19 @@ Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure only 
 
 ## Download pre-built clients
 
-All binaries are hosted on **GitHub Releases** (not in git):
+All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/latest)** (not in git):
 
-| Platform | Asset |
-|----------|--------|
-| Android | `khandaq-android.apk` |
-| Windows | `khandaq-windows-installer.exe` |
-| macOS | `khandaq-macos.zip` |
-| Linux x86_64 | `khandaq-linux-x86_64-portable.tar.gz` |
+| Platform | Download |
+|----------|----------|
+| Android | [khandaq-android.apk](https://github.com/ummalife/khandaq/releases/latest/download/khandaq-android.apk) |
+| Windows | [khandaq-windows-installer.exe](https://github.com/ummalife/khandaq/releases/latest/download/khandaq-windows-installer.exe) |
+| macOS | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/latest/download/khandaq-macos.zip) |
+| Linux x86_64 | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/latest/download/khandaq-linux-x86_64-portable.tar.gz) |
 | iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (not distributed as IPA here) |
 
-Verify downloads with `SHA256SUMS.txt` attached to each release.
+Windows portable zip: [khandaq-x86_64-Release.zip](https://github.com/ummalife/khandaq/releases/latest/download/khandaq-x86_64-Release.zip)
+
+Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/latest/download/SHA256SUMS.txt).
 
 ---
 

@@ -1,0 +1,16 @@
+/* 
+  InfoPlist.strings
+  Khandaq
+
+  Created by Dmytro Vorobiov on 15/11/16.
+  Copyright © 2016 dvor. All rights reserved.
+*/
+
+/* Camera usage alert description */
+"NSCameraUsageDescription" = "Galite naudotis vaizdo skambučiais, siųsti nuotraukas ir vaizdo įrašus, skenuoti QR kodus.";
+
+/* Microphone usage alert description */
+"NSMicrophoneUsageDescription" = "Galite naudotis balso ir vaizdo skambučiais.";
+
+/* Photo library usage alert description */
+"NSPhotoLibraryUsageDescription" = "Galite siųsti nuotraukas ir vaizdo įrašus.";

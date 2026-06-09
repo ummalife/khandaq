@@ -1,0 +1,10 @@
+Az aTox egy szabad és nyílt forráskódú üzenetküldő alkalmazás a Tox protokollhoz.
+
+<b>Miért az aTox?</b>
+* Nyílt forráskódú: szabadon megosztható, átvizsgálható és megváltoztatható igény szerint.
+* Ésszerű: jól megválasztott alapbeállítások, nem találgatja, hogy mi fontos Önnek, és nem hagyja figyelmen kívül, amit <b>te</b> Ön szeretne.
+* Végpontok közötti titkosítás: a beszélgetéseit csak azok láthatják, akikkel kommunikál.
+* Elosztott: nincs központi kiszolgáló, amit le lehetne állítani vagy adatkiadásra lehetne kényszeríteni.
+* Könnyű: nincs telemetria, reklám vagy bármilyen egyéb megfigyelési forma.
+
+További információ: <a href="https://github.com/evilcorpltd/aTox/">aTox</a>, <a href="https://tox.chat/">Tox</a>.

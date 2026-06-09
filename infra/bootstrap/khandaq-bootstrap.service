@@ -1,0 +1,16 @@
+[Unit]
+Description=Khandaq Tox Bootstrap Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=toxbootstrap
+Group=toxbootstrap
+ExecStart=/usr/local/bin/tox-bootstrapd --config /etc/khandaq-bootstrap/bootstrap.conf --foreground
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

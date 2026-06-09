@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtoxext.a CMakeFiles/ToxExtObjs.dir/toxext.c.o
+/usr/bin/ranlib libtoxext.a

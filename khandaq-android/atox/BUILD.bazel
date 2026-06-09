@@ -1,0 +1,15 @@
+load("@io_bazel_rules_kotlin//kotlin:android.bzl", "kt_android_library")
+
+kt_android_library(
+    name = "atox",
+    srcs = [
+        "src/main/kotlin/di/DatabaseModule.kt",
+    ],
+    custom_package = "ltd.evilcorp.atox",
+    deps = [
+        "//:dagger",
+        "//core",
+        "@maven//:androidx_room_room_runtime",
+        "@maven//:javax_inject_javax_inject",
+    ],
+)

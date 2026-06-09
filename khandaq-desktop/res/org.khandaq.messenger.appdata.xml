@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+ <id>org.khandaq.messenger</id>
+ <launchable type="desktop-id">khandaq.desktop</launchable>
+ <metadata_license>CC-BY-SA-3.0</metadata_license>
+ <project_license>GPL-3.0</project_license>
+ <name>Khandaq</name>
+ <summary>Secure Tox messenger built on the Khandaq brand.</summary>
+ <description>
+  <p>
+    Khandaq Messenger is a chat, voice, video, and file transfer client
+    using the encrypted peer-to-peer Tox protocol.
+  </p>
+  <p>
+    Based on qTox. Modified by the Khandaq project.
+  </p>
+ </description>
+ <url type="homepage">https://khandaq.org</url>
+ <project_group>Khandaq</project_group>
+ <releases>
+  <release version="0.1.0-alpha" date="2026-06-08"/>
+ </releases>
+</component>

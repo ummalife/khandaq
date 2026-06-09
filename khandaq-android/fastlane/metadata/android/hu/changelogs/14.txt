@@ -1,0 +1,8 @@
+Csevegési előzmények exportálásának hozzáadása
+Az ismerősnek jelölési kérelmek üzenetei mostantól bekerülnek a csevegési előzményekbe
+Javított fájlátviteli sebesség és stabilitás
+Hívások közben a kijelző mostantól automatikusan ki-/bekapcsol a közelségérzékelő segítségével
+
+Frissítve a Toxcore 0.2.19 verzióra
+
+Teljes változáslista: https://github.com/evilcorpltd/aTox/releases

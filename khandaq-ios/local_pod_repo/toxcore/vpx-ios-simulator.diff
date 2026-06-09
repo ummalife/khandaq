@@ -1,0 +1,11 @@
+# Khandaq: build libvpx 1.4.0 arm64 for iOS Simulator (platform 7).
+# Apply on a clean libvpx-1.4.0 tree, then:
+#   ./build/make/iosbuild.sh --targets "arm64-darwin-gcc"
+#
+# Equivalent manual sed (used by scripts/build-ios-native-deps.sh):
+#   sed -i '' 's/FRAMEWORK_DIR="VPX.framework"/FRAMEWORK_DIR="vpx.framework"/g' build/make/iosbuild.sh
+#   sed -i '' 's/${FRAMEWORK_DIR}\/VPX/${FRAMEWORK_DIR}\/vpx/g' build/make/iosbuild.sh
+#   sed -i '' 's/show_darwin_sdk_path macosx/show_darwin_sdk_path iphonesimulator/g' build/make/configure.sh
+#   sed -i '' 's/alt_libc="$(show_darwin_sdk_path iphoneos)"/alt_libc="$(show_darwin_sdk_path iphonesimulator)"/g' build/make/configure.sh
+#   sed -i '' 's/add_ldflags -miphoneos-version-min="${IOS_VERSION_MIN}"/add_ldflags -mios-simulator-version-min=12.0/g' build/make/configure.sh
+#   sed -i '' 's/add_ldflags -ios_version_min "${IOS_VERSION_MIN}"/add_ldflags -mios-simulator-version-min=12.0/g' build/make/configure.sh

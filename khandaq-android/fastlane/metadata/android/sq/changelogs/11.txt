@@ -1,0 +1,6 @@
+aTox nuk bllokohet më gjatë nisjes në Android KitKat
+Refuzimi i një thirrjeje hyrëse gjatë një thirrjeje tani funksionon siç pritet
+Shtoi mbështetje për ndarjen e ID-së tuaj të Tox si një imazh kodi QR
+Shtoi një buton "shëno si të lexuar" në njoftimet e mesazheve
+
+Regjistri i plotë i ndryshimeve: https://github.com/evilcorpltd/aTox/releases

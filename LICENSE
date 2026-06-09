@@ -1,0 +1,22 @@
+Khandaq Messenger — multi-license repository
+============================================
+
+This repository aggregates several upstream projects. Each component retains
+its original license:
+
+  khandaq-desktop/       GNU General Public License v3 or later (GPL-3.0+)
+  khandaq-android-trifa/ GNU General Public License v3 or later (GPL-3.0+)
+  khandaq-ios/           Mozilla Public License 2.0 (MPL-2.0)
+
+Khandaq-specific files at the repository root (README, docs/, config/, scripts/,
+infra/, web/) are released under GPL-3.0+ unless otherwise noted, to match the
+desktop and Android components.
+
+You must comply with the license of each component you use, copy, or distribute.
+See the LICENSE/COPYING files inside each subdirectory for full text.
+
+Upstream acknowledgements:
+  - qTox / TokTok (GPL-3.0+)
+  - Antidote (MPL-2.0)
+  - TRIfA / ToxAndroidRefImpl (GPL-3.0+)
+  - c-toxcore (GPL-3.0+)

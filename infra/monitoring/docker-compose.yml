@@ -1,0 +1,16 @@
+# Uptime Kuma — bootstrap node monitoring (TCP + ping)
+# Deploy: scripts/deploy-monitoring.sh
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: khandaq-uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime-kuma-data:/app/data
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      - TZ=UTC
+
+volumes:
+  uptime-kuma-data:

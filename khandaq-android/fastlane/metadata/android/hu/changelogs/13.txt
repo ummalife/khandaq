@@ -1,0 +1,10 @@
+Partnerek kapcsolati állapotának megjelenítése hozzáadva
+
+Javítva egy összeomlás indításkor újabb Samsung telefonokon
+Javítva, hogy a hívás csengőhangja nem mindig némult el, amikor kellett volna
+Több összeomlás javítása, amelyek partnerek törlésekor, nem megfelelő időben jelentkeztek
+Javítva egy összeomlás, amely proxy beállítása és internetkapcsolat hiánya esetén lépett fel indításkor
+
+Frissítve a Toxcore 0.2.16 verzióra
+
+Teljes változáslista: https://github.com/evilcorpltd/aTox/releases

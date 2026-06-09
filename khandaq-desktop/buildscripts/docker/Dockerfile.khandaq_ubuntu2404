@@ -1,0 +1,58 @@
+# Khandaq Linux build image — Ubuntu 24.04
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+
+RUN apt-get update && apt-get -y --no-install-recommends install \
+    build-essential \
+    autoconf \
+    automake \
+    libtool \
+    cmake \
+    extra-cmake-modules \
+    git \
+    pkg-config \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavfilter-dev \
+    libavutil-dev \
+    libexif-dev \
+    libgdk-pixbuf2.0-dev \
+    libglib2.0-dev \
+    libgtk2.0-dev \
+    libopenal-dev \
+    libopus-dev \
+    libqrencode-dev \
+    libqt5opengl5-dev \
+    libqt5svg5-dev \
+    libsodium-dev \
+    libsqlcipher-dev \
+    libswresample-dev \
+    libswscale-dev \
+    libvpx-dev \
+    libxss-dev \
+    qtbase5-dev \
+    qttools5-dev \
+    qttools5-dev-tools \
+    librsvg2-bin \
+    ca-certificates \
+    curl \
+    file \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY download/common.sh /build/download/common.sh
+COPY build_utils.sh /build/build_utils.sh
+COPY download/download_toxcore.sh /build/download/download_toxcore.sh
+COPY download/download_toxext.sh /build/download/download_toxext.sh
+COPY download/download_toxext_messages.sh /build/download/download_toxext_messages.sh
+COPY build_toxcore_linux.sh /build/build_toxcore_linux.sh
+
+RUN mkdir -p /src/tox && cd /src/tox && \
+    sed -i 's/cmake \./cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ./g' /build/build_toxcore_linux.sh && \
+    /build/build_toxcore_linux.sh && \
+    rm -rf /src/tox
+
+RUN echo '/usr/local/lib/' >> /etc/ld.so.conf.d/locallib.conf && ldconfig
+
+WORKDIR /khandaq

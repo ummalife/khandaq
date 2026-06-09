@@ -1,0 +1,11 @@
+Az el nem küldött üzenetek piszkozatként mentődnek
+Proxy támogatás és automatikus „távol” állapot
+Az indítócsomópontok felülbírálhatók
+Közvetlen válasz az értesítésekből
+Automatikus fájlátvitel-elfogadás
+Esztétikus profilkép helyőrzők
+A csevegés törlése a fájlátvitelekre is kiterjed
+Javított többbájtos üzenetkezelés.
+Új nyelvek: brazil portugál, orosz, német
+
+Teljes változáslista: https://github.com/evilcorpltd/aTox/releases

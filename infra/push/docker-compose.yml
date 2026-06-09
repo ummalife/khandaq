@@ -1,0 +1,13 @@
+services:
+  push-relay:
+    build: ./relay
+    container_name: khandaq-push-relay
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8080"
+    volumes:
+      - /opt/khandaq-push/secrets:/run/secrets:ro
+    environment:
+      - PORT=8080
+      - FCM_PROJECT_ID=khandaq-messenger
+      - FCM_SERVICE_ACCOUNT_FILE=/run/secrets/firebase-sa.json

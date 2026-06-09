@@ -1,0 +1,11 @@
+QSplitter:handle
+{
+    color: @groundBase;
+    background-color: @groundBase;
+}
+
+QWidget
+{
+    background: @groundBase;
+    color: @mainText;
+}

@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -arch arm64 -mmacosx-version-min=10.15 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/peer_sometimes_no_extension.dir/peer_sometimes_no_extension.c.o -o peer_sometimes_no_extension  -fsanitize=address ../mock/libtoxext_mock.a

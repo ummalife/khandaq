@@ -1,0 +1,12 @@
+Enregistrez un message non envoyé comme brouillon
+Support des proxys
+Option d'absence automatique
+Remplacez à souhait les nœuds d'amorçage utilisés
+Répondez directement depuis une notification
+Acceptez automatiquement un transfert de fichier
+Joli espace réservé aux avatars
+Effacer un chat supprime les transferts de fichiers associés
+Fini le fractionnement des messages
+Traduit en portugais (br), russe et allemand
+
+Journal des modifications complet : https://github.com/evilcorpltd/aTox/releases

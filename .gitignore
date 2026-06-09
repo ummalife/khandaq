@@ -1,0 +1,72 @@
+# Secrets and signing (never commit)
+secrets/
+*.keystore
+*.jks
+*.p8
+android-signing.env
+push-relay.env
+!*.env.example
+!secrets/*.example
+
+# Build artifacts
+**/build/
+**/Build/
+**/DerivedData/
+**/.gradle/
+**/cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+!scripts/**/*.sh
+
+# iOS / CocoaPods (run `pod install` in khandaq-ios/)
+khandaq-ios/Pods/
+khandaq-ios/build/
+khandaq-ios/*.xcworkspace/xcuserdata/
+khandaq-ios/*.xcodeproj/xcuserdata/
+khandaq-ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Desktop build
+khandaq-desktop/build/
+
+# Distribution binaries (published via GitHub Releases, not git history)
+dist/
+.release-staging/
+web/messenger/downloads/
+
+# Logs and local ops
+*.log
+docs/network-deploy-logs/
+docs/smoke-test-screenshots/
+
+# Internal / non-public documentation (English public docs are whitelisted below)
+docs/**
+!docs/BUILDING.md
+!docs/NETWORK.md
+!docs/BOOTSTRAP.md
+!docs/PUSH_RELAY.md
+
+# Ops scripts with credential patterns (use SSH keys locally)
+scripts/deploy-bootstrap-remote.sh
+scripts/remote-node-audit.sh
+
+# OS / IDE
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Temporary
+*.tmp
+dmg.tmp/
+khandaq-desktop/osx/DS_Store-DMG

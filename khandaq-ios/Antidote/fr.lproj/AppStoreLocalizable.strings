@@ -1,0 +1,54 @@
+/* 
+  AppStoreLocalizable.strings
+  Khandaq
+
+  Created by Dmytro Vorobiov on 08/02/17.
+  Copyright © 2017 dvor. All rights reserved.
+*/
+
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_female_1" = "Honore Pariseau";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_female_2" = "Florence Marceau";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_female_3" = "Capucine Goulet";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_female_4" = "Estelle Varieur";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_female_5" = "Cosette Brisette";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_male_1" = "Geoffrey Saurel";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_male_2" = "Christian Fecteau";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_male_3" = "Thomas Lacasse";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_male_4" = "Timothé Pirouet";
+/* Name of friend for the App Store screenshot. Should be fully random, no real people here. Can be generated with service like http://www.fakenamegenerator.com/ */
+"app_store_screenshot_friend_male_5" = "Bruno Lamothe";
+
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_1" = "Khandaq est vraiment sécurisé ?";
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_2" = "bien sur, c'est p2p";
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_3" = "Et qu'est-ce que ça veut dire ? Peer-to-peer ? 😄";
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_4" = "tu me parles directement, il n'y a pas de serveurs ou de trucs comme ça";
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_5" = "+ c'est chiffré 🔐😎";
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_6" = "Cool !";
+/* Demo conversation for the App Store screenshot */
+"app_store_screenshot_conversation_7" = "Je vais l'essayer alors";
+
+/* Demo chat message for the App Store screenshot */
+"app_store_screenshot_chat_message_1" = "😂😂😂";
+/* Demo chat message for the App Store screenshot */
+"app_store_screenshot_chat_message_2" = "dîner ce soir ?";
+/* Demo chat message for the App Store screenshot */
+"app_store_screenshot_chat_message_3" = "Je pense savoir de quoi tu veux parler";
+/* Demo chat message for the App Store screenshot */
+"app_store_screenshot_chat_message_4" = "Bien sur, merci !";
+/* Demo chat message for the App Store screenshot */
+"app_store_screenshot_chat_message_5" = "yep";

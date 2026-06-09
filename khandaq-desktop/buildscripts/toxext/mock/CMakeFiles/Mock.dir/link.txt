@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtoxext_mock.a CMakeFiles/Mock.dir/mock_tox.c.o CMakeFiles/Mock.dir/mock_fixtures.c.o ../src/CMakeFiles/ToxExtObjs.dir/toxext.c.o
+/usr/bin/ranlib libtoxext_mock.a

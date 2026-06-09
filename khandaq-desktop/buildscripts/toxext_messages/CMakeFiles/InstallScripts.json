@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,0 +1,10 @@
+Audio ciamada support
+Opsion par doperar co na encrypted Tox fegura
+Opsion par canbiar el to NoSpam
+Abiłità par riserver sconpartimenti de mesajo
+Abiłità par vardar el to Tox ID cofà un QR code
+Support par sfiorar un mucio de arcivi e mandarli
+Voltà par na mucia de łengue
+Metà in dì co Toxcore 0.2.13
+
+Pien changelog: https://github.com/evilcorpltd/aTox/releases

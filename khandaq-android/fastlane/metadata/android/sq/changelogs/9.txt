@@ -1,0 +1,12 @@
+Mesazhet e padërguara ruhen si drafte
+Mbështetje për proxy
+Opsion për t'u shënuar automatikisht si larg
+Opsion për të anashkaluar nyjet bootstrap të përdorura
+Tani mund të përgjigjeni direkt nga njoftimet
+Mbështetje për pranimin automatik të transferimeve të skedarëve
+Vendndodhje të avatarit të bukur
+Pastrimi i një bisede tani fshin transferimet e skedarëve të shoqëruara
+Ndarja e mesazheve me karaktere shumë-bajtëshe është rregulluar
+Përkthyer në portugalisht braziliane, rusisht dhe gjermanisht
+
+Regjistri i plotë i ndryshimeve: https://github.com/evilcorpltd/aTox/releases

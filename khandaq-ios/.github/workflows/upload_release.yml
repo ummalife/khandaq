@@ -1,0 +1,45 @@
+name: Upload to Store
+
+on:
+#  push:
+#    paths-ignore:
+#     - 'README.md'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: dummy
+        default: dummy
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  macos-compile:
+    runs-on: macos-12
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Display the OS Version1
+      run: sw_vers -productVersion
+
+    - name: Display the OS Version2
+      run: system_profiler SPSoftwareDataType
+
+    - name: install pkgs
+      run:  |
+            sudo gem install fastlane -NV
+
+    - name: xcode info
+      run:  |
+            ls -al
+            pwd
+            id -a
+            xcode-select --print-path
+
+    - name: check compile output
+      run:  |
+            fastlane ios release
+
+
+

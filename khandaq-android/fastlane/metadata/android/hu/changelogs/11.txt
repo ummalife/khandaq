@@ -1,0 +1,6 @@
+Az aTox már nem omlik össze indításkor Android KitKat rendszeren
+Bejövő hívás elutasítása hívás közben most már megfelelően működik
+Hozzáadva a Tox-azonosító QR-kód képként való megosztásának támogatása
+„Megjelölés olvasottként” gomb hozzáadva az üzenetértesítésekhez
+
+Teljes változáslista: https://github.com/evilcorpltd/aTox/releases

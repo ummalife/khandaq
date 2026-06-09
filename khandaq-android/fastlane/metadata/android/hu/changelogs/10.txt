@@ -1,0 +1,10 @@
+Hanghívások támogatása
+Lehetőség titkosított Tox-profillal való használatra
+Lehetőség a NoSpam érték módosítására
+Szövegmegosztások fogadásának támogatása
+ A Tox-azonosító megjelenítése QR-kódként
+Több fájl egyidejű kiválasztásának és küldésének támogatása
+Sokkal több nyelvre lefordítva
+Frissítve a Toxcore 0.2.13 verzióra
+
+Teljes változáslista: https://github.com/evilcorpltd/aTox/releases

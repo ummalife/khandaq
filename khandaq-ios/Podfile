@@ -1,0 +1,73 @@
+source 'https://github.com/CocoaPods/Specs.git'
+
+platform :ios, '12.0'
+
+# ignore all warnings from all pods
+inhibit_all_warnings!
+
+def common_pods
+    pod 'libopus-static', :path => 'local_pod_repo/libopus-static'
+    pod 'objcTox', :path => 'local_pod_repo/objcTox/'
+    pod "cmp", :path => 'local_pod_repo/cmp'
+    pod "toxcore", :path => 'local_pod_repo/toxcore'
+    pod 'UITextView+Placeholder', '~> 1.1.0'
+    pod 'SDCAlertView', '~> 2.5.4'
+    pod 'LNNotificationsUI', :git => 'https://github.com/LeoNatan/LNNotificationsUI.git', :commit => '3f75043fc6e77b4180b76cb6cfff4faa506ab9fc'
+    pod 'JGProgressHUD', '~> 1.4.0'
+    pod 'SnapKit', '~> 5.6.0'
+    pod 'Yaml', '~> 3.4.4'
+    pod 'Firebase/Messaging', '~> 8.15.0'
+end
+
+target :Antidote do
+    common_pods
+end
+
+target :AntidoteTests do
+    common_pods
+    pod 'FBSnapshotTestCase/Core'
+end
+
+target :ScreenshotsUITests do
+    common_pods
+end
+
+post_install do |installer|
+  # UITextView+Placeholder 1.1.x uses KVC on UITextField._placeholderLabel for color.
+  # iOS 26 AutoFill reads UITextView.placeholder on focus and crashes without this patch.
+  placeholder_pod = File.join(
+    installer.sandbox.root,
+    'UITextView+Placeholder/UITextView+Placeholder/UITextView+Placeholder.m'
+  )
+  if File.exist?(placeholder_pod)
+    content = File.read(placeholder_pod)
+    patched_method = <<~'OBJC'.strip
+      + (UIColor *)defaultPlaceholderColor {
+          if (@available(iOS 13.0, *)) {
+              return [UIColor placeholderTextColor];
+          }
+          return [UIColor colorWithWhite:0.0 alpha:0.22];
+      }
+    OBJC
+    content.sub!(
+      /\+ \(UIColor \*\)defaultPlaceholderColor \{[\s\S]*?\n\}/m,
+      patched_method
+    )
+    File.chmod(0o644, placeholder_pod)
+    File.write(placeholder_pod, content)
+  end
+
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+      end
+      next unless target.name == 'libsodium'
+
+      flags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+      flags = [flags] unless flags.is_a?(Array)
+      flags += %w[-Wno-error=sizeof-array-div -Wno-sizeof-array-div]
+      config.build_settings['OTHER_CFLAGS'] = flags
+    end
+  end
+end

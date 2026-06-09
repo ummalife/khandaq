@@ -1,0 +1,10 @@
+aTox l'è un łìbaro open-source app de mesajo co'l Tox protocol. 
+
+<b>Parcosa aTox?</b>
+* Open-souce: èsar ìbaro par sconpartir, e canbiar cofà pitostar.
+* Reasonable: inpostasion savie, sensa uzmar so' che te ghè caro, no dezmentega mìa 'sa che <b>ti te</b> vol.
+* End-to-end encrypted: soło łe parsone che te si drio ciacołar łe ze bon da vardar łe ciàcołe.
+* Distributed: sensa central servers che pol cascar in tera o mandar łe informasion par i altri.
+* Lightweight: sensa tełemetrìa, ads, o altre moo' de zminciar.
+
+Altre informasion:<a href="https://github.com/evilcorpltd/aTox/">aTox</a>, <a href="https://tox.chat/">Tox</a>.

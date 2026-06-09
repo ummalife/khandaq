@@ -1,0 +1,10 @@
+U shtua shfaqja e statusit të lidhjes së kontakteve
+
+U rregullua një bllokim gjatë nisjes në telefonat më të rinj Samsung
+U rregullua zilja e thirrjes që nuk heshtte gjithmonë kur duhej
+U rregulluan një mori bllokimesh gjatë fshirjes së kontakteve në kohë të vështira
+U rregullua një bllokim që lidhej me nisjen me një proxy të vendosur dhe pa internet
+
+Përditësuar në Toxcore 0.2.16
+
+Regjistri i plotë i ndryshimeve: https://github.com/evilcorpltd/aTox/releases

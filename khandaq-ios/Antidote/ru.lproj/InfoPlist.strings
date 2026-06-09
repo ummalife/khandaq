@@ -1,0 +1,16 @@
+/* 
+  InfoPlist.strings
+  Khandaq
+
+  Created by Dmytro Vorobiov on 15/11/16.
+  Copyright © 2016 dvor. All rights reserved.
+*/
+
+/* Camera usage alert description */
+"NSCameraUsageDescription" = "Вы можете совершать видео звонки, отправлять фото и видео, сканировать QR-код.";
+
+/* Microphone usage alert description */
+"NSMicrophoneUsageDescription" = "Вы можете совершать аудио и видео звонки.";
+
+/* Photo library usage alert description */
+"NSPhotoLibraryUsageDescription" = "Вы можете отправлять фото и видео.";

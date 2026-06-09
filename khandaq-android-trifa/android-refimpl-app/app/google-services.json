@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "575942301057",
+    "project_id": "khandaq-messenger",
+    "storage_bucket": "khandaq-messenger.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:575942301057:android:9f26ba7d1d6ff2af1ac480",
+        "android_client_info": {
+          "package_name": "org.khandaq.messenger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLuZhp6HfSyNenPIhnX12P8-Gb03FdTT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

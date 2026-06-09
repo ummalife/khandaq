@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext/cmake_install.cmake",
+		"/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext/src/cmake_install.cmake",
+		"/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext/mock/cmake_install.cmake",
+		"/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext/test/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

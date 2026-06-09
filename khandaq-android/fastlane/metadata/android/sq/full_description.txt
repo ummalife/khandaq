@@ -1,0 +1,10 @@
+aTox është një aplikacion falas për mesazhe me burim të hapur për protokollin Tox.
+
+<b>Pse aTox?</b>
+* Burim i hapur: falas për t'u ndarë, inspektuar dhe ndryshuar sipas dëshirës.
+* I arsyeshëm: parazgjedhje të arsyeshme, pa hamendësime për atë që ju intereson, nuk injoron atë <b>që</b> dëshironi.
+* I enkriptuar nga fillimi në fund: të vetmit njerëz që mund të shohin bisedat tuaja janë njerëzit me të cilët po flisni.
+* I shpërndarë: pa serverë qendrorë që mund të çaktivizohen ose të detyrohen të dorëzojnë të dhëna.
+* I lehtë: pa telemetri, reklama ose forma të tjera monitorimi.
+
+Më shumë informacion: <a href="https://github.com/evilcorpltd/aTox/">aTox</a>, <a href="https://tox.chat/">Tox</a>.

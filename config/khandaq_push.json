@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "relay_base_url": "https://push.khandaq.org",
+  "fcm_push_url_prefix": "https://push.khandaq.org/toxfcm/fcm.php?id=",
+  "legacy_push_url_prefix": "https://tox.zoff.xyz/toxfcm/fcm.php?id=",
+  "allowed_push_url_prefixes": [
+    "https://push.khandaq.org/toxfcm/fcm.php?id=",
+    "https://tox.zoff.xyz/toxfcm/fcm.php?id=",
+    "https://gotify1.unifiedpush.org/UP?token=",
+    "https://ntfy.sh/"
+  ],
+  "privacy": {
+    "payload_contains_message_content": false,
+    "payload_contains_tox_id": false,
+    "notification_title": "Khandaq",
+    "notification_body": "New message"
+  }
+}

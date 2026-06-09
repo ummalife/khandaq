@@ -1,0 +1,3 @@
+Performing Streamed Install
+adb: failed to install /Users/lucyok/Khandaq/dist/android/khandaq-debug.apk: Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]
+

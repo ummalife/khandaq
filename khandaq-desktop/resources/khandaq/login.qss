@@ -1,0 +1,21 @@
+/* Khandaq login screen branding */
+
+#loginButton,
+#importButton,
+#createAccountButton {
+    background-color: #0F3D2E;
+    color: #F5F5F0;
+    border: 1px solid #1A5A44;
+}
+
+#loginButton:hover,
+#importButton:hover,
+#createAccountButton:hover {
+    background-color: #C9A227;
+    color: #0B0F0E;
+    border-color: #C9A227;
+}
+
+QLabel#label_7 {
+    background: transparent;
+}

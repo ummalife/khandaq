@@ -1,0 +1,4 @@
+U rregullua ngërçi në trajtimin e mbylljes së thirrjeve hyrëse
+U rregullua ngërçi në fshirjen e kontakteve
+
+Regjistri i plotë i ndryshimeve: https://github.com/evilcorpltd/aTox/releases

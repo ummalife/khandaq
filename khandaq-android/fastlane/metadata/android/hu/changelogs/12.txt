@@ -1,0 +1,4 @@
+Javítva egy összeomlás a bejövő hívások befejezésének kezelésekor
+Javítva egy összeomlás a partnerek törlésekor
+
+Teljes változáslista: https://github.com/evilcorpltd/aTox/releases

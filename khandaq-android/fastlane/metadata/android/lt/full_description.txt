@@ -1,0 +1,10 @@
+aTox yra nemokama atvirojo kodo pranešimų siuntimo programa, skirta Tox protokolui.
+
+<b>Kodėl aTox?</b>
+* Atvirasis kodas: galite laisvai dalytis, tikrinti ir keisti, kaip jums patinka.
+* Protinga: sveikos numatytuosius nustatymus, jokių spėlionių apie tai, kas jums rūpi, neignoruoja to, ko <b>jūs</b> norite.
+* Užšifruota nuo galo iki galo: jūsų pokalbius gali matyti tik tie žmonės, su kuriais kalbate.
+* Paskirstytas: nėra centrinių serverių, kuriuos galima pašalinti arba priversti perduoti duomenis.
+* Lengvas: nėra telemetrijos, reklamų ar kitų stebėjimo formų.
+
+Daugiau informacijos: <a href="https://github.com/evilcorpltd/aTox/">aTox</a>, <a href="https://tox.chat/">Tox</a>.

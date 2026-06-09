@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -arch arm64 -mmacosx-version-min=10.15 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/simple_extension_test.dir/simple_extension_test.c.o -o simple_extension_test  -fsanitize=address ../mock/libtoxext_mock.a

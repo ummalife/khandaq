@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+    <androidx.appcompat.widget.Toolbar android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/colorPrimary"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+            app:title="@string/app_name"/>
+    <androidx.constraintlayout.widget.ConstraintLayout android:id="@+id/content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+        <TextView android:id="@+id/profileCreationLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/create_a_tox_profile"
+                android:textSize="25sp"
+                app:layout_constraintBottom_toTopOf="@id/username"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_chainStyle="packed"/>
+
+        <EditText android:id="@+id/username"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autofillHints="username"
+                android:hint="@string/name"
+                android:inputType="text"
+                android:maxLines="1"
+                android:maxLength="@integer/toxMaxNameLength"
+                app:layout_constraintBottom_toTopOf="@id/btnCreate"
+                app:layout_constraintTop_toBottomOf="@id/profileCreationLabel"
+                tools:targetApi="26"/>
+
+        <Button android:id="@+id/btnCreate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/create"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/username"/>
+
+        <TextView android:id="@+id/importLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/or_import_existing_save"
+                android:textSize="20sp"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/btnCreate"
+                app:layout_constraintVertical_chainStyle="packed"/>
+
+        <Button android:id="@+id/btnImport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/import_tox_save"
+                app:layout_constraintTop_toBottomOf="@+id/importLabel"
+                app:layout_constraintVertical_chainStyle="packed"/>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</LinearLayout>

@@ -1,0 +1,39 @@
+QWidget#quotePreview
+{
+    background: #2a2f2a;
+    border: 1px solid #46465b;
+    border-radius: 4px;
+}
+
+QWidget#quotePreviewAccent
+{
+    background: #5cb85c;
+    border-radius: 2px;
+}
+
+QLabel#quotePreviewTitle
+{
+    color: #7fd67f;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QLabel#quotePreviewText
+{
+    color: #cccccc;
+    font-size: 12px;
+}
+
+QToolButton#quotePreviewClose
+{
+    color: #888888;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    padding: 0 4px;
+}
+
+QToolButton#quotePreviewClose:hover
+{
+    color: #eeeeee;
+}

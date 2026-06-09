@@ -1,0 +1,10 @@
+Mbështetje për thirrjet audio
+Mundësi për t'u përdorur me një profil të koduar Tox
+Mundësi për të ndryshuar nospam-in tuaj
+Mundësi për të marrë shpërndarje tekstesh
+Mundësi për të shfaqur Tox ID-in tuaj si kod QR
+Mbështetje për zgjedhjen e skedarëve të shumtë për t'i dërguar në të njëjtën kohë
+Përkthyer në shumë më tepër gjuhë
+Përditësuar në Toxcore 0.2.13
+
+Regjistri i plotë i ndryshimeve: https://github.com/evilcorpltd/aTox/releases

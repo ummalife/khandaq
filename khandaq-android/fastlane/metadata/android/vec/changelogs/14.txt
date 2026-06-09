@@ -1,0 +1,8 @@
+Des te pol mandar fora ła cronołozìa de'l chat
+I mesaji de sołitasion de amigo i ze des zontài co ła cronołozìa de ła convarsasion
+Ła zveltesa e stabiłità de ła traslocasion de arcivi i ze pułiti
+El display des l'è inpisà/zmorsà in muò automàtego drio łe ciamade che łe ze drio doparar el proximity sensor
+
+Metà in dì co'l Toxcore 0.2.19
+
+Pien changelog: https://github.com/evilcorpltd/aTox/releases

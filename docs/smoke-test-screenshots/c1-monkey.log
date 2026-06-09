@@ -1,0 +1,15 @@
+  bash arg: -p
+  bash arg: org.khandaq.messenger
+  bash arg: -c
+  bash arg: android.intent.category.LAUNCHER
+  bash arg: 1
+args: [-p, org.khandaq.messenger, -c, android.intent.category.LAUNCHER, 1]
+ arg: "-p"
+ arg: "org.khandaq.messenger"
+ arg: "-c"
+ arg: "android.intent.category.LAUNCHER"
+ arg: "1"
+data="org.khandaq.messenger"
+data="android.intent.category.LAUNCHER"
+Events injected: 1
+## Network stats: elapsed time=171ms (0ms mobile, 0ms wifi, 171ms not connected)

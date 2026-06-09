@@ -1,0 +1,4 @@
+build/
+libs/
+release/
+src/main/jniLibs/

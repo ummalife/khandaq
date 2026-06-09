@@ -1,0 +1,37 @@
+diff --git a/build/make/configure.sh b/build/make/configure.sh
+index 81d30a1..ac128f9 100644
+--- a/build/make/configure.sh
++++ b/build/make/configure.sh
+@@ -1089,9 +1089,6 @@ EOF
+           ;;
+ 
+         android*)
+-          echo "Assuming standalone build with NDK toolchain."
+-          echo "See build/make/Android.mk for details."
+-          check_add_ldflags -static
+           soft_enable unit_tests
+           ;;
+ 
+@@ -1249,6 +1246,7 @@ EOF
+       case  ${tgt_os} in
+         android)
+           soft_enable realtime_only
++          add_asflags -D__ANDROID__
+           ;;
+         win*)
+           enabled gcc && add_cflags -fno-common
+@@ -1418,6 +1416,14 @@ EOF
+           log "Warning: Unknown os $tgt_os while setting up $AS flags"
+           ;;
+       esac
++      ;;
++    x86_64*)
++      case  ${tgt_os} in
++        android)
++          soft_enable realtime_only
++          add_asflags -D__ANDROID__
++          ;;
++      esac
+       ;;
+     *-gcc|generic-gnu)
+       link_with_cc=gcc

@@ -1,0 +1,11 @@
+naming:
+  InvalidPackageDeclaration:
+    active: false
+
+empty-blocks:
+  EmptyFunctionBlock:
+    ignoreOverridden: true
+
+style:
+  ReturnCount:
+    active: false

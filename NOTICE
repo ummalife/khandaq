@@ -1,0 +1,18 @@
+Khandaq Messenger
+Copyright (C) 2026 Khandaq Project
+
+This product includes software developed by The qTox Project Contributors.
+qTox is licensed under the GNU General Public License v3.0 or later.
+See khandaq-desktop/LICENSE and khandaq-desktop/LICENSES/.
+
+Khandaq desktop is a modified work based on qTox.
+Source code: https://github.com/ummalife/khandaq (or tagged release archive)
+
+Third-party components are listed in THIRD_PARTY_LICENSES.md.
+
+Mobile components included in this repository as upstream snapshots:
+  - TRIfA (GPL-2/3) — khandaq-android-trifa/
+  - aTox (GPL-3) — khandaq-android/ [upstream archived]
+  - Antidote (MPL-2.0) — khandaq-ios/
+
+Tox® is used to refer to the Tox protocol. Tox is not affiliated with Khandaq.

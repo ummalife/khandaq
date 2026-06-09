@@ -1,0 +1,6 @@
+aTox no crashes pì co che'l ze drio scumisiar su Android KitKat
+Refudar na ciamada drio n'altra ciamada, des łaora pułito.
+Zontà el support par sconpartir el to Tox ID cofà na someja de QR code
+Zontà el "senja cofà łezesto" buton par notifegasion de mesajo
+
+Pien changelog: https://github.com/evilcorpltd/aTox/releases

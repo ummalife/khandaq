@@ -1,0 +1,10 @@
+Zontà par védar el status de conesion de i contati tui
+
+Rangià ła ronja che ła no fazéa mìa el startup su novi tełefoneti Samsung
+Rangià ła ronja che'l son de ciamada no'l zera siłensià co che'l bezonjéa
+Rangiamo łe scaronje che łe fazéa crashes drio butar via contati in momenti zbałià
+Rangià ła ronja co'l scumisio insieme un proxy set e sensa internet
+
+Metà in dì co'l Toxcore 0.2.16
+
+Pien changelog: https://github.com/evilcorpltd/aTox/releases

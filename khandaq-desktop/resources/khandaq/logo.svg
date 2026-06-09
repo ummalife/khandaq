@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" role="img" aria-label="Khandaq Messenger">
+  <g transform="translate(10,10)">
+    <rect width="100" height="100" rx="18" fill="#0B0F0E"/>
+    <path d="M60 22 L88 36 V72 C88 88 60 98 60 98 C60 98 32 88 32 72 V36 Z" fill="#0F3D2E"/>
+    <path d="M60 32 L80 44 V68 C80 78 60 86 60 86 C60 86 40 78 40 68 V44 Z" fill="none" stroke="#C9A227" stroke-width="3"/>
+    <circle cx="60" cy="58" r="10" fill="#C9A227"/>
+  </g>
+  <text x="130" y="58" fill="#F5F5F0" font-family="DejaVu Sans, sans-serif" font-size="36" font-weight="600">Khandaq</text>
+  <text x="132" y="88" fill="#C9A227" font-family="DejaVu Sans, sans-serif" font-size="16" letter-spacing="2">MESSENGER</text>
+</svg>

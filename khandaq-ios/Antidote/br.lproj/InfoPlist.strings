@@ -1,0 +1,16 @@
+/* 
+  InfoPlist.strings
+  Khandaq
+
+  Created by Dmytro Vorobiov on 15/11/16.
+  Copyright © 2016 dvor. All rights reserved.
+*/
+
+/* Camera usage alert description */
+"NSCameraUsageDescription" = "Gellout a rit implijout pellgomzadennoù video, kas videioù ha skeudennoù, skanañ kodoù QR.";
+
+/* Microphone usage alert description */
+"NSMicrophoneUsageDescription" = "Gellout a rit implijout pellgomzadennoù klev pe video.";
+
+/* Photo library usage alert description */
+"NSPhotoLibraryUsageDescription" = "Gellout a rit kas skeudennoù ha videoioù.";

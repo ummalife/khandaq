@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Khandaq Messenger — Download</title>
+  <meta name="description" content="Khandaq Messenger — decentralized Tox-based messenger. Download for Android, Windows, macOS, and Linux.">
+  <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="https://khandaq.org/">
+      <img src="assets/logo.svg" alt="" width="40" height="40">
+      <span>Khandaq</span>
+    </a>
+    <a class="back" href="https://khandaq.org/">Back to site</a>
+  </header>
+
+  <main class="hero">
+    <div class="hero-text">
+      <p class="eyebrow">Public Beta · Tox network</p>
+      <h1>Khandaq Messenger</h1>
+      <p class="lead">
+        Decentralized messenger with no central message server.
+        End-to-end encryption, Khandaq bootstrap nodes, clients for all major platforms.
+      </p>
+      <ul class="features">
+        <li>No phone number — Tox ID only</li>
+        <li>Text and files over the Tox P2P network</li>
+        <li><a href="https://github.com/ummalife/khandaq">Open source on GitHub</a></li>
+      </ul>
+      <p class="note">Public beta — report bugs to the Khandaq team.</p>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <img src="assets/logo.svg" alt="" class="hero-logo">
+    </div>
+  </main>
+
+  <section class="downloads">
+    <h2>Download</h2>
+    <p class="checksum-link">
+      Binaries are hosted on <a href="https://github.com/ummalife/khandaq/releases/latest">GitHub Releases</a>.
+      Verify with <a id="sha-link" href="#">SHA256SUMS.txt</a>:
+      <code>shasum -a 256 -c SHA256SUMS.txt</code>
+    </p>
+    <div class="cards">
+
+      <article class="card">
+        <div class="card-icon android" aria-hidden="true"></div>
+        <h3>Android</h3>
+        <p>Sideload APK. Android 8+.</p>
+        <a class="btn dl-android" href="#">Download APK</a>
+        <span class="meta">Public beta · GPL-3.0</span>
+      </article>
+
+      <article class="card">
+        <div class="card-icon windows" aria-hidden="true"></div>
+        <h3>Windows</h3>
+        <p>x64 installer. Windows 10/11.</p>
+        <a class="btn dl-windows" href="#">Download .exe</a>
+        <span class="meta">Public beta · GPL-3.0</span>
+      </article>
+
+      <article class="card">
+        <div class="card-icon macos" aria-hidden="true"></div>
+        <h3>macOS</h3>
+        <p>.app bundle in a zip archive.</p>
+        <a class="btn dl-macos" href="#">Download .zip</a>
+        <span class="meta">Public beta · GPL-3.0</span>
+      </article>
+
+      <article class="card">
+        <div class="card-icon linux" aria-hidden="true"></div>
+        <h3>Linux</h3>
+        <p>Portable x86_64 tarball with bundled libs (Arch, Fedora, Ubuntu, Debian, …).</p>
+        <a class="btn dl-linux" href="#">Download .tar.gz</a>
+        <span class="meta">Public beta · GPL-3.0</span>
+      </article>
+
+      <article class="card">
+        <div class="card-icon ios" aria-hidden="true"></div>
+        <h3>iOS</h3>
+        <p>TestFlight public link. Install Apple TestFlight first, then open on iPhone or iPad.</p>
+        <a class="btn" href="https://testflight.apple.com/join/4ppS8ZN5" rel="noopener noreferrer">Open TestFlight</a>
+        <span class="meta">Public beta · MPL-2.0</span>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="install-notes">
+    <h2>Installation notes</h2>
+
+    <details class="install-detail">
+      <summary>Android — sideload APK</summary>
+      <ol>
+        <li>Download APK and verify SHA256.</li>
+        <li>Allow installation from your browser (unknown sources).</li>
+        <li>Open the APK and confirm install.</li>
+        <li><strong>Upgrading from unsigned debug builds:</strong> export Tox profile → uninstall old app → install new APK → import profile (signature change).</li>
+      </ol>
+    </details>
+
+    <details class="install-detail">
+      <summary>Windows — SmartScreen</summary>
+      <ol>
+        <li>If warned, click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
+        <li>Installer is not Authenticode-signed during beta.</li>
+        <li>Verify SHA256 if your antivirus blocks the file.</li>
+      </ol>
+    </details>
+
+    <details class="install-detail">
+      <summary>macOS — Gatekeeper</summary>
+      <ol>
+        <li>Unzip and move <code>khandaq.app</code> to Applications.</li>
+        <li>If blocked: <code>xattr -cr /Applications/khandaq.app</code></li>
+        <li>Or: right-click → <strong>Open</strong> → confirm.</li>
+      </ol>
+    </details>
+
+    <details class="install-detail">
+      <summary>Linux (portable)</summary>
+      <ol>
+        <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
+        <li>Keep <code>khandaq</code>, <code>khandaq.bin</code>, and <code>lib/</code> together.</li>
+        <li>See <code>INSTALL.txt</code> inside the archive.</li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="steps">
+    <h2>Quick start</h2>
+    <ol>
+      <li>Install a client and create a profile (remember your password).</li>
+      <li>Copy your Tox ID and share it with a contact.</li>
+      <li>Add the contact and send a test message.</li>
+    </ol>
+  </section>
+
+  <footer class="footer">
+    <p>© Khandaq · <a href="https://khandaq.org/">khandaq.org</a> · <a href="https://github.com/ummalife/khandaq">Source code</a> · <a href="https://tox.chat/" rel="noopener">Tox protocol</a></p>
+  </footer>
+
+  <script>
+    (function () {
+      var base = 'https://github.com/ummalife/khandaq/releases/latest/download/';
+      document.getElementById('sha-link').href = base + 'SHA256SUMS.txt';
+      document.querySelector('.dl-android').href = base + 'khandaq-android.apk';
+      document.querySelector('.dl-windows').href = base + 'khandaq-windows-installer.exe';
+      document.querySelector('.dl-macos').href = base + 'khandaq-macos.zip';
+      document.querySelector('.dl-linux').href = base + 'khandaq-linux-x86_64-portable.tar.gz';
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+pid=3662
+filtered_lines=       0
+=== FATAL ===
+=== JNI ===

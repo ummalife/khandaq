@@ -1,0 +1,228 @@
+/*
+    Copyright © 2014-2019 by The qTox Project Contributors
+
+    This file is part of qTox, a Qt-based graphical interface for Tox.
+
+    qTox is libre software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    qTox is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with qTox.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include "advancedform.h"
+#include "ui_advancedsettings.h"
+
+#include <QApplication>
+#include <QClipboard>
+#include <QDir>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QProcess>
+
+#include "src/model/status.h"
+#include "src/persistence/profile.h"
+#include "src/persistence/settings.h"
+#include "src/widget/tool/recursivesignalblocker.h"
+#include "src/widget/tool/imessageboxmanager.h"
+#include "src/widget/translator.h"
+
+/**
+ * @class AdvancedForm
+ *
+ * This form contains all connection settings.
+ * Is also contains "Reset settings" button and "Make portable" checkbox.
+ */
+
+AdvancedForm::AdvancedForm(Settings& settings_, Style& style, IMessageBoxManager& messageBoxManager_)
+    : GenericForm(QPixmap(":/img/settings/general.png"), style)
+    , bodyUI(new Ui::AdvancedSettings)
+    , settings{settings_}
+    , messageBoxManager{messageBoxManager_}
+{
+    bodyUI->setupUi(this);
+
+    // block all child signals during initialization
+    const RecursiveSignalBlocker signalBlocker(this);
+
+    bodyUI->cbEnableIPv6->setChecked(settings.getEnableIPv6());
+    bodyUI->cbMakeToxPortable->setChecked(settings.getMakeToxPortable());
+    bodyUI->proxyAddr->setText(settings.getProxyAddr());
+    quint16 port = settings.getProxyPort();
+    if (port > 0) {
+        bodyUI->proxyPort->setValue(port);
+    }
+
+    int index = static_cast<int>(settings.getProxyType());
+    bodyUI->proxyType->setCurrentIndex(index);
+    on_proxyType_currentIndexChanged(index);
+    const bool udpEnabled = !settings.getForceTCP() && (settings.getProxyType() == Settings::ProxyType::ptNone);
+    bodyUI->cbEnableUDP->setChecked(udpEnabled);
+    bodyUI->cbEnableLanDiscovery->setChecked(settings.getEnableLanDiscovery() && udpEnabled);
+    bodyUI->cbEnableLanDiscovery->setEnabled(udpEnabled);
+
+    updateWarningLabel();
+
+    eventsInit();
+    Translator::registerHandler(std::bind(&AdvancedForm::retranslateUi, this), this);
+}
+
+AdvancedForm::~AdvancedForm()
+{
+    Translator::unregister(this);
+    delete bodyUI;
+}
+
+void AdvancedForm::on_cbMakeToxPortable_stateChanged()
+{
+    settings.setMakeToxPortable(bodyUI->cbMakeToxPortable->isChecked());
+}
+void AdvancedForm::on_btnExportLog_clicked()
+{
+    QString savefile =
+        QFileDialog::getSaveFileName(Q_NULLPTR, tr("Save file"), QString{}, tr("Logs (*.log)"));
+
+    if (savefile.isNull() || savefile.isEmpty()) {
+        qDebug() << "Debug log save file was not properly chosen";
+        return;
+    }
+
+    QString logFileDir = settings.getPaths().getAppCacheDirPath();
+    QString logfile = logFileDir + "khandaq.log";
+
+    QFile file(logfile);
+    if (file.exists()) {
+        qDebug() << "Found debug log for copying";
+    } else {
+        qDebug() << "No debug file found";
+        return;
+    }
+
+    if (QFile::copy(logfile, savefile))
+        qDebug() << "Successfully copied to: " << savefile;
+    else
+        qDebug() << "File was not copied";
+}
+
+void AdvancedForm::on_btnCopyDebug_clicked()
+{
+    QString logFileDir = settings.getPaths().getAppCacheDirPath();
+    QString logfile = logFileDir + "khandaq.log";
+
+    QFile file(logfile);
+    if (!file.exists()) {
+        qDebug() << "No debug file found";
+        return;
+    }
+
+    QClipboard* clipboard = QApplication::clipboard();
+    if (clipboard) {
+        QString debugtext;
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            debugtext = in.readAll();
+            file.close();
+        } else {
+            qDebug() << "Unable to open file for copying to clipboard";
+            return;
+        }
+
+        clipboard->setText(debugtext, QClipboard::Clipboard);
+        qDebug() << "Debug log copied to clipboard";
+    } else {
+        qDebug() << "Unable to access clipboard";
+    }
+}
+
+void AdvancedForm::on_resetButton_clicked()
+{
+    const QString titile = tr("Reset settings");
+    bool result = messageBoxManager.askQuestion(titile, tr("All settings will be reset to default. Are you sure?"),
+                                   tr("Yes"), tr("No"));
+
+    if (!result)
+        return;
+
+    settings.resetToDefault();
+    messageBoxManager.showInfo(titile, tr("Changes will take effect after restart"));
+}
+
+void AdvancedForm::on_cbEnableIPv6_stateChanged()
+{
+    settings.setEnableIPv6(bodyUI->cbEnableIPv6->isChecked());
+}
+
+void AdvancedForm::on_cbEnableUDP_stateChanged()
+{
+    const bool enableUdp = bodyUI->cbEnableUDP->isChecked();
+    settings.setForceTCP(!enableUdp);
+    const bool enableLanDiscovery = settings.getEnableLanDiscovery();
+    bodyUI->cbEnableLanDiscovery->setEnabled(enableUdp);
+    bodyUI->cbEnableLanDiscovery->setChecked(enableUdp && enableLanDiscovery);
+}
+
+void AdvancedForm::on_cbEnableLanDiscovery_stateChanged()
+{
+    settings.setEnableLanDiscovery(bodyUI->cbEnableLanDiscovery->isChecked());
+}
+
+void AdvancedForm::on_proxyAddr_editingFinished()
+{
+    settings.setProxyAddr(bodyUI->proxyAddr->text());
+}
+
+void AdvancedForm::on_proxyPort_valueChanged(int port)
+{
+    if (port <= 0) {
+        port = 0;
+    }
+
+    settings.setProxyPort(port);
+}
+
+void AdvancedForm::on_proxyType_currentIndexChanged(int index)
+{
+    Settings::ProxyType proxytype = static_cast<Settings::ProxyType>(index);
+    const bool proxyEnabled = proxytype != Settings::ProxyType::ptNone;
+
+    bodyUI->proxyAddr->setEnabled(proxyEnabled);
+    bodyUI->proxyPort->setEnabled(proxyEnabled);
+    // enabling UDP and proxy can be a privacy issue
+    bodyUI->cbEnableUDP->setEnabled(!proxyEnabled);
+    bodyUI->cbEnableUDP->setChecked(!proxyEnabled);
+
+    settings.setProxyType(proxytype);
+}
+
+/**
+ * @brief Retranslate all elements in the form.
+ */
+void AdvancedForm::updateWarningLabel()
+{
+    const QString warningBody =
+        tr("If you are not sure what you are doing, please do not change anything here. "
+           "Changes made here may lead to problems with Khandaq, and even to loss of your data, "
+           "e.g. chat history.")
+        + QStringLiteral("<p>%1</p>").arg(tr("Changes here are applied only after restarting Khandaq."));
+
+    const QString warning = QStringLiteral("<div style=\"color:#ff0000;\">"
+                                           "<p><b>%1</b></p><p>%2</p></div>")
+                                .arg(tr("IMPORTANT NOTE"), warningBody);
+
+    bodyUI->warningLabel->setText(warning);
+}
+
+void AdvancedForm::retranslateUi()
+{
+    int proxyType = bodyUI->proxyType->currentIndex();
+    bodyUI->retranslateUi(this);
+    bodyUI->proxyType->setCurrentIndex(proxyType);
+    updateWarningLabel();
+}

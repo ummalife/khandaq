@@ -1,0 +1,8 @@
+Ajout de l’exportation de l’historique des discussions
+Les messages de demande d’ami sont maintenant ajoutés à l’historique des discussions
+Amélioration de la vitesse et de la stabilité du transfert des fichiers
+L’affichage est maintenant automatiquement éteint/allumé pendant les appels en utilisant le capteur de proximité
+
+Mis à jour vers Toxcore 0.2.19
+
+Changelog complet : https://github.com/evilcorpltd/aTox/releases

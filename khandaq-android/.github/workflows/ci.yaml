@@ -1,0 +1,161 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ktlint:
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: adopt
+          java-version: 17
+      - run: curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.7.1/ktlint && chmod a+x ktlint
+      - run: ./ktlint
+
+  gradle:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    needs: tox4j
+    strategy:
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-15
+          - windows-2025
+    steps:
+      - name: Download tox4j
+        uses: actions/download-artifact@v8
+        with:
+          name: tox4j
+          path: ~/.m2
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: adopt
+          java-version: 17
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          # https://github.com/gradle/actions/blob/11d4d83c63a6ce61b32d8a9c4faddbdb04fe9917/docs/setup-gradle.md
+          cache-provider: basic
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+      # First build the .apks, then run things like check and lint tasks attached to the build task.
+      # We do this in multiple steps to try to reduce the peak memory usage as a plain
+      # `./gradlew build` often uses up all memory and dies in CI.
+      # See: https://issuetracker.google.com/issues/297088701
+      - run: ./gradlew assembleDebug
+      - run: ./gradlew assembleRelease
+      - run: ./gradlew build
+      - name: Upload apk
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v7
+        with:
+          name: atox-debug.apk
+          path: ./atox/build/outputs/apk/debug/atox-debug.apk
+          if-no-files-found: error
+      # https://github.blog/changelog/2023-02-23-hardware-accelerated-android-virtualization-on-actions-windows-and-linux-larger-hosted-runners/
+      - name: Enable hardware acceleration
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android tests
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          arch: x86_64
+          script: ./gradlew connectedCheck
+
+  tox4j:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: adopt
+          java-version: 17
+      # sbt 0.13.18 is broken starting with sbt-runner 1.11.6.
+      # See: https://github.com/sbt/sbt/issues/8278
+      - uses: sbt/setup-sbt@17575ea4e18dd928fe5968dbe32294b97923d65b # v1.11.13
+        with:
+          sbt-runner-version: 1.11.5
+      - name: Set up cache
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository/org/toktok
+          key: from-src-${{ hashFiles('scripts/**') }}
+      # TODO(robinlinden): Update NDK.
+      - name: Set up NDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          # https://github.com/actions/virtual-environments/issues/5595
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          echo "y" | $SDKMANAGER "ndk;29.0.14206865"
+      - name: Install tox4j dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt install yasm
+      - name: Build tox4j
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_SDK_ROOT}/ndk/29.0.14206865"
+          ./scripts/build-all -j$(nproc)
+      - name: Upload tox4j
+        uses: actions/upload-artifact@v7
+        with:
+          name: tox4j
+          path: ~/.m2
+          if-no-files-found: error
+          include-hidden-files: true
+
+  bazel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: adopt
+          java-version: 17
+      - name: Set up Android
+        run: |
+          echo "y" | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;$NDK_VERSION" | grep -v = || true
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> $GITHUB_ENV
+        env:
+          NDK_VERSION: "25.2.9519653"
+      - name: Set up Bazel cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/bazel
+          key: bazel-${{ hashFiles('.bazelversion', 'WORKSPACE', 'bazel/**') }}
+      - run: bazel test //...
+
+  buildifier:
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install
+        run: |
+          wget --output-document=buildifier https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildifier-linux-amd64
+          sudo chmod +x buildifier
+      - name: Check
+        run: ./buildifier --lint=warn --warnings=all -mode diff WORKSPACE $(find . -type f -name "BUILD.*")
+
+  prettier:
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v6
+      - run: npm install --global prettier@3.3.3
+      - run: npx prettier --ignore-path .gitignore --write .
+      - run: git diff --exit-code
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true

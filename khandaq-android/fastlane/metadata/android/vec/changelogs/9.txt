@@ -1,0 +1,12 @@
+I mesaji mìa mandà i ze salvà cofà un zbos
+Proxy support
+Opsion par senjar in muò automàtego cofà fora de łinea
+Opsion par canbiar bootstrap nodes doparà
+Des te pol domandar łe notifegasion
+Auto-asetar support par łe traslocasion de arcivo
+Avatar bełi ga un posto just
+Deznotar chat des pol butar via i arcivi de łe traslocasion
+Coresion te'l mesaji spacà co multi-byte characters 
+Voltà in Portogheze Braziłian, Ruso, and Zermanego
+
+Pien changelog: https://github.com/evilcorpltd/aTox/releases

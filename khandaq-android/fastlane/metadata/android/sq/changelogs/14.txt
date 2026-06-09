@@ -1,0 +1,8 @@
+U shtua eksportimi i historikut të bisedave
+Mesazhet e kërkesave për miqësi tani shtohen në historikun e bisedave
+Shpejtësia dhe stabiliteti i transferimit të skedarëve janë përmirësuar
+Ekrani tani fiket/ndizet automatikisht gjatë thirrjeve duke përdorur sensorin e afërsisë
+
+Përditësuar në Toxcore 0.2.19
+
+Regjistri i plotë i ndryshimeve: https://github.com/evilcorpltd/aTox/releases

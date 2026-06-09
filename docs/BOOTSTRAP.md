@@ -31,7 +31,7 @@ Full keys are in `config/khandaq_bootstrap_nodes.json`. These are **public** —
 
 ## Public nodes
 
-The registry also includes curated entries from the public Tox network (`nodes.tox.chat`). Khandaq does not operate those nodes.
+The registry also includes curated entries from the public Tox bootstrap network. Khandaq does not operate those nodes.
 
 ## Client integration
 

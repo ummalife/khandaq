@@ -1,2 +1,0 @@
-/usr/bin/ar qc libtox_extension_messages.a CMakeFiles/ToxExtensionMessages.dir/tox_extension_messages.c.o
-/usr/bin/ranlib libtox_extension_messages.a

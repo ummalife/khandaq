@@ -471,7 +471,7 @@ will be used instead.
 ## Avoiding Censorship
 
 Although Tox is distributed, to initially connect to the network
-[public bootstrap nodes](https://nodes.tox.chat) are used. After first run,
+public bootstrap nodes are used. After first run,
 other nodes will also be saved and reused on next start. We have seen multiple
 reports of Tox bootstrap nodes being blocked in China. We haven't seen reports
 of Tox connections in general being blocked, though Tox makes no effort to
@@ -485,7 +485,7 @@ blocking of bootstrap nodes:
 * [Custom bootstrap nodes](#bootstrap-nodes) can be set. Note that these
 require the DHT key of the node, which is different from the longterm Tox
 public key, and which changes on every start of a client, so it's best to use a
-[bootstrap daemon](https://github.com/TokTok/c-toxcore/tree/master/other/bootstrap_daemon).
+bootstrap daemon (see c-toxcore upstream docs).
 
 [ToxMe service]: #register-on-toxme
 [user profile]: #user-profile

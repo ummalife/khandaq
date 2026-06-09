@@ -2,7 +2,7 @@
 
 Minimal infrastructure for **Khandaq-owned** Tox bootstrap nodes.
 
-**Important:** The public Tox network is not replaced. Khandaq nodes are **added** on top of existing bootstrap entries from `nodes.tox.chat` (see `config/khandaq_bootstrap_nodes.json`).
+**Important:** The public Tox network is not replaced. Khandaq nodes are **added** on top of existing public bootstrap entries (see `config/khandaq_bootstrap_nodes.json`).
 
 ## Target topology
 

@@ -1,4 +1,0 @@
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/lib/libtox_extension_messages.a
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/include/tox_extension_messages.h
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/lib/cmake/ToxExtensionMessages/ToxExtensionMessagesConfig.cmake
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/lib/cmake/ToxExtensionMessages/ToxExtensionMessagesConfig-release.cmake

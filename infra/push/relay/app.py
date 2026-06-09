@@ -176,7 +176,7 @@ def root():
     return jsonify({
         "service": "khandaq-push-relay",
         "endpoints": ["/toxfcm/fcm.php?id=<fcm_token>&type=1"],
-        "privacy": "wake-only, no message content",
+        "privacy": "wake-only, no message content; optional sender public key via &from=",
     })
 
 

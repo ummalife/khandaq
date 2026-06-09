@@ -31,7 +31,7 @@ iptables -A INPUT -p tcp --dport 33445 -j ACCEPT
 
 ```bash
 nc -vz YOUR_IP 33445          # TCP
-# UDP: см. nodes.tox.chat или scripts/audit-bootstrap-nodes.sh
+# UDP: см. public bootstrap registry или scripts/audit-bootstrap-nodes.sh
 ```
 
 ## Не открывать

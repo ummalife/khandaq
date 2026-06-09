@@ -32,6 +32,21 @@ khandaq-ios/*.xcodeproj/project.xcworkspace/xcuserdata/
 # Desktop build
 khandaq-desktop/build/
 
+# Local cmake outputs under buildscripts (source trees like toxext stay tracked)
+khandaq-desktop/buildscripts/**/CMakeFiles/
+khandaq-desktop/buildscripts/**/CMakeCache.txt
+khandaq-desktop/buildscripts/**/cmake_install.cmake
+khandaq-desktop/buildscripts/**/CTestTestfile.cmake
+khandaq-desktop/buildscripts/**/DartConfiguration.tcl
+khandaq-desktop/buildscripts/**/install_manifest.txt
+khandaq-desktop/buildscripts/**/Makefile
+khandaq-desktop/buildscripts/**/Makefile2
+khandaq-desktop/buildscripts/**/Testing/
+khandaq-desktop/buildscripts/**/*.o
+khandaq-desktop/buildscripts/**/*.o.d
+khandaq-desktop/buildscripts/**/compiler_depend.*
+khandaq-desktop/buildscripts/toxcore/DHT_bootstrap
+
 # Distribution binaries (published via GitHub Releases, not git history)
 dist/
 .release-staging/

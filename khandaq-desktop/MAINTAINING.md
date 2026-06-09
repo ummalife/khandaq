@@ -205,7 +205,7 @@ If a new translation language has been added, update the following files:
   1.11.0`
 - Update toxcore version number to the latest tag in [`./buildscripts/download/download_toxcore.sh]
 - Pull in latest translations from Weblate.
-- Update the bootstrap nodelist at `./res/nodes.json` from https://nodes.tox.chat/json.
+- Update the bootstrap nodelist at `./res/nodes.json` from the public Tox bootstrap registry (see `config/khandaq_bootstrap_nodes.json`).
   This can be done by running [`./tools/update-nodes.sh`]
 - Generate changelog with `clog`.
   - In a `MAJOR`/`MINOR` release tag should include information that changelog
@@ -227,7 +227,7 @@ If a new translation language has been added, update the following files:
   in detached and ascii armored mode, e.g. `gpg -a -b <artifact>`, and upload
   the signatures to the draft release.
 - Add a title and description to the draft release, then publish the release.
-- Update download links on https://tox.chat to point to the new release.
+- Update download links on https://khandaq.org and GitHub Releases to point to the new release.
 - Write a short blog post for https://github.com/qTox/blog/ and advertise the
   post on Tox IRC channels, popular Tox groups, reddit, or whatever other platforms.
 - Merge [`./flatpak/io.github.qtox.qTox.json`] into the manifest of our

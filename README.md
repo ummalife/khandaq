@@ -1,6 +1,6 @@
 # Khandaq Messenger
 
-Open-source, decentralized messenger built on the [Tox](https://tox.chat/) protocol. Khandaq adds branded clients, optional Khandaq-owned bootstrap nodes, and a privacy-preserving push wake relay — without replacing the public Tox network.
+Open-source, decentralized messenger built on the Tox protocol. Khandaq adds branded clients, optional Khandaq-owned bootstrap nodes, and a privacy-preserving push wake relay — without replacing the public Tox network.
 
 **Repository:** https://github.com/ummalife/khandaq  
 **Website:** https://khandaq.org  
@@ -12,9 +12,9 @@ Open-source, decentralized messenger built on the [Tox](https://tox.chat/) proto
 
 | Path | Description |
 |------|-------------|
-| [`khandaq-desktop/`](khandaq-desktop/) | Desktop client (Qt/C++), forked from [qTox](https://github.com/TokTok/qTox) |
-| [`khandaq-ios/`](khandaq-ios/) | iOS client (Swift), forked from [Antidote](https://github.com/Antidote-for-Tox/Antidote) |
-| [`khandaq-android-trifa/`](khandaq-android-trifa/) | Android client (Java/Kotlin), forked from [TRIfA](https://github.com/zoff99/ToxAndroidRefImpl) |
+| [`khandaq-desktop/`](khandaq-desktop/) | Desktop client (Qt/C++), forked from qTox |
+| [`khandaq-ios/`](khandaq-ios/) | iOS client (Swift), forked from Antidote |
+| [`khandaq-android-trifa/`](khandaq-android-trifa/) | Android client (Java/Kotlin), forked from TRIfA |
 | [`khandaq-android/`](khandaq-android/) | Legacy Android reference (aTox-based) |
 | [`config/`](config/) | Public network config (bootstrap registry, push relay URLs) |
 | [`infra/`](infra/) | Bootstrap node & push relay deployment templates (Docker, nginx) |
@@ -22,7 +22,7 @@ Open-source, decentralized messenger built on the [Tox](https://tox.chat/) proto
 | [`web/messenger/`](web/messenger/) | Static download landing page |
 | [`docs/`](docs/) | Public documentation (English) |
 
-Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure only provides bootstrap discovery and opaque push wake notifications (no message body on the relay).
+Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure provides bootstrap discovery and push **wake** notifications (no message body; optional sender public key for chat routing — see [docs/PUSH_RELAY.md](docs/PUSH_RELAY.md)).
 
 ---
 
@@ -51,7 +51,7 @@ These URLs are embedded in client builds and configuration files:
 | Service | URL | Purpose |
 |---------|-----|---------|
 | Bootstrap registry | https://bootstrap.khandaq.org/nodes.json | Khandaq + public Tox bootstrap list |
-| Push wake relay | https://push.khandaq.org/toxfcm/fcm.php | FCM/APNs wake only (no message payload) |
+| Push wake relay | https://push.khandaq.org/toxfcm/fcm.php | FCM/APNs wake only (no message body; see PUSH_RELAY.md) |
 | Main site | https://khandaq.org | Project website |
 
 Source of truth: [`config/khandaq_bootstrap_nodes.json`](config/khandaq_bootstrap_nodes.json), [`config/khandaq_push.json`](config/khandaq_push.json).
@@ -99,10 +99,10 @@ cd khandaq-ios && pod install
 
 Khandaq is a fork/rebrand. Core protocol and libraries:
 
-- [TokTok/c-toxcore](https://github.com/TokTok/c-toxcore) — Tox protocol implementation
-- [TokTok/qTox](https://github.com/TokTok/qTox) — desktop base
-- [Antidote-for-Tox/Antidote](https://github.com/Antidote-for-Tox/Antidote) — iOS base
-- [zoff99/ToxAndroidRefImpl](https://github.com/zoff99/ToxAndroidRefImpl) — Android (TRIfA) base
+- **c-toxcore** — Tox protocol implementation
+- **qTox** — desktop base
+- **Antidote** — iOS base
+- **TRIfA** (ToxAndroidRefImpl) — Android base
 
 Khandaq maintains **Tox wire compatibility** — clients can talk to standard Tox peers.
 

@@ -1,5 +1,0 @@
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/lib/cmake/ToxExt/ToxExtConfig.cmake
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/lib/cmake/ToxExt/ToxExtConfig-release.cmake
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/lib/libtoxext.a
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/include/toxext/toxext.h
-/Users/lucyok/Khandaq/khandaq-desktop/local-deps/include/toxext/toxext_util.h

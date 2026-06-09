@@ -2,8 +2,7 @@
 
 Due to a lack of resources, this repository of qTox is no longer maintained.
 
-There is an active fork of qTox at [TokTok/qTox](https://github.com/TokTok/qTox)
-which I recommend for future releases.
+There is an active fork of qTox at TokTok/qTox which I recommend for future releases.
 
 I want to take the time and thank all
 [contributors](https://github.com/qTox/qTox/graphs/contributors) and
@@ -57,8 +56,8 @@ the encrypted peer-to-peer Tox protocol.
  **[Install/Build] |**
  **[Roadmap] |**
  **[Report bugs] |**
- **[Jenkins builds] |**
- **[Mailing list] |**
+ Jenkins builds |
+ Mailing list |
  **IRC:** [#qtox@libera.chat]
 
 ---
@@ -138,7 +137,7 @@ idea of the general look and features.
 
 ### Organizational stuff
 
-Happens in both IRC channel [#qtox@libera.chat] and on [qTox-dev mailing list].
+Happens in both IRC channel [#qtox@libera.chat] and on the qTox-dev mailing list.
 If you are interested in participating, **join the channel** and **subscribe to
 the mailing list**.
 
@@ -198,10 +197,7 @@ AED3 1134 9C23 A123 E5C4  AA4B 139C A045 3DA2 D773
 [Install/Build]: /INSTALL.md
 [IRC logs]: https://github.com/qTox/qtox-irc-logs
 [issues that need help]: https://github.com/qTox/qTox/labels/help%20wanted
-[Jenkins builds]: https://build.tox.chat/
-[Mailing list]: https://lists.tox.chat
 [From Source]: /INSTALL.md#linux
-[qTox-dev mailing list]: https://lists.tox.chat/listinfo/qtox-dev
 [Package & Port]: /INSTALL.md#freebsd-easy
 [Report bugs]: https://github.com/qTox/qTox/wiki/Writing-Useful-Bug-Reports
 [reporting bugs]: https://github.com/qTox/qTox/wiki/Writing-Useful-Bug-Reports

@@ -15,14 +15,14 @@ journalctl -u khandaq-bootstrap -f
 nc -vz localhost 33445
 ```
 
-### 3. nodes.tox.chat (внешний)
+### 3. Public bootstrap registry (внешний)
 
-После деплоя нода должна появиться в https://nodes.tox.chat/json в течение 24–48 ч (зависит от сканера).
+После деплоя нода должна появиться в публичном реестре bootstrap-нод в течение 24–48 ч (зависит от сканера). URL — `public_registry` в `config/khandaq_bootstrap_nodes.json`.
 
 Проверка:
 
 ```bash
-curl -fsSL https://nodes.tox.chat/json | jq '.nodes[] | select(.public_key=="YOUR_KEY")'
+curl -fsSL "$(jq -r .sources.public_registry config/khandaq_bootstrap_nodes.json)" | jq '.nodes[] | select(.public_key=="YOUR_KEY")'
 ```
 
 ### 4. Локальный аудит
@@ -37,7 +37,7 @@ curl -fsSL https://nodes.tox.chat/json | jq '.nodes[] | select(.public_key=="YOU
 |---------|-------|----------|
 | systemd active | != active | restart + alert |
 | TCP 33445 | closed | check firewall / process |
-| В nodes.tox.chat | offline > 7d | investigate VPS |
+| В public registry | offline > 7d | investigate VPS |
 | Disk /var/lib | > 80% | rotate logs |
 
 ## Алерты (пример cron)

@@ -12,7 +12,7 @@ Khandaq clients connect to the **public Tox DHT**. Khandaq adds infrastructure t
        │ bootstrap / DHT                        │
        ▼                                        ▼
 ┌──────────────────────────────────────────────────────┐
-│  Public Tox bootstrap nodes (nodes.tox.chat, etc.)    │
+│  Public Tox bootstrap nodes (community registry)      │
 │  + Khandaq-owned nodes (bootstrap1/2/3.khandaq.org)  │
 └──────────────────────────────────────────────────────┘
 
@@ -35,10 +35,10 @@ Khandaq clients connect to the **public Tox DHT**. Khandaq adds infrastructure t
 
 | Data | Bootstrap nodes | Push relay |
 |------|-----------------|------------|
-| Tox public keys | Yes (required for DHT) | No |
+| Tox public keys | Yes (required for DHT) | Optional sender key only (`&from=`, 64 hex) |
 | IP addresses | Yes (network traffic) | Yes (HTTP access logs) |
 | Message content | **No** | **No** |
-| FCM/APNs device token | No | Yes (query parameter only) |
+| FCM/APNs device token | No | Yes (query parameter `id=`) |
 
 ## Khandaq-owned bootstrap nodes
 
@@ -48,7 +48,7 @@ Hostnames (public keys in `config/khandaq_bootstrap_nodes.json`):
 - `bootstrap2.khandaq.org` (US)
 - `bootstrap3.khandaq.org` (DE)
 
-Policy: **additive** — Khandaq nodes are added alongside public `nodes.tox.chat` entries, not replacing the global Tox network.
+Policy: **additive** — Khandaq nodes are added alongside public community bootstrap entries, not replacing the global Tox network.
 
 ## Auditing
 

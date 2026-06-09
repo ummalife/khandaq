@@ -1,7 +1,0 @@
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/ToxExtensionMessages.dir
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/edit_cache.dir
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/rebuild_cache.dir
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/list_install_components.dir
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/install.dir
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/install/local.dir
-/Users/lucyok/Khandaq/khandaq-desktop/buildscripts/toxext_messages/CMakeFiles/install/strip.dir

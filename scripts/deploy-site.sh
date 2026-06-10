@@ -68,12 +68,14 @@ if not snippet.endswith('\n'):
     snippet += '\n'
 lines = nginx.read_text().splitlines(keepends=True)
 
-start = next((i for i, l in enumerate(lines) if 'Настройки для Element Web' in l), None)
+start = next((i for i, l in enumerate(lines) if 'location = /messenger' in l), None)
+if start is None:
+    start = next((i for i, l in enumerate(lines) if 'Настройки для Element Web' in l), None)
 if start is None:
     start = next((i for i, l in enumerate(lines) if 'location = /index.html' in l), None)
 idx = next((i for i, l in enumerate(lines) if l.strip() == 'location / {' and i > (start or 0)), None)
 if start is None or idx is None:
-    print('ERROR: Element Web block not found', file=sys.stderr)
+    print('ERROR: static site block not found', file=sys.stderr)
     sys.exit(1)
 
 depth = 0

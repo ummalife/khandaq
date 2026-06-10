@@ -36,36 +36,32 @@
   <main id="main" class="changelog-page">
     <section class="container cl-hero">
       <p class="eyebrow">Release history</p>
-      <h1>Fixes &amp; updates</h1>
+      <h1>Changelog</h1>
       <p class="cl-hero-lead">
-        Change log synced from <a id="gh-link" href="https://github.com/ummalife/khandaq">GitHub</a>.
-        Each entry is tagged with a severity level — like traffic-light status indicators.
+        Security fixes and updates from <a id="gh-link" href="https://github.com/ummalife/khandaq">GitHub</a>.
+        <span class="cl-legend-inline">
+          <span class="cl-dot critical"></span> critical
+          <span class="cl-dot important"></span> important
+          <span class="cl-dot medium"></span> medium
+          <span class="cl-dot low"></span> low
+        </span>
       </p>
-      <div class="cl-legend" aria-label="Severity levels">
-        <div class="cl-legend-item"><span class="cl-dot critical"></span> Critical — vulnerability, crash, data leak</div>
-        <div class="cl-legend-item"><span class="cl-dot important"></span> Important — serious bug or weakness</div>
-        <div class="cl-legend-item"><span class="cl-dot medium"></span> Medium — stability, hardening</div>
-        <div class="cl-legend-item"><span class="cl-dot low"></span> Low — minor changes</div>
-        <div class="cl-legend-item"><span class="cl-dot fixed"></span> <span class="cl-fixed-label">Fixed</span></div>
-      </div>
     </section>
 
-    <section class="container">
-      <div id="cl-summary" class="cl-summary" hidden></div>
-
+    <section class="container cl-content">
       <div class="cl-toolbar">
-        <div class="cl-filters" role="group" aria-label="Filter">
-          <button type="button" class="cl-filter active" data-filter="all"><span class="cl-dot all"></span>All</button>
-          <button type="button" class="cl-filter" data-filter="critical"><span class="cl-dot critical"></span>Critical</button>
-          <button type="button" class="cl-filter" data-filter="important"><span class="cl-dot important"></span>Important</button>
-          <button type="button" class="cl-filter" data-filter="medium"><span class="cl-dot medium"></span>Medium</button>
-          <button type="button" class="cl-filter" data-filter="low"><span class="cl-dot low"></span>Low</button>
+        <div class="cl-filters" role="group" aria-label="Filter by severity">
+          <button type="button" class="cl-filter active" data-filter="all">All</button>
+          <button type="button" class="cl-filter" data-filter="critical">Critical</button>
+          <button type="button" class="cl-filter" data-filter="important">Important</button>
+          <button type="button" class="cl-filter" data-filter="medium">Medium</button>
+          <button type="button" class="cl-filter" data-filter="low">Low</button>
         </div>
         <p class="cl-meta" id="changelog-meta"></p>
       </div>
 
       <div id="changelog-root" class="cl-root" aria-live="polite">
-        <div class="cl-loading"><span class="cl-dot medium"></span> Loading changelog…</div>
+        <p class="cl-loading">Loading…</p>
       </div>
     </section>
   </main>
@@ -97,26 +93,10 @@
   <script>
     (function () {
       var SEV = ['critical', 'important', 'medium', 'low'];
-      var SEV_LABEL = {
-        critical: 'Critical',
-        important: 'Important',
-        medium: 'Medium',
-        low: 'Low'
-      };
-      var SEV_HINT = {
-        critical: 'Required immediate fix',
-        important: 'Significant risk or bug',
-        medium: 'Stability improvement',
-        low: 'Minor change'
-      };
+      var SEV_LABEL = { critical: 'Critical', important: 'Important', medium: 'Medium', low: 'Low' };
       var PLAT = {
-        android: 'Android',
-        ios: 'iOS',
-        desktop: 'Desktop',
-        infra: 'Infrastructure',
-        windows: 'Windows',
-        macos: 'macOS',
-        linux: 'Linux'
+        android: 'Android', ios: 'iOS', desktop: 'Desktop', infra: 'Infra',
+        windows: 'Windows', macos: 'macOS', linux: 'Linux'
       };
       var activeFilter = 'all';
       var data = null;
@@ -130,156 +110,100 @@
         return activeFilter === 'all' || sev === activeFilter;
       }
 
-      function commitsHtml(commits) {
-        if (!commits || !commits.length) return '';
-        return '<div class="cl-commits">' + commits.map(function (c) {
-          return '<a class="cl-commit" href="' + esc(c.url) + '" rel="noopener noreferrer" title="View commit on GitHub">' +
-            '<span class="cl-commit-icon">⎇</span>' + esc(c.hash) + '</a>';
-        }).join('') + '</div>';
+      function sortChanges(changes) {
+        return (changes || []).slice().sort(function (a, b) {
+          return SEV.indexOf(a.severity) - SEV.indexOf(b.severity);
+        });
       }
 
-      function platformsHtml(platforms) {
-        if (!platforms || !platforms.length) return '';
-        return '<div class="cl-platforms">' + platforms.map(function (p) {
-          return '<span class="cl-platform">' + esc(PLAT[p] || p) + '</span>';
-        }).join('') + '</div>';
+      function countSummary(changes) {
+        var c = { critical: 0, important: 0, medium: 0, low: 0 };
+        (changes || []).forEach(function (ch) {
+          if (c[ch.severity] !== undefined) c[ch.severity]++;
+        });
+        var parts = SEV.filter(function (s) { return c[s] > 0; }).map(function (s) {
+          return c[s] + ' ' + SEV_LABEL[s].toLowerCase();
+        });
+        var total = c.critical + c.important + c.medium + c.low;
+        return { total: total, parts: parts };
       }
 
       function itemHtml(ch) {
         if (!matches(ch.severity)) return '';
-        return '<article class="cl-item" data-severity="' + esc(ch.severity) + '">' +
-          '<div class="cl-item-rail"><span class="cl-dot ' + esc(ch.severity) + '"></span></div>' +
-          '<div class="cl-item-body">' +
-            '<div class="cl-item-top">' +
-              '<span class="cl-sev-pill ' + esc(ch.severity) + '">' + esc(SEV_LABEL[ch.severity]) + '</span>' +
-              '<span class="cl-status-fixed"><span class="cl-dot fixed"></span>Fixed</span>' +
-            '</div>' +
-            '<h4 class="cl-item-title">' + esc(ch.title) + '</h4>' +
-            (ch.description ? '<p class="cl-item-desc">' + esc(ch.description) + '</p>' : '') +
-            '<div class="cl-item-foot">' + platformsHtml(ch.platforms) + commitsHtml(ch.commits) + '</div>' +
+        var plats = (ch.platforms || []).map(function (p) { return PLAT[p] || p; }).join(' · ');
+        return '<li class="cl-entry cl-entry--' + esc(ch.severity) + '">' +
+          '<div class="cl-entry-marker" aria-hidden="true"><span class="cl-dot ' + esc(ch.severity) + '"></span></div>' +
+          '<div class="cl-entry-main">' +
+            '<p class="cl-entry-meta">' + esc(SEV_LABEL[ch.severity]) +
+              (plats ? ' · <span class="cl-entry-plat">' + esc(plats) + '</span>' : '') + '</p>' +
+            '<h3 class="cl-entry-title">' + esc(ch.title) + '</h3>' +
+            (ch.description ? '<p class="cl-entry-desc">' + esc(ch.description) + '</p>' : '') +
           '</div>' +
-        '</article>';
-      }
-
-      function groupBySeverity(changes) {
-        var groups = {};
-        SEV.forEach(function (s) { groups[s] = []; });
-        (changes || []).forEach(function (ch) {
-          if (matches(ch.severity)) groups[ch.severity].push(ch);
-        });
-        return groups;
-      }
-
-      function severityGroupHtml(sev, items) {
-        if (!items.length) return '';
-        return '<div class="cl-sev-group cl-sev-group--' + sev + '">' +
-          '<div class="cl-sev-head">' +
-            '<span class="cl-dot ' + sev + '"></span>' +
-            '<span class="cl-sev-head-label">' + esc(SEV_LABEL[sev]) + '</span>' +
-            '<span class="cl-sev-count">' + items.length + '</span>' +
-            '<span class="cl-sev-hint">' + esc(SEV_HINT[sev]) + '</span>' +
-          '</div>' +
-          '<div class="cl-sev-items">' + items.map(itemHtml).join('') + '</div>' +
-        '</div>';
+        '</li>';
       }
 
       function releaseHtml(rel) {
-        var groups = groupBySeverity(rel.changes);
-        var hasAny = SEV.some(function (s) { return groups[s].length; });
-        if (!hasAny && activeFilter !== 'all') return '';
+        var visible = sortChanges(rel.changes).filter(function (ch) { return matches(ch.severity); });
+        if (!visible.length && activeFilter !== 'all') return '';
 
-        var groupsHtml = SEV.map(function (s) {
-          return severityGroupHtml(s, groups[s]);
-        }).join('');
+        var summary = countSummary(rel.changes);
+        var items = visible.map(itemHtml).join('');
 
-        return '<section class="cl-release">' +
+        return '<article class="cl-release">' +
           '<header class="cl-release-head">' +
-            '<div class="cl-release-date">' +
+            '<div class="cl-release-meta">' +
               '<time datetime="' + esc(rel.date) + '">' + formatDate(rel.date) + '</time>' +
               (rel.version ? '<span class="cl-version">v' + esc(rel.version) + '</span>' : '') +
             '</div>' +
             '<h2 class="cl-release-title">' + esc(rel.title) + '</h2>' +
             (rel.summary ? '<p class="cl-release-summary">' + esc(rel.summary) + '</p>' : '') +
-            (rel.commits && rel.commits.length ? '<div class="cl-release-commits">' +
-              '<span class="cl-release-commits-label">Release commits:</span>' + commitsHtml(rel.commits) + '</div>' : '') +
+            (summary.total ? '<p class="cl-release-count">' + summary.total + ' fixes' +
+              (summary.parts.length ? ' — ' + esc(summary.parts.join(', ')) : '') + '</p>' : '') +
           '</header>' +
-          '<div class="cl-release-body">' +
-            (groupsHtml || '<p class="cl-empty">No entries match the selected filter.</p>') +
-          '</div>' +
-        '</section>';
+          '<ol class="cl-list">' + (items || '<li class="cl-empty">No entries for this filter.</li>') + '</ol>' +
+          (rel.commits && rel.commits.length ?
+            '<footer class="cl-release-foot">' +
+              '<span class="cl-foot-label">Commits</span> ' +
+              rel.commits.map(function (c) {
+                return '<a class="cl-commit" href="' + esc(c.url) + '" rel="noopener noreferrer">' + esc(c.hash) + '</a>';
+              }).join('') +
+            '</footer>' : '') +
+        '</article>';
       }
 
       function formatDate(iso) {
         try {
-          var d = new Date(iso + 'T12:00:00');
-          return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-        } catch (e) {
-          return iso;
-        }
-      }
-
-      function summaryHtml(releases) {
-        var counts = { critical: 0, important: 0, medium: 0, low: 0 };
-        (releases || []).forEach(function (r) {
-          (r.changes || []).forEach(function (ch) {
-            if (counts[ch.severity] !== undefined) counts[ch.severity]++;
+          return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', {
+            month: 'long', day: 'numeric', year: 'numeric'
           });
-        });
-        var total = counts.critical + counts.important + counts.medium + counts.low;
-        if (!total) return '';
-
-        return SEV.map(function (s) {
-          return '<div class="cl-stat cl-stat--' + s + '">' +
-            '<span class="cl-dot ' + s + '"></span>' +
-            '<span class="cl-stat-num">' + counts[s] + '</span>' +
-            '<span class="cl-stat-label">' + esc(SEV_LABEL[s]) + '</span>' +
-          '</div>';
-        }).join('') + '<div class="cl-stat cl-stat--total">' +
-          '<span class="cl-stat-num">' + total + '</span>' +
-          '<span class="cl-stat-label">total fixes</span></div>';
+        } catch (e) { return iso; }
       }
 
       function render() {
         var root = document.getElementById('changelog-root');
         if (!data) return;
 
-        var summary = document.getElementById('cl-summary');
-        var sumHtml = summaryHtml(data.releases);
-        if (sumHtml) {
-          summary.innerHTML = sumHtml;
-          summary.hidden = false;
-        }
-
         var parts = (data.releases || []).map(releaseHtml).filter(Boolean);
-        var days = (data.days || []).filter(function (day) {
-          return (day.changes || []).some(function (c) { return matches(c.severity); });
+        (data.days || []).forEach(function (day) {
+          var visible = sortChanges(day.changes).filter(function (ch) { return matches(ch.severity); });
+          if (!visible.length) return;
+          parts.push('<article class="cl-release cl-release--day">' +
+            '<header class="cl-release-head"><time datetime="' + esc(day.date) + '">' + formatDate(day.date) + '</time></header>' +
+            '<ol class="cl-list">' + visible.map(itemHtml).join('') + '</ol></article>');
         });
-
-        if (days.length) {
-          parts.push('<div class="cl-days-label">Tagged commits by day</div>');
-          days.forEach(function (day) {
-            var groups = groupBySeverity(day.changes);
-            parts.push('<section class="cl-release cl-release--day">' +
-              '<header class="cl-release-head"><time class="cl-day-date" datetime="' + esc(day.date) + '">' +
-              formatDate(day.date) + '</time></header>' +
-              '<div class="cl-release-body">' +
-              SEV.map(function (s) { return severityGroupHtml(s, groups[s]); }).join('') +
-              '</div></section>');
-          });
-        }
 
         root.innerHTML = parts.length
           ? parts.join('')
-          : '<p class="cl-empty">No entries yet. New fixes appear after commits tagged <code class="cl-code">[critical]</code>, etc.</p>';
+          : '<p class="cl-empty">No entries yet.</p>';
       }
 
       function setMeta() {
         var el = document.getElementById('changelog-meta');
-        if (!data || !el) return;
-        var t = (data.generated_at || '').replace('T', ' ').replace('Z', ' UTC');
-        el.textContent = 'Updated ' + t;
+        if (data && el) {
+          el.textContent = 'Updated ' + (data.generated_at || '').replace('T', ' ').replace('Z', ' UTC');
+        }
         var gh = document.getElementById('gh-link');
-        if (gh && data.github_url) gh.href = data.github_url;
+        if (gh && data && data.github_url) gh.href = data.github_url;
       }
 
       document.querySelectorAll('.cl-filter').forEach(function (btn) {
@@ -292,11 +216,11 @@
       });
 
       fetch('/changelog.json', { cache: 'no-cache' })
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (json) { data = json; setMeta(); render(); })
         .catch(function () {
           document.getElementById('changelog-root').innerHTML =
-            '<p class="cl-error">Failed to load changelog data. <a href="https://github.com/ummalife/khandaq/commits/master">View on GitHub</a></p>';
+            '<p class="cl-error">Could not load data. <a href="https://github.com/ummalife/khandaq/commits/master">View on GitHub</a>.</p>';
         });
     })();
   </script>

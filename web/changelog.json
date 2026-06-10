@@ -1,35 +1,35 @@
 {
-  "generated_at": "2026-06-10T15:51:37Z",
+  "generated_at": "2026-06-10T15:57:10Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
     {
       "id": "critical",
-      "label": "Критический",
-      "description": "Уязвимость, краш, утечка данных, RCE"
+      "label": "Critical",
+      "description": "Vulnerability, crash, data leak, RCE"
     },
     {
       "id": "important",
-      "label": "Важный",
-      "description": "Серьёзный баг или слабое место без немедленной эксплуатации"
+      "label": "Important",
+      "description": "Serious bug or weakness without immediate exploitation"
     },
     {
       "id": "medium",
-      "label": "Средний",
-      "description": "Стабильность, UX, hardening"
+      "label": "Medium",
+      "description": "Stability, UX, hardening"
     },
     {
       "id": "low",
-      "label": "Низкий",
-      "description": "Мелкие правки, документация, косметика"
+      "label": "Low",
+      "description": "Minor fixes, documentation, cosmetic changes"
     }
   ],
   "releases": [
     {
       "version": "0.2.5",
       "date": "2026-06-10",
-      "title": "Исправления по аудиту безопасности",
-      "summary": "16 уязвимостей из внешнего аудита закрыты в коде. Сборки v0.2.5 для Android, iOS, Desktop и обновлённый push-relay.",
+      "title": "Security audit remediation",
+      "summary": "16 vulnerabilities from the external security audit fixed in code. v0.2.5 builds for Android, iOS, Desktop, and an updated push relay.",
       "commits": [
         {
           "hash": "48cf534",
@@ -50,64 +50,64 @@
       "changes": [
         {
           "severity": "critical",
-          "title": "Краш Android при разблокировке после пароля",
-          "description": "Экран «Разблокировать» молча блокировал вход из-за isPasswordValid(). Теперь проверка корректная, ошибки видны в UI.",
+          "title": "Android unlock crash after password",
+          "description": "The unlock screen silently blocked login due to isPasswordValid(). Validation now works correctly and errors are shown in the UI.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "critical",
-          "title": "Перехват push-токена через exported receiver",
-          "description": "Любое приложение могло подменить FCM-токен через broadcast. Receiver закрыт (exported=false), токен применяется только изнутри приложения.",
+          "title": "Push token hijack via exported receiver",
+          "description": "Any app could replace the FCM token via broadcast. Receiver is now closed (exported=false); token is applied only from inside the app.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "critical",
-          "title": "Утечка IP через автозагрузку карты OpenStreetMap",
-          "description": "Входящие координаты автоматически запрашивали tile.openstreetmap.org. Карта грузится только по явному тапу пользователя.",
+          "title": "IP leak via automatic OpenStreetMap tile load",
+          "description": "Incoming location messages automatically requested tile.openstreetmap.org. Map tiles load only after an explicit user tap.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "critical",
-          "title": "iOS: чтение буфера за пределами строки в push-пакете",
-          "description": "Lossless packet без \\0 вызывал over-read и краш. Строки читаются через initWithBytes:length: с явной длиной.",
+          "title": "iOS buffer over-read in push packet",
+          "description": "Lossless packets without a null terminator caused over-read and crash. Strings are read via initWithBytes:length: with explicit length.",
           "platforms": [
             "ios"
           ]
         },
         {
           "severity": "critical",
-          "title": "iOS: path traversal при сохранении файлов от контакта",
-          "description": "Имя файла ../../Library/evil могло выйти за пределы downloads. Используется lastPathComponent и фильтр ..",
+          "title": "iOS path traversal when saving files from contacts",
+          "description": "Filenames like ../../Library/evil could escape the downloads directory. Uses lastPathComponent and filters .. segments.",
           "platforms": [
             "ios"
           ]
         },
         {
           "severity": "critical",
-          "title": "Android: path traversal в IOCipherContentProvider",
-          "description": "Соседнее приложение могло читать чужие файлы через content:// с .. в пути. Provider закрыт, небезопасные пути отклоняются.",
+          "title": "Android IOCipherContentProvider path traversal",
+          "description": "A neighbouring app could read foreign files via content:// paths with ... Provider is closed; unsafe paths are rejected.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "important",
-          "title": "Command injection в bootstrap-скриптах",
-          "description": "Вредоносный host в registry мог выполнить произвольную команду. Добавлена валидация host, убран bash -c, ssh с разделителем --.",
+          "title": "Command injection in bootstrap scripts",
+          "description": "A malicious host in the registry could run arbitrary commands. Host validation added; bash -c removed; ssh uses -- separator.",
           "platforms": [
             "infra"
           ]
         },
         {
           "severity": "important",
-          "title": "Открытая push-будилка и flood без ограничений",
-          "description": "Любой мог слать wake-запросы на push.khandaq.org. Добавлены rate limit, опциональный HMAC-auth, корректные коды при timeout FCM.",
+          "title": "Open push wake endpoint and flood",
+          "description": "Anyone could send wake requests to push.khandaq.org. Rate limits added, optional HMAC auth, proper codes on FCM timeout.",
           "platforms": [
             "infra",
             "android",
@@ -116,16 +116,16 @@
         },
         {
           "severity": "important",
-          "title": "Слабое хранение ключа шифрования БД (Android)",
-          "description": "Ключ БД хранился в plaintext в SharedPreferences. Skip-mode → Android Keystore; новые пароли → PBKDF2 + salt.",
+          "title": "Weak Android database encryption key storage",
+          "description": "DB key was stored in plaintext in SharedPreferences. Skip mode uses Android Keystore; new passwords use PBKDF2 + salt.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "important",
-          "title": "Слабый whitelist push URL",
-          "description": "Контакт мог подсунуть push URL на сторонний сервер (ntfy.sh и др.). Принимаются только push.khandaq.org и tox.zoff.xyz.",
+          "title": "Weak push URL whitelist",
+          "description": "A contact could supply a push URL to a third-party server (ntfy.sh, etc.). Only push.khandaq.org and tox.zoff.xyz are accepted.",
           "platforms": [
             "android",
             "ios"
@@ -133,48 +133,48 @@
         },
         {
           "severity": "medium",
-          "title": "Зависание Desktop на длинном markdown",
-          "description": "Сообщение 20k+ с незакрытым ``` блокировало UI. Лимит markdown 16k, multiline code — 8k.",
+          "title": "Desktop hang on long markdown messages",
+          "description": "Messages 20k+ with unclosed ``` blocks froze the UI. Markdown limited to 16k; multiline code blocks to 8k.",
           "platforms": [
             "desktop"
           ]
         },
         {
           "severity": "medium",
-          "title": "Bootstrap nodes без валидации при импорте",
-          "description": "Произвольный JSON с невалидным host попадал в БД. Добавлен BootstrapHostValidator.",
+          "title": "Bootstrap nodes imported without validation",
+          "description": "Arbitrary JSON with invalid hosts could enter the database. BootstrapHostValidator added on import.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "medium",
-          "title": "nginx без rate limit на push",
-          "description": "Flood на push.khandaq.org не ограничивался на уровне nginx. Добавлены limit_req и limit_conn.",
+          "title": "nginx rate limit missing on push endpoint",
+          "description": "Flooding push.khandaq.org was not limited at nginx level. limit_req and limit_conn added.",
           "platforms": [
             "infra"
           ]
         },
         {
           "severity": "medium",
-          "title": "Предсказуемый nospam при регистрации",
-          "description": "nospam генерировался слабым PRNG. Заменён на SecureRandom.",
+          "title": "Predictable nospam on registration",
+          "description": "nospam was generated with a weak PRNG. Replaced with SecureRandom.",
           "platforms": [
             "android"
           ]
         },
         {
           "severity": "low",
-          "title": "Незакреплённая версия toxcore в bootstrap Docker",
-          "description": "Сборка bootstrap могла тянуть произвольный toxcore. Закреплён TOXCORE_TAG=v0.2.20.",
+          "title": "Unpinned toxcore in bootstrap Docker image",
+          "description": "Bootstrap build could pull an arbitrary toxcore revision. Pinned to TOXCORE_TAG=v0.2.20.",
           "platforms": [
             "infra"
           ]
         },
         {
           "severity": "low",
-          "title": "iOS: KhandaqPush несовместим с iOS 12",
-          "description": "CryptoKit требовал iOS 13+, сборка TestFlight падала. HMAC переведён на CommonCrypto.",
+          "title": "iOS KhandaqPush incompatible with iOS 12",
+          "description": "CryptoKit required iOS 13+, breaking TestFlight builds. HMAC moved to CommonCrypto.",
           "platforms": [
             "ios"
           ]

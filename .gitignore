@@ -67,6 +67,7 @@ docs/**
 !docs/NETWORK.md
 !docs/BOOTSTRAP.md
 !docs/PUSH_RELAY.md
+!docs/SECURITY_AUDIT_RETEST.md
 
 # Ops scripts with credential patterns (use SSH keys locally)
 scripts/deploy-bootstrap-remote.sh

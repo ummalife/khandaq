@@ -60,7 +60,7 @@ import static com.zoffcc.applications.trifa.MainActivity.PREF__dark_mode_pref;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_disconnect;
-import static com.zoffcc.applications.trifa.HelperGroup.get_group_display_name;
+import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_leave;
@@ -235,7 +235,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         {
         }
 
-        String group_title = get_group_display_name(fl.group_identifier, tox_group_get_name(group_number));
+        String group_title = get_effective_group_title(group_number, fl.group_identifier);
         textView.setText(group_title);
 
         imageView2.setVisibility(View.INVISIBLE);

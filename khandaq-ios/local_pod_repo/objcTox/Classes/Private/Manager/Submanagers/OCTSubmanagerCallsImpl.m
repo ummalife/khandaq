@@ -149,7 +149,7 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 
         OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
         [manager updateObject:call withBlock:^(OCTCall *callToUpdate) {
-            call.status = OCTCallStatusActive;
+            callToUpdate.status = OCTCallStatusActive;
             callToUpdate.videoIsEnabled = enableVideo;
         }];
 

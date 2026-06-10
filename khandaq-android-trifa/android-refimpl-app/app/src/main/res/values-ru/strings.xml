@@ -11,11 +11,20 @@
     <string name="title_activity_calling">Вызов</string>
     <string name="title_activity_profile">Профиль</string>
     <string name="title_activity_settings">Настройки</string>
+    <string name="pref_title_dark_mode">Тема интерфейса</string>
+    <string name="pref_description_dark_mode">Как в системе, тёмная или светлая. Применяется после выхода из настроек.</string>
+    <string-array name="pref_dark_mode_titles">
+        <item>Как в системе</item>
+        <item>Тёмная</item>
+        <item>Светлая</item>
+    </string-array>
     <string name="title_activity_crash">Сбой</string>
     <string name="title_activity_friendinfo">Информация о друге</string>
     <string name="message_list_open_friend_profile">Открыть профиль контакта</string>
     <string name="main_profile_open">Открыть мой профиль</string>
     <string name="group_open_group_info">Открыть информацию о группе</string>
+    <string name="group_title_saved_toast">Название группы обновлено</string>
+    <string name="group_title_save_failed_toast">Не удалось изменить название группы</string>
     <string name="title_activity_conferencepeerinfo">Информация о партнёре</string>
     <string name="title_activity_aboutpage">О программе</string>
     <string name="title_activity_set_password">Установка пароля</string>
@@ -210,7 +219,7 @@
     <string name="MainActivity_logout_login">Выйти/Войти</string>
     <string name="MainActivity_maint">Техническое обслуживание</string>
     <string name="MainActivity_about">О программе</string>
-    <string name="MainActivity_exit">Выход</string>
+    <string name="MainActivity_exit">Закрыть приложение</string>
     <string name="MainActivity_available">Доступен</string>
     <string name="MainActivity_away">Отошёл</string>
     <string name="MainActivity_busy">Занят</string>
@@ -261,6 +270,8 @@
     <string name="add_self_already_in_contacts">Вы уже есть в списке контактов</string>
     <string name="qr_scan_hint">Наведите камеру на QR-код</string>
     <string name="qr_scan_camera_error">Камера недоступна. Закройте другие приложения с камерой и попробуйте снова.</string>
+    <string name="qr_scan_permission_denied">Для сканирования QR-кода нужен доступ к камере.</string>
+    <string name="qr_scan_close">Закрыть сканер</string>
     <string name="layout___enter_pass_longtext">Введите пароль
 \nНет опции восстановления!</string>
     <string name="layout___unlock">Разблокировать</string>
@@ -328,8 +339,17 @@
     <string name="pref_title_force_udp_only">принудительный режим UDP</string>
     <string name="pref_description_mic_gain_factor">Увеличьте усиление, если ваш микрофон слишком тихий</string>
     <string name="pref_title_mic_gain_factor">Усиление микрофона</string>
-    <string name="pref_description_global_font_size">Выбрать размер шрифта</string>
+    <string name="pref_description_global_font_size">Размер текста в сообщениях (по умолчанию 17sp)</string>
     <string name="pref_title_global_font_size">Размер шрифта</string>
+    <string-array name="pref_global_font_size_titles">
+        <item>очень мелкий (11)</item>
+        <item>мелкий (14)</item>
+        <item>обычный (17)</item>
+        <item>крупный (21)</item>
+        <item>больше (26)</item>
+        <item>очень крупный (32)</item>
+        <item>максимальный (48)</item>
+    </string-array>
     <string name="pref_description_video_cam_resolution">Какое разрешение использовать для видеозвонков</string>
     <string name="pref_title_video_cam_resolution">Разрешение камеры</string>
     <string name="pref_description_auto_accept_video">автоматически принимать видео размером до 40 МБ</string>
@@ -338,6 +358,16 @@
     <string name="layout___migdb_do_not_close">НЕ закрывайте этот экран</string>
     <string name="layout___migdb_text">Перенос файлов базы данных</string>
     <string name="messages_search_default_text">поиск …</string>
+    <string name="chat_filter_spinner_description">Фильтр сообщений в чате</string>
+    <string name="chat_filter_all_messages">Все сообщения</string>
+    <string name="chat_filter_files_only">Только файлы</string>
+    <string name="chat_ft_status_confirm_send">Отправить этот файл?</string>
+    <string name="chat_ft_status_waiting_self_online">Ожидание подключения к сети…</string>
+    <string name="chat_ft_status_waiting_friend_online">Отправится, когда собеседник будет в сети</string>
+    <string name="chat_ft_status_sending">Отправка…</string>
+    <string name="chat_ft_status_waiting_friend_accept">Ожидание принятия собеседником…</string>
+    <string name="voice_message_label">Голосовое сообщение</string>
+    <string name="chat_ft_generic_file">Файл</string>
     <string name="MainActivity_new_noti_token_dialog_text">Получен новый токен уведомления. Использовать этот токен\?</string>
     <string name="MainActivity_new_noti_token_dialog_title">Токен</string>
     <string name="MainActivity_yes_button">да</string>
@@ -362,8 +392,20 @@
     <string name="join_group_activity_join">Присоединиться к группе</string>
     <string name="add_private_group_success">Вы создали частную группу</string>
     <string name="add_friend_failed">не удалось добавить друга</string>
+    <string name="add_friend_failed_invalid_id">Неверный ID контакта. Проверьте Tox ID и попробуйте снова.</string>
+    <string name="add_friend_failed_bad_checksum">Неверная контрольная сумма ID. Скопируйте полный ID заново.</string>
+    <string name="add_friend_failed_use_full_id">Используйте полный Tox ID контакта, а не только публичный ключ.</string>
+    <string name="add_friend_failed_own_key">Нельзя добавить свой собственный ID в контакты.</string>
+    <string name="add_friend_failed_not_ready">Мессенджер ещё загружается. Подождите несколько секунд.</string>
+    <string name="add_friend_failed_memory">Недостаточно памяти для добавления контакта.</string>
+    <string name="add_friend_already_in_contacts">Контакт уже есть в списке</string>
     <string name="add_friend_success">Вы добавили нового друга</string>
     <string name="add_private_group_failed">Не удалось создать частную группу</string>
+    <string name="add_group_failed_not_ready">Мессенджер ещё загружается. Подождите несколько секунд.</string>
+    <string name="add_group_failed_empty_name">Введите название группы.</string>
+    <string name="add_group_failed_name_too_long">Слишком длинное название группы (макс. 48 байт).</string>
+    <string name="add_group_failed_peer_name_too_long">Имя профиля слишком длинное для групп. Сократите его в настройках.</string>
+    <string name="add_group_failed_too_many">Слишком много групп. Сначала выйдите из старой группы.</string>
     <string name="layout___group_id2">Group ID:</string>
     <string name="layout___group_name2">Название группы:</string>
     <string name="layout___group_myname2">моё имя в группе:</string>
@@ -414,6 +456,9 @@
     <string name="profile_save_button">Сохранить профиль</string>
     <string name="profile_saved_toast">Профиль сохранён</string>
     <string name="profile_avatar_saved_toast">Фото профиля обновлено</string>
+    <string name="profile_avatar_error_generic">Не удалось установить фото профиля</string>
+    <string name="profile_avatar_error_too_large">Слишком большой файл (макс. 10 МБ)</string>
+    <string name="profile_avatar_error_unsupported">Неподдерживаемый или повреждённый формат изображения</string>
     <string name="profile_save_hint">Фото сохраняется сразу при выборе. Нажмите «Сохранить», чтобы применить ник и статус.</string>
     <string name="layout___remove_own_pushurl">удалить Push URL</string>
     <string name="pref_title_allow_open_encrypted_file_via_intent">Открыть файл с зашифрованного хранилища</string>
@@ -448,6 +493,22 @@
     <string name="group_send_empty">Пустое сообщение.</string>
     <string name="group_send_bad_type">Неподдерживаемый тип сообщения.</string>
     <string name="group_send_failed">Не удалось отправить сообщение в группу.</string>
+    <string name="group_invite_friend_success">Приглашение в группу отправлено.</string>
+    <string name="group_invite_friend_failed">Не удалось пригласить контакт в группу.</string>
+    <string name="group_invite_friend_not_found">Контакт недоступен в Tox.</string>
+    <string name="group_invite_friend_disconnected">Группа отключена.</string>
+    <string name="group_invite_friend_fail_send">Не удалось связаться с контактом. Убедитесь, что он в сети.</string>
+    <string name="group_invite_friend_invite_fail">Не удалось создать приглашение в группу.</string>
+    <string name="group_invite_no_friends_available">Нет контактов для приглашения.</string>
+    <string name="call_permission_mic_required">Для звонков нужен доступ к микрофону.</string>
+    <string name="call_permission_camera_required">Для видеозвонков нужен доступ к камере.</string>
+    <string name="call_start_failed">Не удалось начать звонок.</string>
+    <string name="call_log_outgoing_voice">Исходящий голосовой звонок</string>
+    <string name="call_log_outgoing_video">Исходящий видеозвонок</string>
+    <string name="call_log_incoming_voice">Входящий голосовой звонок</string>
+    <string name="call_log_incoming_video">Входящий видеозвонок</string>
+    <string name="call_log_missed">Пропущенный звонок</string>
+    <string name="call_log_failed">Звонок не удался</string>
     <string name="invite_friend_success">Вы получили запрос на добавление в друзья</string>
     <string name="invite_join_group_success">Вы приглашены в группу</string>
     <string name="invite_join_conference_success">Вы приглашены в конференцию</string>
@@ -457,8 +518,8 @@
     <string name="MessageListHolder_file_incoming_cancel_ft_message">Вы хотите отменить передачу этого файла?</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">Отменить передачу</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">Вы хотите отменить передачу этого файла?</string>
-    <string name="MainActivity_manually_logged_out_true">активировать</string>
-    <string name="MainActivity_manually_logged_out_false">Выйти</string>
+    <string name="MainActivity_manually_logged_out_true">Подключиться</string>
+    <string name="MainActivity_manually_logged_out_false">Отключиться</string>
     <string name="notification_status_online">В сети</string>
     <string name="notification_status_offline">Не в сети</string>
     <string name="notification_status_connecting">Подключение</string>

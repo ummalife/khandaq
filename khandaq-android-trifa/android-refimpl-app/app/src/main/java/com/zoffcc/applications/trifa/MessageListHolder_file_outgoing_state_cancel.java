@@ -239,7 +239,7 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
 
             textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,
                                      AutoLinkMode.MODE_MENTION);
-            textView.setAutoLinkText("" + message.text + "\n *canceled*");
+            textView.setAutoLinkText(HelperFiletransfer.outgoingFileDisplayLabel(context, message) + "\n *canceled*");
 
             ft_preview_image.setImageDrawable(null);
             ft_preview_image.setVisibility(View.GONE);
@@ -252,7 +252,7 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
         else // file transferred OK
         {
             // TODO: show preview and "click" to open/delete file
-            textView.setAutoLinkText("" + message.text + "\n OK");
+            textView.setAutoLinkText(HelperFiletransfer.outgoingFileDisplayLabel(context, message) + "\n OK");
 
             final String mimeType = HelperFiletransfer.guess_message_file_mime_type(context, message);
             final boolean is_image = (mimeType != null) && mimeType.startsWith("image/");

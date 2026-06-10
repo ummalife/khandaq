@@ -309,6 +309,9 @@
     <color name="md_grey_800">#424242</color>
     <color name="md_grey_900">#FFFFFF</color>
     <color name="md_black_1000">#8AFFFFFF</color>
+    <color name="text_on_light_surface">#DE000000</color>
+    <color name="chat_input_text">@color/text_on_light_surface</color>
+    <color name="message_bubble_text">#DE000000</color>
     <color name="md_always_black_1000">#000000</color>
     <color name="md_white_1000">#292929</color>
 

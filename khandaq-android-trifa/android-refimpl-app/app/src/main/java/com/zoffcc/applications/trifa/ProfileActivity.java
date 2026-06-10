@@ -409,6 +409,7 @@ public class ProfileActivity extends AppCompatActivity
         final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
                 getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
         profile_icon.setImageDrawable(d1);
+        update_avatar_remove_button_visibility();
 
         mytoxid_textview.setText("");
         mynick_edittext.setText(global_my_name);
@@ -476,6 +477,7 @@ public class ProfileActivity extends AppCompatActivity
                                             GoogleMaterial.Icon.gmd_face).color(
                                             getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
                                     profile_icon.setImageDrawable(d1);
+                                    update_avatar_remove_button_visibility();
                                 }
                                 catch (Exception ignored)
                                 {
@@ -551,158 +553,227 @@ public class ProfileActivity extends AppCompatActivity
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == MEDIAPICK_ID_002 && resultCode == Activity.RESULT_OK)
         {
-            if (data == null)
+            if ((data == null) || (data.getData() == null))
             {
-                //Display an error
+                Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
                 return;
             }
-            else
+
+            try
             {
+                final Uri uri = data.getData();
+                final String fileName_ = resolve_picked_image_display_name(uri);
+
+                long file_size = -1;
                 try
                 {
-                    String fileName1 = null;
-
-                    try
+                    DocumentFile documentFile = DocumentFile.fromSingleUri(this.getApplicationContext(), uri);
+                    if (documentFile != null)
                     {
-                        DocumentFile documentFile = DocumentFile.fromSingleUri(this.getApplicationContext(),
-                                                                               data.getData());
-                        fileName1 = documentFile.getName();
-                        ContentResolver cr = getApplicationContext().getContentResolver();
-                        Cursor metaCursor = cr.query(data.getData(), null, null, null, null);
-                        if (metaCursor != null)
-                        {
-                            try
-                            {
-                                if (metaCursor.moveToFirst())
-                                {
-                                    int j;
-                                    for (j = 0; j < metaCursor.getColumnNames().length; j++)
-                                    {
-                                        if (metaCursor.getColumnName(j).equals(
-                                                DocumentsContract.Document.COLUMN_DISPLAY_NAME))
-                                        {
-                                            if (metaCursor.getString(j) != null)
-                                            {
-                                                if (metaCursor.getString(j).length() > 0)
-                                                {
-                                                    fileName1 = metaCursor.getString(j);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            finally
-                            {
-                                metaCursor.close();
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    final String fileName_ = fileName1;
-
-                    if (fileName_ != null)
-                    {
-                        final Uri uri = data.getData();
-                        long file_size = -1;
-                        try
-                        {
-                            DocumentFile documentFile = DocumentFile.fromSingleUri(this.getApplicationContext(), uri);
-                            file_size = documentFile.length();
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                            // file length unknown?
-                            return;
-                        }
-
-                        if (file_size < 100)
-                        {
-                            // file length very small?
-                            return;
-                        }
-
-                        if (file_size > 10 * 1024 * 1024)
-                        {
-                            // file size too large
-                            return;
-                        }
-
-                        MessageListActivity.outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(
-                                data.getData().toString(), fileName_, file_size);
-                        if (ofw == null)
-                        {
-                            return;
-                        }
-
-                        Bitmap out = null;
-                        Bitmap b = BitmapFactory.decodeFile(ofw.filepath_wrapped + "/" + ofw.filename_wrapped);
-                        if (need_rotate_image_to_exif(b, ofw.filepath_wrapped + "/" + ofw.filename_wrapped))
-                        {
-                            out = scale_bitmap_keep_aspect(
-                                    rotate_image_to_exif(b, ofw.filepath_wrapped + "/" + ofw.filename_wrapped), 640,
-                                    640);
-                        }
-                        else
-                        {
-                            out = scale_bitmap_keep_aspect(b, 640, 640);
-                        }
-                        java.io.File file = new java.io.File(ofw.filepath_wrapped, ofw.filename_wrapped);
-                        Log.i(TAG, "profile_avatar:1:w x h=" + out.getWidth() + " " + out.getHeight());
-                        java.io.FileOutputStream fOut;
-                        try
-                        {
-                            fOut = new java.io.FileOutputStream(file);
-                            out.compress(Bitmap.CompressFormat.JPEG, 80, fOut);
-                            fOut.flush();
-                            fOut.close();
-                            b.recycle();
-                            out.recycle();
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-
-                        Log.i(TAG, "select_avatar:p=" + ofw.filepath_wrapped + " f=" + ofw.filename_wrapped);
-                        copy_real_file_to_vfs_file(ofw.filepath_wrapped, ofw.filename_wrapped,
-                                                   VFS_PREFIX + VFS_OWN_AVATAR_DIR,
-                                                   VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION);
-
-                        try
-                        {
-                            file.delete();
-                        }
-                        catch (Exception e)
-                        {
-
-                        }
-
-                        set_g_opts("VFS_OWN_AVATAR_FNAME",
-                                   VFS_PREFIX + VFS_OWN_AVATAR_DIR + "/" + VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION);
-
-                        set_g_opts("VFS_OWN_AVATAR_FILE_EXTENSION", VFS_OWN_AVATAR_DIR_FILE_EXTENSION);
-
-                        final Drawable d2 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
-                                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-                        put_vfs_image_on_imageview_real(ProfileActivity.this, profile_icon, d2,
-                                                        VFS_PREFIX + VFS_OWN_AVATAR_DIR + "/" +
-                                                        VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION, true, false, null);
-
-                        send_avatar_to_all_friends();
-                        Toast.makeText(this, getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
+                        file_size = documentFile.length();
                     }
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
                 }
+
+                if (file_size > 10 * 1024 * 1024)
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_too_large), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                // DocumentFile.length() often returns -1; validate size after copy instead.
+                if ((file_size >= 0) && (file_size < 100))
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                MessageListActivity.outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(uri.toString(),
+                                                                                                 fileName_,
+                                                                                                 file_size > 0 ? file_size : 0);
+                if (ofw == null)
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if (ofw.file_size_wrapped < 100)
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if (ofw.file_size_wrapped > 10 * 1024 * 1024)
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_too_large), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                final String local_image_path = ofw.filepath_wrapped + "/" + ofw.filename_wrapped;
+                Bitmap b = BitmapFactory.decodeFile(local_image_path);
+                if (b == null)
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_unsupported), Toast.LENGTH_SHORT).show();
+                    try
+                    {
+                        new java.io.File(local_image_path).delete();
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                    return;
+                }
+
+                Bitmap out;
+                if (need_rotate_image_to_exif(b, local_image_path))
+                {
+                    out = scale_bitmap_keep_aspect(rotate_image_to_exif(b, local_image_path), 640, 640);
+                }
+                else
+                {
+                    out = scale_bitmap_keep_aspect(b, 640, 640);
+                }
+
+                java.io.File file = new java.io.File(ofw.filepath_wrapped, ofw.filename_wrapped);
+                Log.i(TAG, "profile_avatar:1:w x h=" + out.getWidth() + " " + out.getHeight());
+                try
+                {
+                    java.io.FileOutputStream fOut = new java.io.FileOutputStream(file);
+                    out.compress(Bitmap.CompressFormat.JPEG, 80, fOut);
+                    fOut.flush();
+                    fOut.close();
+                    b.recycle();
+                    out.recycle();
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                Log.i(TAG, "select_avatar:p=" + ofw.filepath_wrapped + " f=" + ofw.filename_wrapped);
+                copy_real_file_to_vfs_file(ofw.filepath_wrapped, ofw.filename_wrapped, VFS_PREFIX + VFS_OWN_AVATAR_DIR,
+                                           VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION);
+
+                try
+                {
+                    file.delete();
+                }
+                catch (Exception ignored)
+                {
+                }
+
+                final String vfs_avatar_path =
+                        VFS_PREFIX + VFS_OWN_AVATAR_DIR + "/" + VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION;
+                info.guardianproject.iocipher.File vfs_avatar = new info.guardianproject.iocipher.File(vfs_avatar_path);
+                if ((!vfs_avatar.exists()) || (vfs_avatar.length() < 100))
+                {
+                    Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                set_g_opts("VFS_OWN_AVATAR_FNAME", vfs_avatar_path);
+                set_g_opts("VFS_OWN_AVATAR_FILE_EXTENSION", VFS_OWN_AVATAR_DIR_FILE_EXTENSION);
+
+                final Drawable d2 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
+                        getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
+                put_vfs_image_on_imageview_real(ProfileActivity.this, profile_icon, d2, vfs_avatar_path, true, false,
+                                                null);
+
+                send_avatar_to_all_friends();
+                update_avatar_remove_button_visibility();
+                Toast.makeText(this, getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
             }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+                Toast.makeText(this, getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private String resolve_picked_image_display_name(final Uri uri)
+    {
+        String fileName1 = null;
+
+        try
+        {
+            DocumentFile documentFile = DocumentFile.fromSingleUri(this.getApplicationContext(), uri);
+            if (documentFile != null)
+            {
+                fileName1 = documentFile.getName();
+            }
+
+            ContentResolver cr = getApplicationContext().getContentResolver();
+            Cursor metaCursor = cr.query(uri, null, null, null, null);
+            if (metaCursor != null)
+            {
+                try
+                {
+                    if (metaCursor.moveToFirst())
+                    {
+                        int j;
+                        for (j = 0; j < metaCursor.getColumnNames().length; j++)
+                        {
+                            if (metaCursor.getColumnName(j).equals(DocumentsContract.Document.COLUMN_DISPLAY_NAME))
+                            {
+                                if (metaCursor.getString(j) != null)
+                                {
+                                    if (metaCursor.getString(j).length() > 0)
+                                    {
+                                        fileName1 = metaCursor.getString(j);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    metaCursor.close();
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        if ((fileName1 == null) || (fileName1.length() < 1))
+        {
+            return "avatar_pick.jpg";
+        }
+
+        return fileName1;
+    }
+
+    private void update_avatar_remove_button_visibility()
+    {
+        if (profile_icon_remove == null)
+        {
+            return;
+        }
+
+        try
+        {
+            String fname = get_vfs_image_filename_own_avatar();
+            boolean has_avatar = false;
+
+            if (fname != null)
+            {
+                info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(fname);
+                has_avatar = f1.exists() && (f1.length() > 0);
+            }
+
+            profile_icon_remove.setVisibility(has_avatar ? View.VISIBLE : View.GONE);
+        }
+        catch (Exception ignored)
+        {
+            profile_icon_remove.setVisibility(View.GONE);
         }
     }
 
@@ -959,6 +1030,7 @@ public class ProfileActivity extends AppCompatActivity
                             put_vfs_image_on_imageview_real(getApplicationContext(), profile_icon, d1, fname, true,
                                                             false, null);
                         }
+                        update_avatar_remove_button_visibility();
                     }
                     catch (Exception e)
                     {

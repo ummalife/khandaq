@@ -246,6 +246,10 @@ public class CameraWrapper
     static int getRotation()
     {
         Log.i(TAG, "[sum]================");
+        if (CallingActivity.ca == null)
+        {
+            return 0;
+        }
         Display display = CallingActivity.ca.getWindowManager().getDefaultDisplay();
         int rotation = display.getRotation();
         int degrees = 0;

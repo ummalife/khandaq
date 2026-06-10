@@ -33,6 +33,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import android.widget.Toast;
+
 import com.zoffcc.applications.sorm.GroupPeerDB;
 
 import java.util.ArrayList;
@@ -50,7 +52,11 @@ import static com.zoffcc.applications.trifa.CameraWrapper.YUV420rotate90;
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.clear_group_group_we_left;
-import static com.zoffcc.applications.trifa.HelperGroup.get_group_display_name;
+import static com.zoffcc.applications.trifa.HelperGroup.ensure_group_in_tox;
+import static com.zoffcc.applications.trifa.HelperGroup.get_display_peer_limit;
+import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
+import static com.zoffcc.applications.trifa.HelperGroup.save_group_title_if_changed;
+import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_title;
 import static com.zoffcc.applications.trifa.HelperGroup.get_group_peernum_from_peer_pubkey;
 import static com.zoffcc.applications.trifa.HelperGroup.is_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.set_group_group_we_left;
@@ -63,7 +69,6 @@ import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_founder_set_peer_limit;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_founder_set_voice_state;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peer_limit;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_voice_state;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_mod_set_role;
@@ -239,6 +244,10 @@ public class GroupInfoActivity extends AppCompatActivity
         try
         {
             group_num = tox_group_by_groupid__wrapper(group_id);
+            if (group_num < 0)
+            {
+                group_num = ensure_group_in_tox(group_id);
+            }
         }
         catch (Exception e)
         {
@@ -247,7 +256,7 @@ public class GroupInfoActivity extends AppCompatActivity
 
         try
         {
-            peer_limit_text.setText("" + tox_group_get_peer_limit(group_num));
+            peer_limit_text.setText("" + get_display_peer_limit(group_num));
         }
         catch (Exception e)
         {
@@ -274,10 +283,7 @@ public class GroupInfoActivity extends AppCompatActivity
 
         try
         {
-            final String db_name = orma.selectFromGroupDB().
-                    group_identifierEq(group_id.toLowerCase()).
-                    toList().get(0).name;
-            this_title.setText(get_group_display_name(group_id, db_name));
+            this_title.setText(get_effective_group_title(group_num, group_id));
         }
         catch (Exception e)
         {
@@ -318,10 +324,24 @@ public class GroupInfoActivity extends AppCompatActivity
             {
                 try
                 {
-                    tox_group_reconnect(group_num_);
-                    update_savedata_file_wrapper();
-                    clear_group_group_we_left(group_id);
-                    group_update_connected_status_on_groupinfo(group_num_);
+                    long active_group_num = group_num_;
+                    if (active_group_num < 0)
+                    {
+                        active_group_num = ensure_group_in_tox(group_id);
+                    }
+                    if (active_group_num >= 0)
+                    {
+                        tox_group_reconnect(active_group_num);
+                        update_savedata_file_wrapper();
+                        clear_group_group_we_left(group_id);
+                        group_update_connected_status_on_groupinfo(active_group_num);
+                        peer_limit_text.setText("" + get_display_peer_limit(active_group_num));
+                    }
+                    else
+                    {
+                        Toast.makeText(GroupInfoActivity.this,
+                                       getString(R.string.group_send_group_not_found), Toast.LENGTH_LONG).show();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -503,6 +523,13 @@ public class GroupInfoActivity extends AppCompatActivity
     {
         try
         {
+            if (group_num < 0)
+            {
+                group_connection_status_text.setText("STATUS_UNKNOWN");
+                group_reconnect_button.setVisibility(View.VISIBLE);
+                return;
+            }
+
             final int is_connected = tox_group_is_connected(group_num);
             if (is_group_we_left(group_id))
             {
@@ -595,6 +622,13 @@ public class GroupInfoActivity extends AppCompatActivity
     protected void onResume()
     {
         super.onResume();
+        final long group_num = ensure_group_in_tox(group_id);
+        if (group_num >= 0)
+        {
+            group_update_connected_status_on_groupinfo(group_num);
+            peer_limit_text.setText("" + get_display_peer_limit(group_num));
+            this_title.setText(get_effective_group_title(group_num, group_id));
+        }
         reload_message_counts(group_id);
     }
 
@@ -602,19 +636,53 @@ public class GroupInfoActivity extends AppCompatActivity
     protected void onPause()
     {
         super.onPause();
-        // TODO dirty hack, just write "conf title"
+
+        final long group_num;
+        try
+        {
+            group_num = tox_group_by_groupid__wrapper(group_id);
+        }
+        catch (Exception e)
+        {
+            return;
+        }
+
+        if (group_num < 0)
+        {
+            return;
+        }
+
+        try
+        {
+            final String new_title = sanitize_group_title(this_title.getText().toString());
+            if (new_title.length() > 0)
+            {
+                final String current_title = get_effective_group_title(group_num, group_id);
+                if (!new_title.equals(current_title))
+                {
+                    if (save_group_title_if_changed(group_id, new_title))
+                    {
+                        Toast.makeText(this, getString(R.string.group_title_saved_toast), Toast.LENGTH_SHORT).show();
+                    }
+                    else
+                    {
+                        Toast.makeText(this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
 
         try
         {
             String my_new_name = group_myname_text.getText().toString();
-            if (my_new_name != null)
+            if ((my_new_name != null) && (my_new_name.length() > 0))
             {
-                if (my_new_name.length() > 0)
-                {
-                    int res = tox_group_self_set_name(tox_group_by_groupid__wrapper(group_id),
-                                                      my_new_name);
-                    update_savedata_file_wrapper();
-                }
+                tox_group_self_set_name(group_num, my_new_name);
+                update_savedata_file_wrapper();
             }
         }
         catch (Exception ignored)
@@ -623,15 +691,17 @@ public class GroupInfoActivity extends AppCompatActivity
 
         try
         {
-            String new_peer_limit = peer_limit_text.getText().toString();
-            if (new_peer_limit != null)
+            if (tox_group_self_get_role(group_num) == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value)
             {
-                if (new_peer_limit.length() > 0)
+                String new_peer_limit = peer_limit_text.getText().toString();
+                if ((new_peer_limit != null) && (new_peer_limit.length() > 0))
                 {
-
-                    int res = tox_group_founder_set_peer_limit(tox_group_by_groupid__wrapper(group_id),
-                                                      Integer.parseInt(new_peer_limit));
-                    update_savedata_file_wrapper();
+                    int parsed_limit = Integer.parseInt(new_peer_limit);
+                    if (parsed_limit >= 1 && parsed_limit <= 65535)
+                    {
+                        tox_group_founder_set_peer_limit(group_num, parsed_limit);
+                        update_savedata_file_wrapper();
+                    }
                 }
             }
         }

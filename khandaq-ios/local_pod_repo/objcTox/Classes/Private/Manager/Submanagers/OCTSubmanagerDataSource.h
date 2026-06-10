@@ -34,6 +34,11 @@ static NSString *const kOCTUserAvatarWasUpdatedNotification = @"kOCTUserAvatarWa
  */
 static NSString *const kOCTScheduleFileTransferCleanupNotification = @"kOCTScheduleFileTransferCleanupNotification";
 
+/**
+ * Posted when an urgent network-change rebootstrap pass completes.
+ */
+static NSString *const kOCTNetworkRebootstrapCompletedNotification = @"kOCTNetworkRebootstrapCompletedNotification";
+
 @protocol OCTSubmanagerDataSource <NSObject>
 
 - (OCTTox *)managerGetTox;

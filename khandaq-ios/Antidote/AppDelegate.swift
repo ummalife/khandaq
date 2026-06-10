@@ -36,6 +36,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         self.backgroundTask = UIBackgroundTaskInvalid
 
         if ToxOptionsRestartScheduler.isRestartInProgress {
+            ToxOptionsRestartScheduler.scheduleRestartAttempt()
             return
         }
 

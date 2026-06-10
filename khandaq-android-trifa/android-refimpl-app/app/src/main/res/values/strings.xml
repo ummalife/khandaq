@@ -75,6 +75,8 @@
         <item>1</item>
         <item>2</item>
     </string-array>
+    <string name="pref_title_dark_mode">Theme</string>
+    <string name="pref_description_dark_mode">System default, dark, or light. Applies after leaving Settings.</string>
 
     <string name="pref_title_auto_accept_image">auto accept images</string>
     <string name="pref_description_auto_accept_image">auto accept Images and Photos up to 12 MByte in size</string>
@@ -120,13 +122,13 @@
     <string name="pref_title_global_font_size">Font Size</string>
     <string name="pref_description_global_font_size">Select Font Size</string>
     <string-array name="pref_global_font_size_titles">
-        <item>very small</item>
-        <item>small</item>
-        <item>default: normal</item>
-        <item>large</item>
-        <item>larger</item>
-        <item>very large</item>
-        <item>extremly large</item>
+        <item>very small (11sp)</item>
+        <item>small (14sp)</item>
+        <item>default (17sp)</item>
+        <item>large (21sp)</item>
+        <item>larger (26sp)</item>
+        <item>very large (32sp)</item>
+        <item>extremely large (48sp)</item>
     </string-array>
     <string-array name="pref_global_font_size_values">
         <item>0</item>
@@ -397,6 +399,22 @@
     <string name="group_send_empty">Message is empty.</string>
     <string name="group_send_bad_type">Unsupported message type.</string>
     <string name="group_send_failed">Failed to send group message.</string>
+    <string name="group_invite_friend_success">Group invitation sent.</string>
+    <string name="group_invite_friend_failed">Failed to invite contact to group.</string>
+    <string name="group_invite_friend_not_found">Contact is not available in Tox.</string>
+    <string name="group_invite_friend_disconnected">Group is disconnected.</string>
+    <string name="group_invite_friend_fail_send">Could not reach contact. Make sure they are online.</string>
+    <string name="group_invite_friend_invite_fail">Failed to create group invitation.</string>
+    <string name="group_invite_no_friends_available">No contacts available to invite.</string>
+    <string name="call_permission_mic_required">Microphone permission is required for calls.</string>
+    <string name="call_permission_camera_required">Camera permission is required for video calls.</string>
+    <string name="call_start_failed">Failed to start call.</string>
+    <string name="call_log_outgoing_voice">Outgoing voice call</string>
+    <string name="call_log_outgoing_video">Outgoing video call</string>
+    <string name="call_log_incoming_voice">Incoming voice call</string>
+    <string name="call_log_incoming_video">Incoming video call</string>
+    <string name="call_log_missed">Missed call</string>
+    <string name="call_log_failed">Call failed</string>
     <string name="add_group_activity_add">Create Group</string>
     <string name="join_group_activity_join">Join Group</string>
     <string name="cancel">Cancel</string>
@@ -405,8 +423,20 @@
     <string name="add_public_group_failed">Creating a Public Group failed</string>
     <string name="add_public_group_success">You have created a Public Group</string>
     <string name="add_private_group_failed">Creating a Private Group failed</string>
+    <string name="add_group_failed_not_ready">Messenger is still loading. Try again in a few seconds.</string>
+    <string name="add_group_failed_empty_name">Enter a group name.</string>
+    <string name="add_group_failed_name_too_long">Group name is too long (max 48 bytes).</string>
+    <string name="add_group_failed_peer_name_too_long">Your profile name is too long for groups. Shorten it in settings.</string>
+    <string name="add_group_failed_too_many">Too many groups. Leave an old group first.</string>
     <string name="add_private_group_success">You have created a Private Group</string>
     <string name="add_friend_failed">adding Friend failed</string>
+    <string name="add_friend_failed_invalid_id">Invalid contact ID. Check the Tox ID and try again.</string>
+    <string name="add_friend_failed_bad_checksum">Invalid contact ID checksum. Copy the full ID again.</string>
+    <string name="add_friend_failed_use_full_id">Use the full Tox ID from your contact, not only the public key.</string>
+    <string name="add_friend_failed_own_key">You cannot add your own ID as a contact.</string>
+    <string name="add_friend_failed_not_ready">Messenger is still loading. Try again in a few seconds.</string>
+    <string name="add_friend_failed_memory">Not enough memory to add a contact.</string>
+    <string name="add_friend_already_in_contacts">Contact is already in your list</string>
     <string name="add_friend_success">You have added a new Friend</string>
     <string name="invite_friend_success">You have received a Friendrequest</string>
     <string name="invite_join_group_success">You have been invited to a Group</string>
@@ -428,13 +458,13 @@
     <string name="MainActivity_profile">Profile</string>
     <string name="MainActivity_settings">Settings</string>
     <string name="MainActivity_logout_login">Logout/Login</string>
-    <string name="MainActivity_manually_logged_out_true">activate</string>
-    <string name="MainActivity_manually_logged_out_false">log out</string>
+    <string name="MainActivity_manually_logged_out_true">Go online</string>
+    <string name="MainActivity_manually_logged_out_false">Go offline</string>
     <string name="MainActivity_join_trifa_groupchat">Khandaq Community</string>
     <string name="layout___join_khandaq_community">Khandaq Community</string>
     <string name="MainActivity_maint">Maintenance</string>
     <string name="MainActivity_about">About</string>
-    <string name="MainActivity_exit">Exit</string>
+    <string name="MainActivity_exit">Close app</string>
     <string name="MainActivity_available">Available</string>
     <string name="MainActivity_away">Away</string>
     <string name="MainActivity_busy">Busy</string>
@@ -464,12 +494,17 @@
     <string name="message_list_open_friend_profile">Open contact profile</string>
     <string name="main_profile_open">Open my profile</string>
     <string name="group_open_group_info">Open group info</string>
+    <string name="group_title_saved_toast">Group name updated</string>
+    <string name="group_title_save_failed_toast">Could not update group name</string>
 
     <string name="ProfileActivity_delete_avatar_dialog_title">Remove Profile Picture</string>
     <string name="ProfileActivity_delete_avatar_dialog_text">Do you want to remove your Profile Picture?</string>
     <string name="profile_save_button">Save profile</string>
     <string name="profile_saved_toast">Profile saved</string>
     <string name="profile_avatar_saved_toast">Profile picture updated</string>
+    <string name="profile_avatar_error_generic">Could not set profile picture</string>
+    <string name="profile_avatar_error_too_large">Image is too large (max 10 MB)</string>
+    <string name="profile_avatar_error_unsupported">Unsupported or corrupted image format</string>
     <string name="profile_save_hint">Photo saves automatically when selected. Tap Save to apply nickname and status.</string>
 
     <string name="Aboutpage_0">Khandaq Crashlog</string>
@@ -501,6 +536,16 @@
     <string name="GroupActivityOffline">Offline:</string>
 
     <string name="messages_search_default_text">search ...</string>
+    <string name="chat_filter_spinner_description">Filter messages in this chat</string>
+    <string name="chat_filter_all_messages">All messages</string>
+    <string name="chat_filter_files_only">Files only</string>
+    <string name="chat_ft_status_confirm_send">Send this file?</string>
+    <string name="chat_ft_status_waiting_self_online">Waiting for network connection…</string>
+    <string name="chat_ft_status_waiting_friend_online">Will send when contact is online</string>
+    <string name="chat_ft_status_sending">Sending…</string>
+    <string name="chat_ft_status_waiting_friend_accept">Waiting for contact to accept…</string>
+    <string name="voice_message_label">Voice message</string>
+    <string name="chat_ft_generic_file">File</string>
     <string name="incoming_filetransfer_size_too_large">Incoming filesize too large. Only files up to 2 GBytes can be received.</string>
     <!-- Java Source texts -->
     <!-- Java Source texts -->
@@ -518,6 +563,8 @@
     <string name="layout___scan_qr_code_gallery">scan QR Code from gallery</string>
     <string name="qr_scan_hint">Point the camera at a QR code</string>
     <string name="qr_scan_camera_error">Camera unavailable. Close other apps using the camera and try again.</string>
+    <string name="qr_scan_permission_denied">Camera permission is required to scan QR codes.</string>
+    <string name="qr_scan_close">Close scanner</string>
     <string name="qr_scan_image_error">No QR code found in this image.</string>
     <string name="add_self_contact">add myself to contacts</string>
     <string name="add_self_contact_name">Saved Messages</string>

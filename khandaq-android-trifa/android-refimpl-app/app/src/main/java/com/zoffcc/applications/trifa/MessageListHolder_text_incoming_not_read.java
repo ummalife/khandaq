@@ -49,7 +49,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
-import static com.zoffcc.applications.trifa.HelperGeneric.long_date_time_format;
+import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_message_time;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__global_font_size;
 import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
 import static com.zoffcc.applications.trifa.MainActivity.selected_messages;
@@ -208,21 +208,11 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
             {
                 if (MainActivity.message_list_fragment.adapter != null)
                 {
-                    if (my_position < 1)
+                    if (MainActivity.message_list_fragment.adapter.shouldShowDateHeader(my_position))
                     {
                         message_text_date_string.setText(
                                 MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position));
                         message_text_date.setVisibility(View.VISIBLE);
-                    }
-                    else
-                    {
-                        if (!MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position).equals(
-                                MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position - 1)))
-                        {
-                            message_text_date_string.setText(
-                                    MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position));
-                            message_text_date.setVisibility(View.VISIBLE);
-                        }
                     }
                 }
             }
@@ -282,29 +272,7 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
             }
         }
 
-        final String unicode_PERSONAL_COMPUTER = "\uD83D\uDCBB";
-        final String unicode_INCOMING_ENVELOPE = "\uD83D\uDCE8";
-        final String unicode_Mobile_Phone_With_Arrow = "\uD83D\uDCF2";
-        final String unicode_MEMO = "\uD83D\uDCDD";
-        final String unicode_ARROW_LEFT = "←";
-
-        if (m.msg_version == 1)
-        {
-            date_time.setText(unicode_ARROW_LEFT + long_date_time_format(m.sent_timestamp) + "\n" +
-                              unicode_Mobile_Phone_With_Arrow + long_date_time_format(m.rcvd_timestamp));
-        }
-        else
-        {
-            if ((m.sent_timestamp > 0) && (m.msg_idv3_hash != null) && (m.msg_idv3_hash.length() > 1))
-            {
-                date_time.setText(unicode_ARROW_LEFT + long_date_time_format(m.sent_timestamp) + "\n" +
-                                  unicode_Mobile_Phone_With_Arrow + long_date_time_format(m.rcvd_timestamp));
-            }
-            else
-            {
-                date_time.setText(long_date_time_format(m.rcvd_timestamp));
-            }
-        }
+        date_time.setText(format_chat_message_time(m, false));
 
         textView.setAutoLinkOnClickListener(new AutoLinkOnClickListener()
         {

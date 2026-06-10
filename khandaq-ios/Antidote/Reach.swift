@@ -117,3 +117,80 @@ extension ReachabilityStatus {
         }
     }
 }
+
+/// Monitors default-route reachability (VPN / Wi-Fi / cellular changes) and debounces callbacks.
+final class ToxNetworkReachabilityMonitor {
+    private var reachability: SCNetworkReachability?
+    private var lastFlags: SCNetworkReachabilityFlags?
+    private var debounceWorkItem: DispatchWorkItem?
+    private var onNetworkChange: (() -> Void)?
+
+    func start(onNetworkChange: @escaping () -> Void) {
+        stop()
+        self.onNetworkChange = onNetworkChange
+
+        var zeroAddress = sockaddr_in()
+        zeroAddress.sin_len = UInt8(MemoryLayout.size(ofValue: zeroAddress))
+        zeroAddress.sin_family = sa_family_t(AF_INET)
+
+        guard let ref = withUnsafePointer(to: &zeroAddress, {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                SCNetworkReachabilityCreateWithAddress(nil, $0)
+            }
+        }) else {
+            return
+        }
+
+        reachability = ref
+
+        var context = SCNetworkReachabilityContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil,
+            release: nil,
+            copyDescription: nil
+        )
+
+        SCNetworkReachabilitySetCallback(ref, { (_, flags, info) in
+            guard let info = info else {
+                return
+            }
+            let monitor = Unmanaged<ToxNetworkReachabilityMonitor>.fromOpaque(info).takeUnretainedValue()
+            monitor.handleFlags(flags)
+        }, &context)
+
+        SCNetworkReachabilityScheduleWithRunLoop(ref, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
+    }
+
+    func stop() {
+        debounceWorkItem?.cancel()
+        debounceWorkItem = nil
+
+        if let ref = reachability {
+            SCNetworkReachabilityUnscheduleFromRunLoop(ref, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
+        }
+        reachability = nil
+        lastFlags = nil
+        onNetworkChange = nil
+    }
+
+    private func handleFlags(_ flags: SCNetworkReachabilityFlags) {
+        if let lastFlags = lastFlags, lastFlags == flags {
+            return
+        }
+        lastFlags = flags
+
+        let connectionRequired = flags.contains(.connectionRequired)
+        let isReachable = flags.contains(.reachable)
+        guard isReachable && !connectionRequired else {
+            return
+        }
+
+        debounceWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.onNetworkChange?()
+        }
+        debounceWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+}

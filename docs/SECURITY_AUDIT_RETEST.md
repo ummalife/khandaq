@@ -35,7 +35,7 @@ APK: https://khandaq.org/downloads/khandaq-android.apk (v0.2.5, build 10295)
 | Платформа | Где взять |
 |-----------|-----------|
 | Android | https://khandaq.org/downloads/khandaq-android.apk |
-| iOS | TestFlight build **142822** — https://testflight.apple.com/join/4ppS8ZN5 |
+| iOS | TestFlight build **142824** — https://testflight.apple.com/join/4ppS8ZN5 |
 | Desktop macOS | https://khandaq.org/downloads/khandaq-macos.zip |
 | Desktop Windows | https://khandaq.org/downloads/khandaq-windows-installer.exe |
 | Desktop Linux | https://khandaq.org/downloads/khandaq-linux-x86_64-portable.tar.gz |

@@ -444,7 +444,8 @@
                     android:paddingBottom="@dimen/chat_input_field_padding_v"
                     android:singleLine="false"
                     android:text=""
-                    android:textColor="@color/md_black_1000"
+                    android:textColor="@color/chat_input_text"
+                    android:textColorHint="@color/gray"
                     android:textSize="@dimen/chat_input_text_size"
                     tools:ignore="NestedWeights" />
 

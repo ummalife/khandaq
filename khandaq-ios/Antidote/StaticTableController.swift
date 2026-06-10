@@ -97,15 +97,53 @@ extension StaticTableController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        guard let array = footerArray else {
+        guard let text = footerText(for: section) else {
+            return nil
+        }
+        if footerContainsLink(text) {
+            return nil
+        }
+        return text
+    }
+
+    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        guard let text = footerText(for: section), footerContainsLink(text) else {
             return nil
         }
 
-        guard section < array.count else {
-            return nil
-        }
+        let textView = UITextView()
+        textView.backgroundColor = .clear
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isScrollEnabled = false
+        textView.dataDetectorTypes = [.link]
+        textView.textContainerInset = UIEdgeInsets(top: 4, left: 16, bottom: 10, right: 16)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.font = UIFont.systemFont(ofSize: 13)
+        textView.textColor = theme.colorForType(.ChatInformationText)
+        textView.linkTextAttributes = [
+            NSAttributedStringKey.foregroundColor.rawValue: theme.colorForType(.LinkText),
+        ]
+        textView.text = text
+        return textView
+    }
 
-        return array[section]
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        guard let text = footerText(for: section), footerContainsLink(text) else {
+            return UITableViewAutomaticDimension
+        }
+        let width = tableView.bounds.width - 32
+        guard width > 0 else {
+            return UITableViewAutomaticDimension
+        }
+        let font = UIFont.systemFont(ofSize: 13)
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font],
+            context: nil
+        )
+        return ceil(rect.height) + 18
     }
 }
 
@@ -130,6 +168,17 @@ extension StaticTableController: UITableViewDelegate {
 }
 
 private extension StaticTableController {
+    func footerText(for section: Int) -> String? {
+        guard let array = footerArray, section < array.count else {
+            return nil
+        }
+        return array[section]
+    }
+
+    func footerContainsLink(_ text: String) -> Bool {
+        return text.contains("https://") || text.contains("http://")
+    }
+
     func createTableView() {
         tableView = UITableView(frame: CGRect.zero, style: tableViewStyle)
         tableView!.dataSource = self

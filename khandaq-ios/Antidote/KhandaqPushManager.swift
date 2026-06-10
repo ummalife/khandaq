@@ -23,8 +23,14 @@ final class KhandaqPushManager {
         guard FirebaseApp.app() != nil else {
             return
         }
-        if let token = Messaging.messaging().fcmToken {
-            applyNotificationTokenAuto(token)
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let token = Messaging.messaging().fcmToken
+            guard let token = token, token.count >= 10 else {
+                return
+            }
+            DispatchQueue.main.async {
+                self?.applyNotificationTokenAuto(token)
+            }
         }
     }
 

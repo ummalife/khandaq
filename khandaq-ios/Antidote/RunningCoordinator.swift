@@ -16,7 +16,7 @@ class RunningCoordinator {
     fileprivate let theme: Theme
     fileprivate let window: UIWindow
 
-    fileprivate var toxManager: OCTManager
+    fileprivate var toxManager: OCTManager!
     fileprivate var options: CoordinatorOptions?
 
     var activeSessionCoordinator: ActiveSessionCoordinator?
@@ -92,6 +92,7 @@ extension RunningCoordinator {
         let session = activeSessionCoordinator
         activeSessionCoordinator = nil
         session?.shutdownForToxRestart()
+        toxManager = nil
     }
 }
 

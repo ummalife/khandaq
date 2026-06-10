@@ -6,6 +6,10 @@
     <color name="khandaq_background">#0B0F0E</color>
     <color name="khandaq_surface">#151B19</color>
     <color name="khandaq_text">#F5F5F0</color>
+    <!-- Always dark — for inputs and list rows on light backgrounds (theme-independent) -->
+    <color name="text_on_light_surface">#DE000000</color>
+    <color name="chat_input_text">@color/text_on_light_surface</color>
+    <color name="message_bubble_text">#DE000000</color>
 
     <color name="colorPrimary">@color/khandaq_primary</color>
     <color name="colorPrimaryDark">#0A2A20</color>

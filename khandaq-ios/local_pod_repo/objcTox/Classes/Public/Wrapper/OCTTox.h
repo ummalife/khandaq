@@ -114,6 +114,16 @@
  */
 - (void)stop;
 
+/**
+ * Runs a block on the same serial queue as tox_iterate.
+ */
+- (void)performBlockOnToxQueue:(void (^)(void))block;
+
+/**
+ * Reset the offline rebootstrap timer so the next iterate pass can rebootstrap sooner.
+ */
+- (void)resetOfflineRebootstrapTimer;
+
 #pragma mark -  Methods
 
 /**

@@ -28,14 +28,21 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.OpenableColumns;
 import android.util.Log;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 
 import androidx.documentfile.provider.DocumentFile;
 
+import com.luseen.autolinklibrary.EmojiTextViewLinks;
 import com.zoffcc.applications.sorm.FileDB;
 import com.zoffcc.applications.sorm.Filetransfer;
 import com.zoffcc.applications.sorm.Message;
 import com.zoffcc.applications.trifa.MessageListActivity.outgoing_file_wrapped;
+
+import org.khandaq.messenger.R;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -50,8 +57,11 @@ import java.util.concurrent.ExecutionException;
 import androidx.core.content.FileProvider;
 
 import static android.webkit.MimeTypeMap.getFileExtensionFromUrl;
+import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
+import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
+import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_fileExt;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_message_accepted_from_id;
 import static com.zoffcc.applications.trifa.HelperMessage.set_message_queueing_from_id;
@@ -72,6 +82,7 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_friend_get_capabili
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.UINT32_MAX_JAVA;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_FILE_DIR;
@@ -96,6 +107,11 @@ public class HelperFiletransfer
     {
         try
         {
+            if (should_force_auto_accept_incoming(message))
+            {
+                return accept_paused_incoming_filetransfer(message);
+            }
+
             String mimeType = URLConnection.guessContentTypeFromName(
                     get_filetransfer_filename_from_id(message.filetransfer_id).toLowerCase());
             // Log.i(TAG, "check_auto_accept_incoming_filetransfer:mime-type=" + mimeType);
@@ -1002,13 +1018,10 @@ public class HelperFiletransfer
 
             if (file_number < 0)
             {
-                Log.i(TAG, "tox_file_send:EE:" + file_number);
+                Log.i(TAG, "tox_file_send:EE:" + file_number + " — re-queue for later");
 
-                // cancel FT
-                set_filetransfer_state_from_id(m.filetransfer_id, TOX_FILE_CONTROL_CANCEL.value);
-                set_message_state_from_id(m.id, TOX_FILE_CONTROL_CANCEL.value);
-                remove_ft_from_cache(m);
-                // update message view
+                orma.updateMessage().idEq(m.id).ft_outgoing_started(false).ft_outgoing_queued(true).execute();
+                orma.updateFiletransfer().idEq(m.filetransfer_id).ft_outgoing_started(false).execute();
                 update_single_message_from_messge_id(m.id, true);
             }
             else
@@ -1025,6 +1038,42 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    static void queue_and_try_send_outgoing_file(long message_id, boolean update_view)
+    {
+        try
+        {
+            Message m = (Message) orma.selectFromMessage().idEq(message_id).get(0);
+
+            if (m.ft_outgoing_started)
+            {
+                return;
+            }
+
+            set_message_queueing_from_id(m.id, true);
+            TrifaToxService.wakeup_tox_thread();
+
+            if (m.sent_push < 1)
+            {
+                friend_call_push_url(m.tox_friendpubkey, m.sent_timestamp);
+                orma.updateMessage().idEq(m.id).sent_push(1).execute();
+            }
+
+            if (is_friend_online_real(tox_friend_by_public_key__wrapper(m.tox_friendpubkey)) != 0)
+            {
+                start_outgoing_ft(m);
+            }
+
+            if (update_view)
+            {
+                update_single_message_from_messge_id(message_id, true);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "queue_and_try_send_outgoing_file:EE:" + e.getMessage());
         }
     }
 
@@ -1483,5 +1532,240 @@ public class HelperFiletransfer
             e.printStackTrace();
             Log.i(TAG, "save_group_incoming_file:EE");
         }
+    }
+
+    static boolean isVoiceMessagePath(String path)
+    {
+        if ((path == null) || path.isEmpty())
+        {
+            return false;
+        }
+        return path.toLowerCase().contains(".file.m4a");
+    }
+
+    static boolean isVoiceMessage(Message message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+        if (isVoiceMessagePath(message.filename_fullpath))
+        {
+            return true;
+        }
+        return isVoiceMessagePath(display_name_from_message_text(message.text));
+    }
+
+    static boolean isAudioMessage(Context context, Message message)
+    {
+        if (isVoiceMessage(message))
+        {
+            return true;
+        }
+        final String mimeType = guess_message_file_mime_type(context, message);
+        return (mimeType != null) && mimeType.startsWith("audio/");
+    }
+
+    static boolean looksLikeInternalFtName(String name)
+    {
+        if ((name == null) || name.isEmpty())
+        {
+            return true;
+        }
+        if (name.contains(" bytes"))
+        {
+            return true;
+        }
+        if (isVoiceMessagePath(name))
+        {
+            return true;
+        }
+        return (name.length() > 48) && name.contains("_");
+    }
+
+    static String basenameFromPath(String path)
+    {
+        if ((path == null) || path.isEmpty())
+        {
+            return null;
+        }
+        final int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        return (slash >= 0) ? path.substring(slash + 1) : path;
+    }
+
+    static String outgoingFileDisplayLabel(Context context, Message message)
+    {
+        if (isVoiceMessage(message))
+        {
+            return context.getString(R.string.voice_message_label);
+        }
+
+        String name = display_name_from_message_text(message.text);
+        if ((name != null) && (!name.isEmpty()) && (!looksLikeInternalFtName(name)))
+        {
+            return name;
+        }
+
+        name = basenameFromPath(message.filename_fullpath);
+        if ((name != null) && (!name.isEmpty()) && (!looksLikeInternalFtName(name)))
+        {
+            return name;
+        }
+
+        return context.getString(R.string.chat_ft_generic_file);
+    }
+
+    static String buildOutgoingFileMessageText(Context context, String filename, long file_size)
+    {
+        if (isVoiceMessagePath(filename))
+        {
+            return context.getString(R.string.voice_message_label);
+        }
+
+        String displayName = basenameFromPath(filename);
+        if ((displayName == null) || displayName.isEmpty())
+        {
+            displayName = filename;
+        }
+        if (looksLikeInternalFtName(displayName))
+        {
+            return context.getString(R.string.chat_ft_generic_file);
+        }
+        return displayName;
+    }
+
+    static boolean isSmallOutgoingFile(Message message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+        if (message.filetransfer_id == -1)
+        {
+            return false;
+        }
+        try
+        {
+            final long filesize = get_filetransfer_filesize_from_id(message.filetransfer_id);
+            return (filesize > 0) &&
+                   (filesize <= (long) AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB * 1024L * 1024L);
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    static String outgoingFtWaitingStatusLine(Context context, Message message)
+    {
+        if (isAudioMessage(context, message))
+        {
+            return null;
+        }
+        if (isSmallOutgoingFile(message))
+        {
+            return null;
+        }
+        return context.getString(R.string.chat_ft_status_waiting_friend_accept);
+    }
+
+    static void resetOutgoingFtAudioPlayer(me.jagar.chatvoiceplayerlibrary.VoicePlayerView ft_audio_player)
+    {
+        if (ft_audio_player == null)
+        {
+            return;
+        }
+        ft_audio_player.setVisibility(View.GONE);
+        try
+        {
+            ft_audio_player.onPause();
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    static void bindOutgoingCompactAudioUi(Context context, Message message, EmojiTextViewLinks textView,
+                                           ImageView imageView, ViewGroup ft_preview_container,
+                                           ImageButton ft_preview_image, ViewGroup ft_buttons_container,
+                                           com.daimajia.numberprogressbar.NumberProgressBar ft_progressbar,
+                                           me.jagar.chatvoiceplayerlibrary.VoicePlayerView ft_audio_player,
+                                           ImageButton button_ok, ImageButton button_cancel,
+                                           boolean showProgressBar, int progressPercent, boolean showCancelButton)
+    {
+        textView.setVisibility(View.GONE);
+        imageView.setVisibility(View.GONE);
+
+        ft_preview_image.setVisibility(View.GONE);
+        ft_preview_image.setOnTouchListener(null);
+
+        final ViewGroup.LayoutParams previewLp = ft_preview_container.getLayoutParams();
+        previewLp.height = (int) dp2px(56);
+        ft_preview_container.setLayoutParams(previewLp);
+        ft_preview_container.setVisibility(View.VISIBLE);
+
+        ft_audio_player.setVisibility(View.VISIBLE);
+        ft_audio_player.refreshPlayer(message.filename_fullpath);
+        ft_audio_player.refreshVisualizer();
+
+        button_ok.setVisibility(View.GONE);
+        ft_buttons_container.setVisibility(showCancelButton ? View.VISIBLE : View.GONE);
+        button_cancel.setVisibility(showCancelButton ? View.VISIBLE : View.GONE);
+
+        if (showProgressBar)
+        {
+            ft_progressbar.setVisibility(View.VISIBLE);
+            ft_progressbar.setMax(100);
+            ft_progressbar.setProgress(progressPercent);
+        }
+        else
+        {
+            ft_progressbar.setVisibility(View.GONE);
+        }
+    }
+
+    private static boolean should_force_auto_accept_incoming(Message message)
+    {
+        try
+        {
+            final String incoming_filename = get_filetransfer_filename_from_id(message.filetransfer_id);
+            if (isVoiceMessagePath(incoming_filename))
+            {
+                return true;
+            }
+
+            final String mimeType = guess_mime_type_from_filename(incoming_filename);
+            if ((mimeType != null) && mimeType.startsWith("audio/"))
+            {
+                return true;
+            }
+
+            final long filesize = get_filetransfer_filesize_from_id(message.filetransfer_id);
+            return (filesize > 0) &&
+                   (filesize <= (long) AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB * 1024L * 1024L);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private static boolean accept_paused_incoming_filetransfer(Message message)
+    {
+        if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
+        {
+            return false;
+        }
+
+        set_filetransfer_accepted_from_id(message.filetransfer_id);
+        set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
+        set_message_accepted_from_id(message.id);
+        set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
+        tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
+                         get_filetransfer_filenum_from_id(message.filetransfer_id),
+                         TOX_FILE_CONTROL_RESUME.value);
+        update_single_message_from_messge_id(message.id, true);
+        return true;
     }
 }

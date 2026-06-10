@@ -74,6 +74,7 @@ public class TRIFAGlobals
     static int AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB = 12;
     static int AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB = 40;
     static int AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB = 200;
+    static int AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB = 1;
 
     public static final String MY_PACKAGE_NAME = "com.zoffcc.applications.trifa";
     public static final int CONFERENCE_COOKIE_LENGTH = 35;
@@ -88,6 +89,8 @@ public class TRIFAGlobals
     public static final int TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES = 25;
     public static final int TOX_NGC_HISTORY_SYNC_MAX_FILENAME_BYTES = 255;
     public static final int TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK = 130 * 60; // 130 minutes
+    /** Khandaq Community: sync full local history to new members (0 = no time cutoff). */
+    public static final int KHANDAQ_COMMUNITY_HISTORY_SYNC_MAX_SECONDS_BACK = 0;
 
     public static final long NGC_NEW_PEERS_TIMEDELTA_IN_MS = (2 * 3600) * 1000; // 2hrs in millis
 
@@ -102,12 +105,9 @@ public class TRIFAGlobals
     public static final long UINT64_MAX_JAVA = 0xffffffffffffffffL; // 0xffffffffffffffff == UINT64_MAX
      */
 
-    // ----------
-    // https://toxme.io/u/echobot
-    //  echobot@toxme.io
+    // Legacy third-party Tox demo bot (echobot@toxme.io). No longer auto-added; removed on startup if present.
     final static String ECHOBOT_TOXID = "76518406F6A9F2217E8DC487CC783C25CC16A15EB36FF32E335A235342C48A39218F515C39A6";
-    final static String ECHOBOT_INIT_NAME = "Echobot";
-    final static String ECHOBOT_INIT_STATUSMSG = "A tiny bot to test Tox audio and video.";
+    final static String ECHOBOT_LEGACY_PUBKEY = ECHOBOT_TOXID.substring(0, 32 * 2).toUpperCase();
     //
     final static String TOXIRC_TOKTOK_CONFID = "836eaf5f6af15a9608feb231e48112f074b7625c054446163a4d8311a5abbb19";
     final static String TOXIRC_PUBKEY = "A922A51E1C91205B9F7992E2273107D47C72E8AE909C61C28A77A4A2A115431B";
@@ -121,7 +121,7 @@ public class TRIFAGlobals
     final static String TOX_TRIFA_PUBLIC_GROUPID = KHANDAQ_COMMUNITY_GROUPID;
     // ----------
 
-    final static boolean ADD_BOTS_ON_STARTUP = true;
+    final static boolean ADD_BOTS_ON_STARTUP = false;
     final static boolean DELETE_SQL_AND_VFS_ON_ERROR = false; // true -> will delete all data on any ERROR with SQL and VFS !!!
 
     final static String VFS_TMP_FILE_DIR = "/tempdir/files/";
@@ -281,12 +281,15 @@ public class TRIFAGlobals
     static List<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> bootstrap_node_list = new ArrayList<>();
     public static List<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> tcprelay_node_list = new ArrayList<>();
 
-    static final int[] MESSAGE_TEXT_SIZE = {9, 11, 15, 20,   25, 30, 45}; // values in "sp"
-    static final int[] MESSAGE_EMOJI_SIZE = {13, 18, 25, 36,   40, 40, 40}; // values in "dp"
+    // Default index 2 = 17sp (Telegram/WhatsApp-class readability)
+    static final int[] MESSAGE_TEXT_SIZE = {11, 14, 17, 21, 26, 32, 48}; // values in "sp"
+    public static final float MESSAGE_LINE_SPACING_MULTIPLIER = 1.22f;
+    public static final float MESSAGE_LETTER_SPACING = 0.012f;
+    static final int[] MESSAGE_EMOJI_SIZE = {15, 20, 28, 38, 42, 42, 42}; // values in "dp"
     static final int[] MESSAGE_AVATAR_HEIGHT_COMPACT_LAYOUT = {17, 17, 22, 30,   30, 30, 30}; // values in "dp"
     static final int[] MESSAGE_AVATAR_HEIGHT_NORMAL_LAYOUT = {50, 50, 50, 50,   50, 50, 50}; // values in "dp"
-    static final int MESSAGE_TEXT_SIZE_FT_SMALL = 12;
-    static final int MESSAGE_TEXT_SIZE_FT_NORMAL = 13;
+    static final int MESSAGE_TEXT_SIZE_FT_SMALL = 13;
+    static final int MESSAGE_TEXT_SIZE_FT_NORMAL = 15;
     static final int[] MESSAGE_EMOJI_ONLY_EMOJI_SIZE = {13 * 2, 18 * 2, 25 * 2, 36 * 2,   40 * 2, 40 * 2, 40 * 2}; // values in "dp"
 
     static long LAST_ONLINE_TIMSTAMP_ONLINE_NOW = Long.MAX_VALUE - 1;

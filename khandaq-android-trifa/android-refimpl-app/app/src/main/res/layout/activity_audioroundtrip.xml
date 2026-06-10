@@ -20,7 +20,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|center_horizontal"
         android:gravity="center"
-        android:text="Do the Test in a quiet room,\nand do not make any sound.\nWait for the beep sounds,\nthen read the latency value.\n\nAfter the test please exit TRIfA and restart it."
+        android:text="Do the Test in a quiet room,\nand do not make any sound.\nWait for the beep sounds,\nthen read the latency value.\n\nAfter the test press Stop or Back to exit."
         android:textSize="13sp"
         tools:ignore="HardcodedText" />
 

@@ -80,7 +80,7 @@
                         android:layout_alignParentRight="true"
                         android:layout_toRightOf="@id/m_icon"
                         android:text="..."
-                        android:textColor="#8A000000"
+                        android:textColor="@color/message_bubble_text"
                         android:textColorLink="@color/textblock_link_color_for_orange"
                         android:textSize="8sp"
                         app:emojiSize="@dimen/emoji_size_in_textview" />

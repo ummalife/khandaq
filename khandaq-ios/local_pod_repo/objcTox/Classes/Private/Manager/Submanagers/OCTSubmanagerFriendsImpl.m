@@ -10,8 +10,19 @@
 #import "OCTRealmManager.h"
 #import "Firebase.h"
 
+@interface OCTSubmanagerFriendsImpl ()
+
+@property (assign, nonatomic) BOOL networkObserverRegistered;
+
+@end
+
 @implementation OCTSubmanagerFriendsImpl
 @synthesize dataSource = _dataSource;
+
+- (void)dealloc
+{
+    [[self.dataSource managerGetNotificationCenter] removeObserver:self];
+}
 
 static NSString *OCTShortPublicKeyLabel(NSString *publicKey)
 {
@@ -20,6 +31,30 @@ static NSString *OCTShortPublicKeyLabel(NSString *publicKey)
     }
 
     return [[publicKey substringFromIndex:publicKey.length - 6] uppercaseString];
+}
+
+static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
+{
+    if ([FIRApp defaultApp] == nil) {
+        return;
+    }
+
+    NSString *token = [FIRMessaging messaging].FCMToken;
+
+    if (token.length == 0) {
+        return;
+    }
+
+    NSString *data = [NSString stringWithFormat:@"Ahttps://push.khandaq.org/toxfcm/fcm.php?id=%@&type=1", token];
+    NSError *error = nil;
+    BOOL result = [tox sendLosslessPacketWithFriendNumber:friendNumber
+                                                   pktid:181
+                                                    data:data
+                                                   error:&error];
+
+    if (! result) {
+        NSLog(@"push URL send failed for friendNumber %d: %@", friendNumber, error);
+    }
 }
 
 static BOOL OCTIsGenericDefaultFriendName(NSString *name)
@@ -218,17 +253,36 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 
         OCTFriend *friend = [results firstObject];
 
-        // Reset some fields for friends.
+        __block BOOL friendIsConnected = NO;
+
         [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
             theFriend.friendNumber = number;
-            theFriend.status = OCTToxUserStatusNone;
-            theFriend.isConnected = NO;
-            theFriend.connectionStatus = OCTToxConnectionStatusNone;
             theFriend.isTyping = NO;
-            NSDate *dateOffline = [tox friendGetLastOnlineWithFriendNumber:number error:nil];
-            theFriend.lastSeenOnlineInterval = [dateOffline timeIntervalSince1970];
-            OCTRefreshFriendNameFromTox(tox, theFriend, number);
+            theFriend.status = [tox friendStatusWithFriendNumber:number error:nil];
+
+            OCTToxConnectionStatus connectionStatus = [tox friendConnectionStatusWithFriendNumber:number error:nil];
+            theFriend.connectionStatus = connectionStatus;
+            theFriend.isConnected = (connectionStatus != OCTToxConnectionStatusNone);
+            friendIsConnected = theFriend.isConnected;
+
+            if (theFriend.isConnected) {
+                OCTRefreshFriendNameFromTox(tox, theFriend, number);
+
+                OCTToxCapabilities f_caps = [tox friendGetCapabilitiesWithFriendNumber:number];
+                theFriend.capabilities2 = [NSString stringWithFormat:@"%lu", f_caps];
+            }
+            else {
+                NSDate *dateOffline = [tox friendGetLastOnlineWithFriendNumber:number error:nil];
+                theFriend.lastSeenOnlineInterval = [dateOffline timeIntervalSince1970];
+                OCTRefreshFriendNameFromTox(tox, theFriend, number);
+            }
         }];
+
+        if (friendIsConnected) {
+            OCTSendPushURLToFriend(tox, number);
+            [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTFriendConnectionStatusChangeNotification
+                                                                        object:friend];
+        }
     }
 
     // Remove all OCTFriend's which aren't bounded to tox. User cannot interact with them anyway.
@@ -237,6 +291,55 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 
     for (OCTFriend *friend in results) {
         [realmManager deleteObject:friend];
+    }
+
+    if (! self.networkObserverRegistered) {
+        [[self.dataSource managerGetNotificationCenter] addObserver:self
+                                                             selector:@selector(networkRebootstrapCompleted:)
+                                                                 name:kOCTNetworkRebootstrapCompletedNotification
+                                                               object:nil];
+        self.networkObserverRegistered = YES;
+    }
+}
+
+- (void)networkRebootstrapCompleted:(NSNotification *)notification
+{
+    [self resyncAllFriendConnectionStatuses];
+}
+
+- (void)resyncAllFriendConnectionStatuses
+{
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    RLMResults *friends = [realmManager objectsWithClass:[OCTFriend class] predicate:nil];
+
+    for (OCTFriend *friend in friends) {
+        if (friend.friendNumber == kOCTToxFriendNumberFailure) {
+            continue;
+        }
+
+        OCTToxConnectionStatus status = [tox friendConnectionStatusWithFriendNumber:friend.friendNumber error:nil];
+        const BOOL connected = (status != OCTToxConnectionStatusNone);
+
+        if (friend.connectionStatus == status && friend.isConnected == connected) {
+            continue;
+        }
+
+        [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
+            theFriend.connectionStatus = status;
+            theFriend.isConnected = connected;
+
+            if (connected) {
+                OCTRefreshFriendNameFromTox(tox, theFriend, theFriend.friendNumber);
+            }
+        }];
+
+        if (connected) {
+            OCTSendPushURLToFriend(tox, friend.friendNumber);
+        }
+
+        [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTFriendConnectionStatusChangeNotification
+                                                                    object:friend];
     }
 }
 
@@ -402,17 +505,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
             }
             if (token.length > 0)
             {
-                // HINT: prepend a dummy "A" char as placeholder for Tox Packet ID.
-                //       it will be replaced in sendLosslessPacketWithFriendNumber by pktid
-                NSString *data = [NSString stringWithFormat:@"Ahttps://push.khandaq.org/toxfcm/fcm.php?id=%@&type=1", token];
-                // NSLog(@"token push url=%@", data);
-                NSError *error;
-
-                // HINT: pktid 181 is for sending push urls to friends
-                BOOL result = [tox sendLosslessPacketWithFriendNumber:friendNumber
-                                                 pktid:181
-                                                  data:data
-                                                 error:&error];
+                OCTSendPushURLToFriend(tox, friendNumber);
             }
         }
         theFriend.isConnected = (status != OCTToxConnectionStatusNone);
@@ -480,6 +573,12 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     OCTApplyFriendName(friend, friend.name, friend.publicKey);
 
     [[self.dataSource managerGetRealmManager] addObject:friend];
+
+    if (friend.isConnected) {
+        OCTSendPushURLToFriend(tox, friendNumber);
+        [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTFriendConnectionStatusChangeNotification
+                                                                    object:friend];
+    }
 
     return YES;
 }

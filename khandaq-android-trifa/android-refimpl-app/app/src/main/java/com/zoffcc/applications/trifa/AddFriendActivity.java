@@ -61,6 +61,11 @@ public class AddFriendActivity extends AppCompatActivity
                 {
                     launchQrScan();
                 }
+                else
+                {
+                    Toast.makeText(AddFriendActivity.this, R.string.qr_scan_permission_denied,
+                            Toast.LENGTH_LONG).show();
+                }
             });
 
     private final ActivityResultLauncher<Intent> qrScanLauncher =
@@ -234,8 +239,16 @@ public class AddFriendActivity extends AppCompatActivity
         {
             final String tox_id_text_clean = normalize_tox_address(toxid_text.getText().toString());
 
-            intent.putExtra("toxid", tox_id_text_clean);
-            setResult(RESULT_OK, intent);
+            if (tox_id_text_clean == null)
+            {
+                friend_toxid_inputlayout.setError(getString(R.string.AddFriendActivity_3));
+                setResult(RESULT_CANCELED, intent);
+            }
+            else
+            {
+                intent.putExtra("toxid", tox_id_text_clean);
+                setResult(RESULT_OK, intent);
+            }
         }
         else
         {

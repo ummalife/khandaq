@@ -54,7 +54,13 @@ import com.zoffcc.applications.sorm.Message;
 
 import java.net.URLConnection;
 
+import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactAudioUi;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isAudioMessage;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isSmallOutgoingFile;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFileDisplayLabel;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFtWaitingStatusLine;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.resetOutgoingFtAudioPlayer;
 import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_filetransfer_filenum_from_id;
@@ -87,6 +93,7 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_accepted extend
     TextView message_text_date_string;
     ViewGroup message_text_date;
     ViewGroup rounded_bg_container;
+    me.jagar.chatvoiceplayerlibrary.VoicePlayerView ft_audio_player;
 
     public MessageListHolder_file_outgoing_state_pause_not_yet_accepted(View itemView, Context c)
     {
@@ -109,6 +116,7 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_accepted extend
         date_time = (TextView) itemView.findViewById(R.id.date_time);
         message_text_date_string = (TextView) itemView.findViewById(R.id.message_text_date_string);
         message_text_date = (ViewGroup) itemView.findViewById(R.id.message_text_date);
+        ft_audio_player = itemView.findViewById(R.id.ft_audio_player);
     }
 
     public void bindMessageList(Message m)
@@ -191,10 +199,7 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_accepted extend
 
         textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG, AutoLinkMode.MODE_MENTION);
 
-        ft_progressbar.setVisibility(View.GONE);
-        ft_buttons_container.setVisibility(View.VISIBLE);
-        ft_preview_container.setVisibility(View.VISIBLE);
-        ft_preview_image.setVisibility(View.VISIBLE);
+        resetOutgoingFtAudioPlayer(ft_audio_player);
 
         final Message message2 = message;
 
@@ -210,7 +215,37 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_accepted extend
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
 
-        textView.setAutoLinkText("" + message.text + "\n\nWaiting for Friend to accept ...");
+        if (isAudioMessage(context, message))
+        {
+            bindOutgoingCompactAudioUi(context, message, textView, imageView, ft_preview_container, ft_preview_image,
+                                       ft_buttons_container, ft_progressbar, ft_audio_player, button_ok, button_cancel,
+                                       true, 0, true);
+            setup_cancel_button(message);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            return;
+        }
+
+        ft_progressbar.setVisibility(isSmallOutgoingFile(message) ? View.VISIBLE : View.GONE);
+        if (isSmallOutgoingFile(message))
+        {
+            ft_progressbar.setMax(100);
+            ft_progressbar.setProgress(0);
+        }
+        ft_preview_container.setVisibility(View.VISIBLE);
+        ft_preview_image.setVisibility(View.VISIBLE);
+
+        final String waitingLine = outgoingFtWaitingStatusLine(context, message);
+        final String label = outgoingFileDisplayLabel(context, message);
+        if (waitingLine != null)
+        {
+            textView.setAutoLinkText(label + "\n\n" + waitingLine);
+        }
+        else
+        {
+            textView.setAutoLinkText(label);
+            textView.setVisibility(View.VISIBLE);
+            imageView.setVisibility(View.GONE);
+        }
 
         boolean is_image = false;
         try
@@ -238,40 +273,15 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_accepted extend
         }
 
 
-        button_cancel.setOnTouchListener(new View.OnTouchListener()
+        setup_cancel_button(message);
+
+        if (isSmallOutgoingFile(message))
         {
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
-            {
-                if (event.getAction() == MotionEvent.ACTION_DOWN)
-                {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                    builder.setTitle(
-                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_title));
-                    builder.setMessage(
-                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_message));
-
-                    builder.setNegativeButton(v.getContext().getString(R.string.MainActivity_no_button), null);
-                    builder.setPositiveButton(v.getContext().getString(R.string.MainActivity_yes_button),
-                                              new DialogInterface.OnClickListener()
-                                              {
-                                                  @Override
-                                                  public void onClick(DialogInterface dialog, int which)
-                                                  {
-                                                      cancel_outgoing_filetransfer(message);
-                                                  }
-                                              });
-
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
-                }
-                else
-                {
-                }
-                return true;
-            }
-        });
-
+            ft_preview_container.setVisibility(View.GONE);
+            ft_preview_image.setVisibility(View.GONE);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            return;
+        }
 
         if (is_image)
         {
@@ -379,6 +389,40 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_accepted extend
         }
 
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+    }
+
+    private void setup_cancel_button(final Message message)
+    {
+        button_cancel.setOnTouchListener(new View.OnTouchListener()
+        {
+            @Override
+            public boolean onTouch(View v, MotionEvent event)
+            {
+                if (event.getAction() == MotionEvent.ACTION_DOWN)
+                {
+                    AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
+                    builder.setTitle(
+                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_title));
+                    builder.setMessage(
+                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_message));
+
+                    builder.setNegativeButton(v.getContext().getString(R.string.MainActivity_no_button), null);
+                    builder.setPositiveButton(v.getContext().getString(R.string.MainActivity_yes_button),
+                                              new DialogInterface.OnClickListener()
+                                              {
+                                                  @Override
+                                                  public void onClick(DialogInterface dialog, int which)
+                                                  {
+                                                      cancel_outgoing_filetransfer(message);
+                                                  }
+                                              });
+
+                    AlertDialog dialog = builder.create();
+                    dialog.show();
+                }
+                return true;
+            }
+        });
     }
 
     private void cancel_outgoing_filetransfer(final Message message)

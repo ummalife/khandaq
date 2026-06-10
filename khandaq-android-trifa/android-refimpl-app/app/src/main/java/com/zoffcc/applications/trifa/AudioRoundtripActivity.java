@@ -25,6 +25,8 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.View;
@@ -64,10 +66,73 @@ public class AudioRoundtripActivity extends AppCompatActivity
     private boolean fastpath_active = false;
     private boolean test_running = false;
     private Thread LatencyTestThread = null;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static final long THREAD_JOIN_TIMEOUT_MS = 3000;
     public static boolean LatencyTestActive = false;
     public static long d1 = 0;
     public static long measured_audio_latency = -1;
     public static boolean measured_audio_latency_set = false;
+
+    private void requestStopTest()
+    {
+        test_running = false;
+        LatencyTestActive = false;
+    }
+
+    private static void joinWithTimeout(Thread thread, long timeoutMs)
+    {
+        if (thread == null || !thread.isAlive())
+        {
+            return;
+        }
+        try
+        {
+            thread.join(timeoutMs);
+            if (thread.isAlive())
+            {
+                Log.w(TAG, "joinWithTimeout:still alive after " + timeoutMs + "ms");
+                thread.interrupt();
+            }
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void cleanupAudioThreads()
+    {
+        try
+        {
+            if (!AudioRecording.stopped)
+            {
+                AudioRecording.close();
+                joinWithTimeout(CallingActivity.audio_thread, THREAD_JOIN_TIMEOUT_MS);
+                CallingActivity.audio_thread = null;
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        try
+        {
+            if (!AudioReceiver.stopped)
+            {
+                AudioReceiver.close();
+                joinWithTimeout(CallingActivity.audio_receiver_thread, THREAD_JOIN_TIMEOUT_MS);
+                CallingActivity.audio_receiver_thread = null;
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        setMicGainToggle(PREF__mic_gain_factor_toggle);
+        setMicGainFactor(PREF_mic_gain_factor);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -144,27 +209,33 @@ public class AudioRoundtripActivity extends AppCompatActivity
             @Override
             public void onClick(View view)
             {
-                try
+                if (!test_running)
                 {
-                    if (test_running)
+                    return;
+                }
+                final boolean enableFast = !fastpath_active;
+                fastpath_toggle_button.setEnabled(false);
+                new Thread(() ->
+                {
+                    try
                     {
-                        if (fastpath_active)
+                        fastpath_active = enableFast;
+                        switch_fast_audio_path(fastpath_active);
+                        runOnUiThread(() ->
                         {
-                            fastpath_active = false;
-                            switch_fast_audio_path(fastpath_active);
-                            fastpath_toggle_button.setText("slow audio path");
-                        }
-                        else
-                        {
-                            fastpath_active = true;
-                            switch_fast_audio_path(fastpath_active);
-                            fastpath_toggle_button.setText("fast audio path");
-                        }
+                            if (!isFinishing())
+                            {
+                                fastpath_toggle_button.setText(
+                                        fastpath_active ? "fast audio path" : "slow audio path");
+                                fastpath_toggle_button.setEnabled(true);
+                            }
+                        });
                     }
-                }
-                catch (Exception ignored)
-                {
-                }
+                    catch (Exception ignored)
+                    {
+                        runOnUiThread(() -> fastpath_toggle_button.setEnabled(true));
+                    }
+                }, "t_latency_fastpath").start();
             }
         });
 
@@ -177,18 +248,20 @@ public class AudioRoundtripActivity extends AppCompatActivity
                 {
                     if (test_running)
                     {
-                        test_running = false;
+                        requestStopTest();
                         roundtrip_start_button.setText("Start");
                         roundtrip_time_textview.setText("stopping ...");
-                        try
+                        new Thread(() ->
                         {
-                            LatencyTestThread.join();
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                        roundtrip_time_textview.setText("test stopped");
+                            joinWithTimeout(LatencyTestThread, 5000);
+                            runOnUiThread(() ->
+                            {
+                                if (!isFinishing())
+                                {
+                                    roundtrip_time_textview.setText("test stopped");
+                                }
+                            });
+                        }, "t_latency_stop").start();
                     }
                     else
                     {
@@ -290,33 +363,7 @@ public class AudioRoundtripActivity extends AppCompatActivity
                 sampling_rate_ = sampling_rate;
                 channels_ = channels;
 
-                try
-                {
-                    if (!AudioRecording.stopped)
-                    {
-                        AudioRecording.close();
-                        CallingActivity.audio_thread.join();
-                        CallingActivity.audio_thread = null;
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                try
-                {
-                    if (!AudioReceiver.stopped)
-                    {
-                        AudioReceiver.close();
-                        CallingActivity.audio_receiver_thread.join();
-                        CallingActivity.audio_receiver_thread = null;
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                cleanupAudioThreads();
 
                 try
                 {
@@ -353,17 +400,18 @@ public class AudioRoundtripActivity extends AppCompatActivity
 
                 if (audio_engine_starting)
                 {
-                    // native audio engine is down. lets wait for it to get up ...
-                    while (audio_engine_starting == true)
+                    int engine_wait = 0;
+                    while (audio_engine_starting && test_running && engine_wait < 250)
                     {
                         try
                         {
                             Thread.sleep(20);
-                            Log.i(TAG, "LatencyTestThread:sleep --------");
+                            engine_wait++;
                         }
                         catch (Exception e)
                         {
                             e.printStackTrace();
+                            break;
                         }
                     }
                 }
@@ -409,25 +457,14 @@ public class AudioRoundtripActivity extends AppCompatActivity
                             }
                             else
                             {
-                                // put result into text box
-
-                                final Thread update_ui_textbox = new Thread()
+                                mainHandler.postDelayed(() ->
                                 {
-                                    @Override
-                                    public void run()
+                                    if (!isFinishing())
                                     {
-                                        try
-                                        {
-                                            Thread.sleep(1000);
-                                            runOnUiThread(() -> roundtrip_time_textview.setText(
-                                                    String.valueOf("latency in ms = " + measured_audio_latency)));
-                                        }
-                                        catch (Exception ignored)
-                                        {
-                                        }
+                                        roundtrip_time_textview.setText(
+                                                "latency in ms = " + measured_audio_latency);
                                     }
-                                };
-                                update_ui_textbox.start();
+                                }, 1000);
                             }
 
                             Log.i(TAG, "LatencyTestThread:--sound--");
@@ -479,36 +516,7 @@ public class AudioRoundtripActivity extends AppCompatActivity
                 }
 
                 LatencyTestActive = false;
-                setMicGainToggle(PREF__mic_gain_factor_toggle);
-                setMicGainFactor(PREF_mic_gain_factor);
-
-                try
-                {
-                    if (!AudioRecording.stopped)
-                    {
-                        AudioRecording.close();
-                        CallingActivity.audio_thread.join();
-                        CallingActivity.audio_thread = null;
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                try
-                {
-                    if (!AudioReceiver.stopped)
-                    {
-                        AudioReceiver.close();
-                        CallingActivity.audio_receiver_thread.join();
-                        CallingActivity.audio_receiver_thread = null;
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                cleanupAudioThreads();
 
                 Log.i(TAG, "LatencyTestThread:finished");
                 test_running = false;
@@ -550,33 +558,36 @@ public class AudioRoundtripActivity extends AppCompatActivity
     }
 
     @Override
+    public void onBackPressed()
+    {
+        requestStopTest();
+        super.onBackPressed();
+    }
+
+    @Override
     protected void onPause()
     {
+        requestStopTest();
+        new Thread(() ->
+        {
+            joinWithTimeout(LatencyTestThread, THREAD_JOIN_TIMEOUT_MS);
+            try
+            {
+                reset_audio_mode();
+            }
+            catch (Exception ignored)
+            {
+            }
+            cleanupAudioThreads();
+        }, "t_latency_pause").start();
         super.onPause();
-        test_running = false;
-        LatencyTestActive = false;
-        try
-        {
-            LatencyTestThread.join();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
+    }
 
-
-        reset_audio_mode();
-        try
-        {
-            setVolumeControlStream(AudioManager.STREAM_VOICE_CALL);
-        }
-        catch (Exception e2)
-        {
-            e2.printStackTrace();
-        }
-
-        setMicGainToggle(PREF__mic_gain_factor_toggle);
-        setMicGainFactor(PREF_mic_gain_factor);
-        roundtrip_time_textview.setText("test finished");
+    @Override
+    protected void onDestroy()
+    {
+        requestStopTest();
+        mainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 }

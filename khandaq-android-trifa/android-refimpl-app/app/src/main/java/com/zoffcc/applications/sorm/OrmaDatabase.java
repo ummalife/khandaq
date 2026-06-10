@@ -537,6 +537,64 @@ public class OrmaDatabase
         return ret2;
     }
 
+    /** Opens the encrypted DB briefly to verify the passphrase without running migrations. */
+    public static boolean probeEncryptedDatabase(final String db_file_path, final String secrect_key)
+    {
+        if ((db_file_path == null) || (secrect_key == null) || secrect_key.isEmpty())
+        {
+            return false;
+        }
+
+        Connection probe = null;
+        Statement statement = null;
+        ResultSet rs = null;
+        try
+        {
+            Class.forName("org.sqlite.JDBC");
+            probe = DriverManager.getConnection("jdbc:sqlite:" + db_file_path, null, secrect_key);
+            statement = probe.createStatement();
+            rs = statement.executeQuery("SELECT count(*) as sqlite_master_count FROM sqlite_master");
+            return rs.next();
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (rs != null)
+                {
+                    rs.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            try
+            {
+                if (statement != null)
+                {
+                    statement.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            try
+            {
+                if (probe != null)
+                {
+                    probe.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
     public static void shutdown()
     {
         Log.i(TAG, "SHUTDOWN:start");

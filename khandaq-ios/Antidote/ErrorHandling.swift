@@ -117,8 +117,16 @@ func handleErrorWithType(_ type: ErrorHandlerType, error: NSError? = nil, retryB
         case .passwordTooWeak:
             UIAlertController.showWithTitle(String(localized: "password_too_weak_error"), retryBlock: retryBlock)
         case .answerCall:
-            let (title, message) = OCTToxAVErrorAnswer(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            if let error = error, let answerError = OCTToxAVErrorAnswer(rawValue: error.code) {
+                let (title, message) = answerError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            } else {
+                UIAlertController.showWithTitle(
+                    String(localized: "error_title"),
+                    message: String(localized: "call_error_microphone_denied"),
+                    retryBlock: retryBlock
+                )
+            }
         case .routeAudioToSpeaker:
             UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
         case .enableVideoSending:
@@ -307,14 +315,18 @@ extension OCTToxAVErrorAnswer {
                 return (String(localized: "error_title"),
                         String(localized: "call_error_no_active_call"))
             case .codecInitialization:
-                fallthrough
+                return (String(localized: "error_title"),
+                        String(localized: "call_error_codec"))
             case .sync:
-                fallthrough
+                return (String(localized: "error_title"),
+                        String(localized: "call_error_connection"))
             case .invalidBitRate:
-                fallthrough
-            case .unknown:
-                fallthrough
+                return (String(localized: "error_title"),
+                        String(localized: "call_error_bitrate"))
             case .friendNotFound:
+                return (String(localized: "error_title"),
+                        String(localized: "call_error_contact_unreachable"))
+            case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
         }

@@ -11,13 +11,18 @@ class QRScannerController: UIViewController {
 
     fileprivate let theme: Theme
 
-    fileprivate var previewLayer: AVCaptureVideoPreviewLayer!
-    fileprivate var captureSession: AVCaptureSession!
+    fileprivate var previewLayer: AVCaptureVideoPreviewLayer?
+    fileprivate var captureSession: AVCaptureSession?
 
     fileprivate var aimView: QRScannerAimView!
+    fileprivate var deniedContainerView: UIView?
 
     var pauseScanning: Bool = false {
         didSet {
+            guard let captureSession = captureSession else {
+                return
+            }
+
             pauseScanning ? captureSession.stopRunning() : captureSession.startRunning()
 
             if !pauseScanning {
@@ -31,7 +36,6 @@ class QRScannerController: UIViewController {
 
         super.init(nibName: nil, bundle: nil)
 
-        createCaptureSession()
         createBarButtonItems()
 
         NotificationCenter.default.addObserver(
@@ -64,19 +68,19 @@ class QRScannerController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        captureSession.startRunning()
+        updateCameraAccessState()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
-        captureSession.stopRunning()
+        captureSession?.stopRunning()
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        previewLayer.frame = view.bounds
+        previewLayer?.frame = view.bounds
     }
 }
 
@@ -85,23 +89,32 @@ extension QRScannerController {
     @objc func cancelButtonPressed() {
         cancelBlock?()
     }
+
+    @objc func openSettingsButtonPressed() {
+        guard let url = URL(string: UIApplicationOpenSettingsURLString) else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
 }
 
 // MARK: Notifications
 extension QRScannerController {
     @objc func applicationDidEnterBackground() {
-        captureSession.stopRunning()
+        captureSession?.stopRunning()
     }
 
     @objc func applicationWillEnterForeground() {
-        if !pauseScanning {
-            captureSession.startRunning()
-        }
+        updateCameraAccessState()
     }
 }
 
 extension QRScannerController: AVCaptureMetadataOutputObjectsDelegate {
     func metadataOutput(_ captureOutput: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard let previewLayer = previewLayer else {
+            return
+        }
+
         let readableObjects = metadataObjects.filter {
             $0 is AVMetadataMachineReadableCodeObject
         }.map {
@@ -123,24 +136,64 @@ extension QRScannerController: AVCaptureMetadataOutputObjectsDelegate {
 }
 
 private extension QRScannerController {
-    func createCaptureSession() {
-        captureSession = AVCaptureSession()
+    func updateCameraAccessState() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            hideCameraDeniedUI()
+            configureCaptureSessionIfNeeded()
+            if !pauseScanning {
+                captureSession?.startRunning()
+            }
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    self?.updateCameraAccessState()
+                }
+            }
+        case .denied, .restricted:
+            showCameraDeniedUI()
+        @unknown default:
+            showCameraDeniedUI()
+        }
+    }
 
+    func configureCaptureSessionIfNeeded() {
+        guard captureSession == nil else {
+            return
+        }
+
+        let session = AVCaptureSession()
         let input = captureSessionInput()
         let output = AVCaptureMetadataOutput()
 
-        if (input != nil) && captureSession.canAddInput(input!) {
-            captureSession.addInput(input!)
+        if let input = input, session.canAddInput(input) {
+            session.addInput(input)
+        } else {
+            showCameraDeniedUI()
+            return
         }
 
-        if captureSession.canAddOutput(output) {
-            captureSession.addOutput(output)
+        if session.canAddOutput(output) {
+            session.addOutput(output)
 
             output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
 
-            if output.availableMetadataObjectTypes.contains({ AVMetadataObject.ObjectType.qr }()) {
+            if output.availableMetadataObjectTypes.contains(AVMetadataObject.ObjectType.qr) {
                 output.metadataObjectTypes = [AVMetadataObject.ObjectType.qr]
             }
+        }
+
+        captureSession = session
+
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = AVLayerVideoGravity.resizeAspectFill
+        view.layer.insertSublayer(layer, at: 0)
+        previewLayer = layer
+        previewLayer?.frame = view.bounds
+
+        if let deniedContainerView = deniedContainerView {
+            view.bringSubview(toFront: deniedContainerView)
+            view.bringSubview(toFront: aimView)
         }
     }
 
@@ -163,15 +216,64 @@ private extension QRScannerController {
         return try? AVCaptureDeviceInput(device: device)
     }
 
+    func showCameraDeniedUI() {
+        captureSession?.stopRunning()
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+        captureSession = nil
+
+        aimView.isHidden = true
+
+        if deniedContainerView == nil {
+            let container = UIView()
+            container.translatesAutoresizingMaskIntoConstraints = false
+
+            let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.text = String(localized: "camera_access_denied_message")
+            label.textAlignment = .center
+            label.numberOfLines = 0
+            label.textColor = theme.colorForType(.NormalText)
+
+            let button = UIButton(type: .system)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.setTitle(String(localized: "open_settings"), for: .normal)
+            button.addTarget(self, action: #selector(QRScannerController.openSettingsButtonPressed), for: .touchUpInside)
+
+            container.addSubview(label)
+            container.addSubview(button)
+            view.addSubview(container)
+
+            NSLayoutConstraint.activate([
+                container.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                container.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                container.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+                container.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+                label.topAnchor.constraint(equalTo: container.topAnchor),
+                label.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                label.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                button.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 16),
+                button.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                button.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            ])
+
+            deniedContainerView = container
+        }
+
+        deniedContainerView?.isHidden = false
+        view.bringSubview(toFront: deniedContainerView!)
+    }
+
+    func hideCameraDeniedUI() {
+        deniedContainerView?.isHidden = true
+        aimView.isHidden = false
+    }
+
     func createBarButtonItems() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(QRScannerController.cancelButtonPressed))
     }
 
     func createViewsAndLayers() {
-        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-
         aimView = QRScannerAimView(theme: theme)
         view.addSubview(aimView)
         view.bringSubview(toFront: aimView)

@@ -74,8 +74,8 @@ extension AddFriendController {
             return isAddressString($0)
 
         }, didScanHander: { [unowned self] in
-            self.idTextField.text = sanitizeAddressInput($0)
-            self.updateSendButton()
+            let value = self.normalizedIdFieldText(from: $0)
+            self.applyIdFieldText(value, cursorOffset: (value as NSString).length)
         })
     }
 
@@ -112,6 +112,11 @@ extension AddFriendController {
 
             do {
                 guard let address = normalizeAddressString(self.idTextField.text ?? "") else {
+                    UIAlertController.showWithTitle(
+                        String(localized: "error_title"),
+                        message: String(localized: "error_contact_request_bad_checksum"),
+                        retryBlock: nil
+                    )
                     return
                 }
 
@@ -140,6 +145,10 @@ extension AddFriendController {
 
 extension AddFriendController: UITextFieldDelegate {
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        if textField !== idTextField {
+            return true
+        }
+
         if string == "\n" {
             updateSendButton()
             textField.resignFirstResponder()
@@ -147,42 +156,44 @@ extension AddFriendController: UITextFieldDelegate {
         }
 
         let current = textField.text ?? ""
-        guard let textRange = Range(range, in: current) else {
-            return false
-        }
-
-        let merged = current.replacingCharacters(in: textRange, with: string)
+        let nsCurrent = current as NSString
         let maxHex = Int(kOCTToxAddressLength)
 
-        // Paste / autofill: strip tox:, spaces, then keep up to 76 hex chars.
-        if string.count > 1 {
-            textField.text = String(sanitizeAddressInput(merged).prefix(maxHex))
-            updateSendButton()
+        guard range.location >= 0,
+              range.length >= 0,
+              range.location <= nsCurrent.length,
+              range.location + range.length <= nsCurrent.length else {
             return false
         }
 
-        if string.count == 1 {
+        let merged = nsCurrent.replacingCharacters(in: range, with: string) as String
+        let newText: String
+        let cursorOffset: Int
+
+        if string.count > 1 {
+            // Paste / autofill
+            newText = normalizedIdFieldText(from: merged)
+            cursorOffset = (newText as NSString).length
+        } else if string.count == 1 {
             let ch = string.uppercased()
             if ch.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789ABCDEF")) == nil {
                 return false
             }
+            newText = String(sanitizeAddressInput(merged).prefix(maxHex))
+            cursorOffset = min(range.location + 1, (newText as NSString).length)
+        } else {
+            // Backspace / delete — apply as-is; validation only on Send.
+            newText = merged
+            cursorOffset = range.location
         }
 
-        if sanitizeAddressInput(merged).count > maxHex {
-            return false
-        }
-
-        updateSendButton(with: merged)
-        return true
+        applyIdFieldText(newText, cursorOffset: cursorOffset)
+        return false
     }
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         textField.resignFirstResponder()
         return true
-    }
-
-    @objc func idTextFieldEditingChanged() {
-        updateSendButton()
     }
 }
 
@@ -200,10 +211,15 @@ private extension AddFriendController {
         idTextField = UITextField()
         idTextField.placeholder = String(localized: "add_contact_tox_id_placeholder")
         idTextField.delegate = self
-        idTextField.font = UIFont.systemFont(ofSize: 17)
+        if #available(iOS 13.0, *) {
+            idTextField.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        } else {
+            idTextField.font = UIFont(name: "Menlo-Regular", size: 14) ?? UIFont.systemFont(ofSize: 14)
+        }
         idTextField.textColor = theme.colorForType(.NormalText)
         idTextField.backgroundColor = .clear
         idTextField.returnKeyType = .done
+        idTextField.adjustsFontSizeToFitWidth = false
         idTextField.autocapitalizationType = .allCharacters
         idTextField.autocorrectionType = .no
         idTextField.spellCheckingType = .no
@@ -215,7 +231,6 @@ private extension AddFriendController {
         idTextField.layer.masksToBounds = true
         idTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 8, height: 1))
         idTextField.leftViewMode = .always
-        idTextField.addTarget(self, action: #selector(idTextFieldEditingChanged), for: .editingChanged)
         view.addSubview(idTextField)
 
         orTopSpacer = createSpacer()
@@ -247,7 +262,7 @@ private extension AddFriendController {
             $0.top.equalTo(view).offset(Constants.TextViewTopOffset)
             $0.leading.equalTo(view).offset(Constants.TextViewXOffset)
             $0.trailing.equalTo(view).offset(-Constants.TextViewXOffset)
-            $0.height.equalTo(44)
+            $0.height.equalTo(52)
         }
 
         orTopSpacer.snp.makeConstraints {
@@ -271,9 +286,42 @@ private extension AddFriendController {
         }
     }
 
+    func applyIdFieldText(_ text: String, cursorOffset: Int) {
+        idTextField.text = text
+        setIdFieldCursor(offset: cursorOffset)
+        updateSendButton(with: text)
+    }
+
+    func setIdFieldCursor(offset: Int) {
+        let nsLength = ((idTextField.text ?? "") as NSString).length
+        let clamped = min(max(0, offset), nsLength)
+
+        guard let position = idTextField.position(from: idTextField.beginningOfDocument, offset: clamped) else {
+            return
+        }
+        idTextField.selectedTextRange = idTextField.textRange(from: position, to: position)
+    }
+
     func updateSendButton(with text: String? = nil) {
         let value = text ?? idTextField.text ?? ""
         navigationItem.rightBarButtonItem?.isEnabled = isAddressString(value)
+    }
+
+    func normalizedIdFieldText(from raw: String) -> String {
+        let hex = sanitizeAddressInput(raw)
+
+        if let normalized = normalizeAddressString(hex) {
+            return normalized
+        }
+
+        if hex.count > Int(kOCTToxAddressLength) {
+            let prefix = String(hex.prefix(Int(kOCTToxAddressLength)))
+            if let normalized = normalizeAddressString(prefix) {
+                return normalized
+            }
+        }
+
+        return String(hex.prefix(Int(kOCTToxAddressLength)))
     }
 
     func isOwnToxAddress(_ address: String) -> Bool {

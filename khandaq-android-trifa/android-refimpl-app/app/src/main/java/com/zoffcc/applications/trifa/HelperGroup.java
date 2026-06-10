@@ -81,7 +81,17 @@ import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_by_chat_id;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_chat_id;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_privacy_state;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_new;
+import static com.zoffcc.applications.trifa.HelperRelay.have_own_relay;
+import static com.zoffcc.applications.trifa.HelperRelay.invite_to_group_own_relay;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peer_limit;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_topic;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_set_topic;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_invite_friend;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_mod_set_role;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_count;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_role;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peerlist;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_name;
@@ -100,6 +110,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_GROUP_HISTORY_S
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NOTIFICATION_EDIT_ACTION.NOTIFICATION_EDIT_ACTION_ADD;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_NGC_HISTORY_SYNC_MAX_FILENAME_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_COMMUNITY_HISTORY_SYNC_MAX_SECONDS_BACK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
@@ -109,17 +120,24 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.UINT32_MAX_JAVA;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_FILE_DIR;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_PREFIX;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_for_battery_savings_ts;
+import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_ERR_GROUP_INVITE_FRIEND;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_ERR_GROUP_NEW;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_GROUP_CHAT_ID_SIZE;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_GROUP_MAX_GROUP_NAME_LENGTH;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_GROUP_MAX_PART_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_GROUP_PEER_PUBLIC_KEY_SIZE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_HASH_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_MAX_FILENAME_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_MAX_NGC_FILESIZE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_MAX_NGC_FILE_AND_HEADER_SIZE;
+import static com.zoffcc.applications.trifa.TrifaToxService.is_tox_started;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 public class HelperGroup
 {
     private static final String TAG = "trifa.Hlp.Group";
+    static final int DEFAULT_GROUP_PEER_LIMIT = 100;
 
     static void add_group_wrapper(final long friend_number, long group_num, String group_identifier_in, final int a_TOX_GROUP_PRIVACY_STATE)
     {
@@ -634,6 +652,81 @@ public class HelperGroup
         }
     }
 
+    static int get_display_peer_limit(final long group_num)
+    {
+        if (group_num < 0)
+        {
+            return DEFAULT_GROUP_PEER_LIMIT;
+        }
+        try
+        {
+            final int limit = tox_group_get_peer_limit(group_num);
+            if (limit < 1)
+            {
+                return DEFAULT_GROUP_PEER_LIMIT;
+            }
+            return limit;
+        }
+        catch (Exception e)
+        {
+            return DEFAULT_GROUP_PEER_LIMIT;
+        }
+    }
+
+    static long ensure_group_in_tox(@NonNull String group_identifier)
+    {
+        long group_num = tox_group_by_groupid__wrapper(group_identifier);
+        if (group_num >= 0)
+        {
+            return group_num;
+        }
+
+        if (is_group_we_left(group_identifier) || !is_tox_started)
+        {
+            return -1;
+        }
+
+        try
+        {
+            ByteBuffer join_chat_id_buffer = ByteBuffer.allocateDirect(TOX_GROUP_CHAT_ID_SIZE);
+            byte[] data_join = HelperGeneric.hex_to_bytes(group_identifier.toUpperCase());
+            if (data_join == null || data_join.length != TOX_GROUP_CHAT_ID_SIZE)
+            {
+                return -1;
+            }
+            join_chat_id_buffer.put(data_join);
+            join_chat_id_buffer.rewind();
+
+            long new_group_num = MainActivity.tox_group_join(join_chat_id_buffer, TOX_GROUP_CHAT_ID_SIZE,
+                                                             get_group_peer_join_name(), null);
+            Log.i(TAG, "ensure_group_in_tox:join=" + new_group_num + " id=" + group_identifier);
+
+            if (new_group_num >= 0 && new_group_num < UINT32_MAX_JAVA)
+            {
+                try
+                {
+                    final GroupDB g = (GroupDB) orma.selectFromGroupDB().
+                            group_identifierEq(group_identifier.toLowerCase()).get(0);
+                    new_or_updated_group(new_group_num, g.who_invited__tox_public_key_string, group_identifier,
+                                         g.privacy_state);
+                }
+                catch (Exception e)
+                {
+                    new_or_updated_group(new_group_num, "", group_identifier,
+                                         ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value);
+                }
+                set_group_active(group_identifier);
+                update_savedata_file_wrapper();
+                return new_group_num;
+            }
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "ensure_group_in_tox:EE:" + e.getMessage());
+        }
+        return -1;
+    }
+
     @Nullable
     static String group_send_precheck_failure_reason(@NonNull String group_identifier)
     {
@@ -642,7 +735,7 @@ public class HelperGroup
             return context_s.getString(R.string.group_send_left_group);
         }
 
-        final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+        final long group_num = ensure_group_in_tox(group_identifier);
         if (group_num < 0)
         {
             return context_s.getString(R.string.group_send_group_not_found);
@@ -660,12 +753,89 @@ public class HelperGroup
             role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
         }
 
-        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
+        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value
+                && !is_khandaq_community_group(group_identifier))
         {
             return context_s.getString(R.string.group_send_observer_role);
         }
 
         return null;
+    }
+
+    static String group_invite_failure_message(final int res)
+    {
+        if (res >= 0)
+        {
+            return context_s.getString(R.string.group_invite_friend_failed);
+        }
+
+        if (res == -99)
+        {
+            return context_s.getString(R.string.add_group_failed_not_ready);
+        }
+
+        final int errCode = -res;
+
+        if (errCode == TOX_ERR_GROUP_INVITE_FRIEND.TOX_ERR_GROUP_INVITE_FRIEND_GROUP_NOT_FOUND.ordinal())
+        {
+            return context_s.getString(R.string.group_send_group_not_found);
+        }
+        if (errCode == TOX_ERR_GROUP_INVITE_FRIEND.TOX_ERR_GROUP_INVITE_FRIEND_FRIEND_NOT_FOUND.ordinal())
+        {
+            return context_s.getString(R.string.group_invite_friend_not_found);
+        }
+        if (errCode == TOX_ERR_GROUP_INVITE_FRIEND.TOX_ERR_GROUP_INVITE_FRIEND_DISCONNECTED.ordinal())
+        {
+            return context_s.getString(R.string.group_invite_friend_disconnected);
+        }
+        if (errCode == TOX_ERR_GROUP_INVITE_FRIEND.TOX_ERR_GROUP_INVITE_FRIEND_FAIL_SEND.ordinal())
+        {
+            return context_s.getString(R.string.group_invite_friend_fail_send);
+        }
+        if (errCode == TOX_ERR_GROUP_INVITE_FRIEND.TOX_ERR_GROUP_INVITE_FRIEND_INVITE_FAIL.ordinal())
+        {
+            return context_s.getString(R.string.group_invite_friend_invite_fail);
+        }
+
+        Log.i(TAG, "group_invite_failure_message:errCode=" + errCode);
+        return context_s.getString(R.string.group_invite_friend_failed);
+    }
+
+    static boolean invite_friend_to_group(@NonNull String group_identifier, @NonNull String friend_public_key)
+    {
+        final String precheck = group_send_precheck_failure_reason(group_identifier);
+        if (precheck != null)
+        {
+            display_toast(precheck, false, 300);
+            return false;
+        }
+
+        final long friend_num = tox_friend_by_public_key__wrapper(friend_public_key);
+        if ((friend_num < 0) || (friend_num >= UINT32_MAX_JAVA))
+        {
+            display_toast(context_s.getString(R.string.group_invite_friend_not_found), false, 300);
+            return false;
+        }
+
+        final long group_num = ensure_group_in_tox(group_identifier);
+        if (group_num < 0)
+        {
+            display_toast(context_s.getString(R.string.group_send_group_not_found), false, 300);
+            return false;
+        }
+
+        final int res = tox_group_invite_friend(group_num, friend_num);
+        Log.i(TAG, "invite_friend_to_group:group=" + group_identifier + " friend=" + friend_public_key + " res=" + res);
+
+        if (res == 1)
+        {
+            update_savedata_file_wrapper();
+            display_toast(context_s.getString(R.string.group_invite_friend_success), false, 300);
+            return true;
+        }
+
+        display_toast(group_invite_failure_message(res), false, 300);
+        return false;
     }
 
     static String group_send_failure_reason(final long message_id)
@@ -743,6 +913,377 @@ public class HelperGroup
             return "";
         }
         return raw_name;
+    }
+
+    static boolean is_valid_group_title_string(final String value)
+    {
+        return (value != null) && (value.length() > 0) && (!value.equals("-1"));
+    }
+
+    static String sanitize_group_title(final String raw_title)
+    {
+        if (raw_title == null)
+        {
+            return "";
+        }
+
+        String cleaned = raw_title.trim().replace("\r", "").replace("\n", "");
+        return HelperGeneric.truncate_utf8_to_max_bytes(cleaned, TOX_GROUP_MAX_GROUP_NAME_LENGTH);
+    }
+
+    static String sanitize_group_peer_name(final String raw_name)
+    {
+        if ((raw_name == null) || (raw_name.trim().isEmpty()))
+        {
+            return "User";
+        }
+
+        String cleaned = raw_name.trim().replace("\r", "").replace("\n", "");
+        return HelperGeneric.truncate_utf8_to_max_bytes(cleaned, TOX_GROUP_MAX_PART_LENGTH);
+    }
+
+    static String group_create_failure_message(final long group_num)
+    {
+        if (group_num == -99)
+        {
+            return context_s.getString(R.string.add_group_failed_not_ready);
+        }
+
+        if (group_num >= 0)
+        {
+            return context_s.getString(R.string.add_private_group_failed);
+        }
+
+        final int errCode = (int) (-group_num);
+        if (errCode == TOX_ERR_GROUP_NEW.TOX_ERR_GROUP_NEW_NAME_TOO_LONG.ordinal())
+        {
+            return context_s.getString(R.string.add_group_failed_name_too_long);
+        }
+        if (errCode == TOX_ERR_GROUP_NEW.TOX_ERR_GROUP_NEW_PEER_NAME_TOO_LONG.ordinal())
+        {
+            return context_s.getString(R.string.add_group_failed_peer_name_too_long);
+        }
+        if (errCode == TOX_ERR_GROUP_NEW.TOX_ERR_GROUP_NEW_TOO_MANY.ordinal())
+        {
+            return context_s.getString(R.string.add_group_failed_too_many);
+        }
+        if (errCode == TOX_ERR_GROUP_NEW.TOX_ERR_GROUP_NEW_INIT.ordinal())
+        {
+            return context_s.getString(R.string.add_group_failed_not_ready);
+        }
+
+        Log.i(TAG, "group_create_failure_message:errCode=" + errCode);
+        return context_s.getString(R.string.add_private_group_failed);
+    }
+
+    static boolean create_new_group(final int privacy_state, final String raw_group_name,
+                                    final int success_string_id, final int failure_string_id,
+                                    final String system_message)
+    {
+        if (!HelperFriend.is_tox_profile_ready())
+        {
+            display_toast(context_s.getString(R.string.add_group_failed_not_ready), false, 300);
+            return false;
+        }
+
+        final String group_name = sanitize_group_title(raw_group_name);
+        if (group_name.isEmpty())
+        {
+            display_toast(context_s.getString(R.string.add_group_failed_empty_name), false, 300);
+            return false;
+        }
+
+        final String peer_name = sanitize_group_peer_name(get_group_peer_join_name());
+        Log.i(TAG, "create_new_group:name=" + group_name + " peer=" + peer_name + " privacy=" + privacy_state);
+
+        final long new_group_num = tox_group_new(privacy_state, group_name, peer_name);
+        Log.i(TAG, "create_new_group:groupnum=" + new_group_num);
+
+        if ((new_group_num < 0) || (new_group_num >= UINT32_MAX_JAVA))
+        {
+            display_toast(group_create_failure_message(new_group_num), false, 300);
+            return false;
+        }
+
+        update_savedata_file_wrapper();
+
+        final ByteBuffer groupid_buf = ByteBuffer.allocateDirect(GROUP_ID_LENGTH * 2);
+        if (tox_group_get_chat_id(new_group_num, groupid_buf) != 0)
+        {
+            Log.i(TAG, "create_new_group:get_chat_id failed groupnum=" + new_group_num);
+            display_toast(context_s.getString(failure_string_id), false, 300);
+            return false;
+        }
+
+        final byte[] groupid_buffer = new byte[GROUP_ID_LENGTH];
+        groupid_buf.get(groupid_buffer, 0, GROUP_ID_LENGTH);
+        final String group_identifier = bytes_to_hex(groupid_buffer);
+        final int resolved_privacy_state = tox_group_get_privacy_state(new_group_num);
+
+        Log.i(TAG, "create_new_group:ok num=" + new_group_num + " id=" + group_identifier);
+
+        add_group_wrapper(0, new_group_num, group_identifier, resolved_privacy_state);
+        display_toast(context_s.getString(success_string_id), false, 300);
+        add_system_message_to_group_chat(group_identifier, system_message);
+        set_group_active(group_identifier);
+
+        if (have_own_relay())
+        {
+            invite_to_group_own_relay(new_group_num);
+        }
+
+        try
+        {
+            final GroupDB conf3 = (GroupDB) orma.selectFromGroupDB().group_identifierEq(
+                    group_identifier.toLowerCase()).toList().get(0);
+            CombinedFriendsAndConferences cc = new CombinedFriendsAndConferences();
+            cc.is_friend = COMBINED_IS_CONFERENCE;
+            cc.group_item = (GroupDB) GroupDB.deep_copy(conf3);
+            MainActivity.friend_list_fragment.modify_friend(cc, cc.is_friend);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "create_new_group:friendlist:EE:" + e.getMessage());
+        }
+
+        return true;
+    }
+
+    static String get_effective_group_title(final long group_num, final String group_identifier)
+    {
+        if (group_num >= 0)
+        {
+            try
+            {
+                String topic = tox_group_get_topic(group_num);
+                if (is_valid_group_title_string(topic))
+                {
+                    return get_group_display_name(group_identifier, topic);
+                }
+
+                String name = tox_group_get_name(group_num);
+                if (is_valid_group_title_string(name))
+                {
+                    return get_group_display_name(group_identifier, name);
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        try
+        {
+            GroupDB g = (GroupDB) orma.selectFromGroupDB().group_identifierEq(group_identifier.toLowerCase()).get(0);
+            return get_group_display_name(group_identifier, g.name);
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        return get_group_display_name(group_identifier, "");
+    }
+
+    static boolean save_group_title_if_changed(final String group_identifier, final String raw_title)
+    {
+        final String new_title = sanitize_group_title(raw_title);
+        if (new_title.length() < 1)
+        {
+            return false;
+        }
+
+        final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+        if (group_num < 0)
+        {
+            return false;
+        }
+
+        final String current_title = get_effective_group_title(group_num, group_identifier);
+        if (new_title.equals(current_title))
+        {
+            return true;
+        }
+
+        final int res = tox_group_set_topic(group_num, new_title);
+        if (res == 1)
+        {
+            update_group_in_db_name(group_identifier, new_title);
+            update_group_in_db_topic(group_identifier, new_title);
+            update_group_in_friendlist(group_identifier);
+            update_group_in_groupmessagelist(group_identifier);
+            update_savedata_file_wrapper();
+            return true;
+        }
+
+        Log.i(TAG, "save_group_title_if_changed:failed res=" + res + " group=" + group_identifier);
+        return false;
+    }
+
+    static void khandaq_community_auto_promote_peer(final long group_number, final long peer_id)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            if (!is_khandaq_community_group(group_identifier))
+            {
+                return;
+            }
+
+            final int self_role = tox_group_self_get_role(group_number);
+            if (self_role < 0
+                    || self_role > ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
+            {
+                return;
+            }
+
+            final int peer_role = tox_group_peer_get_role(group_number, peer_id);
+            if (peer_role != ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
+            {
+                return;
+            }
+
+            final int result = tox_group_mod_set_role(group_number, peer_id,
+                    ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value);
+            Log.i(TAG, "khandaq_community_auto_promote_peer:peer=" + peer_id + " result=" + result);
+
+            if (result == 1)
+            {
+                final String group_peer_pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+                update_group_peer_in_db(group_number, group_identifier, peer_id, group_peer_pubkey,
+                        ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value);
+                update_group_messages_peer_role(group_identifier, group_peer_pubkey,
+                        ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value);
+            }
+
+            update_savedata_file_wrapper();
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "khandaq_community_auto_promote_peer:EE:" + e.getMessage());
+        }
+    }
+
+    static void khandaq_community_promote_all_observers_if_moderator(final long group_number)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            if (!is_khandaq_community_group(group_identifier))
+            {
+                return;
+            }
+
+            final int self_role = tox_group_self_get_role(group_number);
+            if (self_role < 0
+                    || self_role > ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
+            {
+                return;
+            }
+
+            final long num_peers = tox_group_peer_count(group_number);
+            if (num_peers <= 0)
+            {
+                return;
+            }
+
+            final long[] peers = tox_group_get_peerlist(group_number);
+            if (peers == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < num_peers; i++)
+            {
+                khandaq_community_auto_promote_peer(group_number, peers[i]);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "khandaq_community_promote_all_observers_if_moderator:EE:" + e.getMessage());
+        }
+    }
+
+    static void khandaq_community_on_connected(final long group_number)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            if (!is_khandaq_community_group(group_identifier))
+            {
+                return;
+            }
+
+            khandaq_community_promote_all_observers_if_moderator(group_number);
+            request_khandaq_community_history_from_peers(group_identifier);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "khandaq_community_on_connected:EE:" + e.getMessage());
+        }
+    }
+
+    static void request_khandaq_community_history_from_peers(final String group_identifier)
+    {
+        if (!is_khandaq_community_group(group_identifier))
+        {
+            return;
+        }
+
+        final Thread t = new Thread()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+                    if (group_num < 0)
+                    {
+                        return;
+                    }
+
+                    if (tox_group_is_connected(group_num) !=
+                        TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+                    {
+                        return;
+                    }
+
+                    final long num_peers = tox_group_peer_count(group_num);
+                    if (num_peers <= 0)
+                    {
+                        return;
+                    }
+
+                    final long[] peers = tox_group_get_peerlist(group_num);
+                    if (peers == null)
+                    {
+                        return;
+                    }
+
+                    final long self_peer_id = tox_group_self_get_peer_id(group_num);
+                    for (int i = 0; i < num_peers; i++)
+                    {
+                        if (peers[i] == self_peer_id)
+                        {
+                            continue;
+                        }
+
+                        final String peer_pubkey = tox_group_peer_get_public_key__wrapper(group_num, peers[i]);
+                        if (peer_pubkey == null)
+                        {
+                            continue;
+                        }
+
+                        send_ngch_request(group_identifier, peer_pubkey);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "request_khandaq_community_history_from_peers:EE:" + e.getMessage());
+                }
+            }
+        };
+        t.start();
     }
 
     static void migrate_khandaq_community_display_names()
@@ -1083,18 +1624,16 @@ public class HelperGroup
 
     static boolean is_group_muted_or_kicked_peer(final String group_identifier, final String group_peer_pubkey)
     {
+        if (is_khandaq_community_group(group_identifier))
+        {
+            return false;
+        }
+
         try
         {
             final int peer_role = orma.selectFromGroupPeerDB().group_identifierEq(group_identifier.toLowerCase()).
                     tox_group_peer_pubkeyEq(group_peer_pubkey).toList().get(0).Tox_Group_Role;
-            if (peer_role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            return peer_role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
         }
         catch(Exception e)
         {
@@ -2014,15 +2553,18 @@ public class HelperGroup
 
     static String get_group_peer_join_name()
     {
+        String peer_name = "User";
+
         if ((global_my_name != null) && (global_my_name.trim().length() > 0))
         {
-            return global_my_name.trim();
+            peer_name = global_my_name.trim();
         }
-        if ((global_my_toxid != null) && (global_my_toxid.length() >= 6))
+        else if ((global_my_toxid != null) && (global_my_toxid.length() >= 6))
         {
-            return global_my_toxid.substring(global_my_toxid.length() - 6).toUpperCase(Locale.ENGLISH);
+            peer_name = global_my_toxid.substring(global_my_toxid.length() - 6).toUpperCase(Locale.ENGLISH);
         }
-        return "User";
+
+        return sanitize_group_peer_name(peer_name);
     }
 
     static void do_join_public_group(Intent data)
@@ -2366,14 +2908,12 @@ public class HelperGroup
             {
                 try
                 {
-                    // HINT: calculate x minutes into the past from now
-                    final long sync_from_ts = System.currentTimeMillis() - (TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK * 1000);
-
-                    if (sync_from_ts < 1)
-                    {
-                        // fail safe
-                        return;
-                    }
+                    final int history_window_seconds = is_khandaq_community_group(group_identifier)
+                            ? KHANDAQ_COMMUNITY_HISTORY_SYNC_MAX_SECONDS_BACK
+                            : TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK;
+                    final long sync_from_ts = history_window_seconds <= 0
+                            ? 0
+                            : System.currentTimeMillis() - (history_window_seconds * 1000L);
 
                     // Log.i(TAG, "sync_group_message_history:sync_from_ts:" + sync_from_ts);
 

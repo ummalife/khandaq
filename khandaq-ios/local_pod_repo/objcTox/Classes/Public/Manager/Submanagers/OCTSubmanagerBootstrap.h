@@ -52,6 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (void)bootstrap;
 
+/**
+ * Re-bootstrap immediately after a network path change (VPN, Wi-Fi/cellular switch).
+ * Uses shorter iteration intervals and full UDP+TCP bootstrap even if self appears connected.
+ */
+- (void)rebootstrapOnNetworkChange;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -56,7 +56,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperFiletransfer.format_speed;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_filetransfer_filenum_from_id;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactAudioUi;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isAudioMessage;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFileDisplayLabel;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.resetOutgoingFtAudioPlayer;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.set_filetransfer_state_from_id;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
@@ -89,6 +93,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
     TextView message_text_date_string;
     ViewGroup message_text_date;
     ViewGroup rounded_bg_container;
+    me.jagar.chatvoiceplayerlibrary.VoicePlayerView ft_audio_player;
 
     public MessageListHolder_file_outgoing_state_resume(View itemView, Context c)
     {
@@ -111,6 +116,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         date_time = (TextView) itemView.findViewById(R.id.date_time);
         message_text_date_string = (TextView) itemView.findViewById(R.id.message_text_date_string);
         message_text_date = (ViewGroup) itemView.findViewById(R.id.message_text_date);
+        ft_audio_player = itemView.findViewById(R.id.ft_audio_player);
     }
 
     public void bindMessageList(Message m)
@@ -197,58 +203,47 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,
                                  AutoLinkMode.MODE_MENTION);
 
+        resetOutgoingFtAudioPlayer(ft_audio_player);
 
-        // TODO:
+        int percent = 0;
         long ft_id = message.filetransfer_id;
-        // Log.i(TAG, "getView:033:STATE:RESUME:ft_id=" + ft_id);
         if (ft_id != -1)
         {
             final Filetransfer ft_ = (Filetransfer) orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            final int percent = (int) (100f * (float) ft_.current_position / (float) ft_.filesize);
-            // Log.i(TAG, "getView:033:STATE:RESUME:percent=" + percent + " cur=" + ft_.current_position + " size=" + ft_.filesize);
-            ft_progressbar.setProgress(percent);
-            long start_ts = ft_.transfer_start_ts;
-            long now = System.currentTimeMillis();
-            long delta_ts_ms = now - start_ts;
-            if (delta_ts_ms < 1)
-            {
-                delta_ts_ms = 1;
-            }
-            float speed_bytes_per_second = (((float)ft_.current_position) / (float)delta_ts_ms) * 1000.0f;
-            // TODO: make text better
-            textView.setAutoLinkText(
-                    "" + message.text + "\n" + ft_.current_position + "/" + ft_.filesize + "\n sending ..." +
-                    "\n" + format_speed(speed_bytes_per_second));
+            percent = (int) (100f * (float) ft_.current_position / (float) ft_.filesize);
         }
-        else
-        {
-            ft_progressbar.setProgress(0);
-            // TODO: make text better
-            textView.setAutoLinkText("" + message.text + "\n sending ...");
-        }
-
-        ft_progressbar.setVisibility(View.VISIBLE);
-        ft_progressbar.setMax(100);
-        // ft_progressbar.setIndeterminate(false);
-
-
-        ft_buttons_container.setVisibility(View.VISIBLE);
-        ft_preview_container.setVisibility(View.VISIBLE);
-        ft_preview_image.setVisibility(View.VISIBLE);
-
-        final Message message2 = message;
 
         final Drawable d2 = new IconicsDrawable(context).
                 icon(GoogleMaterial.Icon.gmd_highlight_off).
                 backgroundColor(Color.TRANSPARENT).
                 color(Color.parseColor("#A0FF0000")).sizeDp(50);
         button_cancel.setImageDrawable(d2);
-        ft_buttons_container.setVisibility(View.VISIBLE);
-
         button_ok.setVisibility(View.GONE);
         button_cancel.setVisibility(View.VISIBLE);
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
+
+        if (isAudioMessage(context, message))
+        {
+            bindOutgoingCompactAudioUi(context, message, textView, imageView, ft_preview_container, ft_preview_image,
+                                       ft_buttons_container, ft_progressbar, ft_audio_player, button_ok, button_cancel,
+                                       true, percent, true);
+            setup_cancel_button(message);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            return;
+        }
+
+        ft_progressbar.setVisibility(View.VISIBLE);
+        ft_progressbar.setMax(100);
+        ft_progressbar.setProgress(percent);
+        ft_buttons_container.setVisibility(View.VISIBLE);
+        ft_preview_container.setVisibility(View.VISIBLE);
+        ft_preview_image.setVisibility(View.VISIBLE);
+
+        final Message message2 = message;
+        textView.setAutoLinkText(outgoingFileDisplayLabel(context, message));
+
+        ft_buttons_container.setVisibility(View.VISIBLE);
 
         boolean is_image = false;
         try
@@ -277,40 +272,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         }
 
 
-        button_cancel.setOnTouchListener(new View.OnTouchListener()
-        {
-            @Override
-            public boolean onTouch(View v, MotionEvent event)
-            {
-                if (event.getAction() == MotionEvent.ACTION_DOWN)
-                {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                    builder.setTitle(
-                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_title));
-                    builder.setMessage(
-                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_message));
-
-                    builder.setNegativeButton(v.getContext().getString(R.string.MainActivity_no_button), null);
-                    builder.setPositiveButton(v.getContext().getString(R.string.MainActivity_yes_button),
-                                              new DialogInterface.OnClickListener()
-                                              {
-                                                  @Override
-                                                  public void onClick(DialogInterface dialog, int which)
-                                                  {
-                                                      cancel_outgoing_filetransfer(message);
-                                                  }
-                                              });
-
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
-                }
-                else
-                {
-                }
-                return true;
-            }
-        });
-
+        setup_cancel_button(message);
 
         if (is_image)
         {
@@ -419,6 +381,40 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         }
 
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+    }
+
+    private void setup_cancel_button(final Message message)
+    {
+        button_cancel.setOnTouchListener(new View.OnTouchListener()
+        {
+            @Override
+            public boolean onTouch(View v, MotionEvent event)
+            {
+                if (event.getAction() == MotionEvent.ACTION_DOWN)
+                {
+                    AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
+                    builder.setTitle(
+                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_title));
+                    builder.setMessage(
+                            v.getContext().getString(R.string.MessageListHolder_file_outgoing_cancel_ft_message));
+
+                    builder.setNegativeButton(v.getContext().getString(R.string.MainActivity_no_button), null);
+                    builder.setPositiveButton(v.getContext().getString(R.string.MainActivity_yes_button),
+                                              new DialogInterface.OnClickListener()
+                                              {
+                                                  @Override
+                                                  public void onClick(DialogInterface dialog, int which)
+                                                  {
+                                                      cancel_outgoing_filetransfer(message);
+                                                  }
+                                              });
+
+                    AlertDialog dialog = builder.create();
+                    dialog.show();
+                }
+                return true;
+            }
+        });
     }
 
     private void cancel_outgoing_filetransfer(final Message message)

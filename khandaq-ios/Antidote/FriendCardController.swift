@@ -134,7 +134,7 @@ private extension FriendCardController {
         statusMessageModel.userInteractionEnabled = false
 
         publicKeyModel.title = String(localized: "public_key")
-        publicKeyModel.value = friend.publicKey
+        publicKeyModel.value = sanitizeAddressInput(friend.publicKey)
         publicKeyModel.userInteractionEnabled = false
         publicKeyModel.canCopyValue = true
 

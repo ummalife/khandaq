@@ -111,8 +111,9 @@ extension ProviderDelegate: CXProviderDelegate {
         // CallKit already activated the session — tell objcTox not to reconfigure it.
         sessionCoord.toxManager.calls.callKitAudioSessionIsActive = true
 
-        let enableVideo = callManager.calls.first?.hasVideo ?? false
-        sessionCoord.callCoordinator.answerCall(enableVideo: enableVideo)
+        let enableVideo = sessionCoord.callCoordinator.consumePreferredAnswerVideo()
+            ?? (callManager.calls.first?.hasVideo ?? false)
+        sessionCoord.callCoordinator.performAnswerCall(enableVideo: enableVideo)
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {

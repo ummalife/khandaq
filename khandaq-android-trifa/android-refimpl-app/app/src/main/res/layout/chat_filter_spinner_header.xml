@@ -1,0 +1,16 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
+    android:background="?attr/colorPrimary"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
+
+    <ImageView
+        android:id="@+id/spinner_item_icon_02"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:contentDescription="@string/chat_filter_spinner_description"
+        android:src="@drawable/ic_chat_filter_tune_24" />
+</LinearLayout>

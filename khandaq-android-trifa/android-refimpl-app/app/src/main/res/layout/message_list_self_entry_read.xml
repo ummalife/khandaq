@@ -41,7 +41,7 @@
                     android:paddingBottom="3dp"
                     app:emojiSize="@dimen/emoji_size_in_textview"
                     android:text="..."
-                    android:textColor="#8A000000"
+                    android:textColor="@color/message_bubble_text"
                     android:textColorLink="@color/textblock_link_color_for_blue"
                     android:textSize="20sp"/>
 

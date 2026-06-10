@@ -20,8 +20,11 @@
 package com.luseen.autolinklibrary;
 
 
+import org.khandaq.messenger.R;
+
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -38,7 +41,11 @@ import java.util.regex.Pattern;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.FloatRange;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.core.graphics.ColorUtils;
+
+import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_LETTER_SPACING;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_LINE_SPACING_MULTIPLIER;
 
 public class EmojiTextViewLinks extends com.vanniktech.emoji.EmojiTextView
 {
@@ -64,11 +71,42 @@ public class EmojiTextViewLinks extends com.vanniktech.emoji.EmojiTextView
     public EmojiTextViewLinks(Context context, AttributeSet attrs)
     {
         super(context, attrs);
+        initChatTypography(context);
     }
 
     public EmojiTextViewLinks(Context context)
     {
         super(context);
+        initChatTypography(context);
+    }
+
+    private void initChatTypography(Context context)
+    {
+        try
+        {
+            Typeface typeface = ResourcesCompat.getFont(context, R.font.khandaq_chat);
+            if (typeface != null)
+            {
+                setTypeface(typeface);
+            }
+            else
+            {
+                setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL);
+            }
+        }
+        catch (Exception ignored)
+        {
+            setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL);
+        }
+
+        setLineSpacing(0, MESSAGE_LINE_SPACING_MULTIPLIER);
+        setLetterSpacing(MESSAGE_LETTER_SPACING);
+
+        final float density = context.getResources().getDisplayMetrics().density;
+        final int padH = (int) (10 * density);
+        final int padV = (int) (7 * density);
+        setPadding(Math.max(getPaddingLeft(), padH), Math.max(getPaddingTop(), padV),
+                   Math.max(getPaddingRight(), padH), Math.max(getPaddingBottom(), padV));
     }
 
     @Override

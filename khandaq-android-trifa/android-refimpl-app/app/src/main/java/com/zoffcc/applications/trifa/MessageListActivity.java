@@ -92,7 +92,9 @@ import static com.zoffcc.applications.trifa.CallingActivity.set_debug_text;
 import static com.zoffcc.applications.trifa.CallingActivity.update_top_text_line;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.copy_outgoing_file_to_sdcard_dir;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.insert_into_filetransfer_db;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.queue_and_try_send_outgoing_file;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.update_filetransfer_db_full;
+import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
 import static com.zoffcc.applications.trifa.HelperFriend.get_friend_name_from_pubkey;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
@@ -112,8 +114,8 @@ import static com.zoffcc.applications.trifa.HelperGeneric.tox_friend_send_messag
 import static com.zoffcc.applications.trifa.HelperGeneric.trim_to_utf8_length_bytes;
 import static com.zoffcc.applications.trifa.HelperMessage.insert_into_message_db;
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
-import static com.zoffcc.applications.trifa.MainActivity.CallingActivity_ID;
 import static com.zoffcc.applications.trifa.MainActivity.CallingWaitingActivity_ID;
+import static com.zoffcc.applications.trifa.MainActivity.launch_outgoing_calling_activity;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__X_eac_delay_ms;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__use_incognito_keyboard;
@@ -195,6 +197,7 @@ public class MessageListActivity extends AppCompatActivity
     static MenuItem amode_save_menu_item = null;
     static MenuItem amode_info_menu_item = null;
     static boolean oncreate_finished = false;
+    private boolean pendingCallAfterPermission = false;
     CustomSpinner spinner_filter_msgs = null;
     SearchView messageSearchView = null;
 
@@ -267,18 +270,22 @@ public class MessageListActivity extends AppCompatActivity
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
+        HelperGeneric.apply_chat_input_typography(ml_new_message);
 
         messageSearchView = (SearchView) findViewById(R.id.search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
         messageSearchView.setIconifiedByDefault(true);
 
         spinner_filter_msgs = (CustomSpinner) findViewById(R.id.spinner_filter_msgs);
-        ArrayList<String> own_online_status_string_values = new ArrayList<String>(Arrays.asList("all", "files"));
-        ArrayAdapter<String> myAdapter = new FilterMsgsSpinnerAdapter(this, R.layout.own_status_spinner_item,
-                                                                      own_online_status_string_values);
+        ArrayList<String> chat_filter_labels = new ArrayList<>(Arrays.asList(
+                getString(R.string.chat_filter_all_messages),
+                getString(R.string.chat_filter_files_only)));
+        ArrayAdapter<String> myAdapter = new FilterMsgsSpinnerAdapter(this,
+                R.layout.chat_filter_spinner_dropdown_item, chat_filter_labels);
 
         if (spinner_filter_msgs != null)
         {
+            spinner_filter_msgs.setContentDescription(getString(R.string.chat_filter_spinner_description));
             spinner_filter_msgs.setAdapter(myAdapter);
             spinner_filter_msgs.setSelection(0);
             spinner_filter_msgs.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener()
@@ -1515,8 +1522,14 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_text_message(final String friend_pubkey, final String message)
     {
+        wakeup_tox_thread();
+
         // send typed message to friend
-        String msg = trim_to_utf8_length_bytes(message, TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        String msg = trim_to_utf8_length_bytes(message.trim(), TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        if ((msg == null) || msg.isEmpty())
+        {
+            return;
+        }
 
         Message m = new Message();
         m.tox_friendpubkey = friend_pubkey;
@@ -1535,64 +1548,67 @@ public class MessageListActivity extends AppCompatActivity
         m.msg_id_hash = "";
         m.raw_msgv2_bytes = "";
 
-        if ((msg != null) && (!msg.equalsIgnoreCase("")))
+        MainActivity.send_message_result result = tox_friend_send_message_wrapper(friend_pubkey, 0, msg,
+                                                                                  (m.sent_timestamp / 1000));
+
+        if (result == null)
         {
-            MainActivity.send_message_result result = tox_friend_send_message_wrapper(friend_pubkey, 0, msg,
-                                                                                      (m.sent_timestamp / 1000));
-
-            if (result == null)
-            {
-                return;
-            }
-
-            long res = result.msg_num;
-
-            if (res > -1)
-            {
-                m.resend_count = 1; // we sent the message successfully
-                m.message_id = res;
-            }
-            else
-            {
-                m.resend_count = 0; // sending was NOT successfull
-                m.message_id = -1;
-            }
-
-            if (result.msg_v2)
-            {
-                m.msg_version = 1;
-            }
-            else
-            {
-                m.msg_version = 0;
-            }
-
-            if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.equalsIgnoreCase("")))
-            {
-                // msgV2 message -----------
-                m.msg_id_hash = result.msg_hash_hex;
-                // msgV2 message -----------
-            }
-
-            if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.equalsIgnoreCase("")))
-            {
-                // msgV3 message -----------
-                m.msg_idv3_hash = result.msg_hash_v3_hex;
-                // msgV3 message -----------
-            }
-
-            if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.equalsIgnoreCase("")))
-            {
-                // save raw message bytes of this v2 msg into the database
-                // we need it if we want to resend it later
-                m.raw_msgv2_bytes = result.raw_message_buf_hex;
-            }
-
-            long row_id = insert_into_message_db(m, true);
-            m.id = row_id;
-            ml_new_message.setText("");
-            stop_self_typing_indicator_s();
+            return;
         }
+
+        long res = result.msg_num;
+
+        if (res > -1)
+        {
+            m.resend_count = 1; // we sent the message successfully
+            m.message_id = res;
+        }
+        else
+        {
+            m.resend_count = 0; // sending was NOT successfull
+            m.message_id = -1;
+        }
+
+        if (result.msg_v2)
+        {
+            m.msg_version = 1;
+        }
+        else
+        {
+            m.msg_version = 0;
+        }
+
+        if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.equalsIgnoreCase("")))
+        {
+            // msgV2 message -----------
+            m.msg_id_hash = result.msg_hash_hex;
+            // msgV2 message -----------
+        }
+
+        if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.equalsIgnoreCase("")))
+        {
+            // msgV3 message -----------
+            m.msg_idv3_hash = result.msg_hash_v3_hex;
+            // msgV3 message -----------
+        }
+
+        if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.equalsIgnoreCase("")))
+        {
+            // save raw message bytes of this v2 msg into the database
+            // we need it if we want to resend it later
+            m.raw_msgv2_bytes = result.raw_message_buf_hex;
+        }
+
+        long row_id = insert_into_message_db(m, true);
+        m.id = row_id;
+
+        if (res <= -1)
+        {
+            friend_call_push_url(friend_pubkey, m.sent_timestamp);
+        }
+
+        ml_new_message.setText("");
+        stop_self_typing_indicator_s();
     }
 
     /* HINT: send a message to a friend */
@@ -1927,7 +1943,7 @@ public class MessageListActivity extends AppCompatActivity
             m.ft_outgoing_queued = false;
             m.filename_fullpath = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).getAbsolutePath();
             m.sent_timestamp = System.currentTimeMillis();
-            m.text = ofw.filename_wrapped + "\n" + ofw.file_size_wrapped + " bytes";
+            m.text = HelperFiletransfer.buildOutgoingFileMessageText(c, ofw.filename_wrapped, ofw.file_size_wrapped);
             m.storage_frame_work = false;
             m.sent_push = 0;
             m.is_new = false; // no notification for outgoing filetransfers
@@ -1951,6 +1967,7 @@ public class MessageListActivity extends AppCompatActivity
             Log.i(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
             // ---------- DEBUG ----------
 
+            queue_and_try_send_outgoing_file(new_msg_id, update_message_view);
         }
         else
         {
@@ -1999,7 +2016,7 @@ public class MessageListActivity extends AppCompatActivity
             m.ft_outgoing_queued = false;
             m.filename_fullpath = filepath;
             m.sent_timestamp = System.currentTimeMillis();
-            m.text = filename + "\n" + file_size + " bytes";
+            m.text = HelperFiletransfer.buildOutgoingFileMessageText(c, filename, file_size);
             m.storage_frame_work = true;
             m.is_new = false; // no notification for outgoing filetransfers
             m.filetransfer_kind = TOX_FILE_KIND_DATA.value;
@@ -2022,24 +2039,7 @@ public class MessageListActivity extends AppCompatActivity
             Log.i(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
             // ---------- DEBUG ----------
 
-            // ---------- DEBUG ----------
-            // m_tmp = orma.selectFromMessage().idEq(new_msg_id).get(0);
-            // Log.i(TAG, "add_outgoing_file:MM2MM:5:" + m.filetransfer_id + "::" + m_tmp);
-            // ---------- DEBUG ----------
-
-            // --- ??? should we do this here?
-            //        try
-            //        {
-            //            // update "new" status on friendlist fragment
-            //            FriendList f2 = orma.selectFromFriendList().tox_public_key_stringEq(m.tox_friendpubkey).toList().get(0);
-            //            friend_list_fragment.modify_friend(f2, friendnum);
-            //        }
-            //        catch (Exception e)
-            //        {
-            //            e.printStackTrace();
-            //            Log.i(TAG, "update *new* status:EE1:" + e.getMessage());
-            //        }
-            // --- ??? should we do this here?
+            queue_and_try_send_outgoing_file(new_msg_id, update_message_view);
         }
     }
 
@@ -2067,13 +2067,28 @@ public class MessageListActivity extends AppCompatActivity
         Log.i(TAG, "start_call_to_friend_real:audio_only");
         Callstate.audio_call = true;
         set_debug_text("_AUDIO_");
-
         Log.i(TAG, "toxav_call:Callstate.audio_call = true");
-        start_call_to_friend(view);
+        start_call_to_friend_internal(view);
     }
 
     public void start_call_to_friend(View view)
     {
+        Callstate.audio_call = false;
+        set_debug_text("VIDEO");
+        start_call_to_friend_internal(view);
+    }
+
+    private void start_call_to_friend_internal(View view)
+    {
+        if (!HelperCall.hasRequiredCallPermissions(this, Callstate.audio_call))
+        {
+            pendingCallAfterPermission = true;
+            HelperCall.requestCallPermissions(this, Callstate.audio_call);
+            return;
+        }
+
+        pendingCallAfterPermission = false;
+
         if (is_friend_online_real(friendnum) == 0)
         {
             final long fn = friendnum;
@@ -2085,6 +2100,32 @@ public class MessageListActivity extends AppCompatActivity
         else
         {
             start_call_to_friend_real(view);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
+    {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode != HelperCall.REQUEST_CALL_PERMISSIONS)
+        {
+            return;
+        }
+
+        if (!pendingCallAfterPermission)
+        {
+            return;
+        }
+
+        if (HelperCall.hasRequiredCallPermissions(this, Callstate.audio_call))
+        {
+            start_call_to_friend_internal(null);
+        }
+        else
+        {
+            pendingCallAfterPermission = false;
+            HelperCall.showMissingPermissionToast(this, Callstate.audio_call);
         }
     }
 
@@ -2147,7 +2188,7 @@ public class MessageListActivity extends AppCompatActivity
                         Callstate.call_start_timestamp = -1;
                         Log.i(TAG, "friend_pubkey:set:004");
                         Callstate.friend_pubkey = tox_friend_get_public_key__wrapper(fn);
-                        Callstate.camera_opened = false;
+                        Callstate.camera_opened = Callstate.audio_call;
                         Callstate.audio_speaker = true;
                         Callstate.other_audio_enabled = 1;
                         Callstate.other_video_enabled = 1;
@@ -2222,35 +2263,38 @@ public class MessageListActivity extends AppCompatActivity
                                     count_video_frame_received = 0;
                                     count_video_frame_sent = 0;
 
+                                    int call_res;
                                     if (Callstate.audio_call)
                                     {
-                                        int res1 = MainActivity.toxav_call(fn, GLOBAL_AUDIO_BITRATE, 0);
-                                        if (res1 != 1)
-                                        {
-                                            Log.i(TAG, "toxav_call:audio_call:RES=" + res1);
-                                            try
-                                            {
-                                                Toast.makeText(context_s, "Call Start ERROR", LENGTH_LONG).show();
-                                            }
-                                            catch (Exception e)
-                                            {
-                                            }
-                                        }
+                                        call_res = MainActivity.toxav_call(fn, GLOBAL_AUDIO_BITRATE, 0);
+                                        Log.i(TAG, "toxav_call:audio_call:RES=" + call_res);
                                     }
                                     else
                                     {
-                                        int res2 = MainActivity.toxav_call(fn, GLOBAL_AUDIO_BITRATE,
+                                        call_res = MainActivity.toxav_call(fn, GLOBAL_AUDIO_BITRATE,
                                                                            GLOBAL_VIDEO_BITRATE);
-                                        if (res2 != 1)
+                                        Log.i(TAG, "toxav_call:video_call:RES=" + call_res);
+                                    }
+
+                                    wakeup_tox_thread();
+
+                                    final String friend_pk = Callstate.friend_pubkey;
+                                    if (call_res == 1)
+                                    {
+                                        friend_call_push_url(friend_pk, System.currentTimeMillis());
+                                        HelperCall.logCallEvent(friend_pk,
+                                                Callstate.audio_call ? R.string.call_log_outgoing_voice
+                                                                     : R.string.call_log_outgoing_video);
+                                    }
+                                    else
+                                    {
+                                        HelperCall.logCallEvent(friend_pk, R.string.call_log_failed);
+                                        try
                                         {
-                                            Log.i(TAG, "toxav_call:video_call:RES=" + res2);
-                                            try
-                                            {
-                                                Toast.makeText(context_s, "Call Start ERROR", LENGTH_LONG).show();
-                                            }
-                                            catch (Exception e)
-                                            {
-                                            }
+                                            Toast.makeText(context_s, R.string.call_start_failed, LENGTH_LONG).show();
+                                        }
+                                        catch (Exception e)
+                                        {
                                         }
                                     }
                                     Log.i(TAG, "CALL_OUT:002");
@@ -2267,7 +2311,7 @@ public class MessageListActivity extends AppCompatActivity
                         Callstate.other_audio_enabled = f_audio_enabled;
                         Callstate.other_video_enabled = f_video_enabled;
                         Callstate.call_init_timestamp = System.currentTimeMillis();
-                        main_activity_s.startActivityForResult(intent, CallingActivity_ID);
+                        launch_outgoing_calling_activity(MessageListActivity.this, intent);
                     }
                 }
                 catch (Exception e)

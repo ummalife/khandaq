@@ -11,23 +11,37 @@
 
 static const NSTimeInterval kDidConnectDelay = 2.0; // in seconds
 static const NSTimeInterval kIterationTime = 5.0; // in seconds
+static const NSTimeInterval kUrgentIterationTime = 1.0; // in seconds
 static const NSUInteger kNodesPerIteration = 20;
+static const NSUInteger kUrgentNodesPerIteration = 30;
 
 @interface OCTSubmanagerBootstrapImpl ()
 
 @property (strong, nonatomic) NSMutableSet *addedNodes;
 
 @property (assign, nonatomic) BOOL isBootstrapping;
+@property (assign, nonatomic) BOOL bootstrappingCancelled;
 
 @property (strong, nonatomic) NSObject *bootstrappingLock;
 
 @property (assign, nonatomic) NSTimeInterval didConnectDelay;
 @property (assign, nonatomic) NSTimeInterval iterationTime;
 
+@property (assign, nonatomic) BOOL urgentNetworkRebootstrap;
+@property (assign, nonatomic) NSUInteger nodesPerIteration;
+@property (assign, nonatomic) NSTimeInterval lastUrgentRebootstrapTime;
+
 @end
 
 @implementation OCTSubmanagerBootstrapImpl
 @synthesize dataSource = _dataSource;
+
+- (void)dealloc
+{
+    @synchronized(self.bootstrappingLock) {
+        self.bootstrappingCancelled = YES;
+    }
+}
 
 #pragma mark -  Lifecycle
 
@@ -44,6 +58,7 @@ static const NSUInteger kNodesPerIteration = 20;
 
     _didConnectDelay = kDidConnectDelay;
     _iterationTime = kIterationTime;
+    _nodesPerIteration = kNodesPerIteration;
 
     return self;
 }
@@ -105,6 +120,84 @@ static const NSUInteger kNodesPerIteration = 20;
     }
 }
 
+- (void)reloadPredefinedNodes
+{
+    @synchronized(self.addedNodes) {
+        [self.addedNodes removeAllObjects];
+    }
+
+    [self addPredefinedNodes];
+}
+
+- (void)performKhandaqBootstrapBurst
+{
+    OCTTox *tox = [self.dataSource managerGetTox];
+
+    NSArray<NSDictionary<NSString *, NSString *> *> *khandaqNodes = @[
+        @{ @"host": @"bootstrap1.khandaq.org", @"key": @"74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D" },
+        @{ @"host": @"bootstrap2.khandaq.org", @"key": @"5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B" },
+        @{ @"host": @"bootstrap3.khandaq.org", @"key": @"A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665" },
+    ];
+
+    [tox performBlockOnToxQueue:^{
+        for (NSDictionary<NSString *, NSString *> *node in khandaqNodes) {
+            NSString *host = node[@"host"];
+            NSString *key = node[@"key"];
+            NSError *error = nil;
+
+            [tox bootstrapFromHost:host port:33445 publicKey:key error:&error];
+            [tox addTCPRelayWithHost:host port:33445 publicKey:key error:&error];
+            [tox addTCPRelayWithHost:host port:3389 publicKey:key error:&error];
+        }
+    }];
+}
+
+- (void)rebootstrapOnNetworkChange
+{
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+
+    if ((now - self.lastUrgentRebootstrapTime) < 2.0) {
+        OCTLogInfo(@"rebootstrapOnNetworkChange: debounced");
+        return;
+    }
+
+    self.lastUrgentRebootstrapTime = now;
+    OCTLogInfo(@"rebootstrapOnNetworkChange: urgent reconnect");
+
+    @synchronized(self.bootstrappingLock) {
+        self.bootstrappingCancelled = YES;
+        self.isBootstrapping = NO;
+    }
+
+    [self reloadPredefinedNodes];
+
+    self.urgentNetworkRebootstrap = YES;
+    self.iterationTime = kUrgentIterationTime;
+    self.didConnectDelay = 0;
+    self.nodesPerIteration = kUrgentNodesPerIteration;
+
+    @synchronized(self.bootstrappingLock) {
+        self.bootstrappingCancelled = NO;
+        self.isBootstrapping = YES;
+    }
+
+    [[self.dataSource managerGetTox] resetOfflineRebootstrapTimer];
+    [self performKhandaqBootstrapBurst];
+    [self tryToBootstrap];
+
+    __weak OCTSubmanagerBootstrapImpl *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong OCTSubmanagerBootstrapImpl *strongSelf = weakSelf;
+
+        if (! strongSelf) {
+            return;
+        }
+
+        [[strongSelf.dataSource managerGetNotificationCenter] postNotificationName:kOCTNetworkRebootstrapCompletedNotification
+                                                                            object:nil];
+    });
+}
+
 - (void)bootstrap
 {
     @synchronized(self.bootstrappingLock) {
@@ -130,6 +223,13 @@ static const NSUInteger kNodesPerIteration = 20;
 
 #pragma mark -  Private
 
+- (BOOL)shouldContinueBootstrapping
+{
+    @synchronized(self.bootstrappingLock) {
+        return self.isBootstrapping && !self.bootstrappingCancelled;
+    }
+}
+
 - (void)tryToBootstrapAfter:(NSTimeInterval)after
 {
     __weak OCTSubmanagerBootstrapImpl *weakSelf = self;
@@ -141,55 +241,103 @@ static const NSUInteger kNodesPerIteration = 20;
             return;
         }
 
+        if (! [strongSelf shouldContinueBootstrapping]) {
+            [strongSelf finishBootstrapping];
+            return;
+        }
+
         [strongSelf tryToBootstrap];
     });
 }
 
 - (void)tryToBootstrap
 {
-    if ([self.dataSource managerIsToxConnected]) {
-        OCTLogInfo(@"trying to bootstrap... tox is connected, exiting");
-
-        OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
-        [realmManager updateObject:realmManager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
-            object.bootstrapDidConnect = YES;
-        }];
-
+    if (! [self shouldContinueBootstrapping]) {
         [self finishBootstrapping];
-
         return;
     }
 
     NSArray *selectedNodes = [self selectedNodesForIteration];
+    const BOOL toxConnected = [self.dataSource managerIsToxConnected];
+
+    const BOOL urgent = self.urgentNetworkRebootstrap;
+
+    if (toxConnected && ! urgent) {
+        OCTLogInfo(@"trying to bootstrap... tox is connected, finishing TCP relays");
+    }
 
     if (! selectedNodes.count) {
         OCTLogInfo(@"trying to bootstrap... no nodes left, exiting");
+
+        if (toxConnected || urgent) {
+            OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+            [realmManager updateObject:realmManager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
+                object.bootstrapDidConnect = YES;
+            }];
+        }
+
+        if (urgent) {
+            self.urgentNetworkRebootstrap = NO;
+            self.iterationTime = kIterationTime;
+            self.nodesPerIteration = kNodesPerIteration;
+            [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTNetworkRebootstrapCompletedNotification
+                                                                        object:nil];
+        }
+
         [self finishBootstrapping];
         return;
     }
 
-    OCTLogInfo(@"trying to bootstrap... picked %lu nodes", (unsigned long)selectedNodes.count);
+    OCTLogInfo(@"trying to bootstrap... picked %lu nodes (connected=%d urgent=%d)", (unsigned long)selectedNodes.count, toxConnected, urgent);
 
-    for (OCTNode *node in selectedNodes) {
-        // HINT: do not do this async on a thread. since "node" will loose its value
-        // dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    __weak OCTSubmanagerBootstrapImpl *weakSelf = self;
+    [[self.dataSource managerGetTox] performBlockOnToxQueue:^{
+        __strong OCTSubmanagerBootstrapImpl *strongSelf = weakSelf;
 
-            [self safeBootstrapFromHost:node.ipv4Host port:node.udpPort publicKey:node.publicKey];
-            [self safeBootstrapFromHost:node.ipv6Host port:node.udpPort publicKey:node.publicKey];
+        if (! strongSelf || ! [strongSelf shouldContinueBootstrapping]) {
+            return;
+        }
+
+        for (OCTNode *node in selectedNodes) {
+            if (! [strongSelf shouldContinueBootstrapping]) {
+                break;
+            }
+
+            if (! toxConnected || strongSelf.urgentNetworkRebootstrap) {
+                [strongSelf safeBootstrapFromHost:node.ipv4Host port:node.udpPort publicKey:node.publicKey];
+                [strongSelf safeBootstrapFromHost:node.ipv6Host port:node.udpPort publicKey:node.publicKey];
+            }
 
             for (NSNumber *tcpPort in node.tcpPorts) {
-                [self safeAddTcpRelayWithHost:node.ipv4Host port:tcpPort.intValue publicKey:node.publicKey];
-                [self safeAddTcpRelayWithHost:node.ipv6Host port:tcpPort.intValue publicKey:node.publicKey];
+                [strongSelf safeAddTcpRelayWithHost:node.ipv4Host port:tcpPort.intValue publicKey:node.publicKey];
+                [strongSelf safeAddTcpRelayWithHost:node.ipv6Host port:tcpPort.intValue publicKey:node.publicKey];
             }
-        // });
-    }
+        }
 
-    [self tryToBootstrapAfter:self.iterationTime];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong OCTSubmanagerBootstrapImpl *mainSelf = weakSelf;
+
+            if (! mainSelf || ! [mainSelf shouldContinueBootstrapping]) {
+                return;
+            }
+
+            if (toxConnected && ! mainSelf.urgentNetworkRebootstrap) {
+                OCTRealmManager *realmManager = [mainSelf.dataSource managerGetRealmManager];
+                [realmManager updateObject:realmManager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
+                    object.bootstrapDidConnect = YES;
+                }];
+                [mainSelf finishBootstrapping];
+                return;
+            }
+
+            [mainSelf tryToBootstrapAfter:mainSelf.iterationTime];
+        });
+    }];
 }
 
 - (void)safeBootstrapFromHost:(NSString *)host port:(OCTToxPort)port publicKey:(NSString *)publicKey
 {
-    if (! host) {
+    if (! [self shouldContinueBootstrapping] || ! host) {
         return;
     }
 
@@ -202,7 +350,7 @@ static const NSUInteger kNodesPerIteration = 20;
 
 - (void)safeAddTcpRelayWithHost:(NSString *)host port:(OCTToxPort)port publicKey:(NSString *)publicKey
 {
-    if (! host) {
+    if (! [self shouldContinueBootstrapping] || ! host) {
         return;
     }
 
@@ -229,7 +377,9 @@ static const NSUInteger kNodesPerIteration = 20;
         allNodes = [[self.addedNodes allObjects] mutableCopy];
     }
 
-    while (allNodes.count && (selectedNodes.count < kNodesPerIteration)) {
+    NSUInteger pickLimit = self.nodesPerIteration > 0 ? self.nodesPerIteration : kNodesPerIteration;
+
+    while (allNodes.count && (selectedNodes.count < pickLimit)) {
         NSUInteger index = arc4random_uniform((u_int32_t)allNodes.count);
 
         [selectedNodes addObject:allNodes[index]];

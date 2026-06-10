@@ -1,12 +1,12 @@
 // Khandaq 0.2.0 push relay constants
 import Foundation
-import CryptoKit
+import CommonCrypto
 
 enum KhandaqPush {
     static let relayBase = "https://push.khandaq.org"
     static let fcmPushURLPrefix = relayBase + "/toxfcm/fcm.php?id="
 
-    /// Set via build setting KHANDAQ_PUSH_AUTH_SECRET (optional).
+    /// Set via Info.plist KhandaqPushRelayAuthSecret (optional).
     private static let relayAuthSecret: String = {
         Bundle.main.object(forInfoDictionaryKey: "KhandaqPushRelayAuthSecret") as? String ?? ""
     }()
@@ -17,10 +17,10 @@ enum KhandaqPush {
 
     static func isAllowedPushURL(_ url: String) -> Bool {
         guard let components = URLComponents(string: url),
-              let host = components.host?.lowercased(),
-              let path = components.path else {
+              let host = components.host?.lowercased() else {
             return false
         }
+        let path = components.path
 
         if host == "push.khandaq.org" {
             return path == "/toxfcm/fcm.php" && (components.queryItems?.first(where: { $0.name == "id" })?.value?.count ?? 0) >= 10
@@ -48,8 +48,18 @@ enum KhandaqPush {
               let keyData = relayAuthSecret.data(using: .utf8) else {
             return ""
         }
-        let key = SymmetricKey(data: keyData)
-        let mac = HMAC<SHA256>.authenticationCode(for: Data("khandaq-push-relay".utf8), using: key)
-        return mac.map { String(format: "%02x", $0) }.joined()
+        let message = Data("khandaq-push-relay".utf8)
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        keyData.withUnsafeBytes { keyBytes in
+            message.withUnsafeBytes { msgBytes in
+                CCHmac(
+                    CCHmacAlgorithm(kCCHmacAlgSHA256),
+                    keyBytes.baseAddress, keyData.count,
+                    msgBytes.baseAddress, message.count,
+                    &digest
+                )
+            }
+        }
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }

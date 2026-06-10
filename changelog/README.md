@@ -1,10 +1,10 @@
 # Khandaq Changelog
 
-История изменений для https://khandaq.org/changelog — генерируется из git и релизных записей.
+Change history for https://khandaq.org/changelog — generated from git and release notes.
 
-## Как помечать коммиты
+## Tagging commits
 
-В **subject** коммита (первая строка):
+In the commit **subject** (first line):
 
 ```
 [critical] Fix unlock crash after password on Android
@@ -13,49 +13,50 @@
 [low] Update deploy script comments
 ```
 
-Альтернатива в **body** коммита:
+Alternative in the commit **body**:
 
 ```
 severity: critical
 ```
 
-Допустимые уровни: `critical`, `important`, `medium`, `low`.
+Allowed levels: `critical`, `important`, `medium`, `low`.
 
-Коммиты **без метки** не попадают в дневной лог (только в полный список на GitHub).
+Commits **without a tag** are excluded from the daily log (see full history on GitHub).
 
-## Релизные записи (крупные изменения)
+## Release notes (major changes)
 
-Для security audit, релизов версий — файл `changelog/releases/YYYY-MM-DD-vX.Y.Z.json`:
+For security audits, version releases — file `changelog/releases/YYYY-MM-DD-vX.Y.Z.json`:
 
 ```json
 {
   "version": "0.2.5",
   "date": "2026-06-10",
   "title": "Security audit remediation",
+  "summary": "Short overview of the release.",
   "commits": ["48cf534", "d3b7c7d"],
   "changes": [
     {
       "severity": "critical",
-      "title": "Краткий заголовок",
-      "description": "Что исправлено и почему.",
+      "title": "Short title",
+      "description": "What was wrong and what was fixed.",
       "platforms": ["android", "ios"]
     }
   ]
 }
 ```
 
-## Генерация
+## Generate
 
 ```bash
 python3 scripts/generate-changelog.py
 # → web/changelog.json
 ```
 
-Запускается автоматически в `scripts/deploy-site.sh` перед заливкой на сервер.
+Runs automatically in `scripts/deploy-site.sh` before upload.
 
 ## Workflow
 
-1. Фикс → коммит с `[severity]` в subject
-2. Крупный релиз → добавить/обновить `changelog/releases/*.json`
+1. Fix → commit with `[severity]` in subject
+2. Major release → add/update `changelog/releases/*.json`
 3. `python3 scripts/generate-changelog.py`
-4. `bash scripts/deploy-site.sh` (или push в master — CI проверит актуальность JSON)
+4. `bash scripts/deploy-site.sh` (or push to master — CI keeps JSON in sync)

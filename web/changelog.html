@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Changelog — Khandaq Messenger</title>
-  <meta name="description" content="История изменений Khandaq: что исправлено, по датам и уровням критичности.">
+  <meta name="description" content="Khandaq changelog: fixes and updates by date and severity level.">
   <link rel="canonical" href="https://khandaq.org/changelog">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#0b0f0e">
@@ -35,18 +35,18 @@
 
   <main id="main" class="changelog-page">
     <section class="container cl-hero">
-      <p class="eyebrow">История изменений</p>
-      <h1>Что исправлено и обновлено</h1>
+      <p class="eyebrow">Release history</p>
+      <h1>Fixes &amp; updates</h1>
       <p class="cl-hero-lead">
-        Журнал изменений из <a id="gh-link" href="https://github.com/ummalife/khandaq">GitHub</a>.
-        Каждая запись помечена уровнем важности — как индикаторы статуса.
+        Change log synced from <a id="gh-link" href="https://github.com/ummalife/khandaq">GitHub</a>.
+        Each entry is tagged with a severity level — like traffic-light status indicators.
       </p>
-      <div class="cl-legend" aria-label="Уровни важности">
-        <div class="cl-legend-item"><span class="cl-dot critical"></span> Критический — уязвимость, краш, утечка</div>
-        <div class="cl-legend-item"><span class="cl-dot important"></span> Важный — серьёзный баг или слабое место</div>
-        <div class="cl-legend-item"><span class="cl-dot medium"></span> Средний — стабильность, hardening</div>
-        <div class="cl-legend-item"><span class="cl-dot low"></span> Низкий — мелкие правки</div>
-        <div class="cl-legend-item"><span class="cl-dot fixed"></span> <span class="cl-fixed-label">Исправлено</span></div>
+      <div class="cl-legend" aria-label="Severity levels">
+        <div class="cl-legend-item"><span class="cl-dot critical"></span> Critical — vulnerability, crash, data leak</div>
+        <div class="cl-legend-item"><span class="cl-dot important"></span> Important — serious bug or weakness</div>
+        <div class="cl-legend-item"><span class="cl-dot medium"></span> Medium — stability, hardening</div>
+        <div class="cl-legend-item"><span class="cl-dot low"></span> Low — minor changes</div>
+        <div class="cl-legend-item"><span class="cl-dot fixed"></span> <span class="cl-fixed-label">Fixed</span></div>
       </div>
     </section>
 
@@ -54,18 +54,18 @@
       <div id="cl-summary" class="cl-summary" hidden></div>
 
       <div class="cl-toolbar">
-        <div class="cl-filters" role="group" aria-label="Фильтр">
-          <button type="button" class="cl-filter active" data-filter="all"><span class="cl-dot all"></span>Все</button>
-          <button type="button" class="cl-filter" data-filter="critical"><span class="cl-dot critical"></span>Критический</button>
-          <button type="button" class="cl-filter" data-filter="important"><span class="cl-dot important"></span>Важный</button>
-          <button type="button" class="cl-filter" data-filter="medium"><span class="cl-dot medium"></span>Средний</button>
-          <button type="button" class="cl-filter" data-filter="low"><span class="cl-dot low"></span>Низкий</button>
+        <div class="cl-filters" role="group" aria-label="Filter">
+          <button type="button" class="cl-filter active" data-filter="all"><span class="cl-dot all"></span>All</button>
+          <button type="button" class="cl-filter" data-filter="critical"><span class="cl-dot critical"></span>Critical</button>
+          <button type="button" class="cl-filter" data-filter="important"><span class="cl-dot important"></span>Important</button>
+          <button type="button" class="cl-filter" data-filter="medium"><span class="cl-dot medium"></span>Medium</button>
+          <button type="button" class="cl-filter" data-filter="low"><span class="cl-dot low"></span>Low</button>
         </div>
         <p class="cl-meta" id="changelog-meta"></p>
       </div>
 
       <div id="changelog-root" class="cl-root" aria-live="polite">
-        <div class="cl-loading"><span class="cl-dot medium"></span> Загрузка журнала…</div>
+        <div class="cl-loading"><span class="cl-dot medium"></span> Loading changelog…</div>
       </div>
     </section>
   </main>
@@ -98,22 +98,22 @@
     (function () {
       var SEV = ['critical', 'important', 'medium', 'low'];
       var SEV_LABEL = {
-        critical: 'Критический',
-        important: 'Важный',
-        medium: 'Средний',
-        low: 'Низкий'
+        critical: 'Critical',
+        important: 'Important',
+        medium: 'Medium',
+        low: 'Low'
       };
       var SEV_HINT = {
-        critical: 'Требовало немедленного исправления',
-        important: 'Существенный риск или баг',
-        medium: 'Улучшение стабильности',
-        low: 'Незначительное изменение'
+        critical: 'Required immediate fix',
+        important: 'Significant risk or bug',
+        medium: 'Stability improvement',
+        low: 'Minor change'
       };
       var PLAT = {
         android: 'Android',
         ios: 'iOS',
         desktop: 'Desktop',
-        infra: 'Инфраструктура',
+        infra: 'Infrastructure',
         windows: 'Windows',
         macos: 'macOS',
         linux: 'Linux'
@@ -133,7 +133,7 @@
       function commitsHtml(commits) {
         if (!commits || !commits.length) return '';
         return '<div class="cl-commits">' + commits.map(function (c) {
-          return '<a class="cl-commit" href="' + esc(c.url) + '" rel="noopener noreferrer" title="Коммит на GitHub">' +
+          return '<a class="cl-commit" href="' + esc(c.url) + '" rel="noopener noreferrer" title="View commit on GitHub">' +
             '<span class="cl-commit-icon">⎇</span>' + esc(c.hash) + '</a>';
         }).join('') + '</div>';
       }
@@ -152,7 +152,7 @@
           '<div class="cl-item-body">' +
             '<div class="cl-item-top">' +
               '<span class="cl-sev-pill ' + esc(ch.severity) + '">' + esc(SEV_LABEL[ch.severity]) + '</span>' +
-              '<span class="cl-status-fixed"><span class="cl-dot fixed"></span>Исправлено</span>' +
+              '<span class="cl-status-fixed"><span class="cl-dot fixed"></span>Fixed</span>' +
             '</div>' +
             '<h4 class="cl-item-title">' + esc(ch.title) + '</h4>' +
             (ch.description ? '<p class="cl-item-desc">' + esc(ch.description) + '</p>' : '') +
@@ -201,10 +201,10 @@
             '<h2 class="cl-release-title">' + esc(rel.title) + '</h2>' +
             (rel.summary ? '<p class="cl-release-summary">' + esc(rel.summary) + '</p>' : '') +
             (rel.commits && rel.commits.length ? '<div class="cl-release-commits">' +
-              '<span class="cl-release-commits-label">Коммиты релиза:</span>' + commitsHtml(rel.commits) + '</div>' : '') +
+              '<span class="cl-release-commits-label">Release commits:</span>' + commitsHtml(rel.commits) + '</div>' : '') +
           '</header>' +
           '<div class="cl-release-body">' +
-            (groupsHtml || '<p class="cl-empty">Нет записей для выбранного фильтра.</p>') +
+            (groupsHtml || '<p class="cl-empty">No entries match the selected filter.</p>') +
           '</div>' +
         '</section>';
       }
@@ -212,7 +212,7 @@
       function formatDate(iso) {
         try {
           var d = new Date(iso + 'T12:00:00');
-          return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+          return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
         } catch (e) {
           return iso;
         }
@@ -236,7 +236,7 @@
           '</div>';
         }).join('') + '<div class="cl-stat cl-stat--total">' +
           '<span class="cl-stat-num">' + total + '</span>' +
-          '<span class="cl-stat-label">всего исправлений</span></div>';
+          '<span class="cl-stat-label">total fixes</span></div>';
       }
 
       function render() {
@@ -256,7 +256,7 @@
         });
 
         if (days.length) {
-          parts.push('<div class="cl-days-label">Отдельные коммиты по дням</div>');
+          parts.push('<div class="cl-days-label">Tagged commits by day</div>');
           days.forEach(function (day) {
             var groups = groupBySeverity(day.changes);
             parts.push('<section class="cl-release cl-release--day">' +
@@ -270,14 +270,14 @@
 
         root.innerHTML = parts.length
           ? parts.join('')
-          : '<p class="cl-empty">Пока нет записей. Новые исправления появятся после коммитов с меткой <code class="cl-code">[critical]</code> и др.</p>';
+          : '<p class="cl-empty">No entries yet. New fixes appear after commits tagged <code class="cl-code">[critical]</code>, etc.</p>';
       }
 
       function setMeta() {
         var el = document.getElementById('changelog-meta');
         if (!data || !el) return;
         var t = (data.generated_at || '').replace('T', ' ').replace('Z', ' UTC');
-        el.textContent = 'Обновлено ' + t;
+        el.textContent = 'Updated ' + t;
         var gh = document.getElementById('gh-link');
         if (gh && data.github_url) gh.href = data.github_url;
       }
@@ -296,7 +296,7 @@
         .then(function (json) { data = json; setMeta(); render(); })
         .catch(function () {
           document.getElementById('changelog-root').innerHTML =
-            '<p class="cl-error">Не удалось загрузить данные. <a href="https://github.com/ummalife/khandaq/commits/master">Открыть GitHub</a></p>';
+            '<p class="cl-error">Failed to load changelog data. <a href="https://github.com/ummalife/khandaq/commits/master">View on GitHub</a></p>';
         });
     })();
   </script>

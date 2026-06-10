@@ -179,23 +179,23 @@ def main() -> int:
         "severities": [
             {
                 "id": "critical",
-                "label": "Критический",
-                "description": "Уязвимость, краш, утечка данных, RCE",
+                "label": "Critical",
+                "description": "Vulnerability, crash, data leak, RCE",
             },
             {
                 "id": "important",
-                "label": "Важный",
-                "description": "Серьёзный баг или слабое место без немедленной эксплуатации",
+                "label": "Important",
+                "description": "Serious bug or weakness without immediate exploitation",
             },
             {
                 "id": "medium",
-                "label": "Средний",
-                "description": "Стабильность, UX, hardening",
+                "label": "Medium",
+                "description": "Stability, UX, hardening",
             },
             {
                 "id": "low",
-                "label": "Низкий",
-                "description": "Мелкие правки, документация, косметика",
+                "label": "Low",
+                "description": "Minor fixes, documentation, cosmetic changes",
             },
         ],
         "releases": releases,

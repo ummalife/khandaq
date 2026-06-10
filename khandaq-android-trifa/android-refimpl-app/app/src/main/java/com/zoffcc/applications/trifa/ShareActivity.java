@@ -63,6 +63,7 @@ public class ShareActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         t1 = (TextView) findViewById(R.id.text1);
         t1.setText("Share Content ...\nNot yet implemented via share.");

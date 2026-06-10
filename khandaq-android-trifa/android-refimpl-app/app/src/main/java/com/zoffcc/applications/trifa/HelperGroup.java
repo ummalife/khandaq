@@ -50,6 +50,7 @@ import java.util.Locale;
 import java.util.Random;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import id.zelory.compressor.Compressor;
 
 import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_CONFERENCE;
@@ -80,6 +81,8 @@ import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_by_chat_id;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_chat_id;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_role;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peerlist;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_public_key;
@@ -629,6 +632,62 @@ public class HelperGroup
             // e.printStackTrace();
             // Log.i(TAG, "set_group_inactive:EE:" + e.getMessage());
         }
+    }
+
+    @Nullable
+    static String group_send_precheck_failure_reason(@NonNull String group_identifier)
+    {
+        if (is_group_we_left(group_identifier))
+        {
+            return context_s.getString(R.string.group_send_left_group);
+        }
+
+        final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+        if (group_num < 0)
+        {
+            return context_s.getString(R.string.group_send_group_not_found);
+        }
+
+        if (tox_group_is_connected(group_num) !=
+            TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+        {
+            return context_s.getString(R.string.group_send_not_connected);
+        }
+
+        int role = tox_group_self_get_role(group_num);
+        if (role < 0)
+        {
+            role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
+        }
+
+        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
+        {
+            return context_s.getString(R.string.group_send_observer_role);
+        }
+
+        return null;
+    }
+
+    static String group_send_failure_reason(final long message_id)
+    {
+        if (message_id == -1)
+        {
+            return context_s.getString(R.string.group_send_group_not_found);
+        }
+        else if (message_id == -2)
+        {
+            return context_s.getString(R.string.group_send_too_long);
+        }
+        else if (message_id == -3)
+        {
+            return context_s.getString(R.string.group_send_empty);
+        }
+        else if (message_id == -4)
+        {
+            return context_s.getString(R.string.group_send_bad_type);
+        }
+
+        return context_s.getString(R.string.group_send_failed);
     }
 
     static String group_identifier_short(String group_identifier, boolean uppercase_result)

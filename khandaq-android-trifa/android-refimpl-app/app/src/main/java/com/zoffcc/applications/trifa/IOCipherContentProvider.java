@@ -52,16 +52,36 @@ public class IOCipherContentProvider extends AbstractFileProvider
         return true;
     }
 
+    private static boolean isSafeVfsPath(String path)
+    {
+        if (path == null || path.isEmpty())
+        {
+            return false;
+        }
+        if (path.contains("..") || path.contains("\0"))
+        {
+            return false;
+        }
+        if (!path.startsWith("/"))
+        {
+            return false;
+        }
+        return true;
+    }
+
     @Override
     public long getDataLength(Uri uri)
     {
         if (!PREF__allow_open_encrypted_file_via_intent)
         {
-            // Log.i(TAG, "getDataLength:ret:001:allow_open_encrypted_file_via_intent");
             return 0;
         }
 
         String path = uri.getPath();
+        if (!isSafeVfsPath(path))
+        {
+            return 0;
+        }
         long filesize = new File(path).length();
         if ((filesize < 1) || (filesize > (Long.MAX_VALUE - 2)))
         {
@@ -88,7 +108,10 @@ public class IOCipherContentProvider extends AbstractFileProvider
         {
             pipe = ParcelFileDescriptor.createPipe();
             String path = uri.getPath();
-            // Log.i(TAG, "openFile:streaming " + path + " mode=" + mode + "tid = " + Thread.currentThread().getId());
+            if (!isSafeVfsPath(path))
+            {
+                throw new FileNotFoundException("Invalid path");
+            }
 
             long filesize = new File(path).length();
             if ((filesize < 1) || (filesize > (Long.MAX_VALUE - 2)))

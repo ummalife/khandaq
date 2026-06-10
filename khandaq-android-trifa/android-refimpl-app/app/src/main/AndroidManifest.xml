@@ -414,7 +414,7 @@
                 <action android:name="org.khandaq.messenger.DECLINE_INCOMING_CALL" />
             </intent-filter>
         </receiver>
-        <receiver android:name="com.zoffcc.applications.trifa.MyTokenReceiver" android:enabled="true" android:exported="true">
+        <receiver android:name="com.zoffcc.applications.trifa.MyTokenReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
                 <action android:name="com.zoffcc.applications.trifa.TOKEN_CHANGED" />
                 <action android:name="org.khandaq.messenger.TOKEN_CHANGED" />
@@ -453,7 +453,7 @@
             android:name="com.zoffcc.applications.trifa.IOCipherContentProvider"
             android:authorities="com.zoffcc.applications.trifa.ext1_fileprovider"
             android:grantUriPermissions="true"
-            android:exported="true">
+            android:exported="false">
         </provider>
 
     </application>

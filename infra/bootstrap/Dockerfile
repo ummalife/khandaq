@@ -1,9 +1,11 @@
 # Khandaq bootstrap — based on toktok/c-toxcore bootstrap_daemon docker
+# Pin c-toxcore release (security audit #14)
+ARG TOXCORE_TAG=v0.2.20
 FROM alpine:3.21 AS build
 RUN apk --no-cache add clang cmake libconfig-dev libconfig-static libsodium-dev libsodium-static \
     linux-headers musl-dev ninja python3 git
 WORKDIR /src
-RUN git clone --depth 1 --recurse-submodules https://github.com/toktok/c-toxcore.git c-toxcore
+RUN git clone --depth 1 --branch ${TOXCORE_TAG} --recurse-submodules https://github.com/toktok/c-toxcore.git c-toxcore
 WORKDIR /src/c-toxcore
 RUN CC=clang cmake -B _build -GNinja \
     -DCMAKE_BUILD_TYPE=Release \

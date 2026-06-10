@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Package dist artifacts and upload to khandaq.org/messenger
-set -euo pipefail
+# Deprecated wrapper — main site is https://khandaq.org/ (see deploy-site.sh)
+exec "$(cd "$(dirname "$0")" && pwd)/deploy-site.sh" "$@"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WEB="$ROOT/web/messenger"

@@ -53,6 +53,7 @@ public class AddPrivateGroupActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         groupname_text = (EditText) findViewById(R.id.group_new_group_name);
         button_add = (Button) findViewById(R.id.friend_addgroup);

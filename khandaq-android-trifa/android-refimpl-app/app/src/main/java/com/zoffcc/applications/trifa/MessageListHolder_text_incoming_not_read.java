@@ -270,7 +270,7 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
             textView.setEmojiSize((int) dp2px(MESSAGE_EMOJI_SIZE[PREF__global_font_size]));
         }
 
-        if (!HelperLocationMessage.bind(itemView, textView, m.text))
+        if (!HelperLocationMessage.bind(itemView, textView, m.text, false))
         {
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {

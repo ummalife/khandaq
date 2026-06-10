@@ -51,6 +51,10 @@ khandaq-desktop/buildscripts/toxcore/DHT_bootstrap
 dist/
 .release-staging/
 web/messenger/downloads/
+web/downloads/*.apk
+web/downloads/*.exe
+web/downloads/*.zip
+web/downloads/*.tar.gz
 
 # Logs and local ops
 *.log

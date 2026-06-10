@@ -235,6 +235,7 @@ public class GroupPeerInfoActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
                 getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);

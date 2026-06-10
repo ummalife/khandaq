@@ -480,6 +480,23 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
             img_avatar.setImageDrawable(smiley_face);
 
+            final String peer_pubkey_for_profile = message__tox_peerpubkey;
+            final View.OnClickListener open_peer_profile_listener = new View.OnClickListener()
+            {
+                @Override
+                public void onClick(final View v)
+                {
+                    if (!is_selected)
+                    {
+                        GroupMessageListActivity.open_group_peer_info_activity(v.getContext(),
+                                peer_pubkey_for_profile, m.group_identifier);
+                    }
+                }
+            };
+            img_avatar.setOnClickListener(open_peer_profile_listener);
+            layout_peer_name_container.setOnClickListener(open_peer_profile_listener);
+            peer_name_text.setOnClickListener(open_peer_profile_listener);
+
             if (m.was_synced)
             {
                 try

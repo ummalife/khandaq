@@ -63,6 +63,7 @@ enum ErrorHandlerType {
     case callSwitchCamera
     case convertImageToPNG
     case changeAvatar
+    case sendMessageToFriend
     case sendFileToFriend
     case acceptIncomingFile
     case cancelFileTransfer
@@ -128,6 +129,9 @@ func handleErrorWithType(_ type: ErrorHandlerType, error: NSError? = nil, retryB
             UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "change_avatar_error_convert_image"), retryBlock: retryBlock)
         case .changeAvatar:
             let (title, message) = OCTSetUserAvatarError(rawValue: error!.code)!.strings()
+            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+        case .sendMessageToFriend:
+            let (title, message) = OCTToxErrorFriendSendMessage(rawValue: error!.code)!.strings()
             UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
         case .sendFileToFriend:
             let (title, message) = OCTSendFileError(rawValue: error!.code)!.strings()
@@ -321,6 +325,28 @@ extension OCTSetUserAvatarError {
     func strings() -> (title: String, message: String) {
         switch self {
             case .tooBig:
+                return (String(localized: "error_title"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorFriendSendMessage {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .friendNotConnected:
+                return (String(localized: "error_title"),
+                        String(localized: "error_contact_not_connected"))
+            case .tooLong:
+                return (String(localized: "error_title"),
+                        String(localized: "error_status_message_too_long"))
+            case .friendNotFound:
+                fallthrough
+            case .alloc:
+                fallthrough
+            case .empty:
+                fallthrough
+            case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))
         }

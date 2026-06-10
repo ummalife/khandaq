@@ -36,6 +36,7 @@ public class WrongCredentials extends AppCompatActivity
         setContentView(R.layout.activity_wrong_credentials);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
         getSupportActionBar().setDisplayShowTitleEnabled(false);
     }
 }

@@ -13,7 +13,7 @@ protocol ProfileTabCoordinatorDelegate: class {
     func profileTabCoordinatorDelegateDidChangeUserName(_ coordinator: ProfileTabCoordinator)
 }
 
-class ProfileTabCoordinator: ActiveSessionNavigationCoordinator {
+class ProfileTabCoordinator: ActiveSessionNavigationCoordinator, UIAdaptivePresentationControllerDelegate {
     weak var delegate: ProfileTabCoordinatorDelegate?
 
     fileprivate weak var toxManager: OCTManager!
@@ -122,7 +122,12 @@ extension ProfileTabCoordinator: ProfileDetailsControllerDelegate {
 
         let toPresent = PortraitNavigationController(rootViewController: controller)
         toPresent.isNavigationBarHidden = true
+        toPresent.presentationController?.delegate = self
         navigationController.present(toPresent, animated: true, completion: nil)
+    }
+
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        NotificationCenter.default.post(name: .khandaqProfileSettingsDidChange, object: nil)
     }
 
     func profileDetailsControllerChangeLockTimeout(_ controller: ProfileDetailsController) {
@@ -152,7 +157,9 @@ extension ProfileTabCoordinator: EnterPinControllerDelegate {
                 settings.unlockPinCode = pin
                 toxManager.objects.saveProfileSettings(settings)
 
-                navigationController.dismiss(animated: true, completion: nil)
+                navigationController.dismiss(animated: true) {
+                    NotificationCenter.default.post(name: .khandaqProfileSettingsDidChange, object: nil)
+                }
             case .setPin:
                 guard let presentedNavigation = controller.navigationController else {
                     fatalError("wrong state")

@@ -2936,6 +2936,19 @@ public class HelperGeneric
             return null;
         }
 
+        if (HelperFriend.is_own_public_key(friend_pubkey))
+        {
+            final MainActivity.send_message_result result = new MainActivity.send_message_result();
+            final ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
+            MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
+            result.msg_num = 1;
+            result.msg_v2 = false;
+            result.msg_hash_hex = "";
+            result.msg_hash_v3_hex = bytebuffer_to_hexstring(hash_bytes, true);
+            result.raw_message_buf_hex = "";
+            return result;
+        }
+
         if ((f.capabilities & TOX_CAPABILITY_MSGV2) != 0)
         {
             msgv1 = false;
@@ -3050,7 +3063,7 @@ public class HelperGeneric
     {
         // Log.i(TAG, "old ToxID=" + MainActivity.get_my_toxid());
         // Log.i(TAG, "old NOSPAM=" + MainActivity.tox_self_get_nospam());
-        Random random = new Random();
+        java.security.SecureRandom random = new java.security.SecureRandom();
         long new_nospam = (long) random.nextInt() + (1L << 31);
         // Log.i(TAG, "generated NOSPAM=" + new_nospam);
         MainActivity.tox_self_set_nospam(new_nospam);

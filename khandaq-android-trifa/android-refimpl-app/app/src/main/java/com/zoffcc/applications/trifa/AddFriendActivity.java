@@ -24,12 +24,14 @@ import org.khandaq.messenger.R;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import com.google.android.material.textfield.TextInputLayout;
 
@@ -67,11 +69,18 @@ public class AddFriendActivity extends AppCompatActivity
                 if (result.getResultCode() == RESULT_OK && result.getData() != null)
                 {
                     final String contents = result.getData().getStringExtra(QrScanActivity.EXTRA_RESULT);
-                    if (contents != null)
-                    {
-                        toxid_text.setText(contents);
-                    }
+                    applyScannedQrContent(contents);
                 }
+            });
+
+    private final ActivityResultLauncher<String> galleryPickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.GetContent(), uri ->
+            {
+                if (uri == null)
+                {
+                    return;
+                }
+                decodeQrFromGallery(uri);
             });
 
     @Override
@@ -82,6 +91,7 @@ public class AddFriendActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         toxid_text = (EditText) findViewById(R.id.friend_toxid);
         button_add = (Button) findViewById(R.id.friend_addbutton);
@@ -156,6 +166,56 @@ public class AddFriendActivity extends AppCompatActivity
         {
             requestCameraPermission.launch(Manifest.permission.CAMERA);
         }
+    }
+
+    public void read_qr_code_from_gallery(View v)
+    {
+        galleryPickerLauncher.launch("image/*");
+    }
+
+    public void add_self_clicked(View v)
+    {
+        HelperFriend.add_self_as_friend();
+        finish();
+    }
+
+    private void decodeQrFromGallery(final Uri uri)
+    {
+        QrImageDecoder.decodeFromUri(this, uri, new QrImageDecoder.Callback()
+        {
+            @Override
+            public void onSuccess(final String value)
+            {
+                runOnUiThread(() -> applyScannedQrContent(value));
+            }
+
+            @Override
+            public void onFailure()
+            {
+                runOnUiThread(() -> Toast.makeText(AddFriendActivity.this,
+                        R.string.qr_scan_image_error, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private void applyScannedQrContent(final String contents)
+    {
+        if ((contents == null) || (contents.isEmpty()))
+        {
+            Toast.makeText(this, R.string.qr_scan_image_error, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final String normalized = normalize_tox_address(contents);
+        if (normalized != null)
+        {
+            toxid_text.setText(normalized);
+            button_add.setEnabled(true);
+            friend_toxid_inputlayout.setErrorEnabled(false);
+            return;
+        }
+
+        toxid_text.setText(contents.trim());
     }
 
     public void add_friend_clicked(View v)

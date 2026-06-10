@@ -80,15 +80,30 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewSendButtonPressed(_ view: ChatInputView) {
-        // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
-        submanagerChats.sendMessage(to: chat, text: view.text, type: .normal, successBlock: nil, failureBlock: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-            os_log("PUSH:10_seconds")
-            self.submanagerChats.sendMessagePush(to: self.chat)
+        let text = view.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            return
         }
 
-        view.text = ""
-        endUserInteraction()
+        // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
+        submanagerChats.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in
+            DispatchQueue.main.async {
+                view.text = ""
+                self.endUserInteraction()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                os_log("PUSH:10_seconds")
+                self.submanagerChats.sendMessagePush(to: self.chat)
+            }
+        }, failureBlock: { error in
+            DispatchQueue.main.async {
+                if let error = error as NSError? {
+                    handleErrorWithType(.sendMessageToFriend, error: error)
+                } else {
+                    UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
+                }
+            }
+        })
     }
 
     func chatInputViewTextDidChange(_ view: ChatInputView) {
@@ -110,16 +125,12 @@ extension ChatInputViewManager: UIImagePickerControllerDelegate {
             return
         }
 
-        let typeImage = kUTTypeImage as String
-        let typeMovie = kUTTypeMovie as String
-
-        switch type {
-            case typeImage:
-                sendImage(imagePickerInfo: info)
-            case typeMovie:
-                sendMovie(imagePickerInfo: info)
-            default:
-                showMediaPickFailed()
+        if isImageMediaType(type) {
+            sendImage(imagePickerInfo: info)
+        } else if isMovieMediaType(type) {
+            sendMovie(imagePickerInfo: info)
+        } else {
+            showMediaPickFailed()
         }
     }
 
@@ -174,9 +185,7 @@ fileprivate extension ChatInputViewManager {
 
     func sendMovie(imagePickerInfo: [String : Any]) {
         if let url = imagePickerInfo[UIImagePickerControllerMediaURL] as? URL {
-            submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { (error: Error) in
-                handleErrorWithType(.sendFileToFriend, error: error as NSError)
-            }
+            sendMovieFile(at: url)
             return
         }
 
@@ -186,6 +195,37 @@ fileprivate extension ChatInputViewManager {
         }
 
         showMediaPickFailed()
+    }
+
+    func sendMovieFile(at url: URL) {
+        let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(ext)
+
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            if FileManager.default.fileExists(atPath: tempURL.path) {
+                try FileManager.default.removeItem(at: tempURL)
+            }
+            try FileManager.default.copyItem(at: url, to: tempURL)
+        } catch {
+            os_log("sendMovieFile:copy_failed %{public}@, trying direct path", error.localizedDescription)
+            submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { (error: Error) in
+                handleErrorWithType(.sendFileToFriend, error: error as NSError)
+            }
+            return
+        }
+
+        submanagerFiles.sendFile(atPath: tempURL.path, moveToUploads: true, to: chat) { (error: Error) in
+            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        }
     }
 
     func sendImageData(_ image: UIImage, fileName: String?) {
@@ -255,11 +295,15 @@ fileprivate extension ChatInputViewManager {
             return
         }
 
+        let ext = (resource.originalFilename as NSString).pathExtension
         let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("mov")
+            .appendingPathExtension(ext.isEmpty ? "mov" : ext)
 
-        PHAssetResourceManager.default().writeData(for: resource, toFile: tempURL, options: nil) { [weak self] error in
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+
+        PHAssetResourceManager.default().writeData(for: resource, toFile: tempURL, options: options) { [weak self] error in
             guard let strongSelf = self else {
                 return
             }
@@ -276,6 +320,15 @@ fileprivate extension ChatInputViewManager {
                 }
             }
         }
+    }
+
+    func isImageMediaType(_ type: String) -> Bool {
+        UTTypeConformsTo(type as CFString, kUTTypeImage)
+    }
+
+    func isMovieMediaType(_ type: String) -> Bool {
+        let cfType = type as CFString
+        return UTTypeConformsTo(cfType, kUTTypeMovie) || UTTypeConformsTo(cfType, kUTTypeVideo)
     }
 
     func showMediaPickFailed() {

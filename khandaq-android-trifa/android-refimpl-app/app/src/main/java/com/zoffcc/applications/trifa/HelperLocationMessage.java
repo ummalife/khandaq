@@ -63,6 +63,11 @@ public final class HelperLocationMessage
 
     public static boolean bind(View itemView, TextView textView, String rawText)
     {
+        return bind(itemView, textView, rawText, true);
+    }
+
+    public static boolean bind(View itemView, TextView textView, String rawText, boolean autoLoadMap)
+    {
         final double[] coordinates = parse(rawText);
         final ViewGroup bubbleContainer = findBubbleContainer(itemView);
 
@@ -81,11 +86,26 @@ public final class HelperLocationMessage
 
         final ImageView mapView = ensureMapView(itemView, bubbleContainer);
         mapView.setVisibility(View.VISIBLE);
-        mapView.setOnClickListener(v -> openMaps(v.getContext(), coordinates[0], coordinates[1]));
+        mapView.setOnClickListener(v -> {
+            if (mapView.getDrawable() == null)
+            {
+                final String cacheKey = String.format(Locale.US, "%.5f,%.5f", coordinates[0], coordinates[1]);
+                mapView.setTag(cacheKey);
+                LocationMapSnapshot.loadInto(mapView, coordinates[0], coordinates[1]);
+            }
+            openMaps(v.getContext(), coordinates[0], coordinates[1]);
+        });
 
-        final String cacheKey = String.format(Locale.US, "%.5f,%.5f", coordinates[0], coordinates[1]);
-        mapView.setTag(cacheKey);
-        LocationMapSnapshot.loadInto(mapView, coordinates[0], coordinates[1]);
+        if (autoLoadMap)
+        {
+            final String cacheKey = String.format(Locale.US, "%.5f,%.5f", coordinates[0], coordinates[1]);
+            mapView.setTag(cacheKey);
+            LocationMapSnapshot.loadInto(mapView, coordinates[0], coordinates[1]);
+        }
+        else
+        {
+            mapView.setImageDrawable(null);
+        }
 
         return true;
     }

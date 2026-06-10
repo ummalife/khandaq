@@ -61,6 +61,7 @@ public class ConferenceInfoActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         if ((conf_id == null) || (conf_id.equals("-1")))
         {

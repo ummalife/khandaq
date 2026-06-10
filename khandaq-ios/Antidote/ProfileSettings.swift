@@ -4,6 +4,10 @@
 
 import Foundation
 
+extension Notification.Name {
+    static let khandaqProfileSettingsDidChange = Notification.Name("KhandaqProfileSettingsDidChange")
+}
+
 private struct Constants {
     static let UnlockPinCodeKey = "UnlockPinCodeKey"
     static let UseTouchIDKey = "UseTouchIDKey"

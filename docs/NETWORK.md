@@ -29,7 +29,7 @@ Khandaq clients connect to the **public Tox DHT**. Khandaq adds infrastructure t
 |----------|-------------|--------------|
 | `https://bootstrap.khandaq.org/nodes.json` | `config/khandaq_bootstrap_nodes.json` | Bootstrap node list (additive) |
 | `https://push.khandaq.org/toxfcm/fcm.php` | `config/khandaq_push.json` | Push wake relay |
-| `https://khandaq.org` | `web/messenger/` | Website & download links |
+| `https://khandaq.org` | `web/` | Website & download links |
 
 ## What Khandaq servers see
 

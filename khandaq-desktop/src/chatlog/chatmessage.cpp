@@ -62,6 +62,12 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const QString& sender, const QSt
     QString text = rawMessage.toHtmlEscaped();
     QString senderText = sender;
 
+    // Avoid UI freeze on pathological markdown from untrusted contacts (#11).
+    const int kMaxMarkdownChars = 16000;
+    if (text.length() > kMaxMarkdownChars) {
+        text = text.left(kMaxMarkdownChars);
+    }
+
     auto textType = Text::NORMAL;
     // smileys
     if (settings.getUseEmoticons())

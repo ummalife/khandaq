@@ -87,6 +87,33 @@
 
             </LinearLayout>
 
+            <Button
+                android:id="@+id/friend_qrbutton_gallery"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="15dp"
+                android:layout_marginRight="15dp"
+                android:layout_marginTop="10dp"
+                android:background="@color/md_grey_300"
+                android:onClick="read_qr_code_from_gallery"
+                android:paddingLeft="15dp"
+                android:paddingRight="15dp"
+                android:text="@string/layout___scan_qr_code_gallery"
+                android:textColor="@color/md_black_1000"/>
+
+            <Button
+                android:id="@+id/friend_add_self_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="15dp"
+                android:layout_marginRight="15dp"
+                android:layout_marginTop="10dp"
+                android:background="@color/md_grey_300"
+                android:onClick="add_self_clicked"
+                android:paddingLeft="15dp"
+                android:paddingRight="15dp"
+                android:text="@string/add_self_contact"
+                android:textColor="@color/md_black_1000"/>
 
             <TextView
                 android:id="@+id/info_text"

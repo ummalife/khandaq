@@ -48,21 +48,25 @@ class PinAuthorizationCoordinator: NSObject {
         super.init()
 
         // Showing window on top of all other windows.
-        window.windowLevel = UIWindowLevelStatusBar + 1000
+        window.windowLevel = CGFloat(2000 + 1000)
 
         if lockOnStartup {
             lockIfNeeded(0)
         }
 
-        NotificationCenter.default.addObserver(self,
-                                                         selector: #selector(PinAuthorizationCoordinator.appWillResignActiveNotification),
-                                                         name: NSNotification.Name.UIApplicationWillResignActive,
-                                                         object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(PinAuthorizationCoordinator.appWillResignActiveNotification),
+            name: NSNotification.Name.UIApplicationWillResignActive,
+            object: nil
+        )
 
-        NotificationCenter.default.addObserver(self,
-                                                         selector: #selector(PinAuthorizationCoordinator.appDidBecomeActiveNotification),
-                                                         name: NSNotification.Name.UIApplicationDidBecomeActive,
-                                                         object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(PinAuthorizationCoordinator.appDidBecomeActiveNotification),
+            name: NSNotification.Name.UIApplicationDidBecomeActive,
+            object: nil
+        )
     }
 
     deinit {
@@ -89,16 +93,7 @@ class PinAuthorizationCoordinator: NSObject {
 
 extension PinAuthorizationCoordinator: CoordinatorProtocol {
     func startWithOptions(_ options: CoordinatorOptions?) {
-        switch state {
-            case .locked(let lockTime):
-                challengeUserToAuthorize(lockTime)
-            case .unlocked:
-                // ignore
-                break
-            case .validatingPin:
-                // ignore
-                break
-        }
+        // Biometric challenge runs from applicationDidBecomeActive when UI is ready.
     }
 }
 
@@ -174,17 +169,24 @@ private extension PinAuthorizationCoordinator {
         }
 
         if shouldUseTouchID() {
+            let context = LAContext()
+            var error: NSError?
+            guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+                showValidatePinController()
+                return
+            }
+
             state = .validatingPin
-
-            LAContext().evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
-                                       localizedReason: String(localized: "pin_touch_id_description"),
-                                       reply: { [weak self] success, error in
+            context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: String(localized: "pin_touch_id_description")
+            ) { [weak self] success, _ in
                 DispatchQueue.main.async {
-                    self?.state = .locked(lockTime: lockTime)
-
-                    success ? self?.unlock() : self?.showValidatePinController()
+                    guard let self = self else { return }
+                    self.state = .locked(lockTime: lockTime)
+                    success ? self.unlock() : self.showValidatePinController()
                 }
-            })
+            }
         }
         else {
             showValidatePinController()
@@ -194,7 +196,12 @@ private extension PinAuthorizationCoordinator {
     func showValidatePinController() {
         let settings = submanagerObjects.getProfileSettings()
         guard let pin = settings.unlockPinCode else {
-            fatalError("pin shouldn't be nil")
+            if settings.useTouchID {
+                settings.useTouchID = false
+                submanagerObjects.saveProfileSettings(settings)
+            }
+            unlock()
+            return
         }
 
         let failedAttempts = KeychainManager().failedPinAttemptsNumber ?? 0

@@ -183,22 +183,23 @@ static void triggerPush(NSString *used_pushToken,
     NSLog(@"PUSH:triggerPush");
     if ((used_pushToken != nil) && (used_pushToken.length > 5)) {
 
-        // check push url starts with allowed values
+        // Strict push URL whitelist (security audit #10)
         if (
-            ([used_pushToken hasPrefix:@"https://push.khandaq.org/toxfcm/fcm.php?id="])
+            ([used_pushToken hasPrefix:@"https://push.khandaq.org/toxfcm/fcm.php?id="] &&
+             [used_pushToken containsString:@"id="])
             ||
-            ([used_pushToken hasPrefix:@"https://tox.zoff.xyz/toxfcm/fcm.php?id="])
-            ||
-            ([used_pushToken hasPrefix:@"https://gotify1.unifiedpush.org/UP?token="])
-            ||
-            ([used_pushToken hasPrefix:@"https://ntfy.sh/"])
+            ([used_pushToken hasPrefix:@"https://tox.zoff.xyz/toxfcm/fcm.php?id="] &&
+             [used_pushToken containsString:@"id="])
         ) {
 
             NSString *strong_pushToken = used_pushToken;
             if ((strongSelf != nil) && ([strong_pushToken containsString:@"fcm.php?id="]) && (![strong_pushToken containsString:@"from="])) {
                 NSString *selfPublicKey = [[strongSelf.dataSource managerGetTox] publicKey];
                 if ((selfPublicKey != nil) && (selfPublicKey.length > 0)) {
-                    strong_pushToken = [NSString stringWithFormat:@"%@&from=%@", strong_pushToken, selfPublicKey];
+                    strong_pushToken = [NSString stringWithFormat:@"%@%@from=%@",
+                        strong_pushToken,
+                        ([strong_pushToken containsString:@"?"] ? @"&" : @"?"),
+                        selfPublicKey];
                 }
             }
 

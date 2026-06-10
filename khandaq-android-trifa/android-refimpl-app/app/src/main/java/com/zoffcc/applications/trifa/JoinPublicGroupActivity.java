@@ -55,6 +55,7 @@ public class JoinPublicGroupActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         groupid_text = (EditText) findViewById(R.id.group_join_group_id);
         button_join = (Button) findViewById(R.id.friend_joingroup);

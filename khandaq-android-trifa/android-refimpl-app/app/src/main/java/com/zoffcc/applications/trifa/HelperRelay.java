@@ -365,16 +365,18 @@ public class HelperRelay
     }
 
     /** Apply FCM/push token silently — no user dialog (Khandaq 0.2 embedded FCM). */
-    static void apply_notification_token_auto(final String token)
+    public static void apply_notification_token_auto(final String token)
     {
-        if (token == null || token.length() < 10)
+        final String normalized = PushUrlValidator.normalizeOwnToken(token);
+        if (normalized == null)
         {
+            Log.w(TAG, "notification token rejected by whitelist");
             return;
         }
 
         own_push_token_load();
         final String current = get_g_opts(NOTIFICATION_TOKEN_DB_KEY);
-        if (token.equals(current))
+        if (normalized.equals(current))
         {
             del_g_opts(NOTIFICATION_TOKEN_DB_KEY_NEED_ACK);
             return;
@@ -382,9 +384,9 @@ public class HelperRelay
 
         try
         {
-            set_g_opts(NOTIFICATION_TOKEN_DB_KEY, token);
+            set_g_opts(NOTIFICATION_TOKEN_DB_KEY, normalized);
             del_g_opts(NOTIFICATION_TOKEN_DB_KEY_NEED_ACK);
-            TRIFAGlobals.global_notification_token = token;
+            TRIFAGlobals.global_notification_token = normalized;
             if (PREF__use_push_service)
             {
                 send_pushurl_to_all_friends();
@@ -400,27 +402,7 @@ public class HelperRelay
 
     static String push_token_to_push_url(final String push_token)
     {
-        if (push_token != null)
-        {
-            // I dont have a relay, but i have a PUSH token
-            String notification_push_url = push_token;
-            if (push_token.startsWith("https://"))
-            {
-                // this must be a gotify/unifiedpush token
-            }
-            else
-            {
-                // this must be a google FCM token, add the porper HTTPS url here
-                notification_push_url = NOTIFICATION_FCM_PUSH_URL_PREFIX + push_token;
-            }
-
-            if (notification_push_url.length() < MAX_PUSH_URL_LENGTH)
-            {
-                return notification_push_url;
-            }
-        }
-
-        return null;
+        return PushUrlValidator.toPushUrl(push_token);
     }
 
     static boolean have_own_pushurl()
@@ -547,65 +529,7 @@ public class HelperRelay
 
     static boolean is_valid_pushurl_for_friend_with_whitelist(String push_url)
     {
-        // whitelist google FCM gateway
-        if (push_url.length() > NOTIFICATION_FCM_PUSH_URL_PREFIX.length())
-        {
-            if (push_url.startsWith(NOTIFICATION_FCM_PUSH_URL_PREFIX))
-            {
-                return true;
-            }
-        }
-
-        // whitelist OLD google FCM gateway
-        if (push_url.length() > NOTIFICATION_FCM_PUSH_URL_PREFIX_OLD.length())
-        {
-            if (push_url.startsWith(NOTIFICATION_FCM_PUSH_URL_PREFIX_OLD))
-            {
-                return true;
-            }
-        }
-
-        // legacy upstream relay (migration)
-        if (push_url.startsWith("https://tox.zoff.xyz/toxfcm/fcm.php?id="))
-        {
-            return true;
-        }
-
-        // whitelist unified push demo server
-        if (push_url.length() > NOTIFICATION_UP_PUSH_URL_PREFIX.length())
-        {
-            if (push_url.startsWith(NOTIFICATION_UP_PUSH_URL_PREFIX))
-            {
-                return true;
-            }
-        }
-
-        // whitelist ntfy.sh server
-        if (PREF__allow_push_server_ntfy)
-        {
-            if (push_url.length() > NOTIFICATION_NTFY_PUSH_URL_PREFIX.length())
-            {
-                if (push_url.startsWith(NOTIFICATION_NTFY_PUSH_URL_PREFIX))
-                {
-                    return true;
-                }
-            }
-        }
-
-        // whitelist mozilla sunup server
-        if (PREF__allow_push_server_sunup)
-        {
-            if (push_url.length() > NOTIFICATION_SUNUP_PUSH_URL_PREFIX.length())
-            {
-                if (push_url.startsWith(NOTIFICATION_SUNUP_PUSH_URL_PREFIX))
-                {
-                    return true;
-                }
-            }
-        }
-
-        // anything else is not allowed at this time!
-        return false;
+        return PushUrlValidator.isAllowedPushUrl(push_url);
     }
 
     static boolean set_friend_as_own_relay_in_db(String friend_public_key)

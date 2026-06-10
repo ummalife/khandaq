@@ -2136,7 +2136,9 @@ void friendLosslessPacketCallback(
 
     if ((length > 5) && (length < 300)) {
         if (data[0] == 181) {
-            pushTokenString = [[NSString alloc] initWithUTF8String:(data + 1)];
+            pushTokenString = [[NSString alloc] initWithBytes:(data + 1)
+                                                       length:(length - 1)
+                                                     encoding:NSUTF8StringEncoding];
         } else {
             return;
         }

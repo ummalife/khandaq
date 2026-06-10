@@ -2,7 +2,8 @@
 """Khandaq push wake relay — FCM HTTP v1, tox.zoff.xyz compatible API."""
 from __future__ import annotations
 
-import json
+import hashlib
+import hmac
 import logging
 import os
 import time
@@ -20,6 +21,7 @@ FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "khandaq-messenger")
 FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")
 FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")  # legacy fallback
 RATE_LIMIT_PER_MIN = int(os.environ.get("PUSH_RATE_LIMIT_PER_MIN", "120"))
+PUSH_RELAY_AUTH_SECRET = os.environ.get("PUSH_RELAY_AUTH_SECRET", "")
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
@@ -29,15 +31,48 @@ def _fcm_configured() -> bool:
     return bool(FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE)) or bool(FCM_SERVER_KEY)
 
 
+def _client_ip() -> str:
+    # Trust X-Real-IP only when set by nginx; never use spoofable X-Forwarded-For alone.
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip.split(",")[0].strip()
+    return (request.remote_addr or "?").strip()
+
+
 def _rate_ok(client_ip: str) -> bool:
     now = time.time()
     with _rate_lock:
+        # Purge stale keys to prevent memory exhaustion (#6).
+        stale = [k for k, ts in _rate.items() if not ts or now - ts[-1] > 120]
+        for k in stale:
+            del _rate[k]
+
         window = [t for t in _rate[client_ip] if now - t < 60]
         if len(window) >= RATE_LIMIT_PER_MIN:
             return False
         window.append(now)
         _rate[client_ip] = window
     return True
+
+
+def _auth_ok() -> bool:
+    if not PUSH_RELAY_AUTH_SECRET:
+        return True
+    supplied = request.args.get("auth", "").strip()
+    if not supplied:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            supplied = auth_header[7:].strip()
+    if not supplied:
+        return False
+    return hmac.compare_digest(
+        supplied,
+        hmac.new(
+            PUSH_RELAY_AUTH_SECRET.encode("utf-8"),
+            b"khandaq-push-relay",
+            hashlib.sha256,
+        ).hexdigest(),
+    )
 
 
 def _get_access_token() -> str:
@@ -64,6 +99,8 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
     try:
         access = _get_access_token()
     except Exception as exc:
+        _token_cache["token"] = None
+        _token_cache["exp"] = 0.0
         return False, f"auth failed: {exc}"
 
     url = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
@@ -90,15 +127,19 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
             },
         }
     }
-    resp = requests.post(
-        url,
-        headers={
-            "Authorization": f"Bearer {access}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=10,
-    )
+    try:
+        resp = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {access}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        return False, f"FCM v1 request failed: {exc}"
+
     if resp.status_code not in (200, 201):
         return False, f"FCM v1 HTTP {resp.status_code}: {resp.text[:200]}"
     return True, "ok"
@@ -107,29 +148,36 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
 def _send_fcm_legacy(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
     if not FCM_SERVER_KEY:
         return False, "FCM_SERVER_KEY not configured"
-    resp = requests.post(
-        "https://fcm.googleapis.com/fcm/send",
-        headers={
-            "Authorization": f"key={FCM_SERVER_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "to": token,
-            "priority": "high",
-            "data": {
-                "wake": "1",
-                **({"sender_pubkey": sender_pubkey, "from": sender_pubkey} if sender_pubkey else {}),
+    try:
+        resp = requests.post(
+            "https://fcm.googleapis.com/fcm/send",
+            headers={
+                "Authorization": f"key={FCM_SERVER_KEY}",
+                "Content-Type": "application/json",
             },
-            "notification": {
-                "title": os.environ.get("PUSH_NOTIFY_TITLE", "Khandaq"),
-                "body": os.environ.get("PUSH_NOTIFY_BODY", "New message"),
+            json={
+                "to": token,
+                "priority": "high",
+                "data": {
+                    "wake": "1",
+                    **({"sender_pubkey": sender_pubkey, "from": sender_pubkey} if sender_pubkey else {}),
+                },
+                "notification": {
+                    "title": os.environ.get("PUSH_NOTIFY_TITLE", "Khandaq"),
+                    "body": os.environ.get("PUSH_NOTIFY_BODY", "New message"),
+                },
             },
-        },
-        timeout=10,
-    )
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        return False, f"FCM legacy request failed: {exc}"
+
     if resp.status_code != 200:
         return False, f"FCM legacy HTTP {resp.status_code}"
-    body = resp.json()
+    try:
+        body = resp.json()
+    except ValueError:
+        return False, "FCM legacy invalid JSON response"
     if body.get("failure", 0) > 0:
         return False, f"FCM failure: {body.get('results', body)}"
     return True, "ok"
@@ -146,12 +194,20 @@ def health():
     mode = "v1" if FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE) else (
         "legacy" if FCM_SERVER_KEY else "none"
     )
-    return jsonify({"status": "ok", "fcm_configured": _fcm_configured(), "fcm_mode": mode})
+    return jsonify({
+        "status": "ok",
+        "fcm_configured": _fcm_configured(),
+        "fcm_mode": mode,
+        "auth_required": bool(PUSH_RELAY_AUTH_SECRET),
+    })
 
 
 @app.route("/toxfcm/fcm.php", methods=["GET", "POST"])
 def wake():
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    if not _auth_ok():
+        return jsonify({"error": "unauthorized"}), 401
+
+    client_ip = _client_ip()
     if not _rate_ok(client_ip):
         return jsonify({"error": "rate limit"}), 429
 
@@ -165,7 +221,7 @@ def wake():
 
     ok, detail = _send_wake(token, sender_pubkey)
     if not ok:
-        log.warning("wake fail: %s", detail)
+        log.warning("wake fail from %s: %s", client_ip, detail)
         return jsonify({"error": detail}), 503 if "not configured" in detail else 502
 
     return jsonify({"success": 1}), 200

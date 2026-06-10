@@ -4,6 +4,7 @@
     <string name="message_list_activity_name">Разговор</string>
     <string name="conference_message_list_activity_name">Текстовая конференция</string>
     <string name="conference_audio_activity_name">Аудиоконференция</string>
+    <string name="password_toggle_content_description">Показать или скрыть пароль</string>
     <string name="set_password_message_empty">Пароль пуст</string>
     <string name="set_password_message_password_invalid">Минимум 8 символов, буквы и цифры</string>
     <string name="set_password_message_password_dont_match">Пароли не совпадают</string>
@@ -12,6 +13,9 @@
     <string name="title_activity_settings">Настройки</string>
     <string name="title_activity_crash">Сбой</string>
     <string name="title_activity_friendinfo">Информация о друге</string>
+    <string name="message_list_open_friend_profile">Открыть профиль контакта</string>
+    <string name="main_profile_open">Открыть мой профиль</string>
+    <string name="group_open_group_info">Открыть информацию о группе</string>
     <string name="title_activity_conferencepeerinfo">Информация о партнёре</string>
     <string name="title_activity_aboutpage">О программе</string>
     <string name="title_activity_set_password">Установка пароля</string>
@@ -248,6 +252,13 @@
     <string name="layout___toxid">ID</string>
     <string name="friend_display_name_fallback">Контакт</string>
     <string name="layout___scan_qr_code">сканировать QR-код</string>
+    <string name="layout___scan_qr_code_gallery">сканировать QR-код из галереи</string>
+    <string name="qr_scan_image_error">QR-код на этом изображении не найден.</string>
+    <string name="add_self_contact">добавить себя в контакты</string>
+    <string name="add_self_contact_name">Избранное</string>
+    <string name="add_self_contact_suffix">вы</string>
+    <string name="add_self_success">Вы добавлены в список контактов</string>
+    <string name="add_self_already_in_contacts">Вы уже есть в списке контактов</string>
     <string name="qr_scan_hint">Наведите камеру на QR-код</string>
     <string name="qr_scan_camera_error">Камера недоступна. Закройте другие приложения с камерой и попробуйте снова.</string>
     <string name="layout___enter_pass_longtext">Введите пароль
@@ -400,6 +411,10 @@
 \nХотите посмотреть, как настроить PUSH уведомления сейчас\?</string>
     <string name="ProfileActivity_delete_avatar_dialog_title">Удалить картинку профиля</string>
     <string name="ProfileActivity_delete_avatar_dialog_text">Вы хотите удалить картинку своего профиля\?</string>
+    <string name="profile_save_button">Сохранить профиль</string>
+    <string name="profile_saved_toast">Профиль сохранён</string>
+    <string name="profile_avatar_saved_toast">Фото профиля обновлено</string>
+    <string name="profile_save_hint">Фото сохраняется сразу при выборе. Нажмите «Сохранить», чтобы применить ник и статус.</string>
     <string name="layout___remove_own_pushurl">удалить Push URL</string>
     <string name="pref_title_allow_open_encrypted_file_via_intent">Открыть файл с зашифрованного хранилища</string>
     <string name="pref_description_allow_open_encrypted_file_via_intent">Открыть файл прямо с шифрованного хранилища через Интернет. Это может быть потенциально опасно, вредоносное приложение может открыть другие файлы внутри хранилища Khandaq.</string>
@@ -425,6 +440,14 @@
     <string name="pref_description_toxirc_muted_peers_02">Беззвучный Пользователь 2 (оставьте пустым если не используется)</string>
     <string name="pref_description_toxirc_muted_peers_03">Беззвучный Пользователь 3 (оставьте пустым если не используется)</string>
     <string name="join_public_group_activity_warning">Предупреждение:\nприсоединение к публичной группе через ID группы пока работает ненадежно!!</string>
+    <string name="group_send_observer_role">Вы наблюдатель в этой группе и не можете отправлять сообщения. Попросите модератора сменить вашу роль на User.</string>
+    <string name="group_send_not_connected">Группа ещё не подключена. Дождитесь зелёного индикатора и попробуйте снова.</string>
+    <string name="group_send_group_not_found">Группа не активна в Tox. Выйдите и зайдите в группу заново.</string>
+    <string name="group_send_left_group">Вы вышли из этой группы.</string>
+    <string name="group_send_too_long">Сообщение слишком длинное.</string>
+    <string name="group_send_empty">Пустое сообщение.</string>
+    <string name="group_send_bad_type">Неподдерживаемый тип сообщения.</string>
+    <string name="group_send_failed">Не удалось отправить сообщение в группу.</string>
     <string name="invite_friend_success">Вы получили запрос на добавление в друзья</string>
     <string name="invite_join_group_success">Вы приглашены в группу</string>
     <string name="invite_join_conference_success">Вы приглашены в конференцию</string>

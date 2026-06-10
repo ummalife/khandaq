@@ -37,12 +37,6 @@ public final class KhandaqPushHelper {
     }
 
     private static void broadcastToken(Context context, String token) {
-        android.content.ComponentName receiver = new android.content.ComponentName(
-                context.getPackageName(), "com.zoffcc.applications.trifa.MyTokenReceiver");
-        android.content.Intent intent = new android.content.Intent(KhandaqPush.TOKEN_CHANGED_ACTION);
-        intent.putExtra("token", token);
-        intent.addFlags(android.content.Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
-        intent.setComponent(receiver);
-        context.sendBroadcast(intent);
+        com.zoffcc.applications.trifa.HelperRelay.apply_notification_token_auto(token);
     }
 }

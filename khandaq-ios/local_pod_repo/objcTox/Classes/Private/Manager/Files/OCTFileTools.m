@@ -13,17 +13,24 @@
     NSParameterAssert(directory);
     NSParameterAssert(fileName);
 
-    NSString *path = [directory stringByAppendingPathComponent:fileName];
+    NSString *safeName = [fileName lastPathComponent];
+    if ((safeName.length == 0) || [safeName isEqualToString:@"."] || [safeName isEqualToString:@".."] ||
+        [safeName containsString:@"/"] || [safeName containsString:@"\\"] || [safeName containsString:@".."])
+    {
+        safeName = @"unsafe_filename";
+    }
+
+    NSString *path = [directory stringByAppendingPathComponent:safeName];
 
     if (! [self fileExistsAtPath:path]) {
         return path;
     }
 
     NSString *base;
-    NSString *pathExtension = [fileName pathExtension];
+    NSString *pathExtension = [safeName pathExtension];
     NSInteger suffix;
 
-    [self getBaseString:&base andSuffix:&suffix fromString:[fileName stringByDeletingPathExtension]];
+    [self getBaseString:&base andSuffix:&suffix fromString:[safeName stringByDeletingPathExtension]];
 
     while (YES) {
         NSString *resultName = [base stringByAppendingFormat:@" %ld", (long)suffix];

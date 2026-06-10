@@ -222,6 +222,7 @@ public class GroupInfoActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         if ((group_id == null) || (group_id.equals("-1")))
         {

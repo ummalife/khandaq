@@ -31,7 +31,7 @@ class AddFriendController: UIViewController {
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
     fileprivate let ownToxAddress: String
 
-    fileprivate var textView: UITextView!
+    fileprivate var idTextField: UITextField!
 
     fileprivate var orTopSpacer: UIView!
     fileprivate var qrCodeBottomSpacer: UIView!
@@ -74,13 +74,13 @@ extension AddFriendController {
             return isAddressString($0)
 
         }, didScanHander: { [unowned self] in
-            self.textView.text = sanitizeAddressInput($0)
+            self.idTextField.text = sanitizeAddressInput($0)
             self.updateSendButton()
         })
     }
 
     @objc func sendButtonPressed() {
-        textView.resignFirstResponder()
+        idTextField.resignFirstResponder()
 
         let messageView = UITextView()
         messageView.text = cachedMessage
@@ -111,7 +111,7 @@ extension AddFriendController {
             let message = messageView.text.isEmpty ? KhandaqBranding.defaultStatusMessage : messageView.text
 
             do {
-                guard let address = normalizeAddressString(self.textView.text) else {
+                guard let address = normalizeAddressString(self.idTextField.text ?? "") else {
                     return
                 }
 
@@ -138,26 +138,31 @@ extension AddFriendController {
     }
 }
 
-extension AddFriendController: UITextViewDelegate {
-    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        if text == "\n" {
+extension AddFriendController: UITextFieldDelegate {
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        if string == "\n" {
             updateSendButton()
-            textView.resignFirstResponder()
+            textField.resignFirstResponder()
             return false
         }
 
-        let merged = (textView.text! as NSString).replacingCharacters(in: range, with: text)
+        let current = textField.text ?? ""
+        guard let textRange = Range(range, in: current) else {
+            return false
+        }
+
+        let merged = current.replacingCharacters(in: textRange, with: string)
         let maxHex = Int(kOCTToxAddressLength)
 
         // Paste / autofill: strip tox:, spaces, then keep up to 76 hex chars.
-        if text.count > 1 {
-            textView.text = String(sanitizeAddressInput(merged).prefix(maxHex))
+        if string.count > 1 {
+            textField.text = String(sanitizeAddressInput(merged).prefix(maxHex))
             updateSendButton()
             return false
         }
 
-        if text.count == 1 {
-            let ch = text.uppercased()
+        if string.count == 1 {
+            let ch = string.uppercased()
             if ch.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789ABCDEF")) == nil {
                 return false
             }
@@ -167,11 +172,16 @@ extension AddFriendController: UITextViewDelegate {
             return false
         }
 
-        updateSendButton()
+        updateSendButton(with: merged)
         return true
     }
 
-    func textViewDidChange(_ textView: UITextView) {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        return true
+    }
+
+    @objc func idTextFieldEditingChanged() {
         updateSendButton()
     }
 }
@@ -186,25 +196,27 @@ private extension AddFriendController {
     }
 
     func createViews() {
-        textView = UITextView()
-        let placeholderstring = NSAttributedString.init(string: String(localized: "add_contact_tox_id_placeholder"))
-        textView.attributedPlaceholder = placeholderstring
-        textView.delegate = self
-        textView.isScrollEnabled = false
-        textView.font = UIFont.systemFont(ofSize: 17)
-        textView.textColor = theme.colorForType(.NormalText)
-        textView.backgroundColor = .clear
-        textView.returnKeyType = .done
-        textView.autocapitalizationType = .allCharacters
-        textView.autocorrectionType = .no
-        textView.smartInsertDeleteType = .no
-        textView.spellCheckingType = .no
-        textView.keyboardType = .asciiCapable
-        textView.layer.cornerRadius = 5.0
-        textView.layer.borderWidth = 0.5
-        textView.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
-        textView.layer.masksToBounds = true
-        view.addSubview(textView)
+        // UITextField avoids UITextView+Placeholder crashes on iOS 17/26 when deleting pasted Tox IDs.
+        idTextField = UITextField()
+        idTextField.placeholder = String(localized: "add_contact_tox_id_placeholder")
+        idTextField.delegate = self
+        idTextField.font = UIFont.systemFont(ofSize: 17)
+        idTextField.textColor = theme.colorForType(.NormalText)
+        idTextField.backgroundColor = .clear
+        idTextField.returnKeyType = .done
+        idTextField.autocapitalizationType = .allCharacters
+        idTextField.autocorrectionType = .no
+        idTextField.spellCheckingType = .no
+        idTextField.keyboardType = .asciiCapable
+        idTextField.clearButtonMode = .whileEditing
+        idTextField.layer.cornerRadius = 5.0
+        idTextField.layer.borderWidth = 0.5
+        idTextField.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
+        idTextField.layer.masksToBounds = true
+        idTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 8, height: 1))
+        idTextField.leftViewMode = .always
+        idTextField.addTarget(self, action: #selector(idTextFieldEditingChanged), for: .editingChanged)
+        view.addSubview(idTextField)
 
         orTopSpacer = createSpacer()
         qrCodeBottomSpacer = createSpacer()
@@ -231,15 +243,15 @@ private extension AddFriendController {
     }
 
     func installConstraints() {
-        textView.snp.makeConstraints {
+        idTextField.snp.makeConstraints {
             $0.top.equalTo(view).offset(Constants.TextViewTopOffset)
             $0.leading.equalTo(view).offset(Constants.TextViewXOffset)
             $0.trailing.equalTo(view).offset(-Constants.TextViewXOffset)
-            $0.bottom.equalTo(view.snp.centerY)
+            $0.height.equalTo(44)
         }
 
         orTopSpacer.snp.makeConstraints {
-            $0.top.equalTo(textView.snp.bottom)
+            $0.top.equalTo(idTextField.snp.bottom)
         }
 
         orLabel.snp.makeConstraints {
@@ -259,8 +271,9 @@ private extension AddFriendController {
         }
     }
 
-    func updateSendButton() {
-        navigationItem.rightBarButtonItem!.isEnabled = isAddressString(textView.text)
+    func updateSendButton(with text: String? = nil) {
+        let value = text ?? idTextField.text ?? ""
+        navigationItem.rightBarButtonItem?.isEnabled = isAddressString(value)
     }
 
     func isOwnToxAddress(_ address: String) -> Bool {

@@ -534,21 +534,22 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
             img_avatar.setImageDrawable(smiley_face);
 
-            img_avatar.setOnClickListener(new View.OnClickListener()
+            final String peer_pubkey_for_profile = message__tox_peerpubkey;
+            final View.OnClickListener open_peer_profile_listener = new View.OnClickListener()
             {
                 @Override
                 public void onClick(final View v)
                 {
                     if (!is_selected)
                     {
-                        Intent intent = new Intent(v.getContext(),
-                                                   GroupPeerInfoActivity.class);
-                        intent.putExtra("peer_pubkey", m.tox_group_peer_pubkey);
-                        intent.putExtra("group_id", m.group_identifier);
-                        v.getContext().startActivity(intent);
+                        GroupMessageListActivity.open_group_peer_info_activity(v.getContext(),
+                                peer_pubkey_for_profile, m.group_identifier);
                     }
                 }
-            });
+            };
+            img_avatar.setOnClickListener(open_peer_profile_listener);
+            layout_peer_name_container.setOnClickListener(open_peer_profile_listener);
+            peer_name_text.setOnClickListener(open_peer_profile_listener);
 
             if (m.was_synced)
             {

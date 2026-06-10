@@ -12,7 +12,7 @@ if [[ ! -f "$REGISTRY" ]]; then
 fi
 
 python3 - "$REGISTRY" "$TIMEOUT" <<'PY'
-import json, socket, subprocess, sys, time
+import json, socket, sys, time
 
 registry_path, timeout_s = sys.argv[1], int(sys.argv[2])
 data = json.load(open(registry_path))
@@ -21,7 +21,18 @@ if not nodes:
     print("No khandaq_owned_nodes in registry")
     sys.exit(1)
 
+HOST_RE = __import__("re").compile(
+    r"^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|"
+    r"(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}|"
+    r"[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*)$"
+)
+
+def valid_host(host):
+    return isinstance(host, str) and bool(HOST_RE.match(host))
+
 def tcp_ok(host, port, timeout):
+    if not valid_host(host):
+        return False
     try:
         s = socket.create_connection((host, port), timeout)
         s.close()
@@ -30,12 +41,14 @@ def tcp_ok(host, port, timeout):
         return False
 
 def udp_probe(host, port):
+    if not valid_host(host):
+        return False
     try:
-        r = subprocess.run(
-            ["bash", "-c", f"nc -z -u -w{timeout_s} {host} {port} 2>/dev/null"],
-            capture_output=True, timeout=timeout_s + 2,
-        )
-        return r.returncode == 0
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(timeout_s)
+        s.sendto(b"\x00", (host, port))
+        s.close()
+        return True
     except Exception:
         return False
 

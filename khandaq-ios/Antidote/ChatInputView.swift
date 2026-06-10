@@ -104,16 +104,14 @@ extension ChatInputView: UITextViewDelegate {
     }
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        // get the current text, or use an empty string if that failed
         let currentText = textView.text ?? ""
+        let nsCurrent = currentText as NSString
 
-        // attempt to read the range they are trying to change, or exit if we can't
-        guard let stringRange = Range(range, in: currentText) else { return false }
+        guard NSMaxRange(range) <= nsCurrent.length else {
+            return true
+        }
 
-        // add their new text to the existing text
-        let updatedText = currentText.replacingCharacters(in: stringRange, with: text)
-
-        // make sure the result is under MAX_TEXT_INPUT_CHARS characters
+        let updatedText = nsCurrent.replacingCharacters(in: range, with: text)
         return updatedText.count <= Constants.MAX_TEXT_INPUT_CHARS
     }
 }

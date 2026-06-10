@@ -1019,6 +1019,101 @@ public class HelperFriend
         // add friend ---------------
     }
 
+    static boolean is_own_public_key(final String friend_pubkey)
+    {
+        if ((friend_pubkey == null) || (friend_pubkey.trim().isEmpty()) || (global_my_toxid == null) ||
+            (global_my_toxid.length() < (TOX_PUBLIC_KEY_SIZE * 2)))
+        {
+            return false;
+        }
+
+        final String own_pubkey = global_my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
+        return friend_pubkey.trim().equalsIgnoreCase(own_pubkey);
+    }
+
+    static String self_contact_display_name()
+    {
+        if ((global_my_name != null) && (!global_my_name.trim().isEmpty()))
+        {
+            return global_my_name.trim() + " (" + context_s.getString(R.string.add_self_contact_suffix) + ")";
+        }
+
+        return context_s.getString(R.string.add_self_contact_name);
+    }
+
+    static boolean add_self_as_friend()
+    {
+        final String my_toxid = MainActivity.get_my_toxid();
+        if ((my_toxid == null) || (my_toxid.length() < ((TOX_PUBLIC_KEY_SIZE * 2) + 12)))
+        {
+            display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+            return false;
+        }
+
+        final String my_pubkey = my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2)).toUpperCase(Locale.ROOT);
+
+        if (lookup_friendlist_by_pubkey(my_pubkey) != null)
+        {
+            display_toast(context_s.getString(R.string.add_self_already_in_contacts), false, 300);
+            return true;
+        }
+
+        long friendnum = MainActivity.tox_friend_add_norequest(my_pubkey);
+        if ((friendnum != UINT32_MAX_JAVA) && (friendnum >= 0))
+        {
+            HelperGeneric.update_savedata_file_wrapper();
+            final FriendList f = new FriendList();
+            f.tox_public_key_string = my_pubkey;
+            f.name = self_contact_display_name();
+            f.TOX_USER_STATUS = 0;
+            f.TOX_CONNECTION = 0;
+            f.TOX_CONNECTION_on_off = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
+            f.avatar_filename = null;
+            f.avatar_pathname = null;
+            f.capabilities = 0;
+            f.added_timestamp = System.currentTimeMillis();
+
+            try
+            {
+                insert_into_friendlist_db(f);
+            }
+            catch (Exception e)
+            {
+                display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+                return false;
+            }
+
+            update_single_friend_in_friendlist_view(f);
+            display_toast(context_s.getString(R.string.add_self_success), false, 300);
+            return true;
+        }
+
+        final FriendList f = new FriendList();
+        f.tox_public_key_string = my_pubkey;
+        f.name = self_contact_display_name();
+        f.TOX_USER_STATUS = 0;
+        f.TOX_CONNECTION = 0;
+        f.TOX_CONNECTION_on_off = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
+        f.avatar_filename = null;
+        f.avatar_pathname = null;
+        f.capabilities = 0;
+        f.added_timestamp = System.currentTimeMillis();
+
+        try
+        {
+            insert_into_friendlist_db(f);
+        }
+        catch (Exception e)
+        {
+            display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+            return false;
+        }
+
+        update_single_friend_in_friendlist_view(f);
+        display_toast(context_s.getString(R.string.add_self_success), false, 300);
+        return true;
+    }
+
     static void add_friend_real(String friend_tox_id)
     {
         // Log.i(TAG, "add_friend_real:add friend ID:" + friend_tox_id);
@@ -1034,6 +1129,12 @@ public class HelperFriend
         {
             Log.i(TAG, "add_friend_real:invalid friend ID");
             display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+            return;
+        }
+
+        if (is_own_public_key(friend_tox_id.substring(0, (TOX_PUBLIC_KEY_SIZE * 2))))
+        {
+            add_self_as_friend();
             return;
         }
 
@@ -1709,11 +1810,10 @@ public class HelperFriend
         String pushurl_to_call = pushurl_for_friend;
         try
         {
-            if ((global_my_toxid != null) && (global_my_toxid.length() >= (TOX_PUBLIC_KEY_SIZE * 2)) &&
-                (!pushurl_for_friend.contains("from=")))
+            if ((global_my_toxid != null) && (global_my_toxid.length() >= (TOX_PUBLIC_KEY_SIZE * 2)))
             {
                 final String sender_pubkey = global_my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
-                pushurl_to_call = pushurl_for_friend + "&from=" + sender_pubkey;
+                pushurl_to_call = org.khandaq.messenger.KhandaqPush.withWakeParams(pushurl_for_friend, sender_pubkey);
             }
         }
         catch (Exception ignored)

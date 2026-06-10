@@ -193,6 +193,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         button_iobrowser_start.setOnClickListener(new View.OnClickListener()
         {
@@ -1061,7 +1062,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                                     bn2.key_hex = nl_entry.getPublicKey().toUpperCase();
                                     bn2.udp_node = true;
                                     bn2.num = num_udp;
-                                    if ((bn2.ip != null) && (!bn2.ip.equalsIgnoreCase("none")) && (bn2.port > 0) && (bn2.key_hex != null))
+                                    if (BootstrapHostValidator.isValidBootstrapEntry(bn2.ip, bn2.port, bn2.key_hex))
                                     {
                                         orma.insertIntoBootstrapNodeEntryDB(bn2);
                                         Log.i(TAG, "add UDP node:" + bn2);
@@ -1074,7 +1075,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                                     bn2_ip6.key_hex = nl_entry.getPublicKey().toUpperCase();
                                     bn2_ip6.udp_node = true;
                                     bn2_ip6.num = num_udp;
-                                    if ((!bn2_ip6.ip.equalsIgnoreCase("-")) && (bn2_ip6.port > 0) && (bn2_ip6.key_hex != null))
+                                    if (BootstrapHostValidator.isValidBootstrapEntry(bn2_ip6.ip, bn2_ip6.port, bn2_ip6.key_hex))
                                     {
                                         orma.insertIntoBootstrapNodeEntryDB(bn2_ip6);
                                         Log.i(TAG, "add UDP ipv6 node:" + bn2_ip6);
@@ -1102,7 +1103,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                                         bn2.port = nl_entry.getTcpPorts().get(k);
                                         bn2.key_hex = nl_entry.getPublicKey().toUpperCase();
                                         bn2.udp_node = false;
-                                        if ((bn2.ip != null) && (!bn2.ip.equalsIgnoreCase("none")) && (bn2.port > 0) && (bn2.key_hex != null))
+                                        if (BootstrapHostValidator.isValidBootstrapEntry(bn2.ip, bn2.port, bn2.key_hex))
                                         {
                                             for (int p=0;p<tcp_ports_count;p++)
                                             {
@@ -1120,7 +1121,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                                         bn2_ip6.key_hex = nl_entry.getPublicKey().toUpperCase();
                                         bn2_ip6.udp_node = false;
                                         bn2_ip6.num = num_tcp;
-                                        if ((!bn2_ip6.ip.equalsIgnoreCase("-")) && (tcp_ports_count_ip6 > 0) && (bn2_ip6.key_hex != null))
+                                        if (BootstrapHostValidator.isValidBootstrapEntry(bn2_ip6.ip, bn2_ip6.port, bn2_ip6.key_hex) && (tcp_ports_count_ip6 > 0))
                                         {
                                             for (int p=0;p<tcp_ports_count_ip6;p++)
                                             {

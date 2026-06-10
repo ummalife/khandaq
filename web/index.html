@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Khandaq Messenger — Decentralized Encrypted Chat on Tox</title>
+  <meta name="description" content="Download Khandaq Messenger for Android, iOS, Windows, macOS, and Linux. Open-source, peer-to-peer messaging with end-to-end encryption. No phone number required.">
+  <meta name="keywords" content="Khandaq, Tox messenger, encrypted chat, decentralized messenger, open source, TestFlight, Android APK, privacy">
+  <meta name="author" content="Khandaq">
+  <link rel="canonical" href="https://khandaq.org/">
+  <meta name="robots" content="index, follow">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://khandaq.org/">
+  <meta property="og:title" content="Khandaq Messenger — Decentralized Encrypted Chat">
+  <meta property="og:description" content="Open-source Tox clients for every platform. No central message server. End-to-end encrypted.">
+  <meta property="og:image" content="https://khandaq.org/assets/pwa-512.png">
+  <meta property="og:site_name" content="Khandaq Messenger">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Khandaq Messenger">
+  <meta name="twitter:description" content="Decentralized encrypted messenger built on the Tox protocol. Download for all platforms.">
+  <meta name="twitter:image" content="https://khandaq.org/assets/pwa-512.png">
+
+  <meta name="theme-color" content="#0b0f0e">
+  <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+  <link rel="icon" href="assets/favicon-16.png" sizes="16x16">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/">
+        <img src="assets/logo.svg" alt="" width="36" height="36">
+        <span>Khandaq</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="#start">Get started</a>
+        <a href="#open-source">Source</a>
+        <a class="nav-cta" href="#download">Get the app</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero container">
+      <div class="hero-text">
+        <p class="eyebrow">Public beta · Tox network</p>
+        <h1>Private messaging without a central server</h1>
+        <p class="lead">
+          Khandaq Messenger is an open-source client for the <a href="https://tox.chat">Tox</a> protocol.
+          Messages are end-to-end encrypted and routed peer-to-peer. No phone number, no account database, no message store on our servers.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#download">Download for your device</a>
+          <a class="btn btn-secondary" href="https://github.com/ummalife/khandaq" rel="noopener noreferrer">View on GitHub</a>
+        </div>
+        <div class="hero-badges">
+          <span class="badge">Android · iOS · Windows · macOS · Linux</span>
+          <span class="badge">Open source</span>
+          <span class="badge">E2E encrypted</span>
+        </div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="hero-logo-wrap">
+          <img src="assets/logo.svg" alt="" class="hero-logo">
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section container">
+      <h2 class="section-title">Why Khandaq</h2>
+      <p class="section-lead">A branded, maintained fork of proven Tox clients — with Khandaq bootstrap nodes and a privacy-preserving push wake relay for mobile.</p>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3>No phone number</h3>
+          <p>Sign up with a Tox ID only. Share your ID as text or QR code to add contacts.</p>
+        </article>
+        <article class="feature-card">
+          <h3>End-to-end encryption</h3>
+          <p>Message content is encrypted by the Tox protocol. Khandaq servers never see your chats.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Truly decentralized</h3>
+          <p>No central message server. Clients connect to the public Tox DHT plus documented Khandaq bootstrap nodes.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Transparent &amp; auditable</h3>
+          <p>Full source code on GitHub. Public endpoints, checksums, and security policy are documented in the repo.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="download" class="section container">
+      <h2 class="section-title">Download</h2>
+      <p class="section-lead">Pick your platform. Verify downloads with SHA-256 checksums before installing.</p>
+
+      <div class="checksum-box">
+        <strong>Verify integrity:</strong>
+        <a id="sha-github" href="#">SHA256SUMS.txt on GitHub</a> or
+        <a id="sha-mirror" href="/downloads/SHA256SUMS.txt">mirror on khandaq.org</a>.
+        <br>
+        <code>shasum -a 256 -c SHA256SUMS.txt</code>
+      </div>
+
+      <div class="download-grid">
+        <article class="card">
+          <div class="card-icon android" aria-hidden="true"></div>
+          <h3>Android</h3>
+          <p>Sideload APK. Android 8+. Package <code>org.khandaq.messenger</code>.</p>
+          <a class="btn btn-primary dl-android" href="#">Download APK</a>
+          <span class="meta">Beta 0.2.3 · production-signed · GPL-3.0</span>
+        </article>
+
+        <article class="card">
+          <div class="card-icon ios" aria-hidden="true"></div>
+          <h3>iOS</h3>
+          <p>Install via Apple TestFlight. Requires iOS 16+. Not distributed as a public IPA.</p>
+          <a class="btn btn-primary" href="https://testflight.apple.com/join/4ppS8ZN5" rel="noopener noreferrer">Open TestFlight</a>
+          <span class="meta">Beta 1.4.28 · build 142821 · MPL-2.0</span>
+        </article>
+
+        <article class="card">
+          <div class="card-icon windows" aria-hidden="true"></div>
+          <h3>Windows</h3>
+          <p>x64 installer for Windows 10 and 11. Portable zip also on GitHub Releases.</p>
+          <a class="btn btn-primary dl-windows" href="#">Download installer</a>
+          <span class="meta">Beta 1.17.6 · GPL-3.0</span>
+        </article>
+
+        <article class="card">
+          <div class="card-icon macos" aria-hidden="true"></div>
+          <h3>macOS</h3>
+          <p><code>khandaq.app</code> in a zip archive. Apple Silicon and Intel builds in one bundle.</p>
+          <a class="btn btn-primary dl-macos" href="#">Download .zip</a>
+          <span class="meta">Beta 1.17.6 · GPL-3.0</span>
+        </article>
+
+        <article class="card">
+          <div class="card-icon linux" aria-hidden="true"></div>
+          <h3>Linux</h3>
+          <p>Portable x86_64 tarball with bundled libraries. Works on Arch, Fedora, Ubuntu, Debian, and more.</p>
+          <a class="btn btn-primary dl-linux" href="#">Download .tar.gz</a>
+          <span class="meta">Beta 1.17.6 · GPL-3.0</span>
+        </article>
+      </div>
+
+      <p class="section-lead" style="margin-top:1.25rem;font-size:0.9rem;">
+        Primary hosting: <a href="https://github.com/ummalife/khandaq/releases/latest">GitHub Releases</a>.
+        Direct mirror: <a href="/downloads/">khandaq.org/downloads/</a>.
+      </p>
+    </section>
+
+    <section id="start" class="section container">
+      <h2 class="section-title">Get started in three steps</h2>
+      <div class="split-grid">
+        <div class="panel">
+          <ol>
+            <li><strong>Install</strong> the client for your platform and create a profile. Write down your password — it cannot be recovered.</li>
+            <li><strong>Share your Tox ID</strong> with someone you trust (copy from profile or show QR).</li>
+            <li><strong>Add a contact</strong> by ID or QR, then send a test message.</li>
+          </ol>
+        </div>
+        <div class="panel">
+          <h3>Recent beta improvements</h3>
+          <ul>
+            <li><strong>Android:</strong> profile bar on home screen, tap chat header for contact info, group info from header, QR from gallery, password visibility toggle, clearer group role errors.</li>
+            <li><strong>iOS:</strong> stable add-contact field, safer message send flow, video attach fix, TestFlight pipeline.</li>
+            <li><strong>All platforms:</strong> open-source release on GitHub with documented network endpoints.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container">
+      <h2 class="section-title">Installation notes</h2>
+      <details class="install">
+        <summary>Android — sideload APK</summary>
+        <ol>
+          <li>Download the APK and verify SHA-256.</li>
+          <li>Allow installation from your browser (unknown sources / install unknown apps).</li>
+          <li>Open the APK and confirm install.</li>
+          <li><strong>Upgrading from old debug builds:</strong> export your Tox profile → uninstall the old app → install the new APK → import the profile (signing key changed).</li>
+        </ol>
+      </details>
+      <details class="install">
+        <summary>Windows — SmartScreen warning</summary>
+        <ol>
+          <li>If Windows shows a protection warning, click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
+          <li>The beta installer is not Authenticode-signed yet.</li>
+          <li>If antivirus blocks the file, verify SHA-256 and add an exception.</li>
+        </ol>
+      </details>
+      <details class="install">
+        <summary>macOS — Gatekeeper</summary>
+        <ol>
+          <li>Unzip and move <code>khandaq.app</code> to Applications.</li>
+          <li>If blocked: <code>xattr -cr /Applications/khandaq.app</code></li>
+          <li>Or right-click the app → <strong>Open</strong> → confirm in the dialog.</li>
+        </ol>
+      </details>
+      <details class="install">
+        <summary>Linux — portable bundle</summary>
+        <ol>
+          <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
+          <li>Keep <code>khandaq</code>, <code>khandaq.bin</code>, and <code>lib/</code> together — see <code>INSTALL.txt</code> in the archive.</li>
+          <li>Recommended: install under <code>~/.local/share/khandaq/</code> and symlink <code>~/.local/bin/khandaq</code>.</li>
+        </ol>
+      </details>
+      <details class="install">
+        <summary>iOS — TestFlight</summary>
+        <ol>
+          <li>Install <strong>TestFlight</strong> from the App Store.</li>
+          <li>Open the <a href="https://testflight.apple.com/join/4ppS8ZN5">public TestFlight link</a> on your iPhone or iPad.</li>
+          <li>Accept the invite and install Khandaq. Updates arrive through TestFlight.</li>
+        </ol>
+      </details>
+    </section>
+
+    <section id="open-source" class="section container">
+      <h2 class="section-title">Open source &amp; transparency</h2>
+      <p class="section-lead">Khandaq is a fork and rebrand of established Tox clients. We keep wire compatibility with the public Tox network.</p>
+      <div class="split-grid">
+        <div class="panel">
+          <h3>Repository &amp; releases</h3>
+          <div class="link-row">
+            <a class="link-chip" href="https://github.com/ummalife/khandaq" rel="noopener noreferrer">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+              GitHub repo
+            </a>
+            <a class="link-chip" href="https://github.com/ummalife/khandaq/releases/latest" rel="noopener noreferrer">Latest release</a>
+            <a class="link-chip" href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md" rel="noopener noreferrer">Security policy</a>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Public infrastructure</h3>
+          <ul>
+            <li><a href="https://bootstrap.khandaq.org/nodes.json">bootstrap.khandaq.org</a> — node registry</li>
+            <li><a href="https://push.khandaq.org">push.khandaq.org</a> — wake-only push relay (no message body)</li>
+            <li>Desktop base: qTox · Android: TRIfA · iOS: Antidote (Zoxcore fork)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container">
+      <h2 class="section-title">FAQ</h2>
+      <details class="install">
+        <summary>Is Khandaq the same as Matrix / Element?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">No. Khandaq uses the <strong>Tox</strong> protocol (peer-to-peer, no homeserver). This website now hosts the Khandaq Messenger download page.</p>
+      </details>
+      <details class="install">
+        <summary>Do you store my messages?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">No. Message content stays on your devices. Khandaq-operated services only provide bootstrap discovery and optional push <em>wake</em> notifications — documented in the <a href="https://github.com/ummalife/khandaq/blob/master/docs/PUSH_RELAY.md">repository</a>.</p>
+      </details>
+      <details class="install">
+        <summary>How do I report a bug?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">Open an issue on <a href="https://github.com/ummalife/khandaq/issues">GitHub Issues</a> or use the security advisory flow for vulnerabilities (<a href="https://github.com/ummalife/khandaq/security/advisories/new">private report</a>).</p>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <h4>Khandaq Messenger</h4>
+        <p>Decentralized encrypted messaging on the Tox protocol. Public beta — your feedback helps us ship a stable release.</p>
+      </div>
+      <div>
+        <h4>Download</h4>
+        <ul>
+          <li><a href="#download">All platforms</a></li>
+          <li><a href="/downloads/khandaq-android.apk">Android APK mirror</a></li>
+          <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iOS TestFlight</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
+          <li><a href="https://github.com/ummalife/khandaq/blob/master/README.md">Documentation</a></li>
+          <li><a href="https://github.com/ummalife/khandaq/blob/master/SECURITY.md">Security</a></li>
+          <li><a href="https://tox.chat">Tox protocol</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="copyright">© Khandaq · <a href="https://khandaq.org/">khandaq.org</a> · Open source · Tox-compatible</p>
+  </footer>
+
+  <script>
+    (function () {
+      var release = 'v0.2.0-beta.1';
+      var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
+      var mirror = '/downloads/';
+
+      document.getElementById('sha-github').href = gh + 'SHA256SUMS.txt';
+      document.getElementById('sha-mirror').href = mirror + 'SHA256SUMS.txt';
+
+      var links = {
+        '.dl-android': ['khandaq-android.apk', gh, mirror],
+        '.dl-windows': ['khandaq-windows-installer.exe', gh, mirror],
+        '.dl-macos': ['khandaq-macos.zip', gh, mirror],
+        '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror]
+      };
+
+      Object.keys(links).forEach(function (sel) {
+        var el = document.querySelector(sel);
+        if (!el) return;
+        var file = links[sel][0];
+        el.href = links[sel][1] + file;
+        el.setAttribute('data-mirror', links[sel][2] + file);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -10,12 +10,23 @@ TIMEOUT="${TIMEOUT:-10}"
 mkdir -p "$(dirname "$OUT")"
 
 python3 - "$REGISTRY" "$OUT" "$TIMEOUT" <<'PY'
-import json, subprocess, sys, time
+import json, re, subprocess, sys, time
+
+HOST_RE = re.compile(
+    r"^(?:[0-9]{1,3}(?:\.[0-9]{1,3}){3}|"
+    r"(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}|"
+    r"[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*)$"
+)
+
+def valid_host(host):
+    return isinstance(host, str) and bool(HOST_RE.match(host)) and not host.startswith("-")
 
 registry_path, out_path, timeout = sys.argv[1], sys.argv[2], int(sys.argv[3])
 hosts = {}
 for n in json.load(open(registry_path)).get("khandaq_owned_nodes", []):
-    hosts[n["id"]] = n.get("ipv4") or n["host"]
+    host = n.get("ipv4") or n.get("host")
+    if valid_host(host):
+        hosts[n["id"]] = host
 
 ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 for node_id, host in hosts.items():
@@ -23,7 +34,7 @@ for node_id, host in hosts.items():
     try:
         cmd = [
             "ssh", "-o", "BatchMode=yes", "-o", f"ConnectTimeout={timeout}",
-            f"root@{host}",
+            "--", f"root@{host}",
             "bash -lc 'echo CPU_LOAD=$(cat /proc/loadavg); "
             "echo MEM_TOTAL_KB=$(grep MemTotal /proc/meminfo | awk \"{print \\$2}\"); "
             "echo MEM_AVAIL_KB=$(grep MemAvailable /proc/meminfo | awk \"{print \\$2}\"); "

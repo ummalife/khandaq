@@ -173,6 +173,8 @@ import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages_incoming_file;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages_text_only;
 import static com.zoffcc.applications.trifa.HelperGroup.get_group_display_name;
+import static com.zoffcc.applications.trifa.HelperGroup.group_send_failure_reason;
+import static com.zoffcc.applications.trifa.HelperGroup.group_send_precheck_failure_reason;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peerlist;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_invite_friend;
@@ -208,6 +210,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.NGC_NEW_PEERS_TIMEDELTA
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NOTIFICATION_EDIT_ACTION.NOTIFICATION_EDIT_ACTION_REMOVE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TEXT_QUOTE_STRING_1;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TEXT_QUOTE_STRING_2;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_for_battery_savings_ts;
@@ -424,6 +427,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         final Drawable drawer_header_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group).color(
@@ -980,6 +984,12 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         ml_icon.setImageResource(R.drawable.circle_red);
         set_group_connection_status_icon();
+
+        final View groupHeaderTap = findViewById(R.id.ml_header_group_info_tap);
+        if (groupHeaderTap != null)
+        {
+            groupHeaderTap.setOnClickListener(v -> open_group_info_activity());
+        }
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         messageSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener()
@@ -2199,6 +2209,50 @@ public class GroupMessageListActivity extends AppCompatActivity
         startActivityForResult(intent, MEDIAPICK_ID_001);
     }
 
+    void open_group_info_activity()
+    {
+        try
+        {
+            if ((group_id == null) || (group_id.equals("-1")))
+            {
+                return;
+            }
+
+            final Intent intent = new Intent(this, GroupInfoActivity.class);
+            intent.putExtra("group_id", group_id);
+            startActivity(intent);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    public static void open_group_peer_info_activity(final Context context, final String peer_pubkey,
+                                                     final String group_identifier)
+    {
+        try
+        {
+            if ((context == null) || (peer_pubkey == null) || (group_identifier == null))
+            {
+                return;
+            }
+
+            if (peer_pubkey.equals(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY) || peer_pubkey.equals("-1"))
+            {
+                return;
+            }
+
+            final Intent intent = new Intent(context, GroupPeerInfoActivity.class);
+            intent.putExtra("peer_pubkey", peer_pubkey);
+            intent.putExtra("group_id", group_identifier);
+            context.startActivity(intent);
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
     synchronized public void send_message_onclick(View view)
     {
         // Log.i(TAG,"send_message_onclick:---start");
@@ -2215,9 +2269,20 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return;
             }
 
-            // send typed message to friend
-            msg = ml_new_group_message.getText().toString().substring(0, (int) Math.min(tox_max_message_length(),
-                                                                                        ml_new_group_message.getText().toString().length()));
+            final String raw_msg = ml_new_group_message.getText().toString().trim();
+            if (raw_msg.isEmpty())
+            {
+                return;
+            }
+
+            msg = raw_msg.substring(0, (int) Math.min(tox_max_message_length(), raw_msg.length()));
+
+            final String send_block_reason = group_send_precheck_failure_reason(group_id);
+            if (send_block_reason != null)
+            {
+                display_toast(send_block_reason, true, 400);
+                return;
+            }
 
             try
             {
@@ -2271,6 +2336,10 @@ public class GroupMessageListActivity extends AppCompatActivity
                         // TODO: m.msg_id_hash = hex(peerpubkey + message_id)
                         insert_into_group_message_db(m, true);
                         ml_new_group_message.setText("");
+                    }
+                    else
+                    {
+                        display_toast(group_send_failure_reason(message_id), true, 400);
                     }
                 }
             }

@@ -81,7 +81,7 @@
                     android:id="@+id/mynick_edittext"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:imeOptions="flagNoPersonalizedLearning"
+                    android:imeOptions="flagNoPersonalizedLearning|actionNext"
                     android:inputType="text"
                     android:maxLines="1"
                     android:singleLine="true"
@@ -93,19 +93,38 @@
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="20dp"
                 android:layout_marginRight="20dp"
-                android:layout_marginBottom="20dp"
+                android:layout_marginBottom="12dp"
                 android:hint="Status">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/mystatus_message_edittext"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:imeOptions="flagNoPersonalizedLearning"
+                    android:imeOptions="flagNoPersonalizedLearning|actionDone"
                     android:inputType="text"
                     android:maxLines="1"
                     android:singleLine="true"
                     tools:text="@tools:sample/lorem" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <Button
+                android:id="@+id/profile_save_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:layout_marginRight="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/profile_save_button" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:layout_marginRight="20dp"
+                android:layout_marginBottom="20dp"
+                android:text="@string/profile_save_hint"
+                android:textColor="@color/friend_list_text_color"
+                android:textSize="13sp" />
 
             <Button
                 android:id="@+id/remove_relay_button"

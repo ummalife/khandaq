@@ -52,6 +52,17 @@ class ProfileDetailsController: StaticTableController {
         updateModel()
 
         title = String(localized: "profile_details")
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(profileSettingsDidChange),
+            name: .khandaqProfileSettingsDidChange,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
@@ -124,15 +135,15 @@ private extension ProfileDetailsController {
     func pinEnabledValueChanged(_ on: Bool) {
         if on {
             delegate?.profileDetailsControllerSetPin(self)
-        }
-        else {
-            let settings = toxManager.objects.getProfileSettings()
-            settings.unlockPinCode = nil
-            toxManager.objects.saveProfileSettings(settings)
+            // UISwitch already shows ON; sync model after PIN flow completes (see notification).
+            return
         }
 
-        updateModel()
-        reloadTableView()
+        let settings = toxManager.objects.getProfileSettings()
+        settings.unlockPinCode = nil
+        settings.useTouchID = false
+        toxManager.objects.saveProfileSettings(settings)
+        notifyProfileSettingsDidChange()
     }
 
     func changeLockTimeout(_: StaticTableBaseCell) {
@@ -141,8 +152,48 @@ private extension ProfileDetailsController {
 
     func touchIdEnabledValueChanged(_ on: Bool) {
         let settings = toxManager.objects.getProfileSettings()
-        settings.useTouchID = on
+        guard settings.unlockPinCode != nil else {
+            notifyProfileSettingsDidChange()
+            return
+        }
+
+        if on {
+            let context = LAContext()
+            var error: NSError?
+            guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+                notifyProfileSettingsDidChange()
+                return
+            }
+
+            context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: String(localized: "pin_touch_id_description")
+            ) { [weak self] success, _ in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    let settings = self.toxManager.objects.getProfileSettings()
+                    settings.useTouchID = success
+                    self.toxManager.objects.saveProfileSettings(settings)
+                    self.notifyProfileSettingsDidChange()
+                }
+            }
+            return
+        }
+
+        settings.useTouchID = false
         toxManager.objects.saveProfileSettings(settings)
+        notifyProfileSettingsDidChange()
+    }
+
+    @objc func profileSettingsDidChange() {
+        updateModel()
+        reloadTableView()
+    }
+
+    func notifyProfileSettingsDidChange() {
+        updateModel()
+        reloadTableView()
+        NotificationCenter.default.post(name: .khandaqProfileSettingsDidChange, object: nil)
     }
 
     func changePassword(_: StaticTableBaseCell) {

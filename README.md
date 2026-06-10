@@ -19,7 +19,7 @@ Open-source, decentralized messenger built on the Tox protocol. Khandaq adds bra
 | [`config/`](config/) | Public network config (bootstrap registry, push relay URLs) |
 | [`infra/`](infra/) | Bootstrap node & push relay deployment templates (Docker, nginx) |
 | [`scripts/`](scripts/) | Build, bundle, and deploy automation |
-| [`web/messenger/`](web/messenger/) | Static download landing page |
+| [`web/`](web/) | Static project & download landing page |
 | [`docs/`](docs/) | Public documentation (English) |
 
 Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure provides bootstrap discovery and push **wake** notifications (no message body; optional sender public key for chat routing — see [docs/PUSH_RELAY.md](docs/PUSH_RELAY.md)).

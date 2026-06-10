@@ -113,6 +113,7 @@ public class FriendInfoActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         mytoxid.setText("*error*");
         mynick.setText("*error*");

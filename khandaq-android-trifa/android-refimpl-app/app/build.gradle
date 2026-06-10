@@ -254,8 +254,8 @@ android {
         minSdkVersion 21
         //noinspection OldTargetApi
         targetSdkVersion 33
-        versionCode 10293
-        versionName "0.2.3"
+        versionCode 10295
+        versionName "0.2.5"
 
         renderscriptTargetApi 21
         renderscriptSupportModeEnabled true
@@ -267,6 +267,8 @@ android {
         vectorDrawables.useSupportLibrary = true
 
         buildConfigField "String", "GitHash", "\"${getGitHash()}\""
+        def pushAuthSecret = System.getenv("KHANDAQ_PUSH_AUTH_SECRET") ?: ""
+        buildConfigField "String", "PUSH_RELAY_AUTH_SECRET", "\"${pushAuthSecret}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments useTestStorageService: 'true'
     }

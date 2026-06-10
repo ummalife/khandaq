@@ -30,6 +30,7 @@
     <string name="conference_audio_activity_name">Audio Conference</string>
     <string name="conference_audio_activity_player_name">Audio Conference Player</string>
 
+    <string name="password_toggle_content_description">Show or hide password</string>
     <string name="set_password_message_empty">Password is empty</string>
     <string name="set_password_message_password_invalid">Use at least 8 characters with letters and numbers</string>
     <string name="set_password_message_password_dont_match">Passwords do NOT match</string>
@@ -388,6 +389,14 @@
     <string name="add_public_group_activity_help">Create a new Public Group with a given Group Name.</string>
     <string name="join_public_group_activity_help">Join a Public Group with the given Group ID.</string>
     <string name="join_public_group_activity_warning">Warning:\njoining a Public Group via Group ID is not reliably working yet!!</string>
+    <string name="group_send_observer_role">You are an observer in this group and cannot send messages. Ask a moderator to change your role to User.</string>
+    <string name="group_send_not_connected">Group is not connected yet. Wait for the green status indicator and try again.</string>
+    <string name="group_send_group_not_found">This group is not active in Tox. Leave and re-join the group.</string>
+    <string name="group_send_left_group">You left this group.</string>
+    <string name="group_send_too_long">Message is too long.</string>
+    <string name="group_send_empty">Message is empty.</string>
+    <string name="group_send_bad_type">Unsupported message type.</string>
+    <string name="group_send_failed">Failed to send group message.</string>
     <string name="add_group_activity_add">Create Group</string>
     <string name="join_group_activity_join">Join Group</string>
     <string name="cancel">Cancel</string>
@@ -452,9 +461,16 @@
     <string name="MainActivity_setup_push_tip_text">You have not installed the Push Notification App and setup Push Notification. Khandaq will fully work without Push Notification, but it needs to be online constantly to receive Messages.With Push Notification you can save Battery and Internetbandwidth.\n\nDo you want to see how you can Setup Push Notification now?</string>
 
     <string name="MessageListActivity_longpress_to_record_audiomsg">long press to record an Audio Message</string>
+    <string name="message_list_open_friend_profile">Open contact profile</string>
+    <string name="main_profile_open">Open my profile</string>
+    <string name="group_open_group_info">Open group info</string>
 
     <string name="ProfileActivity_delete_avatar_dialog_title">Remove Profile Picture</string>
     <string name="ProfileActivity_delete_avatar_dialog_text">Do you want to remove your Profile Picture?</string>
+    <string name="profile_save_button">Save profile</string>
+    <string name="profile_saved_toast">Profile saved</string>
+    <string name="profile_avatar_saved_toast">Profile picture updated</string>
+    <string name="profile_save_hint">Photo saves automatically when selected. Tap Save to apply nickname and status.</string>
 
     <string name="Aboutpage_0">Khandaq Crashlog</string>
     <string name="Aboutpage_2">send Crash report via Email</string>
@@ -499,8 +515,15 @@
     <string name="layout___group_name">Group Name</string>
     <string name="layout___group_id">Group ID</string>
     <string name="layout___scan_qr_code">scan QR Code</string>
+    <string name="layout___scan_qr_code_gallery">scan QR Code from gallery</string>
     <string name="qr_scan_hint">Point the camera at a QR code</string>
     <string name="qr_scan_camera_error">Camera unavailable. Close other apps using the camera and try again.</string>
+    <string name="qr_scan_image_error">No QR code found in this image.</string>
+    <string name="add_self_contact">add myself to contacts</string>
+    <string name="add_self_contact_name">Saved Messages</string>
+    <string name="add_self_contact_suffix">you</string>
+    <string name="add_self_success">You were added to your contact list</string>
+    <string name="add_self_already_in_contacts">You are already in your contact list</string>
     <string name="layout___enter_pass_longtext">Enter Password\nThere is NO recovery option!</string>
     <string name="layout___unlock">Unlock</string>
     <string name="layout___name">Name</string>

@@ -41,6 +41,9 @@ import android.text.Html;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.TextView.OnEditorActionListener;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -118,6 +121,7 @@ public class ProfileActivity extends AppCompatActivity
     TextView my_toxcapabilities_textview = null;
     EditText mynick_edittext = null;
     EditText mystatus_message_edittext = null;
+    Button profile_save_button = null;
     Button new_nospam_button = null;
     Button copy_toxid_button = null;
     Button remove_own_relay_button = null;
@@ -148,6 +152,7 @@ public class ProfileActivity extends AppCompatActivity
         mytoxid_textview = findViewById(R.id.mytoxid_textview);
         mynick_edittext = findViewById(R.id.mynick_edittext);
         mystatus_message_edittext = findViewById(R.id.mystatus_message_edittext);
+        profile_save_button = findViewById(R.id.profile_save_button);
         my_identicon_imageview = findViewById(R.id.my_identicon_imageview);
         my_toxcapabilities_textview = findViewById(R.id.my_toxcapabilities_textview);
 
@@ -396,6 +401,7 @@ public class ProfileActivity extends AppCompatActivity
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         // don't show keyboard when activity starts
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
@@ -407,6 +413,18 @@ public class ProfileActivity extends AppCompatActivity
         mytoxid_textview.setText("");
         mynick_edittext.setText(global_my_name);
         mystatus_message_edittext.setText(global_my_status_message);
+
+        profile_save_button.setOnClickListener(v -> saveProfileChanges(true));
+
+        final OnEditorActionListener saveOnDoneListener = (v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE)
+            {
+                saveProfileChanges(true);
+                return true;
+            }
+            return false;
+        };
+        mystatus_message_edittext.setOnEditorActionListener(saveOnDoneListener);
 
         profile_icon_edit.setOnClickListener(v -> {
             // select new avatar image
@@ -677,6 +695,7 @@ public class ProfileActivity extends AppCompatActivity
                                                         VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION, true, false, null);
 
                         send_avatar_to_all_friends();
+                        Toast.makeText(this, getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
                     }
                 }
                 catch (Exception e)
@@ -833,11 +852,8 @@ public class ProfileActivity extends AppCompatActivity
         }
     }
 
-    @Override
-    protected void onPause()
+    void saveProfileChanges(boolean showToast)
     {
-        super.onPause();
-        // TODO dirty hack, just write "name" and message all the time, and send to "tox core"
         try
         {
             global_my_name = mynick_edittext.getText().toString().substring(0, Math.min(
@@ -846,12 +862,45 @@ public class ProfileActivity extends AppCompatActivity
                     mystatus_message_edittext.getText().toString().length(), TOX_MAX_STATUS_MESSAGE_LENGTH));
             tox_self_set_name(global_my_name);
             tox_self_set_status_message(global_my_status_message);
-            update_savedata_file_wrapper(); // after exiting from Profile Activity
+            update_savedata_file_wrapper();
+            MainActivity.update_main_profile_bar();
+
+            if (showToast)
+            {
+                hide_soft_keyboard();
+                Toast.makeText(this, getString(R.string.profile_saved_toast), Toast.LENGTH_SHORT).show();
+            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+    }
+
+    void hide_soft_keyboard()
+    {
+        try
+        {
+            final View focused = getCurrentFocus();
+            if (focused != null)
+            {
+                final InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null)
+                {
+                    imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    @Override
+    protected void onPause()
+    {
+        super.onPause();
+        saveProfileChanges(false);
     }
 
     Bitmap encodeAsBitmap(String str) throws WriterException

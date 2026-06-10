@@ -263,6 +263,7 @@ public class MessageListActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
@@ -369,6 +370,12 @@ public class MessageListActivity extends AppCompatActivity
         set_friend_connection_status_icon();
         ml_status_icon.setImageResource(R.drawable.circle_green);
         set_friend_status_icon();
+
+        final View profileHeaderTap = findViewById(R.id.ml_header_profile_tap);
+        if (profileHeaderTap != null)
+        {
+            profileHeaderTap.setOnClickListener(v -> open_friend_info_activity());
+        }
 
         messageSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener()
         {
@@ -2033,6 +2040,25 @@ public class MessageListActivity extends AppCompatActivity
             //            Log.i(TAG, "update *new* status:EE1:" + e.getMessage());
             //        }
             // --- ??? should we do this here?
+        }
+    }
+
+    void open_friend_info_activity()
+    {
+        try
+        {
+            if (friendnum < 0)
+            {
+                return;
+            }
+
+            final Intent intent = new Intent(this, FriendInfoActivity.class);
+            intent.putExtra("friendnum", friendnum);
+            startActivity(intent);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
         }
     }
 

@@ -15,6 +15,9 @@ STAMP="$(date -u +%Y%m%d-%H%M%S)"
 
 mkdir -p "$DL"
 
+echo "==> Generate changelog from git"
+python3 "$ROOT/scripts/generate-changelog.py"
+
 echo "==> Package Android APK"
 APK_SRC="${KHANDAQ_ANDROID_APK:-$ROOT/dist/android/khandaq-release.apk}"
 [[ -f "$APK_SRC" ]] || APK_SRC="$ROOT/dist/android/trifa-release.apk"
@@ -49,7 +52,7 @@ ssh "$REMOTE" "mkdir -p '$REMOTE_BACKUP_ROOT' && \
 
 echo "==> Upload Khandaq site to $REMOTE:$REMOTE_SITE_DIR"
 ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/downloads'"
-scp -p "$WEB/index.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -pr "$WEB/assets" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -p "$DL"/* "$REMOTE:$REMOTE_SITE_DIR/downloads/" 2>/dev/null || true
 scp -p "$ROOT/infra/nginx/khandaq-static-site.locations.conf" "$REMOTE:/tmp/khandaq-static-site.locations.conf"

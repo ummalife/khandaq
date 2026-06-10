@@ -1,0 +1,42 @@
+name: Changelog
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog.json from git
+        run: python3 scripts/generate-changelog.py
+
+      - name: Auto-update changelog.json on master
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        run: |
+          if git diff --quiet web/changelog.json; then
+            echo "changelog.json is up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/changelog.json
+          git commit -m "chore: regenerate changelog.json from git"
+          git push
+
+      - name: Verify changelog.json on pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --exit-code web/changelog.json; then
+            echo "::error::web/changelog.json is stale. Run: python3 scripts/generate-changelog.py"
+            exit 1
+          fi

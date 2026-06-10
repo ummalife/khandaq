@@ -435,3 +435,194 @@ details.install ol {
   text-align: center;
   font-size: 0.82rem;
 }
+
+/* Changelog */
+.changelog-page h1 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  margin: 0 0 0.5rem;
+}
+
+.sev-inline {
+  font-weight: 600;
+  font-size: 0.92em;
+}
+.sev-inline.critical { color: #f87171; }
+.sev-inline.important { color: #fb923c; }
+.sev-inline.medium { color: #60a5fa; }
+.sev-inline.low { color: var(--muted); }
+
+.changelog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.changelog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.filter-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.filter-btn:hover {
+  color: var(--text);
+  border-color: var(--green-light);
+}
+.filter-btn.active {
+  color: var(--text);
+  border-color: var(--gold);
+  background: var(--bg-elevated);
+}
+
+.changelog-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted-2);
+}
+
+.changelog-root {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.changelog-release,
+.changelog-day {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.35rem;
+}
+
+.changelog-date-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.changelog-date-head time {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold-soft);
+}
+
+.version-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--green);
+  border: 1px solid var(--green-light);
+  color: var(--text);
+}
+
+.release-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.release-commits,
+.change-commits {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted-2);
+}
+
+.changelog-section-label h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.change-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.change-item {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border-left: 3px solid var(--border);
+}
+.change-item[data-severity="critical"] { border-left-color: #ef4444; }
+.change-item[data-severity="important"] { border-left-color: #f97316; }
+.change-item[data-severity="medium"] { border-left-color: #3b82f6; }
+.change-item[data-severity="low"] { border-left-color: var(--muted-2); }
+
+.change-head { margin-bottom: 0.35rem; }
+
+.sev-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 6px;
+}
+.sev-badge.critical { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.sev-badge.important { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
+.sev-badge.medium { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.sev-badge.low { background: rgba(109, 122, 116, 0.25); color: var(--muted); }
+
+.change-title {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.change-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.platform-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.platform-tag {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted-2);
+}
+
+.commit-link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  margin-right: 0.35rem;
+}
+
+.changelog-loading,
+.changelog-empty,
+.changelog-error {
+  color: var(--muted);
+  font-size: 0.95rem;
+}

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog — Khandaq Messenger</title>
+  <meta name="description" content="История изменений Khandaq: исправления по датам с уровнями критичности. Данные из GitHub.">
+  <link rel="canonical" href="https://khandaq.org/changelog">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0b0f0e">
+  <link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/">
+        <img src="assets/logo.svg" alt="" width="36" height="36">
+        <span>Khandaq</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="/#features">Features</a>
+        <a href="/#download">Download</a>
+        <a href="/changelog" aria-current="page">Changelog</a>
+        <a class="nav-cta" href="/#download">Get the app</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="changelog-page">
+    <section class="section container">
+      <p class="eyebrow">Release history</p>
+      <h1>Changelog</h1>
+      <p class="section-lead">
+        Изменения в коде по датам. Уровни: <span class="sev-inline critical">критический</span>,
+        <span class="sev-inline important">важный</span>,
+        <span class="sev-inline medium">средний</span>,
+        <span class="sev-inline low">низкий</span>.
+        Источник — <a id="gh-link" href="https://github.com/ummalife/khandaq">GitHub</a>.
+      </p>
+
+      <div class="changelog-toolbar">
+        <div class="changelog-filters" role="group" aria-label="Фильтр по критичности">
+          <button type="button" class="filter-btn active" data-filter="all">Все</button>
+          <button type="button" class="filter-btn" data-filter="critical">Критический</button>
+          <button type="button" class="filter-btn" data-filter="important">Важный</button>
+          <button type="button" class="filter-btn" data-filter="medium">Средний</button>
+          <button type="button" class="filter-btn" data-filter="low">Низкий</button>
+        </div>
+        <p class="changelog-meta" id="changelog-meta"></p>
+      </div>
+
+      <div id="changelog-root" class="changelog-root" aria-live="polite">
+        <p class="changelog-loading">Загрузка…</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer container">
+    <div class="footer-grid">
+      <div>
+        <h4>Khandaq Messenger</h4>
+        <p>Decentralized encrypted chat on the Tox network.</p>
+      </div>
+      <div>
+        <h4>Download</h4>
+        <ul>
+          <li><a href="/#download">All platforms</a></li>
+          <li><a href="/downloads/khandaq-android.apk">Android APK</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/ummalife/khandaq">Source code</a></li>
+          <li><a href="/changelog">Changelog</a></li>
+          <li><a href="https://github.com/ummalife/khandaq/blob/master/changelog/README.md">Как писать записи</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="copyright">© Khandaq · <a href="https://khandaq.org/">khandaq.org</a></p>
+  </footer>
+
+  <script>
+    (function () {
+      var SEV_ORDER = ['critical', 'important', 'medium', 'low'];
+      var SEV_LABEL = {
+        critical: 'Критический',
+        important: 'Важный',
+        medium: 'Средний',
+        low: 'Низкий'
+      };
+      var activeFilter = 'all';
+      var data = null;
+
+      function esc(s) {
+        if (!s) return '';
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function sevBadge(sev) {
+        return '<span class="sev-badge ' + sev + '">' + esc(SEV_LABEL[sev] || sev) + '</span>';
+      }
+
+      function commitLinks(commits) {
+        if (!commits || !commits.length) return '';
+        return commits.map(function (c) {
+          return '<a class="commit-link" href="' + esc(c.url) + '" rel="noopener noreferrer">' +
+            esc(c.hash) + '</a>';
+        }).join(' ');
+      }
+
+      function platformTags(platforms) {
+        if (!platforms || !platforms.length) return '';
+        return '<span class="platform-tags">' +
+          platforms.map(function (p) {
+            return '<span class="platform-tag">' + esc(p) + '</span>';
+          }).join('') + '</span>';
+      }
+
+      function matchesFilter(sev) {
+        return activeFilter === 'all' || sev === activeFilter;
+      }
+
+      function renderChange(ch) {
+        if (!matchesFilter(ch.severity)) return '';
+        var html = '<article class="change-item" data-severity="' + esc(ch.severity) + '">';
+        html += '<div class="change-head">' + sevBadge(ch.severity) + '</div>';
+        html += '<h3 class="change-title">' + esc(ch.title) + '</h3>';
+        if (ch.description) {
+          html += '<p class="change-desc">' + esc(ch.description) + '</p>';
+        }
+        html += platformTags(ch.platforms);
+        if (ch.commits && ch.commits.length) {
+          html += '<p class="change-commits">' + commitLinks(ch.commits) + '</p>';
+        }
+        html += '</article>';
+        return html;
+      }
+
+      function renderRelease(rel) {
+        var changes = (rel.changes || []).map(renderChange).join('');
+        if (!changes && activeFilter !== 'all') return '';
+
+        var html = '<section class="changelog-release" data-date="' + esc(rel.date) + '">';
+        html += '<header class="changelog-date-head">';
+        html += '<time datetime="' + esc(rel.date) + '">' + esc(rel.date) + '</time>';
+        if (rel.version) {
+          html += '<span class="version-tag">v' + esc(rel.version) + '</span>';
+        }
+        html += '</header>';
+        if (rel.title) {
+          html += '<h2 class="release-title">' + esc(rel.title) + '</h2>';
+        }
+        if (rel.commits && rel.commits.length) {
+          html += '<p class="release-commits">Коммиты: ' + commitLinks(rel.commits) + '</p>';
+        }
+        html += '<div class="change-list">' + (changes || '<p class="changelog-empty">Нет записей для выбранного фильтра.</p>') + '</div>';
+        html += '</section>';
+        return html;
+      }
+
+      function renderDay(day) {
+        var changes = (day.changes || []).map(renderChange).join('');
+        if (!changes) return '';
+
+        var html = '<section class="changelog-day" data-date="' + esc(day.date) + '">';
+        html += '<header class="changelog-date-head"><time datetime="' + esc(day.date) + '">' + esc(day.date) + '</time></header>';
+        html += '<div class="change-list">' + changes + '</div>';
+        html += '</section>';
+        return html;
+      }
+
+      function render() {
+        var root = document.getElementById('changelog-root');
+        if (!data) return;
+
+        var parts = [];
+        (data.releases || []).forEach(function (r) {
+          var block = renderRelease(r);
+          if (block) parts.push(block);
+        });
+
+        var dayBlocks = (data.days || []).map(renderDay).filter(Boolean);
+        if (dayBlocks.length) {
+          parts.push('<section class="changelog-section-label"><h2>Коммиты по дням</h2></section>');
+          parts = parts.concat(dayBlocks);
+        }
+
+        root.innerHTML = parts.length
+          ? parts.join('')
+          : '<p class="changelog-empty">Пока нет записей. Коммиты с меткой <code>[critical]</code> и др. появятся здесь автоматически.</p>';
+      }
+
+      function setMeta() {
+        var el = document.getElementById('changelog-meta');
+        if (!data || !el) return;
+        var relCount = (data.releases || []).length;
+        var dayCount = (data.days || []).length;
+        el.textContent = 'Обновлено ' + (data.generated_at || '').replace('T', ' ').replace('Z', ' UTC') +
+          ' · ' + relCount + ' релиз(ов) · ' + dayCount + ' дн. с помеченными коммитами';
+        var gh = document.getElementById('gh-link');
+        if (gh && data.github_url) gh.href = data.github_url;
+      }
+
+      document.querySelectorAll('.filter-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.filter-btn').forEach(function (b) {
+            b.classList.remove('active');
+          });
+          btn.classList.add('active');
+          activeFilter = btn.getAttribute('data-filter');
+          render();
+        });
+      });
+
+      fetch('/changelog.json', { cache: 'no-cache' })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (json) {
+          data = json;
+          setMeta();
+          render();
+        })
+        .catch(function (err) {
+          document.getElementById('changelog-root').innerHTML =
+            '<p class="changelog-error">Не удалось загрузить changelog.json. ' +
+            '<a href="https://github.com/ummalife/khandaq/commits/master">Смотреть на GitHub</a>.</p>';
+          console.error(err);
+        });
+    })();
+  </script>
+</body>
+</html>

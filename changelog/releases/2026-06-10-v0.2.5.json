@@ -1,0 +1,104 @@
+{
+  "version": "0.2.5",
+  "date": "2026-06-10",
+  "title": "Security audit remediation + unlock fix",
+  "commits": ["48cf534", "146bc56", "d3b7c7d"],
+  "changes": [
+    {
+      "severity": "critical",
+      "title": "Android unlock crash after password",
+      "description": "Убрана silent-блокировка isPasswordValid() на экране разблокировки; ошибки показываются в UI.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "critical",
+      "title": "Перехват push-токена через exported receiver",
+      "description": "MyTokenReceiver exported=false; FCM token применяется напрямую через HelperRelay.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "critical",
+      "title": "IP-утечка через автозагрузку OSM на карте",
+      "description": "Входящие location-сообщения не грузят tile.openstreetmap.org до явного тапа.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "critical",
+      "title": "iOS buffer over-read в push packet",
+      "description": "Строки из lossless packet через initWithBytes:length: вместо initWithUTF8String:.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "critical",
+      "title": "iOS path traversal при сохранении файлов",
+      "description": "lastPathComponent + фильтр .. в OCTFileTools.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "critical",
+      "title": "IOCipherContentProvider path traversal",
+      "description": "exported=false; isSafeVfsPath() отклоняет .. и абсолютные пути.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Command injection в bootstrap-скриптах",
+      "description": "Host validation + убран bash -c в check-bootstrap-health; ssh -- в collect-bootstrap-metrics.",
+      "platforms": ["infra"]
+    },
+    {
+      "severity": "important",
+      "title": "Открытая push-будилка и flood",
+      "description": "Rate limit nginx + relay; опциональный HMAC auth; FCM timeout → 502/503.",
+      "platforms": ["infra", "android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Слабое хранение ключа БД Android",
+      "description": "Keystore для skip-mode; PBKDF2+salt для новых паролей; legacy SHA256 для миграции.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Слабый push URL whitelist",
+      "description": "PushUrlValidator / isAllowedPushURL — только push.khandaq.org и tox.zoff.xyz.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "Desktop markdown hang на длинных сообщениях",
+      "description": "Лимит markdown 16k; multiline code block 8k.",
+      "platforms": ["desktop"]
+    },
+    {
+      "severity": "medium",
+      "title": "Bootstrap nodes без валидации",
+      "description": "BootstrapHostValidator при импорте JSON.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "nginx без rate limit на push",
+      "description": "limit_req + limit_conn на push.khandaq.org.",
+      "platforms": ["infra"]
+    },
+    {
+      "severity": "medium",
+      "title": "Predictable nospam",
+      "description": "SecureRandom в HelperGeneric.set_new_random_nospam_value.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "low",
+      "title": "Unpinned toxcore в bootstrap Docker",
+      "description": "TOXCORE_TAG=v0.2.20 в Dockerfile.",
+      "platforms": ["infra"]
+    },
+    {
+      "severity": "low",
+      "title": "iOS TestFlight: KhandaqPush iOS 12",
+      "description": "CryptoKit заменён на CommonCrypto для HMAC (deployment target iOS 12).",
+      "platforms": ["ios"]
+    }
+  ]
+}

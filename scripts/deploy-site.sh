@@ -36,6 +36,10 @@ if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "
     || tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" khandaq khandaq.bin lib INSTALL.txt
   cp -f "$DL/khandaq-linux-x86_64-portable.tar.gz" "$DL/khandaq-linux-x86_64.tar.gz"
 fi
+DEB="$(ls -1 "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | head -1)"
+if [[ -n "$DEB" && -f "$DEB" ]]; then
+  cp -f "$DEB" "$DL/khandaq-messenger_amd64.deb"
+fi
 WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
 [[ -f "$WIN_EXE" ]] || WIN_EXE="$ROOT/dist/windows/x86_64/Khandaq-installer.exe"
 [[ -f "$WIN_EXE" ]] && cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"

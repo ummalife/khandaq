@@ -150,9 +150,10 @@
         <article class="card">
           <div class="card-icon linux" aria-hidden="true"></div>
           <h3>Linux</h3>
-          <p>Portable x86_64 tarball with bundled libraries. Works on Arch, Fedora, Ubuntu, Debian, and more.</p>
-          <a class="btn btn-primary dl-linux" href="#">Download .tar.gz</a>
-          <span class="meta">v0.2.5 · GPL-3.0</span>
+          <p>Debian/Ubuntu: <code>.deb</code> package. Other distros: portable tarball with bundled libraries.</p>
+          <a class="btn btn-primary dl-linux-deb" href="#">Download .deb</a>
+          <a class="btn btn-secondary dl-linux" href="#" style="margin-top:0.35rem;">Portable .tar.gz</a>
+          <span class="meta">v0.2.5 · amd64 · GPL-3.0</span>
         </article>
       </div>
 
@@ -210,8 +211,16 @@
           <li>Or right-click the app → <strong>Open</strong> → confirm in the dialog.</li>
         </ol>
       </details>
+      <details class="install" open>
+        <summary>Debian / Ubuntu — .deb package</summary>
+        <ol>
+          <li>Download <code>khandaq-messenger_amd64.deb</code> and verify SHA-256.</li>
+          <li><code>sudo apt install ./khandaq-messenger_amd64.deb</code></li>
+          <li>Launch <strong>Khandaq</strong> from the app menu or run <code>khandaq</code>.</li>
+        </ol>
+      </details>
       <details class="install">
-        <summary>Linux — portable bundle</summary>
+        <summary>Linux — portable bundle (Arch, Fedora, …)</summary>
         <ol>
           <li><code>tar -xzf khandaq-linux-x86_64-portable.tar.gz</code></li>
           <li>Keep <code>khandaq</code>, <code>khandaq.bin</code>, and <code>lib/</code> together — see <code>INSTALL.txt</code> in the archive.</li>
@@ -311,8 +320,14 @@
         '.dl-android': ['khandaq-android.apk', gh, mirror],
         '.dl-windows': ['khandaq-windows-installer.exe', gh, mirror],
         '.dl-macos': ['khandaq-macos.zip', gh, mirror],
-        '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror]
+        '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror],
+        '.dl-linux-deb': ['khandaq-messenger_0.2.5_amd64.deb', gh, mirror]
       };
+
+      var debMirror = document.querySelector('.dl-linux-deb');
+      if (debMirror) {
+        debMirror.setAttribute('data-mirror', mirror + 'khandaq-messenger_amd64.deb');
+      }
 
       Object.keys(links).forEach(function (sel) {
         var el = document.querySelector(sel);

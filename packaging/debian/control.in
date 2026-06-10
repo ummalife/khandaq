@@ -1,0 +1,14 @@
+Package: khandaq-messenger
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: amd64
+Maintainer: Khandaq <support@khandaq.org>
+Homepage: https://khandaq.org
+Depends: libc6 (>= 2.31), libgcc-s1, libstdc++6, libx11-6, libxcb1, libglib2.0-0
+Recommends: libpulse0 | pipewire-pulse, libv4l-0
+Description: Khandaq Messenger — decentralized encrypted Tox client
+ Khandaq is an open-source messenger using the Tox protocol.
+ Messages are end-to-end encrypted and routed peer-to-peer.
+ .
+ This package bundles Qt and media libraries; no separate Qt install required.

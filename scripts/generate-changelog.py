@@ -151,6 +151,7 @@ def load_releases() -> list[dict]:
                 "version": data.get("version"),
                 "date": data.get("date"),
                 "title": data.get("title", ""),
+                "summary": data.get("summary"),
                 "commits": commits,
                 "changes": changes,
             }

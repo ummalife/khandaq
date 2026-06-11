@@ -13,6 +13,7 @@ void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
 @property (assign, nonatomic) Tox *tox;
 
 @property (strong, nonatomic) dispatch_source_t timer;
+@property (strong, nonatomic) dispatch_queue_t toxQueue;
 @property (assign, nonatomic) uint64_t previousIterate;
 
 @end
@@ -20,7 +21,8 @@ void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
 @implementation OCTTox
 
 static long long last_check_time = 0;
-static long long TWO_MIN_IN_MILLIS = (2 * 60 * 1000); // 2 minutes in milliseconds
+static long long OFFLINE_REBOOTSTRAP_GRACE_MS = (5 * 1000);
+static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
 
 #pragma mark -  Class methods
 
@@ -120,14 +122,13 @@ static long long TWO_MIN_IN_MILLIS = (2 * 60 * 1000); // 2 minutes in millisecon
             return;
         }
 
-        dispatch_queue_t queue = dispatch_queue_create("me.dvor.objcTox.OCTToxQueue", NULL);
-        self.timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+        self.toxQueue = dispatch_queue_create("me.dvor.objcTox.OCTToxQueue", NULL);
+        self.timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, self.toxQueue);
 
         [self updateTimerIntervalIfNeeded];
 
-        // HINT: prevent bootstrapping here on startup. so add 2 minutes grace period
         last_check_time = (long long)([[NSDate date] timeIntervalSince1970] * 1000.0);
-        last_check_time = last_check_time + TWO_MIN_IN_MILLIS;
+        last_check_time = last_check_time + OFFLINE_REBOOTSTRAP_GRACE_MS;
 
         __weak OCTTox *weakSelf = self;
         dispatch_source_set_event_handler(self.timer, ^{
@@ -140,7 +141,7 @@ static long long TWO_MIN_IN_MILLIS = (2 * 60 * 1000); // 2 minutes in millisecon
 
             long long current_time = (long long)([[NSDate date] timeIntervalSince1970] * 1000.0);
 
-            if (current_time > (last_check_time + (TWO_MIN_IN_MILLIS))) {
+            if (current_time > (last_check_time + OFFLINE_REBOOTSTRAP_INTERVAL_MS)) {
                 last_check_time = (long long)([[NSDate date] timeIntervalSince1970] * 1000.0);
                 int cstatus = tox_self_get_connection_status(strongSelf.tox);
 
@@ -149,20 +150,13 @@ static long long TWO_MIN_IN_MILLIS = (2 * 60 * 1000); // 2 minutes in millisecon
                 if (cstatus == 0) {
                     OCTLogInfo(@"Tox offline for a long time, bootstrapping again ...");
 
-                    uint8_t *key_bin = hex_to_bin("CD133B521159541FB1D326DE9850F5E56A6C724B5B8E5EB5CD8D950408E95707",
+                    uint8_t *key_bin = hex_to_bin("74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D",
                                                  (TOX_PUBLIC_KEY_SIZE * 2));
 
                     if (key_bin != NULL) {
-                        // -------------------------------------------------------------
-                        // HINT: fix me. how to access OCTSubmanagerBootstrapImpl here?
-                        //       add a hardcoded node to least make it come online
-                        //       after a long period of being offline.
-                        // -------------------------------------------------------------
-                        tox_add_tcp_relay(strongSelf.tox, "46.101.197.175", 33445, key_bin, NULL);
-                        tox_bootstrap(strongSelf.tox, "46.101.197.175", 33445, key_bin, NULL);
-
-                        tox_add_tcp_relay(strongSelf.tox, "2a03:b0c0:3:d0::ac:5001", 33445, key_bin, NULL);
-                        tox_bootstrap(strongSelf.tox, "2a03:b0c0:3:d0::ac:5001", 33445, key_bin, NULL);
+                        tox_add_tcp_relay(strongSelf.tox, "bootstrap1.khandaq.org", 33445, key_bin, NULL);
+                        tox_add_tcp_relay(strongSelf.tox, "bootstrap1.khandaq.org", 3389, key_bin, NULL);
+                        tox_bootstrap(strongSelf.tox, "bootstrap1.khandaq.org", 33445, key_bin, NULL);
 
                         OCTLogInfo(@"Tox offline for a long time, bootstrapping DONE");
                         free(key_bin);
@@ -191,9 +185,31 @@ static long long TWO_MIN_IN_MILLIS = (2 * 60 * 1000); // 2 minutes in millisecon
 
         dispatch_source_cancel(self.timer);
         self.timer = nil;
+        self.toxQueue = nil;
     }
 
     OCTLogInfo(@"stopped");
+}
+
+- (void)performBlockOnToxQueue:(void (^)(void))block
+{
+    if (! block) {
+        return;
+    }
+
+    dispatch_queue_t queue = self.toxQueue;
+
+    if (! queue) {
+        block();
+        return;
+    }
+
+    dispatch_async(queue, block);
+}
+
+- (void)resetOfflineRebootstrapTimer
+{
+    last_check_time = (long long)([[NSDate date] timeIntervalSince1970] * 1000.0);
 }
 
 #pragma mark -  Properties

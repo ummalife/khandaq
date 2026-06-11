@@ -5,6 +5,7 @@
 import Foundation
 import MobileCoreServices
 import Photos
+import PhotosUI
 import UIKit
 import os
 
@@ -59,21 +60,26 @@ extension ChatInputViewManager: ChatInputViewDelegate {
         alert.popoverPresentationController?.sourceView = cameraView
         alert.popoverPresentationController?.sourceRect = CGRect(x: cameraView.frame.size.width / 2, y: cameraView.frame.size.height / 2, width: 1.0, height: 1.0)
 
-        func addAction(title: String, sourceType: UIImagePickerControllerSourceType) {
-            if UIImagePickerController.isSourceTypeAvailable(sourceType) {
-                alert.addAction(UIAlertAction(title: title, style: .default) { [unowned self] _ -> Void in
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            alert.addAction(UIAlertAction(title: String(localized: "photo_from_camera"), style: .default) { [unowned self] _ in
+                MediaPermission.requestCameraAccess(from: self.presentingViewController) { granted in
+                    guard granted else {
+                        return
+                    }
+
                     let controller = UIImagePickerController()
                     controller.delegate = self
-                    controller.sourceType = sourceType
+                    controller.sourceType = .camera
                     controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
                     controller.videoQuality = .typeHigh
                     self.presentingViewController.present(controller, animated: true, completion: nil)
-                })
-            }
+                }
+            })
         }
 
-        addAction(title: String(localized: "photo_from_camera"), sourceType: .camera)
-        addAction(title: String(localized: "photo_from_photo_library"), sourceType: .photoLibrary)
+        alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ in
+            self.presentPhotoLibraryPicker()
+        })
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
         presentingViewController.present(alert, animated: true, completion: nil)
@@ -141,7 +147,82 @@ extension ChatInputViewManager: UIImagePickerControllerDelegate {
 
 extension ChatInputViewManager: UINavigationControllerDelegate {}
 
+@available(iOS 14.0, *)
+extension ChatInputViewManager: PHPickerViewControllerDelegate {
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        presentingViewController.dismiss(animated: true, completion: nil)
+
+        guard let provider = results.first?.itemProvider else {
+            return
+        }
+
+        if provider.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
+            provider.loadFileRepresentation(forTypeIdentifier: kUTTypeMovie as String) { [weak self] url, _ in
+                guard let self = self, let url = url else {
+                    return
+                }
+
+                let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+                let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(ext)
+
+                do {
+                    if FileManager.default.fileExists(atPath: tempURL.path) {
+                        try FileManager.default.removeItem(at: tempURL)
+                    }
+                    try FileManager.default.copyItem(at: url, to: tempURL)
+                } catch {
+                    DispatchQueue.main.async {
+                        self.showMediaPickFailed()
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    self.sendMovieFile(at: tempURL)
+                }
+            }
+            return
+        }
+
+        if provider.canLoadObject(ofClass: UIImage.self) {
+            provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+                guard let self = self, let image = object as? UIImage else {
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    self.sendImageData(image, fileName: nil)
+                }
+            }
+            return
+        }
+
+        showMediaPickFailed()
+    }
+}
+
 fileprivate extension ChatInputViewManager {
+    func presentPhotoLibraryPicker() {
+        if #available(iOS 14.0, *) {
+            var configuration = PHPickerConfiguration()
+            configuration.filter = .any(of: [.images, .videos])
+            configuration.selectionLimit = 1
+
+            let controller = PHPickerViewController(configuration: configuration)
+            controller.delegate = self
+            presentingViewController.present(controller, animated: true, completion: nil)
+        } else if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
+            let controller = UIImagePickerController()
+            controller.delegate = self
+            controller.sourceType = .photoLibrary
+            controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
+            controller.videoQuality = .typeHigh
+            presentingViewController.present(controller, animated: true, completion: nil)
+        }
+    }
+
     func endUserInteraction() {
         try? submanagerChats.setIsTyping(false, in: chat)
         inactivityTimer?.invalidate()

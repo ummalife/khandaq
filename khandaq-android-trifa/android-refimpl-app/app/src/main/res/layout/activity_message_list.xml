@@ -26,6 +26,7 @@
             android:id="@+id/spinner_filter_msgs"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
+            android:contentDescription="@string/chat_filter_spinner_description"
             android:layout_marginLeft="0dp"
             android:paddingLeft="0dp" />
 
@@ -250,7 +251,8 @@
             android:paddingBottom="@dimen/chat_input_field_padding_v"
             android:singleLine="false"
             android:text=""
-            android:textColor="@color/md_black_1000"
+            android:textColor="@color/chat_input_text"
+            android:textColorHint="@color/gray"
             android:textSize="@dimen/chat_input_text_size" />
 
         <LinearLayout

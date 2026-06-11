@@ -97,7 +97,7 @@
             android:maxLines="1"
             android:paddingRight="5dp"
             android:text="example name long name long name long name long name long name"
-            android:textColor="@color/md_black_1000"
+            android:textColor="@color/text_on_light_surface"
             android:textSize="12sp"
             android:textStyle="bold" />
 

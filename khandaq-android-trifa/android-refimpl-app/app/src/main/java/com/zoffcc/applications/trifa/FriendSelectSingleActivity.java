@@ -37,8 +37,10 @@ import com.zoffcc.applications.sorm.GroupPeerDB;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
+import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 public class FriendSelectSingleActivity extends ListActivity
@@ -71,6 +73,10 @@ public class FriendSelectSingleActivity extends ListActivity
         if (extras != null)
         {
             exclude_group_id = extras.getString("group_id");
+            if (exclude_group_id != null)
+            {
+                exclude_group_id = exclude_group_id.toLowerCase(Locale.ROOT);
+            }
         }
 
         final Set<String> existing_group_peer_pubkeys = new HashSet<>();
@@ -119,17 +125,16 @@ public class FriendSelectSingleActivity extends ListActivity
                         toList();
             }
 
-            if (also_ngc_groups == 0)
+            if (fl == null)
             {
-                if (fl == null)
-                {
-                    this.finish();
-                }
+                fl = new ArrayList<>();
+            }
 
-                if (fl.size() < 1)
-                {
-                    this.finish();
-                }
+            if (also_ngc_groups == 0 && fl.size() < 1)
+            {
+                display_toast(getString(R.string.group_invite_no_friends_available), false, 300);
+                finish();
+                return;
             }
         }
         catch (Exception e)
@@ -137,8 +142,16 @@ public class FriendSelectSingleActivity extends ListActivity
             e.printStackTrace();
             if (also_ngc_groups == 0)
             {
-                this.finish();
+                display_toast(getString(R.string.group_invite_no_friends_available), false, 300);
+                finish();
+                return;
             }
+            fl = new ArrayList<>();
+        }
+
+        if (fl == null)
+        {
+            fl = new ArrayList<>();
         }
 
         List<com.zoffcc.applications.sorm.GroupDB> gr = null;
@@ -210,6 +223,13 @@ public class FriendSelectSingleActivity extends ListActivity
             catch(Exception e)
             {
                 Log.i(TAG, "onCreate:EE001:add:gr:" +e.getMessage());
+            }
+
+            if (also_ngc_groups == 0 && friends_list.size() < 1)
+            {
+                display_toast(getString(R.string.group_invite_no_friends_available), false, 300);
+                finish();
+                return;
             }
 
             FriendSelectSingleAdapter adapter = new FriendSelectSingleAdapter(this,

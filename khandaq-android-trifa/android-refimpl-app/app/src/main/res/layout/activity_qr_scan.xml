@@ -3,13 +3,27 @@
              xmlns:app="http://schemas.android.com/apk/res-auto"
              android:layout_width="match_parent"
              android:layout_height="match_parent"
-             android:background="@android:color/black">
+             android:background="@android:color/black"
+             android:keepScreenOn="true">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/preview_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:implementationMode="performance"/>
+        app:implementationMode="compatible"
+        app:scaleType="fillCenter"/>
+
+    <ImageButton
+        android:id="@+id/qr_scan_close"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/qr_scan_close"
+        android:padding="8dp"
+        android:src="@drawable/ic_baseline_clear_24"
+        app:tint="@android:color/white"/>
 
     <TextView
         android:layout_width="match_parent"

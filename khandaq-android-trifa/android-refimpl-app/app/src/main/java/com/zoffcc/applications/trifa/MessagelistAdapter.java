@@ -168,20 +168,52 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 }
                 return new MessageListHolder_file_outgoing_state_cancel(view, this.context);
             case Message_model.FILE_OUTGOING_STATE_PAUSE_HAS_ACCEPTED:
-                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
-                                                                        false);
+                if (PREF__compact_chatlist)
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing_compact,
+                                                                            parent, false);
+                }
+                else
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
+                                                                            false);
+                }
                 return new MessageListHolder_file_outgoing_state_pause_has_accepted(view, this.context);
             case Message_model.FILE_OUTGOING_STATE_PAUSE_NOT_YET_ACCEPTED:
-                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
-                                                                        false);
+                if (PREF__compact_chatlist)
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing_compact,
+                                                                            parent, false);
+                }
+                else
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
+                                                                            false);
+                }
                 return new MessageListHolder_file_outgoing_state_pause_not_yet_accepted(view, this.context);
             case Message_model.FILE_OUTGOING_STATE_PAUSE_NOT_YET_STARTED:
-                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
-                                                                        false);
+                if (PREF__compact_chatlist)
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing_compact,
+                                                                            parent, false);
+                }
+                else
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
+                                                                            false);
+                }
                 return new MessageListHolder_file_outgoing_state_pause_not_yet_started(view, this.context);
             case Message_model.FILE_OUTGOING_STATE_RESUME:
-                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
-                                                                        false);
+                if (PREF__compact_chatlist)
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing_compact,
+                                                                            parent, false);
+                }
+                else
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_ft_outgoing, parent,
+                                                                            false);
+                }
                 return new MessageListHolder_file_outgoing_state_resume(view, this.context);
         }
 
@@ -610,43 +642,32 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
     {
         try
         {
-            Message getSectionText_message_object2 = (Message) messagelistitems.get(position);
-
-            if (getSectionText_message_object2.direction == 0)
-            {
-                // incoming msg
-                if (getSectionText_message_object2.rcvd_timestamp == getSectionText_message_object_ts2)
-                {
-                    return getSectionText_message_object_ts_string2;
-                }
-                else
-                {
-                    getSectionText_message_object_ts2 = getSectionText_message_object2.rcvd_timestamp;
-                    getSectionText_message_object_ts_string2 =
-                            "" + only_date_time_format(getSectionText_message_object2.rcvd_timestamp);
-                    return getSectionText_message_object_ts_string2;
-                }
-            }
-            else
-            {
-                // outgoing msg
-                if (getSectionText_message_object2.sent_timestamp == getSectionText_message_object_ts2)
-                {
-                    return getSectionText_message_object_ts_string2;
-                }
-                else
-                {
-                    getSectionText_message_object_ts2 = getSectionText_message_object2.sent_timestamp;
-                    getSectionText_message_object_ts_string2 =
-                            "" + only_date_time_format(getSectionText_message_object2.sent_timestamp);
-                    return getSectionText_message_object_ts_string2;
-                }
-            }
+            Message m = (Message) messagelistitems.get(position);
+            final long ts = m.direction == 0 ? m.rcvd_timestamp : m.sent_timestamp;
+            return only_date_time_format(ts);
         }
         catch (Exception e)
         {
             e.printStackTrace();
             return " ";
+        }
+    }
+
+    public boolean shouldShowDateHeader(int position)
+    {
+        if (position < 1)
+        {
+            return true;
+        }
+
+        try
+        {
+            return !getDateHeaderText(position).equals(getDateHeaderText(position - 1));
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return true;
         }
     }
 

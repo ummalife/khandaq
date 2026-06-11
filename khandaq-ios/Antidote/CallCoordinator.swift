@@ -45,6 +45,11 @@ class CallCoordinator: NSObject {
 
     fileprivate let audioPlayer = AudioPlayer()
 
+    fileprivate var incomingCallKitUUID: UUID?
+    fileprivate var preferredAnswerVideo: Bool?
+    fileprivate var toxAnswerInProgress = false
+    fileprivate var toxAnswerCompleted = false
+
     fileprivate var activeCall: ActiveCall? {
         didSet {
             switch (oldValue, activeCall) {
@@ -140,16 +145,19 @@ extension CallCoordinator: OCTSubmanagerCallDelegate {
         // CALL: start incoming call
         print("cc:controler:incoming_call:01")
 
+        resetCallAnswerState()
+        let callKitUUID = UUID()
+        incomingCallKitUUID = callKitUUID
+
         if !UIApplication.isActive {
             delegate?.callCoordinator(self, notifyAboutBackgroundCallFrom: nickname, userInfo: call.uniqueIdentifier)
-            // CALL: start incoming call
             print("cc:controler:incoming_call:BG")
+        }
 
-            let backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-            DispatchQueue.main.asyncAfter(wallDeadline: DispatchWallTime.now() + 0.1) {
-                AppDelegate.shared.displayIncomingCall(uuid: UUID(), handle: nickname, hasVideo: videoEnabled) { _ in
-                    UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
-                }
+        let backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        DispatchQueue.main.asyncAfter(wallDeadline: DispatchWallTime.now() + 0.1) {
+            AppDelegate.shared.displayIncomingCall(uuid: callKitUUID, handle: nickname, hasVideo: videoEnabled) { _ in
+                UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
             }
         }
 
@@ -263,11 +271,18 @@ extension CallCoordinator {
         }
         // self.providerdelegate.endIncomingCall()
 
+        resetCallAnswerState()
+
         let delayTime = DispatchTime.now() + Double(Int64(Constants.DeclineAfterInterval * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
         DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
             self?.presentingController.dismiss(animated: true, completion: nil)
             self?.activeCall = nil
         }
+    }
+
+    func consumePreferredAnswerVideo() -> Bool? {
+        defer { preferredAnswerVideo = nil }
+        return preferredAnswerVideo
     }
 
     func startActiveCallWithCall(_ call: OCTCall, controller: CallBaseController) {
@@ -313,35 +328,77 @@ extension CallCoordinator {
         // CALL:
         print("cc:controler:answerCall:01")
 
+        preferredAnswerVideo = enableVideo
+
         ensureMicrophonePermission { [weak self] granted in
             guard let self = self else { return }
             guard granted else {
-                handleErrorWithType(.answerCall)
+                handleErrorWithType(.answerCall, error: nil)
                 self.declineCall(callWasRemoved: false)
                 return
             }
+
+            if let callKitUUID = self.incomingCallKitUUID,
+               AppDelegate.shared.callManager.callWithUUID(uuid: callKitUUID) != nil {
+                AppDelegate.shared.callManager.answerViaCallKit(uuid: callKitUUID)
+                return
+            }
+
+            self.configureAudioSessionForAnswer(enableVideo: enableVideo)
             self.performAnswerCall(enableVideo: enableVideo)
         }
     }
 
-    private func performAnswerCall(enableVideo: Bool) {
+    func performAnswerCall(enableVideo: Bool) {
+        guard !toxAnswerInProgress && !toxAnswerCompleted else {
+            print("cc:controler:performAnswerCall:skip:already_answered")
+            return
+        }
+
         guard let activeCall = activeCall else {
-            // assert(false, "This method should be called only if active call is non-nil")
             return
         }
 
         guard activeCall.call.status == .ringing else {
-            // assert(false, "Call status should be .Ringing")
+            print("cc:controler:performAnswerCall:skip:status=\(activeCall.call.status.rawValue)")
             return
         }
 
+        toxAnswerInProgress = true
+
         do {
             try submanagerCalls.answer(activeCall.call, enableAudio: true, enableVideo: enableVideo)
+            toxAnswerCompleted = true
         }
         catch let error as NSError {
+            toxAnswerInProgress = false
             handleErrorWithType(.answerCall, error: error)
-
             declineCall(callWasRemoved: false)
+        }
+    }
+
+    private func resetCallAnswerState() {
+        toxAnswerInProgress = false
+        toxAnswerCompleted = false
+        preferredAnswerVideo = nil
+        incomingCallKitUUID = nil
+        submanagerCalls?.callKitAudioSessionIsActive = false
+    }
+
+    private func configureAudioSessionForAnswer(enableVideo: Bool) {
+        let session = AVAudioSession.sharedInstance()
+        let mode = enableVideo ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat
+        do {
+            try session.setCategory(
+                AVAudioSessionCategoryPlayAndRecord,
+                with: [.allowBluetooth, .defaultToSpeaker]
+            )
+            try session.setMode(mode)
+            try session.setPreferredSampleRate(48000)
+            try session.setPreferredIOBufferDuration(0.005)
+            try session.setActive(true)
+        } catch {
+            print("cc:controler:configureAudioSessionForAnswer:error \(error)")
         }
     }
 

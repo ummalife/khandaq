@@ -64,6 +64,9 @@
 "pin_enabled" = "PIN-код включен";
 /* PIN screen screen */
 "pin_touch_id_enabled" = "Touch ID включен";
+"pin_face_id_enabled" = "Face ID включен";
+"pin_biometrics_unavailable" = "Биометрическая разблокировка недоступна на этом устройстве.";
+"pin_biometrics_failed" = "Не удалось подтвердить биометрию. Попробуйте снова или введите PIN.";
 /* PIN screen screen */
 "pin_description" = "Предотвратить неавторизованный доступ к Khandaq с помощью PIN-кода.";
 /* PIN screen screen */
@@ -133,7 +136,7 @@
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Сообщение";
 /* Add contat default text sended to contact */
-"add_contact_default_message_text" = "Привет! Пожалуйста, добавьте меня в список своих контактов?";
+"add_contact_default_message_text" = "Мир тебе! Пожалуйста, добавьте меня в список своих контактов?";
 /* Add contat error */
 "add_contact_wrong_qr" = "QR-код должен содержать MyID";
 
@@ -390,6 +393,19 @@
 "call_error_contact_is_offline" = "Абонент не в сети";
 /* Call error */
 "call_error_no_active_call" = "Нет активных звонков";
+/* Call error */
+"call_error_codec" = "Не удалось инициализировать аудио- или видеокодеки";
+/* Call error */
+"call_error_connection" = "Не удалось синхронизироваться с абонентом. Попробуйте ещё раз.";
+/* Call error */
+"call_error_bitrate" = "Неверные настройки битрейта звонка";
+/* Call error */
+"call_error_contact_unreachable" = "Абонент недоступен";
+/* Call error */
+"call_error_microphone_denied" = "Для ответа на звонок нужен доступ к микрофону";
+"permission_denied_title" = "Нужен доступ";
+"camera_access_denied_message" = "Доступ к камере запрещён. Разрешите камеру в Настройках, чтобы использовать эту функцию.";
+"open_settings" = "Настройки";
 
 /* Error while using color theme */
 "theme_error_cannot_open" = "Не удалось открыть, тема имеет неверный формат";

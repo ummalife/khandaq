@@ -108,7 +108,7 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:exported="false"
             android:screenOrientation="portrait"
-            android:theme="@style/FullscreenTheme"
+            android:theme="@style/QrScanTheme"
             tools:ignore="LockedOrientationActivity">
         </activity>
         <activity

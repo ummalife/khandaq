@@ -21,9 +21,11 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.app.KeyguardManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -70,6 +72,7 @@ import java.nio.ByteBuffer;
 
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import static android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_aec_active;
@@ -216,6 +219,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     public static int set_vdelay_every_x_frames = 100;
     private static float slider_alpha = 0.3f;
     static boolean camera_toggle_button_pressed = false;
+    static boolean pendingCameraOpen = false;
     static byte[] arr_h264_enc = null;
 
     private static MediaCodec.BufferInfo mBufferInfo_h264_decoder;
@@ -292,17 +296,33 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         misc_button_pad = (TextView) findViewById(R.id.misc_button_pad);
         calling_friend_online_status = (View) findViewById(R.id.calling_friend_online_status);
 
-        int conn_status = tox_friend_get_connection_status(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey));
-        if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
+        try
         {
-            calling_friend_online_status.setBackgroundColor(Color.parseColor("#04b431"));
+            final long call_friend_num = tox_friend_by_public_key__wrapper(Callstate.friend_pubkey);
+            if (call_friend_num >= 0)
+            {
+                int conn_status = tox_friend_get_connection_status(call_friend_num);
+                if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
+                {
+                    calling_friend_online_status.setBackgroundColor(Color.parseColor("#04b431"));
+                }
+                else if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
+                {
+                    calling_friend_online_status.setBackgroundColor(Color.parseColor("#ffce00"));
+                }
+                else
+                {
+                    calling_friend_online_status.setBackgroundColor(Color.parseColor("#ff0000"));
+                }
+            }
+            else
+            {
+                calling_friend_online_status.setBackgroundColor(Color.parseColor("#ff0000"));
+            }
         }
-        else if (conn_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
+        catch (Exception e)
         {
-            calling_friend_online_status.setBackgroundColor(Color.parseColor("#ffce00"));
-        }
-        else
-        {
+            Log.w(TAG, "onCreate:conn_status:EE:" + e.getMessage());
             calling_friend_online_status.setBackgroundColor(Color.parseColor("#ff0000"));
         }
 
@@ -1255,7 +1275,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                                     Log.i(TAG, "accept_button:onTouch:004:002");
                                     return true;
                                 }
-                                Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_V.value;
+                                Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_A.value;
                                 Log.i(TAG, "accept_button:onTouch:004:003");
                             }
                             else
@@ -1325,6 +1345,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         Log.i(TAG, "decline_button_pressed:DOWN");
                         Log.i(TAG, "decline_button_pressed:on_call_ended_actions");
+                        if (Callstate.incoming_one_on_one_call && Callstate.accepted_call != 1)
+                        {
+                            HelperCall.logCallEvent(Callstate.friend_pubkey, R.string.call_log_missed);
+                        }
                         CallAudioService.stop_me(true);
                     }
                 }
@@ -1337,7 +1361,94 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             }
         });
 
+        HelperCall.requestCallPermissions(this, Callstate.audio_call);
+
         Log.i(TAG, "onCreate:99");
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
+    {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode != HelperCall.REQUEST_CALL_PERMISSIONS)
+        {
+            return;
+        }
+
+        if (!HelperCall.hasMicrophonePermission(this))
+        {
+            HelperCall.showMissingPermissionToast(this, Callstate.audio_call);
+            CallAudioService.stop_me(true);
+            finish();
+            return;
+        }
+
+        scheduleCameraOpen();
+    }
+
+    void onCameraSurfaceReady()
+    {
+        openCameraOnUiThreadIfSurfaceReady();
+    }
+
+    private void scheduleCameraOpen()
+    {
+        if (Callstate.audio_call)
+        {
+            Callstate.camera_opened = true;
+            return;
+        }
+
+        if (!HelperCall.hasCameraPermission(this))
+        {
+            Callstate.camera_opened = true;
+            return;
+        }
+
+        pendingCameraOpen = true;
+        openCameraOnUiThreadIfSurfaceReady();
+    }
+
+    private void openCameraOnUiThreadIfSurfaceReady()
+    {
+        runOnUiThread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                if (!pendingCameraOpen || Callstate.audio_call)
+                {
+                    return;
+                }
+
+                if (cameraSurfacePreview == null)
+                {
+                    return;
+                }
+
+                final SurfaceHolder holder = cameraSurfacePreview.getSurfaceHolder();
+
+                if ((holder == null) || !holder.getSurface().isValid())
+                {
+                    return;
+                }
+
+                try
+                {
+                    active_camera_type = FRONT_CAMERA_USED;
+                    CameraWrapper.camera_preview_size2 = null;
+                    CameraWrapper.getInstance().doOpenCamera(CallingActivity.this, true);
+                    pendingCameraOpen = false;
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "openCameraOnUiThreadIfSurfaceReady:EE:" + e.getMessage());
+                    Callstate.camera_opened = true;
+                    pendingCameraOpen = false;
+                }
+            }
+        });
     }
 
     @Override
@@ -1438,7 +1549,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         Log.i(TAG, "reset_values:001");
         Callstate.reset_values();
         // close calling activity --------
-        ca.finish();
+        if (ca != null && !ca.isFinishing())
+        {
+            ca.finish();
+        }
         // close calling activity --------
     }
 
@@ -1738,7 +1852,14 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     void toggle_camera()
     {
-        Thread openThread = new Thread()
+        if (!HelperCall.hasCameraPermission(this))
+        {
+            HelperCall.requestCallPermissions(this, false);
+            HelperCall.showMissingPermissionToast(this, false);
+            return;
+        }
+
+        runOnUiThread(new Runnable()
         {
             @Override
             public void run()
@@ -1764,11 +1885,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 }
                 catch (Exception e)
                 {
-                    // e.printStackTrace();
+                    Log.i(TAG, "toggle_camera:EE:" + e.getMessage());
                 }
             }
-        };
-        openThread.start();
+        });
     }
 
     // -------------------------------------------------------
@@ -1913,76 +2033,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         Log.i(TAG, "onStart:01");
         org.khandaq.messenger.HelperCallNotification.cancel(this);
         super.onStart();
-        final CallingActivity c_this = this;
 
-        Thread openThread = new Thread()
-        {
-            @Override
-            public void run()
-            {
-                active_camera_type = FRONT_CAMERA_USED;
-                Log.i(TAG, "active_camera_type(01)=" + active_camera_type);
-                CameraWrapper.camera_preview_size2 = null;
-
-                try
-                {
-                    CameraWrapper.getInstance().doOpenCamera(CallingActivity.this, true);
-
-                    // wait for 1 seconds to actually get a camera preview. if not, restart camera
-                    int WAIT_SECONDS = 2;
-                    long startup_ts = System.currentTimeMillis();
-                    for (int j = 0; j < 100 * WAIT_SECONDS; j++)
-                    {
-                        // Log.i(TAG, "onStart:01:ts=" + camera_preview_call_back_ts_first_frame + " " +
-                        //            camera_preview_call_back_start_ts);
-
-                        if (camera_toggle_button_pressed == true)
-                        {
-                            break;
-                        }
-
-                        if (camera_preview_call_back_ts_first_frame > startup_ts)
-                        {
-                            Log.i(TAG, "onStart:01:ts:got a frame");
-                            // ok we got a video frame from the camera
-                            break;
-                        }
-
-                        try
-                        {
-                            Thread.sleep(10);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
-
-                    try
-                    {
-                        if (camera_toggle_button_pressed != true)
-                        {
-                            Log.i(TAG, "onStart:01:ts:NO FRAME from camera, restarting ...");
-                            reinit_camera(c_this);
-                        }
-                        else
-                        {
-                            Log.i(TAG, "onStart:01:ts:camera toggle button pressed");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Log.i(TAG, "onStart:01:ts:NO FRAME from camera, restart:EE:" + e.getMessage());
-                        e.printStackTrace();
-                    }
-                }
-                catch (Exception e33)
-                {
-                    Log.i(TAG, "onStart:EE33:" + e33.getMessage());
-                }
-            }
-        };
-        openThread.start();
+        scheduleCameraOpen();
 
         Log.i(TAG, "onStart:99");
     }
@@ -2012,21 +2064,30 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     @Override
     public void cameraHasOpened()
     {
-        Log.i(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
-        Log.i(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
-        Log.i(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
-        Callstate.camera_opened = true;
-        try
+        runOnUiThread(new Runnable()
         {
-            SurfaceHolder holder = cameraSurfacePreview.getSurfaceHolder();
-            Log.i(TAG, "cameraHasOpened:holder=" + holder);
-            Log.i(TAG, "cameraHasOpened:CameraWrapper.getInstance()=" + CameraWrapper.getInstance());
-            CameraWrapper.getInstance().doStartPreview(holder, mPreviewRate);
-        }
-        catch (Exception e)
-        {
-            Log.i(TAG, "cameraHasOpened:EE01:" + e.getMessage());
-        }
+            @Override
+            public void run()
+            {
+                Log.i(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
+                Callstate.camera_opened = true;
+                try
+                {
+                    if (cameraSurfacePreview == null)
+                    {
+                        return;
+                    }
+
+                    SurfaceHolder holder = cameraSurfacePreview.getSurfaceHolder();
+                    Log.i(TAG, "cameraHasOpened:holder=" + holder);
+                    CameraWrapper.getInstance().doStartPreview(holder, mPreviewRate);
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "cameraHasOpened:EE01:" + e.getMessage());
+                }
+            }
+        });
     }
 
     public void turnOnScreen()

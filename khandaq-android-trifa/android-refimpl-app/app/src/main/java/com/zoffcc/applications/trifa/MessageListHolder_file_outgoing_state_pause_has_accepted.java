@@ -46,7 +46,11 @@ import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.Filetransfer;
 import com.zoffcc.applications.sorm.Message;
 
+import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactAudioUi;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isAudioMessage;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFileDisplayLabel;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.resetOutgoingFtAudioPlayer;
 import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_filetransfer_filenum_from_id;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_vfs_image_filename_own_avatar;
@@ -79,6 +83,7 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
     TextView message_text_date_string;
     ViewGroup message_text_date;
     ViewGroup rounded_bg_container;
+    me.jagar.chatvoiceplayerlibrary.VoicePlayerView ft_audio_player;
 
     public MessageListHolder_file_outgoing_state_pause_has_accepted(View itemView, Context c)
     {
@@ -101,6 +106,7 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
         date_time = (TextView) itemView.findViewById(R.id.date_time);
         message_text_date_string = (TextView) itemView.findViewById(R.id.message_text_date_string);
         message_text_date = (ViewGroup) itemView.findViewById(R.id.message_text_date);
+        ft_audio_player = itemView.findViewById(R.id.ft_audio_player);
     }
 
     public void bindMessageList(Message m)
@@ -198,30 +204,43 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
         button_ok.setVisibility(View.GONE);
         button_cancel.setVisibility(View.VISIBLE);
 
-        // TODO: make text better
-        textView.setAutoLinkText("" + message.text + "\n PAUSED");
+        resetOutgoingFtAudioPlayer(ft_audio_player);
 
-
-        // TODO:
+        int percent = 0;
         long ft_id = message.filetransfer_id;
-        // Log.i(TAG, "getView:033:STATE:RESUME:ft_id=" + ft_id);
         if (ft_id != -1)
         {
             final Filetransfer ft_ = (Filetransfer) orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            final int percent = (int) (100f * (float) ft_.current_position / (float) ft_.filesize);
-            // Log.i(TAG, "getView:033:STATE:RESUME:percent=" + percent + " cur=" + ft_.current_position + " size=" + ft_.filesize);
-            ft_progressbar.setProgress(percent);
-        }
-        else
-        {
-            ft_progressbar.setProgress(0);
+            percent = (int) (100f * (float) ft_.current_position / (float) ft_.filesize);
         }
 
+        if (isAudioMessage(context, message))
+        {
+            bindOutgoingCompactAudioUi(context, message, textView, imageView, ft_preview_container, ft_preview_image,
+                                       ft_buttons_container, ft_progressbar, ft_audio_player, button_ok, button_cancel,
+                                       true, percent, true);
+            setup_cancel_button(message);
+            HelperGeneric.fill_own_avatar_icon(context, img_avatar);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            return;
+        }
+
+        textView.setAutoLinkText(outgoingFileDisplayLabel(context, message));
+
+        ft_progressbar.setProgress(percent);
         ft_progressbar.setVisibility(View.VISIBLE);
         ft_progressbar.setMax(100);
         // ft_progressbar.setIndeterminate(false);
 
 
+        setup_cancel_button(message);
+
+        HelperGeneric.fill_own_avatar_icon(context, img_avatar);
+        HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+    }
+
+    private void setup_cancel_button(final Message message)
+    {
         button_cancel.setOnTouchListener(new View.OnTouchListener()
         {
             @Override
@@ -249,15 +268,9 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
                     AlertDialog dialog = builder.create();
                     dialog.show();
                 }
-                else
-                {
-                }
                 return true;
             }
         });
-
-        HelperGeneric.fill_own_avatar_icon(context, img_avatar);
-        HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
     }
 
     private void cancel_outgoing_filetransfer(final Message message)

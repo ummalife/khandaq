@@ -16,4 +16,8 @@ class OCTSubmanagerBootstrapMock: NSObject, OCTSubmanagerBootstrap {
     func bootstrap() {
         // nop
     }
+
+    func rebootstrapOnNetworkChange() {
+        // nop
+    }
 }

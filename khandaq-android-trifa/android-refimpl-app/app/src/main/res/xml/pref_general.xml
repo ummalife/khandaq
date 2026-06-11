@@ -6,8 +6,8 @@
             android:entries="@array/pref_dark_mode_titles"
             android:entryValues="@array/pref_dark_mode_values"
             android:key="dark_mode_pref"
-            android:summary="change default theme to dark mode"
-            android:title="Dark Mode" />
+            android:summary="@string/pref_description_dark_mode"
+            android:title="@string/pref_title_dark_mode" />
 
         <SwitchPreference
             android:defaultValue="false"

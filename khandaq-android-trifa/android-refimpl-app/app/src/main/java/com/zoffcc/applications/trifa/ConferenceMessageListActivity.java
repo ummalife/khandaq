@@ -239,6 +239,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_conf_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
+        HelperGeneric.apply_chat_input_typography(ml_new_conf_message);
 
         messageSearchView = (SearchView) findViewById(R.id.conf_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -732,9 +733,13 @@ public class ConferenceMessageListActivity extends AppCompatActivity
         {
             if (is_conference_active(conf_id))
             {
-                // send typed message to friend
-                msg = ml_new_conf_message.getText().toString().substring(0, (int) Math.min(tox_max_message_length(),
-                                                                                           ml_new_conf_message.getText().toString().length()));
+                final String raw_msg = ml_new_conf_message.getText().toString().trim();
+                if (raw_msg.isEmpty())
+                {
+                    return;
+                }
+
+                msg = raw_msg.substring(0, (int) Math.min(tox_max_message_length(), raw_msg.length()));
 
                 try
                 {
@@ -752,22 +757,19 @@ public class ConferenceMessageListActivity extends AppCompatActivity
                     m.text = msg;
                     m.was_synced = false;
 
-                    if ((msg != null) && (!msg.equalsIgnoreCase("")))
+                    int res = tox_conference_send_message(tox_conference_by_confid__wrapper(conf_id), 0, msg);
+                    // Log.i(TAG, "tox_conference_send_message:result=" + res + " m=" + m);
+                    if (PREF__X_battery_saving_mode)
                     {
-                        int res = tox_conference_send_message(tox_conference_by_confid__wrapper(conf_id), 0, msg);
-                        // Log.i(TAG, "tox_conference_send_message:result=" + res + " m=" + m);
-                        if (PREF__X_battery_saving_mode)
-                        {
-                            Log.i(TAG, "global_last_activity_for_battery_savings_ts:001:*PING*");
-                        }
-                        global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
+                        Log.i(TAG, "global_last_activity_for_battery_savings_ts:001:*PING*");
+                    }
+                    global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
 
-                        if (res > -1)
-                        {
-                            // message was sent OK
-                            insert_into_conference_message_db(m, true);
-                            ml_new_conf_message.setText("");
-                        }
+                    if (res > -1)
+                    {
+                        // message was sent OK
+                        insert_into_conference_message_db(m, true);
+                        ml_new_conf_message.setText("");
                     }
                 }
                 catch (Exception e)

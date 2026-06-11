@@ -21,7 +21,6 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
-
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -34,8 +33,8 @@ import java.util.List;
 
 public class FilterMsgsSpinnerAdapter extends ArrayAdapter<String>
 {
-    private List<String> objects;
-    private Context context;
+    private final List<String> objects;
+    private final Context context;
 
     public FilterMsgsSpinnerAdapter(Context context, int resourceId, List<String> objects)
     {
@@ -59,40 +58,32 @@ public class FilterMsgsSpinnerAdapter extends ArrayAdapter<String>
     public View getCustomHeaderView(int position, View convertView, ViewGroup parent)
     {
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        View row = inflater.inflate(R.layout.spinner_own_status_header, parent, false);
-        ImageView icon = (ImageView) row.findViewById(R.id.spinner_item_icon_02);
-
-        if (position == 0)
-        {
-            icon.setImageResource(R.drawable.circle_blue);
-        }
-        else if (position == 1)
-        {
-            icon.setImageResource(R.drawable.circle_orange);
-        }
-
+        View row = inflater.inflate(R.layout.chat_filter_spinner_header, parent, false);
+        ImageView icon = row.findViewById(R.id.spinner_item_icon_02);
+        bindFilterIcon(icon, position);
         return row;
     }
 
     public View getCustomView(int position, View convertView, ViewGroup parent)
     {
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        View row = inflater.inflate(R.layout.own_status_spinner_item, parent, false);
-        TextView label = (TextView) row.findViewById(R.id.spinner_item_text_01);
-        ImageView icon = (ImageView) row.findViewById(R.id.spinner_item_icon_01);
+        View row = inflater.inflate(R.layout.chat_filter_spinner_dropdown_item, parent, false);
+        TextView label = row.findViewById(R.id.spinner_item_text_01);
+        ImageView icon = row.findViewById(R.id.spinner_item_icon_01);
         label.setText(objects.get(position));
-
-        if (position == 0)
-        {
-            icon.setImageResource(R.drawable.circle_blue);
-        }
-        else if (position == 1)
-        {
-            icon.setImageResource(R.drawable.circle_orange);
-        }
-
+        bindFilterIcon(icon, position);
         return row;
     }
 
-
+    private static void bindFilterIcon(ImageView icon, int position)
+    {
+        if (position == 0)
+        {
+            icon.setImageResource(R.drawable.ic_chat_filter_all_24);
+        }
+        else
+        {
+            icon.setImageResource(R.drawable.ic_chat_filter_files_24);
+        }
+    }
 }

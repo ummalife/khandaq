@@ -8,6 +8,8 @@ class AppCoordinator {
     fileprivate let window: UIWindow
     var activeCoordinator: TopCoordinatorProtocol?
     fileprivate var theme: Theme
+    fileprivate var pendingToxRestartOptions: CoordinatorOptions?
+    fileprivate var toxRestartWorkItem: DispatchWorkItem?
 
     init(window: UIWindow) {
         self.window = window
@@ -17,6 +19,10 @@ class AppCoordinator {
 
         theme = try! Theme(yamlString: yamlString)
         applyTheme(theme)
+
+        ToxOptionsRestartScheduler.setContinueRecreateHandler { [weak self] in
+            self?.performToxRecreateIfReady()
+        }
     }
 }
 
@@ -72,26 +78,8 @@ extension AppCoordinator: RunningCoordinatorDelegate {
     }
 
     func runningCoordinatorRecreateCoordinatorsStack(_ coordinator: RunningCoordinator, options: CoordinatorOptions) {
-        showRestartPlaceholder()
-        teardownActiveRunningCoordinator()
-
-        // Non-blocking delay so tox can close sockets; must not spin RunLoop (re-entrancy crashes).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self else {
-                ToxOptionsRestartScheduler.restartFailed()
-                return
-            }
-            self.recreateActiveCoordinator(options: options,
-                                           skipAuthorizationChallenge: true,
-                                           onToxOptionsRestartComplete: { success in
-                if success {
-                    ToxOptionsRestartScheduler.restartCompleted()
-                } else {
-                    ToxOptionsRestartScheduler.restartFailed()
-                    self.presentToxRestartFailedAlert()
-                }
-            })
-        }
+        pendingToxRestartOptions = options
+        beginToxOptionsRestart()
     }
 }
 
@@ -119,10 +107,65 @@ private extension AppCoordinator {
     }
 
     func teardownActiveRunningCoordinator() {
+        toxRestartWorkItem?.cancel()
+        toxRestartWorkItem = nil
+
         if let running = activeCoordinator as? RunningCoordinator {
             running.shutdownForToxRestart()
         }
         activeCoordinator = nil
+    }
+
+    func beginToxOptionsRestart() {
+        toxRestartWorkItem?.cancel()
+        showRestartPlaceholder()
+        teardownActiveRunningCoordinator()
+        scheduleToxRecreateAttempt()
+    }
+
+    func scheduleToxRecreateAttempt() {
+        guard pendingToxRestartOptions != nil else {
+            return
+        }
+
+        let work = DispatchWorkItem { [weak self] in
+            self?.performToxRecreateIfReady()
+        }
+        toxRestartWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    func performToxRecreateIfReady() {
+        guard let options = pendingToxRestartOptions else {
+            return
+        }
+        guard ToxOptionsRestartScheduler.isRestartInProgress else {
+            return
+        }
+        guard UIApplication.shared.applicationState == .active else {
+            ToxOptionsRestartScheduler.deferRecreate()
+            return
+        }
+
+        toxRestartWorkItem = nil
+
+        recreateActiveCoordinator(options: options,
+                                   skipAuthorizationChallenge: true,
+                                   onToxOptionsRestartComplete: { [weak self] success in
+            guard let self = self else {
+                ToxOptionsRestartScheduler.restartFailed()
+                return
+            }
+
+            self.pendingToxRestartOptions = nil
+
+            if success {
+                ToxOptionsRestartScheduler.restartCompleted()
+            } else {
+                ToxOptionsRestartScheduler.restartFailed()
+                self.presentToxRestartFailedAlert()
+            }
+        })
     }
 
     func recreateActiveCoordinator(options: CoordinatorOptions? = nil,

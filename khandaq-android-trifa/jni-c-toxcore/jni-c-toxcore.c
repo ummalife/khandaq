@@ -777,6 +777,20 @@ Tox *create_tox(int udp_enabled, int orbot_enabled, const char *proxy_host, uint
             {
                 free(savedata_enc);
             }
+
+            if(res_decrypt != true)
+            {
+                dbg(0, "create_tox:ERROR:tox_pass_decrypt failed, refusing to create a new Tox profile");
+                if(savedata)
+                {
+                    free(savedata);
+                }
+                free(full_path_filename);
+                pthread_mutex_destroy(&group_audio___mutex);
+                return NULL;
+            }
+
+            fsize = (long)savedata_len;
         }
         else
         {
@@ -786,7 +800,7 @@ Tox *create_tox(int udp_enabled, int orbot_enabled, const char *proxy_host, uint
 
         options.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
         options.savedata_data = savedata;
-        options.savedata_length = fsize;
+        options.savedata_length = (size_t)fsize;
         dbg(9, "create_tox:1009:2");
 #ifdef TOX_HAVE_TOXUTIL
         tox = tox_utils_new(&options, &error);
@@ -2955,15 +2969,11 @@ void Java_com_zoffcc_applications_trifa_MainActivity_init__real(JNIEnv *env, job
     (*env)->ReleaseStringUTFChars(env, proxy_host, proxy_host_str);
     dbg(9, "tox_global=%p", tox_global);
     // ----------- create Tox instance -----------
-    // dbg(9, "1001");
-    // const char *name = "TRIfA";
-    // dbg(9, "1002");
-    // tox_self_set_name(tox_global, (uint8_t *)name, strlen(name), NULL);
-    // dbg(9, "1003");
-    // const char *status_message = "This is TRIfA";
-    // dbg(9, "1004");
-    // tox_self_set_status_message(tox_global, (uint8_t *)status_message, strlen(status_message), NULL);
-    // dbg(9, "1005");
+    if(tox_global == NULL)
+    {
+        dbg(0, "create_tox failed: refusing to start with a new Tox profile");
+        return;
+    }
     dbg(9, "MainActivity=%p", MainActivity);
     // ----------- create Tox AV instance --------
     TOXAV_ERR_NEW rc;
@@ -2973,9 +2983,12 @@ void Java_com_zoffcc_applications_trifa_MainActivity_init__real(JNIEnv *env, job
     if(rc != TOXAV_ERR_NEW_OK)
     {
         dbg(0, "Error at toxav_new: %d", rc);
+        global_toxav_valid = false;
     }
-
-    global_toxav_valid = true;
+    else
+    {
+        global_toxav_valid = true;
+    }
     memset(&mytox_CC, 0, sizeof(CallControl));
     // ----------- create Tox AV instance --------
     toxav_audio_iterate_seperation(tox_av_global, true);
@@ -4336,7 +4349,7 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1add(JNIEnv *env, jo
 
     if(tox_global == NULL)
     {
-        return (jlong)-3;
+        return (jlong)-((jlong)TOX_ERR_FRIEND_ADD_NULL);
     }
 
     unsigned char public_key_bin[TOX_ADDRESS_SIZE];
@@ -4368,16 +4381,8 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1add(JNIEnv *env, jo
 
     if(error != 0)
     {
-        if(error == TOX_ERR_FRIEND_ADD_ALREADY_SENT)
-        {
-            dbg(9, "add friend:ERROR:TOX_ERR_FRIEND_ADD_ALREADY_SENT");
-            return (jlong)-1;
-        }
-        else
-        {
-            dbg(9, "add friend:ERROR:%d", (int)error);
-            return (jlong)-2;
-        }
+        dbg(9, "add friend:ERROR:%d", (int)error);
+        return (jlong)(-((jlong)error));
     }
     else
     {
@@ -7191,6 +7196,69 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1get_1topic(JNIEnv *e
             jstring js1 = c_safe_string_from_java((char *)title, length);
             return js1;
         }
+    }
+#endif
+}
+
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1set_1topic(JNIEnv *env, jobject thiz,
+        jlong group_number, jstring topic)
+{
+    TRACE_LOGGER();
+#ifndef HAVE_TOX_NGC
+    return (jint)-99;
+#else
+    if(tox_global == NULL)
+    {
+        return (jint)-99;
+    }
+
+    if(topic == NULL)
+    {
+        return (jint)-21;
+    }
+
+    Tox_Err_Group_Topic_Set error;
+    bool res = false;
+
+#ifdef JAVA_LINUX
+
+    const jclass stringClass = (*env)->GetObjectClass(env, (jstring)topic);
+    const jmethodID getBytes = (*env)->GetMethodID(env, stringClass, "getBytes", "(Ljava/lang/String;)[B");
+    const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+
+    const jbyteArray stringJbytes = (jbyteArray) (*env)->CallObjectMethod(env, (jstring)topic, getBytes, charsetName);
+    const jsize plength = (*env)->GetArrayLength(env, stringJbytes);
+    jbyte* pBytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+
+    res = tox_group_set_topic(tox_global,
+            (uint32_t)group_number,
+            (uint8_t *)pBytes, (size_t)plength,
+            &error);
+
+    (*env)->DeleteLocalRef(env, charsetName);
+
+    (*env)->ReleaseByteArrayElements(env, stringJbytes, pBytes, JNI_ABORT);
+    (*env)->DeleteLocalRef(env, stringJbytes);
+#else
+    const char *topic_str = NULL;
+    topic_str = (*env)->GetStringUTFChars(env, topic, NULL);
+
+    res = tox_group_set_topic(tox_global,
+            (uint32_t)group_number,
+            (uint8_t *)topic_str, (size_t)strlen(topic_str),
+            &error);
+
+    (*env)->ReleaseStringUTFChars(env, topic, topic_str);
+#endif
+
+    if(error != TOX_ERR_GROUP_TOPIC_SET_OK)
+    {
+        return (jint)(-(error));
+    }
+    else
+    {
+        return (jint)(res ? 1 : 0);
     }
 #endif
 }

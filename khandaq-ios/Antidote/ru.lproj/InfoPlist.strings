@@ -14,3 +14,6 @@
 
 /* Photo library usage alert description */
 "NSPhotoLibraryUsageDescription" = "Вы можете отправлять фото и видео.";
+
+/* Face ID / Touch ID usage alert description */
+"NSFaceIDUsageDescription" = "Khandaq использует Face ID или Touch ID для разблокировки приложения вместо ввода PIN-кода.";

@@ -106,6 +106,7 @@ public class MainApplication extends Application
         randnum = (int) (Math.random() * 1000d);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
+        DbSecretKeyStorage.onApplicationStart(this);
         ensureFcmNotificationChannel();
         org.khandaq.messenger.HelperCallNotification.ensureChannel(this);
         org.khandaq.messenger.KhandaqPushHelper.initIfAvailable(this);

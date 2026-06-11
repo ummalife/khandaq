@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import PhotosUI
 import UIKit
 
 protocol ProfileMainControllerDelegate: class {
@@ -80,43 +81,36 @@ extension ProfileMainController: UIImagePickerControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
         dismiss(animated: true, completion: nil)
 
-        guard var image = info[UIImagePickerControllerOriginalImage] as? UIImage else {
+        guard let image = info[UIImagePickerControllerOriginalImage] as? UIImage else {
             return
         }
 
-        if image.size.width != image.size.height {
-            let side = min(image.size.width, image.size.height)
-            let x = (image.size.width - side) / 2
-            let y = (image.size.height - side) / 2
-            let rect = CGRect(x: x, y: y, width: side, height: side)
-
-            image = image.cropWithRect(rect)
-        }
-
-        let data: Data
-
-        do {
-            data = try pngDataFromImage(image)
-        }
-        catch {
-            handleErrorWithType(.convertImageToPNG, error: nil)
-            return
-        }
-
-        do {
-            try submanagerUser.setUserAvatar(data)
-            updateModels()
-            reloadTableView()
-
-            delegate?.profileMainControllerDidChangeAvatar(self)
-        }
-        catch let error as NSError {
-            handleErrorWithType(.changeAvatar, error: error)
-        }
+        applyAvatarImage(image)
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         dismiss(animated: true, completion: nil)
+    }
+}
+
+@available(iOS 14.0, *)
+extension ProfileMainController: PHPickerViewControllerDelegate {
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        dismiss(animated: true, completion: nil)
+
+        guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else {
+            return
+        }
+
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let image = object as? UIImage else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                self?.applyAvatarImage(image)
+            }
+        }
     }
 }
 
@@ -155,7 +149,7 @@ private extension ProfileMainController {
         statusMessageModel.didSelectHandler = changeStatusMessage
 
         toxIdModel.title = String(localized: "my_tox_id")
-        toxIdModel.value = submanagerUser.userAddress
+        toxIdModel.value = sanitizeAddressInput(submanagerUser.userAddress)
         toxIdModel.rightButton = String(localized: "show_qr")
         toxIdModel.rightButtonHandler = showToxIdQR
         toxIdModel.userInteractionEnabled = false
@@ -207,26 +201,40 @@ private extension ProfileMainController {
 
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             alert.addAction(UIAlertAction(title: String(localized: "photo_from_camera"), style: .default) { [unowned self] _ -> Void in
-                let controller = UIImagePickerController()
-                controller.sourceType = .camera
-                controller.delegate = self
+                MediaPermission.requestCameraAccess(from: self) { granted in
+                    guard granted else {
+                        return
+                    }
 
-                if (UIImagePickerController.isCameraDeviceAvailable(.front)) {
-                    controller.cameraDevice = .front
+                    let controller = UIImagePickerController()
+                    controller.sourceType = .camera
+                    controller.delegate = self
+
+                    if UIImagePickerController.isCameraDeviceAvailable(.front) {
+                        controller.cameraDevice = .front
+                    }
+
+                    self.present(controller, animated: true, completion: nil)
                 }
-
-                self.present(controller, animated: true, completion: nil)
             })
         }
 
-        if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
-            alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ -> Void in
+        alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ -> Void in
+            if #available(iOS 14.0, *) {
+                var configuration = PHPickerConfiguration()
+                configuration.filter = .images
+                configuration.selectionLimit = 1
+
+                let controller = PHPickerViewController(configuration: configuration)
+                controller.delegate = self
+                self.present(controller, animated: true, completion: nil)
+            } else if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
                 let controller = UIImagePickerController()
                 controller.sourceType = .photoLibrary
                 controller.delegate = self
                 self.present(controller, animated: true, completion: nil)
-            })
-        }
+            }
+        })
 
         if submanagerUser.userAvatar() != nil {
             alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [unowned self] _ -> Void in
@@ -242,6 +250,40 @@ private extension ProfileMainController {
     func removeAvatar() {
         do {
             try submanagerUser.setUserAvatar(nil)
+            updateModels()
+            reloadTableView()
+
+            delegate?.profileMainControllerDidChangeAvatar(self)
+        }
+        catch let error as NSError {
+            handleErrorWithType(.changeAvatar, error: error)
+        }
+    }
+
+    func applyAvatarImage(_ image: UIImage) {
+        var croppedImage = image
+
+        if croppedImage.size.width != croppedImage.size.height {
+            let side = min(croppedImage.size.width, croppedImage.size.height)
+            let x = (croppedImage.size.width - side) / 2
+            let y = (croppedImage.size.height - side) / 2
+            let rect = CGRect(x: x, y: y, width: side, height: side)
+
+            croppedImage = croppedImage.cropWithRect(rect)
+        }
+
+        let data: Data
+
+        do {
+            data = try pngDataFromImage(croppedImage)
+        }
+        catch {
+            handleErrorWithType(.convertImageToPNG, error: nil)
+            return
+        }
+
+        do {
+            try submanagerUser.setUserAvatar(data)
             updateModels()
             reloadTableView()
 

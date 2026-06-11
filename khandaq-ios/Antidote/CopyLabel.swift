@@ -45,7 +45,10 @@ extension CopyLabel {
 // MARK: Copying
 extension CopyLabel {
     override func copy(_ sender: Any?) {
-        UIPasteboard.general.string = text
+        let raw = text ?? ""
+        let sanitized = sanitizeAddressInput(raw)
+        // Contact details / Tox ID fields: copy clean hex only (no label text or formatting).
+        UIPasteboard.general.string = sanitized.isEmpty ? raw : sanitized
     }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {

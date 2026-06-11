@@ -74,6 +74,8 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate var iPhone: IphoneObjects!
     fileprivate var iPad: IpadObjects!
 
+    fileprivate let networkReachabilityMonitor = ToxNetworkReachabilityMonitor()
+
     init(theme: Theme, window: UIWindow, toxManager: OCTManager) {
         self.theme = theme
         self.window = window
@@ -100,11 +102,21 @@ class ActiveSessionCoordinator: NSObject {
 
         KhandaqPushManager.shared.bind(toxManager: toxManager)
 
+        networkReachabilityMonitor.start { [weak self] in
+            self?.handleNetworkPathChange()
+        }
+
         NotificationCenter.default.addObserver(self, selector: #selector(ActiveSessionCoordinator.applicationWillTerminate), name: NSNotification.Name.UIApplicationWillTerminate, object: nil)
     }
 
     deinit {
+        networkReachabilityMonitor.stop()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    fileprivate func handleNetworkPathChange() {
+        toxManager.bootstrap.rebootstrapOnNetworkChange()
+        toxManager.chats.broadcastOwnPushURLToConnectedFriends()
     }
 
     @objc func applicationWillTerminate() {
@@ -112,6 +124,7 @@ class ActiveSessionCoordinator: NSObject {
     }
 
     func shutdownForToxRestart() {
+        networkReachabilityMonitor.stop()
         KhandaqPushManager.shared.unbind()
         toxManager?.user.delegate = nil
         callCoordinator = nil
@@ -150,8 +163,13 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
         automationCoordinator.startWithOptions(nil)
         callCoordinator.startWithOptions(nil)
 
-        toxManager.bootstrap.addPredefinedNodes()
-        toxManager.bootstrap.bootstrap()
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.toxManager.bootstrap.addPredefinedNodes()
+            self.toxManager.bootstrap.bootstrap()
+        }
 
         updateUserAvatar()
         updateUserName()
@@ -236,6 +254,10 @@ extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
 
         let show = (connectionStatus == .none)
         notificationCoordinator.toggleConnectingView(show: show, animated: true)
+
+        if connectionStatus == .none {
+            toxManager.bootstrap.rebootstrapOnNetworkChange()
+        }
     }
 }
 

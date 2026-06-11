@@ -42,7 +42,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
-import static com.zoffcc.applications.trifa.HelperGeneric.long_date_time_format;
+import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_message_time;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__global_font_size;
 import static com.zoffcc.applications.trifa.MainActivity.selected_messages;
 import static com.zoffcc.applications.trifa.MessageListActivity.onClick_message_helper;
@@ -120,21 +120,11 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
             {
                 if (MainActivity.message_list_fragment.adapter != null)
                 {
-                    if (my_position < 1)
+                    if (MainActivity.message_list_fragment.adapter.shouldShowDateHeader(my_position))
                     {
                         message_text_date_string.setText(
                                 MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position));
                         message_text_date.setVisibility(View.VISIBLE);
-                    }
-                    else
-                    {
-                        if (!MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position).equals(
-                                MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position - 1)))
-                        {
-                            message_text_date_string.setText(
-                                    MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position));
-                            message_text_date.setVisibility(View.VISIBLE);
-                        }
                     }
                 }
             }
@@ -168,7 +158,7 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
             }
         });
 
-        date_time.setText(long_date_time_format(m.sent_timestamp));
+        date_time.setText(format_chat_message_time(m, true));
 
         textView.setCustomRegex(TOXURL_PATTERN);
         textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,

@@ -118,7 +118,7 @@ private extension ProfileDetailsController {
         }
 
         touchIdEnabledModel.enabled = isPinEnabled
-        touchIdEnabledModel.title = String(localized: "pin_touch_id_enabled")
+        touchIdEnabledModel.title = biometricSettingsTitle()
         touchIdEnabledModel.on = settings.useTouchID
         touchIdEnabledModel.valueChangedHandler = touchIdEnabledValueChanged
 
@@ -161,6 +161,7 @@ private extension ProfileDetailsController {
             let context = LAContext()
             var error: NSError?
             guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+                presentBiometricUnavailableAlert()
                 notifyProfileSettingsDidChange()
                 return
             }
@@ -168,12 +169,18 @@ private extension ProfileDetailsController {
             context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
                 localizedReason: String(localized: "pin_touch_id_description")
-            ) { [weak self] success, _ in
+            ) { [weak self] success, evaluateError in
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     let settings = self.toxManager.objects.getProfileSettings()
                     settings.useTouchID = success
                     self.toxManager.objects.saveProfileSettings(settings)
+                    if !success, let evaluateError = evaluateError as NSError?,
+                       evaluateError.code != LAError.userCancel.rawValue,
+                       evaluateError.code != LAError.systemCancel.rawValue,
+                       evaluateError.code != LAError.appCancel.rawValue {
+                        self.presentBiometricFailedAlert()
+                    }
                     self.notifyProfileSettingsDidChange()
                 }
             }
@@ -183,6 +190,47 @@ private extension ProfileDetailsController {
         settings.useTouchID = false
         toxManager.objects.saveProfileSettings(settings)
         notifyProfileSettingsDidChange()
+    }
+
+    func biometricSettingsTitle() -> String {
+        let context = LAContext()
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            return String(localized: "pin_touch_id_enabled")
+        }
+
+        if #available(iOS 11.0, *) {
+            switch context.biometryType {
+            case .faceID:
+                return String(localized: "pin_face_id_enabled")
+            case .touchID:
+                return String(localized: "pin_touch_id_enabled")
+            default:
+                break
+            }
+        }
+
+        return String(localized: "pin_touch_id_enabled")
+    }
+
+    func presentBiometricUnavailableAlert() {
+        let alert = UIAlertController(
+            title: nil,
+            message: String(localized: "pin_biometrics_unavailable"),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: String(localized: "error_ok_button"), style: .default, handler: nil))
+        present(alert, animated: true, completion: nil)
+    }
+
+    func presentBiometricFailedAlert() {
+        let alert = UIAlertController(
+            title: nil,
+            message: String(localized: "pin_biometrics_failed"),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: String(localized: "error_ok_button"), style: .default, handler: nil))
+        present(alert, animated: true, completion: nil)
     }
 
     @objc func profileSettingsDidChange() {

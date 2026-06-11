@@ -61,8 +61,8 @@ import static com.zoffcc.applications.trifa.HelperConference.new_or_updated_conf
 import static com.zoffcc.applications.trifa.HelperConference.set_all_conferences_inactive;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.set_all_filetransfers_inactive;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.start_outgoing_ft;
-import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
 import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real_norequest;
+import static com.zoffcc.applications.trifa.HelperFriend.remove_legacy_echobot_contact_if_present;
 import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
 import static com.zoffcc.applications.trifa.HelperFriend.get_friend_msgv3_capability;
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online;
@@ -92,10 +92,13 @@ import static com.zoffcc.applications.trifa.HelperGeneric.tox_friend_send_messag
 import static com.zoffcc.applications.trifa.HelperGeneric.trigger_proper_wakeup_from_tox_service_thread;
 import static com.zoffcc.applications.trifa.HelperGeneric.trigger_proper_wakeup_outside_tox_service_thread;
 import static com.zoffcc.applications.trifa.HelperGeneric.vfs__unmount;
+import static com.zoffcc.applications.trifa.HelperGroup.is_valid_group_title_string;
 import static com.zoffcc.applications.trifa.HelperGroup.migrate_khandaq_community_display_names;
 import static com.zoffcc.applications.trifa.HelperGroup.new_or_updated_group;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_name;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_privacy_state;
+import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_topic;
+import static com.zoffcc.applications.trifa.HelperMessage.set_message_queueing_from_id;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_messageid;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_no_read_recvedts;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_resend_count;
@@ -134,6 +137,7 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_friend_get_connecti
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_chat_id;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_grouplist;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_topic;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_number_groups;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_privacy_state;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
@@ -150,12 +154,8 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_self_set_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_self_set_status_message;
 import static com.zoffcc.applications.trifa.MainActivity.tox_service_fg;
 import static com.zoffcc.applications.trifa.MainActivity.tox_util_friend_resend_message_v2;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.ADD_BOTS_ON_STARTUP;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.CONFERENCE_ID_LENGTH;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.ECHOBOT_INIT_NAME;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.ECHOBOT_INIT_STATUSMSG;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.ECHOBOT_TOXID;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GROUP_ID_LENGTH;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HAVE_INTERNET_CONNECTIVITY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOGFRIEND_ON_STARTUP_DONE_DB_KEY;
@@ -193,6 +193,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.global_showing_messagev
 import static com.zoffcc.applications.trifa.TRIFAGlobals.tcprelay_node_list;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_CANCEL;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_PAUSE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_HASH_LENGTH;
 
 public class TrifaToxService extends Service
@@ -216,6 +217,7 @@ public class TrifaToxService extends Service
     static long last_resend_pending_messages3_ms = -1;
     static long last_resend_pending_messages4_ms = -1;
     static long last_start_queued_fts_ms = -1;
+    static long last_resend_unsent_text_messages_ms = -1;
     static boolean need_wakeup_now = false;
     static int tox_thread_starting_up = 0;
 
@@ -794,7 +796,17 @@ public class TrifaToxService extends Service
                 {
                     group_name = "";
                 }
-                update_group_in_db_name(group_identifier, group_name);
+
+                String group_topic = tox_group_get_topic(group_numbers[conf_]);
+                if (is_valid_group_title_string(group_topic))
+                {
+                    update_group_in_db_name(group_identifier, group_topic);
+                    update_group_in_db_topic(group_identifier, group_topic);
+                }
+                else
+                {
+                    update_group_in_db_name(group_identifier, group_name);
+                }
 
                 final int new_privacy_state = tox_group_get_privacy_state(group_numbers[conf_]);
                 update_group_in_db_privacy_state(group_identifier, new_privacy_state);
@@ -1121,6 +1133,8 @@ public class TrifaToxService extends Service
                 HelperGeneric.update_savedata_file_wrapper();
 
                 load_and_add_all_friends();
+                remove_legacy_echobot_contact_if_present();
+                DbSecretKeyStorage.persistLastWorkingDbSecretKey(context_s, MainActivity.PREF__DB_secrect_key);
 
                 // --------------- bootstrap ---------------
                 // --------------- bootstrap ---------------
@@ -1164,46 +1178,6 @@ public class TrifaToxService extends Service
                 Log.i(TAG, "tox_iteration_interval_ms=" + tox_iteration_interval_ms);
 
                 MainActivity.tox_iterate();
-
-                if (ADD_BOTS_ON_STARTUP)
-                {
-                    boolean need_add_bots = true;
-
-                    try
-                    {
-                        if (get_g_opts("ADD_BOTS_ON_STARTUP_done") != null)
-                        {
-                            if (get_g_opts("ADD_BOTS_ON_STARTUP_done").equals("true"))
-                            {
-                                need_add_bots = false;
-                                Log.i(TAG, "need_add_bots=false");
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    if (need_add_bots)
-                    {
-                        Log.i(TAG, "need_add_bots:start");
-                        add_friend_real(ECHOBOT_TOXID);
-                        set_g_opts("ADD_BOTS_ON_STARTUP_done", "true");
-
-                        FriendList f_echobot = main_get_friend(ECHOBOT_TOXID.substring(0, 32 * 2).toUpperCase());
-                        if (f_echobot != null)
-                        {
-                            f_echobot.status_message = ECHOBOT_INIT_STATUSMSG;
-                            f_echobot.name = ECHOBOT_INIT_NAME;
-                            HelperFriend.update_friend_in_db_name(f_echobot);
-                            HelperFriend.update_friend_in_db_status_message(f_echobot);
-                            HelperFriend.update_single_friend_in_friendlist_view(f_echobot);
-                        }
-
-                        Log.i(TAG, "need_add_bots=true (INSERT)");
-                    }
-                }
 
                 // -------- add log friend --------
                 // -------- add log friend --------
@@ -1683,6 +1657,12 @@ public class TrifaToxService extends Service
             last_resend_pending_messages3_ms = System.currentTimeMillis();
             resend_v2_messages(true);
         }
+
+        if ((last_resend_unsent_text_messages_ms + (15 * 1000)) < System.currentTimeMillis())
+        {
+            last_resend_unsent_text_messages_ms = System.currentTimeMillis();
+            resend_unsent_text_messages();
+        }
     }
 
     private void start_queued_filetransfers()
@@ -1694,6 +1674,26 @@ public class TrifaToxService extends Service
 
             try
             {
+                List<com.zoffcc.applications.sorm.Message> pending_ft = orma.selectFromMessage().
+                        directionEq(1).
+                        TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                        ft_outgoing_startedEq(false).
+                        ft_outgoing_queuedEq(false).
+                        stateEq(TOX_FILE_CONTROL_PAUSE.value).
+                        sent_timestampLt(System.currentTimeMillis() - 1500).
+                        orderBySent_timestampAsc().
+                        toList();
+
+                if ((pending_ft != null) && (pending_ft.size() > 0))
+                {
+                    Iterator<com.zoffcc.applications.sorm.Message> pending_it = pending_ft.iterator();
+                    while (pending_it.hasNext())
+                    {
+                        Message m_pending = (Message) pending_it.next();
+                        set_message_queueing_from_id(m_pending.id, true);
+                    }
+                }
+
                 List<com.zoffcc.applications.sorm.Message> m_v1 = orma.selectFromMessage().
                         directionEq(1).
                         TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
@@ -2299,6 +2299,98 @@ public class TrifaToxService extends Service
             e.printStackTrace();
         }
         // loop through all pending outgoing 1-on-1 text messages V2 (resend the resend) --------------
+    }
+
+    static void resend_unsent_text_messages()
+    {
+        try
+        {
+            List<com.zoffcc.applications.sorm.Message> unsent = orma.selectFromMessage().
+                    directionEq(1).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_TYPE_TEXT.value).
+                    message_idEq(-1).
+                    readEq(false).
+                    orderBySent_timestampAsc().
+                    toList();
+
+            if ((unsent == null) || (unsent.isEmpty()))
+            {
+                return;
+            }
+
+            int sent_this_round = 0;
+            final int max_per_round = 10;
+            Iterator<com.zoffcc.applications.sorm.Message> ii = unsent.iterator();
+
+            while (ii.hasNext())
+            {
+                Message m_unsent = (Message) ii.next();
+
+                if (is_friend_online_real(tox_friend_by_public_key__wrapper(m_unsent.tox_friendpubkey)) == 0)
+                {
+                    if (m_unsent.sent_push < 1)
+                    {
+                        friend_call_push_url(m_unsent.tox_friendpubkey, m_unsent.sent_timestamp);
+                        orma.updateMessage().idEq(m_unsent.id).sent_push(1).execute();
+                    }
+                    continue;
+                }
+
+                MainActivity.send_message_result result = tox_friend_send_message_wrapper(
+                        m_unsent.tox_friendpubkey, 0, m_unsent.text, (m_unsent.sent_timestamp / 1000));
+
+                if (result == null)
+                {
+                    continue;
+                }
+
+                long res = result.msg_num;
+                if (res > -1)
+                {
+                    m_unsent.resend_count = 1;
+                    m_unsent.message_id = res;
+                }
+                else
+                {
+                    m_unsent.resend_count = 0;
+                    m_unsent.message_id = -1;
+                }
+
+                if (result.msg_v2)
+                {
+                    m_unsent.msg_version = 1;
+                }
+
+                if ((result.msg_hash_hex != null) && (!result.msg_hash_hex.isEmpty()))
+                {
+                    m_unsent.msg_id_hash = result.msg_hash_hex;
+                }
+
+                if ((result.msg_hash_v3_hex != null) && (!result.msg_hash_v3_hex.isEmpty()))
+                {
+                    m_unsent.msg_idv3_hash = result.msg_hash_v3_hex;
+                }
+
+                if ((result.raw_message_buf_hex != null) && (!result.raw_message_buf_hex.isEmpty()))
+                {
+                    m_unsent.raw_msgv2_bytes = result.raw_message_buf_hex;
+                }
+
+                update_message_in_db_messageid(m_unsent);
+                update_message_in_db_resend_count(m_unsent);
+                update_message_in_db_no_read_recvedts(m_unsent);
+
+                sent_this_round++;
+                if (sent_this_round >= max_per_round)
+                {
+                    break;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "resend_unsent_text_messages:EE:" + e.getMessage());
+        }
     }
 
     static void wakeup_tox_thread()

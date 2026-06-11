@@ -54,8 +54,13 @@ import static com.zoffcc.applications.trifa.HelperRelay.push_token_to_push_url;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__orbot_enabled;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__use_push_service;
 import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
+import static com.zoffcc.applications.trifa.HelperGeneric.del_g_opts;
+import static com.zoffcc.applications.trifa.HelperGeneric.get_g_opts;
+import static com.zoffcc.applications.trifa.HelperGeneric.set_g_opts;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
+import static com.zoffcc.applications.trifa.MainActivity.tox_friend_delete;
 import static com.zoffcc.applications.trifa.MainActivity.tox_friend_send_lossless_packet;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.ECHOBOT_LEGACY_PUBKEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.CONTROL_PROXY_MESSAGE_TYPE.CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_TOR_USERAGENT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_UNIFIED_WEBPUSH_CONTENT_ENCODING;
@@ -69,6 +74,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIF
 import static com.zoffcc.applications.trifa.TRIFAGlobals.UINT32_MAX_JAVA;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_name;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_toxid;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_ERR_FRIEND_ADD;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_PUBLIC_KEY_SIZE;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
@@ -944,6 +950,52 @@ public class HelperFriend
         //t.start();
     }
 
+    private static final String ECHOBOT_LEGACY_REMOVED_DB_KEY = "ECHOBOT_LEGACY_REMOVED_v1";
+
+    static void remove_legacy_echobot_contact_if_present()
+    {
+        try
+        {
+            if ("true".equals(get_g_opts(ECHOBOT_LEGACY_REMOVED_DB_KEY)))
+            {
+                return;
+            }
+
+            List<FriendList> existing = orma.selectFromFriendList().tox_public_key_stringEq(ECHOBOT_LEGACY_PUBKEY).toList();
+            if ((existing == null) || existing.isEmpty())
+            {
+                set_g_opts(ECHOBOT_LEGACY_REMOVED_DB_KEY, "true");
+                del_g_opts("ADD_BOTS_ON_STARTUP_done");
+                return;
+            }
+
+            Log.i(TAG, "remove_legacy_echobot_contact_if_present:start");
+
+            delete_friend_all_files(ECHOBOT_LEGACY_PUBKEY);
+            delete_friend_all_filetransfers(ECHOBOT_LEGACY_PUBKEY);
+            delete_friend_all_messages(ECHOBOT_LEGACY_PUBKEY);
+            delete_friend(ECHOBOT_LEGACY_PUBKEY);
+
+            final long friend_num = tox_friend_by_public_key__wrapper(ECHOBOT_LEGACY_PUBKEY);
+            if (friend_num > -1)
+            {
+                tox_friend_delete(friend_num);
+                HelperGeneric.update_savedata_file_wrapper();
+            }
+
+            set_g_opts(ECHOBOT_LEGACY_REMOVED_DB_KEY, "true");
+            del_g_opts("ADD_BOTS_ON_STARTUP_done");
+            add_all_friends_clear_wrapper(0);
+
+            Log.i(TAG, "remove_legacy_echobot_contact_if_present:done");
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            Log.i(TAG, "remove_legacy_echobot_contact_if_present:EE:" + e.getMessage());
+        }
+    }
+
     static void add_friend_real_norequest(String friend_tox_id)
     {
         // Log.i(TAG, "add_friend_real:add friend ID:" + friend_tox_id);
@@ -1114,13 +1166,111 @@ public class HelperFriend
         return true;
     }
 
+    static boolean is_tox_profile_ready()
+    {
+        final String my_toxid = MainActivity.get_my_toxid();
+        return (my_toxid != null) && (my_toxid.length() >= ((TOX_PUBLIC_KEY_SIZE * 2) + 12));
+    }
+
+    static FriendList build_friendlist_entry(final String friend_public_key, final long friendnum)
+    {
+        final FriendList f = new FriendList();
+        f.tox_public_key_string = friend_public_key;
+        f.name = initial_friend_display_name(friend_public_key, friendnum);
+        f.TOX_USER_STATUS = 0;
+        f.TOX_CONNECTION = 0;
+        f.TOX_CONNECTION_on_off = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
+        f.avatar_filename = null;
+        f.avatar_pathname = null;
+        f.added_timestamp = System.currentTimeMillis();
+        return f;
+    }
+
+    static boolean persist_new_friend_contact(final String friend_public_key, final long friendnum)
+    {
+        final FriendList f = build_friendlist_entry(friend_public_key, friendnum);
+
+        try
+        {
+            insert_into_friendlist_db(f);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "persist_new_friend_contact:db:EE:" + e.getMessage());
+            return false;
+        }
+
+        update_single_friend_in_friendlist_view(f);
+        refresh_friend_name_after_add(friendnum, f);
+        return true;
+    }
+
+    static boolean sync_tox_friend_to_contacts(final String friend_public_key)
+    {
+        if (lookup_friendlist_by_pubkey(friend_public_key) != null)
+        {
+            return true;
+        }
+
+        final long friendnum = tox_friend_by_public_key__wrapper(friend_public_key);
+        if ((friendnum == UINT32_MAX_JAVA) || (friendnum < 0))
+        {
+            return false;
+        }
+
+        return persist_new_friend_contact(friend_public_key, friendnum);
+    }
+
+    static void show_friend_add_error(final long friendnum)
+    {
+        if (friendnum >= 0)
+        {
+            return;
+        }
+
+        final int errCode = (int) (-friendnum);
+        String message = context_s.getString(R.string.add_friend_failed);
+
+        if (errCode == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_ALREADY_SENT.ordinal())
+        {
+            message = context_s.getString(R.string.add_friend_already_in_contacts);
+        }
+        else if (errCode == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_BAD_CHECKSUM.ordinal())
+        {
+            message = context_s.getString(R.string.add_friend_failed_bad_checksum);
+        }
+        else if (errCode == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_SET_NEW_NOSPAM.ordinal())
+        {
+            message = context_s.getString(R.string.add_friend_failed_use_full_id);
+        }
+        else if (errCode == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_OWN_KEY.ordinal())
+        {
+            message = context_s.getString(R.string.add_friend_failed_own_key);
+        }
+        else if (errCode == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_NULL.ordinal())
+        {
+            message = context_s.getString(R.string.add_friend_failed_not_ready);
+        }
+        else if (errCode == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_MALLOC.ordinal())
+        {
+            message = context_s.getString(R.string.add_friend_failed_memory);
+        }
+
+        Log.i(TAG, "show_friend_add_error:friendnum=" + friendnum + " errCode=" + errCode);
+        display_toast(message, false, 300);
+    }
+
     static void add_friend_real(String friend_tox_id)
     {
-        // Log.i(TAG, "add_friend_real:add friend ID:" + friend_tox_id);
-        // add friend ---------------
         if (friend_tox_id == null)
         {
             Log.i(TAG, "add_friend_real:add friend ID = NULL");
+            return;
+        }
+
+        if (!is_tox_profile_ready())
+        {
+            display_toast(context_s.getString(R.string.add_friend_failed_not_ready), false, 300);
             return;
         }
 
@@ -1128,72 +1278,62 @@ public class HelperFriend
         if (friend_tox_id == null)
         {
             Log.i(TAG, "add_friend_real:invalid friend ID");
-            display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+            display_toast(context_s.getString(R.string.add_friend_failed_invalid_id), false, 300);
             return;
         }
 
-        if (is_own_public_key(friend_tox_id.substring(0, (TOX_PUBLIC_KEY_SIZE * 2))))
+        final String friend_public_key = friend_tox_id.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
+
+        if (is_own_public_key(friend_public_key))
         {
             add_self_as_friend();
             return;
         }
 
+        if (lookup_friendlist_by_pubkey(friend_public_key) != null)
+        {
+            display_toast(context_s.getString(R.string.add_friend_already_in_contacts), false, 300);
+            return;
+        }
+
+        if (sync_tox_friend_to_contacts(friend_public_key))
+        {
+            display_toast(context_s.getString(R.string.add_friend_already_in_contacts), false, 300);
+            return;
+        }
+
         Log.i(TAG, "add_friend_real:add friend ID len:" + friend_tox_id.length());
-        long friendnum = MainActivity.tox_friend_add(friend_tox_id, "Hi"); // add friend
-        Log.i(TAG, "add_friend_real:add friend  #:" + friendnum);
-        HelperGeneric.update_savedata_file_wrapper(); // save toxcore datafile (new friend added)
+        long friendnum = MainActivity.tox_friend_add(friend_tox_id, "Hi");
+        Log.i(TAG, "add_friend_real:add friend #:" + friendnum);
 
-        if (friendnum > -1)
+        if (friendnum >= 0)
         {
-            // nospam=8 chars, checksum=4 chars
-            String friend_public_key = friend_tox_id.substring(0, friend_tox_id.length() - 12);
-            // Log.i(TAG, "add_friend_real:add friend PK:" + friend_public_key);
-            FriendList f = new FriendList();
-            f.tox_public_key_string = friend_public_key;
-
-            f.name = initial_friend_display_name(friend_public_key, friendnum);
-
-            f.TOX_USER_STATUS = 0;
-            f.TOX_CONNECTION = 0;
-            f.TOX_CONNECTION_on_off = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
-            f.avatar_filename = null;
-            f.avatar_pathname = null;
-
-            display_toast(context_s.getString(R.string.add_friend_success), false, 300);
-
-            try
+            HelperGeneric.update_savedata_file_wrapper();
+            if (persist_new_friend_contact(friend_public_key, friendnum))
             {
-                insert_into_friendlist_db(f);
+                display_toast(context_s.getString(R.string.add_friend_success), false, 300);
             }
-            catch (Exception e)
+            else
             {
-                // e.printStackTrace();
+                display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
             }
-
-            update_single_friend_in_friendlist_view(f);
-            refresh_friend_name_after_add(friendnum, f);
+            return;
         }
-        else
+
+        if ((-friendnum) == TOX_ERR_FRIEND_ADD.TOX_ERR_FRIEND_ADD_ALREADY_SENT.ordinal())
         {
-            display_toast(context_s.getString(R.string.add_friend_failed), false, 300);
+            if (sync_tox_friend_to_contacts(friend_public_key))
+            {
+                display_toast(context_s.getString(R.string.add_friend_already_in_contacts), false, 300);
+            }
+            else
+            {
+                show_friend_add_error(friendnum);
+            }
+            return;
         }
 
-        if (friendnum == -1)
-        {
-            Log.i(TAG, "add_friend_real:friend already added, or request already sent");
-
-            /*
-            // still add the friend to the DB
-            String friend_public_key = friend_tox_id.substring(0, friend_tox_id.length() - 12);
-            add_friend_to_system(friend_public_key, false, null);
-            */
-        }
-        else if (friendnum < -1)
-        {
-            Log.i(TAG, "add_friend_real:some error occured");
-        }
-
-        // add friend ---------------
+        show_friend_add_error(friendnum);
     }
 
     static boolean is_placeholder_friend_name(String name, String friend_pubkey)

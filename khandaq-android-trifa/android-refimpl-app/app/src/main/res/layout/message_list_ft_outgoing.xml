@@ -48,7 +48,7 @@
                         android:layout_weight="1"
                         android:paddingLeft="10dp"
                         android:text="..."
-                        android:textColor="#8A000000"
+                        android:textColor="@color/message_bubble_text"
                         android:textColorLink="@color/textblock_link_color_for_blue"
                         android:textSize="20sp"
                         app:emojiSize="@dimen/emoji_size_in_textview"/>
@@ -96,7 +96,7 @@
                 <LinearLayout
                     android:id="@+id/ft_preview_container"
                     android:layout_width="fill_parent"
-                    android:layout_height="250dp"
+                    android:layout_height="wrap_content"
                     android:layout_marginRight="0dp"
                     android:gravity="center_horizontal"
                     android:orientation="horizontal"

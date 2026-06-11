@@ -62,6 +62,11 @@ class CallManager {
         requestTransaction(transaction)
     }
 
+    func answerViaCallKit(uuid: UUID) {
+        let answerAction = CXAnswerCallAction(call: uuid)
+        requestTransaction(CXTransaction(action: answerAction))
+    }
+
     func end(call: Call) {
         let endCallAction = CXEndCallAction(call: call.uuid)
         // wrap action in a transaction

@@ -37,6 +37,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -101,6 +102,7 @@ import java.util.Random;
 import java.util.regex.Pattern;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.appcompat.app.AlertDialog;
 import androidx.exifinterface.media.ExifInterface;
 import de.hdodenhof.circleimageview.CircleImageView;
@@ -1943,6 +1945,31 @@ public class HelperGeneric
      * @param dp A value in dp (density independent pixels) unit. Which we need to convert into pixels
      * @return A float value to represent px equivalent to dp depending on device density
      */
+    public static void apply_chat_input_typography(android.widget.TextView textView)
+    {
+        if (textView == null)
+        {
+            return;
+        }
+        try
+        {
+            Typeface typeface = ResourcesCompat.getFont(textView.getContext(), R.font.khandaq_chat);
+            if (typeface != null)
+            {
+                textView.setTypeface(typeface);
+            }
+            else
+            {
+                textView.setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL);
+            }
+        }
+        catch (Exception ignored)
+        {
+            textView.setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL);
+        }
+        textView.setLineSpacing(0, TRIFAGlobals.MESSAGE_LINE_SPACING_MULTIPLIER);
+    }
+
     public static float dp2px(float dp)
     {
         try
@@ -2449,6 +2476,44 @@ public class HelperGeneric
             e.printStackTrace();
             return "_Datetime_ERROR_";
         }
+    }
+
+    static String short_time_format(long timestamp_in_millis)
+    {
+        if (timestamp_in_millis <= 0)
+        {
+            return "";
+        }
+
+        try
+        {
+            return MainActivity.df_time_only.format(new Date(timestamp_in_millis));
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return "";
+        }
+    }
+
+    static String format_chat_message_time(final com.zoffcc.applications.sorm.Message m, final boolean outgoing)
+    {
+        if (m == null)
+        {
+            return "";
+        }
+
+        long ts;
+        if (outgoing)
+        {
+            ts = m.sent_timestamp > 0 ? m.sent_timestamp : m.rcvd_timestamp;
+        }
+        else
+        {
+            ts = m.rcvd_timestamp > 0 ? m.rcvd_timestamp : m.sent_timestamp;
+        }
+
+        return short_time_format(ts);
     }
 
     static String seconds_time_format_or_empty(long time_in_seconds)
@@ -4846,6 +4911,28 @@ public class HelperGeneric
         return out;
     }
 
+    static String truncate_utf8_to_max_bytes(final String value, final int maxBytes)
+    {
+        if ((value == null) || (maxBytes <= 0))
+        {
+            return "";
+        }
+
+        final byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
+        if (utf8.length <= maxBytes)
+        {
+            return value;
+        }
+
+        int end = maxBytes;
+        while (end > 0 && ((utf8[end] & 0xC0) == 0x80))
+        {
+            end--;
+        }
+
+        return new String(utf8, 0, end, StandardCharsets.UTF_8);
+    }
+
     static String sanitize_tox_id_input(final String in)
     {
         if (in == null)
@@ -4858,8 +4945,20 @@ public class HelperGeneric
         {
             cleaned = cleaned.substring(4);
         }
+        else if (cleaned.regionMatches(true, 0, "khandaq:", 0, 8))
+        {
+            cleaned = cleaned.substring(8);
+        }
 
         return filter_out_non_hex_chars(cleaned);
+    }
+
+    static boolean is_valid_tox_address_checksum(final byte[] address)
+    {
+        final int checksum = tox_data_checksum(address, TOX_PUBLIC_KEY_SIZE + TOX_NOSPAM_SIZE);
+        final int stored = ((address[TOX_PUBLIC_KEY_SIZE + TOX_NOSPAM_SIZE] & 0xFF) |
+                ((address[TOX_PUBLIC_KEY_SIZE + TOX_NOSPAM_SIZE + 1] & 0xFF) << 8));
+        return checksum == stored;
     }
 
     static int tox_data_checksum(final byte[] data, final int length)
@@ -4897,6 +4996,12 @@ public class HelperGeneric
 
         if (hex.length() == (TOX_ADDRESS_SIZE * 2))
         {
+            final byte[] address = hex_to_bytes(hex);
+            if (!is_valid_tox_address_checksum(address))
+            {
+                return null;
+            }
+
             return hex;
         }
 

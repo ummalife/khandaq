@@ -172,12 +172,16 @@ import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages_incoming_file;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages_text_only;
-import static com.zoffcc.applications.trifa.HelperGroup.get_group_display_name;
+import static com.zoffcc.applications.trifa.HelperGroup.ensure_group_in_tox;
+import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
 import static com.zoffcc.applications.trifa.HelperGroup.group_send_failure_reason;
 import static com.zoffcc.applications.trifa.HelperGroup.group_send_precheck_failure_reason;
+import static com.zoffcc.applications.trifa.HelperGroup.is_khandaq_community_group;
+import static com.zoffcc.applications.trifa.HelperGroup.khandaq_community_promote_all_observers_if_moderator;
+import static com.zoffcc.applications.trifa.HelperGroup.request_khandaq_community_history_from_peers;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peerlist;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_invite_friend;
+import static com.zoffcc.applications.trifa.HelperGroup.invite_friend_to_group;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_offline_peer_count;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_count;
@@ -484,6 +488,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_group_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
+        HelperGeneric.apply_chat_input_typography(ml_new_group_message);
 
         messageSearchView = (SearchView) findViewById(R.id.group_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -1529,7 +1534,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
                 final long conference_num = tox_group_by_groupid__wrapper(group_id);
-                final String f_name = get_group_display_name(group_id, tox_group_get_name(conference_num));
+                final String f_name = get_effective_group_title(conference_num, group_id);
 
                 Runnable myRunnable = new Runnable()
                 {
@@ -1877,10 +1882,36 @@ public class GroupMessageListActivity extends AppCompatActivity
         wakeup_tox_thread();
         try
         {
+            ensure_group_in_tox(group_id);
+            set_group_connection_status_icon();
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        try
+        {
             update_group_all_users();
         }
         catch (Exception e)
         {
+        }
+
+        if (is_khandaq_community_group(group_id))
+        {
+            try
+            {
+                final long group_num = tox_group_by_groupid__wrapper(group_id);
+                if (group_num >= 0)
+                {
+                    khandaq_community_promote_all_observers_if_moderator(group_num);
+                }
+                request_khandaq_community_history_from_peers(group_id);
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
         }
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -4169,57 +4200,25 @@ public class GroupMessageListActivity extends AppCompatActivity
     {
         super.onActivityResult(requestCode, resultCode, data);
 
-        Log.i(TAG, "onActivityResult:tox_group_invite_friend:start");
-        if (requestCode == SelectFriendSingleActivity_ID)
+        if (requestCode == SelectFriendSingleActivity_ID && resultCode == RESULT_OK && data != null &&
+            data.getData() != null)
         {
-            Log.i(TAG, "onActivityResult:tox_group_invite_friend:001");
-            if (resultCode == RESULT_OK)
+            try
             {
-                Log.i(TAG, "onActivityResult:tox_group_invite_friend:002");
-                try
+                final String result_data = data.getData().toString();
+                final String result_friend_pubkey = result_data.substring(2);
+                if (result_friend_pubkey.length() == TOX_PUBLIC_KEY_SIZE * 2)
                 {
-                    int item_type = Integer.parseInt(data.getData().toString().substring(0, 1));
-                    String result_friend_pubkey = data.getData().toString().substring(2);
-                    Log.i(TAG, "onActivityResult:tox_group_invite_friend:003:");
-                    if (result_friend_pubkey != null)
+                    if (group_id.equals("-1"))
                     {
-                        Log.i(TAG, "onActivityResult:tox_group_invite_friend:004:");
-                        if (result_friend_pubkey.length() == TOX_PUBLIC_KEY_SIZE * 2)
-                        {
-                            Log.i(TAG, "onActivityResult:tox_group_invite_friend:result_friend_pubkey:ok");
-                            long friend_num_temp_safety2 = tox_friend_by_public_key__wrapper(result_friend_pubkey);
-                            if (friend_num_temp_safety2 >= 0)
-                            {
-                                if (group_id.equals("-1"))
-                                {
-                                    group_id = group_id_prev;
-                                    // Log.i(TAG, "onActivityResult:001:conf_id=" + conf_id);
-                                }
-
-                                final long group_num = tox_group_by_groupid__wrapper(group_id);
-
-                                Log.d(TAG, "onActivityResult:info:tox_group_invite_friend:group_num=" + group_num);
-
-                                if (group_num > -1)
-                                {
-                                    int res_conf_invite = tox_group_invite_friend(group_num, friend_num_temp_safety2);
-                                    Log.d(TAG, "onActivityResult:info:tox_group_invite_friend:res_conf_invite=" +
-                                               res_conf_invite);
-                                    if (res_conf_invite != 1)
-                                    {
-                                        Log.d(TAG,
-                                              "onActivityResult:info:tox_group_invite_friend:ERR:" + res_conf_invite);
-                                    }
-                                    update_savedata_file_wrapper();
-                                }
-                            }
-                        }
+                        group_id = group_id_prev;
                     }
+                    invite_friend_to_group(group_id, result_friend_pubkey);
                 }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+            }
+            catch (Exception e)
+            {
+                Log.w(TAG, "onActivityResult:invite_friend_to_group:EE:" + e.getMessage());
             }
         }
         else if (requestCode == MEDIAPICK_ID_001 && resultCode == Activity.RESULT_OK)

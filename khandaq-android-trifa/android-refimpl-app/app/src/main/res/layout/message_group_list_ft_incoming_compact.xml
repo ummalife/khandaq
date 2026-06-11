@@ -132,7 +132,7 @@
                     android:layout_height="0dp"
                     android:paddingBottom="3dp"
                     android:text=""
-                    android:textColor="#8A000000"
+                    android:textColor="@color/message_bubble_text"
                     android:textColorLink="@color/textblock_link_color_for_orange"
                     android:textSize="1sp"
                     app:emojiSize="@dimen/emoji_size_in_textview" />

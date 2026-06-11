@@ -78,22 +78,14 @@ class PinAuthorizationCoordinator: NSObject {
     }
 
     @objc func appDidBecomeActiveNotification() {
-        switch state {
-            case .unlocked:
-                // unlocked, nothing to do here
-                break
-            case .locked(let lockTime):
-                isPinDateExpired(lockTime) ? challengeUserToAuthorize(lockTime) : unlock()
-            case .validatingPin:
-                // checking pin, no action required
-                break
-        }
+        presentLockChallengeIfApplicationActive()
     }
 }
 
 extension PinAuthorizationCoordinator: CoordinatorProtocol {
     func startWithOptions(_ options: CoordinatorOptions?) {
-        // Biometric challenge runs from applicationDidBecomeActive when UI is ready.
+        // Cold start: applicationDidBecomeActive often fires before this coordinator exists.
+        presentLockChallengeIfApplicationActive()
     }
 }
 
@@ -126,6 +118,19 @@ extension PinAuthorizationCoordinator: EnterPinControllerDelegate {
 }
 
 private extension PinAuthorizationCoordinator {
+    func presentLockChallengeIfApplicationActive() {
+        guard UIApplication.shared.applicationState == .active else {
+            return
+        }
+
+        switch state {
+            case .unlocked, .validatingPin:
+                break
+            case .locked(let lockTime):
+                isPinDateExpired(lockTime) ? challengeUserToAuthorize(lockTime) : unlock()
+        }
+    }
+
     func lockIfNeeded(_ lockTime: CFTimeInterval) {
         guard submanagerObjects.getProfileSettings().unlockPinCode != nil else {
             return

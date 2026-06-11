@@ -9,8 +9,8 @@
         <item name="android:actionModeBackground">@color/md_orange_400</item>
         <item name="windowActionModeOverlay">true</item>
 
-        <item name="material_drawer_background">@color/md_white_1000</item>
-        <item name="material_drawer_primary_text">@color/md_black_1000</item>
+        <item name="material_drawer_background">@color/khandaq_surface</item>
+        <item name="material_drawer_primary_text">@color/khandaq_text</item>
         <item name="material_drawer_primary_icon">@color/gray</item>
 
         <!--<item name="android:textColorPrimary">@android:color/white</item>-->

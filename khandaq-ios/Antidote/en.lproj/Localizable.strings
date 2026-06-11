@@ -59,6 +59,9 @@
 "pin_enabled" = "Enable PIN";
 /* PIN screen screen */
 "pin_touch_id_enabled" = "Enable Touch ID";
+"pin_face_id_enabled" = "Enable Face ID";
+"pin_biometrics_unavailable" = "Biometric unlock is not available on this device.";
+"pin_biometrics_failed" = "Biometric authentication failed. Try again or use your PIN.";
 /* PIN screen screen */
 "pin_description" = "Prevent unauthorized access to Khandaq with a PIN.";
 /* PIN screen screen */
@@ -389,6 +392,19 @@
 "call_error_contact_is_offline" = "Contact is offline";
 /* Call error */
 "call_error_no_active_call" = "There is no active call";
+/* Call error */
+"call_error_codec" = "Could not initialize audio or video codecs";
+/* Call error */
+"call_error_connection" = "Could not synchronize with the caller. Try again.";
+/* Call error */
+"call_error_bitrate" = "Invalid call bitrate settings";
+/* Call error */
+"call_error_contact_unreachable" = "Contact is unreachable";
+/* Call error */
+"call_error_microphone_denied" = "Microphone access is required to answer calls";
+"permission_denied_title" = "Permission required";
+"camera_access_denied_message" = "Camera access is disabled. Allow camera access in Settings to use this feature.";
+"open_settings" = "Settings";
 
 /* Error while using color theme */
 "theme_error_cannot_open" = "Cannot open theme, wrong format";

@@ -35,6 +35,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
+import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_title;
+
 public class AddPublicGroupActivity extends AppCompatActivity
 {
     private static final String TAG = "trifa.AddPubGrpActy";
@@ -110,9 +112,13 @@ public class AddPublicGroupActivity extends AppCompatActivity
 
         if (group_name_ok == true)
         {
-            String group_name_clean = groupname_text.getText().toString().
-                    replace("\r", "").
-                    replace("\n", "");
+            final String group_name_clean = sanitize_group_title(groupname_text.getText().toString());
+            if (group_name_clean.isEmpty())
+            {
+                setResult(RESULT_CANCELED, intent);
+                finish();
+                return;
+            }
 
             intent.putExtra("group_name", group_name_clean);
             setResult(RESULT_OK, intent);

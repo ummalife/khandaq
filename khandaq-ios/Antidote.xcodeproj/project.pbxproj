@@ -148,6 +148,7 @@
 		111783371DC647F8000C1721 /* ErrorHandling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119AD1C91BDED6E9000C5CB8 /* ErrorHandling.swift */; };
 		111783381DC647F8000C1721 /* ExceptionHandling.m in Sources */ = {isa = PBXBuildFile; fileRef = 9CDC092B1C34102F00DC0D63 /* ExceptionHandling.m */; };
 		111783391DC647F8000C1721 /* HelperFunctions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640771C2DC15400D24C6D /* HelperFunctions.swift */; };
+		1117833A1DC647F8000C1722 /* MediaPermissionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640791C2DC15400D24C6E /* MediaPermissionHelper.swift */; };
 		1117833A1DC647F8000C1721 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FA0EE01BC591FC00F3DA5B /* Logger.swift */; };
 		1117833B1DC647FF000C1721 /* Reach.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11771E351CA5C6E900EC259E /* Reach.swift */; };
 		1117833C1DC64810000C1721 /* BubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B253131C4A79A50068F47C /* BubbleView.swift */; };
@@ -419,6 +420,7 @@
 		11E6406D1C2D6C3500D24C6D /* ViewPassingGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E6406C1C2D6C3500D24C6D /* ViewPassingGestures.swift */; };
 		11E640761C2DBAE200D24C6D /* AddFriendController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640751C2DBAE200D24C6D /* AddFriendController.swift */; };
 		11E640781C2DC15400D24C6D /* HelperFunctions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640771C2DC15400D24C6D /* HelperFunctions.swift */; };
+		11E6407A1C2DC15400D24C6E /* MediaPermissionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640791C2DC15400D24C6E /* MediaPermissionHelper.swift */; };
 		11F08D131DE0610B00F80F5F /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 11F08D171DE0610B00F80F5F /* InfoPlist.strings */; };
 		11F08D141DE0610B00F80F5F /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 11F08D171DE0610B00F80F5F /* InfoPlist.strings */; };
 		11F08D151DE0610B00F80F5F /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 11F08D171DE0610B00F80F5F /* InfoPlist.strings */; };
@@ -560,6 +562,7 @@
 		9CEE6B0A1C4E8FDC00A1ECB5 /* UIViewControllerExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1164C8F51BC98F8300B91107 /* UIViewControllerExtension.swift */; };
 		9CEE6B0B1C4E8FDC00A1ECB5 /* ErrorHandling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119AD1C91BDED6E9000C5CB8 /* ErrorHandling.swift */; };
 		9CEE6B0C1C4E8FDC00A1ECB5 /* HelperFunctions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640771C2DC15400D24C6D /* HelperFunctions.swift */; };
+		9CEE6B0D1C4E8FDC00A1ECB6 /* MediaPermissionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640791C2DC15400D24C6E /* MediaPermissionHelper.swift */; };
 		9CEE6B0D1C4E8FDC00A1ECB5 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FA0EE01BC591FC00F3DA5B /* Logger.swift */; };
 		9CEE6B0E1C4E8FDC00A1ECB5 /* BubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B253131C4A79A50068F47C /* BubbleView.swift */; };
 		9CEE6B0F1C4E8FDC00A1ECB5 /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A21EFC1C45BDF200E80A89 /* ChatInputView.swift */; };
@@ -883,6 +886,7 @@
 		11E6406C1C2D6C3500D24C6D /* ViewPassingGestures.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewPassingGestures.swift; sourceTree = "<group>"; };
 		11E640751C2DBAE200D24C6D /* AddFriendController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AddFriendController.swift; sourceTree = "<group>"; };
 		11E640771C2DC15400D24C6D /* HelperFunctions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HelperFunctions.swift; sourceTree = "<group>"; };
+		11E640791C2DC15400D24C6E /* MediaPermissionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MediaPermissionHelper.swift; sourceTree = "<group>"; };
 		11F08D161DE0610B00F80F5F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		11F08D1E1DE0611700F80F5F /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		11F08D1F1DE0611800F80F5F /* zh */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh; path = zh.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -1406,6 +1410,7 @@
 				9CDC092A1C34102F00DC0D63 /* ExceptionHandling.h */,
 				9CDC092B1C34102F00DC0D63 /* ExceptionHandling.m */,
 				11E640771C2DC15400D24C6D /* HelperFunctions.swift */,
+				11E640791C2DC15400D24C6E /* MediaPermissionHelper.swift */,
 				11FA0EE01BC591FC00F3DA5B /* Logger.swift */,
 			);
 			name = Functions;
@@ -2002,6 +2007,7 @@
 				1117830B1DC6479E000C1721 /* Theme.swift in Sources */,
 				1117833F1DC64810000C1721 /* ChatPrivateTitleView.swift in Sources */,
 				111783391DC647F8000C1721 /* HelperFunctions.swift in Sources */,
+				1117833A1DC647F8000C1722 /* MediaPermissionHelper.swift in Sources */,
 				1117834D1DC64810000C1721 /* StaticBackgroundView.swift in Sources */,
 				113BBBA91EA88EAC00540E6C /* ChatTypingHeaderView.swift in Sources */,
 				111782FD1DC6479E000C1721 /* AudioPlayer.swift in Sources */,
@@ -2219,6 +2225,7 @@
 				116DCE3B1CAAF85300B693EC /* NSURLExtension.swift in Sources */,
 				1183BCDD1CA1FD55000CD310 /* ChatProgressBridge.swift in Sources */,
 				11E640781C2DC15400D24C6D /* HelperFunctions.swift in Sources */,
+				11E6407A1C2DC15400D24C6E /* MediaPermissionHelper.swift in Sources */,
 				11FA0EEB1BC5A68600F3DA5B /* FriendsTabCoordinator.swift in Sources */,
 				1164C8F01BC982FF00B91107 /* UIImageExtension.swift in Sources */,
 				4E4B267F27C0DCAE00E07A66 /* Call.swift in Sources */,
@@ -2384,6 +2391,7 @@
 				9CEE6ABA1C4E8FDC00A1ECB5 /* BaseCellModel.swift in Sources */,
 				1117829A1DC53545000C1721 /* OCTSubmanagerObjectsMock.swift in Sources */,
 				9CEE6B0C1C4E8FDC00A1ECB5 /* HelperFunctions.swift in Sources */,
+				9CEE6B0D1C4E8FDC00A1ECB6 /* MediaPermissionHelper.swift in Sources */,
 				113F03231CAFE5190009ABE1 /* ChatOutgoingTextCellSnapshotTest.swift in Sources */,
 				116634E11C7B8D770072C980 /* StaticTableInfoCell.swift in Sources */,
 				11771E2D1CA5C3F200EC259E /* AutomationCoordinator.swift in Sources */,
@@ -2912,7 +2920,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142820;
+				CURRENT_PROJECT_VERSION = 142824;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -2946,7 +2954,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142820;
+				CURRENT_PROJECT_VERSION = 142824;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;

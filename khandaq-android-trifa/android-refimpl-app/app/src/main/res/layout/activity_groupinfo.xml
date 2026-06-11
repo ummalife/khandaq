@@ -200,9 +200,10 @@
                         android:layout_marginRight="20dp"
                         android:hint="@string/layout___group_peerlimit"
                         android:imeOptions="flagNoPersonalizedLearning"
-                        android:inputType="text"
+                        android:inputType="number"
                         android:maxLines="1"
-                        android:singleLine="true" />
+                        android:singleLine="true"
+                        android:textColor="@color/text_on_light_surface" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -235,7 +236,8 @@
                         android:imeOptions="flagNoPersonalizedLearning"
                         android:inputType="text"
                         android:maxLines="1"
-                        android:singleLine="true" />
+                        android:singleLine="true"
+                        android:textColor="@color/text_on_light_surface" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 

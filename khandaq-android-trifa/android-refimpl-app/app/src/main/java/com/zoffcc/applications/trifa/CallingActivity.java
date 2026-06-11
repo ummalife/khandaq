@@ -38,6 +38,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -66,6 +68,7 @@ import com.etiennelawlor.discreteslider.library.ui.DiscreteSlider;
 import com.google.speech.levelmeter.BarLevelDrawable;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
+import com.zoffcc.applications.sorm.FriendList;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -78,7 +81,10 @@ import static android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_aec_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_vu_in;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_vu_out;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_audio_play_volume_percent;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_call_playback_gain;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_aec_active;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.set_gainprocessing_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_rec_preset;
 import static com.zoffcc.applications.trifa.CameraWrapper.camera_preview_call_back_ts_first_frame;
 import static com.zoffcc.applications.trifa.CameraWrapper.getRotation;
@@ -87,8 +93,8 @@ import static com.zoffcc.applications.trifa.HeadsetStateReceiver.isBluetoothConn
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.format_timeduration_from_seconds;
-import static com.zoffcc.applications.trifa.HelperGeneric.get_vfs_image_filename_friend_avatar;
-import static com.zoffcc.applications.trifa.HelperGeneric.put_vfs_image_on_imageview_real;
+import static com.zoffcc.applications.trifa.HelperGeneric.applyActiveCallVideoBitrate;
+import static com.zoffcc.applications.trifa.HelperGeneric.applyCallStreamVolume;
 import static com.zoffcc.applications.trifa.HelperGeneric.reset_audio_mode;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_audio_to_ear;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_audio_to_headset;
@@ -201,16 +207,16 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static View video_box_left_top_01 = null;
     static View video_box_right_top_01 = null;
     final static String MIME_TYPE = "video/avc";   // H.264 Advanced Video Coding
-    final static int FRAME_RATE = 20;              // ~ estimated fps
-    final static int IFRAME_INTERVAL = 1;          // n seconds between I-frames
-    final static int IFRAME_INTERVAL_START = 1;          // n seconds between I-frames
+    final static int FRAME_RATE = 30;
+    final static int IFRAME_INTERVAL = 2;
+    final static int IFRAME_INTERVAL_START = 2;
     private static MediaCodec.BufferInfo mBufferInfo;
     private static MediaCodec mEncoder;
     private static MediaPlayer mMediaPlayer = null;
     private static MediaFormat video_encoder_format = null;
     private static int video_encoder_width = 640; // start a dummy start value, DO NOT CHANGE
     private static int video_encoder_height = 480; // start a dummy start value, DO NOT CHANGE
-    private static int v_bitrate_bits_per_second = 20 * 1000; // video bitrate <n> bps, in bits per second
+    private static int v_bitrate_bits_per_second = 1500 * 1000;
     private static long encode_last_v_bitrate_change = -1;
     public static byte[] global_sps_pps_nal_unit_bytes = null;
     public static int send_sps_pps_every_x_frames_current = 0;
@@ -430,6 +436,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     try
                     {
                         set_audio_play_volume_percent(PREF__audio_play_volume_percent);
+                        na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
                     }
                     catch (Exception ee)
                     {
@@ -583,18 +590,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         try
         {
-            final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
-                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-            caller_avatar_view.setImageDrawable(d1);
-
-            String fname = get_vfs_image_filename_friend_avatar(
-                    tox_friend_by_public_key__wrapper(Callstate.friend_pubkey));
-
-            if (fname != null)
+            final FriendList friend = main_get_friend(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey));
+            String displayName = friend.name;
+            if (friend.alias_name != null && friend.alias_name.length() > 0)
             {
-                put_vfs_image_on_imageview_real(this, caller_avatar_view, d1, fname, false, true, main_get_friend(
-                        tox_friend_by_public_key__wrapper(Callstate.friend_pubkey)));
+                displayName = friend.alias_name;
             }
+            ChatBubbleUiHelper.fill_profile_peer_icon(caller_avatar_view, Callstate.friend_pubkey, displayName);
         }
         catch (Exception e1)
         {
@@ -662,6 +664,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                     getApplicationContext());
                             settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                            applyActiveCallVideoBitrate();
                         }
                     }
                     catch (Exception e)
@@ -713,6 +716,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                     getApplicationContext());
                             settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                            applyActiveCallVideoBitrate();
                         }
                     }
                     catch (Exception e)
@@ -764,12 +768,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                     getApplicationContext());
                             settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                            applyActiveCallVideoBitrate();
                         }
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "text_vq_low:touch:001:EE:" + e.getMessage());
+                        Log.i(TAG, "text_vq_high:touch:001:EE:" + e.getMessage());
                     }
                 }
                 return true;
@@ -788,9 +793,18 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             if (!dh._Detect())
             {
-                video_box_speaker_button.setText("Speaker: ON");
                 AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                set_audio_to_loudspeaker(manager);
+                if (Callstate.audio_speaker)
+                {
+                    video_box_speaker_button.setText("Speaker: ON");
+                    set_audio_to_loudspeaker(manager);
+                }
+                else
+                {
+                    video_box_speaker_button.setText("Speaker: OFF");
+                    set_audio_to_ear(manager);
+                }
+                applyCallAudioProcessing(Callstate.audio_speaker);
             }
             else
             {
@@ -832,11 +846,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         {
                             set_audio_to_loudspeaker(audio_manager_s);
                             video_box_speaker_button.setText("Speaker: ON");
+                            applyCallAudioProcessing(true);
                         }
                         else
                         {
                             set_audio_to_ear(audio_manager_s);
                             video_box_speaker_button.setText("Speaker: OFF");
+                            applyCallAudioProcessing(false);
                         }
                     }
                     catch (Exception e)
@@ -952,6 +968,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                 getApplicationContext());
                         settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                        applyActiveCallVideoBitrate();
                     }
                     else
                     {
@@ -1777,6 +1794,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         Log.i(TAG, "restart_audio_system__normal_call:101");
         HelperGeneric.restart_audio_system();
+        requestAudioFocus();
+        applyCallAudioProcessing(Callstate.audio_speaker);
 
         // update call time every second -----------
         final Handler ha = new Handler();
@@ -2243,30 +2262,54 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         mContentView.setVisibility(View.INVISIBLE);
     }
 
-    private void requestAudioFocus()
+    static void requestAudioFocus()
     {
-        //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-        //        {
-        //            AudioAttributes playbackAttributes = new AudioAttributes.Builder().setUsage(
-        //                    AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(
-        //                    AudioAttributes.CONTENT_TYPE_SPEECH).build();
-        //            AudioFocusRequest focusRequest = new AudioFocusRequest.Builder(
-        //                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(
-        //                    playbackAttributes).setAcceptsDelayedFocusGain(true).setOnAudioFocusChangeListener(
-        //                    new AudioManager.OnAudioFocusChangeListener()
-        //                    {
-        //                        @Override
-        //                        public void onAudioFocusChange(int i)
-        //                        {
-        //                        }
-        //                    }).build();
-        //            audio_manager_s.requestAudioFocus(focusRequest);
-        //        }
-        //        else
-        //        {
-        //            audio_manager_s.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL,
-        //                                              AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-        //        }
+        if (audio_manager_s == null)
+        {
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
+            AudioAttributes playbackAttributes = new AudioAttributes.Builder().setUsage(
+                    AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(
+                    AudioAttributes.CONTENT_TYPE_SPEECH).build();
+            AudioFocusRequest focusRequest = new AudioFocusRequest.Builder(
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(
+                    playbackAttributes).setAcceptsDelayedFocusGain(true).setOnAudioFocusChangeListener(
+                    new AudioManager.OnAudioFocusChangeListener()
+                    {
+                        @Override
+                        public void onAudioFocusChange(int i)
+                        {
+                        }
+                    }).build();
+            audio_manager_s.requestAudioFocus(focusRequest);
+        }
+        else
+        {
+            audio_manager_s.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL,
+                                              AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+        }
+    }
+
+    static void applyCallAudioProcessing(boolean speaker)
+    {
+        try
+        {
+            set_gainprocessing_active(1);
+            set_aec_active((speaker || !Callstate.audio_call) ? 1 : 0);
+            na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
+            na_set_call_playback_gain(speaker ? 3 : 2);
+            if (audio_manager_s != null)
+            {
+                applyCallStreamVolume(audio_manager_s, speaker);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -2274,60 +2317,22 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         if (event.sensor.getType() == Sensor.TYPE_PROXIMITY)
         {
-            // Log.i(TAG, "onSensorChanged:value=" + event.values[0] + " max=" + proximity_sensor.getMaximumRange());
+            if (Callstate.audio_speaker)
+            {
+                if (event.values[0] >= proximity_sensor.getMaximumRange())
+                {
+                    turnOnScreen();
+                }
+                return;
+            }
+
             if (event.values[0] < proximity_sensor.getMaximumRange())
             {
-                // close to ear
-                if (Callstate.audio_speaker == true)
-                {
-                    Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> EAR");
-
-                    try
-                    {
-                        if (!dh._Detect())
-                        {
-                            set_aec_active(0);
-                            AudioManager manager = (AudioManager) context_s.getSystemService(Context.AUDIO_SERVICE);
-                            set_audio_to_ear(manager);
-                            Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> EAR:set_audio_to_ear()");
-                            turnOffScreen();
-                            Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> EAR:turnOffScreen()");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                    }
-                }
+                turnOffScreen();
             }
             else
             {
-                // away from ear
-                if (Callstate.audio_speaker == false)
-                {
-                    Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> speaker");
-
-                    try
-                    {
-                        if (!dh._Detect())
-                        {
-                            if (PREF__use_software_aec)
-                            {
-                                set_aec_active(0); // --ACTIVE--
-                            }
-                            else
-                            {
-                                set_aec_active(0);
-                            }
-                            AudioManager manager = (AudioManager) context_s.getSystemService(Context.AUDIO_SERVICE);
-                            set_audio_to_loudspeaker(manager);
-                            turnOnScreen();
-                            Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> speaker:turnOnScreen()");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                    }
-                }
+                turnOnScreen();
             }
         }
         else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
@@ -2737,6 +2742,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 try
                 {
                     set_audio_play_volume_percent(PREF__audio_play_volume_percent);
+                    na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
                 }
                 catch (Exception ee)
                 {
@@ -2753,10 +2759,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static void on_call_started_actions()
     {
         set_min_and_max_video_bitrate();
+        applyActiveCallVideoBitrate();
         set_video_delay_ms();
         set_audio_play_volume();
         stop_ringtone();
         set_calling_audio_mode();
+        applyCallAudioProcessing(Callstate.audio_speaker);
+        requestAudioFocus();
 
         Runnable myRunnable = new Runnable()
         {
@@ -3106,11 +3115,22 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
             video_encoder_format.setInteger(MediaFormat.KEY_BIT_RATE, v_bitrate_bits_per_second);
 
-            //            video_encoder_format.setInteger(MediaFormat.KEY_BITRATE_MODE,
-            //                                            MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            {
+                video_encoder_format.setInteger(MediaFormat.KEY_BITRATE_MODE,
+                                                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+            }
 
             video_encoder_format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
             video_encoder_format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL_START);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            {
+                video_encoder_format.setInteger(MediaFormat.KEY_PROFILE,
+                                                MediaCodecInfo.CodecProfileLevel.AVCProfileHigh);
+                video_encoder_format.setInteger(MediaFormat.KEY_LEVEL,
+                                                MediaCodecInfo.CodecProfileLevel.AVCLevel31);
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
             {

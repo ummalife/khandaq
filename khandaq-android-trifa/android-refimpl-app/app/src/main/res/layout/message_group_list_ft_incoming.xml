@@ -16,6 +16,7 @@
             android:id="@+id/layout_peer_name_container"
             android:layout_height="wrap_content"
             android:layout_width="match_parent"
+            android:layout_marginBottom="@dimen/message_peer_name_bottom_padding"
             android:orientation="horizontal"
             android:visibility="gone">
 
@@ -161,9 +162,9 @@
                 android:id="@+id/date_time"
                 android:layout_gravity="top"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
-                android:layout_marginRight="20dp"
-                android:layout_marginTop="-2dp"
+            android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
+            android:layout_marginRight="20dp"
+            android:layout_marginTop="4dp"
                 android:layout_width="wrap_content"
                 android:padding="0dp"
                 android:text="2017-06-20 14:00:12"
@@ -185,7 +186,7 @@
         android:visibility="gone">
 
         <ImageView
-            android:background="#FFFFFF"
+            android:background="@color/tg_date_separator_line"
             android:layout_gravity="center_vertical"
             android:layout_height="2dp"
             android:layout_marginLeft="10dp"
@@ -212,7 +213,7 @@
             android:textSize="@dimen/text_small" />
 
         <ImageView
-            android:background="#FFFFFF"
+            android:background="@color/tg_date_separator_line"
             android:layout_gravity="center_vertical"
             android:layout_height="2dp"
             android:layout_marginLeft="10dp"

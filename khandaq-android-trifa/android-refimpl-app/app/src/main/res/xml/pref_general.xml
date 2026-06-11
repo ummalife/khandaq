@@ -1,8 +1,8 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <PreferenceCategory android:title="general">
+    <PreferenceCategory android:title="@string/pref_header_general">
         <ListPreference
-            android:defaultValue="2"
+            android:defaultValue="0"
             android:entries="@array/pref_dark_mode_titles"
             android:entryValues="@array/pref_dark_mode_values"
             android:key="dark_mode_pref"
@@ -335,5 +335,12 @@
             android:summary="@string/pref_description_X_zoom_incoming_video"
             android:title="@string/pref_title_X_zoom_incoming_video" />
 
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_header_general">
+        <Preference
+            android:key="network_diagnostics"
+            android:summary="@string/network_diag_summary"
+            android:title="@string/pref_title_network_diagnostics" />
     </PreferenceCategory>
 </PreferenceScreen>

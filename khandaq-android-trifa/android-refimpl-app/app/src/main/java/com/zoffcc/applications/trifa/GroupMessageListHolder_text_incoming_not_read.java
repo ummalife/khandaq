@@ -129,6 +129,13 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
     {
         message_ = m;
 
+        if (!GroupMessageLayoutHelper.isRenderableMessage(context, m))
+        {
+            GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container,
+                    GroupMessageLayoutHelper.hiddenRowLayout());
+            return;
+        }
+
         String message__text = m.text;
 
         if (m.private_message == 1)
@@ -338,9 +345,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
                 }
                 else
                 {
-                    peer_name_text.setText(peer_name + " / " +
-                                           message__tox_peerpubkey.substring((message__tox_peerpubkey.length() - 6),
-                                                                             message__tox_peerpubkey.length()));
+                    peer_name_text.setText(peer_name);
                 }
             }
             catch (Exception e2)
@@ -373,66 +378,21 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             textView.setEmojiSize((int) dp2px(MESSAGE_EMOJI_SIZE[PREF__global_font_size]));
         }
 
-        int peer_color_fg = context.getResources().getColor(R.color.colorPrimaryDark);
-        int peer_color_bg = context.getResources().getColor(R.color.material_drawer_background);
-        int alpha_value = 160;
-        // int peer_color_bg_with_alpha = (peer_color_bg & 0x00FFFFFF) | (alpha_value << 24);
+        ChatBubbleUiHelper.apply_incoming_bubble(textView_container);
+        ChatBubbleUiHelper.apply_message_text_style(textView, false);
+        ChatBubbleUiHelper.apply_peer_name_style(peer_name_text, message__tox_peerpubkey);
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                HelperGeneric.short_time_format(m.sent_timestamp), false);
 
-        final int linkcolor = lightenColor(Color.BLUE, 0.3f);
-        textView.setMentionModeColor(linkcolor);
-        textView.setHashtagModeColor(linkcolor);
-        textView.setUrlModeColor(linkcolor);
-        textView.setPhoneModeColor(linkcolor);
-        textView.setEmailModeColor(linkcolor);
-        textView.setCustomModeColor(linkcolor);
-        textView.setLinkTextColor(linkcolor);
-        //
-        textView.setTextColor(Color.BLACK);
-
-        try
-        {
-            if (message__tox_peerpubkey.compareTo("-1") == 0)
-            {
-                peer_color_bg = TRIFA_SYSTEM_MESSAGE_PEER_CHATCOLOR;
-            }
-            else
-            {
-                peer_color_bg = ChatColors.get_shade(
-                        ChatColors.PeerAvatarColors[hash_to_bucket(message__tox_peerpubkey, ChatColors.get_size())],
-                        message__tox_peerpubkey);
-            }
-            // peer_color_bg_with_alpha = (peer_color_bg & 0x00FFFFFF) | (alpha_value << 24);
-            textView.setTextColor(Color.BLACK);
-
-            if (isColorDarkBrightness(peer_color_bg))
-            {
-                textView.setTextColor(darkenColor(Color.WHITE, 0.1f));
-                //
-                final int linkcolor_for_other_bg = darkenColor(Color.YELLOW, 0.1f);
-                textView.setMentionModeColor(linkcolor_for_other_bg);
-                textView.setHashtagModeColor(linkcolor_for_other_bg);
-                textView.setUrlModeColor(linkcolor_for_other_bg);
-                textView.setPhoneModeColor(linkcolor_for_other_bg);
-                textView.setEmailModeColor(linkcolor_for_other_bg);
-                textView.setCustomModeColor(linkcolor_for_other_bg);
-                textView.setLinkTextColor(linkcolor_for_other_bg);
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
+        final String displayText = GroupMessageLayoutHelper.displayTextForMessage(context, m);
         if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
         {
-            textView.setAutoLinkText(message__text);
+            textView.setAutoLinkText(displayText);
         }
         else
         {
-            textView.setAutoLinkTextHighlight(message__text, group_search_messages_text);
+            textView.setAutoLinkTextHighlight(displayText, group_search_messages_text);
         }
-
-        date_time.setText(long_date_time_format(m.sent_timestamp));
 
         textView.setAutoLinkOnClickListener(new AutoLinkOnClickListener()
         {
@@ -464,26 +424,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             }
         });
 
-        boolean have_avatar_for_pubkey = false;
-        FriendList fl_temp = null;
-
-        // we need to do the rounded corner background manually here, to change the color ---------------
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadii(
-                new float[]{CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX});
-        shape.setColor(peer_color_bg);
-        // shape.setStroke(3, borderColor);
-        textView_container.setBackground(shape);
-        // we need to do the rounded corner background manually here, to change the color ---------------
-
-        final Drawable smiley_face = new IconicsDrawable(context).
-                icon(GoogleMaterial.Icon.gmd_sentiment_satisfied).
-                backgroundColor(peer_color_bg).
-                color(peer_color_fg).sizeDp(70);
-
         img_corner.setVisibility(View.GONE);
-        date_time.setVisibility(View.VISIBLE);
+        ChatBubbleUiHelper.hide_delivery_indicator(imageView);
 
         if (is_system_message)
         {
@@ -514,15 +456,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
             // TODO: do we need to reset here? -> yes
             img_avatar.setVisibility(View.VISIBLE);
-            if (PREF__compact_chatlist)
-            {
-                img_corner.setVisibility(View.GONE);
-            }
-            else
-            {
-                img_corner.setVisibility(View.VISIBLE);
-            }
-            imageView.setVisibility(View.VISIBLE);
+            img_corner.setVisibility(View.GONE);
+            ChatBubbleUiHelper.hide_delivery_indicator(imageView);
             textView_container.setMinimumHeight((int) dp2px(0));
             textView_container.setPadding(0, textView_container.getPaddingTop(), 0,
                                           textView_container.getPaddingBottom()); // left, top, right, bottom
@@ -531,8 +466,6 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
                                  parameter.bottomMargin); // left, top, right, bottom
             textView_container.setLayoutParams(parameter);
             // peer_name_text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-
-            img_avatar.setImageDrawable(smiley_face);
 
             final String peer_pubkey_for_profile = message__tox_peerpubkey;
             final View.OnClickListener open_peer_profile_listener = new View.OnClickListener()
@@ -550,58 +483,6 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             img_avatar.setOnClickListener(open_peer_profile_listener);
             layout_peer_name_container.setOnClickListener(open_peer_profile_listener);
             peer_name_text.setOnClickListener(open_peer_profile_listener);
-
-            if (m.was_synced)
-            {
-                try
-                {
-                    if (m.TRIFA_SYNC_TYPE == TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value)
-                    {
-                        imageView.setImageResource(R.drawable.circle_pink);
-
-                        if (m.sync_confirmations > 0)
-                        {
-                            String confirmations_text = "" + m.sync_confirmations;
-                            if (m.sync_confirmations > 9)
-                            {
-                                confirmations_text = "+";
-                            }
-
-                            final TextDrawable drawable2 = TextDrawable.builder().beginConfig().textColor(Color.WHITE).
-                                    bold().width(60).height(60).fontSize(58).endConfig().
-                                    buildRound(confirmations_text, Color.GRAY);
-                            imageView.setImageDrawable(drawable2);
-                        }
-                    }
-                    else
-                    {
-                        imageView.setImageResource(R.drawable.circle_orange);
-
-                        if (m.sync_confirmations > 0)
-                        {
-                            String confirmations_text = "" + m.sync_confirmations;
-                            if (m.sync_confirmations > 9)
-                            {
-                                confirmations_text = "+";
-                            }
-
-                            final TextDrawable drawable2 = TextDrawable.builder().beginConfig().textColor(Color.BLACK).
-                                    bold().width(60).height(60).fontSize(58).endConfig().
-                                    buildRound(confirmations_text, Color.parseColor("#ffce00"));
-                            imageView.setImageDrawable(drawable2);
-                        }
-                    }
-                }
-                catch(Exception e3)
-                {
-                    imageView.setImageResource(R.drawable.circle_orange);
-                }
-            }
-            else
-            {
-                // received directly
-                imageView.setImageResource(R.drawable.circle_green);
-            }
 
         }
 
@@ -671,63 +552,30 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         // --------- peer name (show only if different from previous message) ---------
         // --------- peer name (show only if different from previous message) ---------
 
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        date_time.setVisibility(View.GONE);
-        if (my_position != RecyclerView.NO_POSITION)
+        final GroupMessageLayoutHelper.RowLayout rowLayout =
+                GroupMessageLayoutHelper.layoutFor(m, my_position, context);
+        GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container, rowLayout);
+        GroupMessageLayoutHelper.applyTopMargin(itemView, rowLayout);
+        if (!is_system_message)
         {
-            try
+            if (!rowLayout.showPeerName)
             {
-                if (MainActivity.group_message_list_fragment.adapter != null)
-                {
-                    if (my_position < 1)
-                    {
-                        date_time.setVisibility(View.VISIBLE);
-                    }
-                    else
-                    {
-                        final GroupMessagelistAdapter.DateTime_in_out peer_cur = MainActivity.group_message_list_fragment.adapter.getDateTime(
-                                my_position);
-                        final GroupMessagelistAdapter.DateTime_in_out peer_prev = MainActivity.group_message_list_fragment.adapter.getDateTime(
-                                my_position - 1);
-                        if ((peer_cur == null) || (peer_prev == null))
-                        {
-                            date_time.setVisibility(View.VISIBLE);
-                        }
-                        // else if (peer_cur.direction != peer_prev.direction)
-                        // {
-                        //     date_time.setVisibility(View.VISIBLE);
-                        // }
-                        // else if (!peer_cur.pk.equals(peer_prev.pk))
-                        // {
-                        //     date_time.setVisibility(View.VISIBLE);
-                        // }
-                        else
-                        {
-                            // if message is within 20 seconds of previous message and same direction and same peer
-                            // then do not show timestamp
-                            if (peer_cur.timestamp > peer_prev.timestamp + (MESSAGES_TIMEDELTA_NO_TIMESTAMP_MS))
-                            {
-                                date_time.setVisibility(View.VISIBLE);
-                            }
-                        }
-
-                    }
-                }
+                layout_peer_name_container.setVisibility(View.GONE);
+                peer_name_text.setVisibility(View.GONE);
             }
-            catch (Exception e)
+            if (rowLayout.showAvatar)
             {
+                img_avatar.setVisibility(View.VISIBLE);
+                ChatBubbleUiHelper.fill_group_peer_avatar(context, message__tox_peerpubkey,
+                        peer_name_text.getText().toString(), img_avatar);
             }
+            else
+            {
+                img_avatar.setVisibility(View.INVISIBLE);
+            }
+            img_corner.setVisibility(View.GONE);
+            ChatBubbleUiHelper.hide_delivery_indicator(imageView);
         }
-        else
-        {
-        }
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-
-        HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
     }
 
     @Override

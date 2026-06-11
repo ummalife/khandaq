@@ -27,7 +27,10 @@
         <RelativeLayout xmlns:app="http://schemas.android.com/apk/res-auto"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:padding="@dimen/message_entry_padding">
+            android:paddingStart="8dp"
+            android:paddingTop="@dimen/tg_message_row_v_margin"
+            android:paddingEnd="56dp"
+            android:paddingBottom="@dimen/tg_message_row_v_margin">
 
             <LinearLayout
                 android:id="@+id/layout_message_container"
@@ -37,25 +40,25 @@
                 android:orientation="vertical"
                 android:padding="0dp">
 
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_margin="0dp"
                     android:orientation="horizontal"
-                    android:padding="0dp">
+                    android:padding="0dp"
+                    android:visibility="gone">
 
                     <LinearLayout
                         android:id="@+id/layout_peer_name_container"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
                         android:layout_gravity="bottom"
                         android:layout_marginTop="@dimen/message_entry_datetime_bottom_padding_small"
+                        android:orientation="horizontal"
                         android:visibility="gone">
 
                         <TextView
-                            android:id="@+id/peer_name_text"
+                            android:id="@+id/peer_name_text_legacy"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center"
@@ -64,8 +67,9 @@
                             android:gravity="left"
                             android:maxLength="20"
                             android:text="@string/layout___peer_name"
-                            android:textColor="#EFEFEF"
-                            android:textSize="9sp" />
+                            android:textColor="@color/tg_chat_preview"
+                            android:textSize="9sp"
+                            android:visibility="gone" />
 
                     </LinearLayout>
 
@@ -80,15 +84,16 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="top"
-                        android:layout_marginBottom="7dp"
-                        android:layout_marginRight="20dp"
                         android:layout_marginTop="@dimen/message_entry_datetime_bottom_padding_small"
+                        android:layout_marginRight="20dp"
+                        android:layout_marginBottom="7dp"
                         android:gravity="top"
                         android:padding="0dp"
-                        android:text="2017-06-20 14:00:12"
+                        android:text="02:09"
                         android:textAlignment="gravity"
-                        android:textColor="#EFEFEF"
-                        android:textSize="9sp" />
+                        android:textColor="@color/tg_bubble_time_incoming"
+                        android:textSize="@dimen/tg_bubble_time_size"
+                        android:visibility="gone" />
 
                 </LinearLayout>
 
@@ -100,14 +105,13 @@
 
                     <de.hdodenhof.circleimageview.CircleImageView
                         android:id="@+id/img_avatar"
-                        android:layout_width="50dp"
-                        android:layout_height="30dp"
-                        android:layout_marginTop="0dp"
-                        android:layout_weight="3"
-                        android:gravity="top"
+                        android:layout_width="@dimen/tg_chat_avatar_in_bubble"
+                        android:layout_height="@dimen/tg_chat_avatar_in_bubble"
+                        android:layout_gravity="bottom"
+                        android:layout_marginEnd="6dp"
                         android:src="@drawable/user_pratikshya"
-                        app:civ_border_color="#50000000"
-                        app:civ_border_width="2dp"
+                        app:civ_border_color="#30000000"
+                        app:civ_border_width="0dp"
                         app:civ_fill_color="@color/md_grey_400" />
 
                     <ImageView
@@ -123,50 +127,65 @@
 
                     <LinearLayout
                         android:id="@+id/m_container"
-                        android:layout_width="fill_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginLeft="0dp"
-                        android:layout_marginRight="20dp"
-                        android:layout_weight="6"
+                        android:layout_weight="1"
                         android:background="@drawable/rounded_orange_bg"
                         android:minHeight="0dp"
-                        android:orientation="horizontal">
+                        android:orientation="vertical">
 
-                        <ImageView
-                            android:id="@+id/m_icon"
-                            android:layout_width="25dp"
-                            android:layout_height="25dp"
-                            android:layout_alignParentTop="true"
-                            android:layout_marginRight="0dip"
-                            android:padding="2dp"
-                            android:scaleType="centerInside"
-                            android:src="@drawable/circle_red"
+                        <TextView
+                            android:id="@+id/peer_name_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="2dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:text="@string/layout___peer_name"
+                            android:textSize="@dimen/tg_bubble_peer_name_size"
                             android:visibility="gone" />
 
-                        <TextView
-                            android:id="@+id/dummy2"
-                            android:layout_width="6dp"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="" />
+                            android:gravity="bottom"
+                            android:orientation="horizontal">
 
-                        <com.luseen.autolinklibrary.EmojiTextViewLinks
-                            android:id="@+id/m_text"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:paddingBottom="3dp"
-                            android:text="..."
-                            android:textColor="@color/message_bubble_text"
-                            android:textColorLink="@color/textblock_link_color_for_orange"
-                            android:textSize="20sp"
-                            app:emojiSize="@dimen/emoji_size_in_textview" />
+                            <ImageView
+                                android:id="@+id/m_icon"
+                                android:layout_width="25dp"
+                                android:layout_height="25dp"
+                                android:layout_alignParentTop="true"
+                                android:layout_marginRight="0dip"
+                                android:padding="2dp"
+                                android:scaleType="centerInside"
+                                android:src="@drawable/circle_red"
+                                android:visibility="gone" />
 
-                        <TextView
-                            android:id="@+id/dummy"
-                            android:layout_width="8dp"
-                            android:layout_height="wrap_content"
-                            android:text=""
-                            android:visibility="visible" />
+                            <com.luseen.autolinklibrary.EmojiTextViewLinks
+                                android:id="@+id/m_text"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:includeFontPadding="false"
+                                android:paddingBottom="1dp"
+                                android:text="..."
+                                android:textColor="@color/tg_bubble_text"
+                                android:textColorLink="@color/tg_bubble_link"
+                                android:textSize="@dimen/tg_bubble_text_size"
+                                app:emojiSize="@dimen/emoji_size_in_textview" />
+
+                            <TextView
+                                android:id="@+id/bubble_time"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="bottom"
+                                android:includeFontPadding="false"
+                                android:text="02:09"
+                                android:textColor="@color/tg_bubble_time_incoming"
+                                android:textSize="@dimen/tg_bubble_time_size" />
+
+                        </LinearLayout>
 
                     </LinearLayout>
 
@@ -190,7 +209,7 @@
                     android:layout_marginLeft="10dp"
                     android:layout_marginRight="10dp"
                     android:layout_weight="100"
-                    android:background="#FFFFFF" />
+                    android:background="@color/tg_date_separator_line" />
 
                 <TextView
                     android:id="@+id/message_text_date_string"
@@ -217,12 +236,10 @@
                     android:layout_marginLeft="10dp"
                     android:layout_marginRight="10dp"
                     android:layout_weight="100"
-                    android:background="#FFFFFF" />
+                    android:background="@color/tg_date_separator_line" />
 
             </LinearLayout>
         </RelativeLayout>
     </LinearLayout>
     <!-- Surface View End -->
 </com.daimajia.swipe.SwipeLayout>
-
-

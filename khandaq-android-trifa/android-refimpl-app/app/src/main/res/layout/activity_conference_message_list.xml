@@ -176,7 +176,7 @@
                     android:gravity="center_vertical"
                     android:imeOptions="flagNoPersonalizedLearning|actionSend"
                     android:includeFontPadding="false"
-                    android:inputType="textMultiLine"
+                    android:inputType="textCapSentences|textMultiLine"
                     android:maxLines="5"
                     android:paddingStart="@dimen/chat_input_field_padding_h"
                     android:paddingTop="@dimen/chat_input_field_padding_v"
@@ -184,8 +184,8 @@
                     android:paddingBottom="@dimen/chat_input_field_padding_v"
                     android:singleLine="false"
                     android:text=""
-                    android:textColor="@color/chat_input_text"
-                    android:textColorHint="@color/gray"
+                    android:textColor="@color/tg_chat_input_text"
+                    android:textColorHint="@color/tg_chat_input_hint"
                     android:textSize="@dimen/chat_input_text_size" />
 
                 <LinearLayout

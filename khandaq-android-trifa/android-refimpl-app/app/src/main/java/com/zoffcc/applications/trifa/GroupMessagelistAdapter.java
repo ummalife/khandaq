@@ -102,26 +102,30 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 return new GroupMessageListHolder_text_incoming_not_read(view, this.context);
 
             case Message_model.TEXT_INCOMING_HAVE_READ:
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read, parent,
-                                                                        false);
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                return new GroupMessageListHolder_error(view, this.context);
+                if (PREF__compact_chatlist)
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read_compact,
+                                                                            parent, false);
+                }
+                else
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_entry_read, parent,
+                                                                            false);
+                }
+                return new GroupMessageListHolder_text_incoming_not_read(view, this.context);
 
             case Message_model.TEXT_OUTGOING_NOT_READ:
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry, parent,
-                                                                        false);
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                // ******** NOT USED ******** //
-                return new GroupMessageListHolder_error(view, this.context);
+                if (PREF__compact_chatlist)
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(
+                            R.layout.message_list_self_entry_read_compact, parent, false);
+                }
+                else
+                {
+                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.message_list_self_entry_read,
+                                                                            parent, false);
+                }
+                return new GroupMessageListHolder_text_outgoing_read(view, this.context);
 
             case Message_model.TEXT_OUTGOING_HAVE_READ:
                 if (PREF__compact_chatlist)
@@ -250,19 +254,10 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     ((GroupMessageListHolder_text_incoming_not_read) holder).bindMessageList(m2);
                     break;
                 case Message_model.TEXT_INCOMING_HAVE_READ:
-                    // NOT USED ----------
-                    // NOT USED ----------
-                    // NOT USED ----------
-                    //((ConferenceMessageListHolder_text_incoming_read) holder).bindMessageList(m2);
-                    // NOT USED ----------
-                    // NOT USED ----------
-                    // NOT USED ----------
+                    ((GroupMessageListHolder_text_incoming_not_read) holder).bindMessageList(m2);
                     break;
                 case Message_model.TEXT_OUTGOING_NOT_READ:
-                    // ******** NOT USED ******** //
-                    // ******** NOT USED ******** //
-                    // ******** NOT USED ******** //
-                    //((ConferenceMessageListHolder_text_outgoing_not_read) holder).bindMessageList(m2);
+                    ((GroupMessageListHolder_text_outgoing_read) holder).bindMessageList(m2);
                     break;
                 case Message_model.TEXT_OUTGOING_HAVE_READ:
                     ((GroupMessageListHolder_text_outgoing_read) holder).bindMessageList(m2);

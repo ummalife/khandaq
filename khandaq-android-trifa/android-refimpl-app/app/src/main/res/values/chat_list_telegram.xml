@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chat list layout follows familiar messenger UX; palette is Khandaq-only. -->
+<resources>
+    <color name="tg_chat_bg">#FFFFFF</color>
+    <color name="tg_chat_bg_deep">@color/khandaq_canvas_light</color>
+    <color name="tg_chat_search_bg">#EEF2F0</color>
+    <color name="tg_chat_title">@color/khandaq_graphite</color>
+    <color name="tg_chat_preview">@color/khandaq_text_muted</color>
+    <color name="tg_chat_draft">#E56555</color>
+    <color name="tg_chat_time">@color/khandaq_text_muted</color>
+    <color name="tg_chat_unread_bg">@color/khandaq_primary</color>
+    <color name="tg_chat_ripple">#1A0F3D2E</color>
+    <dimen name="tg_chat_row_height">72dp</dimen>
+    <dimen name="tg_chat_avatar_size">54dp</dimen>
+    <dimen name="tg_chat_title_size">16sp</dimen>
+    <dimen name="tg_chat_preview_size">15sp</dimen>
+    <dimen name="tg_chat_time_size">13sp</dimen>
+</resources>

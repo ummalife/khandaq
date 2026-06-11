@@ -120,6 +120,11 @@
 - (void)performBlockOnToxQueue:(void (^)(void))block;
 
 /**
+ * Runs a block synchronously on the tox_iterate queue (safe for tox_file_send_chunk).
+ */
+- (void)performSyncBlockOnToxQueue:(void (^)(void))block;
+
+/**
  * Reset the offline rebootstrap timer so the next iterate pass can rebootstrap sooner.
  */
 - (void)resetOfflineRebootstrapTimer;

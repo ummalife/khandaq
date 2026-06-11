@@ -64,9 +64,11 @@
         return;
     }
 
-    NSError *error;
+    NSError *error = nil;
+    BOOL result = NO;
+    NSUInteger sendAttempts = 0;
+    const NSUInteger maxSendAttempts = 500;
 
-    BOOL result;
     do {
         result = [self.tox fileSendChunkForFileNumber:self.fileNumber
                                          friendNumber:self.friendNumber
@@ -74,11 +76,14 @@
                                                  data:data
                                                 error:&error];
 
-        if (! result) {
+        if (! result && error.code == OCTToxErrorFileSendChunkSendq && sendAttempts < maxSendAttempts) {
+            sendAttempts++;
             [NSThread sleepForTimeInterval:0.01];
         }
-    }
-    while (! result && error.code == OCTToxErrorFileSendChunkSendq);
+        else {
+            break;
+        }
+    } while (YES);
 
     if (! result) {
         OCTLogWarn(@"upload error %@", error);

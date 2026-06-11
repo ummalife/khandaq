@@ -46,6 +46,18 @@ void OfflineMsgEngine::onExtendedReceiptReceived(ExtendedReceiptNum receipt)
     extendedReceiptResolver.notifyReceiptReceived(receipt);
 }
 
+void OfflineMsgEngine::abandonCoreMessage(ReceiptNum receipt)
+{
+    QMutexLocker ml(&mutex);
+    receiptResolver.unAckedMessages.erase(receipt);
+}
+
+void OfflineMsgEngine::abandonExtendedMessage(ExtendedReceiptNum receipt)
+{
+    QMutexLocker ml(&mutex);
+    extendedReceiptResolver.unAckedMessages.erase(receipt);
+}
+
 /**
 * @brief Add a message which has been saved to history, but not sent yet to the peer.
 *

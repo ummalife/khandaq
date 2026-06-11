@@ -2,6 +2,11 @@
     <string name="app_name" translatable="false">Khandaq</string>
     <string name="notification_app_title" translatable="false">Khandaq online</string>
     <string name="notification_status_online">Online</string>
+    <string name="network_diag_title">Network diagnostics</string>
+    <string name="network_diag_summary">DHT status, relays, reconnect log</string>
+    <string name="network_diag_refresh">Refresh</string>
+    <string name="network_diag_export">Export log</string>
+    <string name="pref_title_network_diagnostics">Network diagnostics</string>
     <string name="notification_status_offline">Offline</string>
     <string name="notification_status_connecting">Connecting</string>
     <string name="notification_status_offline_manual">Offline (signed out)</string>
@@ -41,7 +46,7 @@
     <string name="title_activity_crash">Crash</string>
     <string name="title_activity_friendinfo">Friendinfo</string>
     <string name="title_activity_conferenceinfo">Conferenceinfo</string>
-    <string name="title_activity_groupinfo">Groupinfo</string>
+    <string name="title_activity_groupinfo">Group info</string>
     <string name="title_activity_conferencepeerinfo">Peerinfo</string>
     <string name="title_activity_grouppeerinfo">Group Peerinfo</string>
     <string name="title_activity_aboutpage">About</string>
@@ -96,9 +101,9 @@
     <string name="pref_title_higher_video_quality">Video Quality</string>
     <string name="pref_description_higher_video_quality">Use better Video quality.\nChange needs RESTART!</string>
     <string-array name="pref_higher_video_quality_titles">
-        <item>low bandwidth\n(250 kb/s)</item>
-        <item>normal bandwidth\n(2500 kb/s)</item>
-        <item>high bandwidth\n(3500 kb/s)</item>
+        <item>data saver\n(800 kb/s, 480p)</item>
+        <item>normal\n(1500 kb/s, 720p)</item>
+        <item>high\n(3000+ kb/s, 1080p)</item>
     </string-array>
     <string-array name="pref_higher_video_quality_values">
         <item>0</item>
@@ -383,6 +388,8 @@
     <string name="pref_ringtone_silent">Silent</string>
 
     <string name="pref_title_vibrate">Vibrate</string>
+    <string name="pref_title_send_read_receipts">Send read receipts</string>
+    <string name="pref_description_send_read_receipts">Let contacts see when you have read their messages</string>
     <string name="pref_title_sound">Sound</string>
     <string name="add_friend_activity_help">Paste friend\'s ID in the text box above or tap the
     QR code button to scan friend\'s code with a camera.</string>
@@ -396,9 +403,22 @@
     <string name="group_send_group_not_found">This group is not active in Tox. Leave and re-join the group.</string>
     <string name="group_send_left_group">You left this group.</string>
     <string name="group_send_too_long">Message is too long.</string>
+    <string name="group_sys_you_joined">You joined the group</string>
+    <string name="group_sys_peer_joined">%1$s joined the group</string>
+    <string name="group_sys_peer_left">%1$s left the group (%2$s)</string>
+    <string name="group_sys_peer_renamed">%1$s changed their name</string>
+    <string name="group_sys_peer_number">Peer %1$d</string>
+    <string name="group_sys_privacy_changed">Privacy changed to:</string>
+    <string name="group_sys_exit_quit">left voluntarily</string>
+    <string name="group_sys_exit_kick">was removed</string>
+    <string name="group_sys_exit_sync_error">connection error</string>
+    <string name="group_sys_exit_self_disconnected">disconnected</string>
     <string name="group_send_empty">Message is empty.</string>
     <string name="group_send_bad_type">Unsupported message type.</string>
     <string name="group_send_failed">Failed to send group message.</string>
+    <string name="dm_send_failed">Message not sent. Check connection and try again.</string>
+    <string name="dm_send_failed_friend">Contact not found. Re-open the chat and try again.</string>
+    <string name="dm_send_failed_not_ready">Messenger is still connecting. Wait a moment and try again.</string>
     <string name="group_invite_friend_success">Group invitation sent.</string>
     <string name="group_invite_friend_failed">Failed to invite contact to group.</string>
     <string name="group_invite_friend_not_found">Contact is not available in Tox.</string>
@@ -445,6 +465,8 @@
     <string name="FriendListHolder_toggle_notification_silent_message">Do you want to toggle Notification Silence for this Friend?</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_title">cancel Filetransfer</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_message">Do you want to cancel this Filetransfer?</string>
+    <string name="file_transfer_incomplete">Download incomplete</string>
+    <string name="file_transfer_incomplete_retry">Ask the sender to resend the file.</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">cancel Filetransfer</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">Do you want to cancel this Filetransfer?</string>
     <!-- Strings related to Settings -->
@@ -475,7 +497,20 @@
     <string name="MainActivity_new_noti_token_dialog_text">New Notification Token received. Use this Token?</string>
     <string name="MainActivity_info_dialog_title">INFO</string>
     <string name="MainActivity_add_to_batt_opt">Please add Khandaq to the exception list for Batteryoptimization!</string>
-    <string name="MainActivity_friend_is_typing">friend is typing ...</string>
+    <string name="MainActivity_friend_is_typing">typing…</string>
+    <string name="chat_presence_online">online</string>
+    <string name="chat_presence_away">away</string>
+    <string name="chat_presence_busy">busy</string>
+    <string name="chat_presence_typing">typing</string>
+    <string name="chat_presence_last_seen_just_now">last seen just now</string>
+    <string name="chat_presence_last_seen_yesterday">last seen yesterday</string>
+    <string name="chat_presence_last_seen_at_time">last seen at %1$s</string>
+    <string name="chat_presence_last_seen_on_date">last seen on %1$s</string>
+    <string name="chat_presence_last_seen_unknown">last seen recently</string>
+    <plurals name="chat_presence_last_seen_minutes">
+        <item quantity="one">last seen %d minute ago</item>
+        <item quantity="other">last seen %d minutes ago</item>
+    </plurals>
     <string name="MainActivity_notification_new_message">new Message</string>
     <string name="MainActivity_notification_new_message2">new Message</string>
     <string name="MainActivity_button_ok">Ok</string>
@@ -494,6 +529,68 @@
     <string name="message_list_open_friend_profile">Open contact profile</string>
     <string name="main_profile_open">Open my profile</string>
     <string name="group_open_group_info">Open group info</string>
+    <string name="group_open_member_list">Members</string>
+    <string name="group_member_list_title">Members</string>
+    <string name="group_header_member_count">%1$d members · %2$d online</string>
+    <string name="chat_list_search_hint">Search</string>
+    <string name="chat_list_no_messages">No messages</string>
+    <string name="chat_list_preview_you">You: %1$s</string>
+    <string name="chat_list_preview_draft">Draft: %1$s</string>
+    <string name="chat_list_preview_file">File</string>
+    <string name="chat_list_preview_empty">Message</string>
+    <string name="chat_list_time_yesterday">yesterday</string>
+    <string name="group_info_members_header_default">Members</string>
+    <string name="group_info_members_header">Members (%1$d)</string>
+    <string name="group_info_member_online">online</string>
+    <string name="group_info_member_offline">offline</string>
+    <string name="group_member_last_seen_just_now">last seen just now</string>
+    <string name="group_member_last_seen_long_ago">last seen a long time ago</string>
+    <plurals name="group_member_last_seen_minutes">
+        <item quantity="one">last seen %d minute ago</item>
+        <item quantity="other">last seen %d minutes ago</item>
+    </plurals>
+    <plurals name="group_member_last_seen_hours">
+        <item quantity="one">last seen %d hour ago</item>
+        <item quantity="other">last seen %d hours ago</item>
+    </plurals>
+    <string name="group_info_member_you">you</string>
+    <string name="group_info_connection_connected">Connected</string>
+    <string name="group_info_connection_connecting">Connecting…</string>
+    <string name="group_info_connection_disconnected">Disconnected</string>
+    <string name="group_info_role_founder">Founder</string>
+    <string name="group_info_role_moderator">Moderator</string>
+    <string name="group_info_role_observer">Observer</string>
+    <string name="group_info_role_user">Member</string>
+    <string name="group_info_privacy_public">Public group</string>
+    <string name="group_info_privacy_private">Private group</string>
+    <string name="group_info_privacy_unknown">Unknown privacy</string>
+    <string name="group_info_message_count_user">Messages: %1$d</string>
+    <string name="group_info_system_message_count">System messages: %1$d</string>
+    <string name="group_delete_system_msgs_title">Delete system messages</string>
+    <string name="group_delete_system_msgs_message">Delete all system messages (join/leave) in this group permanently?</string>
+    <string name="group_delete_system_msgs_confirm">Delete</string>
+    <string name="group_delete_system_msgs_progress">Deleting, please wait…</string>
+    <string name="group_delete_system_msgs_done">System messages deleted</string>
+    <string name="group_member_probable_bot_short">bot</string>
+    <string name="group_member_action_info">Info</string>
+    <string name="group_member_action_private_msg">Private group message</string>
+    <string name="group_member_action_private_msg_to">Message to %1$s</string>
+    <string name="group_member_action_private_msg_hint">Private message text</string>
+    <string name="group_member_action_send">Send</string>
+    <string name="group_member_action_private_msg_sent">Private message sent</string>
+    <string name="group_member_action_private_msg_failed">Failed to send</string>
+    <string name="group_member_action_open_chat">Open direct chat</string>
+    <string name="group_member_action_add_friend">Add friend</string>
+    <string name="group_member_action_copy_id">Copy ID</string>
+    <string name="group_member_action_copy_done">ID copied</string>
+    <string name="group_member_action_mute">Mute notifications</string>
+    <string name="group_member_action_unmute">Unmute notifications</string>
+    <string name="group_member_action_mute_done">Notifications muted</string>
+    <string name="group_member_action_unmute_done">Notifications unmuted</string>
+    <string name="group_member_action_kick">Remove from group</string>
+    <string name="group_member_action_bot_info">What is this bot?</string>
+    <string name="group_member_action_bot_info_title">Automated client</string>
+    <string name="group_member_action_bot_info_body">Not a human tester — a headless TRIfA/CI client in the public group. Names like Cameron Willis come from RandomNameGenerator in TRIfA. ID: %1$s</string>
     <string name="group_title_saved_toast">Group name updated</string>
     <string name="group_title_save_failed_toast">Could not update group name</string>
 
@@ -545,6 +642,12 @@
     <string name="chat_ft_status_sending">Sending…</string>
     <string name="chat_ft_status_waiting_friend_accept">Waiting for contact to accept…</string>
     <string name="voice_message_label">Voice message</string>
+    <string name="media_label_photo">Photo</string>
+    <string name="media_send_caption_hint">Add a caption…</string>
+    <string name="media_send_counter_format">%1$d / %2$d</string>
+    <string name="media_label_video">Video</string>
+    <string name="media_label_audio">Audio</string>
+    <string name="media_label_document">Document</string>
     <string name="chat_ft_generic_file">File</string>
     <string name="incoming_filetransfer_size_too_large">Incoming filesize too large. Only files up to 2 GBytes can be received.</string>
     <!-- Java Source texts -->

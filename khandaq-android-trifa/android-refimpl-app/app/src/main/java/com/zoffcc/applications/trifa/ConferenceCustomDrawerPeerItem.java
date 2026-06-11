@@ -28,6 +28,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
@@ -43,7 +44,6 @@ import static com.zoffcc.applications.trifa.HelperFriend.friendlist_has_avatar_f
 import static com.zoffcc.applications.trifa.HelperGeneric.StringSignature2;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.hash_to_bucket;
-import static com.zoffcc.applications.trifa.Identicon.create_avatar_identicon_for_pubkey;
 import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX;
@@ -57,11 +57,28 @@ public class ConferenceCustomDrawerPeerItem extends AbstractBadgeableDrawerItem<
     private static final String TAG = "trifa.ConfPeerDItem";
     ImageView icon = null;
     String peer_pubkey = null;
+    String group_id = null;
+    String peer_display_name = null;
     boolean have_avatar_for_pubkey = false;
+    boolean peer_online = false;
+
+    ConferenceCustomDrawerPeerItem setPeerOnline(final boolean online)
+    {
+        peer_online = online;
+        return this;
+    }
 
     ConferenceCustomDrawerPeerItem(boolean have_avatar_for_pubkey, String peer_pubkey)
     {
+        this(have_avatar_for_pubkey, peer_pubkey, null, null);
+    }
+
+    ConferenceCustomDrawerPeerItem(boolean have_avatar_for_pubkey, String peer_pubkey, String group_id,
+                                   String peer_display_name)
+    {
         this.peer_pubkey = peer_pubkey;
+        this.group_id = group_id;
+        this.peer_display_name = peer_display_name;
         this.have_avatar_for_pubkey = have_avatar_for_pubkey;
     }
 
@@ -71,143 +88,47 @@ public class ConferenceCustomDrawerPeerItem extends AbstractBadgeableDrawerItem<
         super.bindView(viewHolder, payloads);
 
         Context c = viewHolder.itemView.getContext();
-        // Log.i(TAG, "bindView:context=" + c);
-        icon = (ImageView) viewHolder.itemView.findViewById(com.mikepenz.materialdrawer.R.id.material_drawer_icon);
-
-        if (!have_avatar_for_pubkey)
-        {
-            have_avatar_for_pubkey = friendlist_has_avatar_for_pubkey(peer_pubkey);
-        }
-
-        FriendList fl_temp = null;
-
         try
         {
-            if (have_avatar_for_pubkey)
+            final TextView description = viewHolder.itemView.findViewById(
+                    com.mikepenz.materialdrawer.R.id.material_drawer_description);
+            if (description != null)
             {
-                fl_temp = (FriendList) orma.selectFromFriendList().
-                    tox_public_key_stringEq(peer_pubkey).get(0);
-
-                if (VFS_ENCRYPT)
-                {
-                    info.guardianproject.iocipher.File f1 = null;
-                    try
-                    {
-                        f1 = new info.guardianproject.iocipher.File(
-                            fl_temp.avatar_pathname + "/" + fl_temp.avatar_filename);
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    if ((f1 != null) && (fl_temp.avatar_pathname != null))
-                    {
-                        if (f1.length() > 0)
-                        {
-                            icon.setVisibility(View.VISIBLE);
-                            icon.setPadding((int) dp2px(2), (int) dp2px(2), (int) dp2px(2), (int) dp2px(2));
-                            LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams((int) dp2px(35),
-                                                                                                (int) dp2px(35));
-                            parameter.setMargins(parameter.leftMargin, (int) dp2px(6), (int) dp2px(10),
-                                                 (int) dp2px(0)); // left, top, right, bottom
-                            icon.setLayoutParams(parameter);
-
-                            // --------------------
-                            icon.setBackgroundResource(R.drawable.bg_circular_border);
-                            // --------------------
-
-                            final RequestOptions glide_options = new RequestOptions().
-                                fitCenter().
-                                circleCrop();
-
-                            GlideApp.
-                                with(c).
-                                load(f1).
-                                diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                signature(StringSignature2(
-                                    "_conf_avatar_" + fl_temp.avatar_pathname + "/" + fl_temp.avatar_filename + "_" +
-                                    fl_temp.avatar_update_timestamp)).
-                                priority(Priority.HIGH).
-                                placeholder(R.drawable.round_loading_animation).
-                                skipMemoryCache(false).
-                                apply(glide_options).
-                                into(this.icon);
-                        }
-                    }
-                }
+                description.setTextColor(peer_online ? Color.parseColor("#64B5F6") : Color.parseColor("#9E9E9E"));
             }
         }
-        catch (Exception a01)
+        catch (Exception ignored)
         {
-            a01.printStackTrace();
-            have_avatar_for_pubkey = false;
         }
-
-        if (!have_avatar_for_pubkey)
+        viewHolder.itemView.setOnLongClickListener(new View.OnLongClickListener()
         {
-            try
+            @Override
+            public boolean onLongClick(View v)
             {
-                if ((peer_pubkey != null) && (peer_pubkey.length() >= 64))
+                try
                 {
-                    create_avatar_identicon_for_pubkey(peer_pubkey);
-                    final String identicon_pathname = VFS_PREFIX + VFS_FILE_DIR + "/" + peer_pubkey + "/";
-                    final String identicon_filename = FRIEND_AVATAR_FILENAME;
-
-                    if (VFS_ENCRYPT)
+                    if ((group_id != null) && (peer_pubkey != null))
                     {
-                        final info.guardianproject.iocipher.File identicon_file =
-                                new info.guardianproject.iocipher.File(identicon_pathname + "/" + identicon_filename);
-                        if (identicon_file.length() > 0)
-                        {
-                            icon.setVisibility(View.VISIBLE);
-                            icon.setPadding((int) dp2px(2), (int) dp2px(2), (int) dp2px(2), (int) dp2px(2));
-                            LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams((int) dp2px(35),
-                                                                                                (int) dp2px(35));
-                            parameter.setMargins(parameter.leftMargin, (int) dp2px(6), (int) dp2px(10), (int) dp2px(0));
-                            icon.setLayoutParams(parameter);
-                            icon.setBackgroundResource(R.drawable.bg_circular_border);
-
-                            final RequestOptions glide_options = new RequestOptions().fitCenter().circleCrop();
-                            GlideApp.with(c).load(identicon_file).diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                    signature(StringSignature2("_conf_identicon_" + identicon_pathname + "/" +
-                                                               identicon_filename)).priority(Priority.HIGH).
-                                    placeholder(R.drawable.round_loading_animation).skipMemoryCache(false).
-                                    apply(glide_options).into(this.icon);
-                            return;
-                        }
+                        GroupMemberActions.showActionMenu(v.getContext(), group_id, peer_pubkey, peer_display_name);
                     }
                 }
-
-                int peer_color_fg = c.getResources().getColor(R.color.colorPrimaryDark);
-                int peer_color_bg = ChatColors.get_shade(
-                    ChatColors.PeerAvatarColors[hash_to_bucket(peer_pubkey, ChatColors.get_size())], peer_pubkey);
-
-                final Drawable default_avatar = new IconicsDrawable(context_s).
-                    icon(GoogleMaterial.Icon.gmd_account_circle).
-                    backgroundColor(Color.TRANSPARENT).
-                    color(peer_color_fg).sizeDp(70);
-
-                icon.setVisibility(View.VISIBLE);
-                icon.setPadding((int) dp2px(0), (int) dp2px(0), (int) dp2px(0), (int) dp2px(0));
-                icon.setImageDrawable(default_avatar);
-
-                LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams((int) dp2px(35), (int) dp2px(35));
-                parameter.setMargins(parameter.leftMargin, (int) dp2px(6), (int) dp2px(10), (int) dp2px(0));
-                icon.setLayoutParams(parameter);
-
-                GradientDrawable shape = new GradientDrawable();
-                shape.setShape(GradientDrawable.RECTANGLE);
-                shape.setSize((int) dp2px(35), (int) dp2px(35));
-                shape.setCornerRadii(
-                    new float[]{CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_DRAWER_ICON_CORNER_RADIUS_IN_PX});
-                shape.setColor(peer_color_bg);
-                icon.setBackground(shape);
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
+                return true;
             }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
+        });
+        // Log.i(TAG, "bindView:context=" + c);
+        icon = (ImageView) viewHolder.itemView.findViewById(com.mikepenz.materialdrawer.R.id.material_drawer_icon);
+        if (icon != null)
+        {
+            icon.setVisibility(View.VISIBLE);
+            LinearLayout.LayoutParams parameter = new LinearLayout.LayoutParams((int) dp2px(36), (int) dp2px(36));
+            parameter.setMargins(parameter.leftMargin, (int) dp2px(6), (int) dp2px(10), (int) dp2px(0));
+            icon.setLayoutParams(parameter);
+            icon.setBackground(null);
+            ChatBubbleUiHelper.fill_drawer_peer_icon(icon, peer_pubkey, peer_display_name);
         }
     }
 }

@@ -110,10 +110,14 @@
                                   error:(NSError **)error
 {
     AVAudioSession *session = [AVAudioSession sharedInstance];
-    AVAudioSessionCategoryOptions options =
-        AVAudioSessionCategoryOptionAllowBluetooth |
-        AVAudioSessionCategoryOptionDefaultToSpeaker;
+    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionAllowBluetooth;
+    if (videoCall) {
+        options |= AVAudioSessionCategoryOptionDefaultToSpeaker;
+    }
     NSString *mode = videoCall ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat;
+    AVAudioSessionPortOverride portOverride = videoCall
+        ? AVAudioSessionPortOverrideSpeaker
+        : AVAudioSessionPortOverrideNone;
 
     if (reconfigure) {
         if (! [session setCategory:AVAudioSessionCategoryPlayAndRecord
@@ -130,7 +134,7 @@
         if (! [session setMode:mode error:error]) {
             return NO;
         }
-        if (! [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:error]) {
+        if (! [session overrideOutputAudioPort:portOverride error:error]) {
             return NO;
         }
         if (! [session setActive:YES error:error]) {
@@ -144,7 +148,7 @@
         if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
             return NO;
         }
-        if (! [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:error]) {
+        if (! [session overrideOutputAudioPort:portOverride error:error]) {
             return NO;
         }
     }

@@ -15,6 +15,7 @@ class SettingsAdvancedController: StaticTableController {
     fileprivate let userDefaults = UserDefaultsManager()
 
     fileprivate let UDPModel = StaticTableSwitchCellModel()
+    fileprivate let networkDiagnosticsModel = StaticTableDefaultCellModel()
     fileprivate let restoreDefaultsModel = StaticTableButtonCellModel()
 
     init(theme: Theme) {
@@ -23,6 +24,9 @@ class SettingsAdvancedController: StaticTableController {
         super.init(theme: theme, style: .grouped, model: [
             [
                 UDPModel,
+            ],
+            [
+                networkDiagnosticsModel,
             ],
             [
                 restoreDefaultsModel,
@@ -44,8 +48,32 @@ private extension SettingsAdvancedController {
         UDPModel.on = userDefaults.UDPEnabled
         UDPModel.valueChangedHandler = UDPChanged
 
+        networkDiagnosticsModel.title = "Network diagnostics"
+        networkDiagnosticsModel.value = "DHT, relays, reconnect log"
+        networkDiagnosticsModel.rightImageType = .arrow
+        networkDiagnosticsModel.didSelectHandler = showNetworkDiagnostics
+
         restoreDefaultsModel.title = String(localized: "settings_restore_default")
         restoreDefaultsModel.didSelectHandler = restoreDefaultsSettings
+    }
+
+    func showNetworkDiagnostics(_: StaticTableBaseCell) {
+        let quality = ConnectionQualityMonitor.shared
+        let body = """
+        --- event log ---
+        \(NetworkDiagnosticsLog.snapshot())
+
+        --- runtime ---
+        connection_quality=\(quality.level.rawValue)
+        estimated_rtt_ms=\(quality.estimatedRttMs)
+        """
+        let controller = TextViewController(
+            plainText: body,
+            backgroundColor: theme.colorForType(.NormalBackground),
+            titleColor: theme.colorForType(.NormalText),
+            textColor: theme.colorForType(.NormalText))
+        controller.title = "Network diagnostics"
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     func UDPChanged(_ on: Bool) {

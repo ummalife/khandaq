@@ -21,6 +21,7 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
+import android.content.Context;
 import android.util.Log;
 
 import com.zoffcc.applications.sorm.FileDB;
@@ -29,6 +30,8 @@ import com.zoffcc.applications.sorm.FriendList;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.nio.ByteBuffer;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -66,6 +69,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_TOR_USERAGENT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_UNIFIED_WEBPUSH_CONTENT_ENCODING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_UNIFIED_WEBPUSH_TTL_SECONDS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_NOW;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ORBOT_PROXY_HOST;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ORBOT_PROXY_PORT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PUSH_URL_TRIGGER_AGAIN_MAX_COUNT;
@@ -88,6 +92,11 @@ public class HelperFriend
     static FriendList main_get_friend(long friendnum)
     {
         FriendList f = null;
+
+        if (friendnum < 0)
+        {
+            return null;
+        }
 
         try
         {
@@ -441,6 +450,16 @@ public class HelperFriend
                 execute();
     }
 
+    static boolean peer_supports_msgv2(@NonNull FriendList f)
+    {
+        return (f.capabilities & ToxVars.TOX_CAPABILITY_MSGV2) != 0;
+    }
+
+    static boolean peer_supports_msgv3(@NonNull FriendList f)
+    {
+        return f.msgv3_capability == 1 || (f.capabilities & ToxVars.TOX_CAPABILITY_MSGV3) != 0;
+    }
+
     static long get_friend_msgv3_capability(@NonNull String friend_public_key_string)
     {
         long ret = 0;
@@ -538,6 +557,11 @@ public class HelperFriend
 
     public static String tox_friend_get_public_key__wrapper(long friend_number)
     {
+        if (friend_number < 0)
+        {
+            return null;
+        }
+
         if (MainActivity.cache_fnum_pubkey.containsKey(friend_number))
         {
             // Log.i(TAG, "cache hit:2");
@@ -1006,8 +1030,17 @@ public class HelperFriend
             return;
         }
 
+        friend_tox_id = HelperGeneric.normalize_tox_address(friend_tox_id);
+        if (friend_tox_id == null)
+        {
+            Log.i(TAG, "add_friend_real_norequest:invalid friend ID");
+            return;
+        }
+
+        final String friend_public_key = friend_tox_id.substring(0, (TOX_PUBLIC_KEY_SIZE * 2)).toUpperCase(Locale.ROOT);
+
         Log.i(TAG, "add_friend_real_norequest:add friend ID len:" + friend_tox_id.length());
-        long friendnum = MainActivity.tox_friend_add_norequest(friend_tox_id); // add friend
+        long friendnum = MainActivity.tox_friend_add_norequest(friend_public_key); // add friend
         Log.i(TAG, "add_friend_real_norequest:add friend  #:" + friendnum);
         HelperGeneric.update_savedata_file_wrapper(); // save toxcore datafile (new friend added)
 
@@ -1017,7 +1050,6 @@ public class HelperFriend
         }
         else if (friendnum > -1)
         {
-            String friend_public_key = friend_tox_id;
             // Log.i(TAG, "add_friend_real_norequest:add friend PK:" + friend_public_key);
             FriendList f = new FriendList();
             f.tox_public_key_string = friend_public_key;
@@ -1212,13 +1244,193 @@ public class HelperFriend
             return true;
         }
 
-        final long friendnum = tox_friend_by_public_key__wrapper(friend_public_key);
+        final long friendnum = ensure_friend_in_tox_core(friend_public_key);
         if ((friendnum == UINT32_MAX_JAVA) || (friendnum < 0))
         {
             return false;
         }
 
         return persist_new_friend_contact(friend_public_key, friendnum);
+    }
+
+    static void invalidate_friendnum_cache_for_pubkey(final String friend_public_key)
+    {
+        if (friend_public_key == null)
+        {
+            return;
+        }
+
+        final String trimmed = friend_public_key.trim();
+        MainActivity.cache_pubkey_fnum.remove(trimmed);
+        MainActivity.cache_pubkey_fnum.remove(trimmed.toUpperCase(Locale.ROOT));
+        MainActivity.cache_pubkey_fnum.remove(trimmed.toLowerCase(Locale.ROOT));
+    }
+
+    /** Re-resolve friendnum from toxcore; re-add DB contacts missing from tox savedata. */
+    static long ensure_friend_in_tox_core(final String friend_public_key)
+    {
+        if ((friend_public_key == null) ||
+            (friend_public_key.trim().length() != (TOX_PUBLIC_KEY_SIZE * 2)))
+        {
+            return -1;
+        }
+
+        if (!is_tox_profile_ready())
+        {
+            return -1;
+        }
+
+        final String pk = friend_public_key.trim().toUpperCase(Locale.ROOT);
+        long fn = tox_friend_by_public_key__wrapper(pk);
+        if (fn >= 0)
+        {
+            return fn;
+        }
+
+        invalidate_friendnum_cache_for_pubkey(pk);
+        fn = MainActivity.tox_friend_by_public_key(pk);
+        if (fn >= 0)
+        {
+            MainActivity.cache_pubkey_fnum.put(pk, fn);
+            return fn;
+        }
+
+        if ((lookup_friendlist_by_pubkey(pk) == null) && !has_dm_history_for_pubkey(pk))
+        {
+            return -1;
+        }
+
+        fn = MainActivity.tox_friend_add_norequest(pk);
+        Log.i(TAG, "ensure_friend_in_tox_core:re-add fn=" + fn + " pk=" + pk.substring(0, 8));
+        if ((fn >= 0) && (fn != UINT32_MAX_JAVA))
+        {
+            invalidate_friendnum_cache_for_pubkey(pk);
+            MainActivity.cache_pubkey_fnum.put(pk, fn);
+            MainActivity.cache_fnum_pubkey.put(fn, pk);
+            HelperGeneric.update_savedata_file_wrapper();
+            final FriendList fl = lookup_friendlist_by_pubkey(pk);
+            if (fl != null)
+            {
+                refresh_friend_name_after_add(fn, fl);
+            }
+            return fn;
+        }
+
+        return -1;
+    }
+
+    static boolean has_dm_history_for_pubkey(final String friend_public_key)
+    {
+        if ((orma == null) || (friend_public_key == null) ||
+            (friend_public_key.length() != (TOX_PUBLIC_KEY_SIZE * 2)))
+        {
+            return false;
+        }
+
+        try
+        {
+            return orma.selectFromMessage().tox_friendpubkeyEq(friend_public_key).count() > 0;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    static void ensure_contact_record_for_pubkey(final String friend_public_key, final long friendnum_hint)
+    {
+        if ((friend_public_key == null) ||
+            (friend_public_key.length() != (TOX_PUBLIC_KEY_SIZE * 2)))
+        {
+            return;
+        }
+
+        final String pk = friend_public_key.trim().toUpperCase(Locale.ROOT);
+        if (lookup_friendlist_by_pubkey(pk) != null)
+        {
+            return;
+        }
+
+        long fn = friendnum_hint;
+        if (fn < 0)
+        {
+            fn = tox_friend_by_public_key__wrapper(pk);
+        }
+
+        if (fn >= 0)
+        {
+            persist_new_friend_contact(pk, fn);
+        }
+    }
+
+    static void sync_db_contacts_to_tox_core()
+    {
+        if (orma == null)
+        {
+            return;
+        }
+
+        try
+        {
+            final List<FriendList> all = orma.selectFromFriendList().toList();
+            if (all == null)
+            {
+                return;
+            }
+
+            for (final FriendList fl : all)
+            {
+                if ((fl.tox_public_key_string != null) &&
+                    (fl.tox_public_key_string.length() == (TOX_PUBLIC_KEY_SIZE * 2)))
+                {
+                    ensure_friend_in_tox_core(fl.tox_public_key_string);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "sync_db_contacts_to_tox_core:EE:" + e.getMessage());
+        }
+    }
+
+    static void repair_corrupt_friend_display_names()
+    {
+        if (orma == null)
+        {
+            return;
+        }
+
+        try
+        {
+            final List<FriendList> all = orma.selectFromFriendList().toList();
+            if (all == null)
+            {
+                return;
+            }
+
+            for (final FriendList fl : all)
+            {
+                if ((fl.tox_public_key_string == null) ||
+                    (fl.tox_public_key_string.length() != (TOX_PUBLIC_KEY_SIZE * 2)))
+                {
+                    continue;
+                }
+
+                if (!is_placeholder_friend_name(fl.name, fl.tox_public_key_string))
+                {
+                    continue;
+                }
+
+                final long fn = tox_friend_by_public_key__wrapper(fl.tox_public_key_string);
+                fl.name = initial_friend_display_name(fl.tox_public_key_string, fn);
+                update_friend_in_db_name(fl);
+                update_single_friend_in_friendlist_view(fl);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "repair_corrupt_friend_display_names:EE:" + e.getMessage());
+        }
     }
 
     static void show_friend_add_error(final long friendnum)
@@ -1344,7 +1556,7 @@ public class HelperFriend
         }
 
         String trimmed = name.trim();
-        if (trimmed.isEmpty() || trimmed.equals("Unknown"))
+        if (trimmed.isEmpty() || trimmed.equals("Unknown") || trimmed.equals("-1"))
         {
             return true;
         }
@@ -1468,6 +1680,11 @@ public class HelperFriend
 
     static String resolve_friend_display_name(long friendnum)
     {
+        if (friendnum < 0)
+        {
+            return friend_display_name_fallback();
+        }
+
         String friend_pubkey = null;
 
         try
@@ -1477,6 +1694,11 @@ public class HelperFriend
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+
+        if ((friend_pubkey != null) && (friend_pubkey.length() != (TOX_PUBLIC_KEY_SIZE * 2)))
+        {
+            friend_pubkey = null;
         }
 
         String result = friend_pubkey != null ? peer_pubkey_short_id(friend_pubkey) : friend_display_name_fallback();
@@ -1675,6 +1897,11 @@ public class HelperFriend
                 return false;
             }
 
+            if (!ChatBubbleUiHelper.shouldLoadVfsAvatar(fl_temp))
+            {
+                return false;
+            }
+
             if (VFS_ENCRYPT)
             {
                 final info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(
@@ -1732,6 +1959,11 @@ public class HelperFriend
 
     static void send_friend_msg_receipt_v2_wrapper(final long friend_number, final int msg_type, final ByteBuffer msg_id_buffer, long t_sec_receipt)
     {
+        if (!MainActivity.PREF__send_read_receipts)
+        {
+            return;
+        }
+
         // (msg_type == 1) msgV2 direct message
         // (msg_type == 2) msgV2 relay message
         // (msg_type == 3) msgV2 "conference" and "group" confirm msg received message
@@ -2099,5 +2331,96 @@ public class HelperFriend
         catch (Exception ignored)
         {
         }
+    }
+
+    static boolean is_friend_presence_online(final FriendList f)
+    {
+        if (f == null)
+        {
+            return false;
+        }
+        return f.last_online_timestamp == LAST_ONLINE_TIMSTAMP_ONLINE_NOW || f.TOX_CONNECTION != 0;
+    }
+
+    static String format_chat_presence_line(final Context context, final FriendList f)
+    {
+        if (context == null || f == null)
+        {
+            return "";
+        }
+        if (is_friend_presence_online(f))
+        {
+            switch (f.TOX_USER_STATUS)
+            {
+                case 1:
+                    return context.getString(R.string.chat_presence_away);
+                case 2:
+                    return context.getString(R.string.chat_presence_busy);
+                default:
+                    return context.getString(R.string.chat_presence_online);
+            }
+        }
+        return format_chat_last_seen_line(context, f.last_online_timestamp, f.last_online_timestamp_real);
+    }
+
+    static String format_chat_last_seen_line(final Context context, long last_seen_combined, final long last_seen_real)
+    {
+        long ts = last_seen_combined;
+        if (ts == LAST_ONLINE_TIMSTAMP_ONLINE_NOW)
+        {
+            return context.getString(R.string.chat_presence_online);
+        }
+        if (ts <= LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE || ts == 0L)
+        {
+            if (last_seen_real > 0L && last_seen_real != LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE
+                    && last_seen_real != LAST_ONLINE_TIMSTAMP_ONLINE_NOW)
+            {
+                ts = last_seen_real;
+            }
+            else
+            {
+                return context.getString(R.string.chat_presence_last_seen_unknown);
+            }
+        }
+        return format_chat_last_seen_from_timestamp(context, ts);
+    }
+
+    static String format_chat_last_seen_from_timestamp(final Context context, final long timestamp_ms)
+    {
+        final long delta_ms = Math.max(0L, System.currentTimeMillis() - timestamp_ms);
+        if (delta_ms < 60_000L)
+        {
+            return context.getString(R.string.chat_presence_last_seen_just_now);
+        }
+        final long minutes = delta_ms / 60_000L;
+        if (minutes < 60L)
+        {
+            return context.getResources().getQuantityString(R.plurals.chat_presence_last_seen_minutes,
+                    (int) minutes, (int) minutes);
+        }
+
+        final Calendar now = Calendar.getInstance();
+        final Calendar seen = Calendar.getInstance();
+        seen.setTimeInMillis(timestamp_ms);
+        if (is_same_calendar_day(now, seen))
+        {
+            final Date seen_date = seen.getTime();
+            return context.getString(R.string.chat_presence_last_seen_at_time,
+                    MainActivity.df_time_only.format(seen_date));
+        }
+        final Calendar yesterday = (Calendar) now.clone();
+        yesterday.add(Calendar.DAY_OF_YEAR, -1);
+        if (is_same_calendar_day(yesterday, seen))
+        {
+            return context.getString(R.string.chat_presence_last_seen_yesterday);
+        }
+        return context.getString(R.string.chat_presence_last_seen_on_date,
+                MainActivity.df_date_only.format(seen.getTime()));
+    }
+
+    private static boolean is_same_calendar_day(final Calendar a, final Calendar b)
+    {
+        return a.get(Calendar.YEAR) == b.get(Calendar.YEAR)
+                && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR);
     }
 }

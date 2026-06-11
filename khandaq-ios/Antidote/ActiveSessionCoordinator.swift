@@ -46,9 +46,9 @@ private struct IphoneObjects {
 
     let tabBarController: TabBarController
 
-    let friendsTabBarItem: TabBarBadgeItem
-    let chatsTabBarItem: TabBarBadgeItem
-    let profileTabBarItem: TabBarProfileItem
+    let friendsTabBarItem: UITabBarItem
+    let chatsTabBarItem: UITabBarItem
+    let profileTabBarItem: UITabBarItem
 }
 
 class ActiveSessionCoordinator: NSObject {
@@ -106,6 +106,12 @@ class ActiveSessionCoordinator: NSObject {
             self?.handleNetworkPathChange()
         }
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(ActiveSessionCoordinator.networkRebootstrapCompleted),
+            name: NSNotification.Name("kOCTNetworkRebootstrapCompletedNotification"),
+            object: nil)
+
         NotificationCenter.default.addObserver(self, selector: #selector(ActiveSessionCoordinator.applicationWillTerminate), name: NSNotification.Name.UIApplicationWillTerminate, object: nil)
     }
 
@@ -115,8 +121,16 @@ class ActiveSessionCoordinator: NSObject {
     }
 
     fileprivate func handleNetworkPathChange() {
+        NetworkDiagnosticsLog.log("network_path_change", detail: "reachability")
+        ConnectionQualityMonitor.shared.onBootstrapStarted()
         toxManager.bootstrap.rebootstrapOnNetworkChange()
         toxManager.chats.broadcastOwnPushURLToConnectedFriends()
+    }
+
+    @objc func networkRebootstrapCompleted() {
+        let connected = toxManager.user.connectionStatus != .none
+        ConnectionQualityMonitor.shared.onBootstrapFinished(connected: connected)
+        NetworkDiagnosticsLog.log("rebootstrap_completed", detail: "connected=\(connected)")
     }
 
     @objc func applicationWillTerminate() {
@@ -256,7 +270,11 @@ extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
         notificationCoordinator.toggleConnectingView(show: show, animated: true)
 
         if connectionStatus == .none {
+            NetworkDiagnosticsLog.log("self_offline", detail: "rebootstrap")
+            ConnectionQualityMonitor.shared.onBootstrapStarted()
             toxManager.bootstrap.rebootstrapOnNetworkChange()
+        } else {
+            ConnectionQualityMonitor.shared.onBootstrapFinished(connected: true)
         }
     }
 }
@@ -279,7 +297,7 @@ extension ActiveSessionCoordinator: NotificationCoordinatorDelegate {
 
         switch InterfaceIdiom.current() {
             case .iPhone:
-                iPhone.friendsTabBarItem.badgeText = text
+                iPhone.friendsTabBarItem.badgeValue = text
             case .iPad:
                 iPad.primaryController.friendsBadgeText = text
                 break
@@ -289,7 +307,7 @@ extension ActiveSessionCoordinator: NotificationCoordinatorDelegate {
     func notificationCoordinator(_ coordinator: NotificationCoordinator, updateChatsBadge badge: Int) {
         switch InterfaceIdiom.current() {
             case .iPhone:
-                iPhone.chatsTabBarItem.badgeText = (badge > 0) ? "\(badge)" : nil
+                iPhone.chatsTabBarItem.badgeValue = (badge > 0) ? "\(badge)" : nil
             case .iPad:
                 // none
                 break
@@ -463,20 +481,16 @@ private extension ActiveSessionCoordinator {
                     }
                 }
 
-                let tabBarItems = createTabBarItems()
+                let tabBarItems = configureNativeTabBarItems(for: tabBarControllers)
 
-                let friendsTabBarItem = tabBarItems[IphoneObjects.TabCoordinator.friends.rawValue] as! TabBarBadgeItem
-                let chatsTabBarItem = tabBarItems[IphoneObjects.TabCoordinator.chats.rawValue] as! TabBarBadgeItem
-                let profileTabBarItem = tabBarItems[IphoneObjects.TabCoordinator.profile.rawValue] as! TabBarProfileItem
-
-                let tabBarController = TabBarController(theme: theme, controllers: tabBarControllers, tabBarItems: tabBarItems)
+                let tabBarController = TabBarController(theme: theme, controllers: tabBarControllers)
 
                 iPhone = IphoneObjects(
                         chatsCoordinator: chatsCoordinator,
                         tabBarController: tabBarController,
-                        friendsTabBarItem: friendsTabBarItem,
-                        chatsTabBarItem: chatsTabBarItem,
-                        profileTabBarItem: profileTabBarItem)
+                        friendsTabBarItem: tabBarItems.friends,
+                        chatsTabBarItem: tabBarItems.chats,
+                        profileTabBarItem: tabBarItems.profile)
 
             case .iPad:
                 let splitController = UISplitViewController()
@@ -508,30 +522,42 @@ private extension ActiveSessionCoordinator {
         callCoordinator.delegate = self
     }
 
-    func createTabBarItems() -> [TabBarAbstractItem] {
-        return IphoneObjects.TabCoordinator.allValues().map {
-            switch $0 {
-                case .friends:
-                    let item = TabBarBadgeItem(theme: theme)
-                    item.image = UIImage(named: "tab-bar-friends")
-                    item.text = String(localized: "contacts_title")
-                    item.badgeAccessibilityEnding = String(localized: "contact_requests_section")
-                    return item
-                case .chats:
-                    let item = TabBarBadgeItem(theme: theme)
-                    item.image = UIImage(named: "tab-bar-chats")
-                    item.text = String(localized: "chats_title")
-                    item.badgeAccessibilityEnding = String(localized: "accessibility_chats_ending")
-                    return item
-                case .settings:
-                    let item = TabBarBadgeItem(theme: theme)
-                    item.image = UIImage(named: "tab-bar-settings")
-                    item.text = String(localized: "settings_title")
-                    return item
-                case .profile:
-                    return TabBarProfileItem(theme: theme)
-            }
+    func configureNativeTabBarItems(for controllers: [UINavigationController]) -> (friends: UITabBarItem, chats: UITabBarItem, profile: UITabBarItem) {
+        func templateImage(_ name: String) -> UIImage? {
+            UIImage(named: name)?.withRenderingMode(.alwaysTemplate)
         }
+
+        let friendsItem = UITabBarItem(
+                title: String(localized: "contacts_title"),
+                image: templateImage("tab-bar-friends"),
+                tag: IphoneObjects.TabCoordinator.friends.rawValue)
+        friendsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
+        controllers[IphoneObjects.TabCoordinator.friends.rawValue].tabBarItem = friendsItem
+
+        let chatsItem = UITabBarItem(
+                title: String(localized: "chats_title"),
+                image: templateImage("tab-bar-chats"),
+                tag: IphoneObjects.TabCoordinator.chats.rawValue)
+        chatsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
+        controllers[IphoneObjects.TabCoordinator.chats.rawValue].tabBarItem = chatsItem
+
+        let settingsItem = UITabBarItem(
+                title: String(localized: "settings_title"),
+                image: templateImage("tab-bar-settings"),
+                tag: IphoneObjects.TabCoordinator.settings.rawValue)
+        controllers[IphoneObjects.TabCoordinator.settings.rawValue].tabBarItem = settingsItem
+
+        let profileItem = UITabBarItem(
+                title: String(localized: "profile_title"),
+                image: TabBarController.makeProfileTabBarImage(
+                        theme: theme,
+                        userImage: nil,
+                        userStatus: .offline,
+                        connectionStatus: .none),
+                tag: IphoneObjects.TabCoordinator.profile.rawValue)
+        controllers[IphoneObjects.TabCoordinator.profile.rawValue].tabBarItem = profileItem
+
+        return (friendsItem, chatsItem, profileItem)
     }
 
     func showFriendRequest(_ request: OCTFriendRequest) {
@@ -628,26 +654,42 @@ private extension ActiveSessionCoordinator {
 
         switch InterfaceIdiom.current() {
             case .iPhone:
-                iPhone.profileTabBarItem.userStatus = status
-                iPhone.profileTabBarItem.connectionStatus = connectionstatus
+                refreshProfileTabBarItem(userStatus: status, connectionStatus: connectionstatus)
             case .iPad:
                 iPad.primaryController.userStatus = status
         }
     }
 
     func updateUserAvatar() {
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                let status = UserStatus(connectionStatus: toxManager.user.connectionStatus, userStatus: toxManager.user.userStatus)
+                let connectionstatus = ConnectionStatus(connectionStatus: toxManager.user.connectionStatus)
+                refreshProfileTabBarItem(userStatus: status, connectionStatus: connectionstatus)
+            case .iPad:
+                var avatar: UIImage?
+
+                if let avatarData = toxManager.user.userAvatar() {
+                    avatar = UIImage(data: avatarData)
+                }
+
+                iPad.primaryController.userAvatar = avatar
+        }
+    }
+
+    func refreshProfileTabBarItem(userStatus: UserStatus, connectionStatus: ConnectionStatus) {
         var avatar: UIImage?
 
         if let avatarData = toxManager.user.userAvatar() {
             avatar = UIImage(data: avatarData)
         }
 
-        switch InterfaceIdiom.current() {
-            case .iPhone:
-                iPhone.profileTabBarItem.userImage = avatar
-            case .iPad:
-                iPad.primaryController.userAvatar = avatar
-        }
+        iPhone.profileTabBarItem.image = TabBarController.makeProfileTabBarImage(
+                theme: theme,
+                userImage: avatar,
+                userStatus: userStatus,
+                connectionStatus: connectionStatus)
+        iPhone.profileTabBarItem.accessibilityValue = userStatus.toString()
     }
 
     func updateUserName() {

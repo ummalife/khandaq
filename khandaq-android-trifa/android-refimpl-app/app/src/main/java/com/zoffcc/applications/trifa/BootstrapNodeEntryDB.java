@@ -85,6 +85,10 @@ public class BootstrapNodeEntryDB extends com.zoffcc.applications.sorm.Bootstrap
 
     static void insert_node_into_db_real(com.zoffcc.applications.sorm.BootstrapNodeEntryDB n)
     {
+        if (orma == null)
+        {
+            return;
+        }
         try
         {
             orma.insertIntoBootstrapNodeEntryDB(n);

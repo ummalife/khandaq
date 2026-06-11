@@ -65,7 +65,7 @@ class CallActiveController: CallBaseController {
         }
     }
 
-    var speaker: Bool = true {
+    var speaker: Bool = false {
         didSet {
             bigSpeakerButton?.isSelected = speaker
             smallSpeakerButton?.isSelected = speaker

@@ -28,20 +28,18 @@ Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure provi
 
 ## Download pre-built clients
 
-All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.5)** (not in git):
+All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.6)** (not in git):
 
 | Platform | Download |
 |----------|----------|
-| Android | [khandaq-android.apk](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-android.apk) |
-| Windows | [khandaq-windows-installer.exe](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-windows-installer.exe) |
-| macOS | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-macos.zip) |
-| Linux x86_64 (portable) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-linux-x86_64-portable.tar.gz) |
-| Debian / Ubuntu (.deb) | [khandaq-messenger_0.2.5_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-messenger_0.2.5_amd64.deb) |
-| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (not distributed as IPA here) |
+| Android | [khandaq-android.apk](https://github.com/ummalife/khandaq/releases/download/v0.2.6/khandaq-android.apk) |
+| Windows | [khandaq-windows-installer.exe](https://github.com/ummalife/khandaq/releases/download/v0.2.6/khandaq-windows-installer.exe) |
+| macOS | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.6/khandaq-macos.zip) |
+| Linux x86_64 (portable) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.6/khandaq-linux-x86_64-portable.tar.gz) |
+| Debian / Ubuntu (.deb) | [khandaq-messenger_0.2.6_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.6/khandaq-messenger_0.2.6_amd64.deb) |
+| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 142825; not distributed as IPA here) |
 
-Windows portable zip: [khandaq-x86_64-Release.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-x86_64-Release.zip)
-
-Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.5/SHA256SUMS.txt).
+Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.6/SHA256SUMS.txt).
 
 ---
 

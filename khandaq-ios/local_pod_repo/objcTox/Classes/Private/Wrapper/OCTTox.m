@@ -8,6 +8,8 @@
 
 void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
 
+uint8_t *hex_to_bin(const char *hex_string_buffer, size_t hex_string_len);
+
 @interface OCTTox ()
 
 @property (assign, nonatomic) Tox *tox;
@@ -21,8 +23,37 @@ void (*_tox_self_get_public_key)(const Tox *tox, uint8_t *public_key);
 @implementation OCTTox
 
 static long long last_check_time = 0;
+static void * const kOCTToxQueueSpecificKey = (void *)&kOCTToxQueueSpecificKey;
+static dispatch_queue_t sOCTFileTransferQueue;
+static dispatch_once_t sOCTFileTransferQueueOnceToken;
 static long long OFFLINE_REBOOTSTRAP_GRACE_MS = (5 * 1000);
 static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
+
+static void perform_khandaq_offline_rebootstrap(Tox *tox)
+{
+    static const struct {
+        const char *host;
+        const char *key_hex;
+    } nodes[] = {
+        {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
+        {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
+        {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
+    };
+    static const uint16_t tcp_ports[] = {33445, 3389};
+
+    for (size_t i = 0; i < (sizeof(nodes) / sizeof(nodes[0])); i++) {
+        uint8_t *key_bin = hex_to_bin(nodes[i].key_hex, (TOX_PUBLIC_KEY_SIZE * 2));
+        if (key_bin == NULL) {
+            continue;
+        }
+
+        tox_bootstrap(tox, nodes[i].host, 33445, key_bin, NULL);
+        for (size_t p = 0; p < (sizeof(tcp_ports) / sizeof(tcp_ports[0])); p++) {
+            tox_add_tcp_relay(tox, nodes[i].host, tcp_ports[p], key_bin, NULL);
+        }
+        free(key_bin);
+    }
+}
 
 #pragma mark -  Class methods
 
@@ -122,7 +153,8 @@ static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
             return;
         }
 
-        self.toxQueue = dispatch_queue_create("me.dvor.objcTox.OCTToxQueue", NULL);
+        self.toxQueue = dispatch_queue_create("me.dvor.objcTox.OCTToxQueue", DISPATCH_QUEUE_SERIAL);
+        dispatch_queue_set_specific(self.toxQueue, kOCTToxQueueSpecificKey, kOCTToxQueueSpecificKey, NULL);
         self.timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, self.toxQueue);
 
         [self updateTimerIntervalIfNeeded];
@@ -149,18 +181,8 @@ static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
 
                 if (cstatus == 0) {
                     OCTLogInfo(@"Tox offline for a long time, bootstrapping again ...");
-
-                    uint8_t *key_bin = hex_to_bin("74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D",
-                                                 (TOX_PUBLIC_KEY_SIZE * 2));
-
-                    if (key_bin != NULL) {
-                        tox_add_tcp_relay(strongSelf.tox, "bootstrap1.khandaq.org", 33445, key_bin, NULL);
-                        tox_add_tcp_relay(strongSelf.tox, "bootstrap1.khandaq.org", 3389, key_bin, NULL);
-                        tox_bootstrap(strongSelf.tox, "bootstrap1.khandaq.org", 33445, key_bin, NULL);
-
-                        OCTLogInfo(@"Tox offline for a long time, bootstrapping DONE");
-                        free(key_bin);
-                    }
+                    perform_khandaq_offline_rebootstrap(strongSelf.tox);
+                    OCTLogInfo(@"Tox offline for a long time, bootstrapping DONE");
                 }
             }
 
@@ -205,6 +227,27 @@ static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
     }
 
     dispatch_async(queue, block);
+}
+
+- (void)performSyncBlockOnToxQueue:(void (^)(void))block
+{
+    if (! block) {
+        return;
+    }
+
+    dispatch_queue_t queue = self.toxQueue;
+
+    if (! queue) {
+        block();
+        return;
+    }
+
+    if (dispatch_get_specific(kOCTToxQueueSpecificKey)) {
+        block();
+        return;
+    }
+
+    dispatch_sync(queue, block);
 }
 
 - (void)resetOfflineRebootstrapTimer
@@ -473,7 +516,15 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
 {
     NSParameterAssert(address);
     NSParameterAssert(message);
-    NSAssert(address.length == kOCTToxAddressLength, @"Address must be kOCTToxAddressLength length");
+
+    if (address.length != kOCTToxAddressLength) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorFriendAddBadChecksum
+                                     description:@"Cannot add friend"
+                                   failureReason:@"Address must be exactly 76 hex characters"];
+        }
+        return kOCTToxFriendNumberFailure;
+    }
 
     OCTLogVerbose(@"add friend with address.length %lu, message.length %lu", (unsigned long)address.length, (unsigned long)message.length);
 
@@ -1050,14 +1101,17 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
                               data:(NSData *)data
                              error:(NSError **)error
 {
-    TOX_ERR_FILE_SEND_CHUNK cError;
-    const uint8_t *cData = [data bytes];
+    __block BOOL result = NO;
+    __block TOX_ERR_FILE_SEND_CHUNK cError;
 
-    bool result = tox_file_send_chunk(self.tox, friendNumber, fileNumber, position, cData, (uint32_t)data.length, &cError);
+    [self performSyncBlockOnToxQueue:^{
+        const uint8_t *cData = [data bytes];
+        result = tox_file_send_chunk(self.tox, friendNumber, fileNumber, position, cData, (uint32_t)data.length, &cError);
+    }];
 
     [self fillError:error withCErrorFileSendChunk:cError];
 
-    return (BOOL)result;
+    return result;
 }
 
 #pragma mark -  Private methods
@@ -2194,7 +2248,11 @@ void fileChunkRequestCallback(Tox *cTox, uint32_t friendNumber, OCTToxFileNumber
 {
     OCTTox *tox = (__bridge OCTTox *)(userData);
 
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_once(&sOCTFileTransferQueueOnceToken, ^{
+        sOCTFileTransferQueue = dispatch_queue_create("me.dvor.objcTox.fileTransferQueue", DISPATCH_QUEUE_SERIAL);
+    });
+
+    dispatch_async(sOCTFileTransferQueue, ^{
         if ([tox.delegate respondsToSelector:@selector(tox:fileChunkRequestForFileNumber:friendNumber:position:length:)]) {
             [tox.delegate tox:tox fileChunkRequestForFileNumber:fileNumber
                  friendNumber:friendNumber
@@ -2260,7 +2318,11 @@ void fileReceiveChunkCallback(
         chunk = [NSData dataWithBytes:cData length:length];
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_once(&sOCTFileTransferQueueOnceToken, ^{
+        sOCTFileTransferQueue = dispatch_queue_create("me.dvor.objcTox.fileTransferQueue", DISPATCH_QUEUE_SERIAL);
+    });
+
+    dispatch_async(sOCTFileTransferQueue, ^{
         if ([tox.delegate respondsToSelector:@selector(tox:fileReceiveChunk:fileNumber:friendNumber:position:)]) {
             [tox.delegate tox:tox fileReceiveChunk:chunk fileNumber:fileNumber friendNumber:friendNumber position:position];
         }

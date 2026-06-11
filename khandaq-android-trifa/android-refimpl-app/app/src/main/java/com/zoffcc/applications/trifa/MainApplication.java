@@ -101,15 +101,20 @@ public class MainApplication extends Application
         {
             Lingver.init(this, Locale.getDefault());
         }
-        // Lingver.getInstance().setFollowSystemLocale(this);
+        AppLocaleHelper.syncAppCompatLocalesFromLingver();
 
         randnum = (int) (Math.random() * 1000d);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
         DbSecretKeyStorage.onApplicationStart(this);
         ensureFcmNotificationChannel();
+        HelperToxNotification.ensureChannel(this);
         org.khandaq.messenger.HelperCallNotification.ensureChannel(this);
         org.khandaq.messenger.KhandaqPushHelper.initIfAvailable(this);
+
+        HelperGeneric.sync_have_internet_connectivity(this);
+        NetworkConnectivityMonitor.register(this);
+        NetworkKeepAliveWorker.schedule(this);
 
         try
         {
@@ -158,6 +163,7 @@ public class MainApplication extends Application
     @Override
     protected void attachBaseContext(Context base)
     {
+        applyDarkModeFromPref(PreferenceManager.getDefaultSharedPreferences(base).getString("dark_mode_pref", "0"));
         super.attachBaseContext(base);
         MultiDex.install(this);
     }
@@ -440,7 +446,7 @@ public class MainApplication extends Application
 
     private void updateTheme(SharedPreferences sharedPreferences)
     {
-        applyDarkModeFromPref(sharedPreferences.getString("dark_mode_pref", "2"));
+        applyDarkModeFromPref(sharedPreferences.getString("dark_mode_pref", "0"));
     }
 
     /** Apply AppCompat night mode and sync {@link MainActivity#PREF__dark_mode_pref}. */

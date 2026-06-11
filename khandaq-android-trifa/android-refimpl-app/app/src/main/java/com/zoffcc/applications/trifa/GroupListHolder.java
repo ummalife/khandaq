@@ -26,7 +26,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.drawable.Drawable;
-import android.text.Html;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MenuItem;
@@ -52,7 +51,7 @@ import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_w
 import static com.zoffcc.applications.trifa.HelperGroup.delete_group;
 import static com.zoffcc.applications.trifa.HelperGroup.delete_group_all_files;
 import static com.zoffcc.applications.trifa.HelperGroup.delete_group_all_messages;
-import static com.zoffcc.applications.trifa.HelperGroup.group_identifier_short;
+import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
 import static com.zoffcc.applications.trifa.HelperGroup.is_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.set_group_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
@@ -64,8 +63,6 @@ import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_titl
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_leave;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_offline_peer_count;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_count;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_ALPHA_NOT_SELECTED;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_ALPHA_SELECTED;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED;
@@ -87,6 +84,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     private ImageView imageView2;
     private ImageView f_notification;
     private ViewGroup f_conf_container_parent;
+    private TextView chatTimeView;
 
     synchronized static void remove_progress_dialog()
     {
@@ -108,7 +106,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
 
         this.context = c;
 
-        f_conf_container_parent = (ViewGroup) itemView.findViewById(R.id.f_conf_container_parent);
+        f_conf_container_parent = (ViewGroup) itemView.findViewById(R.id.chat_list_row);
+        chatTimeView = (TextView) itemView.findViewById(R.id.f_chat_time);
 
         textView = (TextView) itemView.findViewById(R.id.f_name);
         statusText = (TextView) itemView.findViewById(R.id.f_status_message);
@@ -158,47 +157,22 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             f_notification.setOnClickListener(this);
         }
 
+        final Drawable group_icon;
         if (fl.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
         {
-            f_conf_container_parent.setBackgroundResource(R.drawable.friend_list_conf_round_bg);
-            final Drawable d_lock = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_public).
-                    color(context.getResources().getColor(R.color.icon_colors)).sizeDp(80);
-            avatar.setImageDrawable(d_lock);
+            group_icon = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_public).
+                    color(context.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
         }
         else
         {
-            f_conf_container_parent.setBackgroundResource(R.drawable.friend_list_conf_round_bg);
-            final Drawable d_lock = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_security).
-                    color(context.getResources().getColor(R.color.icon_colors)).sizeDp(80);
-            avatar.setImageDrawable(d_lock);
+            group_icon = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_security).
+                    color(context.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
         }
+        avatar.setImageDrawable(group_icon);
 
         try
         {
-            long user_count = tox_group_peer_count(fl.tox_group_number);
-            long offline_user_count = tox_group_offline_peer_count(fl.tox_group_number);
-
-            if (user_count < 0)
-            {
-                user_count = 0;
-            }
-
-            String peer_num_text_color = "#000000";
-            if (PREF__dark_mode_pref == 1)
-            {
-                peer_num_text_color = "#ffffff";
-            }
-            String peer_num_text_color_text = "<font color=\"" + peer_num_text_color + "\">";
-            String peer_num_text_color_text_end = "</font>";
-            peer_num_text_color_text = "";
-            peer_num_text_color_text_end = "";
-
-            statusText.setText(Html.fromHtml("#" + fl.tox_group_number + " "
-                                             //
-                                             + group_identifier_short(fl.group_identifier, true)
-                                             //
-                                             + " " + "<b>" + peer_num_text_color_text + "Users:" + user_count + "(" +
-                                             offline_user_count + ")" + peer_num_text_color_text_end + "</b>"));
+            statusText.setText(format_group_list_status_subtitle(context, fl.group_identifier));
         }
         catch (Exception e)
         {
@@ -240,35 +214,37 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
 
         imageView2.setVisibility(View.INVISIBLE);
 
+        int new_messages_count = 0;
         try
         {
-            int new_messages_count = orma.selectFromGroupMessage().
+            new_messages_count = orma.selectFromGroupMessage().
                     group_identifierEq(fl.group_identifier.toLowerCase()).is_newEq(true).count();
-
-            if (new_messages_count > 0)
-            {
-                if (new_messages_count > 99)
-                {
-                    unread_count.setText("+"); //("∞");
-                }
-                else
-                {
-                    unread_count.setText("" + new_messages_count);
-                }
-                unread_count.setVisibility(View.VISIBLE);
-            }
-            else
-            {
-                unread_count.setText("");
-                unread_count.setVisibility(View.INVISIBLE);
-            }
         }
-        catch (Exception e)
+        catch (Exception ignored)
         {
-            e.printStackTrace();
+        }
+        ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
+        apply_telegram_chat_row(fl);
+    }
 
-            unread_count.setText("");
-            unread_count.setVisibility(View.INVISIBLE);
+    private void apply_telegram_chat_row(final GroupDB fl)
+    {
+        ChatListUiHelper.prepare_telegram_row(f_conf_container_parent, textView, statusText, chatTimeView,
+                                              f_notification, imageView, imageView2, null, null);
+        statusText.setText(ChatListUiHelper.group_last_message_preview(context, fl.group_identifier));
+        ChatListUiHelper.bind_preview_text_color(statusText,
+                ChatDraftHelper.has_group_draft(fl.group_identifier));
+        if (chatTimeView != null)
+        {
+            chatTimeView.setText(ChatListUiHelper.format_chat_list_time(context,
+                    ChatListUiHelper.group_last_message_timestamp_ms(fl.group_identifier)));
+        }
+        try
+        {
+            avatar.setBorderWidth(0);
+        }
+        catch (Exception ignored)
+        {
         }
     }
 

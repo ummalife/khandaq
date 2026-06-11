@@ -17,4 +17,5 @@ class FriendListCellModel: BaseCellModel {
     var status: UserStatus = .offline
     var connectionstatus: ConnectionStatus = .none
     var hideStatus: Bool = false
+    var presenceIsOnline: Bool = false
 }

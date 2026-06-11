@@ -262,6 +262,7 @@ public class MessageListHolder_file_incoming_state_pause_has_accepted extends Re
         }
 
         ft_progressbar.setMax(100);
+        ft_progressbar.setVisibility(View.VISIBLE);
         // ft_progressbar.setIndeterminate(false);
 
         HelperGeneric.fill_friend_avatar_icon(m, context, img_avatar);

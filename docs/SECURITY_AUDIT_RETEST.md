@@ -1,8 +1,8 @@
-# Khandaq — чеклист повторной проверки (post v0.2.5)
+# Khandaq — чеклист повторной проверки (post v0.2.6)
 
-Дата фиксов: 2026-06-10  
-Базовый коммит: после merge security-fixes в `master`  
-APK: https://khandaq.org/downloads/khandaq-android.apk (v0.2.5, build 10295)
+Дата фиксов: 2026-06-11  
+Базовый коммит: tag `v0.2.6` на `master`  
+APK: https://khandaq.org/downloads/khandaq-android.apk (v0.2.6, build 10298)
 
 ## Как проверять
 

@@ -37,7 +37,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.DocumentsContract;
+import android.text.Editable;
 import android.text.Html;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -90,15 +92,19 @@ import static com.zoffcc.applications.trifa.HelperRelay.own_push_token_load;
 import static com.zoffcc.applications.trifa.HelperRelay.push_token_to_push_url;
 import static com.zoffcc.applications.trifa.HelperRelay.remove_own_pushurl_in_db;
 import static com.zoffcc.applications.trifa.HelperRelay.remove_own_relay_in_db;
-import static com.zoffcc.applications.trifa.Identicon.IDENTICON_ROWS;
 import static com.zoffcc.applications.trifa.MainActivity.clipboard;
 import static com.zoffcc.applications.trifa.MainActivity.friend_list_fragment;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_get_all_tcp_relays;
 import static com.zoffcc.applications.trifa.MainActivity.tox_get_all_udp_connections;
 import static com.zoffcc.applications.trifa.MainActivity.tox_self_get_capabilities;
+import static com.zoffcc.applications.trifa.MainActivity.tox_self_get_name;
+import static com.zoffcc.applications.trifa.MainActivity.tox_self_get_name_size;
+import static com.zoffcc.applications.trifa.MainActivity.tox_self_get_status_message;
+import static com.zoffcc.applications.trifa.MainActivity.tox_self_get_status_message_size;
 import static com.zoffcc.applications.trifa.MainActivity.tox_self_set_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_self_set_status_message;
+import static com.zoffcc.applications.trifa.TrifaToxService.is_tox_started;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_OWN_AVATAR_DIR;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_OWN_AVATAR_DIR_FILENAME_WITH_EXTENSION;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_OWN_AVATAR_DIR_FILE_EXTENSION;
@@ -131,13 +137,31 @@ public class ProfileActivity extends AppCompatActivity
     TextView my_relay_toxid_text = null;
     TextView my_pushurl_textview = null;
     TextView my_pushurl_text = null;
-    ImageView my_identicon_imageview = null;
     TextView mytox_network_connections = null;
     static final int MEDIAPICK_ID_002 = 8003;
 
     static Handler profile_handler_s = null;
-    Identicon.Identicon_data id_data = null;
     private boolean stop_me_netconn = false;
+    private boolean profileDirty = false;
+
+    private final TextWatcher profileFieldWatcher = new TextWatcher()
+    {
+        @Override
+        public void beforeTextChanged(CharSequence s, int start, int count, int after)
+        {
+        }
+
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count)
+        {
+            profileDirty = true;
+        }
+
+        @Override
+        public void afterTextChanged(Editable s)
+        {
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -153,7 +177,6 @@ public class ProfileActivity extends AppCompatActivity
         mynick_edittext = findViewById(R.id.mynick_edittext);
         mystatus_message_edittext = findViewById(R.id.mystatus_message_edittext);
         profile_save_button = findViewById(R.id.profile_save_button);
-        my_identicon_imageview = findViewById(R.id.my_identicon_imageview);
         my_toxcapabilities_textview = findViewById(R.id.my_toxcapabilities_textview);
 
         new_nospam_button = findViewById(R.id.new_nospam_button);
@@ -414,6 +437,9 @@ public class ProfileActivity extends AppCompatActivity
         mytoxid_textview.setText("");
         mynick_edittext.setText(global_my_name);
         mystatus_message_edittext.setText(global_my_status_message);
+        mynick_edittext.addTextChangedListener(profileFieldWatcher);
+        mystatus_message_edittext.addTextChangedListener(profileFieldWatcher);
+        profileDirty = false;
 
         profile_save_button.setOnClickListener(v -> saveProfileChanges(true));
 
@@ -501,6 +527,7 @@ public class ProfileActivity extends AppCompatActivity
     protected void onResume()
     {
         super.onResume();
+        reloadProfileFromTox();
 
         mytox_network_connections.setText("");
 
@@ -848,93 +875,73 @@ public class ProfileActivity extends AppCompatActivity
             e3.printStackTrace();
         }
 
+    }
+
+    void reloadProfileFromTox()
+    {
+        if (!is_tox_started)
+        {
+            return;
+        }
+
         try
         {
-            id_data = Identicon.create_identicon(
-                    MainActivity.get_my_toxid().substring(0, (ToxVars.TOX_PUBLIC_KEY_SIZE * 2))); // Pubkey
-
-            int w = my_identicon_imageview.getWidth();
-            int h = my_identicon_imageview.getHeight();
-
-            if ((w == 0) || (h == 0))
+            if (tox_self_get_name_size() > 0)
             {
-                w = 400;
-                h = 400;
-            }
-
-            // Log.i(TAG, "update_toxid_display:w=" + w);
-            // Log.i(TAG, "update_toxid_display:h=" + w);
-
-            Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
-            Bitmap bmp = Bitmap.createBitmap(w, h, conf); // this creates a MUTABLE bitmap
-            Canvas canvas = new Canvas(bmp);
-
-            Paint p0 = new Paint();
-            p0.setColor(id_data.color_a);
-            p0.setStyle(Paint.Style.FILL);
-
-            Paint p1 = new Paint();
-            p1.setColor(id_data.color_b);
-            p1.setStyle(Paint.Style.FILL);
-
-            int x1 = 0;
-            int y1 = 0;
-            int x2 = 0;
-            int y2 = 0;
-            int dot_width = w / IDENTICON_ROWS;
-            int dot_height = h / IDENTICON_ROWS;
-            int columnIdx;
-
-            // Log.i(TAG, "update_toxid_display:dot_width=" + dot_width + " ACTIVE_COLS=" + IDENTICON_ROWS);
-            // Log.i(TAG, "update_toxid_display:dot_height=" + dot_height + " IDENTICON_ROWS=" + IDENTICON_ROWS);
-
-            for (int row = 0; row < IDENTICON_ROWS; ++row)
-            {
-                for (int col = 0; col < IDENTICON_ROWS; ++col)
+                String name = tox_self_get_name();
+                if (name != null)
                 {
-                    columnIdx = Math.abs((col * 2 - (IDENTICON_ROWS - 1)) / 2);
-                    // Log.i(TAG, "update_toxid_display:col=" + col + " columnIdx=" + columnIdx + " row=" + row);
-
-                    x1 = col * dot_width;
-                    x2 = (col + 1) * dot_width;
-                    y1 = row * dot_height;
-                    y2 = (row + 1) * dot_height;
-
-                    // Log.i(TAG, "update_toxid_display:x1=" + x1 + " y1=" + y1 + " x2=" + x2 + " y2=" + y2);
-
-                    if (id_data.dot_color[row][columnIdx] == true)
-                    {
-                        canvas.drawRect(x1, y1, x2, y2, p1);
-                    }
-                    else
-                    {
-                        canvas.drawRect(x1, y1, x2, y2, p0);
-                    }
+                    global_my_name = name;
+                    mynick_edittext.setText(global_my_name);
                 }
             }
 
-            my_identicon_imageview.setImageBitmap(bmp);
-            my_identicon_imageview.invalidate();
+            if (tox_self_get_status_message_size() > 0)
+            {
+                String status = tox_self_get_status_message();
+                if (status != null)
+                {
+                    global_my_status_message = status;
+                    mystatus_message_edittext.setText(global_my_status_message);
+                }
+            }
+            else
+            {
+                global_my_status_message = "";
+                mystatus_message_edittext.setText("");
+            }
+
+            profileDirty = false;
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "update_toxid_display:EE:" + e.getMessage());
         }
     }
 
     void saveProfileChanges(boolean showToast)
     {
+        if (!is_tox_started)
+        {
+            return;
+        }
+
         try
         {
-            global_my_name = mynick_edittext.getText().toString().substring(0, Math.min(
-                    mynick_edittext.getText().toString().length(), TOX_MAX_NAME_LENGTH));
+            String nick = mynick_edittext.getText().toString().trim();
+            if (nick.isEmpty())
+            {
+                return;
+            }
+
+            global_my_name = nick.substring(0, Math.min(nick.length(), TOX_MAX_NAME_LENGTH));
             global_my_status_message = mystatus_message_edittext.getText().toString().substring(0, Math.min(
                     mystatus_message_edittext.getText().toString().length(), TOX_MAX_STATUS_MESSAGE_LENGTH));
             tox_self_set_name(global_my_name);
             tox_self_set_status_message(global_my_status_message);
             update_savedata_file_wrapper();
             MainActivity.update_main_profile_bar();
+            profileDirty = false;
 
             if (showToast)
             {
@@ -971,7 +978,10 @@ public class ProfileActivity extends AppCompatActivity
     protected void onPause()
     {
         super.onPause();
-        saveProfileChanges(false);
+        if (profileDirty)
+        {
+            saveProfileChanges(false);
+        }
     }
 
     Bitmap encodeAsBitmap(String str) throws WriterException

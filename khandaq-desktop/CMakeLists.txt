@@ -55,10 +55,37 @@ endif()
 set(ENV{PKG_CONFIG_PATH}
   ${CMAKE_SOURCE_DIR}/libs/lib/pkgconfig:/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH})
 
-# necessary to find openal-soft on mac os
+# necessary to find openal-soft / opus / libvpx on macOS (Homebrew)
 if(APPLE)
-  set(ENV{PKG_CONFIG_PATH}
-    /usr/local/opt/openal-soft/lib/pkgconfig:$ENV{PKG_CONFIG_PATH})
+  set(_khandaq_brew_pkgconfig_paths
+    /usr/local/opt/openal-soft/lib/pkgconfig
+    /opt/homebrew/opt/openal-soft/lib/pkgconfig
+    /usr/local/opt/opus/lib/pkgconfig
+    /opt/homebrew/opt/opus/lib/pkgconfig
+    /usr/local/opt/libvpx/lib/pkgconfig
+    /opt/homebrew/opt/libvpx/lib/pkgconfig
+  )
+  foreach(_pc_path IN LISTS _khandaq_brew_pkgconfig_paths)
+    if(EXISTS "${_pc_path}")
+      set(ENV{PKG_CONFIG_PATH} "${_pc_path}:$ENV{PKG_CONFIG_PATH}")
+    endif()
+  endforeach()
+  unset(_khandaq_brew_pkgconfig_paths)
+  unset(_pc_path)
+
+  foreach(_lib openal-soft opus libvpx)
+    execute_process(
+      COMMAND brew --prefix ${_lib}
+      OUTPUT_VARIABLE _brew_prefix
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(_brew_prefix AND EXISTS "${_brew_prefix}/lib")
+      link_directories("${_brew_prefix}/lib")
+    endif()
+  endforeach()
+  unset(_lib)
+  unset(_brew_prefix)
 endif()
 
 execute_process(
@@ -222,6 +249,10 @@ set(${PROJECT_NAME}_SOURCES
   src/core/coreext.cpp
   src/core/coreext.h
   src/core/core.cpp
+  src/core/reconnectbackoff.cpp
+  src/core/reconnectbackoff.h
+  src/core/networkdiagnostics.cpp
+  src/core/networkdiagnostics.h
   src/core/corefile.cpp
   src/core/corefile.h
   src/core/core.h

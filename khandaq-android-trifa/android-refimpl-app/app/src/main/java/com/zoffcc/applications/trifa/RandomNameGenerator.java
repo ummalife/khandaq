@@ -21,7 +21,9 @@ package com.zoffcc.applications.trifa;
 
 import android.util.Log;
 
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 
 public final class RandomNameGenerator
 {
@@ -71,5 +73,41 @@ public final class RandomNameGenerator
     public static String getLastName(Random rand)
     {
         return lastNames[rand.nextInt(lastNames.length)];
+    }
+
+    private static final Set<String> FIRST_NAME_SET = new HashSet<>();
+    private static final Set<String> LAST_NAME_SET = new HashSet<>();
+
+    static
+    {
+        for (String firstName : firstNames)
+        {
+            FIRST_NAME_SET.add(firstName);
+        }
+        for (String lastName : lastNames)
+        {
+            LAST_NAME_SET.add(lastName);
+        }
+    }
+
+    public static boolean looksLikeGeneratedFullName(final String name)
+    {
+        if (name == null)
+        {
+            return false;
+        }
+        final String trimmed = name.trim();
+        final int space = trimmed.indexOf(' ');
+        if (space <= 0 || space >= trimmed.length() - 1)
+        {
+            return false;
+        }
+        if (trimmed.indexOf(' ', space + 1) >= 0)
+        {
+            return false;
+        }
+        final String first = trimmed.substring(0, space);
+        final String last = trimmed.substring(space + 1).trim();
+        return FIRST_NAME_SET.contains(first) && LAST_NAME_SET.contains(last);
     }
 }

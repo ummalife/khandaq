@@ -77,6 +77,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
     private ImageView imageView2;
     private ImageView f_notification;
     private ViewGroup f_conf_container_parent;
+    private TextView chatTimeView;
 
     synchronized static void remove_progress_dialog()
     {
@@ -98,7 +99,8 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
 
         this.context = c;
 
-        f_conf_container_parent = (ViewGroup) itemView.findViewById(R.id.f_conf_container_parent);
+        f_conf_container_parent = (ViewGroup) itemView.findViewById(R.id.chat_list_row);
+        chatTimeView = (TextView) itemView.findViewById(R.id.f_chat_time);
 
         textView = (TextView) itemView.findViewById(R.id.f_name);
         statusText = (TextView) itemView.findViewById(R.id.f_status_message);
@@ -146,20 +148,18 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
             f_notification.setOnClickListener(this);
         }
 
+        final Drawable conf_icon;
         if (fl.kind == TOX_CONFERENCE_TYPE_AV.value)
         {
-            f_conf_container_parent.setBackgroundResource(R.drawable.friend_list_conf_av_round_bg);
-            final Drawable d_lock = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_music_note).
-                    color(context.getResources().getColor(R.color.icon_colors)).sizeDp(80);
-            avatar.setImageDrawable(d_lock);
+            conf_icon = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_music_note).
+                    color(context.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
         }
         else
         {
-            f_conf_container_parent.setBackgroundResource(R.drawable.friend_list_conf_round_bg);
-            final Drawable d_lock = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_group).
-                    color(context.getResources().getColor(R.color.icon_colors)).sizeDp(80);
-            avatar.setImageDrawable(d_lock);
+            conf_icon = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_group).
+                    color(context.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
         }
+        avatar.setImageDrawable(conf_icon);
 
         try
         {
@@ -221,35 +221,33 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
 
         imageView2.setVisibility(View.INVISIBLE);
 
+        int new_messages_count = 0;
         try
         {
-            int new_messages_count = orma.selectFromConferenceMessage().
+            new_messages_count = orma.selectFromConferenceMessage().
                     conference_identifierEq(fl.conference_identifier).is_newEq(true).count();
-
-            if (new_messages_count > 0)
-            {
-                if (new_messages_count > 99)
-                {
-                    unread_count.setText("+"); //("∞");
-                }
-                else
-                {
-                    unread_count.setText("" + new_messages_count);
-                }
-                unread_count.setVisibility(View.VISIBLE);
-            }
-            else
-            {
-                unread_count.setText("");
-                unread_count.setVisibility(View.INVISIBLE);
-            }
         }
-        catch (Exception e)
+        catch (Exception ignored)
         {
-            e.printStackTrace();
+        }
+        ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
+        apply_telegram_chat_row(fl);
+    }
 
-            unread_count.setText("");
-            unread_count.setVisibility(View.INVISIBLE);
+    private void apply_telegram_chat_row(final ConferenceDB fl)
+    {
+        ChatListUiHelper.prepare_telegram_row(f_conf_container_parent, textView, statusText, chatTimeView,
+                                              f_notification, imageView, imageView2, null, null);
+        if (chatTimeView != null)
+        {
+            chatTimeView.setText("");
+        }
+        try
+        {
+            avatar.setBorderWidth(0);
+        }
+        catch (Exception ignored)
+        {
         }
     }
 

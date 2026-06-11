@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#3F51B5</color>
-    <color name="colorPrimaryDark">#303F9F</color>
-    <color name="colorAccent">#FF4081</color>
+    <color name="khandaq_primary">#0F3D2E</color>
+    <color name="khandaq_primary_deep">#0A2A20</color>
+    <color name="khandaq_forest">#061B16</color>
+    <color name="khandaq_graphite">#101416</color>
+    <color name="khandaq_gunmetal">#243036</color>
+    <color name="khandaq_emerald">#69C58F</color>
+    <color name="khandaq_accent">#C8A85A</color>
+    <color name="khandaq_background">#0B0F0E</color>
+    <color name="khandaq_surface">#151B19</color>
+    <color name="khandaq_text">#F4FAF6</color>
+    <color name="khandaq_text_muted">#8A9A92</color>
+    <color name="colorPrimary">@color/khandaq_primary</color>
+    <color name="colorPrimaryDark">@color/khandaq_primary_deep</color>
+    <color name="colorAccent">@color/khandaq_emerald</color>
 
     <color name="black_overlay">#66000000</color>
 
@@ -12,9 +23,9 @@
     <color name="textblock_link_color_for_orange">@android:color/holo_blue_dark</color>
     <color name="textblock_link_color_for_red">@android:color/holo_blue_bright</color>
 
-    <color name="date_bg_color">#EE3F51B5</color>
-    <color name="fast_scroller_color">#3F51B5</color>
-    <color name="message_text_date_string_color">#FFFFFF</color>
+    <color name="date_bg_color">#EE0F3D2E</color>
+    <color name="fast_scroller_color">@color/khandaq_primary</color>
+    <color name="message_text_date_string_color">@color/tg_date_separator_text</color>
     <color name="scroll_date_header_color">#FFFFFF</color>
     <color name="message_list_scroll_to_bottom_fab_bg_normal">#9E9E9E</color>
     <color name="message_list_scroll_to_bottom_fab_bg_new_message">#FF4081</color>
@@ -310,8 +321,9 @@
     <color name="md_grey_900">#FFFFFF</color>
     <color name="md_black_1000">#8AFFFFFF</color>
     <color name="text_on_light_surface">#DE000000</color>
-    <color name="chat_input_text">@color/text_on_light_surface</color>
-    <color name="message_bubble_text">#DE000000</color>
+    <color name="text_on_dark_surface">#E2E8F0</color>
+    <color name="chat_input_text">@color/tg_chat_input_text</color>
+    <color name="message_bubble_text">#FFFFFF</color>
     <color name="md_always_black_1000">#000000</color>
     <color name="md_white_1000">#292929</color>
 

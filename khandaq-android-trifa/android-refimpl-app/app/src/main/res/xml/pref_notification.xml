@@ -28,8 +28,8 @@
 
     <SwitchPreference
         android:defaultValue="true"
-        android:dependency="notifications_new_message"
-        android:key="notifications_new_message_vibrate"
-        android:title="@string/pref_title_vibrate"/>
+        android:key="pref_send_read_receipts"
+        android:summary="@string/pref_description_send_read_receipts"
+        android:title="@string/pref_title_send_read_receipts" />
 
 </PreferenceScreen>

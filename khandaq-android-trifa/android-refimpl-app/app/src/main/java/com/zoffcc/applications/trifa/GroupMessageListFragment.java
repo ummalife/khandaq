@@ -44,7 +44,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.do_fade_anim_on_fab;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_sqlite_search_string;
-import static com.zoffcc.applications.trifa.MainActivity.PREF__conference_show_system_messages;
+import static com.zoffcc.applications.trifa.HelperGroup.should_show_group_system_messages;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
@@ -114,7 +114,7 @@ public class GroupMessageListFragment extends Fragment
                 if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
                 {
 
-                    if (PREF__conference_show_system_messages)
+                    if (should_show_group_system_messages(current_group_id))
                     {
                         data_values = orma.selectFromGroupMessage().
                                 group_identifierEq(current_group_id.toLowerCase()).
@@ -132,7 +132,7 @@ public class GroupMessageListFragment extends Fragment
                 }
                 else
                 {
-                    if (PREF__conference_show_system_messages)
+                    if (should_show_group_system_messages(current_group_id))
                     {
 
                         /*
@@ -551,7 +551,7 @@ public class GroupMessageListFragment extends Fragment
 
                 if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
                 {
-                    if (PREF__conference_show_system_messages)
+                    if (should_show_group_system_messages(current_group_id))
                     {
                         adapter.add_list_clear(orma.selectFromGroupMessage().
                                 group_identifierEq(current_group_id.toLowerCase()).
@@ -569,7 +569,7 @@ public class GroupMessageListFragment extends Fragment
                 }
                 else
                 {
-                    if (PREF__conference_show_system_messages)
+                    if (should_show_group_system_messages(current_group_id))
                     {
                     /*
                      searching for case-IN-sensitive non ascii chars is not working:

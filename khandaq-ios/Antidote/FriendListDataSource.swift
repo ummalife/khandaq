@@ -32,7 +32,6 @@ class FriendListDataSource: NSObject {
     weak var delegate: FriendListDataSourceDelegate?
 
     fileprivate let avatarManager: AvatarManager
-    fileprivate let dateFormatter: DateFormatter
 
     fileprivate let requests: Results<OCTFriendRequest>?
     fileprivate let friends: Results<OCTFriend>
@@ -43,7 +42,6 @@ class FriendListDataSource: NSObject {
     /// In case if requests is nil friend requests won't be shown.
     init(theme: Theme, friends: Results<OCTFriend>, requests: Results<OCTFriendRequest>? = nil) {
         self.avatarManager = AvatarManager(theme: theme)
-        self.dateFormatter = DateFormatter(type: .relativeDateAndTime)
 
         self.requests = requests
         self.friends = friends
@@ -106,18 +104,13 @@ class FriendListDataSource: NSObject {
 
                 model.status = UserStatus(connectionStatus: friend.connectionStatus, userStatus: friend.status)
                 model.connectionstatus = ConnectionStatus(connectionStatus: friend.connectionStatus)
+                model.hideStatus = true
 
+                let presence = FriendPresenceFormatter.presence(for: friend)
                 model.accessibilityLabel = friend.nickname
-                model.accessibilityValue = model.status.toString()
-
-                if friend.isConnected {
-                    model.bottomText = friend.statusMessage ?? ""
-                    model.accessibilityValue += ", Status: \(model.bottomText)"
-                }
-                else if let date = friend.lastSeenOnline() {
-                    model.bottomText = String(localized: "contact_last_seen", dateFormatter.string(from: date))
-                    model.accessibilityValue += ", " + model.bottomText
-                }
+                model.accessibilityValue = presence.text
+                model.bottomText = presence.text
+                model.presenceIsOnline = presence.isOnline
         }
 
         return model

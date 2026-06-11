@@ -1068,14 +1068,17 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
 
-    [realmManager addMessageWithFileNumber:fileNumber
-                                  fileType:OCTMessageFileTypeWaitingConfirmation
-                                  fileSize:fileSize
-                                  fileName:fileName
-                                  filePath:nil
-                                   fileUTI:[self fileUTIFromFileName:fileName]
-                                      chat:chat
-                                    sender:friend];
+    OCTMessageAbstract *message = [realmManager addMessageWithFileNumber:fileNumber
+                                                                fileType:OCTMessageFileTypeWaitingConfirmation
+                                                                fileSize:fileSize
+                                                                fileName:fileName
+                                                                filePath:nil
+                                                                 fileUTI:[self fileUTIFromFileName:fileName]
+                                                                    chat:chat
+                                                                  sender:friend];
+    if (message) {
+        [self acceptFileTransfer:message failureBlock:nil];
+    }
 }
 
 - (void)avatarFileReceiveForFileNumber:(OCTToxFileNumber)fileNumber

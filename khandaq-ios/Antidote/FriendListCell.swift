@@ -33,16 +33,15 @@ class FriendListCell: BaseCell {
         separatorInset.left = CGFloat(Constants.AvatarLeftOffset + Constants.AvatarSize + Constants.AvatarRightOffset)
 
         avatarView.imageView.image = friendModel.avatar
-        avatarView.userStatusView.theme = theme
-        avatarView.userStatusView.userStatus = friendModel.status
-        avatarView.userStatusView.connectionStatus = friendModel.connectionstatus
-        avatarView.userStatusView.isHidden = friendModel.hideStatus
+        avatarView.userStatusView.isHidden = true
 
         topLabel.text = friendModel.topText
         topLabel.textColor = theme.colorForType(.NormalText)
 
         bottomLabel.text = friendModel.bottomText
-        bottomLabel.textColor = theme.colorForType(.FriendCellStatus)
+        bottomLabel.textColor = friendModel.presenceIsOnline
+            ? theme.colorForType(.OnlineStatus)
+            : theme.colorForType(.FriendCellStatus)
         bottomLabel.numberOfLines = friendModel.multilineBottomtext ? 0 : 1
 
         accessibilityLabel = friendModel.accessibilityLabel

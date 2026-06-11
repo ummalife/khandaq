@@ -126,14 +126,6 @@ AddFriendForm::AddFriendForm(ToxId ownId_, Settings& settings_, Style& style_,
     importContacts->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
     tabWidget->addTab(importContacts, QString());
 
-    QScrollArea* scrollArea = new QScrollArea(tabWidget);
-    QWidget* requestWidget = new QWidget(tabWidget);
-    scrollArea->setWidget(requestWidget);
-    scrollArea->setWidgetResizable(true);
-    requestsLayout = new QVBoxLayout(requestWidget);
-    requestsLayout->addStretch(1);
-    tabWidget->addTab(scrollArea, QString());
-
     head->setLayout(&headLayout);
     headLayout.addWidget(&headLabel);
 
@@ -159,11 +151,11 @@ AddFriendForm::AddFriendForm(ToxId ownId_, Settings& settings_, Style& style_,
     retranslateUi();
     Translator::registerHandler(std::bind(&AddFriendForm::retranslateUi, this), this);
 
-    const int size = settings.getFriendRequestSize();
-    for (int i = 0; i < size; ++i) {
-        Settings::Request request = settings.getFriendRequest(i);
-        addFriendRequestWidget(request.address, request.message);
+    while (settings.getFriendRequestSize() > 0) {
+        settings.removeFriendRequest(0);
     }
+    settings.clearUnreadFriendRequests();
+    settings.savePersonal();
 }
 
 AddFriendForm::~AddFriendForm()
@@ -212,19 +204,16 @@ QString AddFriendForm::getImportMessage() const
 
 void AddFriendForm::setMode(Mode mode)
 {
+    if (mode == FriendRequest) {
+        mode = AddFriend;
+    }
     tabWidget->setCurrentIndex(mode);
 }
 
 bool AddFriendForm::addFriendRequest(const QString& friendAddress, const QString& message_)
 {
-    if (settings.addFriendRequest(friendAddress, message_)) {
-        addFriendRequestWidget(friendAddress, message_);
-        if (isShown()) {
-            onCurrentChanged(tabWidget->currentIndex());
-        }
-
-        return true;
-    }
+    Q_UNUSED(friendAddress);
+    Q_UNUSED(message_);
     return false;
 }
 
@@ -318,14 +307,12 @@ void AddFriendForm::onImportSendClicked()
 {
     const QString requestMessage = getImportMessage();
 
-    if (requestMessage.isEmpty()) {
-        messageBoxManager.showWarning(tr("Couldn't send friend request"),
-            tr("You need to write a message with your request",
-                "Error while sending friend request"));
-        return;
+    QString resolvedImportMessage = requestMessage.trimmed();
+    if (resolvedImportMessage.isEmpty()) {
+        resolvedImportMessage = QStringLiteral("Khandaq");
     }
 
-    if (ToxString(requestMessage).size() > tox_max_friend_request_length()) {
+    if (ToxString(resolvedImportMessage).size() > tox_max_friend_request_length()) {
         messageBoxManager.showWarning(tr("Couldn't send friend request"),
             tr("Your message is too long!", "Error while sending friend request"));
         return;
@@ -337,7 +324,7 @@ void AddFriendForm::onImportSendClicked()
     for (const QString& id : toSend) {
         const ToxId friendId(id);
         deleteFriendRequest(friendId);
-        emit friendRequested(friendId, requestMessage);
+        emit friendRequested(friendId, resolvedImportMessage);
     }
 
     showImportSkippedSummary(stats, toSend.size());
@@ -539,7 +526,6 @@ void AddFriendForm::retranslateUi()
 
     tabWidget->setTabText(AddFriend, tr("Add a friend"));
     tabWidget->setTabText(ImportContacts, tr("Import contacts"));
-    tabWidget->setTabText(FriendRequest, tr("Friend requests"));
 
     for (QPushButton* acceptButton : acceptButtons) {
         retranslateAcceptButton(acceptButton);

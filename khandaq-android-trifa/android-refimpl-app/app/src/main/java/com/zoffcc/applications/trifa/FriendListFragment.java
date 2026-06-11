@@ -47,6 +47,7 @@ import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBIN
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.INTERVAL_ADD_ALL_FRIENDS_CLEAR_MS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ONE_HOUR_IN_MS;
+import static com.zoffcc.applications.trifa.HelperGroup.is_removed_legacy_public_community_group;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 public class FriendListFragment extends Fragment
@@ -438,6 +439,10 @@ public class FriendListFragment extends Fragment
                             int i = 0;
                             for (i = 0; i < groups.size(); i++)
                             {
+                                if (is_removed_legacy_public_community_group(groups.get(i).group_identifier))
+                                {
+                                    continue;
+                                }
                                 GroupDB n = (GroupDB) GroupDB.deep_copy(groups.get(i));
                                 CombinedFriendsAndConferences cfac = new CombinedFriendsAndConferences();
                                 cfac.is_friend = COMBINED_IS_GROUP;
@@ -529,6 +534,10 @@ public class FriendListFragment extends Fragment
                         int i = 0;
                         for (i = 0; i < groups.size(); i++)
                         {
+                            if (is_removed_legacy_public_community_group(groups.get(i).group_identifier))
+                            {
+                                continue;
+                            }
                             GroupDB n = (GroupDB) GroupDB.deep_copy(groups.get(i));
                             CombinedFriendsAndConferences cfac = new CombinedFriendsAndConferences();
                             cfac.is_friend = COMBINED_IS_GROUP;
@@ -702,6 +711,10 @@ public class FriendListFragment extends Fragment
                                         int i = 0;
                                         for (i = 0; i < groupsm.size(); i++)
                                         {
+                                            if (is_removed_legacy_public_community_group(groupsm.get(i).group_identifier))
+                                            {
+                                                continue;
+                                            }
                                             GroupDB n = (GroupDB) GroupDB.deep_copy(groupsm.get(i));
 
                                             try
@@ -821,6 +834,10 @@ public class FriendListFragment extends Fragment
                                         int i = 0;
                                         for (i = 0; i < groups.size(); i++)
                                         {
+                                            if (is_removed_legacy_public_community_group(groups.get(i).group_identifier))
+                                            {
+                                                continue;
+                                            }
                                             GroupDB n = (GroupDB) GroupDB.deep_copy(groups.get(i));
 
                                             int new_messages_count = 0;

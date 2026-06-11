@@ -240,6 +240,7 @@ public class MessageListHolder_file_incoming_state_resume extends RecyclerView.V
         }
 
         ft_progressbar.setMax(100);
+        ft_progressbar.setVisibility(View.VISIBLE);
         // ft_progressbar.setIndeterminate(false);
 
         button_cancel.setOnTouchListener(new View.OnTouchListener()

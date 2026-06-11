@@ -44,7 +44,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.gson.Gson;
-import com.yariksoffice.lingver.Lingver;
 import com.zoffcc.applications.sorm.ConferenceDB;
 import com.zoffcc.applications.sorm.ConferenceMessage;
 import com.zoffcc.applications.sorm.FriendList;
@@ -61,7 +60,6 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -1645,102 +1643,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                         if (result_lang.length() > 0)
                         {
                             Log.i(TAG, "onActivityResult:result_lang:" + result_lang);
-
-                            if (result_lang.compareTo("_default_") == 0)
-                            {
-                                Lingver.getInstance().setFollowSystemLocale(this);
-                            }
-                            else if (result_lang.compareTo("en") == 0)
-                            {
-                                Lingver.getInstance().setLocale(this, Locale.ENGLISH);
-                            }
-                            else if (result_lang.compareTo("de") == 0)
-                            {
-                                Lingver.getInstance().setLocale(this, Locale.GERMAN);
-                            }
-                            else if (result_lang.compareTo("zh-rCN") == 0)
-                            {
-                                Lingver.getInstance().setLocale(this, Locale.SIMPLIFIED_CHINESE);
-                            }
-                            // ------------------
-                            // ------------------
-                            // ------------------
-                            //else if (result_lang.compareTo("ar") == 0)
-                            //{
-                            //    // TODO: left to right languages corrupt the layout now
-                            //    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                            //}
-                            else if (result_lang.compareTo("es") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            //else if (result_lang.compareTo("fa") == 0)
-                            //{
-                            //    // TODO: left to right languages corrupt the layout now
-                            //    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                            //}
-                            else if (result_lang.compareTo("fr") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("hi") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("hu") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("it") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("kn") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("tr") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("sv") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("ru") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            // ------------------
-                            // ------------------
-                            // ------------------
+                            AppLocaleHelper.applyLocaleAndRestart(this, result_lang);
                         }
                     }
                 }

@@ -67,6 +67,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.PREF_KEY_CUSTOM_BOOTSTR
 public class SettingsActivity extends AppCompatPreferenceActivity
 {
     private static final String TAG = "trifa.SettingsActivity";
+    private Toolbar settingsToolbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -80,16 +81,51 @@ public class SettingsActivity extends AppCompatPreferenceActivity
         super.onPostCreate(savedInstanceState);
 
         LinearLayout root = (LinearLayout) findViewById(android.R.id.list).getParent().getParent().getParent();
-        Toolbar bar = (Toolbar) LayoutInflater.from(this).inflate(R.layout.settings_toolbar, root, false);
-        root.addView(bar, 0); // insert at top
-        bar.setNavigationOnClickListener(new View.OnClickListener()
+        settingsToolbar = (Toolbar) LayoutInflater.from(this).inflate(R.layout.settings_toolbar, root, false);
+        root.addView(settingsToolbar, 0); // insert at top
+        settingsToolbar.setNavigationOnClickListener(new View.OnClickListener()
         {
             @Override
             public void onClick(View v)
             {
-                finish();
+                navigateUp();
             }
         });
+        updateSettingsToolbarTitle();
+    }
+
+    @Override
+    public void onBackPressed()
+    {
+        navigateUp();
+    }
+
+    private void navigateUp()
+    {
+        if (onIsMultiPane())
+        {
+            finish();
+            return;
+        }
+
+        if (getFragmentManager().getBackStackEntryCount() > 0)
+        {
+            getFragmentManager().popBackStackImmediate();
+            updateSettingsToolbarTitle();
+            return;
+        }
+
+        finish();
+    }
+
+    private void updateSettingsToolbarTitle()
+    {
+        if (settingsToolbar == null)
+        {
+            return;
+        }
+
+        settingsToolbar.setTitle(R.string.settings_toolbar_title);
     }
 
     private static Preference.OnPreferenceChangeListener sBindPreferenceSummaryToValueListener = new Preference.OnPreferenceChangeListener()
@@ -206,6 +242,20 @@ public class SettingsActivity extends AppCompatPreferenceActivity
         {
             super.onCreate(savedInstanceState);
             addPreferencesFromResource(R.xml.pref_general);
+
+            final Preference prefNetworkDiag = findPreference("network_diagnostics");
+            if (prefNetworkDiag != null)
+            {
+                prefNetworkDiag.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener()
+                {
+                    @Override
+                    public boolean onPreferenceClick(Preference preference)
+                    {
+                        startActivity(new android.content.Intent(getActivity(), NetworkDiagnosticsActivity.class));
+                        return true;
+                    }
+                });
+            }
 
             final SwitchPreference pref_keepnpspam = (SwitchPreference) findPreference("U_keep_nospam");
 

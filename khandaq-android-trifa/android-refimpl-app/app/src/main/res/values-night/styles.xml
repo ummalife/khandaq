@@ -20,10 +20,11 @@
     </style>
 
     <style name="SettingsTheme" parent="AppTheme">
-        <item name="android:windowBackground">@android:color/white</item>
-        <item name="android:colorBackground">@android:color/white</item>
-        <item name="android:textColorPrimary">@color/md_always_black_1000</item>
+        <item name="android:windowBackground">@color/khandaq_surface</item>
+        <item name="android:colorBackground">@color/khandaq_surface</item>
+        <item name="android:textColorPrimary">@color/md_grey_50</item>
         <item name="android:textColorSecondary">@color/gray</item>
+        <item name="colorControlHighlight">#33FFFFFF</item>
     </style>
 
     <style name="FullscreenTheme" parent="AppTheme">
@@ -35,7 +36,7 @@
 
     <style name="DrawerArrowStyle" parent="Widget.AppCompat.DrawerArrowToggle">
         <item name="spinBars">true</item>
-        <item name="color">@android:color/white</item>
+        <item name="color">@color/tg_chat_title</item>
     </style>
 
 

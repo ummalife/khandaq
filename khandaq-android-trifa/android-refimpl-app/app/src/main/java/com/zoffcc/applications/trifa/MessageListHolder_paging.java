@@ -142,7 +142,7 @@ public class MessageListHolder_paging extends RecyclerView.ViewHolder implements
     {
         try
         {
-            if (message_.msg_idv3_hash.equals(MESSAGE_PAGING_SHOW_OLDER_HASH))
+            if (MESSAGE_PAGING_SHOW_OLDER_HASH.equals(message_.msg_idv3_hash))
             {
                 if ((MessageListFragment.current_page_offset - PREF__message_paging_num_msgs_per_page) < 1)
                 {

@@ -29,6 +29,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QShortcut>
+#include <QStandardPaths>
 #include <QString>
 #include <QSvgRenderer>
 #include <QWindow>
@@ -1118,17 +1119,17 @@ void Widget::dispatchFile(ToxFile file)
     auto pk = f->getPublicKey();
 
     if (file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING) {
-        auto sender =
-            (file.direction == ToxFile::SENDING) ? core->getSelfPublicKey() : pk;
-
         QString autoAcceptDir = settings.getAutoAcceptDir(f->getPublicKey());
 
-        if (autoAcceptDir.isEmpty() && settings.getAutoSaveEnabled()) {
+        if (autoAcceptDir.isEmpty()) {
             autoAcceptDir = settings.getGlobalAutoAcceptDir();
         }
+        if (autoAcceptDir.isEmpty()) {
+            autoAcceptDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+        }
 
-        auto maxAutoAcceptSize = settings.getMaxAutoAcceptSize();
-        bool autoAcceptSizeCheckPassed =
+        const auto maxAutoAcceptSize = settings.getMaxAutoAcceptSize();
+        const bool autoAcceptSizeCheckPassed =
             maxAutoAcceptSize == 0 || maxAutoAcceptSize >= file.progress.getFileSize();
 
         if (!autoAcceptDir.isEmpty() && autoAcceptSizeCheckPassed) {
@@ -1438,7 +1439,10 @@ void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& messa
         return;
     }
 
-    friendMessageDispatchers[f->getPublicKey()]->onMessageReceived(isAction, message);
+    const auto dispatcher = friendMessageDispatchers.value(f->getPublicKey());
+    if (dispatcher) {
+        dispatcher->onMessageReceived(isAction, message);
+    }
 }
 
 void Widget::onReceiptReceived(int friendId, ReceiptNum receipt)
@@ -1449,7 +1453,10 @@ void Widget::onReceiptReceived(int friendId, ReceiptNum receipt)
         return;
     }
 
-    friendMessageDispatchers[f->getPublicKey()]->onReceiptReceived(receipt);
+    const auto dispatcher = friendMessageDispatchers.value(f->getPublicKey());
+    if (dispatcher) {
+        dispatcher->onReceiptReceived(receipt);
+    }
 }
 
 void Widget::onExtendedMessageSupport(uint32_t friendNumber, bool supported)
@@ -1466,13 +1473,19 @@ void Widget::onExtendedMessageSupport(uint32_t friendNumber, bool supported)
 void Widget::onFriendExtMessageReceived(uint32_t friendNumber, const QString& message)
 {
     const auto& friendKey = friendList->id2Key(friendNumber);
-    friendMessageDispatchers[friendKey]->onExtMessageReceived(message);
+    const auto dispatcher = friendMessageDispatchers.value(friendKey);
+    if (dispatcher) {
+        dispatcher->onExtMessageReceived(message);
+    }
 }
 
 void Widget::onExtReceiptReceived(uint32_t friendNumber, uint64_t receiptId)
 {
     const auto& friendKey = friendList->id2Key(friendNumber);
-    friendMessageDispatchers[friendKey]->onExtReceiptReceived(receiptId);
+    const auto dispatcher = friendMessageDispatchers.value(friendKey);
+    if (dispatcher) {
+        dispatcher->onExtReceiptReceived(receiptId);
+    }
 }
 
 void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
@@ -1736,14 +1749,8 @@ bool Widget::newMessageAlert(QWidget* currentWindow, bool isActive, bool sound, 
 
 void Widget::onFriendRequestReceived(const ToxPk& friendPk, const QString& message)
 {
-    if (addFriendForm->addFriendRequest(friendPk.toString(), message)) {
-        friendRequestsUpdate();
-        newMessageAlert(window(), isActiveWindow(), true, true);
-#if DESKTOP_NOTIFICATIONS
-        auto notificationData = notificationGenerator->friendRequestNotification(friendPk, message);
-        notifier.notifyMessage(notificationData);
-#endif
-    }
+    Q_UNUSED(friendPk);
+    Q_UNUSED(message);
 }
 
 void Widget::onFileReceiveRequested(const ToxFile& file)
@@ -2646,25 +2653,8 @@ void Widget::friendListContextMenu(const QPoint& pos)
 
 void Widget::friendRequestsUpdate()
 {
-    unsigned int unreadFriendRequests = settings.getUnreadFriendRequests();
-
-    if (unreadFriendRequests == 0) {
-        delete friendRequestsButton;
-        friendRequestsButton = nullptr;
-    } else if (!friendRequestsButton) {
-        friendRequestsButton = new QPushButton(this);
-        friendRequestsButton->setObjectName("green");
-        ui->statusLayout->insertWidget(2, friendRequestsButton);
-
-        connect(friendRequestsButton, &QPushButton::released, [this]() {
-            onAddClicked();
-            addFriendForm->setMode(AddFriendForm::Mode::FriendRequest);
-        });
-    }
-
-    if (friendRequestsButton) {
-        friendRequestsButton->setText(tr("%n new friend request(s)", "", unreadFriendRequests));
-    }
+    delete friendRequestsButton;
+    friendRequestsButton = nullptr;
 }
 
 void Widget::groupInvitesUpdate()

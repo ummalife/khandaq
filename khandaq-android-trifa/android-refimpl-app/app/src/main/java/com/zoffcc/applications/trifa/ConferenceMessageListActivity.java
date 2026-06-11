@@ -239,7 +239,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_conf_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
-        HelperGeneric.apply_chat_input_typography(ml_new_conf_message);
+        HelperGeneric.apply_chat_input_field_style(ml_new_conf_message);
 
         messageSearchView = (SearchView) findViewById(R.id.conf_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -733,13 +733,13 @@ public class ConferenceMessageListActivity extends AppCompatActivity
         {
             if (is_conference_active(conf_id))
             {
-                final String raw_msg = ml_new_conf_message.getText().toString().trim();
-                if (raw_msg.isEmpty())
+                final String normalized = HelperGeneric.normalize_chat_input_text(ml_new_conf_message.getText().toString());
+                if (normalized.isEmpty())
                 {
                     return;
                 }
 
-                msg = raw_msg.substring(0, (int) Math.min(tox_max_message_length(), raw_msg.length()));
+                msg = normalized.substring(0, (int) Math.min(tox_max_message_length(), normalized.length()));
 
                 try
                 {
@@ -769,7 +769,11 @@ public class ConferenceMessageListActivity extends AppCompatActivity
                     {
                         // message was sent OK
                         insert_into_conference_message_db(m, true);
-                        ml_new_conf_message.setText("");
+                        HelperGeneric.clear_chat_input_field(ml_new_conf_message);
+                        if (emojiPopup != null)
+                        {
+                            emojiPopup.dismiss();
+                        }
                     }
                 }
                 catch (Exception e)

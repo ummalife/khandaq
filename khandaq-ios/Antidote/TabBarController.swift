@@ -3,46 +3,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import UIKit
-import SnapKit
-
-private struct Constants {
-    static let HorizontalLineHeight = 0.5
-}
 
 class TabBarController: UITabBarController {
-    override var selectedIndex: Int {
-        didSet {
-            guard let navigation = viewControllers?[selectedIndex] as? UINavigationController else {
-                return
-            }
-
-            navigation.delegate = self
-
-            if oldValue == selectedIndex {
-                navigation.popToRootViewController(animated: true)
-            }
-
-            updateSelectedItems()
-        }
-    }
-
-    fileprivate let items: [TabBarAbstractItem]
-
     fileprivate let theme: Theme
 
-    fileprivate var customTabBarView: UIView!
-
-    fileprivate var customTabBarViewVisibleConstraint: Constraint!
-    fileprivate var customTabBarViewHiddenConstraint: Constraint!
-
-    init(theme: Theme, controllers: [UINavigationController], tabBarItems: [TabBarAbstractItem]) {
+    init(theme: Theme, controllers: [UINavigationController]) {
         self.theme = theme
-        self.items = tabBarItems
 
         super.init(nibName: nil, bundle: nil)
 
         viewControllers = controllers
-
         delegate = self
     }
 
@@ -53,111 +23,87 @@ class TabBarController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        createCustomTabBarView()
-        addItems()
-        installConstraints()
+        configureNativeTabBarAppearance()
+    }
 
-        updateSelectedItems()
+    static func makeProfileTabBarImage(
+            theme: Theme,
+            userImage: UIImage?,
+            userStatus: UserStatus,
+            connectionStatus: ConnectionStatus) -> UIImage {
+        let size: CGFloat = 32
+        let container = ImageViewWithStatus()
+        container.frame = CGRect(x: 0, y: 0, width: size, height: size)
+        container.userStatusView.theme = theme
+        container.userStatusView.userStatus = userStatus
+        container.userStatusView.connectionStatus = connectionStatus
+
+        if let userImage = userImage {
+            container.imageView.image = userImage
+        }
+        else {
+            container.imageView.image = UIImage.templateNamed("tab-bar-profile")
+            container.imageView.tintColor = theme.colorForType(.TabItemInactive)
+        }
+
+        container.setNeedsLayout()
+        container.layoutIfNeeded()
+
+        UIGraphicsBeginImageContextWithOptions(container.bounds.size, false, 0)
+        if let context = UIGraphicsGetCurrentContext() {
+            container.layer.render(in: context)
+        }
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        return image?.withRenderingMode(.alwaysOriginal) ?? UIImage.templateNamed("tab-bar-profile")
     }
 }
 
 extension TabBarController: UITabBarControllerDelegate {
-    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        guard let navigation = viewController as? UINavigationController else {
-            return
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        if viewController == tabBarController.selectedViewController {
+            if let navigation = viewController as? UINavigationController {
+                navigation.popToRootViewController(animated: true)
+            }
+
+            return false
         }
 
-        navigation.delegate = self
+        return true
     }
 }
 
-extension TabBarController: UINavigationControllerDelegate {
-    func navigationController(
-            _ navigationController: UINavigationController,
-            willShow viewController: UIViewController,
-            animated: Bool) {
-        tabBar.isHidden = true
+private extension TabBarController {
+    func configureNativeTabBarAppearance() {
+        tabBar.tintColor = theme.colorForType(.TabItemActive)
+        tabBar.unselectedItemTintColor = theme.colorForType(.TabItemInactive)
+        tabBar.barTintColor = theme.colorForType(.NormalBackground)
+        tabBar.isTranslucent = false
 
-        if viewController.hidesBottomBarWhenPushed {
-            customTabBarViewVisibleConstraint.deactivate()
-            customTabBarViewHiddenConstraint.activate()
-        }
-        else {
-            customTabBarViewHiddenConstraint.deactivate()
-            customTabBarViewVisibleConstraint.activate()
-        }
-    }
-}
+        if #available(iOS 13.0, *) {
+            let appearance = UITabBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = theme.colorForType(.NormalBackground)
+            appearance.shadowColor = theme.colorForType(.SeparatorsAndBorders)
 
-extension TabBarController {
-    func createCustomTabBarView() {
-        customTabBarView = UIView()
-        customTabBarView.backgroundColor = theme.colorForType(.NormalBackground)
-        view.addSubview(customTabBarView)
+            let normalAttributes: [NSAttributedString.Key: Any] = [
+                .foregroundColor: theme.colorForType(.TabItemInactive)
+            ]
+            let selectedAttributes: [NSAttributedString.Key: Any] = [
+                .foregroundColor: theme.colorForType(.TabItemActive)
+            ]
 
-        let horizontalLine = UIView()
-        horizontalLine.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
-        customTabBarView.addSubview(horizontalLine)
+            appearance.stackedLayoutAppearance.normal.iconColor = theme.colorForType(.TabItemInactive)
+            appearance.stackedLayoutAppearance.selected.iconColor = theme.colorForType(.TabItemActive)
+            appearance.stackedLayoutAppearance.normal.titleTextAttributes = normalAttributes
+            appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
 
-        horizontalLine.snp.makeConstraints {
-            $0.top.leading.trailing.equalTo(customTabBarView)
-            $0.height.equalTo(Constants.HorizontalLineHeight)
-        }
-    }
+            tabBar.standardAppearance = appearance
 
-    func addItems() {
-        for (index, item) in items.enumerated() {
-            item.didTapHandler = { [weak self] in
-                self?.selectedIndex = index
+            if #available(iOS 15.0, *) {
+                tabBar.scrollEdgeAppearance = appearance
             }
-
-            customTabBarView.addSubview(item)
-        }
-    }
-
-    func installConstraints() {
-        customTabBarView.snp.makeConstraints {
-            customTabBarViewVisibleConstraint = $0.bottom.equalTo(view.snp.bottom).constraint
-            customTabBarViewHiddenConstraint = $0.top.equalTo(view.snp.bottom).constraint
-            $0.leading.trailing.equalTo(view)
-            $0.height.equalTo(tabBar.frame.size.height)
-            // TODO: this moves the view a bit more to the top, because the home button "line" is in the way otherwise
-            //       please fix me properly in the future
-            if #available(iOS 11.0, *) {
-                let keyWindow = UIApplication.shared.keyWindow
-                let b = keyWindow?.safeAreaInsets.bottom
-                customTabBarViewVisibleConstraint?.update(offset: -(b ?? 20))
-            }
-
-        }
-
-        customTabBarViewHiddenConstraint.deactivate()
-
-        var previous: TabBarAbstractItem?
-
-        for item in items {
-            item.snp.makeConstraints {
-                $0.top.bottom.equalTo(customTabBarView)
-
-                if previous != nil {
-                    $0.leading.equalTo(previous!.snp.trailing)
-                    $0.width.equalTo(previous!)
-                }
-                else {
-                    $0.leading.equalTo(customTabBarView)
-                }
-            }
-
-            previous = item
-        }
-        previous!.snp.makeConstraints {
-            $0.trailing.equalTo(customTabBarView)
-        }
-    }
-
-    func updateSelectedItems() {
-        for (index, item) in items.enumerated() {
-            item.selected = (index == selectedIndex)
         }
     }
 }

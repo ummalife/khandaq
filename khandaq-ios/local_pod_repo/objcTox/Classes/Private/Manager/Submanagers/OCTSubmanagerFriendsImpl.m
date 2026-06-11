@@ -107,11 +107,11 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 - (BOOL)sendFriendRequestToAddress:(NSString *)address message:(NSString *)message error:(NSError **)error
 {
     NSParameterAssert(address);
-    NSParameterAssert(message);
 
+    NSString *requestMessage = message.length > 0 ? message : @"Khandaq";
     OCTTox *tox = [self.dataSource managerGetTox];
 
-    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:address message:message error:error];
+    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:address message:requestMessage error:error];
 
     if (friendNumber == kOCTToxFriendNumberFailure) {
         if (error && ((*error).code == OCTToxErrorFriendAddAlreadySent || (*error).code == OCTToxErrorFriendAddSetNewNospam)) {
@@ -307,6 +307,11 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     [self resyncAllFriendConnectionStatuses];
 }
 
+- (void)refreshConnectionStatuses
+{
+    [self resyncAllFriendConnectionStatuses];
+}
+
 - (void)resyncAllFriendConnectionStatuses
 {
     OCTTox *tox = [self.dataSource managerGetTox];
@@ -350,24 +355,21 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"publicKey == %@", publicKey];
-    RLMResults *results = [realmManager objectsWithClass:[OCTFriendRequest class] predicate:predicate];
-    if (results.count > 0) {
-        // friendRequest already exists
+    if ([realmManager objectsWithClass:[OCTFriend class] predicate:predicate].count > 0) {
         return;
     }
 
-    results = [realmManager objectsWithClass:[OCTFriend class] predicate:predicate];
-    if (results.count > 0) {
-        // friend with such publicKey already exists
+    for (OCTFriendRequest *pending in [realmManager objectsWithClass:[OCTFriendRequest class] predicate:predicate]) {
+        [realmManager deleteObject:pending];
+    }
+
+    OCTToxFriendNumber friendNumber = [tox addFriendWithNoRequestWithPublicKey:publicKey error:nil];
+    if (friendNumber == kOCTToxFriendNumberFailure) {
         return;
     }
 
-    OCTFriendRequest *request = [OCTFriendRequest new];
-    request.publicKey = publicKey;
-    request.message = message;
-    request.dateInterval = [[NSDate date] timeIntervalSince1970];
-
-    [realmManager addObject:request];
+    [self.dataSource managerSaveTox];
+    [self createFriendWithFriendNumber:friendNumber error:nil];
 }
 
 - (void)tox:(OCTTox *)tox friendNameUpdate:(NSString *)name friendNumber:(OCTToxFriendNumber)friendNumber

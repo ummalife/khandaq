@@ -26,6 +26,8 @@
 #include "src/core/dhtserver.h"
 #include "src/core/icoresettings.h"
 #include "src/core/toxlogger.h"
+#include "src/core/networkdiagnostics.h"
+#include "src/core/reconnectbackoff.h"
 #include "src/core/toxoptions.h"
 #include "src/core/toxstring.h"
 #include "src/model/groupinvite.h"
@@ -38,6 +40,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QNetworkConfigurationManager>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringBuilder>
@@ -276,6 +279,14 @@ void Core::onStarted()
     loadFriends();
     loadGroups();
 
+    networkManager = new QNetworkConfigurationManager();
+    connect(networkManager, &QNetworkConfigurationManager::onlineStateChanged, this, &Core::onNetworkChanged);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 2, 0)
+    connect(networkManager, &QNetworkConfigurationManager::configurationChanged, this, &Core::onNetworkChanged);
+#endif
+
+    performKhandaqBootstrapBurst();
+
     process(); // starts its own timer
 }
 
@@ -346,8 +357,12 @@ void Core::process()
 
     // TODO(sudden6): recheck if this is still necessary
     if (checkConnection()) {
+        ReconnectBackoff::instance().reset();
         tolerance = CORE_DISCONNECT_TOLERANCE;
     } else if (!(--tolerance)) {
+        ReconnectBackoff::instance().noteAttempt(QStringLiteral("offline_periodic"), false);
+        NetworkDiagnostics::logEvent(QStringLiteral("bootstrap_dht"),
+                                     QStringLiteral("attempt=%1").arg(ReconnectBackoff::instance().currentAttempt()));
         bootstrapDht();
         tolerance = 3 * CORE_DISCONNECT_TOLERANCE;
     }
@@ -391,6 +406,52 @@ bool Core::checkConnection()
     return toxConnected;
 }
 
+void Core::performKhandaqBootstrapBurst()
+{
+    ASSERT_CORE_THREAD;
+
+    struct KhandaqNode
+    {
+        const char* host;
+        const char* publicKeyHex;
+    };
+
+    static const KhandaqNode khandaqNodes[] = {
+        {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
+        {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
+        {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
+    };
+    static const uint16_t tcpPorts[] = {33445, 3389};
+
+    for (const auto& node : khandaqNodes) {
+        ToxPk pk{QString::fromLatin1(node.publicKeyHex)};
+        const uint8_t* pkPtr = pk.getData();
+
+        tox_bootstrap(tox.get(), node.host, 33445, pkPtr, nullptr);
+        for (const auto tcpPort : tcpPorts) {
+            tox_add_tcp_relay(tox.get(), node.host, tcpPort, pkPtr, nullptr);
+        }
+    }
+}
+
+void Core::onNetworkChanged()
+{
+    ASSERT_CORE_THREAD;
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - lastNetworkRebootstrapMs < 500) {
+        return;
+    }
+    lastNetworkRebootstrapMs = now;
+
+    ReconnectBackoff::instance().noteAttempt(QStringLiteral("network_change"), true);
+    qInfo() << "Core: network changed, urgent rebootstrap";
+    NetworkDiagnostics::logEvent(QStringLiteral("network_changed"), QStringLiteral("urgent rebootstrap"));
+    tolerance = 0;
+    performKhandaqBootstrapBurst();
+    bootstrapDht();
+}
+
 /**
  * @brief Connects us to the Tox network
  */
@@ -398,6 +459,7 @@ void Core::bootstrapDht()
 {
     ASSERT_CORE_THREAD;
 
+    performKhandaqBootstrapBurst();
 
     auto const shuffledBootstrapNodes = shuffleBootstrapNodes(bootstrapListGenerator.getBootstrapNodes());
     if (shuffledBootstrapNodes.empty()) {
@@ -405,8 +467,7 @@ void Core::bootstrapDht()
         return;
     }
 
-    // i think the more we bootstrap, the more we jitter because the more we overwrite nodes
-    auto numNewNodes = 2;
+    auto numNewNodes = 6;
     for (int i = 0; i < numNewNodes && i < shuffledBootstrapNodes.size(); ++i) {
         const auto& dhtServer = shuffledBootstrapNodes.at(i);
         QByteArray address;
@@ -441,9 +502,14 @@ void Core::onFriendRequest(Tox* tox, const uint8_t* cFriendPk, const uint8_t* cM
                            size_t cMessageSize, void* core)
 {
     std::ignore = tox;
-    ToxPk friendPk(cFriendPk);
-    QString requestMessage = ToxString(cMessage, cMessageSize).getQString();
-    emit static_cast<Core*>(core)->friendRequestReceived(friendPk, requestMessage);
+    std::ignore = cMessage;
+    std::ignore = cMessageSize;
+    Core* corePtr = static_cast<Core*>(core);
+    const ToxPk friendPk(cFriendPk);
+    if (corePtr->hasFriendWithPublicKey(friendPk)) {
+        return;
+    }
+    corePtr->acceptFriendRequest(friendPk);
 }
 
 void Core::onFriendMessage(Tox* tox, uint32_t friendId, Tox_Message_Type type, const uint8_t* cMessage,
@@ -613,6 +679,7 @@ void Core::onLosslessPacket(Tox* tox, uint32_t friendId,
 void Core::onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core)
 {
     std::ignore = tox;
+    qDebug() << "Core: friend_read_receipt friendId" << friendId << "messageId" << receipt;
     emit static_cast<Core*>(core)->receiptRecieved(friendId, ReceiptNum{receipt});
 }
 
@@ -647,11 +714,6 @@ QString Core::getFriendRequestErrorMessage(const ToxId& friendId, const QString&
         return tr("Invalid Tox ID", "Error while sending friend request");
     }
 
-    if (message.isEmpty()) {
-        return tr("You need to write a message with your request",
-                  "Error while sending friend request");
-    }
-
     if (ToxString(message).size() > tox_max_friend_request_length()) {
         return tr("Your message is too long!", "Error while sending friend request");
     }
@@ -668,14 +730,18 @@ void Core::requestFriendship(const ToxId& friendId, const QString& message)
     QMutexLocker ml{&coreLoopLock};
 
     ToxPk friendPk = friendId.getPublicKey();
-    QString errorMessage = getFriendRequestErrorMessage(friendId, message);
+    QString requestMessage = message.trimmed();
+    if (requestMessage.isEmpty()) {
+        requestMessage = QStringLiteral("Khandaq");
+    }
+    QString errorMessage = getFriendRequestErrorMessage(friendId, requestMessage);
     if (!errorMessage.isNull()) {
         emit failedToAddFriend(friendPk, errorMessage);
         emit saveRequest();
         return;
     }
 
-    ToxString cMessage(message);
+    ToxString cMessage(requestMessage);
     Tox_Err_Friend_Add error;
     uint32_t friendNumber =
         tox_friend_add(tox.get(), friendId.getBytes(), cMessage.data(), cMessage.size(), &error);
@@ -683,7 +749,7 @@ void Core::requestFriendship(const ToxId& friendId, const QString& message)
         qDebug() << "Requested friendship from " << friendNumber;
         emit saveRequest();
         emit friendAdded(friendNumber, friendPk);
-        emit requestSent(friendPk, message);
+        emit requestSent(friendPk, requestMessage);
         const QString username = getFriendUsername(friendNumber);
         if (!username.isEmpty()) {
             emit friendUsernameChanged(friendNumber, username);

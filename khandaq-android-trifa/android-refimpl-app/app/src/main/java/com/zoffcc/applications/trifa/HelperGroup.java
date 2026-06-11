@@ -31,6 +31,7 @@ import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
 import android.net.Uri;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.mikepenz.fontawesome_typeface_library.FontAwesome;
@@ -43,11 +44,15 @@ import java.io.File;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -73,6 +78,7 @@ import static com.zoffcc.applications.trifa.HelperGeneric.utf8_string_from_bytes
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__conference_show_system_messages;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
+import static com.zoffcc.applications.trifa.MainActivity.main_activity_s;
 import static com.zoffcc.applications.trifa.MainActivity.group_message_list_activity;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages;
@@ -91,9 +97,19 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_group_set_topic;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_invite_friend;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_is_connected;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_mod_set_role;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_disconnect;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_leave;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_reconnect;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_offline_peer_count;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_count;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_savedpeer_get_public_key;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_role;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peerlist;
+import static com.zoffcc.applications.trifa.HelperFriend.format_group_peer_list_display_name;
+import static com.zoffcc.applications.trifa.HelperFriend.lookup_friendlist_by_pubkey;
+import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
+import static com.zoffcc.applications.trifa.ToxVars.GC_MAX_SAVED_PEERS;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_connection_status;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_public_key;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_role;
@@ -101,16 +117,16 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_peer
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_public_key;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_send_custom_packet;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_send_custom_private_packet;
+import static com.zoffcc.applications.trifa.MainActivity.tox_group_send_message;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GROUP_ID_LENGTH;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_COMMUNITY_DISPLAY_NAME;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_COMMUNITY_GROUPID;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_connection_status;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_name;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_toxid;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_GROUP_HISTORY_SYNC_DOUBLE_INTERVAL_SECS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NOTIFICATION_EDIT_ACTION.NOTIFICATION_EDIT_ACTION_ADD;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_NGC_HISTORY_SYNC_MAX_FILENAME_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_COMMUNITY_HISTORY_SYNC_MAX_SECONDS_BACK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
@@ -340,16 +356,22 @@ public class HelperGroup
 
     static long insert_into_group_message_db(final GroupMessage m, final boolean update_group_view_flag)
     {
+        if (!GroupMessageLayoutHelper.isRenderableMessageForDb(m))
+        {
+            Log.i(TAG, "insert_into_group_message_db:skip empty message");
+            return -1;
+        }
+
         long row_id = orma.insertIntoGroupMessage(m);
 
         try
         {
             if ((row_id != -1) && (update_group_view_flag))
             {
-                if ((PREF__conference_show_system_messages == false) &&
+                if ((!should_show_group_system_messages(m.group_identifier)) &&
                     (m.tox_group_peer_pubkey.equals(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY)))
                 {
-                    // HINT: dont show system message because of user PREF
+                    // HINT: dont show system message because of user PREF / community policy
                 }
                 else
                 {
@@ -753,8 +775,7 @@ public class HelperGroup
             role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
         }
 
-        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value
-                && !is_khandaq_community_group(group_identifier))
+        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
         {
             return context_s.getString(R.string.group_send_observer_role);
         }
@@ -860,6 +881,39 @@ public class HelperGroup
         return context_s.getString(R.string.group_send_failed);
     }
 
+    private static final int GROUP_SEND_MAX_ATTEMPTS = 8;
+
+    static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
+                                                @NonNull final String message)
+    {
+        long group_num = group_number;
+        for (int attempt = 0; attempt < GROUP_SEND_MAX_ATTEMPTS; attempt++)
+        {
+            if (group_num < 0)
+            {
+                group_num = ensure_group_in_tox(group_identifier);
+            }
+
+            if (group_num < 0)
+            {
+                continue;
+            }
+
+            final long message_id = tox_group_send_message(group_num, 0, message);
+            if (message_id > -1)
+            {
+                return message_id;
+            }
+
+            if (message_id == -2 || message_id == -3 || message_id == -4)
+            {
+                return message_id;
+            }
+        }
+
+        return -99;
+    }
+
     static String group_identifier_short(String group_identifier, boolean uppercase_result)
     {
         try
@@ -881,38 +935,512 @@ public class HelperGroup
         }
     }
 
-    static boolean is_khandaq_community_group(final String group_identifier)
+    /** Former auto-joined public group; stripped from the app in v0.2.7. */
+    private static final String REMOVED_LEGACY_PUBLIC_COMMUNITY_GROUPID =
+            "154b3973bd0e66304fd6179a8a54759073649e09e6e368f0334fc6ed666ab762";
+
+    static boolean is_removed_legacy_public_community_group(final String group_identifier)
     {
         if (group_identifier == null)
         {
             return false;
         }
-        return KHANDAQ_COMMUNITY_GROUPID.equalsIgnoreCase(group_identifier.trim());
+        return REMOVED_LEGACY_PUBLIC_COMMUNITY_GROUPID.equalsIgnoreCase(group_identifier.trim());
     }
 
-    static boolean is_legacy_trifa_community_display_name(final String name)
+    /** Leave tox group, mark left in DB, hide from chat list. */
+    static void remove_legacy_public_community_group()
     {
-        if (name == null)
+        if (!is_tox_started || orma == null)
         {
-            return false;
+            return;
         }
-        final String normalized = name.trim();
-        return "TRIfA Community".equalsIgnoreCase(normalized)
-                || "TRIFA Community".equalsIgnoreCase(normalized)
-                || "TriFA Community".equalsIgnoreCase(normalized);
+
+        final String group_identifier = REMOVED_LEGACY_PUBLIC_COMMUNITY_GROUPID;
+        try
+        {
+            set_group_group_we_left(group_identifier);
+            final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+            if (group_num >= 0)
+            {
+                tox_group_leave(group_num, "removed");
+                update_savedata_file_wrapper();
+            }
+            Log.i(TAG, "remove_legacy_public_community_group:done gn=" + group_num);
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "remove_legacy_public_community_group:EE:" + e.getMessage());
+        }
     }
 
     static String get_group_display_name(final String group_identifier, final String raw_name)
     {
-        if (is_khandaq_community_group(group_identifier) || is_legacy_trifa_community_display_name(raw_name))
-        {
-            return KHANDAQ_COMMUNITY_DISPLAY_NAME;
-        }
         if (raw_name == null)
         {
             return "";
         }
         return raw_name;
+    }
+
+    static boolean should_show_group_system_messages(final String group_identifier)
+    {
+        return PREF__conference_show_system_messages;
+    }
+
+    static String format_group_member_count_subtitle(final Context context, final long online_count,
+                                                     final long offline_count)
+    {
+        final long total = Math.max(0L, online_count) + Math.max(0L, offline_count);
+        return context.getString(R.string.group_header_member_count, total, Math.max(0L, online_count));
+    }
+
+    static String format_group_list_status_subtitle(final Context context, final String group_identifier)
+    {
+        final long[] counts = count_visible_group_members(group_identifier);
+        return format_group_member_count_subtitle(context, counts[0], counts[1]);
+    }
+
+    static String humanize_group_connection_status(final Context context, final int connection_status)
+    {
+        if (connection_status == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+        {
+            return context.getString(R.string.group_info_connection_connected);
+        }
+        if (connection_status == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTING.value)
+        {
+            return context.getString(R.string.group_info_connection_connecting);
+        }
+        return context.getString(R.string.group_info_connection_disconnected);
+    }
+
+    static String humanize_group_role(final Context context, final int role)
+    {
+        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value)
+        {
+            return context.getString(R.string.group_info_role_founder);
+        }
+        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
+        {
+            return context.getString(R.string.group_info_role_moderator);
+        }
+        if (role == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
+        {
+            return context.getString(R.string.group_info_role_observer);
+        }
+        return context.getString(R.string.group_info_role_user);
+    }
+
+    static String humanize_group_privacy(final Context context, final int privacy_state)
+    {
+        if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
+        {
+            return context.getString(R.string.group_info_privacy_public);
+        }
+        if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value)
+        {
+            return context.getString(R.string.group_info_privacy_private);
+        }
+        return context.getString(R.string.group_info_privacy_unknown);
+    }
+
+    static final class GroupMemberDisplay
+    {
+        String pubkey;
+        String name;
+        boolean online;
+        boolean self;
+        boolean probable_bot;
+        int connection_status;
+        long last_seen_ms;
+    }
+
+    private static final ConcurrentHashMap<String, Long> group_peer_last_online_ms = new ConcurrentHashMap<>();
+
+    static String group_peer_seen_key(final String group_id, final String pubkey)
+    {
+        return group_id.toLowerCase(Locale.ENGLISH) + "|" + pubkey.toLowerCase(Locale.ENGLISH);
+    }
+
+    static void touch_group_peer_online(final String group_id, final String pubkey)
+    {
+        if ((group_id == null) || (pubkey == null))
+        {
+            return;
+        }
+        group_peer_last_online_ms.put(group_peer_seen_key(group_id, pubkey), System.currentTimeMillis());
+    }
+
+    static void record_group_peer_last_seen_on_exit(final long group_number, final long peer_id)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            final String pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+            if (TextUtils.isEmpty(group_identifier) || TextUtils.isEmpty(pubkey))
+            {
+                return;
+            }
+            final long now = System.currentTimeMillis();
+            touch_group_peer_online(group_identifier, pubkey);
+            orma.updateGroupPeerDB().group_identifierEq(group_identifier.toLowerCase()).
+                    tox_group_peer_pubkeyEq(pubkey).
+                    last_update_timestamp(now).
+                    execute();
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    static long resolve_group_peer_last_seen_ms(final String group_id, final String pubkey, final GroupPeerDB db)
+    {
+        Long from_memory = group_peer_last_online_ms.get(group_peer_seen_key(group_id, pubkey));
+        final long from_db = db != null ? db.last_update_timestamp : 0L;
+        if (from_memory != null && from_memory > from_db)
+        {
+            return from_memory;
+        }
+        if (from_db > 0L)
+        {
+            return from_db;
+        }
+        return from_memory != null ? from_memory : 0L;
+    }
+
+    static boolean is_group_peer_online(final int connection_status)
+    {
+        return connection_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value
+               || connection_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value;
+    }
+
+    static boolean is_likely_automated_test_peer(final String name, final String pubkey)
+    {
+        if (pubkey != null && lookup_friendlist_by_pubkey(pubkey.trim()) != null)
+        {
+            return false;
+        }
+
+        if (name != null)
+        {
+            final String n = name.trim();
+            if (n.matches("(?i)^(tt2|uh2)\\s+\\d+$"))
+            {
+                return true;
+            }
+            if (n.matches("(?i)^[0-9A-F]{6}$"))
+            {
+                return true;
+            }
+            if (n.contains("TrifaMaterial") || n.contains("envsh") || n.startsWith("zzzzzoffline"))
+            {
+                return true;
+            }
+            if (n.matches("(?i)^0seid0[-_].*"))
+            {
+                return true;
+            }
+            if (n.matches("(?i)^venom-ngc.*"))
+            {
+                return true;
+            }
+            if (RandomNameGenerator.looksLikeGeneratedFullName(n))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static boolean should_hide_peer_from_member_lists(final String name, final String pubkey)
+    {
+        return is_likely_automated_test_peer(name, pubkey);
+    }
+
+    static int compare_group_members(final boolean self1, final boolean online1, final String name1,
+                                     final long last_seen1, final boolean self2, final boolean online2,
+                                     final String name2, final long last_seen2)
+    {
+        if (self1 != self2)
+        {
+            return self1 ? -1 : 1;
+        }
+        if (online1 != online2)
+        {
+            return online1 ? -1 : 1;
+        }
+        if (!online1 && !online2 && last_seen1 != last_seen2)
+        {
+            return Long.compare(last_seen2, last_seen1);
+        }
+        final String n1 = name1 == null ? "" : name1;
+        final String n2 = name2 == null ? "" : name2;
+        return n1.compareToIgnoreCase(n2);
+    }
+
+    static String format_group_member_list_label(final Context context, final String pubkey, final String raw_name,
+                                                 final boolean online, final boolean is_self)
+    {
+        return format_group_peer_list_display_name(pubkey, raw_name);
+    }
+
+    static String format_group_member_last_seen_relative(final Context context, final long last_seen_ms)
+    {
+        if (last_seen_ms <= 0L)
+        {
+            return context.getString(R.string.group_member_last_seen_long_ago);
+        }
+        final long delta_ms = Math.max(0L, System.currentTimeMillis() - last_seen_ms);
+        if (delta_ms < 60_000L)
+        {
+            return context.getString(R.string.group_member_last_seen_just_now);
+        }
+        final long minutes = delta_ms / 60_000L;
+        if (minutes < 60L)
+        {
+            return context.getResources().getQuantityString(R.plurals.group_member_last_seen_minutes,
+                                                              (int) minutes, (int) minutes);
+        }
+        final long hours = minutes / 60L;
+        if (hours < 48L)
+        {
+            return context.getResources().getQuantityString(R.plurals.group_member_last_seen_hours,
+                                                              (int) hours, (int) hours);
+        }
+        return context.getString(R.string.group_member_last_seen_long_ago);
+    }
+
+    static String format_group_member_status_line(final Context context, final boolean online, final long last_seen_ms)
+    {
+        if (online)
+        {
+            return context.getString(R.string.group_info_member_online);
+        }
+        return format_group_member_last_seen_relative(context, last_seen_ms);
+    }
+
+    static long[] count_visible_group_members(final String group_identifier)
+    {
+        long online = 0L;
+        long offline = 0L;
+        try
+        {
+            final List<GroupMemberDisplay> members = collect_group_members_for_display(group_identifier);
+            for (GroupMemberDisplay member : members)
+            {
+                if (member.online)
+                {
+                    online++;
+                }
+                else
+                {
+                    offline++;
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return new long[]{online, offline};
+    }
+
+    static List<GroupMemberDisplay> collect_group_members_for_display(final String group_identifier)
+    {
+        final List<GroupMemberDisplay> members = new ArrayList<>();
+        try
+        {
+            final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+            if (group_num < 0)
+            {
+                return members;
+            }
+
+            final long self_peer_id = tox_group_self_get_peer_id(group_num);
+            final long num_peers = tox_group_peer_count(group_num);
+            if (num_peers > 0)
+            {
+                final long[] peers = tox_group_get_peerlist(group_num);
+                if (peers != null)
+                {
+                    for (long peer : peers)
+                    {
+                        try
+                        {
+                            final String pubkey = tox_group_peer_get_public_key(group_num, peer);
+                            final String raw_name = tox_group_peer_get_name(group_num, peer);
+                            if (should_hide_peer_from_member_lists(raw_name, pubkey))
+                            {
+                                continue;
+                            }
+                            touch_group_peer_online(group_identifier, pubkey);
+                            GroupPeerDB peer_from_db = null;
+                            try
+                            {
+                                peer_from_db = orma.selectFromGroupPeerDB().group_identifierEq(
+                                        group_identifier.toLowerCase()).tox_group_peer_pubkeyEq(pubkey).toList().get(0);
+                            }
+                            catch (Exception ignored)
+                            {
+                            }
+                            final int conn = tox_group_peer_get_connection_status(group_num, peer);
+                            final GroupMemberDisplay item = new GroupMemberDisplay();
+                            item.pubkey = pubkey;
+                            item.probable_bot = false;
+                            item.connection_status = conn;
+                            item.online = true;
+                            item.self = peer == self_peer_id;
+                            item.last_seen_ms = resolve_group_peer_last_seen_ms(group_identifier, pubkey, peer_from_db);
+                            item.name = format_group_member_list_label(context_s, pubkey, raw_name, true, item.self);
+                            members.add(item);
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+                    }
+                }
+            }
+
+            final java.util.HashSet<String> seen_pubkeys = new java.util.HashSet<>();
+            for (GroupMemberDisplay existing : members)
+            {
+                if (existing.pubkey != null)
+                {
+                    seen_pubkeys.add(existing.pubkey.toLowerCase(Locale.ENGLISH));
+                }
+            }
+
+            for (long i = 0; i < GC_MAX_SAVED_PEERS; i++)
+            {
+                try
+                {
+                    final String pubkey = tox_group_savedpeer_get_public_key(group_num, i);
+                    if (pubkey == null || pubkey.isEmpty() || "-1".equalsIgnoreCase(pubkey))
+                    {
+                        continue;
+                    }
+                    if (seen_pubkeys.contains(pubkey.toLowerCase(Locale.ENGLISH)))
+                    {
+                        continue;
+                    }
+                    seen_pubkeys.add(pubkey.toLowerCase(Locale.ENGLISH));
+
+                    String peer_name = "";
+                    GroupPeerDB peer_from_db = null;
+                    try
+                    {
+                        peer_from_db = orma.selectFromGroupPeerDB().group_identifierEq(group_identifier.toLowerCase()).
+                                tox_group_peer_pubkeyEq(pubkey).toList().get(0);
+                        peer_name = peer_from_db.peer_name;
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                    if (should_hide_peer_from_member_lists(peer_name, pubkey))
+                    {
+                        continue;
+                    }
+
+                    final GroupMemberDisplay item = new GroupMemberDisplay();
+                    item.pubkey = pubkey;
+                    item.probable_bot = false;
+                    item.connection_status = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+                    item.online = false;
+                    item.self = false;
+                    item.last_seen_ms = resolve_group_peer_last_seen_ms(group_identifier, pubkey, peer_from_db);
+                    item.name = format_group_member_list_label(context_s, pubkey, peer_name, false, false);
+                    members.add(item);
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+
+            append_group_peers_from_db(group_identifier, group_num, seen_pubkeys, members);
+
+            try
+            {
+                Collections.sort(members, new Comparator<GroupMemberDisplay>()
+                {
+                    @Override
+                    public int compare(GroupMemberDisplay a, GroupMemberDisplay b)
+                    {
+                        return compare_group_members(a.self, a.online, a.name, a.last_seen_ms,
+                                                     b.self, b.online, b.name, b.last_seen_ms);
+                    }
+                });
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "collect_group_members_for_display:EE:" + e.getMessage());
+        }
+        return members;
+    }
+
+    private static void append_group_peers_from_db(final String group_identifier, final long group_num,
+                                                   final java.util.HashSet<String> seen_pubkeys,
+                                                   final List<GroupMemberDisplay> members)
+    {
+        try
+        {
+            String self_pubkey = null;
+            if (group_num >= 0)
+            {
+                try
+                {
+                    self_pubkey = tox_group_self_get_public_key(group_num);
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+
+            final List<GroupPeerDB> db_peers = orma.selectFromGroupPeerDB().
+                    group_identifierEq(group_identifier.toLowerCase()).
+                    orderByLast_update_timestampDesc().toList();
+            for (GroupPeerDB db_peer : db_peers)
+            {
+                if (db_peer == null || db_peer.tox_group_peer_pubkey == null)
+                {
+                    continue;
+                }
+                final String pubkey = db_peer.tox_group_peer_pubkey.trim();
+                if (pubkey.isEmpty())
+                {
+                    continue;
+                }
+                final String key = pubkey.toLowerCase(Locale.ENGLISH);
+                if (seen_pubkeys.contains(key))
+                {
+                    continue;
+                }
+                seen_pubkeys.add(key);
+
+                final String peer_name = db_peer.peer_name;
+                if (should_hide_peer_from_member_lists(peer_name, pubkey))
+                {
+                    continue;
+                }
+
+                final GroupMemberDisplay item = new GroupMemberDisplay();
+                item.pubkey = pubkey;
+                item.probable_bot = false;
+                item.connection_status = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+                item.online = false;
+                item.self = self_pubkey != null && self_pubkey.equalsIgnoreCase(pubkey);
+                item.last_seen_ms = resolve_group_peer_last_seen_ms(group_identifier, pubkey, db_peer);
+                item.name = format_group_member_list_label(context_s, pubkey, peer_name, false, item.self);
+                members.add(item);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "append_group_peers_from_db:EE:" + e.getMessage());
+        }
     }
 
     static boolean is_valid_group_title_string(final String value)
@@ -1119,203 +1647,159 @@ public class HelperGroup
         return false;
     }
 
-    static void khandaq_community_auto_promote_peer(final long group_number, final long peer_id)
+    static void ensure_group_peer_recorded(final String group_identifier, final long group_number,
+                                           final String peer_pubkey, final String peer_name_hint)
     {
+        if (group_identifier == null || peer_pubkey == null || peer_pubkey.isEmpty()
+                || TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(peer_pubkey)
+                || "-1".equalsIgnoreCase(peer_pubkey))
+        {
+            return;
+        }
+
         try
         {
-            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
-            if (!is_khandaq_community_group(group_identifier))
+            String resolved_name = null;
+            if (!TextUtils.isEmpty(peer_name_hint))
             {
+                resolved_name = sanitize_group_peer_name(peer_name_hint);
+            }
+            if (TextUtils.isEmpty(resolved_name))
+            {
+                resolved_name = tox_group_peer_get_name__wrapper(group_identifier, peer_pubkey);
+            }
+
+            final GroupPeerDB existing = lookup_group_peer_by_pubkey(group_identifier, peer_pubkey);
+            if (existing != null)
+            {
+                if (!TextUtils.isEmpty(resolved_name) && TextUtils.isEmpty(existing.peer_name))
+                {
+                    orma.updateGroupPeerDB().group_identifierEq(group_identifier.toLowerCase()).
+                            tox_group_peer_pubkeyEq(existing.tox_group_peer_pubkey).
+                            peer_name(resolved_name).
+                            last_update_timestamp(System.currentTimeMillis()).
+                            execute();
+                }
                 return;
             }
 
-            final int self_role = tox_group_self_get_role(group_number);
-            if (self_role < 0
-                    || self_role > ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
+            int role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
+            long peer_num = -1L;
+            if (group_number >= 0)
             {
-                return;
+                try
+                {
+                    peer_num = get_group_peernum_from_peer_pubkey(group_identifier, peer_pubkey);
+                    if (peer_num >= 0)
+                    {
+                        final int peer_role = tox_group_peer_get_role(group_number, peer_num);
+                        if (peer_role >= 0)
+                        {
+                            role = peer_role;
+                        }
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
             }
 
-            final int peer_role = tox_group_peer_get_role(group_number, peer_id);
-            if (peer_role != ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value)
-            {
-                return;
-            }
-
-            final int result = tox_group_mod_set_role(group_number, peer_id,
-                    ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value);
-            Log.i(TAG, "khandaq_community_auto_promote_peer:peer=" + peer_id + " result=" + result);
-
-            if (result == 1)
-            {
-                final String group_peer_pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
-                update_group_peer_in_db(group_number, group_identifier, peer_id, group_peer_pubkey,
-                        ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value);
-                update_group_messages_peer_role(group_identifier, group_peer_pubkey,
-                        ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value);
-            }
-
-            update_savedata_file_wrapper();
+            final GroupPeerDB p = new GroupPeerDB();
+            p.group_identifier = group_identifier;
+            p.tox_group_peer_pubkey = peer_pubkey;
+            p.peer_name = resolved_name;
+            p.last_update_timestamp = System.currentTimeMillis();
+            p.first_join_timestamp = System.currentTimeMillis();
+            p.Tox_Group_Role = role;
+            orma.insertIntoGroupPeerDB(p);
         }
         catch (Exception e)
         {
-            Log.i(TAG, "khandaq_community_auto_promote_peer:EE:" + e.getMessage());
+            try
+            {
+                int role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_USER.value;
+                long peer_num = -1L;
+                if (group_number >= 0)
+                {
+                    peer_num = get_group_peernum_from_peer_pubkey(group_identifier, peer_pubkey);
+                    if (peer_num >= 0)
+                    {
+                        final int peer_role = tox_group_peer_get_role(group_number, peer_num);
+                        if (peer_role >= 0)
+                        {
+                            role = peer_role;
+                        }
+                    }
+                }
+                update_group_peer_in_db(group_number, group_identifier, peer_num, peer_pubkey, role);
+            }
+            catch (Exception ignored)
+            {
+            }
         }
     }
 
-    static void khandaq_community_promote_all_observers_if_moderator(final long group_number)
+    /** Copy live + saved tox peers into GroupPeerDB (peer_join is not fired for existing peers). */
+    static void sync_group_peers_from_tox_to_db(final long group_number)
     {
         try
         {
             final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
-            if (!is_khandaq_community_group(group_identifier))
-            {
-                return;
-            }
-
-            final int self_role = tox_group_self_get_role(group_number);
-            if (self_role < 0
-                    || self_role > ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_MODERATOR.value)
+            if (group_identifier == null)
             {
                 return;
             }
 
             final long num_peers = tox_group_peer_count(group_number);
-            if (num_peers <= 0)
+            if (num_peers > 0)
             {
-                return;
+                final long[] peers = tox_group_get_peerlist(group_number);
+                if (peers != null)
+                {
+                    for (long peer : peers)
+                    {
+                        try
+                        {
+                            final String pubkey = tox_group_peer_get_public_key(group_number, peer);
+                            if (TextUtils.isEmpty(pubkey))
+                            {
+                                continue;
+                            }
+                            touch_group_peer_online(group_identifier, pubkey);
+                            int role = tox_group_peer_get_role(group_number, peer);
+                            if (role < 0)
+                            {
+                                role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
+                            }
+                            ensure_group_peer_recorded(group_identifier, group_number, pubkey, null);
+                            update_group_peer_in_db(group_number, group_identifier, peer, pubkey, role);
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+                    }
+                }
             }
 
-            final long[] peers = tox_group_get_peerlist(group_number);
-            if (peers == null)
-            {
-                return;
-            }
-
-            for (int i = 0; i < num_peers; i++)
-            {
-                khandaq_community_auto_promote_peer(group_number, peers[i]);
-            }
-        }
-        catch (Exception e)
-        {
-            Log.i(TAG, "khandaq_community_promote_all_observers_if_moderator:EE:" + e.getMessage());
-        }
-    }
-
-    static void khandaq_community_on_connected(final long group_number)
-    {
-        try
-        {
-            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
-            if (!is_khandaq_community_group(group_identifier))
-            {
-                return;
-            }
-
-            khandaq_community_promote_all_observers_if_moderator(group_number);
-            request_khandaq_community_history_from_peers(group_identifier);
-        }
-        catch (Exception e)
-        {
-            Log.i(TAG, "khandaq_community_on_connected:EE:" + e.getMessage());
-        }
-    }
-
-    static void request_khandaq_community_history_from_peers(final String group_identifier)
-    {
-        if (!is_khandaq_community_group(group_identifier))
-        {
-            return;
-        }
-
-        final Thread t = new Thread()
-        {
-            @Override
-            public void run()
+            for (long i = 0; i < GC_MAX_SAVED_PEERS; i++)
             {
                 try
                 {
-                    final long group_num = tox_group_by_groupid__wrapper(group_identifier);
-                    if (group_num < 0)
+                    final String pubkey = tox_group_savedpeer_get_public_key(group_number, i);
+                    if (pubkey == null || pubkey.isEmpty() || "-1".equalsIgnoreCase(pubkey))
                     {
-                        return;
+                        continue;
                     }
-
-                    if (tox_group_is_connected(group_num) !=
-                        TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
-                    {
-                        return;
-                    }
-
-                    final long num_peers = tox_group_peer_count(group_num);
-                    if (num_peers <= 0)
-                    {
-                        return;
-                    }
-
-                    final long[] peers = tox_group_get_peerlist(group_num);
-                    if (peers == null)
-                    {
-                        return;
-                    }
-
-                    final long self_peer_id = tox_group_self_get_peer_id(group_num);
-                    for (int i = 0; i < num_peers; i++)
-                    {
-                        if (peers[i] == self_peer_id)
-                        {
-                            continue;
-                        }
-
-                        final String peer_pubkey = tox_group_peer_get_public_key__wrapper(group_num, peers[i]);
-                        if (peer_pubkey == null)
-                        {
-                            continue;
-                        }
-
-                        send_ngch_request(group_identifier, peer_pubkey);
-                    }
+                    ensure_group_peer_recorded(group_identifier, group_number, pubkey, null);
                 }
-                catch (Exception e)
+                catch (Exception ignored)
                 {
-                    Log.i(TAG, "request_khandaq_community_history_from_peers:EE:" + e.getMessage());
-                }
-            }
-        };
-        t.start();
-    }
-
-    static void migrate_khandaq_community_display_names()
-    {
-        try
-        {
-            orma.updateGroupDB().
-                    group_identifierEq(KHANDAQ_COMMUNITY_GROUPID.toLowerCase()).
-                    name(KHANDAQ_COMMUNITY_DISPLAY_NAME).
-                    execute();
-        }
-        catch (Exception ignored)
-        {
-        }
-
-        try
-        {
-            final List<GroupDB> groups = orma.selectFromGroupDB().toList();
-            for (GroupDB g : groups)
-            {
-                if (is_khandaq_community_group(g.group_identifier)
-                        || is_legacy_trifa_community_display_name(g.name))
-                {
-                    orma.updateGroupDB().
-                            group_identifierEq(g.group_identifier.toLowerCase()).
-                            name(KHANDAQ_COMMUNITY_DISPLAY_NAME).
-                            execute();
                 }
             }
         }
-        catch (Exception ignored)
+        catch (Exception e)
         {
+            Log.i(TAG, "sync_group_peers_from_tox_to_db:EE:" + e.getMessage());
         }
     }
 
@@ -1624,11 +2108,6 @@ public class HelperGroup
 
     static boolean is_group_muted_or_kicked_peer(final String group_identifier, final String group_peer_pubkey)
     {
-        if (is_khandaq_community_group(group_identifier))
-        {
-            return false;
-        }
-
         try
         {
             final int peer_role = orma.selectFromGroupPeerDB().group_identifierEq(group_identifier.toLowerCase()).
@@ -1664,9 +2143,275 @@ public class HelperGroup
         }
     }
 
+    private static final long GROUP_RECONNECT_SUPPRESS_MS = 5L * 60L * 1000L;
+    private static final java.util.Map<String, Long> group_peer_reconnect_until = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static void notify_group_peer_joined(final long group_number, final long peer_id)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            if (TextUtils.isEmpty(group_identifier))
+            {
+                return;
+            }
+            if (!should_show_group_system_messages(group_identifier))
+            {
+                return;
+            }
+            if (shouldSuppressReconnectJoin(group_identifier, peer_id))
+            {
+                return;
+            }
+            add_system_message_to_group_chat(group_identifier,
+                    formatGroupPeerJoinedMessage(group_number, peer_id));
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "notify_group_peer_joined:EE:" + e.getMessage());
+        }
+    }
+
+    static void notify_group_peer_exit(final long group_number, final long peer_id, final int exit_type)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            if (TextUtils.isEmpty(group_identifier))
+            {
+                return;
+            }
+
+            if (exit_type == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_TIMEOUT.value
+                    || exit_type == ToxVars.Tox_Group_Exit_Type.TOX_GROUP_EXIT_TYPE_DISCONNECTED.value)
+            {
+                markGroupPeerReconnectNoise(group_identifier, peer_id);
+                return;
+            }
+
+            if (!should_show_group_system_messages(group_identifier))
+            {
+                return;
+            }
+
+            add_system_message_to_group_chat(group_identifier,
+                    formatGroupPeerLeftMessage(group_number, peer_id, exit_type));
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "notify_group_peer_exit:EE:" + e.getMessage());
+        }
+    }
+
+    static void notify_group_peer_name_changed(final long group_number, final long peer_id)
+    {
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            if (TextUtils.isEmpty(group_identifier))
+            {
+                return;
+            }
+            if (isGroupPeerReconnectSuppressed(group_identifier, peer_id))
+            {
+                return;
+            }
+            if (!should_show_group_system_messages(group_identifier))
+            {
+                return;
+            }
+            add_system_message_to_group_chat(group_identifier,
+                    formatGroupPeerRenamedMessage(group_number, peer_id));
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "notify_group_peer_name_changed:EE:" + e.getMessage());
+        }
+    }
+
+    static boolean isReconnectNoiseSystemMessage(final String text)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return false;
+        }
+
+        return text.contains("TOX_GROUP_EXIT_TYPE_TIMEOUT")
+                || text.contains("TOX_GROUP_EXIT_TYPE_DISCONNECTED");
+    }
+
+    static String formatSystemMessageForDisplay(final Context context, final String raw)
+    {
+        if (context == null || raw == null)
+        {
+            return raw == null ? "" : raw;
+        }
+
+        if (isReconnectNoiseSystemMessage(raw))
+        {
+            return "";
+        }
+
+        if (raw.startsWith("You joined the group"))
+        {
+            return context.getString(R.string.group_sys_you_joined);
+        }
+
+        if (raw.startsWith("privacy state changed to:"))
+        {
+            return raw.replace("privacy state changed to:", context.getString(R.string.group_sys_privacy_changed));
+        }
+
+        try
+        {
+            if (raw.contains(" joined the group"))
+            {
+                final String peerLabel = raw.replace("peer ", "").replace(" joined the group", "").trim();
+                return context.getString(R.string.group_sys_peer_joined, peerLabel);
+            }
+            if (raw.contains(" left the group: "))
+            {
+                final int split = raw.indexOf(" left the group: ");
+                final String peerLabel = raw.substring(raw.indexOf("peer ") + 5, split).trim();
+                final String reason = raw.substring(split + " left the group: ".length()).trim();
+                return context.getString(R.string.group_sys_peer_left, peerLabel, humanizeExitReason(context, reason));
+            }
+            if (raw.contains(" changed name"))
+            {
+                final String peerLabel = raw.replace("peer ", "").replace(" changed name", "").trim();
+                return context.getString(R.string.group_sys_peer_renamed, peerLabel);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "formatSystemMessageForDisplay:EE:" + e.getMessage());
+        }
+
+        return raw;
+    }
+
+    private static String humanizeExitReason(final Context context, final String reason)
+    {
+        if (reason == null)
+        {
+            return "";
+        }
+
+        if (reason.contains("TOX_GROUP_EXIT_TYPE_QUIT"))
+        {
+            return context.getString(R.string.group_sys_exit_quit);
+        }
+        if (reason.contains("TOX_GROUP_EXIT_TYPE_KICK"))
+        {
+            return context.getString(R.string.group_sys_exit_kick);
+        }
+        if (reason.contains("TOX_GROUP_EXIT_TYPE_SYNC_ERROR"))
+        {
+            return context.getString(R.string.group_sys_exit_sync_error);
+        }
+        if (reason.contains("TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED"))
+        {
+            return context.getString(R.string.group_sys_exit_self_disconnected);
+        }
+
+        return reason;
+    }
+
+    private static String formatGroupPeerJoinedMessage(final long group_number, final long peer_id)
+    {
+        final Context ctx = groupNotifyContext();
+        return ctx.getString(R.string.group_sys_peer_joined, resolveGroupPeerLabel(group_number, peer_id));
+    }
+
+    private static String formatGroupPeerLeftMessage(final long group_number, final long peer_id, final int exit_type)
+    {
+        final Context ctx = groupNotifyContext();
+        return ctx.getString(R.string.group_sys_peer_left,
+                resolveGroupPeerLabel(group_number, peer_id),
+                humanizeExitReason(ctx, ToxVars.Tox_Group_Exit_Type.value_str(exit_type)));
+    }
+
+    private static String formatGroupPeerRenamedMessage(final long group_number, final long peer_id)
+    {
+        final Context ctx = groupNotifyContext();
+        return ctx.getString(R.string.group_sys_peer_renamed, resolveGroupPeerLabel(group_number, peer_id));
+    }
+
+    private static String resolveGroupPeerLabel(final long group_number, final long peer_id)
+    {
+        try
+        {
+            final String peer_name = tox_group_peer_get_name(group_number, peer_id);
+            if (peer_name != null && !peer_name.isEmpty() && !peer_name.equals("-1"))
+            {
+                return peer_name;
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        return groupNotifyContext().getString(R.string.group_sys_peer_number, peer_id);
+    }
+
+    private static Context groupNotifyContext()
+    {
+        if (context_s != null)
+        {
+            return context_s;
+        }
+        if (main_activity_s != null)
+        {
+            return main_activity_s;
+        }
+        throw new IllegalStateException("group notify context unavailable");
+    }
+
+    private static String groupPeerEventKey(final String group_identifier, final long peer_id)
+    {
+        if (group_identifier == null)
+        {
+            return ":" + peer_id;
+        }
+        return group_identifier.toLowerCase() + ":" + peer_id;
+    }
+
+    private static void markGroupPeerReconnectNoise(final String group_identifier, final long peer_id)
+    {
+        group_peer_reconnect_until.put(groupPeerEventKey(group_identifier, peer_id),
+                System.currentTimeMillis() + GROUP_RECONNECT_SUPPRESS_MS);
+    }
+
+    private static boolean isGroupPeerReconnectSuppressed(final String group_identifier, final long peer_id)
+    {
+        final Long until = group_peer_reconnect_until.get(groupPeerEventKey(group_identifier, peer_id));
+        if (until == null)
+        {
+            return false;
+        }
+
+        if (System.currentTimeMillis() > until)
+        {
+            group_peer_reconnect_until.remove(groupPeerEventKey(group_identifier, peer_id));
+            return false;
+        }
+
+        return true;
+    }
+
+    private static boolean shouldSuppressReconnectJoin(final String group_identifier, final long peer_id)
+    {
+        return isGroupPeerReconnectSuppressed(group_identifier, peer_id);
+    }
+
     static void add_system_message_to_group_chat(final String group_identifier, final String system_message)
     {
-        if (PREF__conference_show_system_messages == false)
+        if (!should_show_group_system_messages(group_identifier))
+        {
+            return;
+        }
+
+        if (system_message == null || system_message.isEmpty())
         {
             return;
         }
@@ -1724,6 +2469,12 @@ public class HelperGroup
         message_ = message_orig;
         message_id_ = "";
         // TODO: add message ID later --------
+
+        if (!GroupMessageLayoutHelper.hasNonBlankText(message_))
+        {
+            Log.i(TAG, "group_message_cb: ignoring empty message from peer " + peer_id);
+            return;
+        }
 
         if (!is_private_message)
         {
@@ -1862,6 +2613,8 @@ public class HelperGroup
             Log.i(TAG, "group_message_cb:new_msg_id=" + new_msg_id);
         }
 
+        ensure_group_peer_recorded(group_id, group_number, peer_pubkey, m.tox_group_peername);
+
         HelperFriend.add_all_friends_clear_wrapper(0);
 
         if (do_notification)
@@ -1906,6 +2659,12 @@ public class HelperGroup
     {
         // Log.i(TAG,
         //       "group_message_add_from_sync:cf_num=" + group_identifier + " pnum=" + peer_number2 + " msg=" + message);
+
+        if (!GroupMessageLayoutHelper.hasNonBlankText(message))
+        {
+            Log.i(TAG, "group_message_add_from_sync: ignoring empty message");
+            return;
+        }
 
         long group_num_ = tox_group_by_groupid__wrapper(group_identifier);
         int res = -1;
@@ -2049,6 +2808,8 @@ public class HelperGroup
             long new_msg_id = insert_into_group_message_db(m, false);
             // Log.i(TAG, "conference_message_add_from_sync:new_msg_id=" + new_msg_id);
         }
+
+        ensure_group_peer_recorded(group_identifier, group_num_, peer_pubkey, peer_name);
 
         HelperFriend.add_all_friends_clear_wrapper(0);
 
@@ -2567,15 +3328,73 @@ public class HelperGroup
         return sanitize_group_peer_name(peer_name);
     }
 
-    static void do_join_public_group(Intent data)
+    static void reconnect_group_if_disconnected(final long group_num, final String group_identifier)
+    {
+        reconnect_group_if_disconnected(group_num, group_identifier, false);
+    }
+
+    static void reconnect_group_if_disconnected(final long group_num, final String group_identifier,
+                                                final boolean hard_reset)
+    {
+        if (group_num < 0 || !is_tox_started || group_identifier == null)
+        {
+            return;
+        }
+        if (global_self_connection_status == TOX_CONNECTION_NONE.value)
+        {
+            return;
+        }
+
+        try
+        {
+            if (tox_group_is_connected(group_num) ==
+                TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+            {
+                return;
+            }
+
+            clear_group_group_we_left(group_identifier);
+            set_group_active(group_identifier);
+            if (hard_reset)
+            {
+                tox_group_disconnect(group_num);
+                update_savedata_file_wrapper();
+                try
+                {
+                    Thread.sleep(300L);
+                }
+                catch (InterruptedException ignored)
+                {
+                }
+            }
+            final int res = tox_group_reconnect(group_num);
+            Log.i(TAG, "reconnect_group_if_disconnected:id=" + group_identifier + " gn=" + group_num
+                    + " hard=" + hard_reset + " res=" + res);
+            update_savedata_file_wrapper();
+            TrifaToxService.wakeup_tox_thread();
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "reconnect_group_if_disconnected:EE:" + e.getMessage());
+        }
+    }
+
+    static boolean join_public_group_by_id(final String group_id, final boolean show_toast)
     {
         try
         {
-            String group_id = data.getStringExtra("group_id");
+            if (group_id == null || group_id.length() < (TOX_GROUP_CHAT_ID_SIZE * 2))
+            {
+                return false;
+            }
             Log.i(TAG, "join_group:group_id:>" + group_id + "<");
 
             ByteBuffer join_chat_id_buffer = ByteBuffer.allocateDirect(TOX_GROUP_CHAT_ID_SIZE);
             byte[] data_join = HelperGeneric.hex_to_bytes(group_id.toUpperCase());
+            if (data_join == null || data_join.length != TOX_GROUP_CHAT_ID_SIZE)
+            {
+                return false;
+            }
             join_chat_id_buffer.put(data_join);
             join_chat_id_buffer.rewind();
 
@@ -2596,31 +3415,53 @@ public class HelperGroup
                     int privacy_state = MainActivity.tox_group_get_privacy_state(new_group_num);
 
                     Log.i(TAG, "join_group:group num=" + new_group_num + " privacy_state=" + privacy_state +
-                                            " group_id=" + group_identifier + " offset=" + groupid_buf.arrayOffset());
+                                            " group_id=" + group_identifier);
 
                     add_group_wrapper(0, new_group_num, group_identifier, privacy_state);
 
-                    display_toast(MainActivity.context_s.getString(R.string.join_public_group_joined), false, 300);
+                    if (show_toast)
+                    {
+                        display_toast(MainActivity.context_s.getString(R.string.join_public_group_joined), false, 300);
+                    }
                     set_group_active(group_identifier);
                     try
                     {
                         final GroupDB conf3 = (GroupDB) orma.selectFromGroupDB().group_identifierEq(
                                 group_identifier.toLowerCase()).toList().get(0);
                         CombinedFriendsAndConferences cc = new CombinedFriendsAndConferences();
-                        cc.is_friend = COMBINED_IS_CONFERENCE;
+                        cc.is_friend = COMBINED_IS_GROUP;
                         cc.group_item = (GroupDB) GroupDB.deep_copy(conf3);
-                        MainActivity.friend_list_fragment.modify_friend(cc, cc.is_friend);
+                        if (MainActivity.friend_list_fragment != null)
+                        {
+                            MainActivity.friend_list_fragment.modify_friend(cc, cc.is_friend);
+                        }
                     }
                     catch (Exception e3)
                     {
-                        // e3.printStackTrace();
+                        Log.i(TAG, "join_group:friendlist:EE:" + e3.getMessage());
                     }
+                    return true;
                 }
             }
-            else
+            else if (show_toast)
             {
                 display_toast(MainActivity.context_s.getString(R.string.join_public_group_failed), false, 300);
             }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            Log.i(TAG, "join_group:EE01:" + e.getMessage());
+        }
+        return false;
+    }
+
+    static void do_join_public_group(Intent data)
+    {
+        try
+        {
+            final String group_id = data.getStringExtra("group_id");
+            join_public_group_by_id(group_id, true);
         }
         catch (Exception e)
         {
@@ -2908,9 +3749,7 @@ public class HelperGroup
             {
                 try
                 {
-                    final int history_window_seconds = is_khandaq_community_group(group_identifier)
-                            ? KHANDAQ_COMMUNITY_HISTORY_SYNC_MAX_SECONDS_BACK
-                            : TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK;
+                    final int history_window_seconds = TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK;
                     final long sync_from_ts = history_window_seconds <= 0
                             ? 0
                             : System.currentTimeMillis() - (history_window_seconds * 1000L);

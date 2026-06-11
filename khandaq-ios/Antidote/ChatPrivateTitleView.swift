@@ -28,9 +28,23 @@ class ChatPrivateTitleView: UIView {
         }
         set {
             statusView.userStatus = newValue
-            statusLabel.text = newValue.toString()
-
             updateFrame()
+        }
+    }
+
+    var presenceText: String {
+        get {
+            return statusLabel.text ?? ""
+        }
+        set {
+            statusLabel.text = newValue
+            updateFrame()
+        }
+    }
+
+    var presenceIsOnline: Bool = false {
+        didSet {
+            updatePresenceColor()
         }
     }
 
@@ -48,10 +62,12 @@ class ChatPrivateTitleView: UIView {
     fileprivate var nameLabel: UILabel!
     fileprivate var statusView: UserStatusView!
     fileprivate var statusLabel: UILabel!
+    fileprivate var theme: Theme!
 
     init(theme: Theme) {
         super.init(frame: CGRect.zero)
 
+        self.theme = theme
         backgroundColor = .clear
 
         createViews(theme)
@@ -73,6 +89,7 @@ private extension ChatPrivateTitleView {
         statusView = UserStatusView()
         statusView.showExternalCircle = false
         statusView.theme = theme
+        statusView.isHidden = true
         addSubview(statusView)
 
         statusLabel = UILabel()
@@ -99,13 +116,25 @@ private extension ChatPrivateTitleView {
             $0.trailing.equalTo(nameLabel)
             $0.bottom.equalTo(self)
         }
+
+        updatePresenceColor()
+    }
+
+    func updatePresenceColor() {
+        guard let theme = theme else {
+            return
+        }
+
+        statusLabel.textColor = presenceIsOnline
+            ? theme.colorForType(.OnlineStatus)
+            : theme.colorForType(.NormalText)
     }
 
     func updateFrame() {
         nameLabel.sizeToFit()
         statusLabel.sizeToFit()
 
-        frame.size.width = max(nameLabel.frame.size.width, statusLabel.frame.size.width) + Constants.StatusViewLeftOffset + Constants.StatusViewSize
+        frame.size.width = max(nameLabel.frame.size.width, statusLabel.frame.size.width)
         frame.size.height = nameLabel.frame.size.height + statusLabel.frame.size.height
     }
 }

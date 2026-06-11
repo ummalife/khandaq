@@ -81,6 +81,12 @@ extension AddFriendController {
 
     @objc func sendButtonPressed() {
         idTextField.resignFirstResponder()
+        sanitizeIdFieldIfNeeded()
+
+        guard validatedAddressFromIdField() != nil else {
+            showInvalidIdFormatError()
+            return
+        }
 
         let messageView = UITextView()
         messageView.text = cachedMessage
@@ -111,12 +117,8 @@ extension AddFriendController {
             let message = messageView.text.isEmpty ? KhandaqBranding.defaultStatusMessage : messageView.text
 
             do {
-                guard let address = normalizeAddressString(self.idTextField.text ?? "") else {
-                    UIAlertController.showWithTitle(
-                        String(localized: "error_title"),
-                        message: String(localized: "error_contact_request_bad_checksum"),
-                        retryBlock: nil
-                    )
+                guard let address = self.validatedAddressFromIdField() else {
+                    self.showInvalidIdFormatError()
                     return
                 }
 
@@ -231,6 +233,7 @@ private extension AddFriendController {
         idTextField.layer.masksToBounds = true
         idTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 8, height: 1))
         idTextField.leftViewMode = .always
+        idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
         view.addSubview(idTextField)
 
         orTopSpacer = createSpacer()
@@ -333,5 +336,44 @@ private extension AddFriendController {
         let ownPublicKey = String(own.prefix(64))
         let candidatePublicKey = String(normalized.prefix(64))
         return !ownPublicKey.isEmpty && ownPublicKey == candidatePublicKey
+    }
+
+    @objc func idTextFieldEditingChanged() {
+        sanitizeIdFieldIfNeeded()
+    }
+
+    func sanitizeIdFieldIfNeeded() {
+        let raw = idTextField.text ?? ""
+        let normalized = normalizedIdFieldText(from: raw)
+        if normalized != raw {
+            applyIdFieldText(normalized, cursorOffset: (normalized as NSString).length)
+        } else {
+            updateSendButton(with: normalized)
+        }
+    }
+
+    func validatedAddressFromIdField() -> String? {
+        let raw = idTextField.text ?? ""
+        let hex = sanitizeAddressInput(raw)
+        let addressLength = Int(kOCTToxAddressLength)
+        let publicKeyLength = Int(kOCTToxPublicKeyLength)
+
+        guard hex.count == addressLength || hex.count == publicKeyLength else {
+            return nil
+        }
+
+        guard let address = normalizeAddressString(raw), address.count == addressLength else {
+            return nil
+        }
+
+        return address
+    }
+
+    func showInvalidIdFormatError() {
+        UIAlertController.showWithTitle(
+            String(localized: "error_title"),
+            message: String(localized: "add_contact_invalid_id_format"),
+            retryBlock: nil
+        )
     }
 }

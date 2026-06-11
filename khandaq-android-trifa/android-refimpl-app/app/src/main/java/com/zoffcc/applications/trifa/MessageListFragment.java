@@ -68,6 +68,30 @@ public class MessageListFragment extends Fragment
     static int count_messages_full = 0;
     static boolean faded_in = false;
     TextView scrollDateHeader = null;
+
+    private String query_friend_pubkey()
+    {
+        if (mla != null)
+        {
+            final String pk = mla.get_friend_pubkey();
+            if ((pk != null) && (pk.length() > 2))
+            {
+                return pk;
+            }
+        }
+        if (current_friendnum >= 0)
+        {
+            try
+            {
+                return tox_friend_get_public_key__wrapper(current_friendnum);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
     ConversationDateHeader conversationDateHeader = null;
     MessageListActivity mla = null;
     boolean is_data_loaded = false;
@@ -110,6 +134,7 @@ public class MessageListFragment extends Fragment
         mla = (MessageListActivity) (getActivity());
         if (mla != null)
         {
+            mla.resolve_friend_for_chat();
             current_friendnum = mla.get_current_friendnum();
         }
         // Log.i(TAG, "current_friendnum=" + current_friendnum);
@@ -123,10 +148,14 @@ public class MessageListFragment extends Fragment
             // reset "new" flags for messages -------
             if (orma != null)
             {
-                orma.updateMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
-                        is_new(false).
-                        execute();
+                final String fpk = query_friend_pubkey();
+                if (fpk != null)
+                {
+                    orma.updateMessage().
+                            tox_friendpubkeyEq(fpk).
+                            is_new(false).
+                            execute();
+                }
             }
             // reset "new" flags for messages -------
         }
@@ -407,13 +436,23 @@ public class MessageListFragment extends Fragment
         Log.i(TAG, "onResume");
         super.onResume();
 
+        if (mla != null)
+        {
+            mla.resolve_friend_for_chat();
+            current_friendnum = mla.get_current_friendnum();
+        }
+
         try
         {
             // reset "new" flags for messages -------
             if (orma != null)
             {
-                orma.updateMessage().tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).is_new(
-                        false).execute();
+                final String fpk = query_friend_pubkey();
+                if (fpk != null)
+                {
+                    orma.updateMessage().tox_friendpubkeyEq(fpk).is_new(
+                            false).execute();
+                }
                 // Log.i(TAG, "loading data:002");
             }
             // reset "new" flags for messages -------
@@ -499,8 +538,12 @@ public class MessageListFragment extends Fragment
         try
         {
             // reset "new" flags for messages -------
-            orma.updateMessage().tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).is_new(
-                    false).execute();
+            final String fpk = query_friend_pubkey();
+            if (fpk != null)
+            {
+                orma.updateMessage().tox_friendpubkeyEq(fpk).is_new(
+                        false).execute();
+            }
             // reset "new" flags for messages -------
         }
         catch (Exception e)
@@ -566,11 +609,17 @@ public class MessageListFragment extends Fragment
 
     private List<com.zoffcc.applications.sorm.Message> get_messages()
     {
+        final String fpk = query_friend_pubkey();
+        if (fpk == null)
+        {
+            return new ArrayList<>();
+        }
+
         List<com.zoffcc.applications.sorm.Message> ml;
         if (show_only_files)
         {
             ml = orma.selectFromMessage().
-                    tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                    tox_friendpubkeyEq(fpk).
                     TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                     orderBySent_timestampAsc().
                     orderBySent_timestamp_msAsc().
@@ -581,7 +630,7 @@ public class MessageListFragment extends Fragment
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {
                 ml = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         toList();
@@ -598,7 +647,7 @@ public class MessageListFragment extends Fragment
                  the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
                  */
                 ml = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         textLike(get_sqlite_search_string(search_messages_text)).
@@ -610,11 +659,17 @@ public class MessageListFragment extends Fragment
 
     private int get_messages_count_full()
     {
+        final String fpk = query_friend_pubkey();
+        if (fpk == null)
+        {
+            return 0;
+        }
+
         int c = 0;
         if (show_only_files)
         {
             c = orma.selectFromMessage().
-                    tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                    tox_friendpubkeyEq(fpk).
                     TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                     orderBySent_timestampAsc().
                     orderBySent_timestamp_msAsc().
@@ -625,7 +680,7 @@ public class MessageListFragment extends Fragment
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {
                 c = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         count();
@@ -642,7 +697,7 @@ public class MessageListFragment extends Fragment
                  the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
                  */
                 c = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         textLike(get_sqlite_search_string(search_messages_text)).

@@ -25,11 +25,5 @@
         android:visible="true"
         android:icon="@drawable/emoji_google_category_smileysandpeople"
         app:showAsAction="never" />
-    <item
-        android:id="@+id/item_join_khandaq_community"
-        android:title="@string/layout___join_khandaq_community"
-        android:visible="true"
-        android:icon="@drawable/emoji_google_category_smileysandpeople"
-        app:showAsAction="never" />
 
 </menu>

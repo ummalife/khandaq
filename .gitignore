@@ -55,6 +55,10 @@ web/downloads/*.apk
 web/downloads/*.exe
 web/downloads/*.zip
 web/downloads/*.tar.gz
+web/downloads/*.deb
+
+# Local QA screenshots (not for repo)
+assets/
 
 # Logs and local ops
 *.log

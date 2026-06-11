@@ -93,7 +93,7 @@ import static com.zoffcc.applications.trifa.HelperGeneric.trigger_proper_wakeup_
 import static com.zoffcc.applications.trifa.HelperGeneric.trigger_proper_wakeup_outside_tox_service_thread;
 import static com.zoffcc.applications.trifa.HelperGeneric.vfs__unmount;
 import static com.zoffcc.applications.trifa.HelperGroup.is_valid_group_title_string;
-import static com.zoffcc.applications.trifa.HelperGroup.migrate_khandaq_community_display_names;
+import static com.zoffcc.applications.trifa.HelperGroup.remove_legacy_public_community_group;
 import static com.zoffcc.applications.trifa.HelperGroup.new_or_updated_group;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_name;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_privacy_state;
@@ -767,7 +767,7 @@ public class TrifaToxService extends Service
     {
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
-        migrate_khandaq_community_display_names();
+        remove_legacy_public_community_group();
 
         long num_groups = tox_group_get_number_groups();
         Log.i(TAG, "load groups at startup: num=" + num_groups);
@@ -785,7 +785,7 @@ public class TrifaToxService extends Service
                 byte[] groupid_buffer = new byte[GROUP_ID_LENGTH];
                 groupid_buf3.get(groupid_buffer, 0, GROUP_ID_LENGTH);
                 String group_identifier = bytes_to_hex(groupid_buffer);
-                int is_connected = tox_group_is_connected(conf_);
+                int is_connected = tox_group_is_connected(group_numbers[conf_]);
                 Log.i(TAG, "load group num=" + group_numbers[conf_] + " connected=" + is_connected);
 
                 new_or_updated_group(group_numbers[conf_], tox_friend_get_public_key__wrapper(0), group_identifier,
@@ -1086,11 +1086,14 @@ public class TrifaToxService extends Service
                     {
                         if (tmp_name.length() > 0)
                         {
-                            if (is_legacy_trifa_profile_name(tmp_name) ||
-                                tmp_name.equalsIgnoreCase("Khandaq"))
+                            android.content.SharedPreferences profile_prefs =
+                                    android.preference.PreferenceManager.getDefaultSharedPreferences(context_s);
+                            if (is_legacy_trifa_profile_name(tmp_name) &&
+                                !profile_prefs.getBoolean("legacy_trifa_profile_name_migrated", false))
                             {
                                 tmp_name = default_self_display_name(my_tox_id_local);
                                 tox_self_set_name(tmp_name);
+                                profile_prefs.edit().putBoolean("legacy_trifa_profile_name_migrated", true).apply();
                             }
                             global_my_name = tmp_name;
                             // Log.i(TAG, "AAA:003:" + global_my_name + " size=" + tox_self_get_name_size());
@@ -1133,6 +1136,8 @@ public class TrifaToxService extends Service
                 HelperGeneric.update_savedata_file_wrapper();
 
                 load_and_add_all_friends();
+                HelperFriend.sync_db_contacts_to_tox_core();
+                HelperFriend.repair_corrupt_friend_display_names();
                 remove_legacy_echobot_contact_if_present();
                 DbSecretKeyStorage.persistLastWorkingDbSecretKey(context_s, MainActivity.PREF__DB_secrect_key);
 
@@ -1607,6 +1612,12 @@ public class TrifaToxService extends Service
             {
                 bootstrapping = false;
                 append_logger_msg(TAG + "::check_if_still_bootstrapping:false");
+                ReconnectBackoffCoordinator.get().onConnectionRestored();
+                ConnectionQualityMonitor.get().onBootstrapFinished(true);
+            }
+            else if (bootstrapping)
+            {
+                ConnectionQualityMonitor.get().onBootstrapFinished(false);
             }
         }
         catch(Exception e)
@@ -1756,15 +1767,8 @@ public class TrifaToxService extends Service
                             e.printStackTrace();
                         }
 
-                        try
-                        {
-                            bootstrap_me(false);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                            Log.i(TAG, "bootstrap_me:001:EE:" + e.getMessage());
-                        }
+                        ReconnectBackoffCoordinator.get().scheduleReconnect(
+                                ReconnectBackoffCoordinator.Reason.OFFLINE_PERIODIC, false);
 
                         check_if_still_bootstrapping();
                     }
@@ -1827,6 +1831,56 @@ public class TrifaToxService extends Service
         }
     }
 
+    static void on_network_changed()
+    {
+        ReconnectBackoffCoordinator.get().scheduleReconnect(ReconnectBackoffCoordinator.Reason.NETWORK_CHANGE, true);
+    }
+
+    static void on_network_reconnect_attempt(final ReconnectBackoffCoordinator.Reason reason, final int attempt)
+    {
+        if (orma == null || !is_tox_started)
+        {
+            NetworkDiagnosticsLog.log("reconnect_skip", "tox not ready reason=" + reason);
+            return;
+        }
+        append_logger_msg(TAG + "::on_network_reconnect_attempt reason=" + reason + " attempt=" + attempt);
+        NetworkDiagnosticsLog.log("reconnect_attempt", reason + " attempt=" + attempt);
+        ConnectionQualityMonitor.get().onBootstrapStarted();
+        global_self_last_went_offline_timestamp =
+                System.currentTimeMillis() - TOX_BOOTSTRAP_AGAIN_AFTER_OFFLINE_MILLIS;
+        bootstrap_me(reason == ReconnectBackoffCoordinator.Reason.NETWORK_CHANGE || attempt == 0);
+        wakeup_tox_thread();
+    }
+
+    static void perform_khandaq_bootstrap_burst()
+    {
+        final String[][] khandaqNodes = new String[][]{
+                {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
+                {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
+                {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
+        };
+        final int[] tcpPorts = new int[]{33445, 3389};
+
+        for (final String[] node : khandaqNodes)
+        {
+            try
+            {
+                bootstrap_single_wrapper(node[0], 33445, node[1]);
+                if (!PREF__force_udp_only)
+                {
+                    for (final int tcpPort : tcpPorts)
+                    {
+                        HelperGeneric.add_tcp_relay_single_wrapper(node[0], tcpPort, node[1]);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "perform_khandaq_bootstrap_burst:EE:" + e.getMessage());
+            }
+        }
+    }
+
     static void bootstrap_me(boolean force)
     {
         append_logger_msg(TAG + "::" + "calling bootstrap_me()");
@@ -1861,6 +1915,7 @@ public class TrifaToxService extends Service
         Log.i(TAG, "bootstrap_me");
 
         bootstap_from_custom_nodes();
+        perform_khandaq_bootstrap_burst();
 
         // ----- UDP ------
         get_udp_nodelist_from_db();

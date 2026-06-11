@@ -379,6 +379,16 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
         // Log.i(TAG, "bindMessageList2: " + a + " " + r + " " + g + " " + b);
         // ***************
 
+        final ViewGroup bubble = (ViewGroup) itemView.findViewById(R.id.m_container);
+        ChatBubbleUiHelper.apply_incoming_bubble(bubble);
+        ChatBubbleUiHelper.apply_message_text_style(textView, false);
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                format_chat_message_time(m, false), false);
+        if (img_avatar != null)
+        {
+            img_avatar.setVisibility(View.GONE);
+        }
+
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
     }
 

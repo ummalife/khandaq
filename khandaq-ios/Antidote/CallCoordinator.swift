@@ -470,6 +470,10 @@ extension CallCoordinator {
         }
 
         activeController!.outgoingVideo = activeCall.call.videoIsEnabled
+        activeController!.speaker = activeCall.call.videoIsEnabled
+        if activeCall.call.status == .active {
+            try? submanagerCalls.routeAudio(toSpeaker: activeCall.call.videoIsEnabled)
+        }
         if activeCall.call.videoIsEnabled {
             if activeController!.videoPreviewLayer == nil {
                 submanagerCalls.getVideoCallPreview { [weak activeController] layer in

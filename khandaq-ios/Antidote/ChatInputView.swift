@@ -141,7 +141,7 @@ private extension ChatInputView {
         textView.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
         textView.layer.masksToBounds = true
         textView.setContentHuggingPriority(UILayoutPriority(rawValue: 0.0), for: .horizontal)
-        textView.autocapitalizationType = .none
+        textView.autocapitalizationType = .sentences
 
         addSubview(textView)
 
@@ -208,7 +208,7 @@ private extension ChatInputView {
 
     func updateViews() {
         textView.isScrollEnabled = true
-        textView.autocapitalizationType = .none
+        textView.autocapitalizationType = .sentences
         cameraButton.isEnabled = cameraButtonEnabled
         sendButton.isEnabled = !textView.text.isEmpty
     }

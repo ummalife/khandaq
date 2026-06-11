@@ -139,6 +139,7 @@
 "add_contact_default_message_text" = "Мир тебе! Пожалуйста, добавьте меня в список своих контактов?";
 /* Add contat error */
 "add_contact_wrong_qr" = "QR-код должен содержать MyID";
+"add_contact_invalid_id_format" = "Неверный формат ID";
 
 /* User name text */
 "name" = "Имя";
@@ -187,6 +188,10 @@
 "status_offline" = "Не в сети";
 /* Status message */
 "status_online" = "В сети";
+"status_last_seen_just_now" = "был(а) только что";
+"status_last_seen_minutes_ago" = "был(а) %d мин. назад";
+"status_last_seen_hours_ago" = "был(а) %d ч. назад";
+"status_last_seen_long_ago" = "был(а) давно";
 /* Status message */
 "status_away" = "Отсутствую";
 /* Status message */
@@ -334,6 +339,14 @@
 "error_too_many_files" = "Слишком много активных загрузок";
 /* Error */
 "error_internal_message" = "Внутренняя ошибка";
+"video_send_preparing" = "Подготовка видео…";
+"video_send_preparation_failed" = "Не удалось подготовить видео к отправке.";
+"video_send_too_large" = "Видео слишком большое (макс. 500 МБ).";
+"video_send_busy" = "Другое видео ещё обрабатывается. Подождите.";
+"video_send_too_long" = "Видео слишком длинное (макс. 10 минут).";
+"media_send_button" = "Отправить";
+"media_send_caption_hint" = "Добавить подпись…";
+"media_send_counter_format" = "%1$d / %2$d";
 /* Error */
 "error_wrong_password_title" = "Неверный пароль";
 /* Error */
@@ -438,5 +451,6 @@
 "accessibility_outgoing_message_label" = "Ваше сообщение";
 /* Message shown on chat list when contact is typing */
 "chat_is_typing_text" = "печатает...";
+"chat_draft_prefix" = "Черновик: %@";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Сообщения и файлы будут доставлены, когда контакт появится в сети. Ему отправлено push-уведомление для пробуждения.";

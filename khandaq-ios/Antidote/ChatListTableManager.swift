@@ -32,6 +32,7 @@ class ChatListTableManager: NSObject {
     fileprivate var chatsToken: RLMNotificationToken?
     fileprivate let friends: Results<OCTFriend>
     fileprivate var friendsToken: RLMNotificationToken?
+    fileprivate var presenceRefreshTimer: Timer?
 
     init(theme: Theme, tableView: UITableView, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects) {
         self.tableView = tableView
@@ -52,11 +53,13 @@ class ChatListTableManager: NSObject {
         tableView.dataSource = self
 
         addNotificationBlocks()
+        startPresenceRefreshTimer()
     }
 
     deinit {
         chatsToken?.invalidate()
         friendsToken?.invalidate()
+        presenceRefreshTimer?.invalidate()
     }
 }
 
@@ -88,13 +91,22 @@ extension ChatListTableManager: UITableViewDataSource {
         }
 
         model.nickname = nickname
-        model.message = lastMessage(in: chat, friend: friend)
+        let preview = lastMessagePreview(in: chat, friend: friend)
+        model.message = preview.text
+        model.isDraft = preview.isDraft
         if let date = chat.lastActivityDate() {
             model.dateText = dateTextFromDate(date)
         }
 
         model.status = UserStatus(connectionStatus: connectionStatus, userStatus: userStatus)
         model.connectionstatus = ConnectionStatus(connectionStatus: connectionStatus)
+
+        if let friend = friend {
+            let presence = FriendPresenceFormatter.presence(for: friend)
+            model.presenceText = presence.text
+            model.presenceIsOnline = presence.isOnline
+        }
+
         model.isUnread = chat.hasUnreadMessages()
 
         let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
@@ -157,61 +169,106 @@ private extension ChatListTableManager {
             }
         }
 
-        friendsToken = friends.addNotificationBlock { [unowned self] change in
+        friendsToken = friends.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
-                case .update(let friends, _, _, let modifications):
-                    guard let friends = friends else {
+                case .update(_, _, _, let modifications):
+                    guard !modifications.isEmpty else {
                         break
                     }
 
-                    for index in modifications {
-                        let friend = friends[index]
-
-                        let pathsToUpdate = self.tableView.indexPathsForVisibleRows?.filter {
-                            let chat = self.chats[$0.row]
-
-                            return Int(chat.friends.index(of: friend)) != NSNotFound
-                        }
-
-                        if let paths = pathsToUpdate {
-                            // TODO: fix me, this crashes
-                            // self.tableView.reloadRows(at: paths, with: .none)
-                        }
-                    }
+                    self.reloadChatRowsForFriendModifications(modifications)
                 case .error(let error):
-                fatalError("\(error)")
+                    fatalError("\(error)")
             }
         }
     }
 
-    func lastMessage(in chat: OCTChat, friend: OCTFriend?) -> String {
-        guard let message = chat.lastMessage else {
-            return ""
+    func reloadChatRowsForFriendModifications(_ friendIndices: [Int]) {
+        var indexPaths = Set<IndexPath>()
+
+        for chatIndex in 0..<chats.count {
+            guard let chatFriend = chats[chatIndex].friends.lastObject() as? OCTFriend else {
+                continue
+            }
+
+            for friendIndex in friendIndices {
+                if friends[friendIndex].uniqueIdentifier == chatFriend.uniqueIdentifier {
+                    indexPaths.insert(IndexPath(row: chatIndex, section: 0))
+                    break
+                }
+            }
         }
 
-        if let friend = friend, friend.isTyping {
-            return String(localized: "chat_is_typing_text")
+        guard !indexPaths.isEmpty else {
+            return
         }
-        else if let text = message.messageText {
-            return text.text ?? ""
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.tableView.window != nil else {
+                return
+            }
+
+            self.tableView.reloadRows(at: Array(indexPaths), with: .none)
+        }
+    }
+
+    func startPresenceRefreshTimer() {
+        presenceRefreshTimer?.invalidate()
+        presenceRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            guard let self = self, self.tableView.window != nil else {
+                return
+            }
+
+            self.tableView.reloadData()
+        }
+    }
+
+    func lastMessage(in chat: OCTChat, friend: OCTFriend?) -> String {
+        return lastMessagePreview(in: chat, friend: friend).text
+    }
+
+    func lastMessagePreview(in chat: OCTChat, friend: OCTFriend?) -> (text: String, isDraft: Bool) {
+        if let friend = friend, friend.isTyping {
+            return (String(localized: "chat_is_typing_text"), false)
+        }
+
+        if let draft = chat.enteredText?.trimmingCharacters(in: .whitespacesAndNewlines), !draft.isEmpty {
+            var body = draft.replacingOccurrences(of: "\n", with: " ")
+            if body.count > 120 {
+                let endIndex = body.index(body.startIndex, offsetBy: 117)
+                body = String(body[..<endIndex]) + "..."
+            }
+            return (String(format: String(localized: "chat_draft_prefix"), body), true)
+        }
+
+        guard let message = chat.lastMessage else {
+            return ("", false)
+        }
+
+        if let text = message.messageText {
+            return (text.text ?? "", false)
         }
         else if let file = message.messageFile {
             let fileName = file.fileName ?? ""
-            return String(localized: message.isOutgoing() ? "chat_outgoing_file" : "chat_incoming_file") + " \(fileName)"
+            return (String(localized: message.isOutgoing() ? "chat_outgoing_file" : "chat_incoming_file") + " \(fileName)", false)
         }
         else if let call = message.messageCall {
             switch call.callEvent {
                 case .answered:
                     let timeString = String(timeInterval: call.callDuration)
-                    return String(localized: "chat_call_finished") + " - \(timeString)"
+                    return (String(localized: "chat_call_finished") + " - \(timeString)", false)
                 case .unanswered:
-                    return message.isOutgoing() ?  String(localized: "chat_unanwered_call") : String(localized: "chat_missed_call_message")
+                    return (message.isOutgoing() ?  String(localized: "chat_unanwered_call") : String(localized: "chat_missed_call_message"), false)
             }
         }
 
-        return ""
+        return ("", false)
     }
 
     func dateTextFromDate(_ date: Date) -> String {

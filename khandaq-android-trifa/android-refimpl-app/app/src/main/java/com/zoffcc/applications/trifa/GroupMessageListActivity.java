@@ -176,9 +176,12 @@ import static com.zoffcc.applications.trifa.HelperGroup.ensure_group_in_tox;
 import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
 import static com.zoffcc.applications.trifa.HelperGroup.group_send_failure_reason;
 import static com.zoffcc.applications.trifa.HelperGroup.group_send_precheck_failure_reason;
-import static com.zoffcc.applications.trifa.HelperGroup.is_khandaq_community_group;
-import static com.zoffcc.applications.trifa.HelperGroup.khandaq_community_promote_all_observers_if_moderator;
-import static com.zoffcc.applications.trifa.HelperGroup.request_khandaq_community_history_from_peers;
+import static com.zoffcc.applications.trifa.HelperGroup.send_group_text_message_resilient;
+import static com.zoffcc.applications.trifa.HelperGroup.GroupMemberDisplay;
+import static com.zoffcc.applications.trifa.HelperGroup.collect_group_members_for_display;
+import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
+import static com.zoffcc.applications.trifa.HelperGroup.lookup_group_peer_by_pubkey;
+import static com.zoffcc.applications.trifa.HelperGroup.format_group_member_status_line;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_peerlist;
 import static com.zoffcc.applications.trifa.HelperGroup.invite_friend_to_group;
@@ -218,7 +221,6 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PE
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_for_battery_savings_ts;
-import static com.zoffcc.applications.trifa.ToxVars.GC_MAX_SAVED_PEERS;
 import static com.zoffcc.applications.trifa.ToxVars.MAX_GC_PACKET_CHUNK_SIZE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_HASH_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_MAX_NGC_FILESIZE;
@@ -308,6 +310,8 @@ public class GroupMessageListActivity extends AppCompatActivity
     static boolean oncreate_finished = false;
     SearchView messageSearchView = null;
     private static long update_group_all_users_last_trigger_ts = 0;
+    private String last_drawer_peers_fingerprint = "";
+    private String last_drawer_status_fingerprint = "";
     //
     static long last_processed_camera_frame = -1;
 
@@ -437,7 +441,8 @@ public class GroupMessageListActivity extends AppCompatActivity
         final Drawable drawer_header_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group).color(
                 getResources().getColor(R.color.md_dark_primary_text)).sizeDp(100);
 
-        group_message_profile_item = new ProfileDrawerItem().withName("Userlist").withIcon(drawer_header_icon);
+        group_message_profile_item = new ProfileDrawerItem().withName(
+                getString(R.string.group_member_list_title)).withIcon(drawer_header_icon);
 
         // Create the AccountHeader
         group_message_drawer_header = new AccountHeaderBuilder().withActivity(
@@ -485,10 +490,22 @@ public class GroupMessageListActivity extends AppCompatActivity
             }
         }).build();
 
+        try
+        {
+            final androidx.recyclerview.widget.RecyclerView drawer_list = group_message_drawer.getRecyclerView();
+            if (drawer_list != null)
+            {
+                drawer_list.setVerticalScrollBarEnabled(true);
+                drawer_list.setNestedScrollingEnabled(true);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_group_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
-        HelperGeneric.apply_chat_input_typography(ml_new_group_message);
+        HelperGeneric.apply_chat_input_field_style(ml_new_group_message);
 
         messageSearchView = (SearchView) findViewById(R.id.group_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -509,6 +526,21 @@ public class GroupMessageListActivity extends AppCompatActivity
         ml_new_group_message.requestFocus();
         try
         {
+            if ((group_id != null) && (!group_id.equals("-1")))
+            {
+                final String draft = ChatDraftHelper.load_group_draft(group_id);
+                if ((draft != null) && (!draft.isEmpty()))
+                {
+                    ml_new_group_message.setText(draft);
+                    ml_new_group_message.setSelection(draft.length());
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        try
+        {
             // hide softkeyboard initially
             // since it takes a lot of screen space
             getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
@@ -520,10 +552,12 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         insert_emoji = (ImageView) findViewById(R.id.insert_emoji);
         ml_maintext = (TextView) findViewById(R.id.ml_maintext);
+        ChatBubbleUiHelper.apply_chat_input_bar_theme(findViewById(R.id.emoji_bar));
         ml_icon = (ImageView) findViewById(R.id.ml_icon);
         ml_status_icon = (ImageView) findViewById(R.id.ml_status_icon);
         ml_phone_icon = (ImageButton) findViewById(R.id.ml_phone_icon);
         ml_video_icon = (ImageButton) findViewById(R.id.ml_video_icon);
+        apply_chat_header();
         ngc_video_view_container = findViewById(R.id.ngc_video_view_container);
         ngc_video_view = findViewById(R.id.ngc_video_view);
         ngc_video_own_view = findViewById(R.id.ngc_video_own_view);
@@ -996,6 +1030,35 @@ public class GroupMessageListActivity extends AppCompatActivity
             groupHeaderTap.setOnClickListener(v -> open_group_info_activity());
         }
 
+        final ImageButton membersIcon = (ImageButton) findViewById(R.id.ml_members_icon);
+        if (membersIcon != null)
+        {
+            final Drawable membersDrawable = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group).color(
+                    getResources().getColor(R.color.icon_colors)).sizeDp(80);
+            membersIcon.setImageDrawable(membersDrawable);
+            membersIcon.setOnClickListener(v ->
+            {
+                try
+                {
+                    if (group_message_drawer != null)
+                    {
+                        if (group_message_drawer.isDrawerOpen())
+                        {
+                            group_message_drawer.closeDrawer();
+                        }
+                        else
+                        {
+                            group_message_drawer.openDrawer();
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
+            });
+        }
+
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         messageSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener()
         {
@@ -1108,7 +1171,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             public void afterTextChanged(Editable s)
             {
-                if (s.length() > 0)
+                if (HelperGeneric.has_sendable_chat_text(s))
                 {
                     attachemnt_instead_of_send = false;
                     ml_button_01.setImageDrawable(send_message_icon);
@@ -1129,9 +1192,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             }
         });
 
-        final Drawable d2 = new IconicsDrawable(this).icon(FontAwesome.Icon.faw_phone).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
-        ml_phone_icon.setImageDrawable(d2);
+
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
         if (PREF__use_incognito_keyboard)
@@ -1543,19 +1604,20 @@ public class GroupMessageListActivity extends AppCompatActivity
                     {
                         try
                         {
-                            long peer_count = tox_group_peer_count(conference_num);
-                            long frozen_peer_count = tox_group_offline_peer_count(conference_num);
-
-                            if (peer_count > -1)
+                            final String members_subtitle = format_group_list_status_subtitle(
+                                    GroupMessageListActivity.this, group_id);
+                            if (members_subtitle != null && !members_subtitle.isEmpty())
                             {
-                                ml_maintext.setText(
-                                        f_name + "\n" + getString(R.string.GroupActivityActive) + " " + peer_count +
-                                        " " + getString(R.string.GroupActivityOffline) + " " + frozen_peer_count);
+                                ml_maintext.setText(f_name + "\n" + members_subtitle);
+                            }
+                            else if (tox_group_peer_count(conference_num) > -1)
+                            {
+                                ml_maintext.setText(f_name + "\n" + format_group_list_status_subtitle(
+                                        GroupMessageListActivity.this, group_id));
                             }
                             else
                             {
                                 ml_maintext.setText(f_name);
-                                // ml_maintext.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
                             }
                         }
                         catch (Exception e)
@@ -1579,199 +1641,88 @@ public class GroupMessageListActivity extends AppCompatActivity
     static class group_list_peer
     {
         String peer_name;
+        String raw_name;
         long peer_num;
         String peer_pubkey;
         int peer_connection_status;
         boolean notification_silent;
         boolean self;
+        boolean online;
+        long last_seen_ms;
     }
 
     synchronized void set_peer_names_and_avatars()
     {
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-        try
-        {
-            remove_group_all_users();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
-        // Log.d(TAG, "set_peer_names_and_avatars:002");
-
+        final List<GroupMemberDisplay> members = collect_group_members_for_display(group_id);
         final long conference_num = tox_group_by_groupid__wrapper(group_id);
-        long num_peers = tox_group_peer_count(conference_num);
-        final long self_peer_id = tox_group_self_get_peer_id(conference_num);
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
+        final java.util.HashMap<String, Long> online_peer_nums = new java.util.HashMap<>();
+        final java.util.HashMap<String, Integer> online_connection_status = new java.util.HashMap<>();
 
-        if (num_peers > 0)
+        if (conference_num >= 0)
         {
-            if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-            long[] peers = tox_group_get_peerlist(conference_num);
-            if (peers != null)
+            final long num_peers = tox_group_peer_count(conference_num);
+            if (num_peers > 0)
             {
-                if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-                List<group_list_peer> group_peers1 = new ArrayList<>();
-                long i = 0;
-                for (i = 0; i < num_peers; i++)
+                final long[] peers = tox_group_get_peerlist(conference_num);
+                if (peers != null)
                 {
-                    try
+                    for (long peer : peers)
                     {
-                        String peer_pubkey_temp = tox_group_peer_get_public_key(conference_num, peers[(int) i]);
-                        final String peer_name_display = format_group_peer_list_display_name(peer_pubkey_temp,
-                                tox_group_peer_get_name(conference_num, peers[(int) i]));
-
-                        GroupPeerDB peer_from_db = null;
                         try
                         {
-                            peer_from_db = (GroupPeerDB) orma.selectFromGroupPeerDB().group_identifierEq(
-                                    group_id).tox_group_peer_pubkeyEq(peer_pubkey_temp).toList().get(0);
+                            final String pubkey = tox_group_peer_get_public_key(conference_num, peer);
+                            if (pubkey == null)
+                            {
+                                continue;
+                            }
+                            final String key = pubkey.toLowerCase();
+                            online_peer_nums.put(key, peer);
+                            online_connection_status.put(key,
+                                    tox_group_peer_get_connection_status(conference_num, peer));
                         }
-                        catch (Exception e)
+                        catch (Exception ignored)
                         {
                         }
-
-                        group_list_peer glp = new group_list_peer();
-                        if (peers[(int) i] == self_peer_id)
-                        {
-                            glp.self = true;
-                        }
-                        else
-                        {
-                            glp.self = false;
-                        }
-                        if (peer_from_db != null)
-                        {
-                            glp.notification_silent = peer_from_db.notification_silent;
-                        }
-                        else
-                        {
-                            glp.notification_silent = false;
-                        }
-                        glp.peer_pubkey = peer_pubkey_temp;
-                        glp.peer_num = peers[(int) i];
-                        glp.peer_name = peer_name_display;
-                        glp.peer_connection_status = tox_group_peer_get_connection_status(conference_num,
-                                                                                          peers[(int) i]);
-                        group_peers1.add(glp);
                     }
-                    catch (Exception ignored)
-                    {
-                    }
-                }
-
-                try
-                {
-                    Collections.sort(group_peers1, new Comparator<group_list_peer>()
-                    {
-                        @Override
-                        public int compare(group_list_peer p1, group_list_peer p2)
-                        {
-                            String name1 = p1.peer_name;
-                            String name2 = p2.peer_name;
-                            return name1.compareToIgnoreCase(name2);
-                        }
-                    });
-                }
-                catch (Exception ignored)
-                {
-                }
-
-                for (group_list_peer peerl : group_peers1)
-                {
-                    add_group_user(peerl.peer_pubkey, peerl.peer_num, peerl.peer_name, peerl.peer_connection_status,
-                                   peerl.self, peerl.notification_silent);
                 }
             }
-            if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         }
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
-        long offline_num_peers = tox_group_offline_peer_count(conference_num);
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
-        if (offline_num_peers > 0)
+        final List<group_list_peer> all_peers = new ArrayList<>();
+        for (final GroupMemberDisplay member : members)
         {
-            if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-            List<group_list_peer> group_peers_offline = new ArrayList<group_list_peer>();
-            long i = 0;
-            for (i = 0; i < GC_MAX_SAVED_PEERS; i++)
+            final group_list_peer glp = new group_list_peer();
+            glp.peer_pubkey = member.pubkey;
+            glp.peer_name = member.name;
+            glp.raw_name = member.name;
+            glp.self = member.self;
+            glp.online = member.online;
+            glp.last_seen_ms = member.last_seen_ms;
+            glp.peer_connection_status = member.connection_status;
+
+            if (member.pubkey != null)
             {
-                try
+                final Long peer_num = online_peer_nums.get(member.pubkey.toLowerCase());
+                glp.peer_num = peer_num != null ? peer_num : Math.abs((long) member.pubkey.hashCode());
+                final Integer conn = online_connection_status.get(member.pubkey.toLowerCase());
+                if (conn != null)
                 {
-                    String peer_pubkey_temp = tox_group_savedpeer_get_public_key(conference_num, i);
-                    if ((peer_pubkey_temp == null) || (peer_pubkey_temp.compareToIgnoreCase("-1") == 0))
-                    {
-                        continue;
-                    }
-                    String peer_name = "";
-                    GroupPeerDB peer_from_db = null;
-                    try
-                    {
-                        peer_from_db = (GroupPeerDB) orma.selectFromGroupPeerDB().group_identifierEq(
-                                group_id).tox_group_peer_pubkeyEq(peer_pubkey_temp).toList().get(0);
-                    }
-                    catch (Exception e)
-                    {
-                    }
-
-                    if (peer_from_db != null)
-                    {
-                        peer_name = peer_from_db.peer_name;
-                    }
-
-                    final String peer_name_display = format_group_peer_list_display_name(peer_pubkey_temp, peer_name);
-
-                    group_list_peer glp3 = new group_list_peer();
-                    if (peer_from_db != null)
-                    {
-                        glp3.notification_silent = peer_from_db.notification_silent;
-                    }
-                    else
-                    {
-                        glp3.notification_silent = false;
-                    }
-                    glp3.peer_pubkey = peer_pubkey_temp;
-                    glp3.peer_num = i;
-                    glp3.peer_name = peer_name_display;
-                    glp3.peer_connection_status = ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
-                    group_peers_offline.add(glp3);
-                }
-                catch (Exception ignored)
-                {
+                    glp.peer_connection_status = conn;
                 }
             }
-            if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
-            try
+            else
             {
-                Collections.sort(group_peers_offline, new Comparator<group_list_peer>()
-                {
-                    @Override
-                    public int compare(group_list_peer p1, group_list_peer p2)
-                    {
-                        String name1 = p1.peer_name;
-                        String name2 = p2.peer_name;
-                        return name1.compareToIgnoreCase(name2);
-                    }
-                });
-            }
-            catch (Exception ignored)
-            {
+                glp.peer_num = 0L;
             }
 
-            for (group_list_peer peerloffline : group_peers_offline)
-            {
-                add_group_user(peerloffline.peer_pubkey, peerloffline.peer_num, peerloffline.peer_name,
-                               peerloffline.peer_connection_status, false, peerloffline.notification_silent);
-            }
-            if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
+            final GroupPeerDB peer_from_db = lookup_group_peer_by_pubkey(group_id, member.pubkey);
+            glp.notification_silent = peer_from_db != null && peer_from_db.notification_silent;
+            all_peers.add(glp);
         }
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
+        sync_group_drawer_peers(all_peers);
     }
 
     @Override
@@ -1804,6 +1755,16 @@ public class GroupMessageListActivity extends AppCompatActivity
         ngc_purge_video_incoming_peer_list();
         ngc_incoming_video_peer_toggle_current_index = 0;
         flush_decoder = 1;
+        try
+        {
+            if ((group_id != null) && (!group_id.equals("-1")))
+            {
+                ChatDraftHelper.save_group_draft(group_id, ml_new_group_message.getText().toString());
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
         // Log.i(TAG, "onPause:001:conf_id=" + conf_id);
         group_id = "-1";
         // Log.i(TAG, "onPause:002:conf_id=" + conf_id);
@@ -1832,16 +1793,31 @@ public class GroupMessageListActivity extends AppCompatActivity
         ml_is_rec_ok = false;
     }
 
+    void apply_chat_header()
+    {
+        ChatBubbleUiHelper.apply_chat_header_theme(
+                (Toolbar) findViewById(R.id.toolbar),
+                findViewById(R.id.ml_header_bar),
+                findViewById(R.id.ml_header_group_info_tap),
+                ml_maintext,
+                ml_phone_icon,
+                ml_video_icon,
+                this);
+    }
+
     @Override
     protected void onResume()
     {
         Log.i(TAG, "onResume");
         super.onResume();
+        apply_chat_header();
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
         // reset update trigger timestamp
         update_group_all_users_last_trigger_ts = 0;
+        last_drawer_peers_fingerprint = "";
+        last_drawer_status_fingerprint = "";
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         stop_group_video(this, true);
@@ -1895,23 +1871,6 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         catch (Exception e)
         {
-        }
-
-        if (is_khandaq_community_group(group_id))
-        {
-            try
-            {
-                final long group_num = tox_group_by_groupid__wrapper(group_id);
-                if (group_num >= 0)
-                {
-                    khandaq_community_promote_all_observers_if_moderator(group_num);
-                }
-                request_khandaq_community_history_from_peers(group_id);
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
         }
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -2237,6 +2196,8 @@ public class GroupMessageListActivity extends AppCompatActivity
             intent.putExtra(Intent.EXTRA_MIME_TYPES, "*/*");
         }
 
+        MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
+
         startActivityForResult(intent, MEDIAPICK_ID_001);
     }
 
@@ -2284,6 +2245,59 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
+    synchronized public void send_text_message_from_preview(final String caption)
+    {
+        if (caption == null || caption.trim().isEmpty())
+        {
+            return;
+        }
+
+        try
+        {
+            wakeup_tox_thread();
+
+            final String msg = caption.trim().substring(0,
+                    (int) Math.min(tox_max_message_length(), caption.trim().length()));
+
+            final String send_block_reason = group_send_precheck_failure_reason(group_id);
+            if (send_block_reason != null)
+            {
+                display_toast(send_block_reason, true, 400);
+                return;
+            }
+
+            final long group_num = tox_group_by_groupid__wrapper(group_id);
+            final long message_id = send_group_text_message_resilient(group_id, group_num, msg);
+            if (message_id <= -1)
+            {
+                display_toast(group_send_failure_reason(message_id), true, 400);
+                return;
+            }
+
+            GroupMessage m = new GroupMessage();
+            m.is_new = false;
+            m.tox_group_peer_pubkey = tox_group_self_get_public_key(group_num).toUpperCase();
+            m.direction = 1;
+            m.TOX_MESSAGE_TYPE = 0;
+            m.read = true;
+            m.tox_group_peername = null;
+            m.private_message = 0;
+            m.group_identifier = group_id.toLowerCase();
+            m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
+            m.sent_timestamp = System.currentTimeMillis();
+            m.rcvd_timestamp = System.currentTimeMillis();
+            m.text = msg;
+            m.was_synced = false;
+            m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+            m.message_id_tox = fourbytes_of_long_to_hex(message_id);
+            insert_into_group_message_db(m, true);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
     synchronized public void send_message_onclick(View view)
     {
         // Log.i(TAG,"send_message_onclick:---start");
@@ -2291,7 +2305,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         String msg = "";
         try
         {
-            if (attachemnt_instead_of_send)
+            wakeup_tox_thread();
+
+            final String normalized = HelperGeneric.normalize_chat_input_text(ml_new_group_message.getText().toString());
+            if (normalized.isEmpty())
             {
                 if (view != null)
                 {
@@ -2300,13 +2317,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return;
             }
 
-            final String raw_msg = ml_new_group_message.getText().toString().trim();
-            if (raw_msg.isEmpty())
-            {
-                return;
-            }
-
-            msg = raw_msg.substring(0, (int) Math.min(tox_max_message_length(), raw_msg.length()));
+            msg = normalized.substring(0, (int) Math.min(tox_max_message_length(), normalized.length()));
 
             final String send_block_reason = group_send_precheck_failure_reason(group_id);
             if (send_block_reason != null)
@@ -2351,7 +2362,8 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                 if ((msg != null) && (!msg.equalsIgnoreCase("")))
                 {
-                    long message_id = tox_group_send_message(tox_group_by_groupid__wrapper(group_id), 0, msg);
+                    final long group_num = tox_group_by_groupid__wrapper(group_id);
+                    long message_id = send_group_text_message_resilient(group_id, group_num, msg);
                     // Log.i(TAG, "tox_group_send_message:result=" + message_id + " m=" + m);
                     if (PREF__X_battery_saving_mode)
                     {
@@ -2366,7 +2378,12 @@ public class GroupMessageListActivity extends AppCompatActivity
                         // Log.i(TAG, "message_id_tox=" + m.message_id_tox + " message_id=" + message_id);
                         // TODO: m.msg_id_hash = hex(peerpubkey + message_id)
                         insert_into_group_message_db(m, true);
-                        ml_new_group_message.setText("");
+                        HelperGeneric.clear_chat_input_field(ml_new_group_message);
+                        ChatDraftHelper.clear_group_draft(group_id);
+                        if (emojiPopup != null)
+                        {
+                            emojiPopup.dismiss();
+                        }
                     }
                     else
                     {
@@ -2907,111 +2924,160 @@ public class GroupMessageListActivity extends AppCompatActivity
         // TODO: write me
     }
 
-    synchronized void add_group_user(final String peer_pubkey, final long peernum, String name, int connection_status, boolean self, boolean notification_silent)
+    private String build_drawer_peers_fingerprint(final List<group_list_peer> peers)
     {
-        try
+        final StringBuilder sb = new StringBuilder();
+        for (final group_list_peer peer : peers)
         {
-            Thread t = new Thread()
+            sb.append(peer.peer_pubkey).append('|').append(peer.online ? '1' : '0').append('|').
+                    append(peer.peer_name).append('|').append(peer.notification_silent).append('|').
+                    append(peer.self).append(';');
+        }
+        return sb.toString();
+    }
+
+    private String build_drawer_status_fingerprint(final List<group_list_peer> peers)
+    {
+        final StringBuilder sb = new StringBuilder();
+        for (final group_list_peer peer : peers)
+        {
+            sb.append(peer.peer_pubkey).append(':');
+            if (peer.online)
             {
-                @Override
-                public void run()
+                sb.append('O');
+            }
+            else
+            {
+                sb.append(peer.last_seen_ms / 60_000L);
+            }
+            sb.append(';');
+        }
+        return sb.toString();
+    }
+
+    synchronized void sync_group_drawer_peers(final List<group_list_peer> peers)
+    {
+        if ((peers == null) || (group_handler_s == null))
+        {
+            return;
+        }
+
+        final String structural_fp = build_drawer_peers_fingerprint(peers);
+        final String status_fp = build_drawer_status_fingerprint(peers);
+        if (structural_fp.equals(last_drawer_peers_fingerprint)
+            && status_fp.equals(last_drawer_status_fingerprint))
+        {
+            return;
+        }
+
+        final boolean structural_changed = !structural_fp.equals(last_drawer_peers_fingerprint);
+        last_drawer_peers_fingerprint = structural_fp;
+        last_drawer_status_fingerprint = status_fp;
+        final List<group_list_peer> peers_copy = new ArrayList<>(peers);
+
+        group_handler_s.post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
                 {
-                    try
+                    if (structural_changed)
                     {
-                        Runnable myRunnable = new Runnable()
-                        {
-                            @Override
-                            public void run()
-                            {
-                                try
-                                {
-                                    ConferenceCustomDrawerPeerItem new_item = null;
-                                    boolean have_avatar_for_pubkey = friendlist_has_avatar_for_pubkey(peer_pubkey);
-
-                                    try
-                                    {
-                                        new_item = new ConferenceCustomDrawerPeerItem(have_avatar_for_pubkey,
-                                                                                      peer_pubkey).withIdentifier(
-                                                peernum).withName(name).withOnDrawerItemClickListener(
-                                                new Drawer.OnDrawerItemClickListener()
-                                                {
-                                                    @Override
-                                                    public boolean onItemClick(View view, int position, IDrawerItem drawerItem)
-                                                    {
-                                                        Intent intent = new Intent(view.getContext(),
-                                                                                   GroupPeerInfoActivity.class);
-                                                        intent.putExtra("peer_pubkey", peer_pubkey);
-                                                        intent.putExtra("group_id", group_id);
-                                                        view.getContext().startActivity(intent);
-                                                        return true;
-                                                    }
-                                                });
-
-                                        if (self)
-                                        {
-                                            new_item.withTextColor(Color.parseColor("#FF5733"));
-                                        }
-                                        else if (notification_silent)
-                                        {
-                                            new_item.withTextColor(Color.parseColor("#d7b442"));
-                                        }
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        e.printStackTrace();
-                                        new_item = new ConferenceCustomDrawerPeerItem(false, null).withIdentifier(
-                                                peernum).withName(name).withIcon(
-                                                GoogleMaterial.Icon.gmd_face).withOnDrawerItemClickListener(
-                                                new Drawer.OnDrawerItemClickListener()
-                                                {
-                                                    @Override
-                                                    public boolean onItemClick(View view, int position, IDrawerItem drawerItem)
-                                                    {
-                                                        /*
-                                                        Intent intent = new Intent(view.getContext(),
-                                                                                   ConferencePeerInfoActivity.class);
-                                                        intent.putExtra("peer_pubkey", peer_pubkey);
-                                                        intent.putExtra("group_id", group_id);
-                                                        intent.putExtra("offline", offline);
-                                                        view.getContext().startActivity(intent);
-                                                        */
-                                                        return true;
-                                                    }
-                                                });
-                                    }
-
-                                    // Log.i(TAG, "conference_message_drawer.addItem:1:" + name3 + ":" + peernum);
-                                    group_message_drawer.addItem(new_item);
-                                }
-                                catch (Exception e2)
-                                {
-                                    e2.printStackTrace();
-                                    Log.i(TAG, "add_group_user:EE2:" + e2.getMessage());
-                                }
-                            }
-                        };
-
-                        if (group_handler_s != null)
-                        {
-                            group_handler_s.post(myRunnable);
-                        }
-
+                        rebuild_group_drawer_peers(peers_copy);
                     }
-                    catch (Exception e3)
+                    else
                     {
-                        e3.printStackTrace();
-                        Log.i(TAG, "add_group_user:EE3:" + e3.getMessage());
+                        update_group_drawer_peer_descriptions(peers_copy);
                     }
                 }
-            };
-            t.start();
-            t.join();
-        }
-        catch (Exception e)
+                catch (Exception e2)
+                {
+                    e2.printStackTrace();
+                    Log.i(TAG, "sync_group_drawer_peers:EE:" + e2.getMessage());
+                }
+            }
+        });
+    }
+
+    private void rebuild_group_drawer_peers(final List<group_list_peer> peers_copy)
+    {
+        lookup_peer_listnum_pubkey.clear();
+        group_message_drawer.removeAllItems();
+        for (final group_list_peer peer : peers_copy)
         {
-            e.printStackTrace();
-            Log.i(TAG, "add_group_user:EE:" + e.getMessage());
+            group_message_drawer.addItem(create_group_drawer_peer_item(peer));
         }
+    }
+
+    private void update_group_drawer_peer_descriptions(final List<group_list_peer> peers_copy)
+    {
+        final HashMap<String, group_list_peer> by_pubkey = new HashMap<>();
+        for (final group_list_peer peer : peers_copy)
+        {
+            if (peer.peer_pubkey != null)
+            {
+                by_pubkey.put(peer.peer_pubkey.toLowerCase(), peer);
+            }
+        }
+
+        final int item_count = group_message_drawer.getAdapter().getItemCount();
+        for (int i = 0; i < item_count; i++)
+        {
+            final IDrawerItem drawer_item = group_message_drawer.getAdapter().getItem(i);
+            if (!(drawer_item instanceof ConferenceCustomDrawerPeerItem))
+            {
+                continue;
+            }
+            final ConferenceCustomDrawerPeerItem peer_item = (ConferenceCustomDrawerPeerItem) drawer_item;
+            if (peer_item.peer_pubkey == null)
+            {
+                continue;
+            }
+            final group_list_peer peer = by_pubkey.get(peer_item.peer_pubkey.toLowerCase());
+            if (peer == null)
+            {
+                continue;
+            }
+            final String status_line = format_group_member_status_line(GroupMessageListActivity.this,
+                                                                       peer.online, peer.last_seen_ms);
+            peer_item.withDescription(status_line);
+            peer_item.setPeerOnline(peer.online);
+        }
+        group_message_drawer.getAdapter().notifyDataSetChanged();
+    }
+
+    private ConferenceCustomDrawerPeerItem create_group_drawer_peer_item(final group_list_peer peer)
+    {
+        final boolean have_avatar_for_pubkey = friendlist_has_avatar_for_pubkey(peer.peer_pubkey);
+        final String status_line = format_group_member_status_line(GroupMessageListActivity.this, peer.online,
+                                                                   peer.last_seen_ms);
+
+        ConferenceCustomDrawerPeerItem new_item = new ConferenceCustomDrawerPeerItem(
+                have_avatar_for_pubkey, peer.peer_pubkey, group_id, peer.peer_name).
+                withIdentifier(peer.peer_num).
+                withName(peer.peer_name).
+                withDescription(status_line).
+                setPeerOnline(peer.online).
+                withOnDrawerItemClickListener(new Drawer.OnDrawerItemClickListener()
+                {
+                    @Override
+                    public boolean onItemClick(View view, int position, IDrawerItem drawerItem)
+                    {
+                        open_group_peer_info_activity(view.getContext(), peer.peer_pubkey, group_id);
+                        return true;
+                    }
+                });
+
+        if (peer.self)
+        {
+            new_item.withTextColor(Color.parseColor("#FF5733"));
+        }
+        else if (peer.notification_silent)
+        {
+            new_item.withTextColor(Color.parseColor("#d7b442"));
+        }
+        return new_item;
     }
 
     public void show_add_friend_group(View view)
@@ -4229,8 +4295,24 @@ public class GroupMessageListActivity extends AppCompatActivity
                 {
                     group_id = group_id_prev;
                 }
+
+                if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, data,
+                        MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true))
+                {
+                    return;
+                }
+
                 add_attachment_ngc(this, data, data, group_id, true);
             }
+        }
+        else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)
+        {
+            if (group_id.equals("-1"))
+            {
+                group_id = group_id_prev;
+            }
+            MediaSendPreviewHelper.handlePreviewResult(this, data,
+                    MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
         }
     }
 

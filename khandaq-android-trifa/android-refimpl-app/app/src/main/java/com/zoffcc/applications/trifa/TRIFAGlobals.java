@@ -65,16 +65,17 @@ public class TRIFAGlobals
     final static String TRIFA_GITHUB_NEW_ISSUE_URL = TRIFA_GITHUB_REPO_URL + "/issues/new";
 
     static boolean HAVE_INTERNET_CONNECTIVITY = true;
-    final static int TOX_BOOTSTRAP_MIN_INTERVAL_SECS = 60; // 60 seconds
-    final static int TOX_BOOTSTRAP_AGAIN_AFTER_OFFLINE_MILLIS =
-            1000 * 60 * 2; // bootstrap again after 2 minutes offline
+    /** Minimum interval between non-forced bootstrap passes. */
+    final static int TOX_BOOTSTRAP_MIN_INTERVAL_SECS = 10;
+    /** Re-bootstrap when DHT offline but internet is available. */
+    final static int TOX_BOOTSTRAP_AGAIN_AFTER_OFFLINE_MILLIS = 15 * 1000;
     final static int SECONDS_TO_STAY_ONLINE_IN_BATTERY_SAVINGS_MODE = 60 * 3; // 3 minutes
     static long BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS = 15 * 1000 * 60; // 15 minutes default
 
     static int AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB = 12;
-    static int AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB = 40;
+    static int AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB = 100;
     static int AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB = 200;
-    static int AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB = 1;
+    static int AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB = 5;
 
     public static final String MY_PACKAGE_NAME = "com.zoffcc.applications.trifa";
     public static final int CONFERENCE_COOKIE_LENGTH = 35;
@@ -89,8 +90,6 @@ public class TRIFAGlobals
     public static final int TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES = 25;
     public static final int TOX_NGC_HISTORY_SYNC_MAX_FILENAME_BYTES = 255;
     public static final int TOX_NGC_HISTORY_SYNC_MAX_SECONDS_BACK = 130 * 60; // 130 minutes
-    /** Khandaq Community: sync full local history to new members (0 = no time cutoff). */
-    public static final int KHANDAQ_COMMUNITY_HISTORY_SYNC_MAX_SECONDS_BACK = 0;
 
     public static final long NGC_NEW_PEERS_TIMEDELTA_IN_MS = (2 * 3600) * 1000; // 2hrs in millis
 
@@ -115,10 +114,6 @@ public class TRIFAGlobals
     final static String TOXIRC_TOKTOK_GROUPID = "fcd19cef34d5fcc970562c849808c370fb6c54fbc1a1c74d9691582ed597dd61";
     final static String TOXIRC_NGC_PUBKEY = "7C6F258261CB4BB3A1ADD7756728558926E8BD794E340FC1DED13343726FDB75";
     final static String TOXIRC_TOKTOK_IRC_USER_PUBKEY = "05D78D2393A4DFB689912C567341EC5B1B2E1591B1FE14B46CBD31899F6F5";
-    //
-    final static String KHANDAQ_COMMUNITY_GROUPID = "154b3973bd0e66304fd6179a8a54759073649e09e6e368f0334fc6ed666ab762";
-    final static String KHANDAQ_COMMUNITY_DISPLAY_NAME = "Khandaq Community";
-    final static String TOX_TRIFA_PUBLIC_GROUPID = KHANDAQ_COMMUNITY_GROUPID;
     // ----------
 
     final static boolean ADD_BOTS_ON_STARTUP = false;
@@ -152,9 +147,13 @@ public class TRIFAGlobals
     static final String LOG_FRIEND_INIT_NAME = "internal logger";
     static String LOG_FRIEND_TOXID = null;
 
-    final static int HIGHER_GLOBAL_VIDEO_BITRATE = 2500;
-    final static int NORMAL_GLOBAL_VIDEO_BITRATE = 1200;
-    final static int LOWER_GLOBAL_VIDEO_BITRATE = 250;
+    final static int HIGHER_GLOBAL_VIDEO_BITRATE = 5000;
+    final static int NORMAL_GLOBAL_VIDEO_BITRATE = 1500;
+    final static int LOWER_GLOBAL_VIDEO_BITRATE = 800;
+
+    final static int VIDEO_BITRATE_WIFI_CEILING = 5000;
+    final static int VIDEO_BITRATE_CELLULAR_CEILING = 2500;
+    final static int VIDEO_BITRATE_3G_CEILING = 800;
 
     final static int HIGHER_NGC_VIDEO_BITRATE = 400;
     final static int LOWER_NGC_VIDEO_BITRATE = 90;
@@ -197,15 +196,15 @@ public class TRIFAGlobals
     final static int VIDEO_ENCODER_MAX_QUANTIZER_MED = 45;
     final static int VIDEO_ENCODER_MAX_QUANTIZER_HIGH = 10;
 
-    final static int VIDEO_ENCODER_MAX_BITRATE_LOW = 250;
-    final static int VIDEO_ENCODER_MAX_BITRATE_MED = 1200;
-    final static int VIDEO_ENCODER_MAX_BITRATE_HIGH = 2500;
+    final static int VIDEO_ENCODER_MAX_BITRATE_LOW = 800;
+    final static int VIDEO_ENCODER_MAX_BITRATE_MED = 1500;
+    final static int VIDEO_ENCODER_MAX_BITRATE_HIGH = 3000;
 
-    final static int VIDEO_ENCODER_MIN_BITRATE_LOW = 0; // use 0 here since other factors will set a limit anyway
-    final static int VIDEO_ENCODER_MIN_BITRATE_MED = 400;
-    final static int VIDEO_ENCODER_MIN_BITRATE_HIGH = 1000;
+    final static int VIDEO_ENCODER_MIN_BITRATE_LOW = 400;
+    final static int VIDEO_ENCODER_MIN_BITRATE_MED = 800;
+    final static int VIDEO_ENCODER_MIN_BITRATE_HIGH = 1500;
 
-    final static int GLOBAL_MIN_VIDEO_BITRATE = 100;
+    final static int GLOBAL_MIN_VIDEO_BITRATE = 500;
     final static int GLOBAL_MIN_AUDIO_BITRATE = 6; // allowed values: (xx>=6) && (xx<=510)
 
     final static int GLOBAL_INIT_PLAY_DELAY = 0;
@@ -269,7 +268,7 @@ public class TRIFAGlobals
     static final int USE_MAX_NUMBER_OF_BOOTSTRAP_TCP_RELAYS = 20;
 
     static final int INTERVAL_ADD_ALL_FRIENDS_CLEAR_MS = 1000;
-    static final int INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS = 1000;
+    static final int INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS = 5000;
 
     // ---- lookup cache ----
     // static Map<String, info.guardianproject.iocipher.RandomAccessFile> cache_ft_fos = new HashMap<String, info.guardianproject.iocipher.RandomAccessFile>();

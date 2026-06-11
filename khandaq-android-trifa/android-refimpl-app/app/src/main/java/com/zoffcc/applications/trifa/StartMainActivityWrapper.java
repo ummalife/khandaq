@@ -23,6 +23,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -101,7 +102,8 @@ public class StartMainActivityWrapper extends AppCompatActivity
 
         Log.i(TAG, "0007");
 
-        if (already_mounted)
+        if (already_mounted
+                && !TextUtils.isEmpty(DbSecretKeyStorage.resolveDbSecretKey(this)))
         {
             Log.i(TAG, "0008");
             /* skip the password enter screen
@@ -120,9 +122,15 @@ public class StartMainActivityWrapper extends AppCompatActivity
 
             /* now we need to figure out if this is the first time the user starts this app
              */
+            if (DbSecretKeyStorage.recoverInconsistentUnlockStateIfNeeded(this))
+            {
+                Log.i(TAG, "0011b:recovered orphaned unlock state");
+            }
+
             SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
             boolean pw_set_screen_done = settings.getBoolean("PW_SET_SCREEN_DONE", false);
-            set_pattern = !pw_set_screen_done;
+            final boolean existingDb = DbSecretKeyStorage.hasExistingUserDatabase(this);
+            set_pattern = !pw_set_screen_done && !existingDb;
 
             Log.i(TAG, "0011");
 

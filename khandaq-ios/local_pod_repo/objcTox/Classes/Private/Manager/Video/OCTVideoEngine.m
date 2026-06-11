@@ -45,11 +45,7 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     // See https://forums.developer.apple.com/thread/62230
 #if ! TARGET_OS_SIMULATOR
     _captureSession = [AVCaptureSession new];
-    _captureSession.sessionPreset = AVCaptureSessionPresetMedium;
-
-    if ([_captureSession canSetSessionPreset:AVCaptureSessionPreset640x480]) {
-        _captureSession.sessionPreset = AVCaptureSessionPreset640x480;
-    }
+    [self applyCapturePresetForPosition:AVCaptureDevicePositionFront];
 #endif
 
     _dataOutput = [AVCaptureVideoDataOutput new];
@@ -168,9 +164,39 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
     [self.captureSession addInput:videoInput];
 
+    [self applyCapturePresetForDevice:dev];
+
     [self orientationChanged];
 
     return YES;
+}
+
+- (void)applyCapturePresetForPosition:(AVCaptureDevicePosition)position
+{
+#if ! TARGET_OS_SIMULATOR
+    NSString *preset = AVCaptureSessionPreset1280x720;
+    if (position == AVCaptureDevicePositionBack) {
+        if ([self.captureSession canSetSessionPreset:AVCaptureSessionPreset1920x1080]) {
+            preset = AVCaptureSessionPreset1920x1080;
+        }
+    }
+    else if (! [self.captureSession canSetSessionPreset:AVCaptureSessionPreset1280x720]) {
+        preset = AVCaptureSessionPreset640x480;
+    }
+    if ([self.captureSession canSetSessionPreset:preset]) {
+        self.captureSession.sessionPreset = preset;
+    }
+#endif
+}
+
+- (void)applyCapturePresetForDevice:(AVCaptureDevice *)dev
+{
+#if ! TARGET_OS_SIMULATOR
+    if (dev == nil) {
+        return;
+    }
+    [self applyCapturePresetForPosition:dev.position];
+#endif
 }
 
 - (void)startSendingVideo

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Messenger UX metrics (Telegram-like layout). Colors = Khandaq identity only. -->
+<resources>
+    <color name="tg_chat_screen_bg">@color/khandaq_canvas_light</color>
+    <color name="tg_bubble_incoming">@color/khandaq_bubble_in_light</color>
+    <color name="tg_bubble_incoming_stroke">@color/khandaq_stroke_light</color>
+    <color name="tg_bubble_outgoing">@color/khandaq_bubble_out_light</color>
+    <color name="tg_bubble_text">@color/khandaq_graphite</color>
+    <color name="tg_bubble_time_incoming">@color/khandaq_text_muted</color>
+    <color name="tg_bubble_time_outgoing">#3D6B58</color>
+    <color name="msg_status_grey">#94a3b8</color>
+    <color name="msg_status_read">#0ea5e9</color>
+    <dimen name="msg_status_icon_size">14dp</dimen>
+    <color name="tg_bubble_link">@color/khandaq_primary</color>
+    <color name="tg_chat_input_bar_bg">#EEF2F0</color>
+    <color name="tg_chat_input_field_bg">#FFFFFF</color>
+    <color name="tg_chat_input_text">@color/khandaq_graphite</color>
+    <color name="tg_chat_input_hint">@color/khandaq_text_muted</color>
+    <color name="tg_date_separator_text">@color/khandaq_graphite</color>
+    <color name="tg_date_separator_line">#CCE0E0E0</color>
+    <color name="tg_chat_header_bg">@color/tg_chat_bg</color>
+    <color name="tg_chat_header_title">@color/khandaq_graphite</color>
+    <color name="tg_chat_header_subtitle">@color/khandaq_text_muted</color>
+    <color name="tg_chat_header_presence_online">@color/khandaq_primary</color>
+    <color name="tg_chat_header_icon">@color/khandaq_primary</color>
+    <dimen name="tg_bubble_radius">16dp</dimen>
+    <dimen name="tg_bubble_tail_radius">4dp</dimen>
+    <dimen name="tg_bubble_padding_h">10dp</dimen>
+    <dimen name="tg_bubble_padding_v">6dp</dimen>
+    <dimen name="tg_bubble_text_size">16sp</dimen>
+    <dimen name="tg_bubble_time_size">12sp</dimen>
+    <dimen name="tg_bubble_peer_name_size">14sp</dimen>
+    <dimen name="tg_chat_avatar_in_bubble">40dp</dimen>
+    <dimen name="tg_message_row_v_margin">2dp</dimen>
+</resources>

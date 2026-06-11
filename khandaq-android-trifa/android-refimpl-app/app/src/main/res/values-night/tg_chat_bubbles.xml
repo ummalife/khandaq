@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tg_chat_screen_bg">@color/khandaq_background</color>
+    <color name="tg_bubble_incoming">@color/khandaq_gunmetal</color>
+    <color name="tg_bubble_incoming_stroke">@color/khandaq_gunmetal</color>
+    <color name="tg_bubble_outgoing">#1A4D3A</color>
+    <color name="tg_bubble_text">#E2E8F0</color>
+    <color name="tg_bubble_time_incoming">#94A3B8</color>
+    <color name="tg_bubble_time_outgoing">#94A3B8</color>
+    <color name="tg_bubble_link">@color/khandaq_emerald</color>
+    <color name="tg_chat_input_bar_bg">@color/khandaq_surface</color>
+    <color name="tg_chat_input_field_bg">#1C2422</color>
+    <color name="tg_chat_input_text">#E2E8F0</color>
+    <color name="tg_chat_input_hint">#94A3B8</color>
+    <color name="tg_date_separator_text">#E2E8F0</color>
+    <color name="tg_date_separator_line">#66FFFFFF</color>
+    <color name="tg_chat_header_bg">@color/khandaq_surface</color>
+    <color name="tg_chat_header_title">@color/khandaq_text</color>
+    <color name="tg_chat_header_subtitle">#8A9A92</color>
+    <color name="tg_chat_header_presence_online">@color/khandaq_emerald</color>
+    <color name="tg_chat_header_icon">@color/khandaq_emerald</color>
+</resources>

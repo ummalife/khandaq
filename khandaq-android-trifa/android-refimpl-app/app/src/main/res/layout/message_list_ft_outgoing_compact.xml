@@ -284,7 +284,7 @@
             android:layout_marginLeft="10dp"
             android:layout_marginRight="10dp"
             android:layout_weight="100"
-            android:background="#FFFFFF" />
+            android:background="@color/tg_date_separator_line" />
 
         <TextView
             android:id="@+id/message_text_date_string"
@@ -311,7 +311,7 @@
             android:layout_marginLeft="10dp"
             android:layout_marginRight="10dp"
             android:layout_weight="100"
-            android:background="#FFFFFF" />
+            android:background="@color/tg_date_separator_line" />
 
     </LinearLayout>
 

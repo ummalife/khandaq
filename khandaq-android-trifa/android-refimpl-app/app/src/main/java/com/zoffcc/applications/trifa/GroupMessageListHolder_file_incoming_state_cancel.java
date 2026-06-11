@@ -162,11 +162,23 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
     {
         message_ = m;
 
+        if (!GroupMessageLayoutHelper.isRenderableMessage(context, m))
+        {
+            GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container,
+                    GroupMessageLayoutHelper.hiddenRowLayout());
+            return;
+        }
+
         ft_audio_player.setVisibility(View.GONE);
         ft_preview_container.setVisibility(View.VISIBLE);
         ft_preview_image.setVisibility(View.VISIBLE);
         textView.setVisibility(View.VISIBLE);
-        ft_preview_image.getLayoutParams().height = (int)dp2px(150);
+        final int previewHeightPx = (int) dp2px(150);
+        ft_preview_image.getLayoutParams().height = previewHeightPx;
+        if (ft_preview_image.getLayoutParams() instanceof android.widget.LinearLayout.LayoutParams)
+        {
+            ((android.widget.LinearLayout.LayoutParams) ft_preview_image.getLayoutParams()).weight = 0;
+        }
 
         String message__text = m.text;
 
@@ -314,9 +326,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                 }
                 else
                 {
-                    peer_name_text.setText(peer_name + " / " +
-                                           message__tox_peerpubkey.substring((message__tox_peerpubkey.length() - 6),
-                                                                             message__tox_peerpubkey.length()));
+                    peer_name_text.setText(peer_name);
                 }
             }
             catch (Exception e2)
@@ -413,22 +423,15 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         boolean have_avatar_for_pubkey = false;
         FriendList fl_temp = null;
 
-        // we need to do the rounded corner background manually here, to change the color ---------------
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadii(
-                new float[]{CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX, CONFERENCE_CHAT_BG_CORNER_RADIUS_IN_PX});
-        shape.setColor(peer_color_bg);
-        // shape.setStroke(3, borderColor);
-        textView_container.setBackground(shape);
-        // we need to do the rounded corner background manually here, to change the color ---------------
-
-        final Drawable smiley_face = new IconicsDrawable(context).
-                icon(GoogleMaterial.Icon.gmd_sentiment_satisfied).
-                backgroundColor(peer_color_bg).
-                color(peer_color_fg).sizeDp(70);
+        if (!is_system_message)
+        {
+            ChatBubbleUiHelper.apply_incoming_bubble(textView_container);
+            ChatBubbleUiHelper.apply_message_text_style(textView, false);
+            ChatBubbleUiHelper.apply_peer_name_style(peer_name_text, message__tox_peerpubkey);
+        }
 
         img_corner.setVisibility(View.GONE);
+        ChatBubbleUiHelper.hide_delivery_indicator(imageView);
         date_time.setVisibility(View.VISIBLE);
 
         if (is_system_message)
@@ -460,15 +463,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
             // TODO: do we need to reset here? -> yes
             img_avatar.setVisibility(View.VISIBLE);
-            if (PREF__compact_chatlist)
-            {
-                img_corner.setVisibility(View.GONE);
-            }
-            else
-            {
-                img_corner.setVisibility(View.VISIBLE);
-            }
-            imageView.setVisibility(View.VISIBLE);
+            img_corner.setVisibility(View.GONE);
+            ChatBubbleUiHelper.hide_delivery_indicator(imageView);
             textView_container.setMinimumHeight((int) dp2px(0));
             textView_container.setPadding(0, textView_container.getPaddingTop(), 0,
                                           textView_container.getPaddingBottom()); // left, top, right, bottom
@@ -477,8 +473,6 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                                  parameter.bottomMargin); // left, top, right, bottom
             textView_container.setLayoutParams(parameter);
             // peer_name_text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-
-            img_avatar.setImageDrawable(smiley_face);
 
             final String peer_pubkey_for_profile = message__tox_peerpubkey;
             final View.OnClickListener open_peer_profile_listener = new View.OnClickListener()
@@ -496,43 +490,6 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
             img_avatar.setOnClickListener(open_peer_profile_listener);
             layout_peer_name_container.setOnClickListener(open_peer_profile_listener);
             peer_name_text.setOnClickListener(open_peer_profile_listener);
-
-            if (m.was_synced)
-            {
-                try
-                {
-                    if (m.TRIFA_SYNC_TYPE == TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value)
-                    {
-                        imageView.setImageResource(R.drawable.circle_pink);
-                    }
-                    else
-                    {
-                        imageView.setImageResource(R.drawable.circle_orange);
-                    }
-
-                    if (m.sync_confirmations > 0)
-                    {
-                        String confirmations_text = "" + m.sync_confirmations;
-                        if (m.sync_confirmations > 9)
-                        {
-                            confirmations_text = "+";
-                        }
-
-                        final TextDrawable drawable2 = TextDrawable.builder().beginConfig().textColor(Color.WHITE).bold().width(60).height(60).fontSize(58).endConfig().buildRound(
-                                confirmations_text, Color.GRAY);
-                        imageView.setImageDrawable(drawable2);
-                    }
-                }
-                catch(Exception e3)
-                {
-                    imageView.setImageResource(R.drawable.circle_orange);
-                }
-            }
-            else
-            {
-                // received directly
-                imageView.setImageResource(R.drawable.circle_green);
-            }
 
         }
 
@@ -894,9 +851,31 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
         }
 
-        imageView.setVisibility(View.VISIBLE);
+        ChatBubbleUiHelper.hide_delivery_indicator(imageView);
 
-        HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+        final GroupMessageLayoutHelper.RowLayout rowLayout =
+                GroupMessageLayoutHelper.layoutFor(m, my_position, context);
+        GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container, rowLayout);
+        GroupMessageLayoutHelper.applyTopMargin(itemView, rowLayout);
+        if (!is_system_message)
+        {
+            if (!rowLayout.showPeerName)
+            {
+                layout_peer_name_container.setVisibility(View.GONE);
+                peer_name_text.setVisibility(View.GONE);
+            }
+            if (rowLayout.showAvatar)
+            {
+                img_avatar.setVisibility(View.VISIBLE);
+                ChatBubbleUiHelper.fill_group_peer_avatar(context, message__tox_peerpubkey,
+                        peer_name_text.getText().toString(), img_avatar);
+            }
+            else
+            {
+                img_avatar.setVisibility(View.INVISIBLE);
+            }
+            img_corner.setVisibility(View.GONE);
+        }
     }
 
     @Override

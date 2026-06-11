@@ -196,27 +196,6 @@ public class MessageListHolder_text_outgoing_read extends RecyclerView.ViewHolde
             }
         }
 
-        if (!m.read)
-        {
-            // not yet read
-            imageView.setImageResource(R.drawable.circle_red);
-        }
-        else
-        {
-            // msg read by other party
-            imageView.setImageResource(R.drawable.circle_green);
-        }
-
-
-        // textView.setHashtagModeColor(ContextCompat.getColor(this.context, android.R.color.holo_blue_dark));
-        // textView.setPhoneModeColor(ContextCompat.getColor(this.context, android.R.color.holo_red_dark));
-        // textView.setCustomModeColor(ContextCompat.getColor(this.context, android.R.color.holo_orange_dark));
-        // textView.setUrlModeColor(ContextCompat.getColor(this.context, android.R.color.holo_green_dark));
-        // textView.setMentionModeColor(ContextCompat.getColor(this.context, android.R.color.holo_green_light));
-        // textView.setEmailModeColor(ContextCompat.getColor(this.context, android.R.color.holo_blue_bright));
-        // textView.setSelectedStateColor(ContextCompat.getColor(this.context, android.R.color.holo_blue_dark));
-        // textView.enableUnderLine();
-
         textView.setAutoLinkOnClickListener(new AutoLinkOnClickListener()
         {
             @Override
@@ -247,62 +226,13 @@ public class MessageListHolder_text_outgoing_read extends RecyclerView.ViewHolde
             }
         });
 
+        ChatBubbleUiHelper.apply_outgoing_bubble(text_block_group);
+        ChatBubbleUiHelper.apply_message_text_style(textView, true);
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                format_chat_message_time(m, true), true);
+        ChatBubbleUiHelper.bind_outgoing_delivery_status(imageView, m);
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
-
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        date_time.setVisibility(View.GONE);
-        if (my_position != RecyclerView.NO_POSITION)
-        {
-            try
-            {
-                if (MainActivity.message_list_fragment.adapter != null)
-                {
-                    if (my_position < 1)
-                    {
-                        date_time.setVisibility(View.VISIBLE);
-                    }
-                    // else if (m.msg_version == 1)
-                    // {
-                    //     date_time.setVisibility(View.VISIBLE);
-                    // }
-                    else
-                    {
-                        final MessagelistAdapter.DateTime_in_out peer_cur = MainActivity.message_list_fragment.adapter.getDateTime(
-                                my_position);
-                        final MessagelistAdapter.DateTime_in_out peer_prev = MainActivity.message_list_fragment.adapter.getDateTime(
-                                my_position - 1);
-                        if ((peer_cur == null) || (peer_prev == null))
-                        {
-                            date_time.setVisibility(View.VISIBLE);
-                        }
-                        // else if (peer_cur.direction != peer_prev.direction)
-                        // {
-                        //     date_time.setVisibility(View.VISIBLE);
-                        // }
-                        else
-                        {
-                            // if message is within 20 seconds of previous message and same direction and same peer
-                            // then do not show timestamp
-                            if (peer_cur.timestamp > peer_prev.timestamp + (MESSAGES_TIMEDELTA_NO_TIMESTAMP_MS))
-                            {
-                                date_time.setVisibility(View.VISIBLE);
-                            }
-                        }
-
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-            }
-        }
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
     }
 

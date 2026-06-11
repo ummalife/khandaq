@@ -86,6 +86,7 @@ import androidx.documentfile.provider.DocumentFile;
 
 import static android.widget.Toast.LENGTH_LONG;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_aec_active;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.set_gainprocessing_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_audio_aec_delay;
 import static com.zoffcc.applications.trifa.CallingActivity.initializeScreenshotSecurity;
 import static com.zoffcc.applications.trifa.CallingActivity.set_debug_text;
@@ -103,7 +104,6 @@ import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_get_public_k
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_vfs_image_filename_friend_avatar;
 import static com.zoffcc.applications.trifa.HelperGeneric.put_vfs_image_on_imageview_real;
-import static com.zoffcc.applications.trifa.Identicon.create_avatar_identicon_for_pubkey;
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
 import static com.zoffcc.applications.trifa.HelperGeneric.do_fade_anim_on_fab;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_g_opts;
@@ -168,12 +168,14 @@ public class MessageListActivity extends AppCompatActivity
     private static final String TAG = "trifa.MsgListActivity";
     long friendnum = -1;
     long friendnum_prev = -1;
+    String friend_pubkey = null;
     static final int MEDIAPICK_ID_001 = 8002;
     //
     static com.vanniktech.emoji.EmojiEditText ml_new_message = null;
     com.vanniktech.emoji.EmojiPopup emojiPopup = null;
     ImageView insert_emoji = null;
     TextView ml_maintext = null;
+    TextView ml_presence_status = null;
     ViewGroup rootView = null;
     //
     static TextView ml_friend_typing = null;
@@ -193,6 +195,10 @@ public class MessageListActivity extends AppCompatActivity
     Thread typing_flag_thread = null;
     final static int TYPING_FLAG_DEACTIVATE_DELAY_IN_MILLIS = 1000; // 1 second
     static boolean attachemnt_instead_of_send = true;
+    static boolean friend_is_typing = false;
+    private Runnable typing_anim_runnable = null;
+    private int typing_dot_frame = 0;
+    private static final int TYPING_ANIM_INTERVAL_MS = 450;
     static ActionMode amode = null;
     static MenuItem amode_save_menu_item = null;
     static MenuItem amode_info_menu_item = null;
@@ -257,8 +263,14 @@ public class MessageListActivity extends AppCompatActivity
 
         Intent intent = getIntent();
         friendnum = intent.getLongExtra("friendnum", -1);
+        friend_pubkey = intent.getStringExtra("friend_pubkey");
+        if (friend_pubkey != null)
+        {
+            friend_pubkey = friend_pubkey.toUpperCase();
+        }
         // Log.i(TAG, "onCreate:003:friendnum=" + friendnum + " friendnum_prev=" + friendnum_prev);
         friendnum_prev = friendnum;
+        resolve_friend_for_chat();
 
         setContentView(R.layout.activity_message_list);
 
@@ -270,7 +282,7 @@ public class MessageListActivity extends AppCompatActivity
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
-        HelperGeneric.apply_chat_input_typography(ml_new_message);
+        HelperGeneric.apply_chat_input_field_style(ml_new_message);
 
         messageSearchView = (SearchView) findViewById(R.id.search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -356,11 +368,14 @@ public class MessageListActivity extends AppCompatActivity
         insert_emoji = (ImageView) findViewById(R.id.insert_emoji);
         ml_friend_typing = (TextView) findViewById(R.id.ml_friend_typing);
         ml_maintext = (TextView) findViewById(R.id.ml_maintext);
+        ml_presence_status = (TextView) findViewById(R.id.ml_presence_status);
+        ChatBubbleUiHelper.apply_chat_input_bar_theme(findViewById(R.id.emoji_bar));
         ml_avatar = (de.hdodenhof.circleimageview.CircleImageView) findViewById(R.id.ml_avatar);
         ml_icon = (ImageView) findViewById(R.id.ml_icon);
         ml_status_icon = (ImageView) findViewById(R.id.ml_status_icon);
         ml_phone_icon = (ImageButton) findViewById(R.id.ml_phone_icon);
         ml_video_icon = (ImageButton) findViewById(R.id.ml_video_icon);
+        apply_chat_header();
         ml_attach_button_01 = (ImageButton) findViewById(R.id.ml_button_01);
         ml_button_recaudio = (ImageButton) findViewById(R.id.ml_button_recaudio);
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
@@ -374,9 +389,8 @@ public class MessageListActivity extends AppCompatActivity
         ml_is_rec_ok = false;
         final ImageButton button01_ = ml_attach_button_01;
         ml_icon.setImageResource(R.drawable.circle_red);
-        set_friend_connection_status_icon();
         ml_status_icon.setImageResource(R.drawable.circle_green);
-        set_friend_status_icon();
+        update_friend_presence_status();
 
         final View profileHeaderTap = findViewById(R.id.ml_header_profile_tap);
         if (profileHeaderTap != null)
@@ -508,7 +522,7 @@ public class MessageListActivity extends AppCompatActivity
         {
             public void afterTextChanged(Editable s)
             {
-                if (s.length() > 0)
+                if (HelperGeneric.has_sendable_chat_text(s))
                 {
                     attachemnt_instead_of_send = false;
                     button01_.setImageDrawable(send_message_icon);
@@ -620,6 +634,7 @@ public class MessageListActivity extends AppCompatActivity
         });
 
         // fill out input text field with shared text value
+        boolean restored_shared_text = false;
         try
         {
             String fillouttext = intent.getStringExtra("fillouttext");
@@ -627,19 +642,31 @@ public class MessageListActivity extends AppCompatActivity
             {
                 ml_new_message.setText("");
                 ml_new_message.append(fillouttext);
+                restored_shared_text = true;
             }
         }
         catch (Exception ignored)
         {
         }
 
-        final Drawable d2 = new IconicsDrawable(this).icon(FontAwesome.Icon.faw_phone).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
-        ml_phone_icon.setImageDrawable(d2);
-
-        final Drawable d3 = new IconicsDrawable(this).icon(FontAwesome.Icon.faw_video).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
-        ml_video_icon.setImageDrawable(d3);
+        if (!restored_shared_text)
+        {
+            try
+            {
+                if ((friend_pubkey != null) && (friend_pubkey.length() > 2))
+                {
+                    final String draft = ChatDraftHelper.load_friend_draft(friend_pubkey);
+                    if ((draft != null) && (!draft.isEmpty()))
+                    {
+                        ml_new_message.setText(draft);
+                        ml_new_message.setSelection(draft.length());
+                    }
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
 
         if (PREF__window_security)
         {
@@ -956,10 +983,24 @@ public class MessageListActivity extends AppCompatActivity
         ml_is_rec_ok = false;
 
         stop_self_typing_indicator_s();
+        stop_typing_animation();
+        friend_is_typing = false;
 
         if (emojiPopup != null)
         {
             emojiPopup.dismiss();
+        }
+
+        try
+        {
+            final String pk = get_friend_pubkey();
+            if (pk != null)
+            {
+                ChatDraftHelper.save_friend_draft(pk, ml_new_message.getText().toString());
+            }
+        }
+        catch (Exception ignored)
+        {
         }
 
         // ** // MainActivity.message_list_fragment = null;
@@ -1068,8 +1109,82 @@ public class MessageListActivity extends AppCompatActivity
         {
         }
 
+        resolve_friend_for_chat();
         message_list_activity = this;
+        apply_chat_header();
+        refresh_chat_header();
         wakeup_tox_thread();
+        schedule_delayed_message_refresh();
+    }
+
+    void resolve_friend_for_chat()
+    {
+        if ((friend_pubkey != null) && (friend_pubkey.length() > 2))
+        {
+            final long fn = HelperFriend.ensure_friend_in_tox_core(friend_pubkey);
+            if (fn >= 0)
+            {
+                friendnum = fn;
+                friendnum_prev = fn;
+            }
+        }
+        else if (friendnum >= 0)
+        {
+            try
+            {
+                friend_pubkey = tox_friend_get_public_key__wrapper(friendnum);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    String get_friend_pubkey()
+    {
+        if ((friend_pubkey != null) && (friend_pubkey.length() > 2))
+        {
+            return friend_pubkey;
+        }
+        if (friendnum >= 0)
+        {
+            try
+            {
+                return tox_friend_get_public_key__wrapper(friendnum);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    private void schedule_delayed_message_refresh()
+    {
+        if (mla_handler_s == null)
+        {
+            return;
+        }
+
+        final Runnable refresh = () -> {
+            try
+            {
+                if (MainActivity.message_list_fragment != null)
+                {
+                    resolve_friend_for_chat();
+                    if (friendnum >= 0)
+                    {
+                        MainActivity.message_list_fragment.update_all_messages(false, false, PREF__messageview_paging);
+                    }
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        };
+
+        mla_handler_s.postDelayed(refresh, 700);
+        mla_handler_s.postDelayed(refresh, 2000);
     }
 
     static void set_recording_pop_text_s(final String t)
@@ -1142,10 +1257,7 @@ public class MessageListActivity extends AppCompatActivity
                 {
                     if (message_list_activity != null)
                     {
-                        if (ml_friend_typing != null)
-                        {
-                            ml_friend_typing.setText("");
-                        }
+                        message_list_activity.set_friend_typing_indicator(0);
                     }
                 }
                 catch (Exception e)
@@ -1267,34 +1379,41 @@ public class MessageListActivity extends AppCompatActivity
 
     public void set_friend_status_icon()
     {
+        update_friend_presence_status();
+    }
+
+    public void update_friend_presence_status()
+    {
         Runnable myRunnable = new Runnable()
         {
             @Override
             public void run()
             {
-                try
-                {
-                    int tox_user_status_friend = TrifaToxService.orma.selectFromFriendList().
-                            tox_public_key_stringEq(tox_friend_get_public_key__wrapper(friendnum)).
-                            toList().get(0).TOX_USER_STATUS;
+                apply_friend_presence_status_ui();
+            }
+        };
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(myRunnable);
+        }
+    }
 
-                    if (tox_user_status_friend == 0)
-                    {
-                        ml_status_icon.setImageResource(R.drawable.circle_green);
-                    }
-                    else if (tox_user_status_friend == 1)
-                    {
-                        ml_status_icon.setImageResource(R.drawable.circle_orange);
-                    }
-                    else
-                    {
-                        ml_status_icon.setImageResource(R.drawable.circle_red);
-                    }
-                }
-                catch (Exception e)
+    public void set_friend_typing_indicator(final int typing)
+    {
+        friend_is_typing = (typing == 1);
+        Runnable myRunnable = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                if (friend_is_typing)
                 {
-                    e.printStackTrace();
-                    Log.i(TAG, "CALL:start:(2):EE:" + e.getMessage());
+                    start_typing_animation();
+                }
+                else
+                {
+                    stop_typing_animation();
+                    apply_friend_presence_status_ui();
                 }
             }
         };
@@ -1302,6 +1421,100 @@ public class MessageListActivity extends AppCompatActivity
         {
             main_handler_s.post(myRunnable);
         }
+    }
+
+    private void apply_friend_presence_status_ui()
+    {
+        if (ml_presence_status == null)
+        {
+            return;
+        }
+        try
+        {
+            if (friend_is_typing)
+            {
+                return;
+            }
+            final FriendList fl = TrifaToxService.orma.selectFromFriendList().
+                    tox_public_key_stringEq(tox_friend_get_public_key__wrapper(friendnum)).
+                    toList().get(0);
+            final String presence = HelperFriend.format_chat_presence_line(MessageListActivity.this, fl);
+            ml_presence_status.setText(presence);
+            ml_presence_status.setVisibility(presence.isEmpty() ? View.GONE : View.VISIBLE);
+            if (HelperFriend.is_friend_presence_online(fl))
+            {
+                ml_presence_status.setTextColor(ContextCompat.getColor(this, R.color.tg_chat_header_presence_online));
+            }
+            else
+            {
+                ml_presence_status.setTextColor(ContextCompat.getColor(this, R.color.tg_chat_header_subtitle));
+            }
+        }
+        catch (Exception e)
+        {
+            ml_presence_status.setVisibility(View.GONE);
+        }
+    }
+
+    private void start_typing_animation()
+    {
+        stop_typing_animation();
+        if (ml_presence_status == null || main_handler_s == null)
+        {
+            return;
+        }
+        typing_dot_frame = 0;
+        ml_presence_status.setVisibility(View.VISIBLE);
+        ml_presence_status.setTextColor(ContextCompat.getColor(this, R.color.tg_chat_header_presence_online));
+        typing_anim_runnable = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                if (!friend_is_typing || ml_presence_status == null)
+                {
+                    return;
+                }
+                final String base = getString(R.string.chat_presence_typing);
+                final String dots = typing_dot_frame == 0 ? "…" : typing_dot_frame == 1 ? "." : "..";
+                ml_presence_status.setText(base + dots);
+                typing_dot_frame = (typing_dot_frame + 1) % 3;
+                if (main_handler_s != null)
+                {
+                    main_handler_s.postDelayed(this, TYPING_ANIM_INTERVAL_MS);
+                }
+            }
+        };
+        main_handler_s.post(typing_anim_runnable);
+    }
+
+    private void stop_typing_animation()
+    {
+        if (typing_anim_runnable != null && main_handler_s != null)
+        {
+            main_handler_s.removeCallbacks(typing_anim_runnable);
+        }
+        typing_anim_runnable = null;
+    }
+
+    @Override
+    protected void onDestroy()
+    {
+        stop_typing_animation();
+        friend_is_typing = false;
+        super.onDestroy();
+    }
+
+    void apply_chat_header()
+    {
+        ChatBubbleUiHelper.apply_chat_header_theme(
+                (Toolbar) findViewById(R.id.toolbar),
+                findViewById(R.id.ml_header_bar),
+                findViewById(R.id.ml_header_profile_tap),
+                ml_maintext,
+                ml_phone_icon,
+                ml_video_icon,
+                this);
     }
 
     static void notify_friend_profile_updated(long friendnum)
@@ -1328,39 +1541,33 @@ public class MessageListActivity extends AppCompatActivity
 
     void refresh_chat_header()
     {
+        resolve_friend_for_chat();
         final long fn = friendnum;
+        final String header_pubkey = get_friend_pubkey();
         Thread t = new Thread()
         {
             @Override
             public void run()
             {
-                HelperFriend.sync_friend_name_from_tox(fn, main_get_friend(fn));
-                final String f_name = HelperFriend.get_friend_name_from_num(fn);
-                final String friend_pubkey = tox_friend_get_public_key__wrapper(fn);
-                String avatar_fname = get_vfs_image_filename_friend_avatar(fn);
-
-                if (avatar_fname == null)
+                if (fn >= 0)
                 {
-                    try
-                    {
-                        create_avatar_identicon_for_pubkey(friend_pubkey);
-                        avatar_fname = get_vfs_image_filename_friend_avatar(fn);
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
+                    HelperFriend.sync_friend_name_from_tox(fn, main_get_friend(fn));
                 }
-
-                final String avatar_fname_final = avatar_fname;
-                FriendList fl = main_get_friend(fn);
+                final String f_name = (header_pubkey != null) ?
+                        HelperFriend.get_friend_name_from_pubkey(header_pubkey) :
+                        HelperFriend.get_friend_name_from_num(fn);
+                final String friend_pubkey = (header_pubkey != null) ? header_pubkey :
+                        tox_friend_get_public_key__wrapper(fn);
+                final String friend_pubkey_final = friend_pubkey;
 
                 Runnable myRunnable = new Runnable()
                 {
                     @Override
                     public void run()
                     {
+                        apply_chat_header();
                         ml_maintext.setText(f_name);
+                        update_friend_presence_status();
 
                         if (ml_avatar == null)
                         {
@@ -1368,19 +1575,8 @@ public class MessageListActivity extends AppCompatActivity
                         }
 
                         ml_avatar.setVisibility(View.VISIBLE);
-                        final Drawable placeholder = new IconicsDrawable(MessageListActivity.this).
-                                icon(FontAwesome.Icon.faw_user).color(
-                                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(36);
-
-                        if (avatar_fname_final != null)
-                        {
-                            put_vfs_image_on_imageview_real(MessageListActivity.this, ml_avatar, placeholder,
-                                                            avatar_fname_final, false, true, fl);
-                        }
-                        else
-                        {
-                            ml_avatar.setImageDrawable(placeholder);
-                        }
+                        ChatBubbleUiHelper.fill_friend_list_avatar(MessageListActivity.this,
+                                friend_pubkey_final, f_name, ml_avatar);
                     }
                 };
 
@@ -1395,34 +1591,7 @@ public class MessageListActivity extends AppCompatActivity
 
     public void set_friend_connection_status_icon()
     {
-        Runnable myRunnable = new Runnable()
-        {
-            @Override
-            public void run()
-            {
-                try
-                {
-                    if (is_friend_online(friendnum) == 0)
-                    {
-                        ml_icon.setImageResource(R.drawable.circle_red);
-                    }
-                    else
-                    {
-                        ml_icon.setImageResource(R.drawable.circle_green);
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                    Log.i(TAG, "CALL:start:(2):EE:" + e.getMessage());
-                }
-            }
-        };
-
-        if (main_handler_s != null)
-        {
-            main_handler_s.post(myRunnable);
-        }
+        update_friend_presence_status();
     }
 
     public void send_attatchment(View view)
@@ -1456,6 +1625,8 @@ public class MessageListActivity extends AppCompatActivity
         {
             intent.putExtra(Intent.EXTRA_MIME_TYPES, "*/*");
         }
+
+        MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
 
         startActivityForResult(intent, MEDIAPICK_ID_001);
 
@@ -1522,10 +1693,16 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_text_message(final String friend_pubkey, final String message)
     {
+        if (!is_tox_started)
+        {
+            display_toast(getString(R.string.dm_send_failed_not_ready), true, 400);
+            return;
+        }
+
         wakeup_tox_thread();
 
         // send typed message to friend
-        String msg = trim_to_utf8_length_bytes(message.trim(), TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        String msg = trim_to_utf8_length_bytes(HelperGeneric.normalize_chat_input_text(message), TOX_MSGV3_MAX_MESSAGE_LENGTH);
         if ((msg == null) || msg.isEmpty())
         {
             return;
@@ -1553,6 +1730,7 @@ public class MessageListActivity extends AppCompatActivity
 
         if (result == null)
         {
+            display_toast(getString(R.string.dm_send_failed_friend), true, 400);
             return;
         }
 
@@ -1605,9 +1783,15 @@ public class MessageListActivity extends AppCompatActivity
         if (res <= -1)
         {
             friend_call_push_url(friend_pubkey, m.sent_timestamp);
+            display_toast(HelperGeneric.dm_send_failure_reason(res), true, 400);
         }
 
-        ml_new_message.setText("");
+        HelperGeneric.clear_chat_input_field(ml_new_message);
+        ChatDraftHelper.clear_friend_draft(friend_pubkey);
+        if (emojiPopup != null)
+        {
+            emojiPopup.dismiss();
+        }
         stop_self_typing_indicator_s();
     }
 
@@ -1615,19 +1799,37 @@ public class MessageListActivity extends AppCompatActivity
     synchronized public void send_message_onclick(View view)
     {
         // Log.i(TAG, "send_message_onclick:---start");
-        String msg = "";
         try
         {
-            if (attachemnt_instead_of_send)
+            resolve_friend_for_chat();
+
+            final String normalized = HelperGeneric.normalize_chat_input_text(ml_new_message.getText().toString());
+            if (!normalized.isEmpty())
             {
-                if (view != null)
+                final String pk = get_friend_pubkey();
+                if ((pk == null) || pk.isEmpty())
                 {
-                    send_attatchment(view);
+                    display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+                    return;
                 }
+                if (friendnum < 0)
+                {
+                    final long fn = HelperFriend.ensure_friend_in_tox_core(pk);
+                    if (fn >= 0)
+                    {
+                        friendnum = fn;
+                        friendnum_prev = fn;
+                    }
+                }
+                send_text_message(pk, normalized);
             }
-            else
+            else if (friendnum < 0)
             {
-                send_text_message(tox_friend_get_public_key__wrapper(friendnum), ml_new_message.getText().toString());
+                display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+            }
+            else if (view != null)
+            {
+                send_attatchment(view);
             }
         }
         catch (Exception e)
@@ -1826,15 +2028,21 @@ public class MessageListActivity extends AppCompatActivity
         {
             if (data == null)
             {
-                //Display an error
                 return;
             }
-            else
+
+            if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, data,
+                    MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true))
             {
-                add_attachment(this, data, data, -1, true);
+                return;
             }
-            // InputStream inputStream = context.getContentResolver().openInputStream(data.getData());
-            //Now you can do whatever you want with your inpustream, save it as file, upload to a server, decode a bitmap...
+
+            add_attachment(this, data, data, -1, true);
+        }
+        else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)
+        {
+            MediaSendPreviewHelper.handlePreviewResult(this, data,
+                    MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true);
         }
     }
 
@@ -2173,14 +2381,15 @@ public class MessageListActivity extends AppCompatActivity
                     if (Callstate.state == 0)
                     {
                         Log.i(TAG, "CALL:start:(2.1):show activity");
-                        if (PREF__use_software_aec)
+                        if (PREF__use_software_aec || !Callstate.audio_call)
                         {
-                            set_aec_active(0); // --ACTIVE--
+                            set_aec_active(1);
                         }
                         else
                         {
                             set_aec_active(0);
                         }
+                        set_gainprocessing_active(1);
 
                         Callstate.state = 1;
                         Callstate.accepted_call = 1; // we started the call, so it's already accepted on our side
@@ -2189,7 +2398,7 @@ public class MessageListActivity extends AppCompatActivity
                         Log.i(TAG, "friend_pubkey:set:004");
                         Callstate.friend_pubkey = tox_friend_get_public_key__wrapper(fn);
                         Callstate.camera_opened = Callstate.audio_call;
-                        Callstate.audio_speaker = true;
+                        Callstate.audio_speaker = !Callstate.audio_call;
                         Callstate.other_audio_enabled = 1;
                         Callstate.other_video_enabled = 1;
                         Callstate.my_audio_enabled = 1;
@@ -2705,6 +2914,7 @@ public class MessageListActivity extends AppCompatActivity
             intent.putExtra("fillouttext", fill_out_text);
         }
         intent.putExtra("friendnum", tox_friend_by_public_key__wrapper(friend_pubkey));
+        intent.putExtra("friend_pubkey", friend_pubkey);
         c.startActivity(intent);
     }
 

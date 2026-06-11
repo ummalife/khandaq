@@ -149,10 +149,7 @@ extension XCUIApplication {
     }
 
     func tapTabBarElement(element: TabBarElement) {
-        // TODO refactor me pls
-        let button = children(matching: .window).element(boundBy: 0).children(matching: .other).element.children(matching: .other).element(boundBy: 1).children(matching: .other).element(boundBy: Int(element.index)).children(matching: .button).element
-
-        button.tap()
+        tabBars.buttons.element(boundBy: element.index - 1).tap()
     }
 }
 

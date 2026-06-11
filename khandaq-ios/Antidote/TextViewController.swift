@@ -12,7 +12,8 @@ private struct Constants {
 }
 
 class TextViewController: UIViewController {
-    fileprivate let resourceName: String
+    fileprivate let resourceName: String?
+    fileprivate let plainText: String?
     fileprivate let backgroundColor: UIColor
     fileprivate let titleColor: UIColor
     fileprivate let textColor: UIColor
@@ -21,6 +22,17 @@ class TextViewController: UIViewController {
 
     init(resourceName: String, backgroundColor: UIColor, titleColor: UIColor, textColor: UIColor) {
         self.resourceName = resourceName
+        self.plainText = nil
+        self.backgroundColor = backgroundColor
+        self.titleColor = titleColor
+        self.textColor = textColor
+
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    init(plainText: String, backgroundColor: UIColor, titleColor: UIColor, textColor: UIColor) {
+        self.resourceName = nil
+        self.plainText = plainText
         self.backgroundColor = backgroundColor
         self.titleColor = titleColor
         self.textColor = textColor
@@ -38,7 +50,11 @@ class TextViewController: UIViewController {
         createTextView()
         installConstraints()
 
-        loadHtml()
+        if plainText != nil {
+            loadPlainText()
+        } else {
+            loadHtml()
+        }
     }
 }
 
@@ -57,10 +73,21 @@ private extension TextViewController {
         }
     }
 
+    func loadPlainText() {
+        textView.text = plainText
+        if #available(iOS 13.0, *) {
+            textView.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        } else {
+            textView.font = UIFont(name: "Menlo-Regular", size: 12) ?? UIFont.systemFont(ofSize: 12)
+        }
+        textView.textColor = textColor
+    }
+
     func loadHtml() {
         do {
             struct FakeError: Error {}
-            guard let htmlFilePath = Bundle.main.path(forResource: resourceName, ofType: "html") else {
+            guard let resourceName = resourceName,
+                  let htmlFilePath = Bundle.main.path(forResource: resourceName, ofType: "html") else {
                 throw FakeError()
             }
 

@@ -47,11 +47,6 @@ import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperRelay.get_pushurl_for_friend;
 import static com.zoffcc.applications.trifa.HelperRelay.get_relay_for_friend;
-import static com.zoffcc.applications.trifa.Identicon.create_avatar_identicon_for_pubkey;
-import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.FRIEND_AVATAR_FILENAME;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_FILE_DIR;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_PREFIX;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP;
 
@@ -81,9 +76,6 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
         ImageView f_status_icon = (ImageView) view.findViewById(R.id.f_status_icon);
         ImageView f_relay_icon = (ImageView) view.findViewById(R.id.f_relay_icon);
         FriendSelectSingle friend_entry = datalist.get(position);
-        final Drawable d_lock = new IconicsDrawable(context).
-                icon(FontAwesome.Icon.faw_lock).color(context.getResources().
-                getColor(R.color.colorPrimaryDark)).sizeDp(80);
 
         if (friend_entry.getType() == 0)
         {
@@ -91,139 +83,7 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
 
             // ------ now fill with data ------
             textViewName.setText(friend_entry.getName());
-            avatar.setImageDrawable(d_lock);
-            try
-            {
-                if (VFS_ENCRYPT)
-                {
-                    boolean need_create_identicon = true;
-
-                    info.guardianproject.iocipher.File f1 = null;
-                    try
-                    {
-                        f1 = new info.guardianproject.iocipher.File(fl.avatar_pathname + "/" + fl.avatar_filename);
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    if ((f1 != null) && (fl.avatar_pathname != null))
-                    {
-                        if (f1.length() > 0)
-                        {
-                            // Log.i(TAG, "AVATAR_GLIDE:" + ":" + fl.name + ":" + fl.avatar_filename);
-                            final RequestOptions glide_options = new RequestOptions().fitCenter();
-                            GlideApp.
-                                    with(avatar.getContext()).
-                                    load(f1).
-                                    diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                    placeholder(d_lock).
-                                    priority(Priority.HIGH).
-                                    skipMemoryCache(false).
-                                    apply(glide_options).
-                                    into(avatar);
-
-                            need_create_identicon = false;
-                        }
-                        else
-                        {
-                            avatar.setImageDrawable(d_lock);
-                        }
-                    }
-
-                    if (need_create_identicon)
-                    {
-                        // no avatar icon? create and use Identicon ------------
-                        create_avatar_identicon_for_pubkey(fl.tox_public_key_string);
-
-
-                        // -- ok, now try to show the avtar icon again --
-
-                        String new_avatar_pathname = VFS_PREFIX + VFS_FILE_DIR + "/" + fl.tox_public_key_string + "/";
-                        String new_avatar_filename = FRIEND_AVATAR_FILENAME;
-                        f1 = null;
-                        try
-                        {
-                            f1 = new info.guardianproject.iocipher.File(new_avatar_pathname + "/" + new_avatar_filename);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-
-                        if ((f1 != null) && (new_avatar_pathname != null))
-                        {
-                            if (f1.length() > 0)
-                            {
-                                // Log.i(TAG, "AVATAR_GLIDE:" + ":" + fl.name + ":" + new_avatar_filename);
-
-                                final RequestOptions glide_options = new RequestOptions().fitCenter();
-                                GlideApp.
-                                        with(avatar.getContext()).
-                                        load(f1).
-                                        diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                        signature(new com.bumptech.glide.signature.StringSignatureZ(
-                                        "_avatar_" + new_avatar_pathname + "/" + FRIEND_AVATAR_FILENAME + "_" +
-                                        fl.avatar_update_timestamp)).
-                                        placeholder(d_lock).
-                                        priority(Priority.HIGH).
-                                        skipMemoryCache(false).
-                                        apply(glide_options).
-                                        into(avatar);
-                            }
-                            else
-                            {
-                                // ok still nothing, show that default "lock" icon
-                                avatar.setImageDrawable(d_lock);
-                            }
-                        }
-                        // -- ok, now try to show the avtar icon again --
-
-                        // no avatar icon? create and use Identicon ------------
-                    }
-
-
-                } // VFS_ENCRYPT -- END --
-                else
-                {
-                    java.io.File f1 = null;
-                    try
-                    {
-                        f1 = new java.io.File(fl.avatar_pathname + "/" + fl.avatar_filename);
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    if ((f1 != null) && (fl.avatar_pathname != null))
-                    {
-                        java.io.FileInputStream fis = new java.io.FileInputStream(f1);
-
-                        byte[] byteArray = new byte[(int) f1.length()];
-                        fis.read(byteArray, 0, (int) f1.length());
-                        fis.close();
-
-                        final RequestOptions glide_options = new RequestOptions().fitCenter();
-                        GlideApp.
-                                with(context).
-                                load(byteArray).
-                                placeholder(d_lock).
-                                diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                signature(new com.bumptech.glide.signature.StringSignatureZ(
-                                "_avatar_" + fl.avatar_pathname + "/" + fl.avatar_filename + "_" +
-                                fl.avatar_update_timestamp)).
-                                skipMemoryCache(false).
-                                apply(glide_options).
-                                into(avatar);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
+            ChatBubbleUiHelper.fill_friend_list_avatar(context, fl.tox_public_key_string, friend_entry.getName(), avatar);
 
             f_status_icon.setVisibility(View.VISIBLE);
             f_relay_icon.setVisibility(View.INVISIBLE);

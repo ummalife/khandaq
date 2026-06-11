@@ -50,4 +50,9 @@
  */
 - (BOOL)removeFriend:(OCTFriend *)friend error:(NSError **)error;
 
+/**
+ * Re-read connection status from toxcore for all friends (e.g. after returning to foreground).
+ */
+- (void)refreshConnectionStatuses;
+
 @end

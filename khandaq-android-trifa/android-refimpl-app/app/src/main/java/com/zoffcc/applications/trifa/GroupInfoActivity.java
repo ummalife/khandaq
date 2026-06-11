@@ -47,14 +47,22 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.AppCompatSpinner;
 import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.CameraWrapper.YUV420rotate90;
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGeneric.update_savedata_file_wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.clear_group_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.ensure_group_in_tox;
+import static com.zoffcc.applications.trifa.HelperGroup.collect_group_members_for_display;
+import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
 import static com.zoffcc.applications.trifa.HelperGroup.get_display_peer_limit;
 import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
+import static com.zoffcc.applications.trifa.HelperGroup.group_identifier_short;
+import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_connection_status;
+import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_privacy;
+import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_role;
 import static com.zoffcc.applications.trifa.HelperGroup.save_group_title_if_changed;
 import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_title;
 import static com.zoffcc.applications.trifa.HelperGroup.get_group_peernum_from_peer_pubkey;
@@ -106,6 +114,12 @@ public class GroupInfoActivity extends AppCompatActivity
     private AppCompatButton group_voicestate_set_button = null;
     private String[] tox_ngc_group_voicestate_items;
     String group_id = "-1";
+    TextView group_info_summary_text = null;
+    TextView group_info_members_header = null;
+    RecyclerView group_info_members_list = null;
+    View group_info_debug_section = null;
+    View group_info_message_stats_section = null;
+    GroupInfoMembersAdapter group_info_members_adapter = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -131,6 +145,18 @@ public class GroupInfoActivity extends AppCompatActivity
         group_del_sysmsgs_button = (Button) findViewById(R.id.group_del_sysmsgs_button);
         group_voicestate_select = findViewById(R.id.group_voicestate_select);
         group_voicestate_set_button = findViewById(R.id.group_voicestate_set_button);
+        group_info_summary_text = findViewById(R.id.group_info_summary_text);
+        group_info_members_header = findViewById(R.id.group_info_members_header);
+        group_info_members_list = findViewById(R.id.group_info_members_list);
+        group_info_debug_section = findViewById(R.id.group_info_debug_section);
+        group_info_message_stats_section = findViewById(R.id.group_info_message_stats_section);
+
+        if (group_info_members_list != null)
+        {
+            group_info_members_list.setLayoutManager(new LinearLayoutManager(this));
+            group_info_members_adapter = new GroupInfoMembersAdapter(this, group_id);
+            group_info_members_list.setAdapter(group_info_members_adapter);
+        }
 
         this.tox_ngc_group_voicestate_items = new String[]{"---", "FOUNDER", "MODERATOR", "ALL"};
         ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
@@ -228,6 +254,10 @@ public class GroupInfoActivity extends AppCompatActivity
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         HelperToolbar.enableUpNavigation(this, toolbar);
+        if (getSupportActionBar() != null)
+        {
+            getSupportActionBar().setTitle(getString(R.string.title_activity_groupinfo));
+        }
 
         if ((group_id == null) || (group_id.equals("-1")))
         {
@@ -290,29 +320,19 @@ public class GroupInfoActivity extends AppCompatActivity
             e.printStackTrace();
         }
 
-        String privacy_state_text = "Unknown Group Privacy State";
-
+        int privacy_state = -1;
         try
         {
-            final int privacy_state = orma.selectFromGroupDB().
+            privacy_state = orma.selectFromGroupDB().
                     group_identifierEq(group_id.toLowerCase()).
                     toList().get(0).privacy_state;
-
-            if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
-            {
-                privacy_state_text = "Public Group";
-            }
-            else if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value)
-            {
-                privacy_state_text = "Private (Invitation only) Group";
-            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
 
-        this_privacy_status_text.setText(privacy_state_text);
+        this_privacy_status_text.setText(humanize_group_privacy(this, privacy_state));
 
         group_update_connected_status_on_groupinfo(group_num);
 
@@ -454,11 +474,10 @@ public class GroupInfoActivity extends AppCompatActivity
                 try
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                    builder.setTitle("Delete System Messages");
-                    builder.setMessage(
-                            "Do you want to delete ALL system generated messages (like join/leave/exit messages) in this group permanently?");
+                    builder.setTitle(getString(R.string.group_delete_system_msgs_title));
+                    builder.setMessage(getString(R.string.group_delete_system_msgs_message));
 
-                    builder.setPositiveButton("Yes, I want to delete them!", new DialogInterface.OnClickListener()
+                    builder.setPositiveButton(getString(R.string.group_delete_system_msgs_confirm), new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
@@ -472,13 +491,13 @@ public class GroupInfoActivity extends AppCompatActivity
                                         try
                                         {
                                             Log.i(TAG, "del_group_system_messages:START:");
-                                            display_toast("starting to delete, please wait ...", true, 0);
+                                            display_toast(getString(R.string.group_delete_system_msgs_progress), true, 0);
                                             orma.deleteFromGroupMessage().
                                                     group_identifierEq(group_id).
                                                     tox_group_peer_pubkeyEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
                                                     execute();
                                             Log.i(TAG, "del_group_system_messages:DONE:");
-                                            display_toast("System Messages deleted", true, 0);
+                                            display_toast(getString(R.string.group_delete_system_msgs_done), true, 0);
                                             reload_message_counts(group_id);
                                         }
                                         catch (Exception e2)
@@ -496,7 +515,7 @@ public class GroupInfoActivity extends AppCompatActivity
                             }
                         }
                     });
-                    builder.setNegativeButton("Cancel", null);
+                    builder.setNegativeButton(getString(R.string.cancel), null);
 
                     AlertDialog dialog = builder.create();
                     dialog.show();
@@ -511,12 +530,15 @@ public class GroupInfoActivity extends AppCompatActivity
         try
         {
             final int myrole = tox_group_self_get_role(group_num);
-            group_myrole_text.setText(ToxVars.Tox_Group_Role.value_str(myrole));
+            group_myrole_text.setText(humanize_group_role(this, myrole));
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+
+        apply_user_facing_group_info(group_num);
+        reload_group_members_list();
     }
 
     private void group_update_connected_status_on_groupinfo(final long group_num)
@@ -538,7 +560,7 @@ public class GroupInfoActivity extends AppCompatActivity
             }
             else
             {
-                group_connection_status_text.setText(TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.value_str(is_connected));
+                group_connection_status_text.setText(humanize_group_connection_status(this, is_connected));
                 if (is_connected == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
                 {
                     group_reconnect_button.setVisibility(View.GONE);
@@ -594,8 +616,25 @@ public class GroupInfoActivity extends AppCompatActivity
                         {
                             try
                             {
-                                group_num_msgs_text.setText("Non System Messages: " + num_str_1);
-                                group_num_system_msgs_text.setText("System Messages: " + num_str_2);
+                                try
+                                {
+                                    group_num_msgs_text.setText(context_s.getString(R.string.group_info_message_count_user,
+                                            Integer.parseInt(num_str_1)));
+                                }
+                                catch (Exception ignored)
+                                {
+                                    group_num_msgs_text.setText(num_str_1);
+                                }
+                                try
+                                {
+                                    group_num_system_msgs_text.setText(
+                                            context_s.getString(R.string.group_info_system_message_count,
+                                                    Integer.parseInt(num_str_2)));
+                                }
+                                catch (Exception ignored)
+                                {
+                                    group_num_system_msgs_text.setText(num_str_2);
+                                }
                             }
                             catch (Exception e)
                             {
@@ -630,6 +669,83 @@ public class GroupInfoActivity extends AppCompatActivity
             this_title.setText(get_effective_group_title(group_num, group_id));
         }
         reload_message_counts(group_id);
+        apply_user_facing_group_info(group_num);
+        reload_group_members_list();
+    }
+
+    private void apply_user_facing_group_info(final long group_num)
+    {
+        try
+        {
+            final View group_info_debug_scroll = findViewById(R.id.group_info_debug_scroll);
+            if (group_info_debug_scroll != null)
+            {
+                group_info_debug_scroll.setVisibility(View.VISIBLE);
+            }
+
+            if (group_info_summary_text != null)
+            {
+                final String title = get_effective_group_title(group_num, group_id);
+                final String members = format_group_list_status_subtitle(this, group_id);
+                final String privacy = this_privacy_status_text.getText().toString();
+                final String connection = group_connection_status_text.getText().toString();
+                final String short_id = group_identifier_short(group_id, true);
+                group_info_summary_text.setText(title + "\n" + members + "\n" + privacy + " · " + connection
+                                                + "\nID: " + short_id);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void reload_group_members_list()
+    {
+        if (group_info_members_adapter == null)
+        {
+            return;
+        }
+
+        new Thread()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    final List<HelperGroup.GroupMemberDisplay> members = collect_group_members_for_display(group_id);
+                    if (main_handler_s == null)
+                    {
+                        return;
+                    }
+                    main_handler_s.post(new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            try
+                            {
+                                group_info_members_adapter.setMembers(members);
+                                if (group_info_members_header != null)
+                                {
+                                    group_info_members_header.setText(
+                                            getString(R.string.group_info_members_header, members.size()));
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
+            }
+        }.start();
     }
 
     @Override

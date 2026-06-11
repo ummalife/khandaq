@@ -30,6 +30,7 @@ import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.luseen.autolinklibrary.AutoLinkMode;
@@ -63,6 +64,7 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
     EmojiTextViewLinks textView;
     ImageView imageView;
     TextView date_time;
+    LinearLayout text_block_group;
     ViewGroup layout_message_container;
     boolean is_selected = false;
     TextView message_text_date_string;
@@ -79,6 +81,7 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
         textView = (EmojiTextViewLinks) itemView.findViewById(R.id.m_text);
         imageView = (ImageView) itemView.findViewById(R.id.m_icon);
         date_time = (TextView) itemView.findViewById(R.id.date_time);
+        text_block_group = (LinearLayout) itemView.findViewById(R.id.text_block_group);
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
         message_text_date_string = (TextView) itemView.findViewById(R.id.message_text_date_string);
         message_text_date = (ViewGroup) itemView.findViewById(R.id.message_text_date);
@@ -186,33 +189,6 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
             }
         }
 
-        if (!m.read)
-        {
-            if (m.msg_at_relay)
-            {
-                // not yet read, but already at friends relay
-                imageView.setImageResource(R.drawable.circle_orange);
-            }
-            else
-            {
-                if (m.sent_push > 0)
-                {
-                    // push url called with result OK
-                    imageView.setImageResource(R.drawable.circle_orange);
-                }
-                else
-                {
-                    // not yet read
-                    imageView.setImageResource(R.drawable.circle_red);
-                }
-            }
-        }
-        else
-        {
-            // msg read by other party
-            imageView.setImageResource(R.drawable.circle_green);
-        }
-
         textView.setAutoLinkOnClickListener(new AutoLinkOnClickListener()
         {
             @Override
@@ -243,6 +219,11 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
             }
         });
 
+        ChatBubbleUiHelper.apply_outgoing_bubble(text_block_group);
+        ChatBubbleUiHelper.apply_message_text_style(textView, true);
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                format_chat_message_time(m, true), true);
+        ChatBubbleUiHelper.bind_outgoing_delivery_status(imageView, m);
     }
 
     @Override

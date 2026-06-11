@@ -104,7 +104,8 @@ private extension NotificationWindow {
         connectingViewLabel = UILabel()
         connectingViewLabel.textColor = theme.colorForType(.ConnectingText)
         connectingViewLabel.backgroundColor = .clear
-        connectingViewLabel.text = String(localized: "connecting_label")
+        let quality = ConnectionQualityMonitor.shared.level.rawValue
+        connectingViewLabel.text = String(localized: "connecting_label") + " · " + quality
         connectingViewLabel.textAlignment = .center
         connectingViewLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
         connectingView.addSubview(connectingViewLabel)

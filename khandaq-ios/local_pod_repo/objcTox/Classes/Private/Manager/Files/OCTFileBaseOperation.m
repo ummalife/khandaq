@@ -235,7 +235,11 @@ static const CFTimeInterval kMinUpdateEtaInterval = 1.0;
     OCTLogInfo(@"progress %.2f, bytes per second %lld, eta %.0f seconds", self.progress, self.bytesPerSecond, self.eta);
 
     if (self.progressBlock) {
-        self.progressBlock(self);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.progressBlock) {
+                self.progressBlock(self);
+            }
+        });
     }
 }
 
@@ -279,7 +283,11 @@ static const CFTimeInterval kMinUpdateEtaInterval = 1.0;
     }
 
     if (self.etaUpdateBlock) {
-        self.etaUpdateBlock(self);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.etaUpdateBlock) {
+                self.etaUpdateBlock(self);
+            }
+        });
     }
 }
 

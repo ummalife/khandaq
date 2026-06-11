@@ -134,6 +134,7 @@
 "add_contact_default_message_text" = "Hello! Could you please add me to your contact list?";
 /* Add contat error */
 "add_contact_wrong_qr" = "Wrong QR code. It should contain MyID";
+"add_contact_invalid_id_format" = "Invalid ID format";
 
 /* User name text */
 "name" = "Name";
@@ -179,6 +180,7 @@
 "chat_more_menu_item" = "More";
 /* Message shown on chat list when contact is typing */
 "chat_is_typing_text" = "is typing...";
+"chat_draft_prefix" = "Draft: %@";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Messages and files will be delivered when your contact comes online. A push notification was sent to wake their device.";
 
@@ -186,6 +188,10 @@
 "status_offline" = "Offline";
 /* Status message */
 "status_online" = "Online";
+"status_last_seen_just_now" = "last seen just now";
+"status_last_seen_minutes_ago" = "last seen %d min ago";
+"status_last_seen_hours_ago" = "last seen %d h ago";
+"status_last_seen_long_ago" = "last seen a long time ago";
 /* Status message */
 "status_away" = "Away";
 /* Status message */
@@ -333,6 +339,15 @@
 "error_too_many_files" = "Too many active file transfers";
 /* Error */
 "error_internal_message" = "Internal error";
+/* Video send */
+"video_send_preparing" = "Preparing video…";
+"video_send_preparation_failed" = "Could not prepare video for sending.";
+"video_send_too_large" = "Video is too large (max 500 MB).";
+"video_send_busy" = "Another video is still being prepared. Please wait.";
+"video_send_too_long" = "Video is too long (max 10 minutes).";
+"media_send_button" = "Send";
+"media_send_caption_hint" = "Add a caption…";
+"media_send_counter_format" = "%1$d / %2$d";
 /* Error */
 "error_wrong_password_title" = "Wrong password";
 /* Error */

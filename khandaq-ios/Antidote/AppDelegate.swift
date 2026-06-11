@@ -44,6 +44,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
            let runcoord = coordinator?.activeCoordinator as? RunningCoordinator,
            let session = runcoord.activeSessionCoordinator,
            let toxManager = session.toxManager {
+            toxManager.friends.refreshConnectionStatuses()
             toxManager.chats.sendOwnPush()
             toxManager.chats.broadcastOwnPushURLToConnectedFriends()
         }
@@ -217,12 +218,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         print("performFetchWithCompletionHandler:start")
         os_log("AppDelegate:performFetchWithCompletionHandler:start")
-        // HINT: we have 30 seconds here. use 25 of those 30 seconds to be on the safe side
-        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
-            completionHandler(UIBackgroundFetchResult.newData)
-            print("performFetchWithCompletionHandler:end")
-            os_log("AppDelegate:performFetchWithCompletionHandler:end")
+
+        if let runcoord = coordinator?.activeCoordinator as? RunningCoordinator,
+           let session = runcoord.activeSessionCoordinator {
+            NetworkDiagnosticsLog.log("background_fetch", detail: "rebootstrap")
+            ConnectionQualityMonitor.shared.onBootstrapStarted()
+            session.toxManager.bootstrap.rebootstrapOnNetworkChange()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                completionHandler(.newData)
+                print("performFetchWithCompletionHandler:end")
+                os_log("AppDelegate:performFetchWithCompletionHandler:end")
+            }
+            return
         }
+
+        completionHandler(.noData)
     }
 
     func application(_ application: UIApplication, didReceive notification: UILocalNotification) {

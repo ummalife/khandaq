@@ -20,4 +20,8 @@ class OCTSubmanagerFriendsMock: NSObject, OCTSubmanagerFriends {
     func remove(_ friend: OCTFriend!) throws {
         // nop
     }
+
+    func refreshConnectionStatuses() {
+        // nop
+    }
 }

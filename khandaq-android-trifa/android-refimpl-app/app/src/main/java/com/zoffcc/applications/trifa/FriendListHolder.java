@@ -34,10 +34,6 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.bumptech.glide.Priority;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.bumptech.glide.request.RequestOptions;
-import com.mikepenz.fontawesome_typeface_library.FontAwesome;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.FriendList;
@@ -70,9 +66,7 @@ import static com.zoffcc.applications.trifa.HelperRelay.invite_to_conference_own
 import static com.zoffcc.applications.trifa.HelperRelay.send_all_friend_pubkeys_to_relay;
 import static com.zoffcc.applications.trifa.HelperRelay.send_relay_pubkey_to_all_friends;
 import static com.zoffcc.applications.trifa.HelperRelay.set_friend_as_own_relay_in_db;
-import static com.zoffcc.applications.trifa.Identicon.create_avatar_identicon_for_pubkey;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__show_friendnumber_on_friendlist;
-import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
 import static com.zoffcc.applications.trifa.MainActivity.cache_confid_confnum;
 import static com.zoffcc.applications.trifa.MainActivity.cache_fnum_pubkey;
 import static com.zoffcc.applications.trifa.MainActivity.cache_pubkey_fnum;
@@ -87,15 +81,12 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_AL
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_ALPHA_SELECTED;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FL_NOTIFICATION_ICON_SIZE_DP_SELECTED;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.FRIEND_AVATAR_FILENAME;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_NOW;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOGFRIEND_ON_STARTUP_DONE_DB_KEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOGFRIEND_TOXID_DB_KEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOG_FRIEND_TOXID;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ONE_HOUR_IN_MS;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_FILE_DIR;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_PREFIX;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONFERENCE_TYPE.TOX_CONFERENCE_TYPE_AV;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONFERENCE_TYPE.TOX_CONFERENCE_TYPE_TEXT;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
@@ -119,6 +110,7 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
     private ImageView f_notification;
     private ImageView f_relay_icon;
     private TextView f_last_online_timestamp;
+    private TextView chatTimeView;
     private ViewGroup friend_line_container;
 
     synchronized static void remove_progress_dialog()
@@ -152,8 +144,9 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         f_relay_icon = (ImageView) itemView.findViewById(R.id.f_relay_icon);
         f_notification = (ImageView) itemView.findViewById(R.id.f_notification);
         f_last_online_timestamp = (TextView) itemView.findViewById(R.id.f_last_online_timestamp);
+        chatTimeView = (TextView) itemView.findViewById(R.id.f_chat_time);
 
-        friend_line_container = (ViewGroup) itemView.findViewById(R.id.friend_line_container);
+        friend_line_container = (ViewGroup) itemView.findViewById(R.id.chat_list_row);
     }
 
     public void bindFriendList(FriendList fl)
@@ -180,23 +173,17 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         {
         }
 
-        friend_line_container.setBackground(null);
         if (fl.last_online_timestamp == LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE)
         {
-            // friend_line_container.setBackgroundResource(R.drawable.friend_list_neveronline_round_bg);
             friend_line_container.setBackgroundColor(context.getResources().getColor(R.color.md_amber_300));
+        }
+        else if (fl.added_timestamp > (System.currentTimeMillis() - ONE_HOUR_IN_MS))
+        {
+            friend_line_container.setBackgroundColor(context.getResources().getColor(R.color.md_amber_700));
         }
         else
         {
-            if (fl.added_timestamp > (System.currentTimeMillis() - ONE_HOUR_IN_MS))
-            {
-                friend_line_container.setBackgroundColor(context.getResources().getColor(R.color.md_amber_700));
-            }
-            else
-            {
-                // friend_line_container.setBackgroundResource(R.drawable.friend_list_round_bg);
-                friend_line_container.setBackgroundColor(Color.TRANSPARENT);
-            }
+            friend_line_container.setBackgroundResource(R.drawable.friend_list_item_ripple);
         }
 
         // Log.i(TAG, "lot=" + fl.last_online_timestamp + " -> " + LAST_ONLINE_TIMSTAMP_ONLINE_NOW);
@@ -238,19 +225,19 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             f_notification.setOnClickListener(this);
         }
 
-        final Drawable d_lock = new IconicsDrawable(context).
-                icon(FontAwesome.Icon.faw_lock).color(context.getResources().
-                getColor(R.color.colorPrimaryDark)).sizeDp(80);
-
         String name_prefix = "";
 
         if (PREF__show_friendnumber_on_friendlist)
         {
-            name_prefix = "" + tox_friend_by_public_key__wrapper(fl.tox_public_key_string) + " ";
+            final long fn = tox_friend_by_public_key__wrapper(fl.tox_public_key_string);
+            if (fn >= 0)
+            {
+                name_prefix = "" + fn + " ";
+            }
         }
 
-        textView.setText(name_prefix + HelperFriend.get_friend_name_from_num(
-                tox_friend_by_public_key__wrapper(fl.tox_public_key_string)));
+        String display_name = HelperFriend.get_friend_name_from_pubkey(fl.tox_public_key_string);
+        textView.setText(name_prefix + display_name);
         try
         {
             if (fl.alias_name != null)
@@ -258,6 +245,7 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
                 if (fl.alias_name.length() > 0)
                 {
                     textView.setText(name_prefix + fl.alias_name);
+                    display_name = fl.alias_name;
                 }
             }
         }
@@ -274,154 +262,6 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
                            tox_file_receiving_active(tox_friend_by_public_key__wrapper(fl.tox_public_key_string)) +
                            " " + fl.status_message);
          */
-
-        avatar.setImageDrawable(d_lock);
-
-        try
-        {
-            if (VFS_ENCRYPT)
-            {
-                boolean need_create_identicon = true;
-
-                info.guardianproject.iocipher.File f1 = null;
-                try
-                {
-                    f1 = new info.guardianproject.iocipher.File(fl.avatar_pathname + "/" + fl.avatar_filename);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                if ((f1 != null) && (fl.avatar_pathname != null))
-                {
-                    if (f1.length() > 0)
-                    {
-                        // Log.i(TAG, "AVATAR_GLIDE:" + ":" + fl.name + ":" + fl.avatar_filename);
-                        final RequestOptions glide_options = new RequestOptions().fitCenter();
-
-                        //                        GlideApp.
-                        //                                with(avatar.getContext()).
-                        //                                load(new info.guardianproject.iocipher.FileInputStream(f1)).
-                        //                                diskCacheStrategy(DiskCacheStrategy.NONE).
-                        //                                placeholder(d_lock).
-                        //                                priority(Priority.HIGH).
-                        //                                skipMemoryCache(false).
-                        //                                apply(glide_options).
-                        //                                into(avatar);
-
-                        GlideApp.
-                                with(avatar.getContext()).
-                                load(f1).
-                                diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                placeholder(d_lock).
-                                priority(Priority.HIGH).
-                                skipMemoryCache(false).
-                                apply(glide_options).
-                                into(avatar);
-
-                        need_create_identicon = false;
-                    }
-                    else
-                    {
-                        avatar.setImageDrawable(d_lock);
-                    }
-                }
-
-                if (need_create_identicon)
-                {
-                    // no avatar icon? create and use Identicon ------------
-                    // Log.i(TAG, "indenticon:002");
-
-                    create_avatar_identicon_for_pubkey(fl.tox_public_key_string);
-
-
-                    // -- ok, now try to show the avtar icon again --
-
-                    String new_avatar_pathname = VFS_PREFIX + VFS_FILE_DIR + "/" + fl.tox_public_key_string + "/";
-                    String new_avatar_filename = FRIEND_AVATAR_FILENAME;
-                    f1 = null;
-                    try
-                    {
-                        f1 = new info.guardianproject.iocipher.File(new_avatar_pathname + "/" + new_avatar_filename);
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    if ((f1 != null) && (new_avatar_pathname != null))
-                    {
-                        if (f1.length() > 0)
-                        {
-                            // Log.i(TAG, "AVATAR_GLIDE:" + ":" + fl.name + ":" + new_avatar_filename);
-
-                            final RequestOptions glide_options = new RequestOptions().fitCenter();
-                            GlideApp.
-                                    with(avatar.getContext()).
-                                    load(f1).
-                                    diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                                    signature(new com.bumptech.glide.signature.StringSignatureZ(
-                                            "_avatar_" + new_avatar_pathname + "/" + FRIEND_AVATAR_FILENAME + "_" +
-                                            fl.avatar_update_timestamp)).
-                                    placeholder(d_lock).
-                                    priority(Priority.HIGH).
-                                    skipMemoryCache(false).
-                                    apply(glide_options).
-                                    into(avatar);
-                        }
-                        else
-                        {
-                            // ok still nothing, show that default "lock" icon
-                            avatar.setImageDrawable(d_lock);
-                        }
-                    }
-                    // -- ok, now try to show the avtar icon again --
-
-                    // no avatar icon? create and use Identicon ------------
-                }
-
-
-            } // VFS_ENCRYPT -- END --
-            else
-            {
-                java.io.File f1 = null;
-                try
-                {
-                    f1 = new java.io.File(fl.avatar_pathname + "/" + fl.avatar_filename);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                if ((f1 != null) && (fl.avatar_pathname != null))
-                {
-                    java.io.FileInputStream fis = new java.io.FileInputStream(f1);
-
-                    byte[] byteArray = new byte[(int) f1.length()];
-                    fis.read(byteArray, 0, (int) f1.length());
-                    fis.close();
-
-                    final RequestOptions glide_options = new RequestOptions().fitCenter();
-                    GlideApp.
-                            with(context).
-                            load(byteArray).
-                            placeholder(d_lock).
-                            diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                            signature(new com.bumptech.glide.signature.StringSignatureZ(
-                                    "_avatar_" + fl.avatar_pathname + "/" + fl.avatar_filename + "_" +
-                                    fl.avatar_update_timestamp)).
-                            skipMemoryCache(false).
-                            apply(glide_options).
-                            into(avatar);
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
 
         f_status_icon.setVisibility(View.VISIBLE);
         f_relay_icon.setVisibility(View.INVISIBLE);
@@ -492,89 +332,41 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             f_user_status_icon.setImageResource(R.drawable.circle_red);
         }
 
+        int new_messages_count = 0;
         try
         {
-            if (fl.TOX_CONNECTION_real == TOX_CONNECTION_NONE.value)
-            {
-                avatar.setBorderColor(Color.parseColor("#40000000"));
-            }
-            else if (fl.TOX_CONNECTION_real == TOX_CONNECTION_TCP.value)
-            {
-                if (is_nightmode_active(context))
-                {
-                    avatar.setBorderColor(Color.parseColor("#A8FFCE00"));
-                }
-                else
-                {
-                    avatar.setBorderColor(Color.parseColor("#FFCE00"));
-                }
-            }
-            else // UDP
-            {
-                if (is_nightmode_active(context))
-                {
-                    avatar.setBorderColor(Color.parseColor("#A804B431"));
-                }
-                else
-                {
-                    avatar.setBorderColor(Color.parseColor("#04B431"));
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        try
-        {
-            if (is_nightmode_active(context))
-            {
-                avatar.setBorderWidth((int) dp2px(4));
-            }
-            else
-            {
-                avatar.setBorderWidth((int) dp2px(4));
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-        try
-        {
-            int new_messages_count = orma.selectFromMessage().tox_friendpubkeyEq(
+            new_messages_count = orma.selectFromMessage().tox_friendpubkeyEq(
                     fl.tox_public_key_string).is_newEq(true).count();
-            if (new_messages_count > 0)
-            {
-                if (new_messages_count > 99)
-                {
-                    unread_count.setText("+"); //("∞");
-                }
-                else
-                {
-                    unread_count.setText("" + new_messages_count);
-                }
-                unread_count.setVisibility(View.VISIBLE);
-            }
-            else
-            {
-                unread_count.setText("");
-                unread_count.setVisibility(View.INVISIBLE);
-            }
         }
-        catch (Exception e)
+        catch (Exception ignored)
         {
-            e.printStackTrace();
-
-            unread_count.setText("");
-            unread_count.setVisibility(View.INVISIBLE);
         }
-
-
+        ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
+        apply_telegram_chat_row(fl);
+        ChatBubbleUiHelper.fill_friend_list_avatar(context, fl.tox_public_key_string, display_name, avatar);
     }
 
+    private void apply_telegram_chat_row(final FriendList fl)
+    {
+        ChatListUiHelper.prepare_telegram_row(friend_line_container, textView, statusText, chatTimeView,
+                                              f_notification, f_status_icon, f_user_status_icon, f_relay_icon,
+                                              ip_addr_text);
+        statusText.setText(ChatListUiHelper.friend_last_message_preview(context, fl.tox_public_key_string));
+        ChatListUiHelper.bind_preview_text_color(statusText,
+                ChatDraftHelper.has_friend_draft(fl.tox_public_key_string));
+        if (chatTimeView != null)
+        {
+            chatTimeView.setText(ChatListUiHelper.format_chat_list_time(context,
+                    ChatListUiHelper.friend_last_message_timestamp_ms(fl.tox_public_key_string)));
+        }
+        try
+        {
+            avatar.setBorderWidth(0);
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
 
     public void friend_toggle_notification_silent()
     {
@@ -1056,6 +848,7 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
 
         Intent intent = new Intent(c, MessageListActivity.class);
         intent.putExtra("friendnum", tox_friend_by_public_key__wrapper(friend_pubkey));
+        intent.putExtra("friend_pubkey", friend_pubkey);
         c.startActivity(intent);
     }
 }

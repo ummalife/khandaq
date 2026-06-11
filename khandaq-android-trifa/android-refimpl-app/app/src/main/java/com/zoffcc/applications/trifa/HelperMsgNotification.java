@@ -288,12 +288,8 @@ public class HelperMsgNotification
         }
         try
         {
-            final long friend_num = MainActivity.message_list_activity.get_current_friendnum();
-            if (friend_num < 0)
-            {
-                return false;
-            }
-            return friend_pubkey.equals(HelperFriend.tox_friend_get_public_key__wrapper(friend_num));
+            final String open_pk = MainActivity.message_list_activity.get_friend_pubkey();
+            return (open_pk != null) && friend_pubkey.equalsIgnoreCase(open_pk);
         }
         catch (Exception e)
         {

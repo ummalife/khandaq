@@ -223,6 +223,7 @@ class ChatPrivateController: KeyboardNotificationController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
+        chatInputViewManager?.endUserInteraction()
         delegate?.chatPrivateControllerWillDisappear(self)
     }
 
@@ -1165,8 +1166,7 @@ private extension ChatPrivateController {
         }
 
         titleView.name = friend.nickname
-        titleView.userStatus = UserStatus(connectionStatus: friend.connectionStatus, userStatus: friend.status)
-        titleView.connectionStatus = ConnectionStatus(connectionStatus: friend.connectionStatus)
+        updateTitlePresence(for: friend)
 
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)
         let results = submanagerObjects.friends(predicate: predicate)
@@ -1181,8 +1181,7 @@ private extension ChatPrivateController {
                     fallthrough
                 case .update:
                     self.titleView.name = friend.nickname
-                    self.titleView.userStatus = UserStatus(connectionStatus: friend.connectionStatus, userStatus: friend.status)
-                    self.titleView.connectionStatus = ConnectionStatus(connectionStatus: friend.connectionStatus)
+                    self.updateTitlePresence(for: friend)
 
                     let isConnected = friend.isConnected
 
@@ -1207,6 +1206,12 @@ private extension ChatPrivateController {
             UInt32.max)
         let compound = NSCompoundPredicate(orPredicateWithSubpredicates: [textPredicate, filePredicate])
         return messages.objects(with: compound).count > 0
+    }
+
+    func updateTitlePresence(for friend: OCTFriend) {
+        let presence = FriendPresenceFormatter.presence(for: friend)
+        titleView.presenceText = presence.text
+        titleView.presenceIsOnline = presence.isOnline
     }
 
     func updateTableHeaderView() {

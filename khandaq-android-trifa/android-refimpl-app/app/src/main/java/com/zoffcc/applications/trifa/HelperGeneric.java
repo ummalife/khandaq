@@ -45,6 +45,9 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.content.ContentValues;
 import android.media.MediaScannerConnection;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -98,6 +101,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Pattern;
 
@@ -120,8 +124,10 @@ import static com.zoffcc.applications.trifa.CallingActivity.set_vdelay_every_x_f
 import static com.zoffcc.applications.trifa.CallingActivity.set_vdelay_every_x_frames_current;
 import static com.zoffcc.applications.trifa.Callstate.java_video_encoder_first_frame_in;
 import static com.zoffcc.applications.trifa.HelperFriend.friend_call_push_url;
+import static com.zoffcc.applications.trifa.HelperFriend.get_friend_msgv3_capability;
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
+import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_get_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperFriend.update_friend_msgv3_capability;
 import static com.zoffcc.applications.trifa.HelperMessage.process_msgv3_high_level_ack;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_messageid;
@@ -130,6 +136,20 @@ import static com.zoffcc.applications.trifa.HelperMessage.update_single_message;
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
 import static com.zoffcc.applications.trifa.MainActivity.DEBUG_USE_LOGFRIEND;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__DB_secrect_key;
+import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
+import static com.zoffcc.applications.trifa.MainActivity.PREF__video_call_quality;
+import static com.zoffcc.applications.trifa.MainActivity.PREF__video_cam_resolution;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.GLOBAL_MIN_VIDEO_BITRATE;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.GLOBAL_VIDEO_BITRATE;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_BITRATE_3G_CEILING;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_BITRATE_CELLULAR_CEILING;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_BITRATE_WIFI_CEILING;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_ENCODER_MAX_BITRATE_HIGH;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_ENCODER_MAX_BITRATE_LOW;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_ENCODER_MAX_BITRATE_MED;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_ENCODER_MIN_BITRATE_HIGH;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_ENCODER_MIN_BITRATE_LOW;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_ENCODER_MIN_BITRATE_MED;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__X_battery_saving_mode;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_chatlist;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__global_font_size;
@@ -142,6 +162,7 @@ import static com.zoffcc.applications.trifa.MainActivity.toxav_option_set;
 import static com.zoffcc.applications.trifa.ProfileActivity.update_toxid_display_s;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FAB_SCROLL_TO_BOTTOM_FADEIN_MS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FAB_SCROLL_TO_BOTTOM_FADEOUT_MS;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.HAVE_INTERNET_CONNECTIVITY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_NOW;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOGFRIEND_TOXID_DB_KEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOG_FRIEND_TOXID;
@@ -164,13 +185,15 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_FRAME_RATE_INCOMI
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VIDEO_FRAME_RATE_OUTGOING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.cache_ft_fis_saf;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.cache_ft_fos;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_name;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_for_battery_savings_ts;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_connection_status;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_last_went_online_timestamp;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_showing_anygroupview;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_showing_messageview;
 import static com.zoffcc.applications.trifa.ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_CLIENT_VIDEO_CAPTURE_DELAY_MS;
-import static com.zoffcc.applications.trifa.ToxVars.TOX_CAPABILITY_MSGV2;
+import static com.zoffcc.applications.trifa.HelperFriend.peer_supports_msgv2;
+import static com.zoffcc.applications.trifa.HelperFriend.peer_supports_msgv3;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_CANCEL;
@@ -1752,6 +1775,11 @@ public class HelperGeneric
     {
         try
         {
+            if (is_friend_avatar && fl != null && !ChatBubbleUiHelper.shouldLoadVfsAvatar(fl))
+            {
+                return;
+            }
+
             // Log.i(TAG, "put_vfs_image_on_imageview:" + vfs_image_filename);
             if (MainActivity.VFS_ENCRYPT)
             {
@@ -1970,6 +1998,74 @@ public class HelperGeneric
         textView.setLineSpacing(0, TRIFAGlobals.MESSAGE_LINE_SPACING_MULTIPLIER);
     }
 
+    /**
+     * Style the chat compose field without overriding its typeface.
+     * Custom fonts on {@link com.vanniktech.emoji.EmojiEditText} break keyboard text after emoji insertion.
+     */
+    public static void apply_chat_input_field_style(android.widget.TextView textView)
+    {
+        if (textView == null)
+        {
+            return;
+        }
+        textView.setLineSpacing(0, TRIFAGlobals.MESSAGE_LINE_SPACING_MULTIPLIER);
+        ChatBubbleUiHelper.apply_chat_input_field_theme(textView);
+    }
+
+    /** Strip zero-width chars that EmojiEditText can leave after emoji-only sends. */
+    public static String normalize_chat_input_text(final String raw)
+    {
+        if (raw == null)
+        {
+            return "";
+        }
+        String normalized = raw.replace("\u200B", "").
+                replace("\u200C", "").
+                replace("\u200D", "").
+                replace("\uFEFF", "").
+                trim();
+        return normalized;
+    }
+
+    public static boolean has_sendable_chat_text(final CharSequence raw)
+    {
+        if (raw == null)
+        {
+            return false;
+        }
+        return !normalize_chat_input_text(raw.toString()).isEmpty();
+    }
+
+    public static void clear_chat_input_field(final android.widget.EditText field)
+    {
+        if (field == null)
+        {
+            return;
+        }
+        field.setText("");
+        try
+        {
+            field.getEditableText().clear();
+        }
+        catch (Exception ignored)
+        {
+        }
+        field.clearComposingText();
+    }
+
+    public static String dm_send_failure_reason(final long msg_num)
+    {
+        if (msg_num == -98)
+        {
+            return context_s.getString(R.string.dm_send_failed_not_ready);
+        }
+        if (msg_num == -99)
+        {
+            return context_s.getString(R.string.dm_send_failed_friend);
+        }
+        return context_s.getString(R.string.dm_send_failed);
+    }
+
     public static float dp2px(float dp)
     {
         try
@@ -2040,6 +2136,169 @@ public class HelperGeneric
             {
                 e.printStackTrace();
             }
+        }
+    }
+
+    public static int getVideoMaxBitrateForQuality(int quality)
+    {
+        if (quality == 2)
+        {
+            return VIDEO_ENCODER_MAX_BITRATE_HIGH;
+        }
+        if (quality == 1)
+        {
+            return VIDEO_ENCODER_MAX_BITRATE_MED;
+        }
+        return VIDEO_ENCODER_MAX_BITRATE_LOW;
+    }
+
+    public static int getVideoMinBitrateForQuality(int quality)
+    {
+        if (quality == 2)
+        {
+            return VIDEO_ENCODER_MIN_BITRATE_HIGH;
+        }
+        if (quality == 1)
+        {
+            return VIDEO_ENCODER_MIN_BITRATE_MED;
+        }
+        return VIDEO_ENCODER_MIN_BITRATE_LOW;
+    }
+
+    public static int applyNetworkVideoBitrateCap(Context ctx, int bitrate)
+    {
+        try
+        {
+            ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null)
+            {
+                return Math.min(bitrate, VIDEO_BITRATE_CELLULAR_CEILING);
+            }
+            Network network = cm.getActiveNetwork();
+            if (network == null)
+            {
+                return Math.min(bitrate, VIDEO_BITRATE_CELLULAR_CEILING);
+            }
+            NetworkCapabilities nc = cm.getNetworkCapabilities(network);
+            if (nc == null)
+            {
+                return Math.min(bitrate, VIDEO_BITRATE_CELLULAR_CEILING);
+            }
+            if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+            {
+                return Math.min(bitrate, VIDEO_BITRATE_WIFI_CEILING);
+            }
+            if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))
+            {
+                int downKbps = nc.getLinkDownstreamBandwidthKbps();
+                if (downKbps > 0 && downKbps < 1500)
+                {
+                    return Math.min(bitrate, VIDEO_BITRATE_3G_CEILING);
+                }
+                return Math.min(bitrate, VIDEO_BITRATE_CELLULAR_CEILING);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        return Math.min(bitrate, VIDEO_BITRATE_CELLULAR_CEILING);
+    }
+
+    public static int computeVideoBitrateForSettings(int quality, int camResolution, Context ctx)
+    {
+        int bitrate = getVideoMaxBitrateForQuality(quality);
+        if (camResolution == 2 && quality < 2)
+        {
+            bitrate = Math.min((bitrate * 3) / 2, VIDEO_ENCODER_MAX_BITRATE_HIGH);
+        }
+        else if (camResolution == 1 && quality == 0)
+        {
+            bitrate = Math.min((bitrate * 4) / 3, VIDEO_ENCODER_MAX_BITRATE_MED);
+        }
+        if (ctx != null)
+        {
+            bitrate = applyNetworkVideoBitrateCap(ctx, bitrate);
+        }
+        return Math.max(bitrate, GLOBAL_MIN_VIDEO_BITRATE);
+    }
+
+    public static void applyGlobalVideoBitrateFromPrefs(Context ctx)
+    {
+        GLOBAL_VIDEO_BITRATE = computeVideoBitrateForSettings(PREF__video_call_quality, PREF__video_cam_resolution, ctx);
+        if (Callstate.state != 0)
+        {
+            Callstate.video_bitrate = GLOBAL_VIDEO_BITRATE;
+        }
+        Log.i(TAG, "applyGlobalVideoBitrateFromPrefs:quality=" + PREF__video_call_quality + " cam=" +
+                   PREF__video_cam_resolution + " bitrate=" + GLOBAL_VIDEO_BITRATE);
+    }
+
+    public static void applyActiveCallVideoBitrate()
+    {
+        if (Callstate.state == 0)
+        {
+            return;
+        }
+        try
+        {
+            applyGlobalVideoBitrateFromPrefs(context_s);
+            long fn = tox_friend_by_public_key__wrapper(Callstate.friend_pubkey);
+            if (fn >= 0)
+            {
+                MainActivity.toxav_bit_rate_set(fn, Callstate.audio_bitrate, Callstate.video_bitrate);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    public static void adaptVideoBitrateFromSuggestion(long suggestedVideoBitrate)
+    {
+        if (Callstate.state == 0 || suggestedVideoBitrate <= 0)
+        {
+            return;
+        }
+        int qualityMax = computeVideoBitrateForSettings(PREF__video_call_quality, PREF__video_cam_resolution,
+                                                          context_s);
+        int qualityMin = getVideoMinBitrateForQuality(PREF__video_call_quality);
+        long target = suggestedVideoBitrate;
+        target = Math.min(target, qualityMax);
+        target = Math.max(target, qualityMin);
+        target = Math.max(target, GLOBAL_MIN_VIDEO_BITRATE);
+
+        long current = Callstate.video_bitrate;
+        if (target < current)
+        {
+            target = Math.max(target, (long) (current * 0.8));
+        }
+        else if (target > current)
+        {
+            target = Math.min(target, (long) (current * 1.2));
+        }
+
+        if (Math.abs(target - current) < 50)
+        {
+            return;
+        }
+
+        Callstate.video_bitrate = target;
+        try
+        {
+            long fn = tox_friend_by_public_key__wrapper(Callstate.friend_pubkey);
+            if (fn >= 0)
+            {
+                MainActivity.toxav_bit_rate_set(fn, Callstate.audio_bitrate, Callstate.video_bitrate);
+                Log.i(TAG, "adaptVideoBitrateFromSuggestion:" + current + " -> " + target + " (suggested=" +
+                           suggestedVideoBitrate + ")");
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
         }
     }
 
@@ -2423,6 +2682,42 @@ public class HelperGeneric
             e.printStackTrace();
             Log.i(TAG, "get_network_connections:EE01:" + e.getMessage());
             return "ERROR_getting_network_connections";
+        }
+    }
+
+    static boolean sync_have_internet_connectivity(final Context context)
+    {
+        if (context == null)
+        {
+            return HAVE_INTERNET_CONNECTIVITY;
+        }
+        try
+        {
+            final ConnectivityManager cm =
+                    (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null)
+            {
+                return HAVE_INTERNET_CONNECTIVITY;
+            }
+            final Network network = cm.getActiveNetwork();
+            if (network == null)
+            {
+                HAVE_INTERNET_CONNECTIVITY = false;
+                return false;
+            }
+            final NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+            HAVE_INTERNET_CONNECTIVITY = caps != null
+                    && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    && (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+            return HAVE_INTERNET_CONNECTIVITY;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "sync_have_internet_connectivity:EE:" + e.getMessage());
+            return HAVE_INTERNET_CONNECTIVITY;
         }
     }
 
@@ -2988,8 +3283,19 @@ public class HelperGeneric
     public static MainActivity.send_message_result tox_friend_send_message_wrapper(final String friend_pubkey, int a_TOX_MESSAGE_TYPE, @NonNull String message, long timestamp_unixtime_seconds)
     {
         // Log.d(TAG, "tox_friend_send_message_wrapper:" + friend_pubkey);
-        FriendList f = main_get_friend(friend_pubkey);
         long friendnum_to_use = tox_friend_by_public_key__wrapper(friend_pubkey);
+        if (friendnum_to_use < 0)
+        {
+            friendnum_to_use = HelperFriend.ensure_friend_in_tox_core(friend_pubkey);
+        }
+
+        FriendList f = main_get_friend(friend_pubkey);
+        if (f == null)
+        {
+            HelperFriend.ensure_contact_record_for_pubkey(friend_pubkey, friendnum_to_use);
+            f = main_get_friend(friend_pubkey);
+        }
+
         boolean need_call_push_url = false;
 
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
@@ -3014,7 +3320,7 @@ public class HelperGeneric
             return result;
         }
 
-        if ((f.capabilities & TOX_CAPABILITY_MSGV2) != 0)
+        if (peer_supports_msgv2(f))
         {
             msgv1 = false;
         }
@@ -3024,37 +3330,60 @@ public class HelperGeneric
         {
             String relay_pubkey = HelperRelay.get_relay_for_friend(f.tox_public_key_string);
 
-            if (relay_pubkey != null)
+            // msgV2 relay delivery requires TOX_CAPABILITY_MSGV2 (iOS/Khandaq uses msgV3 over tox_friend_send_message only)
+            if (relay_pubkey != null && peer_supports_msgv2(f))
             {
-                // friend has a relay
                 friendnum_to_use = tox_friend_by_public_key__wrapper(relay_pubkey);
                 msgv1 = false;
-                // Log.d(TAG, "tox_friend_send_message_wrapper:friendnum_to_use=" + friendnum_to_use);
             }
-            else // if friend is NOT online and does not have a relay, try if he has a push url
+            else
             {
                 need_call_push_url = true;
             }
         }
 
-        if (msgv1)
+        if (MessageChunker.shouldChunk(message) && friendnum_to_use >= 0
+                && f.TOX_CONNECTION_real != TOX_CONNECTION_NONE.value)
         {
-            // old msgV1 message (but always send msgV3 format)
-            ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
-            MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
-            MainActivity.send_message_result result = new MainActivity.send_message_result();
-
-            // long t_sec = (System.currentTimeMillis() / 1000);
-            long res = MainActivity.tox_messagev3_friend_send_message(friendnum_to_use, a_TOX_MESSAGE_TYPE, message,
-                                                                      hash_bytes, timestamp_unixtime_seconds);
-            // Log.i(TAG, "tox_friend_send_message_wrapper:msg=" + message + " " + timestamp_unixtime_seconds + " " +
-            //           long_date_time_format(timestamp_unixtime_seconds * 1000));
-
-            result.msg_num = res;
+            final MainActivity.send_message_result result = new MainActivity.send_message_result();
             result.msg_v2 = false;
             result.msg_hash_hex = "";
-            result.msg_hash_v3_hex = bytebuffer_to_hexstring(hash_bytes, true);
+            result.msg_hash_v3_hex = "";
             result.raw_message_buf_hex = "";
+            result.msg_num = MessageChunker.sendChunked(friendnum_to_use, message) ? 1L : 0L;
+            return result;
+        }
+
+        if (msgv1)
+        {
+            MainActivity.send_message_result result = new MainActivity.send_message_result();
+            result.msg_v2 = false;
+            result.msg_hash_hex = "";
+            result.raw_message_buf_hex = "";
+
+            // Desktop / classic Tox clients (e.g. qTox on Windows) expect plain tox_friend_send_message payloads.
+            if (!peer_supports_msgv3(f))
+            {
+                long res = MainActivity.tox_friend_send_message(friendnum_to_use, a_TOX_MESSAGE_TYPE, message);
+                result.msg_num = res;
+                result.msg_hash_v3_hex = "";
+
+                if (need_call_push_url)
+                {
+                    friend_call_push_url(f.tox_public_key_string, System.currentTimeMillis());
+                }
+
+                return result;
+            }
+
+            // TRIfA msgV3 peers
+            ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
+            MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
+            long res = MainActivity.tox_messagev3_friend_send_message(friendnum_to_use, a_TOX_MESSAGE_TYPE, message,
+                                                                      hash_bytes, timestamp_unixtime_seconds);
+
+            result.msg_num = res;
+            result.msg_hash_v3_hex = bytebuffer_to_hexstring(hash_bytes, true);
 
             if (need_call_push_url)
             {
@@ -3212,8 +3541,72 @@ public class HelperGeneric
         }
     }
 
+    /** Reload open DM chat after incoming message (covers push→open race and missed add_single_message). */
+    static void schedule_dm_chat_refresh_for_friend(final String friend_pubkey)
+    {
+        if ((friend_pubkey == null) || (friend_pubkey.length() < 2))
+        {
+            return;
+        }
+
+        final Runnable refresh = () -> {
+            try
+            {
+                if (MainActivity.message_list_activity == null)
+                {
+                    return;
+                }
+                final String open_pk = MainActivity.message_list_activity.get_friend_pubkey();
+                if ((open_pk == null) || !friend_pubkey.equalsIgnoreCase(open_pk))
+                {
+                    return;
+                }
+                if (MainActivity.message_list_fragment != null)
+                {
+                    MainActivity.message_list_fragment.update_all_messages(false, false, PREF__messageview_paging);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "schedule_dm_chat_refresh_for_friend:EE:" + e.getMessage());
+            }
+        };
+
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(refresh);
+            main_handler_s.postDelayed(refresh, 800);
+        }
+    }
+
     static void receive_incoming_message(int msg_type, int tox_message_type, long friend_number, String friend_message_text_utf8, byte[] raw_message, long raw_message_length, String original_sender_pubkey, byte[] msgV3hash_bin, long message_timestamp)
     {
+        try
+        {
+            String sender_pk = null;
+            if ((original_sender_pubkey != null) &&
+                (original_sender_pubkey.length() == (TOX_PUBLIC_KEY_SIZE * 2)))
+            {
+                sender_pk = original_sender_pubkey.toUpperCase(Locale.ROOT);
+            }
+            else if (friend_number >= 0)
+            {
+                sender_pk = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
+                if (sender_pk != null)
+                {
+                    sender_pk = sender_pk.toUpperCase(Locale.ROOT);
+                }
+            }
+            if (sender_pk != null)
+            {
+                HelperFriend.ensure_contact_record_for_pubkey(sender_pk, friend_number);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "receive_incoming_message:ensure_contact:EE:" + e.getMessage());
+        }
+
         // incoming msg can be:
         // (msg_type == 0) msgV1 text only message -> msg_type, friend_number, friend_message_text_utf8 [, msgV3hash_bin, message_timestamp]
         // (msg_type == 1) msgV2 direct message    -> msg_type, friend_number, friend_message_text_utf8, raw_message, raw_message_length
@@ -3321,8 +3714,14 @@ public class HelperGeneric
             m.sent_timestamp_ms = 0;
             m.text = friend_message_text_utf8;
             m.msg_version = 0;
-            m.msg_idv3_hash = msgV3hash_hex_string;
+            m.msg_idv3_hash = (msgV3hash_hex_string != null) ? msgV3hash_hex_string : "";
             m.sent_push = 0;
+
+            if (m.tox_friendpubkey == null || m.tox_friendpubkey.length() < (TOX_PUBLIC_KEY_SIZE * 2))
+            {
+                Log.w(TAG, "friend_message:skip invalid pubkey friend=" + friend_number);
+                return;
+            }
 
             long db_result = -1;
 
@@ -3389,6 +3788,8 @@ public class HelperGeneric
             {
                 HelperMessage.send_msgv3_high_level_ack(friend_number, msgV3hash_hex_string);
             }
+
+            schedule_dm_chat_refresh_for_friend(m.tox_friendpubkey);
         }
         else if (msg_type == 1)
         {
@@ -5143,81 +5544,28 @@ public class HelperGeneric
 
     public static void fill_own_avatar_icon(Context context, CircleImageView img_avatar)
     {
-        final Drawable d_lock = new IconicsDrawable(context).icon(FontAwesome.Icon.faw_lock).color(
-                context.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
-        img_avatar.setImageDrawable(d_lock);
-
+        String peerPubkey = null;
         try
         {
-            if (VFS_ENCRYPT)
+            final String toxid = MainActivity.get_my_toxid();
+            if (toxid != null && toxid.length() >= ToxVars.TOX_PUBLIC_KEY_SIZE * 2)
             {
-                String fname = get_vfs_image_filename_own_avatar();
-
-                info.guardianproject.iocipher.File f1 = null;
-                try
-                {
-                    if (fname != null)
-                    {
-                        f1 = new info.guardianproject.iocipher.File(fname);
-                    }
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                if ((f1 != null) && (fname != null))
-                {
-                    if (f1.length() > 0)
-                    {
-                        final RequestOptions glide_options = new RequestOptions().fitCenter();
-                        GlideApp.with(context).load(f1).diskCacheStrategy(DiskCacheStrategy.RESOURCE).skipMemoryCache(
-                                false).apply(glide_options).into(img_avatar);
-                    }
-                }
+                peerPubkey = toxid.substring(0, ToxVars.TOX_PUBLIC_KEY_SIZE * 2);
             }
         }
-        catch (Exception e)
+        catch (Exception ignored)
         {
-            e.printStackTrace();
         }
+
+        ChatBubbleUiHelper.fill_own_avatar_icon(context, img_avatar, peerPubkey, global_my_name);
     }
 
     public static void fill_friend_avatar_icon(Message m, Context context, CircleImageView img_avatar)
     {
-        final Drawable d_lock = new IconicsDrawable(context).icon(FontAwesome.Icon.faw_lock).color(
-                context.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
-        img_avatar.setImageDrawable(d_lock);
-
         try
         {
-            if (VFS_ENCRYPT)
-            {
-                FriendList fl = (FriendList) orma.selectFromFriendList().tox_public_key_stringEq(m.tox_friendpubkey).get(0);
-
-                info.guardianproject.iocipher.File f1 = null;
-                try
-                {
-                    f1 = new info.guardianproject.iocipher.File(fl.avatar_pathname + "/" + fl.avatar_filename);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-
-                if ((f1 != null) && (fl.avatar_pathname != null))
-                {
-                    if (f1.length() > 0)
-                    {
-                        final RequestOptions glide_options = new RequestOptions().fitCenter();
-                        GlideApp.with(context).load(f1).diskCacheStrategy(DiskCacheStrategy.RESOURCE).signature(
-                                new com.bumptech.glide.signature.StringSignatureZ(
-                                        "_avatar_" + fl.avatar_pathname + "/" + fl.avatar_filename + "_" +
-                                        fl.avatar_update_timestamp)).skipMemoryCache(false).apply(
-                                glide_options).priority(Priority.HIGH).into(img_avatar);
-                    }
-                }
-            }
+            final String peerName = HelperFriend.get_friend_name_from_pubkey(m.tox_friendpubkey);
+            ChatBubbleUiHelper.fill_group_peer_avatar(context, m.tox_friendpubkey, peerName, img_avatar);
         }
         catch (Exception e)
         {
@@ -5270,9 +5618,55 @@ public class HelperGeneric
         }
     }
 
+    synchronized public static void applyCallStreamVolume(AudioManager manager, boolean speaker)
+    {
+        try
+        {
+            int stream = AudioManager.STREAM_VOICE_CALL;
+            int max = manager.getStreamMaxVolume(stream);
+            int volume = speaker ? max : Math.max(1, (max * 85) / 100);
+            manager.setStreamVolume(stream, volume, 0);
+            Log.i(TAG, "AUDIOROUTE:applyCallStreamVolume:speaker=" + speaker + " vol=" + volume + "/" + max);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private static void finalizeCallAudioRoute(AudioManager manager, boolean speaker)
+    {
+        try
+        {
+            manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
+            {
+                manager.setSpeakerphoneOn(speaker);
+            }
+            applyCallStreamVolume(manager, speaker);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
     synchronized public static void set_calling_audio_mode()
     {
-        // NOOP , now!
+        try
+        {
+            AudioManager manager = MainActivity.audio_manager_s;
+            if (manager == null)
+            {
+                return;
+            }
+            manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            applyCallStreamVolume(manager, Callstate.audio_speaker);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     synchronized public static void reset_audio_mode()
@@ -5328,7 +5722,6 @@ public class HelperGeneric
             Log.i(TAG, "AUDIOROUTE:set_audio_to_loudspeaker");
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
             {
-                manager.setMode(AudioManager.MODE_NORMAL);
                 Boolean result = null;
                 ArrayList<Integer> targetTypes = new ArrayList<>();
                 targetTypes.add(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
@@ -5352,11 +5745,14 @@ public class HelperGeneric
             else
             {
                 print_stack_trace();
-                manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 manager.setWiredHeadsetOn(false);
                 manager.setBluetoothScoOn(false);
-                manager.setSpeakerphoneOn(true);
                 Callstate.audio_speaker = true;
+                finalizeCallAudioRoute(manager, true);
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
+            {
+                finalizeCallAudioRoute(manager, true);
             }
         }
         catch (Exception e)
@@ -5374,7 +5770,6 @@ public class HelperGeneric
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
             {
-                manager.setMode(AudioManager.MODE_NORMAL);
                 Boolean result = null;
                 ArrayList<Integer> targetTypes = new ArrayList<>();
                 targetTypes.add(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE);
@@ -5398,11 +5793,14 @@ public class HelperGeneric
             else
             {
                 print_stack_trace();
-                manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 manager.setWiredHeadsetOn(false);
                 manager.setBluetoothScoOn(false);
-                manager.setSpeakerphoneOn(false);
                 Callstate.audio_speaker = false;
+                finalizeCallAudioRoute(manager, false);
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
+            {
+                finalizeCallAudioRoute(manager, false);
             }
 
             try
@@ -5433,7 +5831,6 @@ public class HelperGeneric
             Log.i(TAG, "AUDIOROUTE:set_audio_to_headset");
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
             {
-                manager.setMode(AudioManager.MODE_NORMAL);
                 Boolean result = null;
                 ArrayList<Integer> targetTypes = new ArrayList<>();
                 targetTypes.add(AudioDeviceInfo.TYPE_WIRED_HEADSET);
@@ -5457,10 +5854,13 @@ public class HelperGeneric
             else
             {
                 print_stack_trace();
-                manager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 manager.setBluetoothScoOn(false);
-                manager.setSpeakerphoneOn(false);
                 manager.setWiredHeadsetOn(true);
+                finalizeCallAudioRoute(manager, false);
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
+            {
+                finalizeCallAudioRoute(manager, false);
             }
 
             try
@@ -5726,6 +6126,16 @@ public class HelperGeneric
 
     static public void append_logger_msg(final String logmsg)
     {
+        if (logmsg != null)
+        {
+            final String lower = logmsg.toLowerCase();
+            if (lower.contains("bootstrap") || lower.contains("reconnect") || lower.contains("network")
+                    || lower.contains("netmonitor"))
+            {
+                NetworkDiagnosticsLog.log("trace", logmsg);
+            }
+        }
+
         if (DEBUG_USE_LOGFRIEND)
         {
             try

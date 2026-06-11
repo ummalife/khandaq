@@ -4,52 +4,100 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/tg_chat_bg_deep"
     android:fitsSystemWindows="true">
 
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
+    <LinearLayout
+        android:id="@+id/main_header_container"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
-        android:contentInsetStart="0dp"
-        android:contentInsetLeft="0dp"
-        android:minHeight="?attr/actionBarSize"
-        android:paddingLeft="0dp"
-        app:contentInsetLeft="0dp"
-        app:contentInsetStart="0dp"
-        app:contentInsetStartWithNavigation="0dp"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+        android:layout_height="wrap_content"
+        android:background="@color/tg_chat_bg"
+        android:orientation="vertical">
 
-        <Spinner
-            android:id="@+id/spinner_own_status"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_marginLeft="0dp"
-            android:paddingLeft="0dp" />
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/tg_chat_bg"
+            android:minHeight="?attr/actionBarSize"
+            app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+            app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar"
+            app:title="@string/app_name"
+            app:titleTextColor="@color/tg_chat_title">
 
-        <TextView
-            android:layout_width="wrap_content"
+            <de.hdodenhof.circleimageview.CircleImageView
+                android:id="@+id/main_profile_avatar"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="8dp"
+                android:contentDescription="@string/MainActivity_profile"
+                android:src="@drawable/circle_green"
+                app:civ_border_width="0dp" />
+
+        </androidx.appcompat.widget.Toolbar>
+
+        <LinearLayout
+            android:id="@+id/main_profile_bar"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginLeft="0dp"
-            android:paddingLeft="0dp"
-            android:text="@string/app_name"
-            android:textColor="@android:color/primary_text_dark"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-    </androidx.appcompat.widget.Toolbar>
+            android:orientation="vertical"
+            android:visibility="gone">
 
-    <!-- the layout which will contain (host) the drawerLayout -->
+            <TextView
+                android:id="@+id/main_profile_name"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/main_maintopimage"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/main_chat_search"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/tg_search_field_bg"
+            android:drawableStart="@android:drawable/ic_menu_search"
+            android:drawablePadding="8dp"
+            android:fontFamily="sans-serif"
+            android:hint="@string/chat_list_search_hint"
+            android:imeOptions="flagNoPersonalizedLearning|actionSearch"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:singleLine="true"
+            android:textColor="@color/tg_chat_title"
+            android:textColorHint="@color/tg_chat_preview"
+            android:textSize="15sp" />
+
+    </LinearLayout>
+
+    <Spinner
+        android:id="@+id/spinner_own_status"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
     <FrameLayout
         android:id="@+id/drawer_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/toolbar">
+        android:layout_below="@id/main_header_container">
 
         <FrameLayout
             android:id="@+id/waiting_container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/md_white_1000"
+            android:background="@color/tg_chat_bg"
             android:visibility="visible">
 
             <TextView
@@ -58,10 +106,11 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginBottom="40dp"
-                android:background="@color/md_white_1000"
+                android:background="@color/tg_chat_bg"
                 android:gravity="center"
                 android:text="@string/layout___waiting_for_orbot"
-                android:textSize="20sp"
+                android:textColor="@color/tg_chat_preview"
+                android:textSize="18sp"
                 android:visibility="gone" />
 
             <ProgressBar
@@ -77,52 +126,10 @@
                 android:id="@+id/normal_container"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:background="@color/tg_chat_bg"
                 android:orientation="vertical"
                 android:visibility="visible"
                 tools:context="com.zoffcc.applications.trifa.MainActivity">
-
-                <LinearLayout
-                    android:id="@+id/main_profile_bar"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:contentDescription="@string/main_profile_open"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp">
-
-                    <de.hdodenhof.circleimageview.CircleImageView
-                        android:id="@+id/main_profile_avatar"
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:src="@drawable/circle_green"
-                        app:civ_border_color="#40000000"
-                        app:civ_border_width="1dp" />
-
-                    <TextView
-                        android:id="@+id/main_profile_name"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:text="@string/layout___name"
-                        android:textColor="@color/md_black_1000"
-                        android:textSize="15sp" />
-
-                    <ImageView
-                        android:id="@+id/main_maintopimage"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_marginStart="6dp"
-                        android:scaleType="centerInside"
-                        android:visibility="gone" />
-
-                </LinearLayout>
 
                 <fragment
                     android:id="@+id/fl_fragment"
@@ -137,5 +144,3 @@
     </FrameLayout>
 
 </RelativeLayout>
-
-

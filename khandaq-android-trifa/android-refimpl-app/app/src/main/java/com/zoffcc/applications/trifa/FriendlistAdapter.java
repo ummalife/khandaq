@@ -62,50 +62,23 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
     {
         // Log.i(TAG, "onCreateViewHolder");
 
-        View view = null;
+        View view;
         switch (viewType)
         {
             case CombinedFriendsAndConferences_model.ITEM_IS_FRIEND:
-                if (PREF__compact_friendlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_entry_compact, parent,
-                                                                            false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_entry, parent, false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
                 return new FriendListHolder(view, this.context);
 
             case CombinedFriendsAndConferences_model.ITEM_IS_GROUP:
-                if (PREF__compact_friendlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry, parent,
-                                                                            false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
                 return new GroupListHolder(view, this.context);
 
             case CombinedFriendsAndConferences_model.ITEM_IS_CONFERENCE:
-                if (PREF__compact_friendlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry, parent,
-                                                                            false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
                 return new ConferenceListHolder(view, this.context);
         }
 
-        // TODO: should never get here!?
-        view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_entry, parent, false);
+        view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
         return new FriendListHolder(view, this.context);
     }
 

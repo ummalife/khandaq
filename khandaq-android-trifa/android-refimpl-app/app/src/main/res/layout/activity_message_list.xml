@@ -12,9 +12,10 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+        app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar">
 
         <TextView
             android:layout_width="10dp"
@@ -42,17 +43,21 @@
     </androidx.appcompat.widget.Toolbar>
 
     <LinearLayout
-        android:id="@+id/ml_container_001"
+        android:id="@+id/ml_header_bar"
         android:layout_width="match_parent"
-        android:layout_height="55dp"
-        android:orientation="horizontal">
+        android:layout_height="wrap_content"
+        android:background="@color/tg_chat_header_bg"
+        android:minHeight="55dp"
+        android:orientation="horizontal"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
         <LinearLayout
             android:id="@+id/ml_header_profile_tap"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
+            android:background="@android:color/transparent"
             android:clickable="true"
             android:contentDescription="@string/message_list_open_friend_profile"
             android:focusable="true"
@@ -71,38 +76,47 @@
 
             <ImageView
                 android:id="@+id/ml_icon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="6dip"
-                android:layout_marginRight="1dip"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/circle_red" />
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
 
             <ImageView
                 android:id="@+id/ml_status_icon"
-                android:layout_width="12dp"
-                android:layout_height="12dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="1dip"
-                android:layout_marginRight="6dip"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/circle_green" />
-
-            <TextView
-                android:id="@+id/ml_maintext"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:layout_weight="1"
-                android:gravity="center_vertical"
-                android:paddingStart="4dp"
-                android:paddingEnd="10dp"
-                android:text="@string/layout___name"
-                android:textColor="@color/md_black_1000"
-                android:textSize="15sp" />
+                android:orientation="vertical"
+                android:paddingStart="6dp"
+                android:paddingEnd="10dp">
+
+                <TextView
+                    android:id="@+id/ml_maintext"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/layout___name"
+                    android:textColor="@color/tg_chat_header_title"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/ml_presence_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="@color/tg_chat_header_subtitle"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
@@ -187,7 +201,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_weight="0"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/ml_friend_typing"
@@ -243,7 +258,7 @@
             android:gravity="center_vertical"
             android:imeOptions="flagNoPersonalizedLearning|actionSend"
             android:includeFontPadding="false"
-            android:inputType="textMultiLine"
+            android:inputType="textCapSentences|textMultiLine"
             android:maxLines="5"
             android:paddingStart="@dimen/chat_input_field_padding_h"
             android:paddingTop="@dimen/chat_input_field_padding_v"
@@ -251,8 +266,8 @@
             android:paddingBottom="@dimen/chat_input_field_padding_v"
             android:singleLine="false"
             android:text=""
-            android:textColor="@color/chat_input_text"
-            android:textColorHint="@color/gray"
+            android:textColor="@color/tg_chat_input_text"
+            android:textColorHint="@color/tg_chat_input_hint"
             android:textSize="@dimen/chat_input_text_size" />
 
         <LinearLayout

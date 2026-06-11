@@ -12,7 +12,8 @@ class ChatListCell: BaseCell {
         static let AvatarRightOffset = 16.0
 
         static let NicknameLabelHeight = 22.0
-        static let MessageLabelHeight = 22.0
+        static let PresenceLabelHeight = 16.0
+        static let MessageLabelHeight = 18.0
 
         static let NicknameToDateMinOffset = 5.0
         static let DateToArrowOffset = 5.0
@@ -23,6 +24,7 @@ class ChatListCell: BaseCell {
 
     fileprivate var avatarView: ImageViewWithStatus!
     fileprivate var nicknameLabel: UILabel!
+    fileprivate var presenceLabel: UILabel!
     fileprivate var messageLabel: UILabel!
     fileprivate var dateLabel: UILabel!
     fileprivate var arrowImageView: UIImageView!
@@ -38,15 +40,21 @@ class ChatListCell: BaseCell {
         separatorInset.left = CGFloat(Constants.AvatarLeftOffset + Constants.AvatarSize + Constants.AvatarRightOffset)
 
         avatarView.imageView.image = chatModel.avatar
-        avatarView.userStatusView.theme = theme
-        avatarView.userStatusView.userStatus = chatModel.status
-        avatarView.userStatusView.connectionStatus = chatModel.connectionstatus
+        avatarView.userStatusView.isHidden = true
 
         nicknameLabel.text = chatModel.nickname
         nicknameLabel.textColor = theme.colorForType(.NormalText)
 
+        presenceLabel.text = chatModel.presenceText
+        presenceLabel.textColor = chatModel.presenceIsOnline
+            ? theme.colorForType(.OnlineStatus)
+            : theme.colorForType(.ChatListCellMessage)
+        presenceLabel.isHidden = chatModel.presenceText.isEmpty
+
         messageLabel.text = chatModel.message
-        messageLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        messageLabel.textColor = chatModel.isDraft
+            ? theme.colorForType(.BusyStatus)
+            : theme.colorForType(.ChatListCellMessage)
 
         dateLabel.text = chatModel.dateText
         dateLabel.textColor = theme.colorForType(.ChatListCellMessage)
@@ -72,6 +80,10 @@ class ChatListCell: BaseCell {
         nicknameLabel = UILabel()
         nicknameLabel.font = UIFont.systemFont(ofSize: 18.0)
         contentView.addSubview(nicknameLabel)
+
+        presenceLabel = UILabel()
+        presenceLabel.font = UIFont.systemFont(ofSize: 13.0)
+        contentView.addSubview(presenceLabel)
 
         messageLabel = UILabel()
         messageLabel.font = UIFont.systemFont(ofSize: 12.0)
@@ -106,9 +118,15 @@ class ChatListCell: BaseCell {
         messageLabel.snp.makeConstraints {
             $0.leading.equalTo(nicknameLabel)
             $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
-            $0.top.equalTo(nicknameLabel.snp.bottom)
+            $0.top.equalTo(presenceLabel.snp.bottom)
             $0.bottom.equalTo(contentView).offset(-Constants.VerticalOffset)
             $0.height.equalTo(Constants.MessageLabelHeight)
+        }
+
+        presenceLabel.snp.makeConstraints {
+            $0.leading.trailing.equalTo(nicknameLabel)
+            $0.top.equalTo(nicknameLabel.snp.bottom)
+            $0.height.equalTo(Constants.PresenceLabelHeight)
         }
 
         dateLabel.snp.makeConstraints {
@@ -137,7 +155,9 @@ extension ChatListCell {
     override var accessibilityLabel: String? {
         get {
             var label = nicknameLabel.text ?? ""
-            label += ", " + avatarView.userStatusView.userStatus.toString()
+            if let presence = presenceLabel.text, !presence.isEmpty {
+                label += ", " + presence
+            }
 
             return label
         }

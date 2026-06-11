@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tg_chat_bg">@color/khandaq_surface</color>
+    <color name="tg_chat_bg_deep">@color/khandaq_background</color>
+    <color name="tg_chat_search_bg">#1C2422</color>
+    <color name="tg_chat_title">@color/khandaq_text</color>
+    <color name="tg_chat_preview">#8A9A92</color>
+    <color name="tg_chat_draft">#E56555</color>
+    <color name="tg_chat_time">#8A9A92</color>
+    <color name="tg_chat_unread_bg">@color/khandaq_emerald</color>
+    <color name="tg_chat_ripple">#33FFFFFF</color>
+</resources>

@@ -49,7 +49,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:layout_marginLeft="65dp"
+                        android:layout_marginStart="52dp"
                         android:gravity="left"
                         android:text="@string/layout___peer_name"
                         android:textColor="#EFEFEF"
@@ -65,24 +65,20 @@
 
                     <de.hdodenhof.circleimageview.CircleImageView
                         android:id="@+id/img_avatar"
-                        android:layout_width="75dp"
-                        android:layout_height="50dp"
-                        android:layout_marginTop="0dp"
-                        android:layout_weight="3"
-                        android:gravity="top"
+                        android:layout_width="@dimen/tg_chat_avatar_in_bubble"
+                        android:layout_height="@dimen/tg_chat_avatar_in_bubble"
+                        android:layout_gravity="bottom"
+                        android:layout_marginEnd="6dp"
                         android:src="@drawable/user_pratikshya"
-                        app:civ_border_color="#50000000"
-                        app:civ_border_width="2dp"
+                        app:civ_border_color="#30000000"
+                        app:civ_border_width="0dp"
                         app:civ_fill_color="@color/md_grey_400" />
 
                     <ImageView
                         android:id="@+id/img_corner"
-                        android:layout_width="30dp"
-                        android:layout_height="30dp"
-                        android:layout_marginTop="14dp"
-                        android:layout_marginRight="0dp"
-                        android:layout_weight="1"
-                        android:alpha="0.5"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:visibility="gone"
                         android:src="@drawable/arrow_bg2" />
 
                     <LinearLayout
@@ -98,14 +94,10 @@
 
                         <ImageView
                             android:id="@+id/m_icon"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_alignParentTop="true"
-                            android:layout_marginRight="6dip"
-                            android:padding="2dp"
-                            android:scaleType="centerInside"
-                            android:src="@drawable/circle_red"
-                            android:visibility="invisible" />
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:visibility="gone"
+                            android:src="@drawable/circle_red" />
 
                         <com.luseen.autolinklibrary.EmojiTextViewLinks
                             android:id="@+id/m_text"
@@ -147,7 +139,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="top"
-                        android:layout_marginTop="-2dp"
+                        android:layout_marginTop="4dp"
                         android:layout_marginRight="20dp"
                         android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
                         android:gravity="top"
@@ -177,7 +169,7 @@
                     android:layout_marginLeft="10dp"
                     android:layout_marginRight="10dp"
                     android:layout_weight="100"
-                    android:background="#FFFFFF" />
+                    android:background="@color/tg_date_separator_line" />
 
                 <TextView
                     android:id="@+id/message_text_date_string"
@@ -204,7 +196,7 @@
                     android:layout_marginLeft="10dp"
                     android:layout_marginRight="10dp"
                     android:layout_weight="100"
-                    android:background="#FFFFFF" />
+                    android:background="@color/tg_date_separator_line" />
 
             </LinearLayout>
         </RelativeLayout>

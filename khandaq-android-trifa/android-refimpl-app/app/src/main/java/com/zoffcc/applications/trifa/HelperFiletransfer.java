@@ -107,12 +107,17 @@ public class HelperFiletransfer
     {
         try
         {
+            if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
+            {
+                return false;
+            }
+
             if (should_force_auto_accept_incoming(message))
             {
                 return accept_paused_incoming_filetransfer(message);
             }
 
-            String mimeType = URLConnection.guessContentTypeFromName(
+            String mimeType = guess_mime_type_from_filename(
                     get_filetransfer_filename_from_id(message.filetransfer_id).toLowerCase());
             // Log.i(TAG, "check_auto_accept_incoming_filetransfer:mime-type=" + mimeType);
 
@@ -178,7 +183,7 @@ public class HelperFiletransfer
             if (PREF__auto_accept_all_upto)
             {
                 if (get_filetransfer_filesize_from_id(message.filetransfer_id) <=
-                    (long) AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB * 1014 *
+                    (long) AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB * 1024 *
                     1024) // if file size is smaller than 200 MByte accept FT
                 {
                     if (get_filetransfer_state_from_id(message.filetransfer_id) == TOX_FILE_CONTROL_PAUSE.value)
@@ -1283,7 +1288,7 @@ public class HelperFiletransfer
 
     static void share_local_file(final String filename_fullpath, final Context context)
     {
-        Uri file_uri = FileProvider.getUriForFile(context, "com.zoffcc.applications.trifa.std_fileprovider",
+        Uri file_uri = FileProvider.getUriForFile(context, KhandaqProviders.STD_FILE_PROVIDER,
                                                   new java.io.File(filename_fullpath));
 
         Intent intent = new Intent(Intent.ACTION_SEND, file_uri);
@@ -1314,7 +1319,7 @@ public class HelperFiletransfer
         {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
             {
-                Uri file_uri = FileProvider.getUriForFile(context, "com.zoffcc.applications.trifa.std_fileprovider",
+                Uri file_uri = FileProvider.getUriForFile(context, KhandaqProviders.STD_FILE_PROVIDER,
                                                           new java.io.File(filename_fullpath));
                 MimeTypeMap myMime = MimeTypeMap.getSingleton();
                 String mimeType = myMime.getMimeTypeFromExtension(getFileExtensionFromUrl(filename_fullpath));
@@ -1424,48 +1429,7 @@ public class HelperFiletransfer
 
     static void open_outgoing_message_file(final Context context, final Message message)
     {
-        final String mime_type = guess_message_file_mime_type(context, message);
-
-        if ((mime_type != null) && mime_type.startsWith("image/"))
-        {
-            try
-            {
-                final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
-                intent.putExtra("image_filename", message.filename_fullpath);
-                intent.putExtra("image_cache_key", message.filename_fullpath + "#" + message.id);
-                if (message.storage_frame_work)
-                {
-                    intent.putExtra("storage_frame_work", "1");
-                }
-                context.startActivity(intent);
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-                display_toast("opening file failed", false, 0);
-            }
-            return;
-        }
-
-        try
-        {
-            if (message.storage_frame_work)
-            {
-                final Uri uri = Uri.parse(message.filename_fullpath);
-                final Intent newIntent = new Intent(Intent.ACTION_VIEW);
-                newIntent.setDataAndType(uri, mime_type);
-                newIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                context.startActivity(newIntent);
-                return;
-            }
-
-            open_local_outgoing_file_with_mime(message.filename_fullpath, context, mime_type);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            display_toast("opening outgoing file failed", false, 0);
-        }
+        ChatMediaHelper.openMessageMedia(context, message, null);
     }
 
     static void open_local_outgoing_file(final String filename_fullpath, final Context context)
@@ -1485,7 +1449,7 @@ public class HelperFiletransfer
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
             {
-                Uri file_uri = FileProvider.getUriForFile(context, "com.zoffcc.applications.trifa.ext2_provider",
+                Uri file_uri = FileProvider.getUriForFile(context, KhandaqProviders.EXT2_PROVIDER,
                                                           new java.io.File(filename_fullpath));
                 Intent newIntent = new Intent(Intent.ACTION_VIEW);
                 newIntent.setDataAndType(file_uri, mimeType);
@@ -1767,5 +1731,169 @@ public class HelperFiletransfer
                          TOX_FILE_CONTROL_RESUME.value);
         update_single_message_from_messge_id(message.id, true);
         return true;
+    }
+
+    static long get_vfs_file_length(String path_name, String file_name)
+    {
+        try
+        {
+            if (MainActivity.VFS_ENCRYPT)
+            {
+                info.guardianproject.iocipher.File f = new info.guardianproject.iocipher.File(path_name + "/" + file_name);
+                return f.length();
+            }
+            else
+            {
+                java.io.File f = new java.io.File(path_name + "/" + file_name);
+                return f.length();
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "get_vfs_file_length:EE:" + e.getMessage());
+            return -1L;
+        }
+    }
+
+    static boolean verify_incoming_file_complete(Filetransfer f)
+    {
+        if (f == null)
+        {
+            return false;
+        }
+
+        final long actual = get_vfs_file_length(f.path_name, f.file_name);
+        if (actual < 0)
+        {
+            return false;
+        }
+
+        return actual >= f.filesize;
+    }
+
+    static boolean is_message_file_complete(Message message)
+    {
+        if ((message == null) || (message.filedb_id == -1))
+        {
+            return false;
+        }
+
+        try
+        {
+            final FileDB file_ = (FileDB) orma.selectFromFileDB().idEq(message.filedb_id).get(0);
+            if ((file_.filesize <= 0) || (file_.path_name == null) || (file_.file_name == null))
+            {
+                return false;
+            }
+
+            final long actual = get_vfs_file_length(file_.path_name, file_.file_name);
+            return (actual >= 0) && (actual >= file_.filesize);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "is_message_file_complete:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    public static void resume_stalled_incoming_filetransfers()
+    {
+        try
+        {
+            final List<Filetransfer> transfers = orma.selectFromFiletransfer().
+                    directionEq(TRIFA_FT_DIRECTION_INCOMING.value).
+                    ft_acceptedEq(true).
+                    stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
+                    toList();
+
+            for (Filetransfer f : transfers)
+            {
+                if ((f.filesize <= 0) || (f.current_position >= f.filesize))
+                {
+                    continue;
+                }
+
+                if ((f.state != TOX_FILE_CONTROL_PAUSE.value) && (f.state != TOX_FILE_CONTROL_RESUME.value))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    final long friend_number = tox_friend_by_public_key__wrapper(f.tox_public_key_string);
+                    if (friend_number < 0)
+                    {
+                        continue;
+                    }
+
+                    tox_file_control(friend_number, f.file_number, TOX_FILE_CONTROL_RESUME.value);
+                    if (f.state == TOX_FILE_CONTROL_PAUSE.value)
+                    {
+                        set_filetransfer_state_from_id(f.id, TOX_FILE_CONTROL_RESUME.value);
+                        final long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(f.id,
+                                                                                                            friend_number);
+                        if (msg_id > -1)
+                        {
+                            set_message_state_from_id(msg_id, TOX_FILE_CONTROL_RESUME.value);
+                            update_single_message_from_messge_id(msg_id, false);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "resume_stalled_incoming_filetransfers:ft=" + f.id + " EE:" + e.getMessage());
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "resume_stalled_incoming_filetransfers:EE:" + e.getMessage());
+        }
+    }
+
+    static void fail_incoming_filetransfer(Filetransfer f, long friend_number, long file_number, String reason)
+    {
+        if (f == null)
+        {
+            return;
+        }
+
+        Log.w(TAG, "fail_incoming_filetransfer:" + f.file_name + " reason=" + reason);
+
+        try
+        {
+            tox_file_control(friend_number, file_number, TOX_FILE_CONTROL_CANCEL.value);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        try
+        {
+            remove_vfs_ft_from_cache(f);
+            delete_filetransfer_tmpfile(friend_number, file_number);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        try
+        {
+            long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(f.id, friend_number);
+            set_filetransfer_state_from_id(f.id, TOX_FILE_CONTROL_CANCEL.value);
+            if (msg_id > -1)
+            {
+                HelperMessage.set_message_state_from_id(msg_id, TOX_FILE_CONTROL_CANCEL.value);
+                HelperMessage.set_message_filedb_from_id(msg_id, -1);
+                update_single_message_from_messge_id(msg_id, true);
+            }
+            delete_filetransfers_from_friendnum_and_filenum(friend_number, file_number);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 }

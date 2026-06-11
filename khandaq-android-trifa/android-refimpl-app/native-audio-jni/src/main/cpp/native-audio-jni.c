@@ -226,7 +226,8 @@ jmethodID rec_buffer_ready_method = NULL;
 static float audio_in_vu_value = 0.0f;
 static float audio_out_vu_value = 0.0f;
 
-static int native_audio_play_volume_percent_c = 10;
+static int native_audio_play_volume_percent_c = 100;
+static int call_playback_gain_c = 2;
 static float native_audio_volumeMultiplier = -20.0f;
 
 // engine interfaces
@@ -1450,6 +1451,25 @@ jint Java_com_zoffcc_applications_nativeaudio_NativeAudio_PlayPCM16(JNIEnv *env,
         }
         // ------------ change PCM volume here ------------
 
+        if (call_playback_gain_c > 1)
+        {
+            const int num_samples_boost = nextSize / 2;
+            int16_t *pcm_boost = (int16_t *) nextBuffer;
+            for (int j = 0; j < num_samples_boost; j++)
+            {
+                int32_t tmp = (int32_t) pcm_boost[j] * call_playback_gain_c;
+                if (tmp > INT16_MAX)
+                {
+                    tmp = INT16_MAX;
+                }
+                else if (tmp < INT16_MIN)
+                {
+                    tmp = INT16_MIN;
+                }
+                pcm_boost[j] = (int16_t) tmp;
+            }
+        }
+
         if (player_state_current == _PLAYING)
         {
             audio_out_vu_value = audio_vu((int16_t *) nextBuffer, (uint32_t) (nextSize / 2));
@@ -2097,6 +2117,16 @@ Java_com_zoffcc_applications_nativeaudio_NativeAudio_na_1set_1audio_1play_1volum
 
     float native_audio_volumeLevelDb = ((float)volume_percent / 100.0f) - 1.0f;
     native_audio_volumeMultiplier = powf(20, native_audio_volumeLevelDb);
+}
+
+void
+Java_com_zoffcc_applications_nativeaudio_NativeAudio_na_1set_1call_1playback_1gain(JNIEnv *env, jclass clazz,
+        jint gain)
+{
+    if (gain >= 1 && gain <= 8)
+    {
+        call_playback_gain_c = (int) gain;
+    }
 }
 
 #pragma clang diagnostic pop

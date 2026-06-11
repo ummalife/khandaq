@@ -12,9 +12,10 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+        app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar">
 
         <androidx.appcompat.widget.SearchView
             android:id="@+id/group_search_view_messages"
@@ -41,8 +42,10 @@
             android:orientation="vertical">
 
             <LinearLayout
+                android:id="@+id/ml_header_bar"
                 android:layout_width="match_parent"
                 android:layout_height="55dp"
+                android:background="@color/tg_chat_header_bg"
                 android:orientation="horizontal">
 
                 <LinearLayout
@@ -50,7 +53,7 @@
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:background="?attr/selectableItemBackground"
+                    android:background="@android:color/transparent"
                     android:clickable="true"
                     android:contentDescription="@string/group_open_group_info"
                     android:focusable="true"
@@ -59,24 +62,16 @@
 
                     <ImageView
                         android:id="@+id/ml_icon"
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:layout_gravity="center_vertical"
-                        android:layout_marginLeft="6dip"
-                        android:layout_marginRight="1dip"
-                        android:padding="2dp"
-                        android:scaleType="centerInside"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:visibility="gone"
                         android:src="@drawable/circle_red" />
 
                     <ImageView
                         android:id="@+id/ml_status_icon"
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:layout_gravity="center_vertical"
-                        android:layout_marginLeft="1dip"
-                        android:layout_marginRight="6dip"
-                        android:padding="2dp"
-                        android:scaleType="centerInside"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:visibility="gone"
                         android:src="@drawable/circle_green" />
 
                     <TextView
@@ -87,14 +82,28 @@
                         android:layout_weight="1"
                         android:ellipsize="end"
                         android:gravity="center_vertical"
-                        android:maxLines="1"
+                        android:maxLines="2"
                         android:paddingStart="4dp"
                         android:paddingEnd="8dp"
                         android:text="@string/layout___name"
-                        android:textColor="@color/md_black_1000"
-                        android:textSize="15sp" />
+                        android:textColor="@color/tg_chat_header_title"
+                        android:textSize="16sp" />
 
                 </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/ml_members_icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_margin="7dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/group_open_member_list"
+                    android:focusable="true"
+                    android:padding="3dp"
+                    android:scaleType="centerInside"
+                    android:src="@android:color/transparent" />
 
                 <ImageButton
                     android:id="@+id/add_friend_conference"
@@ -436,7 +445,7 @@
                     android:gravity="center_vertical"
                     android:imeOptions="flagNoPersonalizedLearning|actionSend"
                     android:includeFontPadding="false"
-                    android:inputType="textMultiLine"
+                    android:inputType="textCapSentences|textMultiLine"
                     android:maxLines="5"
                     android:paddingStart="@dimen/chat_input_field_padding_h"
                     android:paddingTop="@dimen/chat_input_field_padding_v"
@@ -444,8 +453,8 @@
                     android:paddingBottom="@dimen/chat_input_field_padding_v"
                     android:singleLine="false"
                     android:text=""
-                    android:textColor="@color/chat_input_text"
-                    android:textColorHint="@color/gray"
+                    android:textColor="@color/tg_chat_input_text"
+                    android:textColorHint="@color/tg_chat_input_hint"
                     android:textSize="@dimen/chat_input_text_size"
                     tools:ignore="NestedWeights" />
 

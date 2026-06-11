@@ -46,8 +46,10 @@
 class CoreAV;
 class CoreFile;
 class CoreExt;
+class QNetworkConfigurationManager;
 class IAudioControl;
 class ICoreSettings;
+class QNetworkConfigurationManager;
 class GroupInvite;
 class Profile;
 class Core;
@@ -233,6 +235,7 @@ private:
     void loadFriends();
     void loadGroups();
     void bootstrapDht();
+    void performKhandaqBootstrapBurst();
 
     void checkLastOnline(uint32_t friendId);
 
@@ -242,6 +245,7 @@ private:
 private slots:
     void process();
     void onStarted();
+    void onNetworkChanged();
 
 private:
     struct ToxDeleter
@@ -258,7 +262,7 @@ private:
     * This should be able to go to 50 or 100 without affecting legitimate disconnects'
     * downtime, but lets be conservative for now. Edit: now ~~40~~ 30.
     */
-    #define CORE_DISCONNECT_TOLERANCE 30
+    #define CORE_DISCONNECT_TOLERANCE 8
 
     using ToxPtr = std::unique_ptr<Tox, ToxDeleter>;
     ToxPtr tox;
@@ -275,4 +279,6 @@ private:
     const ICoreSettings& settings;
     bool isConnected = false;
     int tolerance = CORE_DISCONNECT_TOLERANCE;
+    class QNetworkConfigurationManager* networkManager = nullptr;
+    qint64 lastNetworkRebootstrapMs = 0;
 };

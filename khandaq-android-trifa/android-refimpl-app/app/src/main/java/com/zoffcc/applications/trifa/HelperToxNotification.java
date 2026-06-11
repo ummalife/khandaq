@@ -22,6 +22,7 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -43,7 +44,30 @@ import static com.zoffcc.applications.trifa.TrifaToxService.manually_logged_out;
 public class HelperToxNotification
 {
     private static final String TAG = "trifa.Hlp.ToxNoti";
+    static final String CHANNEL_ID_TOX_SERVICE = "khandaq_online_service";
     static int ONGOING_NOTIFICATION_ID = 1030;
+
+    static void ensureChannel(final Context c)
+    {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O)
+        {
+            return;
+        }
+        final NotificationManager nm = (NotificationManager) c.getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null)
+        {
+            return;
+        }
+        final NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID_TOX_SERVICE,
+                c.getString(R.string.notification_channel_toxservice),
+                NotificationManager.IMPORTANCE_MIN);
+        channel.setDescription(CHANNEL_ID_TOX_SERVICE);
+        channel.setSound(null, null);
+        channel.enableVibration(false);
+        nm.createNotificationChannel(channel);
+        MainActivity.channelId_toxservice = CHANNEL_ID_TOX_SERVICE;
+    }
 
     private static class StatusAppearance
     {
@@ -111,11 +135,17 @@ public class HelperToxNotification
         {
             return c.getString(R.string.notification_status_online_tor);
         }
-        return c.getString(R.string.notification_status_online);
+        final String quality = ConnectionQualityMonitor.get().getLabel();
+        if ("strong".equals(quality))
+        {
+            return c.getString(R.string.notification_status_online);
+        }
+        return c.getString(R.string.notification_status_online) + " · " + quality;
     }
 
     private static Notification build_foreground_notification(Context c, int connection, String message)
     {
+        ensureChannel(c);
         Intent notificationIntent = new Intent(c, MainActivity.class);
         notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         PendingIntent pendingIntent = PendingIntent.getActivity(c, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
@@ -124,7 +154,7 @@ public class HelperToxNotification
         final StatusAppearance appearance = resolve_status_appearance(connection, bootstrapping, is_manual_logout);
         final String statusText = resolve_status_text(c, connection, bootstrapping, is_manual_logout, message);
 
-        NotificationCompat.Builder b = new NotificationCompat.Builder(c, MainActivity.channelId_toxservice);
+        NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID_TOX_SERVICE);
         b.setContentTitle(c.getString(R.string.notification_app_title));
         b.setContentText(statusText);
         b.setSmallIcon(appearance.smallIcon);
@@ -135,7 +165,7 @@ public class HelperToxNotification
         b.setSilent(true);
         b.setCategory(Notification.CATEGORY_SERVICE);
         b.setPriority(NotificationCompat.PRIORITY_MIN);
-        b.setVisibility(NotificationCompat.VISIBILITY_SECRET);
+        b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
         {

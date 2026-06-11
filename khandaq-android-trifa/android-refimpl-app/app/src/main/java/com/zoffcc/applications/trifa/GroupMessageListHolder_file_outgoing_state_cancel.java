@@ -102,8 +102,20 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
 
         message_ = m;
 
+        if (!GroupMessageLayoutHelper.isRenderableMessage(context, m))
+        {
+            GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container,
+                    GroupMessageLayoutHelper.hiddenRowLayout());
+            return;
+        }
+
         ft_audio_player.setVisibility(View.GONE);
-        ft_preview_image.getLayoutParams().height = (int)dp2px(150);
+        final int previewHeightPx = (int) dp2px(150);
+        ft_preview_image.getLayoutParams().height = previewHeightPx;
+        if (ft_preview_image.getLayoutParams() instanceof android.widget.LinearLayout.LayoutParams)
+        {
+            ((android.widget.LinearLayout.LayoutParams) ft_preview_image.getLayoutParams()).weight = 0;
+        }
 
         int drawable_id = R.drawable.rounded_blue_bg;
         try
@@ -186,12 +198,12 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
                 mimeType = URLConnection.guessContentTypeFromName(message.filename_fullpath.toLowerCase());
             }
 
-            if (mimeType.startsWith("image/"))
+            if (mimeType != null && mimeType.startsWith("image/"))
             {
                 is_image = true;
             }
 
-            if (mimeType.startsWith("audio/"))
+            if (mimeType != null && mimeType.startsWith("audio/"))
             {
                 is_audio = true;
             }
@@ -206,7 +218,7 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
             try
             {
                 String mimeType = URLConnection.guessContentTypeFromName(message.filename_fullpath.toLowerCase());
-                if (mimeType.startsWith("video/"))
+                if (mimeType != null && mimeType.startsWith("video/"))
                 {
                     is_video = true;
                 }
@@ -365,6 +377,19 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
         ft_buttons_container.setVisibility(View.GONE);
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
+        img_avatar.setVisibility(View.GONE);
+
+        final int layoutPosition = this.getAdapterPosition();
+        final GroupMessageLayoutHelper.RowLayout rowLayout =
+                GroupMessageLayoutHelper.layoutFor(m, layoutPosition, context);
+        GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container, rowLayout);
+        GroupMessageLayoutHelper.applyTopMargin(itemView, rowLayout);
+        if (rowLayout.hidePeerHeader)
+        {
+            img_avatar.setVisibility(View.GONE);
+            imageView.setVisibility(View.GONE);
+        }
+
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
     }
 

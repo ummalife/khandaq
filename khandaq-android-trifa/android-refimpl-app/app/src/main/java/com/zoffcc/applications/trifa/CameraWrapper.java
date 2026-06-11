@@ -491,9 +491,9 @@ public class CameraWrapper
             }
             else
             {
-                // default setting
-                IMAGE_WIDTH = 640;
-                IMAGE_HEIGHT = 480;
+                // default: 720p
+                IMAGE_WIDTH = 1280;
+                IMAGE_HEIGHT = 720;
             }
             // ---------- configure camera resolution for video calling ------------
 

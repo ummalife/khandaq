@@ -307,14 +307,11 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         else
         {
             // TEXT -------------
-            if ((my_msg.tox_friendpubkey.equals(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY)) && (
-
-                    ((my_msg.msg_idv3_hash.equals(MESSAGE_PAGING_SHOW_OLDER_HASH)) ||
-                     (my_msg.msg_idv3_hash.equals(MESSAGE_PAGING_SHOW_NEWER_HASH)))
-
-            ))
+            if (TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(my_msg.tox_friendpubkey)
+                    && (MESSAGE_PAGING_SHOW_OLDER_HASH.equals(my_msg.msg_idv3_hash)
+                        || MESSAGE_PAGING_SHOW_NEWER_HASH.equals(my_msg.msg_idv3_hash)))
             {
-                if (my_msg.msg_idv3_hash.equals(MESSAGE_PAGING_SHOW_OLDER_HASH))
+                if (MESSAGE_PAGING_SHOW_OLDER_HASH.equals(my_msg.msg_idv3_hash))
                 {
                     return Message_model.PAGING_OLDER;
                 }

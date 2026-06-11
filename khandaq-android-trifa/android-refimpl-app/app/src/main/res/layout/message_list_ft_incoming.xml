@@ -267,7 +267,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="top"
-                android:layout_marginTop="-2dp"
+                android:layout_marginTop="4dp"
                 android:layout_marginRight="20dp"
                 android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
                 android:gravity="top"
@@ -298,7 +298,7 @@
             android:layout_marginLeft="10dp"
             android:layout_marginRight="10dp"
             android:layout_weight="100"
-            android:background="#FFFFFF" />
+            android:background="@color/tg_date_separator_line" />
 
         <TextView
             android:id="@+id/message_text_date_string"
@@ -325,7 +325,7 @@
             android:layout_marginLeft="10dp"
             android:layout_marginRight="10dp"
             android:layout_weight="100"
-            android:background="#FFFFFF" />
+            android:background="@color/tg_date_separator_line" />
 
     </LinearLayout>
 

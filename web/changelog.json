@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-10T21:57:48Z",
+  "generated_at": "2026-06-11T19:52:31Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,140 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.6",
+      "date": "2026-06-11",
+      "title": "Cross-platform messaging and UX stabilization",
+      "summary": "Fix Linux↔macOS desktop delivery spinners, Android avatars/themes/media UX, iOS video send and presence, network hardening, and v0.2.6 release builds on khandaq.org and GitHub Releases.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "critical",
+          "title": "Desktop Linux↔macOS messages stuck on spinner",
+          "description": "Messages arrived but delivery indicators never cleared; macOS replies did not reach Linux. Outgoing traffic now uses Tox core only; toxext negotiation and receipt handling fixed.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "severity": "critical",
+          "title": "Android empty avatars in chat list",
+          "description": "Friend list showed blank circles instead of avatars or initials. Glide cache cleared before placeholders; explicit avatar dimensions applied.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "critical",
+          "title": "iOS crash when sending video",
+          "description": "Video send ran on main thread with full-file memory load. Compression and upload moved to background with size limits and error UI.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android text messages blocked after emoji",
+          "description": "After sending emoji-only messages, text sends hung with spinner in DM and groups. Message pipeline state fixed.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Cross-platform friend request mismatch",
+          "description": "Desktop required manual accept while Android auto-accepted, leaving contacts stuck in pending. Auto-accept aligned on all desktop clients.",
+          "platforms": [
+            "desktop",
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android dark theme unreadable chat text",
+          "description": "Message bubbles, timestamps, date separators and input field used dark text on dark backgrounds in night mode. Theme colors corrected.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android invisible toolbar icons in light theme",
+          "description": "Add-friend and hamburger menu used white icons on white header. Switched to DayNight ActionBar with adaptive tints.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Network reconnection and bootstrap hardening",
+          "description": "Long reconnect delays after WiFi/cellular/VPN changes and weak offline startup. Bootstrap refresh, backoff with jitter, and connectivity monitors added on mobile and desktop.",
+          "platforms": [
+            "android",
+            "ios",
+            "desktop"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Remove Tox identicon avatars",
+          "description": "Generated Tox ID icons replaced with initials placeholders everywhere; profile ID badge section removed.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Media send preview before upload",
+          "description": "Gallery picks sent immediately without confirmation. Preview screen with caption and cancel added on Android and iOS.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Telegram-style online status text",
+          "description": "Colored debug dots replaced with readable presence strings in chat lists.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Remove Khandaq Community auto-group",
+          "description": "Built-in public group entry and auto-join removed from Android client.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Linux .deb deploy mirror 404",
+          "description": "Site deploy copied only unversioned .deb and picked stale 0.2.5 package. Deploy script now uploads latest .deb with versioned filename.",
+          "platforms": [
+            "infra"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Message delivery checkmarks",
+          "description": "Outgoing messages show sending/sent/delivered/read indicators in chats.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Site and README download links v0.2.6",
+          "description": "Landing page, README, and mirror checksums updated to match GitHub Release v0.2.6.",
+          "platforms": [
+            "infra"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.5",
       "date": "2026-06-10",

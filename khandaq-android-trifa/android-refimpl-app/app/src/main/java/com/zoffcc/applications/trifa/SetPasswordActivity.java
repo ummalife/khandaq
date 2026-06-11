@@ -74,6 +74,14 @@ public class SetPasswordActivity extends AppCompatActivity
 
         settings = PreferenceManager.getDefaultSharedPreferences(this);
 
+        if (DbSecretKeyStorage.hasExistingUserDatabase(this))
+        {
+            Log.w(TAG, "existing DB detected — redirecting to CheckPassword");
+            startActivity(new Intent(this, CheckPasswordActivity.class));
+            finish();
+            return;
+        }
+
         githash_text = findViewById(R.id.githash_text);
 
         mPasswordView1 = (EditText) findViewById(R.id.password_1);

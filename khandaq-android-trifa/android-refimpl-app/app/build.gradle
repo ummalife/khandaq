@@ -20,6 +20,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'kotlin-kapt'
 }
 if (!file("google-services.json").exists() && file("google-services.json.example").exists()) {
     copy {
@@ -254,8 +255,8 @@ android {
         minSdkVersion 21
         //noinspection OldTargetApi
         targetSdkVersion 33
-        versionCode 10295
-        versionName "0.2.5"
+        versionCode 10298
+        versionName "0.2.6"
 
         renderscriptTargetApi 21
         renderscriptSupportModeEnabled true
@@ -372,7 +373,8 @@ dependencies {
     implementation('com.github.bumptech.glide:glide:5.0.7') {
         exclude group: 'com.android.support'
     }
-    annotationProcessor 'com.github.bumptech.glide:compiler:5.0.7'
+    // kapt: stable GlideApp generation with Kotlin (release + debug)
+    kapt 'com.github.bumptech.glide:compiler:5.0.7'
     //
     //
     //
@@ -395,6 +397,7 @@ dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
     //noinspection KtxExtensionAvailable
     implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.work:work-runtime:2.9.1'
     androidTestImplementation 'androidx.multidex:multidex:2.0.1'
     androidTestImplementation 'androidx.multidex:multidex-instrumentation:2.0.0'
     implementation 'info.guardianproject.netcipher:netcipher:2.1.0'
@@ -404,6 +407,10 @@ dependencies {
     implementation 'me.zhanghai.android.patternlock:library:2.1.2'
     implementation 'com.github.zoff99:pkgs_armchaAutoLinkTextView:0.3.0'
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'
+    def media3_version = "1.4.1"
+    implementation "androidx.media3:media3-exoplayer:$media3_version"
+    implementation "androidx.media3:media3-ui:$media3_version"
+    implementation "androidx.media3:media3-common:$media3_version"
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.daimajia.numberprogressbar:library:1.4@aar'
     implementation 'com.github.lawloretienne:discreteslider:0.0.9'
@@ -413,7 +420,7 @@ dependencies {
     implementation 'com.google.android.gms:play-services-base:18.5.0'
     //noinspection GradleDependency
     implementation 'id.zelory:compressor:2.1.1'
-    annotationProcessor 'com.github.zoff99:pkgs_hotchemiPermissionsdispatcher-processor:3.2.0'
+    kapt 'com.github.zoff99:pkgs_hotchemiPermissionsdispatcher-processor:3.2.0'
     // ---------------------
     // ---------------------
     // Testing-only dependencies

@@ -60,7 +60,7 @@ public class Callstate
     static long call_first_video_frame_received = -1L; // when we receive the first video frame (someone calls us)
     static long call_first_audio_frame_received = -1L; // when we receive the first audio frame (someone calls us)
     static boolean camera_opened = false;
-    static boolean audio_speaker = true; // true -> loudspeaker, false -> for your ear-speaker
+    static boolean audio_speaker = false; // true -> loudspeaker, false -> earpiece
     static int audio_device = 0; // 0 -> phone, 1 -> headset, 2 -> bluetoothdevice
     static long play_delay = 0;
     static long java_video_play_delay = 0;
@@ -97,7 +97,7 @@ public class Callstate
         Callstate.video_out_codec = VIDEO_CODEC_VP8;
         Callstate.video_in_codec = VIDEO_CODEC_VP8;
         Callstate.accepted_call = 0;
-        Callstate.audio_speaker = true;
+        Callstate.audio_speaker = false;
         Callstate.audio_device = 0;
         Callstate.play_delay = 0;
         Callstate.java_video_play_delay = 0;

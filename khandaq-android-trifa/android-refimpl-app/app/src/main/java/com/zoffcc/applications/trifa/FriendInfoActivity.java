@@ -44,19 +44,15 @@ import androidx.appcompat.widget.Toolbar;
 
 import static com.zoffcc.applications.trifa.HelperFriend.get_friend_capabilities_from_pubkey;
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
-import static com.zoffcc.applications.trifa.HelperFriend.set_friend_avatar_update;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_get_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.darkenColor;
-import static com.zoffcc.applications.trifa.HelperGeneric.get_vfs_image_filename_friend_avatar;
 import static com.zoffcc.applications.trifa.HelperGeneric.is_nightmode_active;
-import static com.zoffcc.applications.trifa.HelperGeneric.put_vfs_image_on_imageview_real;
 import static com.zoffcc.applications.trifa.HelperRelay.get_pushurl_for_friend;
 import static com.zoffcc.applications.trifa.HelperRelay.get_relay_for_friend;
 import static com.zoffcc.applications.trifa.HelperRelay.is_valid_pushurl_for_friend_with_whitelist;
 import static com.zoffcc.applications.trifa.HelperRelay.remove_friend_pushurl_in_db;
 import static com.zoffcc.applications.trifa.HelperRelay.remove_friend_relay_in_db;
-import static com.zoffcc.applications.trifa.Identicon.create_avatar_identicon_for_pubkey;
 import static com.zoffcc.applications.trifa.MainActivity.friend_list_fragment;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_friend_get_connection_ip;
@@ -290,10 +286,6 @@ public class FriendInfoActivity extends AppCompatActivity
             e.printStackTrace();
         }
 
-        final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
-                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-        profile_icon.setImageDrawable(d1);
-
         try
         {
             final long friendnum_ = friendnum;
@@ -353,29 +345,13 @@ public class FriendInfoActivity extends AppCompatActivity
 
         try
         {
-            String fname = get_vfs_image_filename_friend_avatar(friendnum);
-            // Log.i(TAG, "fname=" + fname);
-            if (fname != null)
+            final FriendList f = main_get_friend(friendnum);
+            String displayName = f.name;
+            if (f.alias_name != null && f.alias_name.length() > 0)
             {
-                put_vfs_image_on_imageview_real(this, profile_icon, d1, fname, false, true, main_get_friend(friendnum));
+                displayName = f.alias_name;
             }
-            else
-            {
-                // Log.i(TAG, "indenticon:001");
-
-                final FriendList f = (FriendList) orma.selectFromFriendList().
-                        tox_public_key_stringEq(friend_pubkey).
-                        toList().get(0);
-
-                create_avatar_identicon_for_pubkey(f.tox_public_key_string);
-                set_friend_avatar_update(friend_pubkey, true);
-
-                String fname3 = get_vfs_image_filename_friend_avatar(friendnum);
-                if (fname3 != null)
-                {
-                    put_vfs_image_on_imageview_real(this, profile_icon, d1, fname3, false, true, f);
-                }
-            }
+            ChatBubbleUiHelper.fill_profile_peer_avatar(this, friend_pubkey, displayName, profile_icon);
         }
         catch (Exception e)
         {

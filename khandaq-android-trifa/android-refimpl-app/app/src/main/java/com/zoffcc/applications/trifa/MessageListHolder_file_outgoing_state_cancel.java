@@ -342,19 +342,14 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                     imageView.setVisibility(View.GONE);
                 }
 
-                final Drawable d4 = new IconicsDrawable(this.context).
-                        icon(GoogleMaterial.Icon.gmd_ondemand_video).
-                        backgroundColor(Color.TRANSPARENT).
-                        color(Color.parseColor("#AA000000")).sizeDp(50);
+                final ViewGroup.LayoutParams previewLp = ft_preview_container.getLayoutParams();
+                previewLp.height = (int) dp2px(180);
+                ft_preview_container.setLayoutParams(previewLp);
+                final ViewGroup.LayoutParams imageLp = ft_preview_image.getLayoutParams();
+                imageLp.height = (int) dp2px(180);
+                ft_preview_image.setLayoutParams(imageLp);
 
-                GlideApp.
-                        with(context).
-                        load(d4).
-                        diskCacheStrategy(DiskCacheStrategy.NONE).
-                        skipMemoryCache(true).
-                        priority(Priority.LOW).
-                        into(ft_preview_image);
-
+                ChatMediaHelper.bindVideoPreview(context, message, null, ft_preview_image);
                 ft_preview_image.setOnTouchListener(new View.OnTouchListener()
                 {
                     @Override

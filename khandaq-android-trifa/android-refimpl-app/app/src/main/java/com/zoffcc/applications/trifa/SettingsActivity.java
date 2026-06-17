@@ -515,12 +515,9 @@ public class SettingsActivity extends AppCompatPreferenceActivity
                     {
                         final String value = (String) newValue;
                         // Persist before recreate — otherwise onCreate reads the previous theme (off-by-one).
-                        PreferenceManager.getDefaultSharedPreferences(preference.getContext()).
-                                edit().putString("dark_mode_pref", value).apply();
-                        MainApplication.applyDarkModeFromPref(value);
                         if (getActivity() != null)
                         {
-                            getActivity().recreate();
+                            ThemeTransitionHelper.recreateWithThemeCrossfade(getActivity(), value);
                         }
                     }
                     catch (Exception e)
@@ -596,7 +593,47 @@ public class SettingsActivity extends AppCompatPreferenceActivity
             super.onCreate(savedInstanceState);
             addPreferencesFromResource(R.xml.pref_notification);
 
-            bindPreferenceSummaryToValue(findPreference("notifications_new_message_ringtone"));
+            final Preference ringtonePref = findPreference("notifications_new_message_ringtone");
+            if (ringtonePref != null)
+            {
+                ringtonePref.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener()
+                {
+                    @Override
+                    public boolean onPreferenceClick(Preference preference)
+                    {
+                        startActivity(new Intent(getActivity(), NotificationRingtoneSettingsActivity.class));
+                        return true;
+                    }
+                });
+                refreshRingtoneSummary();
+            }
+        }
+
+        @Override
+        public void onResume()
+        {
+            super.onResume();
+            refreshRingtoneSummary();
+        }
+
+        private void refreshRingtoneSummary()
+        {
+            final Preference ringtonePref = findPreference("notifications_new_message_ringtone");
+            if (ringtonePref == null)
+            {
+                return;
+            }
+
+            try
+            {
+                final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(
+                        ringtonePref.getContext());
+                ringtonePref.setSummary(NotificationRingtoneSettingsActivity.ringtoneSummary(
+                        ringtonePref.getContext(), prefs));
+            }
+            catch (Exception ignored)
+            {
+            }
         }
     }
 }

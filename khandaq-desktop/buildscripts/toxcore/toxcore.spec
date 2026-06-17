@@ -5,7 +5,7 @@
 %endif
 
 Name:           toxcore
-Version:        0.2.18
+Version:        0.2.19
 Release:        1%{?dist}
 Summary:        All-in-one secure communication platform
 

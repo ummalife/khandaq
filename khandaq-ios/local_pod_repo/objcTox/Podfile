@@ -4,7 +4,9 @@ source 'https://github.com/CocoaPods/Specs.git'
 inhibit_all_warnings!
 
 def common_pods
-    pod "toxcore", :git => 'https://github.com/Zoxcore/toxcore.git', :commit => '5cf8c66a8fc3f2ab0708a15e3d77ba9e77f48a81'
+    pod 'libopus-static', :path => '../libopus-static'
+    pod "toxcore", :path => '../toxcore'
+    pod "cmp", :path => '../cmp'
     pod 'CocoaLumberjack', '~> 1.9.2'
     pod 'Realm', '10.36.0'
     pod 'TPCircularBuffer', '~> 0.0.1'
@@ -21,25 +23,57 @@ end
 
 
 target :iOSDemo do
-    platform :ios, '8.0'
+    platform :ios, '12.0'
     common_pods
     demo_pods
 end
 
 target :iOSDemoTests do
-    platform :ios, '8.0'
+    platform :ios, '12.0'
     common_pods
     test_pods
 end
 
 target :OSXDemo do
-    platform :osx, '10.9'
+    platform :osx, '10.13'
     common_pods
     demo_pods
 end
 
 target :OSXDemoTests do
-    platform :osx, '10.9'
+    platform :osx, '10.13'
     common_pods
     test_pods
+end
+
+post_install do |installer|
+  blake2b_ref = File.join(installer.sandbox.root,
+                          'libsodium/src/libsodium/crypto_generichash/blake2b/ref/blake2b-ref.c')
+  if File.exist?(blake2b_ref)
+    blake2b_stack = <<~'C'.strip
+          CRYPTO_ALIGN(64) unsigned char _blake2b_state_buf[crypto_generichash_blake2b_statebytes()];
+          blake2b_state *S = (blake2b_state *) (void *) _blake2b_state_buf;
+    C
+    content = File.read(blake2b_ref)
+    patched = content.gsub(/    (?:CRYPTO_ALIGN\(64\) )?blake2b_state S\[1\];/, blake2b_stack)
+    if patched != content
+      File.chmod(0o644, blake2b_ref)
+      File.write(blake2b_ref, patched)
+    end
+  end
+
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+      end
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386 x86_64'
+      next unless target.name.start_with?('libsodium')
+
+      flags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+      flags = [flags] unless flags.is_a?(Array)
+      flags += %w[-Wno-error=sizeof-array-div -Wno-sizeof-array-div]
+      config.build_settings['OTHER_CFLAGS'] = flags
+    end
+  end
 end

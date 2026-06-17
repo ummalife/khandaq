@@ -73,9 +73,9 @@ public class ExportActivity extends AppCompatActivity
         TextView text_dbpass = findViewById(R.id.text_dbpass);
 
         Intent intent = getIntent();
-        final String act = intent.getStringExtra("act");
+        final String act = intent != null ? intent.getStringExtra("act") : null;
 
-        if (act.equals("MaintenanceActivity"))
+        if ("MaintenanceActivity".equals(act))
         {
             text_toxpass.setText(TrifaSetPatternActivity.bytesToString(TrifaSetPatternActivity.sha256(TrifaSetPatternActivity.StringToBytes2(PREF__DB_secrect_key))));
             text_dbpass.setText(PREF__DB_secrect_key);
@@ -96,19 +96,18 @@ public class ExportActivity extends AppCompatActivity
                 try
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                    builder.setTitle("Export All Encrypted Files");
-                    builder.setMessage(
-                            "Your Encrypted files will be exported to:" + "\n\n" +
-                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_FULL_FILES_EXPORT_DIR);
+                    builder.setTitle(R.string.maintenance_export_all_files_title);
+                    builder.setMessage(v.getContext().getString(R.string.maintenance_export_all_files_message,
+                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_FULL_FILES_EXPORT_DIR));
 
-                    builder.setPositiveButton("Yes, I want to export", new DialogInterface.OnClickListener()
+                    builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
                             export_all_files(v.getContext());
                         }
                     });
-                    builder.setNegativeButton("Cancel", null);
+                    builder.setNegativeButton(R.string.cancel, null);
 
                     AlertDialog dialog = builder.create();
                     dialog.show();
@@ -148,7 +147,7 @@ public class ExportActivity extends AppCompatActivity
         {
             manually_log_out();
 
-            dialog.setMessage("exporting ...");
+            dialog.setMessage(c.getString(R.string.maintenance_exporting));
             dialog.setCancelable(false);
             dialog.show();
         }
@@ -166,7 +165,6 @@ public class ExportActivity extends AppCompatActivity
 
                 // first export the tox save file unencrypted
                 final String export_tox_file = export_dir_string + "/" + "unsecure_export_savedata.tox";
-                System.out.println("XXXXXXXXX:" + export_tox_file);
                 export_savedata_file_unsecure("_", export_tox_file);
 
                 // now export all other files
@@ -182,7 +180,6 @@ public class ExportActivity extends AppCompatActivity
 
                 for (String export_file : files_to_export)
                 {
-                    System.out.println("XXXXXXXXX:" + export_file + " -> " + export_dir_string + "/" + new File(export_file).getName());
                     final String dst_file = export_dir_string + "/" + new File(export_file).getName();
                     io_file_copy(new File(export_file), new File(dst_file));
                 }
@@ -191,7 +188,6 @@ public class ExportActivity extends AppCompatActivity
                 {
                     try
                     {
-                        System.out.println("XXXXXXXXX:optinal:" + export_file + " -> " + export_dir_string + "/" + new File(export_file).getName());
                         final String dst_file = export_dir_string + "/" + new File(export_file).getName();
                         io_file_copy(new File(export_file), new File(dst_file));
                     }
@@ -203,7 +199,7 @@ public class ExportActivity extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                display_toast("!! ERROR on export !!", true, 0);
+                display_toast(c.getString(R.string.maintenance_export_failed), true, 0);
                 return false;
             }
 
@@ -220,7 +216,7 @@ public class ExportActivity extends AppCompatActivity
 
             if (result)
             {
-                display_toast("export ready", true, 0);
+                display_toast(c.getString(R.string.maintenance_export_ready), true, 0);
             }
         }
     }

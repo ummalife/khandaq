@@ -20,6 +20,7 @@
 #include "groupwidget.h"
 
 #include <QApplication>
+#include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDrag>
 #include <QDragEnterEvent>
@@ -96,6 +97,7 @@ void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
 
     menu.addSeparator();
 
+    QAction* copyGroupId = menu.addAction(tr("Copy Group ID"));
     QAction* setTitle = menu.addAction(tr("Set title..."));
     QAction* quitGroup = menu.addAction(tr("Quit group", "Menu to quit a groupchat"));
 
@@ -119,6 +121,8 @@ void GroupWidget::contextMenuEvent(QContextMenuEvent* event)
         chatroom->removeGroupFromDialogs();
     } else if (selectedItem == setTitle) {
         editName();
+    } else if (selectedItem == copyGroupId) {
+        QApplication::clipboard()->setText(groupId.toString());
     }
 }
 

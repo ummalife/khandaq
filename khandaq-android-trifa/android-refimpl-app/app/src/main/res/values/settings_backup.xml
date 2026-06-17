@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="settings_backup_label">@color/khandaq_text_muted</color>
+    <color name="settings_backup_panel_bg">@color/tg_chat_search_bg</color>
+    <color name="settings_backup_panel_stroke">@color/khandaq_stroke_light</color>
+    <color name="settings_backup_action_text">@color/khandaq_graphite</color>
+    <color name="settings_backup_icon">@color/khandaq_primary</color>
+    <color name="settings_backup_divider">@color/khandaq_stroke_light</color>
+</resources>

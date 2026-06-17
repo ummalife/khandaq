@@ -5,5 +5,5 @@
 import Foundation
 
 class ChatOutgoingFileCellModel: ChatGenericFileCellModel {
-
+    var delivered: Bool = false
 }

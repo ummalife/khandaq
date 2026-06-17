@@ -23,12 +23,16 @@ final class NetworkConnectivityMonitor
 {
     private static final String TAG = "trifa.NetMonitor";
     private static final long REBOOTSTRAP_DEBOUNCE_MS = 500L;
+    private static final long REBOOTSTRAP_MIN_INTERVAL_MS = 10_000L;
 
     private static NetworkConnectivityMonitor instance;
     private static ConnectivityManager.NetworkCallback networkCallback;
 
     private final Handler debounceHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingRebootstrap;
+    private long lastNetworkHandle = -1L;
+    private boolean lastValidated = false;
+    private long lastRebootstrapMs = 0L;
 
     static void register(final Context context)
     {
@@ -60,7 +64,8 @@ final class NetworkConnectivityMonitor
             @Override
             public void onAvailable(final Network network)
             {
-                handleNetworkEvent(appContext, "available");
+                final boolean networkChanged = updateNetworkHandle(network);
+                handleNetworkEvent(appContext, "available", networkChanged);
             }
 
             @Override
@@ -68,14 +73,29 @@ final class NetworkConnectivityMonitor
             {
                 sync_have_internet_connectivity(appContext);
                 append_logger_msg(TAG + "::onLost HAVE_INTERNET=" + HAVE_INTERNET_CONNECTIVITY);
-                ConnectionQualityMonitor.get().onInternetLost();
-                NetworkDiagnosticsLog.log("network_lost", "default network lost");
+                if (!HAVE_INTERNET_CONNECTIVITY)
+                {
+                    lastNetworkHandle = -1L;
+                    lastValidated = false;
+                    ConnectionQualityMonitor.get().onInternetLost();
+                    NetworkDiagnosticsLog.log("network_lost", "default network lost");
+                }
             }
 
             @Override
             public void onCapabilitiesChanged(final Network network, final NetworkCapabilities caps)
             {
-                handleNetworkEvent(appContext, "capabilities");
+                // fires every few seconds on mobile (signal level changes) — only react
+                // to a real network switch or the network becoming validated
+                final boolean networkChanged = updateNetworkHandle(network);
+                final boolean validated =
+                        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                final boolean becameValidated = validated && !lastValidated;
+                lastValidated = validated;
+                if (networkChanged || becameValidated)
+                {
+                    handleNetworkEvent(appContext, "capabilities", true);
+                }
             }
         };
 
@@ -101,12 +121,25 @@ final class NetworkConnectivityMonitor
         }
     }
 
-    private void handleNetworkEvent(final Context appContext, final String reason)
+    private boolean updateNetworkHandle(final Network network)
+    {
+        final long handle = network.getNetworkHandle();
+        final boolean changed = (lastNetworkHandle != -1L) && (handle != lastNetworkHandle);
+        if (handle != lastNetworkHandle)
+        {
+            lastValidated = false;
+        }
+        lastNetworkHandle = handle;
+        return changed;
+    }
+
+    private void handleNetworkEvent(final Context appContext, final String reason,
+                                    final boolean meaningfulChange)
     {
         final boolean wasOnline = HAVE_INTERNET_CONNECTIVITY;
         sync_have_internet_connectivity(appContext);
         append_logger_msg(TAG + "::" + reason + " HAVE_INTERNET=" + HAVE_INTERNET_CONNECTIVITY
-                + " was=" + wasOnline);
+                + " was=" + wasOnline + " change=" + meaningfulChange);
 
         if (!HAVE_INTERNET_CONNECTIVITY)
         {
@@ -117,6 +150,24 @@ final class NetworkConnectivityMonitor
         {
             return;
         }
+
+        final boolean cameBackOnline = !wasOnline;
+        if (!meaningfulChange && !cameBackOnline)
+        {
+            return;
+        }
+
+        // tox already connected and same network: skip churn unless enough time passed
+        final long now = android.os.SystemClock.elapsedRealtime();
+        if (TRIFAGlobals.global_self_connection_status !=
+            ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value
+            && (now - lastRebootstrapMs) < REBOOTSTRAP_MIN_INTERVAL_MS)
+        {
+            NetworkDiagnosticsLog.log("rebootstrap_skip",
+                    "reason=" + reason + " tox online, too soon");
+            return;
+        }
+        lastRebootstrapMs = now;
 
         scheduleRebootstrap(reason);
     }

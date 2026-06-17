@@ -312,6 +312,12 @@
     <string name="join_public_group_joined">आप सार्वजनिक समूह में शामिल हो गए हैं</string>
     <string name="add_public_group_failed">सार्वजनिक समूह बनाना विफल रहा</string>
     <string name="add_private_group_failed">निजी समूह बनाना विफल रहा</string>
+    <string name="group_password_placeholder">समूह पासवर्ड (केवल निजी समूह)</string>
+    <string name="group_password_set">समूह पासवर्ड सेट करें</string>
+    <string name="group_topic_lock">विषय लॉक (केवल संस्थापक)</string>
+    <string name="group_privacy_set">गोपनीयता सेट करें</string>
+    <string name="group_create_private_password">वैकल्पिक समूह पासवर्ड</string>
+
     <string name="add_private_group_success">आपने एक निजी समूह बनाया है</string>
     <string name="add_public_group_success">आपने सार्वजनिक समूह बनाया है</string>
     <string name="MainActivity_yes_button">हां</string>
@@ -341,6 +347,14 @@
     <string name="pref_description_allow_file_sharing_to_trifa_via_intent">Share Intent के माध्यम से TRIfA को फ़ाइलें साझा करें।</string>
     <string name="add_public_group_activity_help">दिए गए समूह नाम के साथ एक नया सार्वजनिक समूह बनाएं।</string>
     <string name="join_public_group_failed">सार्वजनिक समूह में शामिल होना विफल रहा</string>
+    <string name="join_public_group_failed_not_ready">मैसेंजर अभी भी कनेक्ट हो रहा है। कुछ सेकंड प्रतीक्षा करें और पुनः प्रयास करें।</string>
+    <string name="join_public_group_failed_bad_id">अमान्य समूह ID। सभी 64 हेक्स वर्ण कॉपी करें।</string>
+    <string name="join_public_group_failed_network">नेटवर्क पर समूह नहीं मिला। इंटरनेट जाँचें और पुनः प्रयास करें।</string>
+    <string name="join_public_group_failed_password">इस समूह के लिए पासवर्ड आवश्यक है।</string>
+    <string name="join_public_group_error_no_id">समूह ID दर्ज करें</string>
+    <string name="join_public_group_error_illegal_chars">समूह ID में अमान्य वर्ण हैं। केवल A–F और 0–9 अनुमत हैं।</string>
+    <string name="join_public_group_error_length">समूह ID 64 हेक्सadecimal वर्ण का होना चाहिए।</string>
+
     <string name="FriendListHolder_toggle_notification_silent_title">अधिसूचना टॉगल (toggle) करें</string>
     <string name="add_friend_success">आपने एक नया मित्र जोड़ा है</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">क्या आप इस फ़ाइल स्थानांतरण को रद्द करना चाहते हैं\?</string>
@@ -397,4 +411,51 @@
     <string name="title_activity_wrong_credentials">गलत प्रामाणिकताएं</string>
     <string name="layout___create_new_private_group">नया निजी समूह बनाएं</string>
     <string name="layout___remove_own_pushurl">Push URL हटाए</string>
+    <string name="group_video_join_title">समूह वीडियो में शामिल हों?</string>
+    <string name="group_video_join_message">इस समूह में सभी को अपना वीडियो और ऑडियो भेजें?</string>
+    <string name="group_video_join_confirm">हाँ, वीडियो शुरू करें</string>
+    <string name="group_video_join_decline">नहीं</string>
+    <string name="group_send_voice_confirm_title">वॉइस संदेश भेजें?</string>
+    <string name="group_send_voice_confirm_message">यह वॉइस संदेश समूह में भेजें?</string>
+    <string name="group_peer_unknown">अज्ञात</string>
+    <string name="group_incoming_message_error">आने वाला समूह संदेश संसाधित नहीं हो सका।</string>
+    <string name="group_file_send_failed">समूह में फ़ाइल भेजने में विफल।</string>
+    <string name="group_image_shrink_failed">भेजने के लिए छवि तैयार नहीं हो सकी।</string>
+    <string name="group_incoming_file_error">आने वाली समूह फ़ाइल संसाधित नहीं हो सकी।</string>
+    <string name="chat_file_too_large">फ़ाइल बहुत बड़ी है।</string>
+    <string name="chat_incoming_file_too_large">आने वाली फ़ाइल बहुत बड़ी है।</string>
+    <string name="chat_opening_file_failed">फ़ाइल नहीं खोली जा सकी।</string>
+    <string name="group_file_too_large">यह फ़ाइल इस समूह के लिए बहुत बड़ी है।</string>
+    <string name="group_file_prepare_failed">भेजने के लिए फ़ाइल तैयार नहीं हो सकी।</string>
+    <string name="add_group_failed_empty_name">समूह का नाम दर्ज करें।</string>
+    <string name="maintenance_exporting">निर्यात हो रहा है…</string>
+    <string name="maintenance_export_ready">निर्यात पूर्ण</string>
+    <string name="maintenance_export_failed">निर्यात विफल</string>
+    <string name="set_password_setup_failed">पासवर्ड सेट नहीं हो सका। पुनः प्रयास करें।</string>
+    <string name="power_charging_connected">चार्जर कनेक्ट हुआ</string>
+    <string name="power_charging_disconnected">चार्जर डिस्कनेक्ट हुआ</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

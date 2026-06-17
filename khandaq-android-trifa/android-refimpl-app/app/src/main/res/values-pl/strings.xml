@@ -243,6 +243,14 @@
     <string name="MainActivity_toast_msg_deleted">Wiadomość usunięta</string>
     <string name="pref_title_speakerphone_tweak">Poprawa pracy Głośnika w Połączeniach głosowych</string>
     <string name="join_public_group_failed">Nie udało się dołączyć do Grupy Publicznej</string>
+    <string name="join_public_group_failed_not_ready">Komunikator nadal się łączy. Poczekaj kilka sekund i spróbuj ponownie.</string>
+    <string name="join_public_group_failed_bad_id">Nieprawidłowe ID grupy. Skopiuj wszystkie 64 znaki hex.</string>
+    <string name="join_public_group_failed_network">Nie udało się znaleźć grupy w sieci. Sprawdź internet i spróbuj ponownie.</string>
+    <string name="join_public_group_failed_password">Ta grupa wymaga hasła.</string>
+    <string name="join_public_group_error_no_id">Wprowadź ID grupy</string>
+    <string name="join_public_group_error_illegal_chars">ID grupy zawiera niedozwolone znaki. Dozwolone są tylko A–F i 0–9.</string>
+    <string name="join_public_group_error_length">ID grupy musi mieć 64 znaki szesnastkowe.</string>
+
     <string name="add_group_activity_name">Stwórz Grupę Prywatną</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_title">przerwij transfer pliku</string>
     <string name="group_message_list_activity_name">Grupa</string>
@@ -255,9 +263,14 @@
     <string name="GroupActivityOffline">Nieaktywni:</string>
     <string name="layout___group_name">Nazwa Grupy</string>
     <string name="pref_title_mic_gain_factor_toggle">Ustaw poziom wzmocnienia mikrofonu dla obniżenia głośności</string>
-    <string name="pref_description_enable_ngc_features">!! Eksperymentalne !!
-\nFunkcja NIE działająca w pełni!!</string>
+    <string name="pref_description_enable_ngc_features">Nowe czaty grupowe (NGC) z ulepszonymi wiadomościami, głosem i wideo.</string>
     <string name="add_private_group_failed">Nie udało się utworzyć nowej Grupy Prywatnej</string>
+    <string name="group_password_placeholder">Hasło grupy (tylko grupy prywatne)</string>
+    <string name="group_password_set">Ustaw hasło grupy</string>
+    <string name="group_topic_lock">Blokada tematu (tylko założyciel)</string>
+    <string name="group_privacy_set">Ustaw prywatność</string>
+    <string name="group_create_private_password">Opcjonalne hasło grupy</string>
+
     <string name="MainActivity_notification_new_message4">nowa Wiadomość</string>
     <string name="MainActivity_notification_new_message5">nowa Wiadomość</string>
     <string name="MainActivity_setup_push_tip_title">Ustaw Powiadomienia Push</string>
@@ -319,4 +332,51 @@
     <string name="layout___friend_message_stats">Wiadomości:</string>
     <string name="layout___delete_group_system_msgs">Usuń wiadomości systemowe</string>
     <string name="layout___group_message_stats">Wiadomości w grupie:</string>
+    <string name="group_video_join_title">Dołączyć do wideorozmowy grupowej?</string>
+    <string name="group_video_join_message">Wysłać wideo i audio wszystkim w grupie?</string>
+    <string name="group_video_join_confirm">Tak, włącz wideo</string>
+    <string name="group_video_join_decline">Nie</string>
+    <string name="group_send_voice_confirm_title">Wysłać wiadomość głosową?</string>
+    <string name="group_send_voice_confirm_message">Wysłać tę wiadomość głosową do grupy?</string>
+    <string name="group_peer_unknown">Nieznany</string>
+    <string name="group_incoming_message_error">Nie udało się przetworzyć przychodzącej wiadomości grupowej.</string>
+    <string name="group_file_send_failed">Nie udało się wysłać pliku do grupy.</string>
+    <string name="group_image_shrink_failed">Nie udało się przygotować obrazu do wysłania.</string>
+    <string name="group_incoming_file_error">Nie udało się przetworzyć przychodzącego pliku grupowego.</string>
+    <string name="chat_file_too_large">Plik jest za duży.</string>
+    <string name="chat_incoming_file_too_large">Przychodzący plik jest za duży.</string>
+    <string name="chat_opening_file_failed">Nie udało się otworić pliku.</string>
+    <string name="group_file_too_large">Plik jest za duży dla tej grupy.</string>
+    <string name="group_file_prepare_failed">Nie udało się przygotować pliku do wysłania.</string>
+    <string name="add_group_failed_empty_name">Wprowadź nazwę grupy.</string>
+    <string name="maintenance_exporting">Eksportowanie…</string>
+    <string name="maintenance_export_ready">Eksport zakończony</string>
+    <string name="maintenance_export_failed">Eksport nie powiódł się</string>
+    <string name="set_password_setup_failed">Nie udało się ustawić hasła. Spróbuj ponownie.</string>
+    <string name="power_charging_connected">Podłączono ładowarkę</string>
+    <string name="power_charging_disconnected">Odłączono ładowarkę</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

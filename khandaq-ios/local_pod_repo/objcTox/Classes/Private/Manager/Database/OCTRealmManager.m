@@ -13,10 +13,12 @@
 #import "OCTMessageText.h"
 #import "OCTMessageFile.h"
 #import "OCTMessageCall.h"
+#import "OCTGroupPeer.h"
 #import "OCTSettingsStorageObject.h"
+#import "OCTToxConstants.h"
 #import "OCTLogging.h"
 
-static const uint64_t kCurrentSchemeVersion = 16;
+static const uint64_t kCurrentSchemeVersion = 31;
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -270,6 +272,416 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     return chat;
 }
 
+- (OCTChat *)chatWithGroupNumber:(uint32_t)groupNumber
+{
+    __block OCTChat *chat = nil;
+
+    dispatch_sync(self.queue, ^{
+        chat = [[OCTChat objectsInRealm:self.realm where:@"isGroup == YES AND groupNumber == %d", groupNumber] firstObject];
+    });
+
+    return chat;
+}
+
+- (OCTChat *)chatWithGroupChatIdHex:(NSString *)chatIdHex
+{
+    NSAssert(chatIdHex.length > 0, @"Group chat id hex should be non-empty.");
+    __block OCTChat *chat = nil;
+    NSString *normalized = chatIdHex.uppercaseString;
+
+    dispatch_sync(self.queue, ^{
+        chat = [[OCTChat objectsInRealm:self.realm where:@"isGroup == YES AND groupChatIdHex ==[c] %@", normalized] firstObject];
+    });
+
+    return chat;
+}
+
+- (RLMResults *)groupChats
+{
+    __block RLMResults *chats = nil;
+
+    dispatch_sync(self.queue, ^{
+        chats = [OCTChat objectsInRealm:self.realm where:@"isGroup == YES"];
+    });
+
+    return chats;
+}
+
+- (NSArray<OCTChat *> *)groupChatsSnapshot
+{
+    __block NSMutableArray<OCTChat *> *snapshot = [NSMutableArray array];
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *results = [OCTChat objectsInRealm:self.realm where:@"isGroup == YES"];
+        NSUInteger count = results.count;
+
+        for (NSUInteger idx = 0; idx < count; idx++) {
+            [snapshot addObject:results[idx]];
+        }
+    });
+
+    return snapshot;
+}
+
+- (OCTChat *)getOrCreateGroupChatWithGroupNumber:(uint32_t)groupNumber
+                                      chatIdHex:(NSString *)chatIdHex
+                                      groupName:(NSString *)groupName
+                                   privacyState:(OCTToxGroupPrivacyState)privacyState
+{
+    NSParameterAssert(chatIdHex);
+
+    __block OCTChat *chat = nil;
+
+    dispatch_sync(self.queue, ^{
+        chat = [[OCTChat objectsInRealm:self.realm where:@"isGroup == YES AND groupNumber == %d", groupNumber] firstObject];
+
+        if (! chat && chatIdHex.length > 0) {
+            NSString *normalized = chatIdHex.uppercaseString;
+            chat = [[OCTChat objectsInRealm:self.realm where:@"isGroup == YES AND groupChatIdHex ==[c] %@", normalized] firstObject];
+        }
+
+        if (chat) {
+            [self.realm beginWriteTransaction];
+            chat.groupNumber = (int32_t)groupNumber;
+            if (chatIdHex.length > 0) {
+                chat.groupChatIdHex = chatIdHex.uppercaseString;
+            }
+            if (groupName.length > 0) {
+                chat.groupName = groupName;
+            }
+            chat.groupPrivacyState = (int32_t)privacyState;
+            [self.realm commitWriteTransaction];
+            return;
+        }
+
+        OCTLogInfo(@"creating group chat number=%u chatId=%@ name=%@", groupNumber, chatIdHex, groupName);
+
+        chat = [OCTChat new];
+        chat.isGroup = YES;
+        chat.groupNumber = (int32_t)groupNumber;
+        chat.groupChatIdHex = chatIdHex.length > 0 ? chatIdHex.uppercaseString : nil;
+        chat.groupName = groupName.length > 0 ? groupName : nil;
+        chat.groupPrivacyState = (int32_t)privacyState;
+        chat.lastActivityDateInterval = [[NSDate date] timeIntervalSince1970];
+
+        [self.realm beginWriteTransaction];
+        [self.realm addObject:chat];
+        [self.realm commitWriteTransaction];
+    });
+
+    return chat;
+}
+
+- (RLMResults *)groupPeersForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier
+{
+    NSAssert(chatUniqueIdentifier.length > 0, @"Chat unique identifier should be non-empty.");
+    __block RLMResults *peers = nil;
+
+    dispatch_sync(self.queue, ^{
+        peers = [[OCTGroupPeer objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chatUniqueIdentifier]
+                 sortedResultsUsingKeyPath:@"peerName" ascending:YES];
+    });
+
+    return peers;
+}
+
+- (void)upsertGroupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId peerName:(NSString *)peerName peerRole:(OCTToxGroupRole)peerRole peerPublicKeyHex:(NSString *)peerPublicKeyHex
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    NSString *uniqueIdentifier = [NSString stringWithFormat:@"%@:%u", chat.uniqueIdentifier, peerId];
+    NSString *normalizedPubkey = peerPublicKeyHex.length > 0 ? peerPublicKeyHex.lowercaseString : nil;
+
+    dispatch_sync(self.queue, ^{
+        OCTGroupPeer *peer = [OCTGroupPeer objectInRealm:self.realm forPrimaryKey:uniqueIdentifier];
+
+        [self.realm beginWriteTransaction];
+
+        if (! peer) {
+            peer = [OCTGroupPeer new];
+            peer.uniqueIdentifier = uniqueIdentifier;
+            peer.chatUniqueIdentifier = chat.uniqueIdentifier;
+            peer.peerId = (int32_t)peerId;
+            peer.peerRole = (int32_t)peerRole;
+
+            if (peerName.length > 0) {
+                peer.peerName = peerName;
+            }
+
+            if (normalizedPubkey.length > 0) {
+                peer.peerPublicKeyHex = normalizedPubkey;
+            }
+
+            [self.realm addObject:peer];
+            [self.realm commitWriteTransaction];
+            return;
+        }
+
+        if (peerName.length > 0 && ! [peer.peerName isEqualToString:peerName]) {
+            peer.peerName = peerName;
+        }
+
+        if (peer.peerRole != (int32_t)peerRole) {
+            peer.peerRole = (int32_t)peerRole;
+        }
+
+        if (normalizedPubkey.length > 0 && ! [peer.peerPublicKeyHex isEqualToString:normalizedPubkey]) {
+            peer.peerPublicKeyHex = normalizedPubkey;
+        }
+
+        [self.realm commitWriteTransaction];
+    });
+}
+
+- (void)upsertGroupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId peerName:(NSString *)peerName peerRole:(OCTToxGroupRole)peerRole
+{
+    [self upsertGroupPeerForChat:chat peerId:peerId peerName:peerName peerRole:peerRole peerPublicKeyHex:nil];
+}
+
+- (NSSet<NSString *> *)knownGroupMemberPublicKeyHexesForChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    __block NSMutableSet<NSString *> *pubkeys = [NSMutableSet set];
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *peers = [OCTGroupPeer objectsInRealm:self.realm
+                                                   where:@"chatUniqueIdentifier == %@ AND peerPublicKeyHex != nil",
+                                                         chat.uniqueIdentifier];
+
+        for (OCTGroupPeer *peer in peers) {
+            if (peer.peerPublicKeyHex.length > 0) {
+                [pubkeys addObject:peer.peerPublicKeyHex.lowercaseString];
+            }
+        }
+    });
+
+    return pubkeys;
+}
+
+- (void)updateGroupPeerLastSeenDateInterval:(NSTimeInterval)dateInterval forChat:(OCTChat *)chat peerId:(uint32_t)peerId
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    if (dateInterval <= 0) {
+        return;
+    }
+
+    NSString *uniqueIdentifier = [NSString stringWithFormat:@"%@:%u", chat.uniqueIdentifier, peerId];
+
+    dispatch_sync(self.queue, ^{
+        OCTGroupPeer *peer = [OCTGroupPeer objectInRealm:self.realm forPrimaryKey:uniqueIdentifier];
+
+        if (! peer) {
+            return;
+        }
+
+        if (peer.peerLastSeenDateInterval >= dateInterval) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        peer.peerLastSeenDateInterval = dateInterval;
+        [self.realm commitWriteTransaction];
+    });
+}
+
+- (NSTimeInterval)groupPeerLastSeenDateIntervalForChat:(OCTChat *)chat peerId:(uint32_t)peerId
+{
+    NSParameterAssert(chat);
+
+    __block NSTimeInterval lastSeen = 0;
+
+    dispatch_sync(self.queue, ^{
+        NSString *uniqueIdentifier = [NSString stringWithFormat:@"%@:%u", chat.uniqueIdentifier, peerId];
+        OCTGroupPeer *peer = [OCTGroupPeer objectInRealm:self.realm forPrimaryKey:uniqueIdentifier];
+        lastSeen = peer.peerLastSeenDateInterval;
+    });
+
+    return lastSeen;
+}
+
+- (NSUInteger)groupSystemMessageCountForChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    __block NSUInteger count = 0;
+
+    dispatch_sync(self.queue, ^{
+        count = [OCTMessageAbstract objectsInRealm:self.realm
+                                             where:@"chatUniqueIdentifier == %@ AND groupSystemMessage == YES",
+                                                   chat.uniqueIdentifier].count;
+    });
+
+    return count;
+}
+
+- (NSUInteger)removeGroupSystemMessagesInChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    __block NSUInteger count = 0;
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *messages = [OCTMessageAbstract objectsInRealm:self.realm
+                                                            where:@"chatUniqueIdentifier == %@ AND groupSystemMessage == YES",
+                                                                  chat.uniqueIdentifier];
+        count = messages.count;
+
+        if (count == 0) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        [self removeMessagesWithSubmessages:messages];
+
+        RLMResults *remaining = [OCTMessageAbstract objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+        remaining = [remaining sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+        chat.lastMessage = remaining.lastObject;
+
+        [self.realm commitWriteTransaction];
+    });
+
+    return count;
+}
+
+- (void)upsertGroupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId peerName:(NSString *)peerName
+{
+    OCTGroupPeer *existingPeer = [self groupPeerForChat:chat peerId:peerId];
+    OCTToxGroupRole role = existingPeer ? (OCTToxGroupRole)existingPeer.peerRole : OCTToxGroupRoleUser;
+
+    [self upsertGroupPeerForChat:chat peerId:peerId peerName:peerName peerRole:role];
+}
+
+- (void)setGroupPeerRole:(OCTToxGroupRole)peerRole peerId:(uint32_t)peerId chat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self upsertGroupPeerForChat:chat peerId:peerId peerName:nil peerRole:peerRole];
+}
+
+- (void)setGroupNotificationsSilent:(BOOL)silent forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupNotificationsSilent = silent;
+    }];
+}
+
+- (void)setGroupPeerNotificationsSilent:(BOOL)silent peerId:(uint32_t)peerId chat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self upsertGroupPeerForChat:chat peerId:peerId peerName:nil];
+
+    NSString *uniqueIdentifier = [NSString stringWithFormat:@"%@:%u", chat.uniqueIdentifier, peerId];
+
+    dispatch_sync(self.queue, ^{
+        OCTGroupPeer *peer = [OCTGroupPeer objectInRealm:self.realm forPrimaryKey:uniqueIdentifier];
+
+        if (! peer) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        peer.peerNotificationsSilent = silent;
+        [self.realm commitWriteTransaction];
+    });
+}
+
+- (void)setGroupPeerPrivateLastReadDateInterval:(NSTimeInterval)interval peerId:(uint32_t)peerId chat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self upsertGroupPeerForChat:chat peerId:peerId peerName:nil];
+
+    NSString *uniqueIdentifier = [NSString stringWithFormat:@"%@:%u", chat.uniqueIdentifier, peerId];
+
+    dispatch_sync(self.queue, ^{
+        OCTGroupPeer *peer = [OCTGroupPeer objectInRealm:self.realm forPrimaryKey:uniqueIdentifier];
+
+        if (! peer) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        peer.privateLastReadDateInterval = interval;
+        [self.realm commitWriteTransaction];
+    });
+}
+
+- (int32_t)unreadPrivateMessageCountForPeerId:(uint32_t)peerId chat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    OCTGroupPeer *peer = [self groupPeerForChat:chat peerId:peerId];
+    NSTimeInterval lastRead = peer ? peer.privateLastReadDateInterval : 0;
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == YES AND groupPrivatePeerId == %u AND groupSenderPeerId == %u AND dateInterval > %f",
+                              chat.uniqueIdentifier, peerId, peerId, lastRead];
+
+    __block int32_t count = 0;
+
+    dispatch_sync(self.queue, ^{
+        count = (int32_t)[OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate].count;
+    });
+
+    return count;
+}
+
+- (nullable OCTGroupPeer *)groupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId
+{
+    NSParameterAssert(chat);
+
+    NSString *uniqueIdentifier = [NSString stringWithFormat:@"%@:%u", chat.uniqueIdentifier, peerId];
+
+    __block OCTGroupPeer *peer = nil;
+
+    dispatch_sync(self.queue, ^{
+        peer = [OCTGroupPeer objectInRealm:self.realm forPrimaryKey:uniqueIdentifier];
+    });
+
+    return peer;
+}
+
+- (void)removeGroupPeersForChat:(OCTChat *)chat notInPeerIds:(NSSet<NSNumber *> *)peerIds
+{
+    NSParameterAssert(chat);
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *peers = [OCTGroupPeer objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+
+        [self.realm beginWriteTransaction];
+
+        for (OCTGroupPeer *peer in peers) {
+            NSNumber *peerIdNumber = @(peer.peerId);
+
+            if (! [peerIds containsObject:peerIdNumber]) {
+                [self.realm deleteObject:peer];
+            }
+        }
+
+        [self.realm commitWriteTransaction];
+    });
+}
+
+- (void)updateGroupPeerCount:(int32_t)peerCount forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupPeerCount = peerCount;
+    }];
+}
+
 - (OCTCall *)createCallWithChat:(OCTChat *)chat status:(OCTCallStatus)status
 {
     __block OCTCall *call = nil;
@@ -351,6 +763,18 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
         if (removeChat) {
             [self.realm deleteObject:chat];
         }
+        else {
+            NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+            chat.lastMessage = nil;
+            chat.lastActivityDateInterval = now;
+            chat.lastReadDateInterval = now;
+
+            RLMResults *peers = [OCTGroupPeer objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+
+            for (OCTGroupPeer *peer in peers) {
+                peer.privateLastReadDateInterval = now;
+            }
+        }
 
         [self.realm commitWriteTransaction];
     });
@@ -394,6 +818,579 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     messageText.sentPush = sentPush;
 
     return [self addMessageAbstractWithChat:chat sender:sender messageText:messageText messageFile:nil messageCall:nil tssent:tssent tsrcvd:tsrcvd];
+}
+
+- (OCTMessageAbstract *)addGroupMessageWithText:(NSString *)text
+                                           type:(OCTToxMessageType)type
+                                           chat:(OCTChat *)chat
+                                         peerId:(uint32_t)peerId
+                                       peerName:(NSString *)peerName
+                                      messageId:(OCTToxMessageId)messageId
+{
+    NSParameterAssert(text);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTLogInfo(@"adding group messageText to chat %@ peer=%u", chat, peerId);
+
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text;
+    messageText.isDelivered = (peerId == 0);
+    messageText.type = type;
+    messageText.messageId = messageId;
+    messageText.groupPeerName = peerName.length > 0 ? peerName : nil;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = peerId;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.messageText = messageText;
+
+    [self addObject:messageAbstract];
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.lastMessage = messageAbstract;
+        theChat.lastActivityDateInterval = messageAbstract.dateInterval;
+    }];
+
+    return messageAbstract;
+}
+
+- (OCTMessageAbstract *)addGroupPendingMessageWithText:(NSString *)text
+                                                  type:(OCTToxMessageType)type
+                                                  chat:(OCTChat *)chat
+{
+    NSParameterAssert(text);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text;
+    messageText.isDelivered = NO;
+    messageText.type = type;
+    messageText.messageId = 0;
+    messageText.groupPeerName = nil;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = 0;
+    messageAbstract.groupPendingSend = YES;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.messageText = messageText;
+
+    [self addObject:messageAbstract];
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.lastMessage = messageAbstract;
+        theChat.lastActivityDateInterval = messageAbstract.dateInterval;
+    }];
+
+    return messageAbstract;
+}
+
+- (RLMResults *)pendingGroupMessagesForChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    __block RLMResults *results = nil;
+
+    dispatch_sync(self.queue, ^{
+        results = [[OCTMessageAbstract objectsInRealm:self.realm
+                                                where:@"chatUniqueIdentifier == %@ AND groupPendingSend == YES",
+                                                      chat.uniqueIdentifier]
+                   sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+    });
+
+    return results;
+}
+
+- (void)markGroupPendingMessageSent:(OCTMessageAbstract *)message messageId:(uint32_t)messageId
+{
+    NSParameterAssert(message);
+
+    [self updateObject:message withBlock:^(OCTMessageAbstract *theMessage) {
+        theMessage.groupPendingSend = NO;
+
+        if (theMessage.messageText) {
+            theMessage.messageText.isDelivered = YES;
+            theMessage.messageText.messageId = messageId;
+        }
+    }];
+}
+
+- (OCTMessageAbstract *)addGroupSystemMessageWithText:(NSString *)text inChat:(OCTChat *)chat
+{
+    NSParameterAssert(text);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text;
+    messageText.isDelivered = YES;
+    messageText.type = OCTToxMessageTypeNormal;
+    messageText.messageId = 0;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = 0;
+    messageAbstract.groupSystemMessage = YES;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.messageText = messageText;
+
+    [self addObject:messageAbstract];
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.lastMessage = messageAbstract;
+        theChat.lastActivityDateInterval = messageAbstract.dateInterval;
+    }];
+
+    return messageAbstract;
+}
+
+- (void)updateGroupTopic:(NSString *)topic forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupTopic = topic.length > 0 ? topic : nil;
+        if (topic.length > 0) {
+            theChat.groupName = topic;
+        }
+    }];
+}
+
+- (void)updateGroupPassword:(NSString *)password forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupPassword = password.length > 0 ? password : nil;
+    }];
+}
+
+- (void)updateGroupTopicLockEnabled:(BOOL)enabled forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupTopicLockEnabled = enabled;
+    }];
+}
+
+- (void)updateGroupPeerLimit:(int32_t)peerLimit forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupPeerLimit = peerLimit;
+    }];
+}
+
+- (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupPrivacyState = (int32_t)privacyState;
+    }];
+}
+
+- (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.groupVoiceState = (int32_t)voiceState;
+    }];
+}
+
+static BOOL OCTRealmGroupSyncPubkeyEquals(NSString *stored, NSString *candidate)
+{
+    if (stored.length == 0 || candidate.length == 0) {
+        return NO;
+    }
+
+    return [stored.uppercaseString isEqualToString:candidate.uppercaseString];
+}
+
+static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
+                                               NSString **key1,
+                                               NSString **key2,
+                                               NSString **key3,
+                                               NSString *ackerPubkeyHex)
+{
+    NSString *acker = ackerPubkeyHex.uppercaseString;
+
+    if (OCTRealmGroupSyncPubkeyEquals(*key1, acker) ||
+        OCTRealmGroupSyncPubkeyEquals(*key2, acker) ||
+        OCTRealmGroupSyncPubkeyEquals(*key3, acker)) {
+        return;
+    }
+
+    if (*count == 0) {
+        *key1 = acker;
+        *count = 1;
+    }
+    else if (*count == 1) {
+        *key2 = acker;
+        *count = 2;
+    }
+    else if (*count == 2) {
+        *key3 = acker;
+        *count = 3;
+    }
+    else {
+        (*count)++;
+    }
+}
+
+- (void)recordGroupSyncConfirmationForOutgoingTextMessageId:(uint32_t)messageId
+                                           ackerPubkeyHex:(NSString *)ackerPubkeyHex
+                                                   inChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    if (ackerPubkeyHex.length == 0) {
+        return;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND messageText != nil AND messageText.messageId == %u",
+                              chat.uniqueIdentifier, messageId];
+    OCTMessageAbstract *message = [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
+
+    if (! message || ! message.messageText) {
+        return;
+    }
+
+    [self updateObject:message withBlock:^(OCTMessageAbstract *theMessage) {
+        OCTMessageText *messageText = theMessage.messageText;
+        int32_t count = messageText.groupSyncConfirmations;
+        NSString *key1 = messageText.groupSyncPeerKey1;
+        NSString *key2 = messageText.groupSyncPeerKey2;
+        NSString *key3 = messageText.groupSyncPeerKey3;
+
+        OCTRealmApplyGroupSyncConfirmation(&count, &key1, &key2, &key3, ackerPubkeyHex);
+
+        messageText.groupSyncConfirmations = count;
+        messageText.groupSyncPeerKey1 = key1;
+        messageText.groupSyncPeerKey2 = key2;
+        messageText.groupSyncPeerKey3 = key3;
+    }];
+}
+
+- (void)recordGroupSyncConfirmationForOutgoingFileWithHashHex:(NSString *)msgIdHashHex
+                                               ackerPubkeyHex:(NSString *)ackerPubkeyHex
+                                                       inChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    if (msgIdHashHex.length == 0 || ackerPubkeyHex.length == 0) {
+        return;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND messageFile != nil AND messageFile.groupMsgIdHashHex ==[c] %@",
+                              chat.uniqueIdentifier, msgIdHashHex];
+    OCTMessageAbstract *message = [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
+
+    if (! message || ! message.messageFile) {
+        return;
+    }
+
+    [self updateObject:message withBlock:^(OCTMessageAbstract *theMessage) {
+        OCTMessageFile *messageFile = theMessage.messageFile;
+        int32_t count = messageFile.groupSyncConfirmations;
+        NSString *key1 = messageFile.groupSyncPeerKey1;
+        NSString *key2 = messageFile.groupSyncPeerKey2;
+        NSString *key3 = messageFile.groupSyncPeerKey3;
+
+        OCTRealmApplyGroupSyncConfirmation(&count, &key1, &key2, &key3, ackerPubkeyHex);
+
+        messageFile.groupSyncConfirmations = count;
+        messageFile.groupSyncPeerKey1 = key1;
+        messageFile.groupSyncPeerKey2 = key2;
+        messageFile.groupSyncPeerKey3 = key3;
+
+        if (count > 0) {
+            messageFile.isDelivered = YES;
+        }
+    }];
+}
+
+- (OCTMessageAbstract *)addGroupPrivateMessageWithText:(NSString *)text
+                                                  type:(OCTToxMessageType)type
+                                                  chat:(OCTChat *)chat
+                                                peerId:(uint32_t)peerId
+                                              peerName:(NSString *)peerName
+                                        counterpartyId:(uint32_t)counterpartyId
+                                             messageId:(OCTToxMessageId)messageId
+                                              isOutgoing:(BOOL)isOutgoing
+{
+    NSParameterAssert(text);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text;
+    messageText.isDelivered = isOutgoing;
+    messageText.type = type;
+    messageText.messageId = messageId;
+    messageText.groupPeerName = peerName.length > 0 ? peerName : nil;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = isOutgoing ? 0 : peerId;
+    messageAbstract.groupPrivateMessage = YES;
+    messageAbstract.groupPrivatePeerId = counterpartyId;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.messageText = messageText;
+
+    [self addObject:messageAbstract];
+
+    return messageAbstract;
+}
+
+- (OCTMessageAbstract *)addGroupMessageWithFileName:(NSString *)fileName
+                                           fileSize:(uint64_t)fileSize
+                                           filePath:(NSString *)filePath
+                                           fileType:(OCTMessageFileType)fileType
+                                               chat:(OCTChat *)chat
+                                             peerId:(uint32_t)peerId
+                                            fileUTI:(NSString *)fileUTI
+                                 groupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                              groupTransferProgress:(float)groupTransferProgress
+{
+    NSParameterAssert(fileName);
+    NSParameterAssert(filePath);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTLogInfo(@"adding group messageFile to chat %@ peer=%u file=%@", chat, peerId, fileName);
+
+    OCTMessageFile *messageFile = [OCTMessageFile new];
+    messageFile.internalFileNumber = kOCTToxFileNumberFailure;
+    messageFile.fileType = fileType;
+    messageFile.fileSize = fileSize;
+    messageFile.fileName = fileName;
+    [messageFile internalSetFilePath:filePath];
+    messageFile.fileUTI = fileUTI;
+    messageFile.groupMsgIdHashHex = groupMsgIdHashHex.length > 0 ? groupMsgIdHashHex : nil;
+    messageFile.groupTransferProgress = groupTransferProgress;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = peerId;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.messageFile = messageFile;
+
+    [self addObject:messageAbstract];
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.lastMessage = messageAbstract;
+        theChat.lastActivityDateInterval = messageAbstract.dateInterval;
+    }];
+
+    return messageAbstract;
+}
+
+- (NSArray<OCTMessageAbstract *> *)groupMessagesForHistorySyncInChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    __block NSMutableArray<OCTMessageAbstract *> *messages = [NSMutableArray new];
+
+    dispatch_sync(self.queue, ^{
+        static const NSTimeInterval kHistoryWindowSeconds = 130 * 60;
+        static const uint64_t kMaxSyncFileBytes = 36701;
+        NSTimeInterval since = [[NSDate date] timeIntervalSince1970] - kHistoryWindowSeconds;
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                  @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
+                                  @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
+                                  chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
+        RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
+        RLMResults *sorted = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+
+        for (OCTMessageAbstract *message in sorted) {
+            if (message.messageFile && message.messageFile.groupMsgIdHashHex.length == 0) {
+                continue;
+            }
+
+            [messages addObject:message];
+        }
+    });
+
+    return messages;
+}
+
+- (NSArray<NSData *> *)groupHistorySyncPacketsForGroupNumber:(uint32_t)groupNumber
+                                         packetFromMessage:(NSData *(^)(OCTMessageAbstract *message))packetBlock
+{
+    NSParameterAssert(packetBlock);
+
+    __block NSMutableArray<NSData *> *packets = [NSMutableArray new];
+
+    dispatch_sync(self.queue, ^{
+        OCTChat *chat = [[OCTChat objectsInRealm:self.realm where:@"isGroup == YES AND groupNumber == %d", groupNumber] firstObject];
+
+        if (! chat) {
+            return;
+        }
+
+        static const NSTimeInterval kHistoryWindowSeconds = 130 * 60;
+        static const uint64_t kMaxSyncFileBytes = 36701;
+        NSTimeInterval since = [[NSDate date] timeIntervalSince1970] - kHistoryWindowSeconds;
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                  @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
+                                  @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
+                                  chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
+        RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
+        RLMResults *sorted = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+
+        for (OCTMessageAbstract *message in sorted) {
+            if (message.messageFile && message.messageFile.groupMsgIdHashHex.length == 0) {
+                continue;
+            }
+
+            NSData *packet = packetBlock(message);
+
+            if (packet) {
+                [packets addObject:packet];
+            }
+        }
+    });
+
+    return packets;
+}
+
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                           messageId:(uint32_t)messageId
+                              peerId:(uint32_t)peerId
+                                text:(NSString *)text
+{
+    NSParameterAssert(chat);
+    NSParameterAssert(text);
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
+                              chat.uniqueIdentifier, messageId, text];
+    RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+
+    return results.count > 0;
+}
+
+- (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
+                                                 type:(OCTToxMessageType)type
+                                                 chat:(OCTChat *)chat
+                                               peerId:(uint32_t)peerId
+                                             peerName:(NSString *)peerName
+                                            messageId:(OCTToxMessageId)messageId
+                                         dateInterval:(NSTimeInterval)dateInterval
+{
+    NSParameterAssert(text);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTLogInfo(@"adding synced group messageText to chat %@ peer=%u", chat, peerId);
+
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text;
+    messageText.isDelivered = YES;
+    messageText.type = type;
+    messageText.messageId = messageId;
+    messageText.groupPeerName = peerName.length > 0 ? peerName : nil;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = dateInterval > 0 ? dateInterval : [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = peerId;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.groupHistorySync = YES;
+    messageAbstract.messageText = messageText;
+
+    [self addObject:messageAbstract];
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        if (! theChat.lastMessage || theChat.lastMessage.dateInterval <= messageAbstract.dateInterval) {
+            theChat.lastMessage = messageAbstract;
+            theChat.lastActivityDateInterval = messageAbstract.dateInterval;
+        }
+    }];
+
+    return messageAbstract;
+}
+
+- (OCTMessageAbstract *)addGroupSyncedMessageWithFileName:(NSString *)fileName
+                                                 fileSize:(uint64_t)fileSize
+                                                 filePath:(NSString *)filePath
+                                                 fileType:(OCTMessageFileType)fileType
+                                                     chat:(OCTChat *)chat
+                                                   peerId:(uint32_t)peerId
+                                                 peerName:(NSString *)peerName
+                                                  fileUTI:(NSString *)fileUTI
+                                       groupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                             dateInterval:(NSTimeInterval)dateInterval
+{
+    NSParameterAssert(fileName);
+    NSParameterAssert(filePath);
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    OCTLogInfo(@"adding synced group messageFile to chat %@ peer=%u file=%@", chat, peerId, fileName);
+
+    OCTMessageFile *messageFile = [OCTMessageFile new];
+    messageFile.internalFileNumber = kOCTToxFileNumberFailure;
+    messageFile.fileType = fileType;
+    messageFile.fileSize = fileSize;
+    messageFile.fileName = fileName;
+    [messageFile internalSetFilePath:filePath];
+    messageFile.fileUTI = fileUTI;
+    messageFile.groupMsgIdHashHex = groupMsgIdHashHex.length > 0 ? groupMsgIdHashHex : nil;
+    messageFile.groupTransferProgress = 1.0f;
+
+    OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
+    messageAbstract.dateInterval = dateInterval > 0 ? dateInterval : [[NSDate date] timeIntervalSince1970];
+    messageAbstract.senderUniqueIdentifier = nil;
+    messageAbstract.groupSenderPeerId = peerId;
+    messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.groupHistorySync = YES;
+    messageAbstract.messageFile = messageFile;
+
+    [self addObject:messageAbstract];
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        if (! theChat.lastMessage || theChat.lastMessage.dateInterval <= messageAbstract.dateInterval) {
+            theChat.lastMessage = messageAbstract;
+            theChat.lastActivityDateInterval = messageAbstract.dateInterval;
+        }
+    }];
+
+    return messageAbstract;
+}
+
+- (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                                              chat:(OCTChat *)chat
+{
+    if (groupMsgIdHashHex.length == 0 || chat.uniqueIdentifier.length == 0) {
+        return nil;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
+                              chat.uniqueIdentifier, groupMsgIdHashHex];
+
+    return [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
 }
 
 - (OCTMessageAbstract *)addMessageWithFileNumber:(OCTToxFileNumber)fileNumber
@@ -502,6 +1499,66 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
                if (oldSchemaVersion < 16) {
                    [self doMigrationVersion16:migration];
                }
+
+               if (oldSchemaVersion < 17) {
+                   [self doMigrationVersion17:migration];
+               }
+
+               if (oldSchemaVersion < 18) {
+                   [self doMigrationVersion18:migration];
+               }
+
+               if (oldSchemaVersion < 19) {
+                   [self doMigrationVersion19:migration];
+               }
+
+               if (oldSchemaVersion < 20) {
+                   [self doMigrationVersion20:migration];
+               }
+
+               if (oldSchemaVersion < 21) {
+                   [self doMigrationVersion21:migration];
+               }
+
+               if (oldSchemaVersion < 22) {
+                   [self doMigrationVersion22:migration];
+               }
+
+               if (oldSchemaVersion < 23) {
+                   [self doMigrationVersion23:migration];
+               }
+
+               if (oldSchemaVersion < 24) {
+                   [self doMigrationVersion24:migration];
+               }
+
+               if (oldSchemaVersion < 25) {
+                   [self doMigrationVersion25:migration];
+               }
+
+               if (oldSchemaVersion < 26) {
+                   [self doMigrationVersion26:migration];
+               }
+
+               if (oldSchemaVersion < 27) {
+                   [self doMigrationVersion27:migration];
+               }
+
+               if (oldSchemaVersion < 28) {
+                   [self doMigrationVersion28:migration];
+               }
+
+               if (oldSchemaVersion < 29) {
+                   [self doMigrationVersion29:migration];
+               }
+
+               if (oldSchemaVersion < 30) {
+                   [self doMigrationVersion30:migration];
+               }
+
+               if (oldSchemaVersion < 31) {
+                   [self doMigrationVersion31:migration];
+               }
     };
 }
 
@@ -603,6 +1660,157 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 {
     [migration enumerateObjects:OCTFriend.className block:^(RLMObject *oldObject, RLMObject *newObject) {
         newObject[@"capabilities2"] = nil;
+    }];
+}
+
++ (void)doMigrationVersion18:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTChat.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupPeerCount"] = @0;
+    }];
+}
+
++ (void)doMigrationVersion19:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTMessageFile.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupMsgIdHashHex"] = nil;
+        newObject[@"groupTransferProgress"] = @0.0f;
+    }];
+}
+
++ (void)doMigrationVersion26:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTChat.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupVoiceState"] = @0;
+    }];
+}
+
++ (void)doMigrationVersion28:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupSystemMessage"] = @NO;
+    }];
+}
+
++ (void)doMigrationVersion29:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupPendingSend"] = @NO;
+    }];
+}
+
++ (void)doMigrationVersion30:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTGroupPeer.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"peerPublicKeyHex"] = nil;
+    }];
+
+    [migration enumerateObjects:OCTSettingsStorageObject.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupShowSystemMessages"] = @NO;
+    }];
+}
+
++ (void)doMigrationVersion31:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTGroupPeer.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"peerLastSeenDateInterval"] = @0.0;
+    }];
+}
+
++ (void)doMigrationVersion27:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTMessageFile.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        BOOL delivered = NO;
+
+        if ([oldObject[@"fileType"] intValue] == OCTMessageFileTypeReady &&
+            [oldObject[@"groupSyncConfirmations"] intValue] > 0) {
+            delivered = YES;
+        }
+
+        newObject[@"isDelivered"] = @(delivered);
+    }];
+}
+
++ (void)doMigrationVersion25:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTGroupPeer.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"privateLastReadDateInterval"] = @0.0;
+    }];
+}
+
++ (void)doMigrationVersion24:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTChat.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupTopicLockEnabled"] = @NO;
+        newObject[@"groupPeerLimit"] = @0;
+    }];
+
+    [migration enumerateObjects:OCTMessageText.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupSyncPeerKey1"] = nil;
+        newObject[@"groupSyncPeerKey2"] = nil;
+        newObject[@"groupSyncPeerKey3"] = nil;
+    }];
+
+    [migration enumerateObjects:OCTMessageFile.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupSyncConfirmations"] = @0;
+        newObject[@"groupSyncPeerKey1"] = nil;
+        newObject[@"groupSyncPeerKey2"] = nil;
+        newObject[@"groupSyncPeerKey3"] = nil;
+    }];
+}
+
++ (void)doMigrationVersion23:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTChat.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupTopic"] = nil;
+        newObject[@"groupPassword"] = nil;
+    }];
+
+    [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupPrivateMessage"] = @NO;
+        newObject[@"groupPrivatePeerId"] = @0;
+    }];
+
+    [migration enumerateObjects:OCTMessageText.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupSyncConfirmations"] = @0;
+    }];
+}
+
++ (void)doMigrationVersion22:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTGroupPeer.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"peerRole"] = @(OCTToxGroupRoleUser);
+    }];
+}
+
++ (void)doMigrationVersion21:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTChat.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupNotificationsSilent"] = @NO;
+    }];
+
+    [migration enumerateObjects:OCTGroupPeer.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"peerNotificationsSilent"] = @NO;
+    }];
+}
+
++ (void)doMigrationVersion20:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupHistorySync"] = @NO;
+    }];
+}
+
++ (void)doMigrationVersion17:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTChat.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"isGroup"] = @NO;
+        newObject[@"groupNumber"] = @(-1);
+        newObject[@"groupPrivacyState"] = @0;
+    }];
+
+    [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        newObject[@"groupSenderPeerId"] = @0;
     }];
 }
 

@@ -140,6 +140,7 @@ std::unique_ptr<ToxOptions> ToxOptions::makeToxOptions(const QByteArray& savedat
     tox_options_set_udp_enabled(*toxOptions, !forceTCP);
     tox_options_set_ipv6_enabled(*toxOptions, enableIPv6);
     tox_options_set_local_discovery_enabled(*toxOptions, enableLanDiscovery);
+    tox_options_set_dht_announcements_enabled(*toxOptions, true);
     tox_options_set_start_port(*toxOptions, 0);
     tox_options_set_end_port(*toxOptions, 0);
 

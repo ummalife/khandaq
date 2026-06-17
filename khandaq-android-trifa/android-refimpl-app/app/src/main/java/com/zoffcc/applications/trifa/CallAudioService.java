@@ -560,8 +560,6 @@ public class CallAudioService extends Service
         {
             try
             {
-                System.out.println("ButtonReceiver:" + intent.getAction());
-
                 if (intent.getAction().equals(ACTION_STOP))
                 {
                     stop_me(true);

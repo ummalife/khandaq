@@ -42,7 +42,7 @@ public class TRIFAGlobals
     static long global_last_activity_for_battery_savings_ts = -1;
     static boolean global_showing_messageview = false;
     static boolean global_showing_anygroupview = false;
-    final static int TOX_MIN_NORMAL_ITERATE_DELTA_MS = 100;
+    final static int TOX_MIN_NORMAL_ITERATE_DELTA_MS = 50;
     static int global_tox_self_status = ToxVars.TOX_USER_STATUS.TOX_USER_STATUS_NONE.value;
 
     static String global_notification_token = null;
@@ -73,9 +73,12 @@ public class TRIFAGlobals
     static long BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS = 15 * 1000 * 60; // 15 minutes default
 
     static int AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB = 12;
-    static int AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB = 100;
+    static int AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB = 200;
     static int AUTO_ACCEPT_FT_MAX_ANYKIND_SIZE_IN_MB = 200;
     static int AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB = 5;
+
+    /** Max file/media transfer size (private chat + NGC groups). */
+    public static final long KHANDAQ_MAX_FILE_TRANSFER_BYTES = 200L * 1024L * 1024L;
 
     public static final String MY_PACKAGE_NAME = "com.zoffcc.applications.trifa";
     public static final int CONFERENCE_COOKIE_LENGTH = 35;
@@ -98,7 +101,7 @@ public class TRIFAGlobals
 
     public static final long UINT32_MAX_JAVA = 4294967295L; // 0xffffffff == UINT32_MAX
     public static final long MiByte_BYTES = (1014 * 1024);
-    public static final long MAX_ALLOWED_INCOMING_FILESIZE_BYTES = 10 * 1024 * MiByte_BYTES; // 10 GiBytes max incoming files !
+    public static final long MAX_ALLOWED_INCOMING_FILESIZE_BYTES = KHANDAQ_MAX_FILE_TRANSFER_BYTES;
     /*
      // HINT: java does NOT have an unsigned 64 bit number!
     public static final long UINT64_MAX_JAVA = 0xffffffffffffffffL; // 0xffffffffffffffff == UINT64_MAX
@@ -136,8 +139,8 @@ public class TRIFAGlobals
 
     final static long FT_OUTGOING_FILESIZE_BYTE_USE_STORAGE_FRAMEWORK =
             2 * 1024 * MiByte_BYTES; // above this size we need Storage Framework for outgoing FTs
-    final static long FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL = 20 * 1024 * 1024; // 20MByte max outgoing NGC filesize
-    final static long FT_OUTGOING_FILESIZE_FRIEND_MAX_TOTAL = 10 * 1024 * MiByte_BYTES; // 20Gbyte max outoing filesize
+    final static long FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL = KHANDAQ_MAX_FILE_TRANSFER_BYTES;
+    final static long FT_OUTGOING_FILESIZE_FRIEND_MAX_TOTAL = KHANDAQ_MAX_FILE_TRANSFER_BYTES;
 
     static boolean orbot_is_really_running = false;
 
@@ -176,8 +179,8 @@ public class TRIFAGlobals
 
     static final int CONNECTION_STATUS_MANUAL_LOGOUT = 99;
 
-    static final int MAX_FRIEND_AUDIO_RECORDING_MSG_SECONDS = 10 * 60; // 10 minutes
-    static final int MAX_NGC_AUDIO_RECORDING_MSG_SECONDS = 10; // x seconds
+    static final int MAX_FRIEND_AUDIO_RECORDING_MSG_SECONDS = 10 * 60; // UI timer only; no auto-stop
+    static final int MAX_NGC_AUDIO_RECORDING_MSG_SECONDS = MAX_FRIEND_AUDIO_RECORDING_MSG_SECONDS;
 
     static int VIDEO_FRAME_RATE_OUTGOING = 0;
     static long last_video_frame_sent = -1;
@@ -267,7 +270,7 @@ public class TRIFAGlobals
     static final int USE_MAX_NUMBER_OF_BOOTSTRAP_NODES = 20;
     static final int USE_MAX_NUMBER_OF_BOOTSTRAP_TCP_RELAYS = 20;
 
-    static final int INTERVAL_ADD_ALL_FRIENDS_CLEAR_MS = 1000;
+    static final int INTERVAL_ADD_ALL_FRIENDS_CLEAR_MS = 2500;
     static final int INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS = 5000;
 
     // ---- lookup cache ----
@@ -279,6 +282,8 @@ public class TRIFAGlobals
 
     static List<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> bootstrap_node_list = new ArrayList<>();
     public static List<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> tcprelay_node_list = new ArrayList<>();
+    /** Serializes bootstrap list reads/writes across tox and grp-kick threads. */
+    static final Object bootstrapListsLock = new Object();
 
     // Default index 2 = 17sp (Telegram/WhatsApp-class readability)
     static final int[] MESSAGE_TEXT_SIZE = {11, 14, 17, 21, 26, 32, 48}; // values in "sp"

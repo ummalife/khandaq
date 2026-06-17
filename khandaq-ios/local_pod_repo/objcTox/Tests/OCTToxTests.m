@@ -692,7 +692,9 @@ void mocked_tox_self_get_public_key(const Tox *tox, uint8_t *public_key);
         OCMExpect([self.tox.delegate tox:self.tox
                            friendMessage:[OCMArg isEqual:@"message"]
                                     type:OCTToxMessageTypeAction
-                            friendNumber:5]);
+                            friendNumber:5
+                            msgv3HashHex:nil
+                            sendTimestamp:0]);
     }];
 }
 
@@ -765,6 +767,50 @@ void mocked_tox_self_get_public_key(const Tox *tox, uint8_t *public_key);
 
     [self waitForExpectationsWithTimeout:1.0 handler:nil];
     OCMVerifyAll((id)self.tox.delegate);
+}
+
+#pragma mark - Groups
+
+- (void)testGroupNewGetChatIdLeaveAndDuplicateJoin
+{
+    NSError *error = nil;
+
+    OCTToxGroupNumber groupNumber = [self.tox groupNewWithPrivacyState:OCTToxGroupPrivacyStatePublic
+                                                             groupName:@"TestGroup"
+                                                              peerName:@"Peer"
+                                                                 error:&error];
+    XCTAssertNotEqual(groupNumber, kOCTToxGroupNumberFailure);
+    XCTAssertNil(error);
+    XCTAssertEqual([self.tox groupCount], 1u);
+
+    NSString *chatId = [self.tox groupChatIdHexForGroupNumber:groupNumber error:&error];
+    XCTAssertNil(error);
+    XCTAssertEqual(chatId.length, kOCTToxGroupChatIdHexLength);
+
+    OCTToxGroupNumber duplicateGroupNumber = [self.tox groupJoinWithChatIdHex:chatId
+                                                                       peerName:@"Peer2"
+                                                                       password:nil
+                                                                          error:&error];
+    XCTAssertEqual(duplicateGroupNumber, kOCTToxGroupNumberFailure);
+    XCTAssertEqual(error.code, OCTToxErrorGroupJoinBadChatId);
+
+    error = nil;
+    XCTAssertTrue([self.tox groupLeaveWithGroupNumber:groupNumber partMessage:nil error:&error]);
+    XCTAssertNil(error);
+    XCTAssertEqual([self.tox groupCount], 0u);
+}
+
+- (void)testGroupMessageCallback
+{
+    [self makeTestCallbackWithCallBlock:^{
+        groupMessageCallback(self.tox.tox, 7, 42, TOX_MESSAGE_TYPE_NORMAL, (const uint8_t *)"hello", 5, 99, (__bridge void *)(self.tox));
+    } expectBlock:^(id<OCTToxDelegate> delegate) {
+        OCMExpect([delegate tox:self.tox groupMessage:@"hello"
+                                                 type:OCTToxMessageTypeNormal
+                                          groupNumber:7
+                                               peerId:42
+                                            messageId:99]);
+    }];
 }
 
 void mocked_tox_self_get_public_key(const Tox *cTox, uint8_t *public_key)

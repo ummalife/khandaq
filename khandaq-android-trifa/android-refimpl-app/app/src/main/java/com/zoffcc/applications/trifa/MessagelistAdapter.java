@@ -36,6 +36,7 @@ import java.util.List;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 
+import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_date_header;
 import static com.zoffcc.applications.trifa.HelperGeneric.only_date_time_format;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_chatlist;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_PAGING_SHOW_NEWER_HASH;
@@ -50,7 +51,8 @@ import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CO
  * HINT: in this class we decide what type of message/filetransfer view is actually shown
  *
  */
-public class MessagelistAdapter extends RecyclerView.Adapter implements FastScroller.SectionIndexer
+public class MessagelistAdapter extends RecyclerView.Adapter implements FastScroller.SectionIndexer,
+        ChatDateSeparatorHelper.DateHeaderSource
 {
     private static final String TAG = "trifa.MessagelistAdptr";
 
@@ -500,12 +502,49 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         }
     }
 
+    private boolean isDuplicateMessage(final Message candidate)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < messagelistitems.size(); i++)
+        {
+            final Message existing = messagelistitems.get(i);
+            if (candidate.id > 0 && existing.id == candidate.id)
+            {
+                return true;
+            }
+
+            if (candidate.filetransfer_id > 0 && existing.filetransfer_id == candidate.filetransfer_id)
+            {
+                return true;
+            }
+
+            if (candidate.msg_id_hash != null && !candidate.msg_id_hash.isEmpty()
+                    && candidate.msg_id_hash.equalsIgnoreCase(existing.msg_id_hash)
+                    && candidate.tox_friendpubkey != null
+                    && candidate.tox_friendpubkey.equalsIgnoreCase(existing.tox_friendpubkey))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void add_item(Message new_item)
     {
         // Log.i(TAG, "add_item:" + new_item + ":" + this.messagelistitems.size());
 
         try
         {
+            if (new_item != null && isDuplicateMessage(new_item))
+            {
+                return;
+            }
+
             this.messagelistitems.add(new_item);
             // TODO: use "notifyItemInserted" !!
             this.notifyDataSetChanged();
@@ -641,7 +680,7 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         {
             Message m = (Message) messagelistitems.get(position);
             final long ts = m.direction == 0 ? m.rcvd_timestamp : m.sent_timestamp;
-            return only_date_time_format(ts);
+            return format_chat_date_header(context, ts);
         }
         catch (Exception e)
         {
@@ -666,6 +705,46 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             e.printStackTrace();
             return true;
         }
+    }
+
+    public int findPositionForReply(final MessageReplyHelper.ReplyMeta replyMeta)
+    {
+        if (replyMeta == null || messagelistitems == null)
+        {
+            return -1;
+        }
+
+        if (replyMeta.localMessageId > 0L)
+        {
+            for (int i = 0; i < messagelistitems.size(); i++)
+            {
+                final Message message = messagelistitems.get(i);
+                if (message != null && message.id == replyMeta.localMessageId)
+                {
+                    return i;
+                }
+            }
+        }
+
+        for (int i = 0; i < messagelistitems.size(); i++)
+        {
+            final Message message = messagelistitems.get(i);
+            if (message == null)
+            {
+                continue;
+            }
+            final long ts = message.direction == 0 ? message.rcvd_timestamp : message.sent_timestamp;
+            if (Math.abs(ts - replyMeta.sortTimestampMs) > 5000L)
+            {
+                continue;
+            }
+            if (replyMeta.senderPubkeyTail == null || replyMeta.senderPubkeyTail.isEmpty()
+                    || MessageReplyHelper.pubkeyTail(message.tox_friendpubkey).equals(replyMeta.senderPubkeyTail))
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public static class DateTime_in_out

@@ -27,6 +27,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import org.khandaq.messenger.R;
+import com.zoffcc.applications.trifa.ChatVoiceSessionHelper;
 import com.zoffcc.applications.trifa.VFileMediaDataSource;
 
 import java.io.IOException;
@@ -236,6 +237,7 @@ import info.guardianproject.iocipher.RandomAccessFile;
             });
 
             try{
+                ChatVoiceSessionHelper.onVoicePlaybackStarting();
                 if (mediaPlayer != null){
                     mediaPlayer.start();
                 }
@@ -293,6 +295,7 @@ import info.guardianproject.iocipher.RandomAccessFile;
                     imgPlay.setVisibility(View.GONE);
                     imgPause.setVisibility(View.VISIBLE);
                     try{
+                        ChatVoiceSessionHelper.onVoicePlaybackStarting();
                         mediaPlayer.start();
                     }catch (Exception e){
                         e.printStackTrace();

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/ft_media_info_bar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom"
+    android:background="#80000000"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingTop="5dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="5dp"
+    android:visibility="gone"
+    tools:visibility="visible">
+
+    <ImageView
+        android:id="@+id/ft_media_info_icon"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:importantForAccessibility="no"
+        android:scaleType="centerInside"
+        tools:src="@android:drawable/ic_media_play" />
+
+    <TextView
+        android:id="@+id/ft_media_info_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        tools:text="Видео" />
+
+    <TextView
+        android:id="@+id/ft_media_info_size"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#CCFFFFFF"
+        android:textSize="12sp"
+        tools:text="3,30 МБ" />
+
+</LinearLayout>

@@ -10,19 +10,62 @@ class AppCoordinator {
     fileprivate var theme: Theme
     fileprivate var pendingToxRestartOptions: CoordinatorOptions?
     fileprivate var toxRestartWorkItem: DispatchWorkItem?
+    fileprivate var isReloadingAppearance = false
 
     init(window: UIWindow) {
         self.window = window
 
-        let filepath = Bundle.main.path(forResource: "default-theme", ofType: "yaml")!
-        let yamlString = try! NSString(contentsOfFile:filepath, encoding:String.Encoding.utf8.rawValue) as String
+        theme = ThemeAppearance.resolvedTheme()
+        ThemeChrome.applyWindowStyle(window, theme: theme)
+        ThemeChrome.applyGlobalAppearance(theme)
 
-        theme = try! Theme(yamlString: yamlString)
-        applyTheme(theme)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppearanceChange),
+            name: ThemeAppearance.didChangeNotification,
+            object: nil
+        )
 
         ToxOptionsRestartScheduler.setContinueRecreateHandler { [weak self] in
             self?.performToxRecreateIfReady()
         }
+    }
+
+    @objc func handleAppearanceChange() {
+        reloadAppearance()
+    }
+
+    func reloadAppearance() {
+        guard !isReloadingAppearance else {
+            return
+        }
+
+        isReloadingAppearance = true
+
+        let newTheme = ThemeAppearance.resolvedTheme()
+        theme = newTheme
+        window.backgroundColor = newTheme.colorForType(.NormalBackground)
+
+        guard let running = activeCoordinator as? RunningCoordinator else {
+            ThemeChrome.applyGlobalAppearance(newTheme)
+            ThemeChrome.applyWindowStyle(window, theme: newTheme)
+            isReloadingAppearance = false
+            return
+        }
+
+        let transitionWindow = window
+        UIView.transition(with: transitionWindow,
+                          duration: ThemeChrome.transitionDuration,
+                          options: [.transitionCrossDissolve, .allowAnimatedContent],
+                          animations: {
+            ThemeChrome.applyGlobalAppearance(newTheme)
+            running.reloadTheme(newTheme)
+            ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
+            ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
+            transitionWindow.layoutIfNeeded()
+        }, completion: { [weak self] _ in
+            self?.isReloadingAppearance = false
+        })
     }
 }
 
@@ -43,6 +86,12 @@ extension AppCoordinator: TopCoordinatorProtocol {
 
     func handleInboxURL(_ url: URL) {
         activeCoordinator?.handleInboxURL(url)
+    }
+
+    func processPendingShareIfNeeded() {
+        if let runningCoordinator = activeCoordinator as? RunningCoordinator {
+            runningCoordinator.processPendingShareIfNeeded()
+        }
     }
 }
 
@@ -93,14 +142,6 @@ extension AppCoordinator: LoginCoordinatorDelegate {
 
 // MARK: Private
 private extension AppCoordinator {
-    func applyTheme(_ theme: Theme) {
-        let linkTextColor = theme.colorForType(.LinkText)
-
-        UIButton.appearance().tintColor = linkTextColor
-        UISwitch.appearance().onTintColor = linkTextColor
-        UINavigationBar.appearance().tintColor = linkTextColor
-    }
-
     func showRestartPlaceholder() {
         let storyboard = UIStoryboard(name: "LaunchPlaceholderBoard", bundle: Bundle.main)
         window.rootViewController = storyboard.instantiateViewController(withIdentifier: "LaunchPlaceholderController")
@@ -172,7 +213,18 @@ private extension AppCoordinator {
                                    manager: OCTManager? = nil,
                                    skipAuthorizationChallenge: Bool = false,
                                    onToxOptionsRestartComplete: ((Bool) -> Void)? = nil) {
-        if let password = KeychainManager().toxPasswordForActiveAccount {
+        // Fresh login passes manager directly — must not depend on keychain (unsigned sim builds fail with errSecMissingEntitlement).
+        if let manager = manager {
+            activeCoordinator = createRunningCoordinatorWithManager(manager,
+                                                                    options: options,
+                                                                    skipAuthorizationChallenge: skipAuthorizationChallenge)
+            onToxOptionsRestartComplete?(true)
+            return
+        }
+
+        // Restore the last active Tox profile from Documents/saves + keychain password.
+        if SessionAutoLogin.canAttemptAutoLogin() {
+            let password = SessionAutoLogin.passwordForAutoLogin() ?? ""
             let successBlock: (OCTManager) -> Void = { [weak self] manager -> Void in
                 guard let self = self else {
                     onToxOptionsRestartComplete?(false)
@@ -184,11 +236,7 @@ private extension AppCoordinator {
                 onToxOptionsRestartComplete?(true)
             }
 
-            if let manager = manager {
-                successBlock(manager)
-            }
-            else {
-                let deleteActiveAccountAndRetry: () -> Void = { [weak self] in
+            let deleteActiveAccountAndRetry: () -> Void = { [weak self] in
                     guard let self = self else {
                         onToxOptionsRestartComplete?(false)
                         return
@@ -223,15 +271,14 @@ private extension AppCoordinator {
                 ToxFactory.createToxWithConfiguration(configuration,
                                                       encryptPassword: password,
                                                       successBlock: successBlock,
-                                                      failureBlock: { _ in
+                                                      failureBlock: { [weak self] _ in
                     log("Cannot create tox with configuration \(configuration)")
                     if let onToxOptionsRestartComplete = onToxOptionsRestartComplete {
                         onToxOptionsRestartComplete(false)
                     } else {
-                        deleteActiveAccountAndRetry()
+                        self?.activeCoordinator = self?.createLoginCoordinator(options)
                     }
                 })
-            }
         }
         else {
             activeCoordinator = createLoginCoordinator(options)

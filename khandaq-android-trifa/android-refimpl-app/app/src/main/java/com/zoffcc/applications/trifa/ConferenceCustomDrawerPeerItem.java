@@ -61,10 +61,17 @@ public class ConferenceCustomDrawerPeerItem extends AbstractBadgeableDrawerItem<
     String peer_display_name = null;
     boolean have_avatar_for_pubkey = false;
     boolean peer_online = false;
+    boolean is_self_peer = false;
 
     ConferenceCustomDrawerPeerItem setPeerOnline(final boolean online)
     {
         peer_online = online;
+        return this;
+    }
+
+    ConferenceCustomDrawerPeerItem setSelfPeer(final boolean self)
+    {
+        is_self_peer = self;
         return this;
     }
 
@@ -128,7 +135,7 @@ public class ConferenceCustomDrawerPeerItem extends AbstractBadgeableDrawerItem<
             parameter.setMargins(parameter.leftMargin, (int) dp2px(6), (int) dp2px(10), (int) dp2px(0));
             icon.setLayoutParams(parameter);
             icon.setBackground(null);
-            ChatBubbleUiHelper.fill_drawer_peer_icon(icon, peer_pubkey, peer_display_name);
+            ChatBubbleUiHelper.fill_drawer_peer_icon(icon, peer_pubkey, peer_display_name, is_self_peer);
         }
     }
 }

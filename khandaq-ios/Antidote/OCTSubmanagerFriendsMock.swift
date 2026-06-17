@@ -24,4 +24,8 @@ class OCTSubmanagerFriendsMock: NSObject, OCTSubmanagerFriends {
     func refreshConnectionStatuses() {
         // nop
     }
+
+    func ensureFriend(forFriendNumber friendNumber: OCTToxFriendNumber) -> OCTFriend! {
+        return nil
+    }
 }

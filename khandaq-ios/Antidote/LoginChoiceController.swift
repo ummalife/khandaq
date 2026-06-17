@@ -25,6 +25,11 @@ class LoginChoiceController: LoginLogoController {
 
         installConstraints()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        LaunchRecovery.markLaunchCompleted()
+    }
 }
 
 // MARK: Actions

@@ -25,7 +25,7 @@ class FriendsTabCoordinator: ActiveSessionNavigationCoordinator {
         let controller = FriendListController(theme: theme, submanagerObjects: toxManager.objects, submanagerFriends: toxManager.friends, submanagerChats: toxManager.chats, submanagerUser: toxManager.user)
         controller.delegate = self
 
-        navigationController.pushViewController(controller, animated: false)
+        installRootViewController(controller)
     }
 
     func showRequest(_ request: OCTFriendRequest, animated: Bool) {
@@ -54,6 +54,7 @@ extension FriendsTabCoordinator: FriendListControllerDelegate {
         let controller = AddFriendController(
             theme: theme,
             submanagerFriends: toxManager.friends,
+            submanagerObjects: toxManager.objects,
             ownToxAddress: toxManager.user.userAddress
         )
         controller.delegate = self

@@ -14,7 +14,6 @@ final class ChatDraftHelper
 {
     private static final String DRAFT_KEY_FRIEND_PREFIX = "draft_f_";
     private static final String DRAFT_KEY_GROUP_PREFIX = "draft_g_";
-    private static final int PREVIEW_MAX_CHARS = 120;
 
     private ChatDraftHelper()
     {
@@ -62,11 +61,8 @@ final class ChatDraftHelper
 
     static String format_draft_preview(final Context context, final String draft_text)
     {
-        String body = draft_text.replace('\n', ' ').trim();
-        if (body.length() > PREVIEW_MAX_CHARS)
-        {
-            body = body.substring(0, PREVIEW_MAX_CHARS - 3) + "...";
-        }
+        String body = ChatListUiHelper.sanitize_preview_body(draft_text);
+        body = ChatListUiHelper.truncate_preview(body);
         return context.getString(R.string.chat_list_preview_draft, body);
     }
 

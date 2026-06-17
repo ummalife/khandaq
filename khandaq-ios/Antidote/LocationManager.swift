@@ -35,6 +35,7 @@ class LocationManager: NSObject {
         get { return _state }
     }
     private var manager: CLLocationManager!
+    private var pendingAuthCompletion: ((Bool) -> Void)?
     
     private override init() {
         super.init()
@@ -89,8 +90,49 @@ extension LocationManager {
     }
     
     func requestAccess() {
-        // manager?.requestAlwaysAuthorization()
         manager?.requestWhenInUseAuthorization()
+    }
+
+    /// Request permission only when the user explicitly opts into a location feature.
+    func requestAccessForUserInitiatedSharing(completion: @escaping (Bool) -> Void) {
+        guard let manager = manager else {
+            completion(false)
+            return
+        }
+
+        if #available(iOS 14.0, *) {
+            switch manager.authorizationStatus {
+                case .authorizedAlways, .authorizedWhenInUse:
+                    completion(true)
+                case .notDetermined:
+                    pendingAuthCompletion = completion
+                    manager.requestWhenInUseAuthorization()
+                default:
+                    completion(false)
+            }
+            return
+        }
+
+        pendingAuthCompletion = completion
+        manager.requestWhenInUseAuthorization()
+    }
+
+    func hasUsableAuthorization() -> Bool {
+        guard let manager = manager else {
+            return false
+        }
+
+        if #available(iOS 14.0, *) {
+            switch manager.authorizationStatus {
+                case .authorizedAlways, .authorizedWhenInUse:
+                    return true
+                default:
+                    return false
+            }
+        }
+
+        return CLLocationManager.authorizationStatus() == .authorizedAlways
+            || CLLocationManager.authorizationStatus() == .authorizedWhenInUse
     }
     
     func startMonitoring() {
@@ -150,6 +192,11 @@ extension LocationManager: CLLocationManagerDelegate {
             Bus.shared.post(event: .LocationAuthUpdate, userInfo: ["status": manager.authorizationStatus, "state": self.state])
         } else {
             // Fallback on earlier versions
+        }
+
+        if let completion = pendingAuthCompletion {
+            pendingAuthCompletion = nil
+            completion(hasUsableAuthorization())
         }
     }
     

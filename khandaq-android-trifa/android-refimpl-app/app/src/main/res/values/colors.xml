@@ -16,6 +16,8 @@
     <color name="khandaq_bubble_out_light">#D4EBE0</color>
     <color name="khandaq_bubble_in_light">#FFFFFF</color>
     <color name="khandaq_stroke_light">#DDE5E1</color>
+    <color name="tab_active">#007AFF</color>
+    <color name="tab_inactive">#8E8E93</color>
     <!-- Always dark — for inputs and list rows on light backgrounds (theme-independent) -->
     <color name="text_on_light_surface">#DE000000</color>
     <color name="chat_input_text">@color/tg_chat_input_text</color>
@@ -33,10 +35,10 @@
     <color name="textblock_link_color_for_orange">@android:color/holo_blue_dark</color>
     <color name="textblock_link_color_for_red">@android:color/holo_blue_bright</color>
 
-    <color name="date_bg_color">#EE0F3D2E</color>
+    <color name="date_bg_color">@color/tg_date_separator_bg</color>
     <color name="fast_scroller_color">@color/khandaq_primary</color>
     <color name="message_text_date_string_color">@color/tg_date_separator_text</color>
-    <color name="scroll_date_header_color">#FFFFFF</color>
+    <color name="scroll_date_header_color">@color/tg_date_separator_text</color>
     <color name="message_list_scroll_to_bottom_fab_bg_normal">#9E9E9E</color>
     <color name="message_list_scroll_to_bottom_fab_bg_new_message">@color/khandaq_emerald</color>
 

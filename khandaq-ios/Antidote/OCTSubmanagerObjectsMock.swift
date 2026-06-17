@@ -26,6 +26,8 @@ class OCTSubmanagerObjectsMock: NSObject, OCTSubmanagerObjects {
                 return OCTCall.objects(in: realm, with: predicate)
             case .messageAbstract:
                 return OCTMessageAbstract.objects(in: realm, with: predicate)
+            case .groupPeer:
+                return OCTGroupPeer.objects(in: realm, with: predicate)
         }
     }
     
@@ -41,6 +43,8 @@ class OCTSubmanagerObjectsMock: NSObject, OCTSubmanagerObjects {
                 return OCTCall.object(in: realm, forPrimaryKey: uniqueIdentifier)
             case .messageAbstract:
                 return OCTMessageAbstract.object(in: realm, forPrimaryKey: uniqueIdentifier)
+            case .groupPeer:
+                return OCTGroupPeer.object(in: realm, forPrimaryKey: uniqueIdentifier)
         }
     }
     
@@ -53,6 +57,10 @@ class OCTSubmanagerObjectsMock: NSObject, OCTSubmanagerObjects {
     }
     
     func change(_ chat: OCTChat!, lastReadDateInterval: TimeInterval) {
+        // nop
+    }
+
+    func setGroupShowSystemMessages(_ enabled: Bool) {
         // nop
     }
 }

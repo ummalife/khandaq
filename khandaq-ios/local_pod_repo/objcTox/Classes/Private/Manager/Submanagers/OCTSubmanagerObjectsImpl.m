@@ -9,6 +9,7 @@
 #import "OCTChat.h"
 #import "OCTCall.h"
 #import "OCTMessageAbstract.h"
+#import "OCTGroupPeer.h"
 #import "OCTSettingsStorageObject.h"
 
 @implementation OCTSubmanagerObjectsImpl
@@ -29,6 +30,15 @@
 {
     OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
     return manager.settingsStorage.genericSettingsData;
+}
+
+- (void)setGroupShowSystemMessages:(BOOL)enabled
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+
+    [manager updateObject:manager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
+        object.groupShowSystemMessages = enabled;
+    }];
 }
 
 - (RLMResults *)objectsForType:(OCTFetchRequestType)type predicate:(NSPredicate *)predicate
@@ -97,6 +107,8 @@
             return [OCTCall class];
         case OCTFetchRequestTypeMessageAbstract:
             return [OCTMessageAbstract class];
+        case OCTFetchRequestTypeGroupPeer:
+            return [OCTGroupPeer class];
     }
 }
 

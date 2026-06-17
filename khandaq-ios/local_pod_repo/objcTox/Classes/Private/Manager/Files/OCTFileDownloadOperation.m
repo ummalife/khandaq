@@ -7,6 +7,7 @@
 #import "OCTFileOutputProtocol.h"
 #import "OCTLogging.h"
 #import "NSError+OCTFile.h"
+#import <QuartzCore/QuartzCore.h>
 
 static const CFTimeInterval kDownloadStallTimeout = 90.0;
 

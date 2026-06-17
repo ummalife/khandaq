@@ -413,3 +413,31 @@
 "chat_pending_faux_offline_messages" = "当您和朋友都在线时，将发送未送达的消息。";
 /* Message shown on chat list when contact is typing */
 "chat_is_typing_text" = "正在打字...";
+"group_live_audio_toggle" = "实时音频";
+"group_live_video_toggle" = "实时视频";
+"group_live_video_quality_toggle" = "视频质量";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "按住麦克风按钮录制语音消息";
+"group_live_video_toggle_active" = "实时视频已开启";
+"group_live_video_toggle_incoming" = "有实时视频传入";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "加入群组视频？";
+"group_video_join_message" = "向群组中的所有人发送您的视频和音频？";
+"group_video_join_confirm" = "是，开始视频";
+"group_video_join_decline" = "否";
+"group_send_voice_confirm_title" = "发送语音消息？";
+"group_send_voice_confirm_message" = "将此语音消息发送到群组？";
+"group_incoming_message_error" = "无法处理收到的群组消息。";
+"group_image_shrink_failed" = "无法准备要发送的图片。";
+"group_incoming_file_error" = "无法处理收到的群组文件。";
+"chat_file_too_large" = "文件太大。";
+"chat_incoming_file_too_large" = "收到的文件太大。";
+"chat_opening_file_failed" = "无法打开文件。";
+"group_file_prepare_failed" = "无法准备要发送的文件。";
+"group_peer_unknown" = "未知";
+"group_live_video_stream_unknown_peer" = "未知";
+
+"microphone_access_denied_message" = "麦克风访问已关闭。请在设置中允许麦克风以使用此功能。";

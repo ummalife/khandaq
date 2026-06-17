@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import AVFoundation
+import MobileCoreServices
 import UIKit
 
 enum VideoSendError: LocalizedError {
@@ -35,7 +36,7 @@ final class VideoSendPreprocessor {
     /// Transcode when the file exceeds this size or resolution/duration thresholds.
     static let skipCompressBelowBytes: Int64 = 8 * 1024 * 1024
     /// Hard cap on exported file size; retry with a lower preset when exceeded.
-    static let maxOutputBytes: Int64 = 100 * 1024 * 1024
+    static let maxOutputBytes: Int64 = 200 * 1024 * 1024
     /// Reject clips longer than this before transcoding.
     static let maxDurationSeconds: Double = 600
 
@@ -129,14 +130,14 @@ final class VideoSendPreprocessor {
 
         let asset = AVURLAsset(url: sourceURL, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false])
 
-        let durationSeconds = CMTimeGetSeconds(asset.duration)
+        let durationSeconds = Self.durationSeconds(for: asset)
         if durationSeconds.isFinite, durationSeconds > Self.maxDurationSeconds {
             completion(.failure(VideoSendError.durationTooLong))
             return
         }
 
         let needsTranscode = inputBytes > Self.skipCompressBelowBytes
-            || videoExceedsTargetResolution(asset)
+            || Self.videoExceedsTargetResolution(asset)
             || (durationSeconds.isFinite && durationSeconds > 120)
 
         if !needsTranscode {
@@ -188,8 +189,9 @@ final class VideoSendPreprocessor {
         let progressTimer = DispatchSource.makeTimerSource(queue: processingQueue)
         progressTimer.schedule(deadline: .now(), repeating: .milliseconds(200))
         progressTimer.setEventHandler {
+            let value = export.progress
             DispatchQueue.main.async {
-                progress(export.progress)
+                progress(value)
             }
         }
         progressTimer.resume()
@@ -252,6 +254,26 @@ final class VideoSendPreprocessor {
     }
 
     private func videoExceedsTargetResolution(_ asset: AVURLAsset) -> Bool {
+        return Self.videoExceedsTargetResolution(asset)
+    }
+
+    private static func durationSeconds(for asset: AVURLAsset) -> Double {
+        let status = asset.statusOfValue(forKey: "duration", error: nil)
+        if status == .loaded {
+            return CMTimeGetSeconds(asset.duration)
+        }
+
+        let group = DispatchGroup()
+        group.enter()
+        asset.loadValuesAsynchronously(forKeys: ["duration"]) {
+            group.leave()
+        }
+        _ = group.wait(timeout: .now() + 15)
+
+        return CMTimeGetSeconds(asset.duration)
+    }
+
+    static func videoExceedsTargetResolution(_ asset: AVURLAsset) -> Bool {
         guard let track = asset.tracks(withMediaType: .video).first else {
             return false
         }
@@ -298,31 +320,38 @@ final class VideoSendPreprocessor {
     }
 }
 
-/// Lightweight modal progress while a video is being prepared for send.
+/// Lightweight banner while a video is being prepared — does not block the chat UI.
 final class VideoSendProgressOverlay {
     static let shared = VideoSendProgressOverlay()
 
-    private var containerView: UIView?
+    private var passthroughHost: TouchPassthroughView?
+    private var bannerView: UIView?
     private var progressView: UIProgressView?
     private var label: UILabel?
+    private var cancelHandler: (() -> Void)?
 
     private init() {}
 
-    func show(on viewController: UIViewController, message: String) {
+    func show(on viewController: UIViewController,
+              message: String,
+              onCancel: (() -> Void)? = nil) {
         DispatchQueue.main.async {
             self.hide()
 
-            let container = UIView()
-            container.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-            container.layer.cornerRadius = 12
-            container.translatesAutoresizingMaskIntoConstraints = false
+            let host = TouchPassthroughView(frame: viewController.view.bounds)
+            host.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            host.backgroundColor = .clear
+
+            let banner = UIView()
+            banner.backgroundColor = UIColor.black.withAlphaComponent(0.82)
+            banner.layer.cornerRadius = 12
+            banner.translatesAutoresizingMaskIntoConstraints = false
 
             let messageLabel = UILabel()
             messageLabel.text = message
             messageLabel.textColor = .white
             messageLabel.font = UIFont.preferredFont(forTextStyle: .subheadline)
-            messageLabel.textAlignment = .center
-            messageLabel.numberOfLines = 0
+            messageLabel.numberOfLines = 2
             messageLabel.translatesAutoresizingMaskIntoConstraints = false
 
             let progress = UIProgressView(progressViewStyle: .default)
@@ -330,30 +359,43 @@ final class VideoSendProgressOverlay {
             progress.trackTintColor = UIColor.white.withAlphaComponent(0.35)
             progress.translatesAutoresizingMaskIntoConstraints = false
 
-            container.addSubview(messageLabel)
-            container.addSubview(progress)
-            viewController.view.addSubview(container)
+            let cancelButton = UIButton(type: .system)
+            cancelButton.setTitle(String(localized: "video_send_cancel"), for: .normal)
+            cancelButton.setTitleColor(.white, for: .normal)
+            cancelButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .subheadline)
+            cancelButton.translatesAutoresizingMaskIntoConstraints = false
+            cancelButton.addTarget(self, action: #selector(VideoSendProgressOverlay.cancelTapped), for: .touchUpInside)
 
+            banner.addSubview(messageLabel)
+            banner.addSubview(progress)
+            banner.addSubview(cancelButton)
+            host.addSubview(banner)
+            viewController.view.addSubview(host)
+
+            let guide = viewController.view.safeAreaLayoutGuide
             NSLayoutConstraint.activate([
-                container.centerXAnchor.constraint(equalTo: viewController.view.centerXAnchor),
-                container.centerYAnchor.constraint(equalTo: viewController.view.centerYAnchor),
-                container.widthAnchor.constraint(lessThanOrEqualToConstant: 280),
-                container.leadingAnchor.constraint(greaterThanOrEqualTo: viewController.view.leadingAnchor, constant: 32),
-                container.trailingAnchor.constraint(lessThanOrEqualTo: viewController.view.trailingAnchor, constant: -32),
+                banner.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+                banner.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -12),
+                banner.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -72),
 
-                messageLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
-                messageLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-                messageLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+                messageLabel.topAnchor.constraint(equalTo: banner.topAnchor, constant: 12),
+                messageLabel.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+                messageLabel.trailingAnchor.constraint(lessThanOrEqualTo: cancelButton.leadingAnchor, constant: -8),
 
-                progress.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 12),
-                progress.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-                progress.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-                progress.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16)
+                cancelButton.centerYAnchor.constraint(equalTo: messageLabel.centerYAnchor),
+                cancelButton.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
+
+                progress.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 10),
+                progress.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+                progress.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -14),
+                progress.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -12)
             ])
 
-            self.containerView = container
+            self.passthroughHost = host
+            self.bannerView = banner
             self.progressView = progress
             self.label = messageLabel
+            self.cancelHandler = onCancel
         }
     }
 
@@ -365,10 +407,157 @@ final class VideoSendProgressOverlay {
 
     func hide() {
         DispatchQueue.main.async {
-            self.containerView?.removeFromSuperview()
-            self.containerView = nil
+            self.passthroughHost?.removeFromSuperview()
+            self.passthroughHost = nil
+            self.bannerView = nil
             self.progressView = nil
             self.label = nil
+            self.cancelHandler = nil
+        }
+    }
+
+    @objc private func cancelTapped() {
+        cancelHandler?()
+    }
+}
+
+/// Passes touches through except on interactive subviews (banner).
+private final class TouchPassthroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
+    }
+}
+
+/// Background thumbnail + duration for inline video bubbles in chat.
+enum ChatFileMediaLoader {
+    private static let queue = DispatchQueue(label: "khandaq.chat.filemedia", qos: .utility)
+    private static let imageCache = NSCache<NSString, UIImage>()
+
+    struct Preview {
+        let image: UIImage
+        let durationText: String?
+    }
+
+    static func isVideoFile(uti: String?, fileName: String?) -> Bool {
+        if let uti = uti {
+            let cf = uti as CFString
+            if UTTypeConformsTo(cf, kUTTypeMovie) || UTTypeConformsTo(cf, kUTTypeVideo) || UTTypeConformsTo(cf, kUTTypeMPEG4) {
+                return true
+            }
+        }
+
+        guard let ext = fileName?.split(separator: ".").last?.lowercased() else {
+            return false
+        }
+
+        switch ext {
+            case "mov", "mp4", "m4v", "avi", "mkv", "webm":
+                return true
+            default:
+                return false
+        }
+    }
+
+    static func cachedPreview(for path: String) -> Preview? {
+        guard let image = imageCache.object(forKey: path as NSString) else {
+            return nil
+        }
+        return Preview(image: image, durationText: nil)
+    }
+
+    static func loadPreview(at path: String, completion: @escaping (Preview?) -> Void) {
+        if let cached = imageCache.object(forKey: path as NSString) {
+            DispatchQueue.main.async {
+                completion(Preview(image: cached, durationText: nil))
+            }
+            return
+        }
+
+        queue.async {
+            let url = URL(fileURLWithPath: path)
+            guard FileManager.default.fileExists(atPath: path) else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false])
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 360, height: 360)
+            generator.requestedTimeToleranceBefore = kCMTimePositiveInfinity
+            generator.requestedTimeToleranceAfter = kCMTimePositiveInfinity
+
+            var frame: UIImage?
+            do {
+                let cgImage = try generator.copyCGImage(at: kCMTimeZero, actualTime: nil)
+                frame = UIImage(cgImage: cgImage)
+            } catch {
+                frame = nil
+            }
+
+            guard let image = frame else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            imageCache.setObject(image, forKey: path as NSString)
+
+            let seconds = CMTimeGetSeconds(asset.duration)
+            let durationText = seconds.isFinite && seconds > 0 ? String(timeInterval: seconds) : nil
+            let preview = Preview(image: image, durationText: durationText)
+
+            DispatchQueue.main.async {
+                completion(preview)
+            }
+        }
+    }
+}
+
+/// Alerts when an active file transfer stops reporting progress.
+final class FileTransferStallWatcher {
+    static let shared = FileTransferStallWatcher()
+
+    static let stallInterval: TimeInterval = 30
+
+    private var timers: [String: Timer] = [:]
+    private var handlers: [String: () -> Void] = [:]
+
+    private init() {}
+
+    func track(messageId: String, onStall: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            self.handlers[messageId] = onStall
+            self.resetTimer(for: messageId)
+        }
+    }
+
+    func progressReceived(for messageId: String) {
+        DispatchQueue.main.async {
+            guard self.handlers[messageId] != nil else {
+                return
+            }
+            self.resetTimer(for: messageId)
+        }
+    }
+
+    func stop(messageId: String) {
+        DispatchQueue.main.async {
+            self.timers[messageId]?.invalidate()
+            self.timers.removeValue(forKey: messageId)
+            self.handlers.removeValue(forKey: messageId)
+        }
+    }
+
+    private func resetTimer(for messageId: String) {
+        timers[messageId]?.invalidate()
+        timers[messageId] = Timer.scheduledTimer(withTimeInterval: Self.stallInterval, repeats: false) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            let handler = self.handlers[messageId]
+            self.stop(messageId: messageId)
+            handler?()
         }
     }
 }

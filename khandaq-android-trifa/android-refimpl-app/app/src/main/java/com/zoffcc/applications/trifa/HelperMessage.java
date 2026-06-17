@@ -755,7 +755,7 @@ public class HelperMessage
                 }
 
                 MainActivity.clipboard.setPrimaryClip(ClipData.newPlainText("", copy_text.toString()));
-                Toast.makeText(c, "copied to Clipboard", Toast.LENGTH_SHORT).show();
+                Toast.makeText(c, R.string.text_copied_to_clipboard, Toast.LENGTH_SHORT).show();
                 MainActivity.selected_messages.clear();
                 MainActivity.selected_messages_incoming_file.clear();
                 MainActivity.selected_messages_text_only.clear();

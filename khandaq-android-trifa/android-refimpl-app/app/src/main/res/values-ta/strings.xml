@@ -64,7 +64,7 @@
     <string name="pref_description_X_tox_set_do_not_sync_av">!! சோதனை !!\n வீடியோ அல்லது ஆடியோவை ஒத்திசைக்க வேண்டாம். உங்களிடம் வீடியோ கேல் சிக்கல்கள் இருந்தால், கடைசி முயற்சியாக இந்த அமைப்பைப் பயன்படுத்தவும்.</string>
     <string name="pref_description_X_eac_delay_ms">!! சோதனை !!\n எம்.எச்</string>
     <string name="pref_title_use_camera_x">பின்னணி அகற்று</string>
-    <string name="pref_description_enable_ngc_features">!! சோதனை !!\n இது முழுமையாக வேலை செய்யவில்லை !!</string>
+    <string name="pref_description_enable_ngc_features">மேம்பட்ட செய்திகள், குரல் மற்றும் வீடியோவுடன் புதிய குழு அரட்டைகள் (NGC).</string>
     <string name="pref_title_X_audio_play_buffer_custom">ஆடியோ ப்ளே பஃபர்</string>
     <string name="pref_description_X_audio_play_buffer_custom">!! சோதனை !!\n தனிப்பயன் அமைப்பை முடக்க 0 ஆக அமைக்கவும், பைட்டுகளில் ஆடியோ பிளே பஃபர்</string>
     <string name="pref_title_toxirc_muted_peers_01">டாக்ச்க் பாலம் முடக்கிய பயனர்கள்</string>
@@ -81,6 +81,12 @@
     <string name="pref_title_ringtone">ரிங்டோன்</string>
     <string name="add_public_group_success">நீங்கள் ஒரு பொதுக் குழுவை உருவாக்கியுள்ளீர்கள்</string>
     <string name="add_private_group_failed">ஒரு தனியார் குழுவை உருவாக்குவது தோல்வியடைந்தது</string>
+    <string name="group_password_placeholder">குழு கடவுச்சொல் (தனியார் குழுக்களுக்கு மட்டும்)</string>
+    <string name="group_password_set">குழு கடவுச்சொல்லை அமை</string>
+    <string name="group_topic_lock">தலைப்பு பூட்டு (நிறுவனர் மட்டும்)</string>
+    <string name="group_privacy_set">தனியுரிமையை அமை</string>
+    <string name="group_create_private_password">விருப்ப குழு கடவுச்சொல்</string>
+
     <string name="invite_friend_success">நீங்கள் ஒரு நண்பர் கோரிக்கையைப் பெற்றுள்ளீர்கள்</string>
     <string name="invite_join_group_success">நீங்கள் ஒரு குழுவிற்கு அழைக்கப்பட்டுள்ளீர்கள்</string>
     <string name="invite_join_conference_success">நீங்கள் ஒரு மாநாட்டு குழுவுக்கு அழைக்கப்பட்டுள்ளீர்கள்</string>
@@ -246,6 +252,14 @@
     <string name="join_group_activity_join">குழுவில் சேரவும்</string>
     <string name="cancel">ரத்துசெய்</string>
     <string name="join_public_group_failed">பொதுக் குழுவில் சேருவது தோல்வியடைந்தது</string>
+    <string name="join_public_group_failed_not_ready">மெசஞ்சர் இன்னும் இணைகிறது. சில வினாடிகள் காத்து மீண்டும் முயற்சிக்கவும்.</string>
+    <string name="join_public_group_failed_bad_id">தவறான குழு ID. 64 hex எழுத்துகளையும் நகலெடுக்கவும்.</string>
+    <string name="join_public_group_failed_network">பிணையத்தில் குழுவைக் கண்டறிய முடியவில்லை. இணையத்தைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.</string>
+    <string name="join_public_group_failed_password">இந்தக் குழுவுக்கு கடவுச்சொல் தேவை.</string>
+    <string name="join_public_group_error_no_id">குழு ID-ஐ உள்ளிடவும்</string>
+    <string name="join_public_group_error_illegal_chars">குழு ID-யில் தவறான எழுத்துகள் உள்ளன. A–F மற்றும் 0–9 மட்டுமே அனுமதி.</string>
+    <string name="join_public_group_error_length">குழு ID 64 hex எழுத்துகளாக இருக்க வேண்டும்.</string>
+
     <string name="join_public_group_joined">நீங்கள் பொதுக் குழுவில் சேர்ந்துள்ளீர்கள்</string>
     <string name="add_public_group_failed">ஒரு பொதுக் குழுவை உருவாக்குவது தோல்வியடைந்தது</string>
     <string name="add_private_group_success">நீங்கள் ஒரு தனியார் குழுவை உருவாக்கியுள்ளீர்கள்</string>
@@ -307,4 +321,45 @@
     <string name="layout___add_friend">நண்பரைச் சேர்க்கவும்</string>
     <string name="layout___create_new_private_group">புதிய தனியார் குழுவை உருவாக்கவும்</string>
     <string name="layout___create_new_public_group">புதிய பொதுக் குழுவை உருவாக்கவும்</string>
+    <string name="group_video_join_title">குழு வீடியோவில் சேரவா?</string>
+    <string name="group_video_join_message">இந்த குழுவில் அனைவருக்கும் உங்கள் வீடியோ மற்றும் ஆடியோவை அனுப்ப?</string>
+    <string name="group_video_join_confirm">ஆம், வீடியோ தொடங்கு</string>
+    <string name="group_video_join_decline">இல்லை</string>
+    <string name="group_send_voice_confirm_title">குரல் செய்தி அனுப்பவா?</string>
+    <string name="group_send_voice_confirm_message">இந்த குரல் செய்தியை குழுவில் அனுப்பவா?</string>
+    <string name="group_peer_unknown">அறியப்படாத</string>
+    <string name="group_incoming_message_error">உள்வரும் குழு செய்தியை செயலாக்க முடியவில்லை.</string>
+    <string name="group_file_send_failed">குழுவில் கோப்பு அனுப்ப முடியவில்லை.</string>
+    <string name="group_image_shrink_failed">அனுப்புவதற்கு படத்தை தயார் செய்ய முடியவில்லை.</string>
+    <string name="group_incoming_file_error">உள்வரும் குழு கோப்பை செயலாக்க முடியவில்லை.</string>
+    <string name="chat_file_too_large">கோப்பு மிகப் பெரியது.</string>
+    <string name="chat_incoming_file_too_large">உள்வரும் கோப்பு மிகப் பெரியது.</string>
+    <string name="chat_opening_file_failed">கோப்பை திறக்க முடியவில்லை.</string>
+    <string name="group_file_too_large">இந்த குழுவிற்கு கோப்பு மிகப் பெரியது.</string>
+    <string name="group_file_prepare_failed">அனுப்புவதற்கு கோப்பை தயார் செய்ய முடியவில்லை.</string>
+    <string name="add_group_failed_empty_name">குழு பெயரை உள்ளிடவும்.</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

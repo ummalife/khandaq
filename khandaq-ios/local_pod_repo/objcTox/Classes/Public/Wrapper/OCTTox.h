@@ -579,4 +579,143 @@
                               data:(NSData *)data
                              error:(NSError **)error;
 
+#pragma mark - Groups
+
+- (OCTToxGroupNumber)groupNewWithPrivacyState:(OCTToxGroupPrivacyState)privacyState
+                                    groupName:(NSString *)groupName
+                                     peerName:(NSString *)peerName
+                                        error:(NSError **)error;
+
+- (OCTToxGroupNumber)groupJoinWithChatIdHex:(NSString *)chatIdHex
+                                   peerName:(NSString *)peerName
+                                   password:(nullable NSString *)password
+                                      error:(NSError **)error;
+
+- (OCTToxGroupNumber)groupInviteAcceptWithFriendNumber:(OCTToxFriendNumber)friendNumber
+                                            inviteData:(NSData *)inviteData
+                                              peerName:(NSString *)peerName
+                                              password:(nullable NSString *)password
+                                                 error:(NSError **)error;
+
+- (BOOL)groupInviteFriendWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                           friendNumber:(OCTToxFriendNumber)friendNumber
+                                  error:(NSError **)error;
+
+- (BOOL)groupLeaveWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                     partMessage:(nullable NSString *)partMessage
+                           error:(NSError **)error;
+
+- (BOOL)groupSendMessage:(NSString *)message
+                    type:(OCTToxMessageType)type
+             groupNumber:(OCTToxGroupNumber)groupNumber
+               messageId:(nullable uint32_t *)messageId
+                   error:(NSError **)error;
+
+- (BOOL)groupSendCustomPacket:(NSData *)data
+                  groupNumber:(OCTToxGroupNumber)groupNumber
+                     lossless:(BOOL)lossless
+                        error:(NSError **)error;
+
+- (BOOL)groupSendCustomPrivatePacket:(NSData *)data
+                         groupNumber:(OCTToxGroupNumber)groupNumber
+                              peerId:(uint32_t)peerId
+                            lossless:(BOOL)lossless
+                               error:(NSError **)error;
+
+- (nullable NSString *)groupChatIdHexForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (int32_t)groupConnectionStatusForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (uint32_t)groupSelfPeerIdForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupSelfSetName:(NSString *)name
+             groupNumber:(OCTToxGroupNumber)groupNumber
+                   error:(NSError **)error;
+
+- (nullable NSString *)groupSelfNameForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (nullable NSString *)groupPeerPublicKeyHexForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                    peerId:(uint32_t)peerId
+                                                     error:(NSError **)error;
+
+- (OCTToxConnectionStatus)groupPeerConnectionStatusForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                             peerId:(uint32_t)peerId
+                                                              error:(NSError **)error;
+
+- (nullable NSString *)groupSelfPublicKeyHexForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (uint32_t)groupPeerIdForPublicKeyHex:(NSString *)publicKeyHex
+                           groupNumber:(OCTToxGroupNumber)groupNumber
+                                 error:(NSError **)error;
+
+- (OCTToxGroupPrivacyState)groupPrivacyStateForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupFounderSetPrivacyState:(OCTToxGroupPrivacyState)privacyState
+                        groupNumber:(OCTToxGroupNumber)groupNumber
+                              error:(NSError **)error;
+
+- (OCTToxGroupVoiceState)groupVoiceStateForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupFounderSetVoiceState:(OCTToxGroupVoiceState)voiceState
+                     groupNumber:(OCTToxGroupNumber)groupNumber
+                           error:(NSError **)error;
+
+- (OCTToxGroupRole)groupSelfRoleForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (OCTToxGroupRole)groupPeerRoleForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                        peerId:(uint32_t)peerId
+                                         error:(NSError **)error;
+
+- (BOOL)groupKickPeerWithId:(uint32_t)peerId
+               groupNumber:(OCTToxGroupNumber)groupNumber
+                     error:(NSError **)error;
+
+- (BOOL)groupModSetRole:(OCTToxGroupRole)role
+                 peerId:(uint32_t)peerId
+            groupNumber:(OCTToxGroupNumber)groupNumber
+                  error:(NSError **)error;
+
+- (uint32_t)groupPeerCountForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+/**
+ * Returns array of dictionaries with keys @"peerId" (NSNumber), @"name" (NSString), @"role" (NSNumber/OCTToxGroupRole).
+ */
+- (NSArray<NSDictionary *> *)groupPeersForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (nullable NSString *)groupTopicForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupSetTopic:(NSString *)topic
+          groupNumber:(OCTToxGroupNumber)groupNumber
+                error:(NSError **)error;
+
+- (nullable NSString *)groupPasswordForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupFounderSetPassword:(nullable NSString *)password
+                   groupNumber:(OCTToxGroupNumber)groupNumber
+                         error:(NSError **)error;
+
+- (OCTToxGroupTopicLock)groupTopicLockForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupFounderSetTopicLock:(OCTToxGroupTopicLock)topicLock
+                     groupNumber:(OCTToxGroupNumber)groupNumber
+                           error:(NSError **)error;
+
+- (uint16_t)groupPeerLimitForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
+- (BOOL)groupFounderSetPeerLimit:(uint16_t)peerLimit
+                     groupNumber:(OCTToxGroupNumber)groupNumber
+                           error:(NSError **)error;
+
+- (BOOL)groupSendPrivateMessage:(NSString *)message
+                           type:(OCTToxMessageType)type
+                    groupNumber:(OCTToxGroupNumber)groupNumber
+                         peerId:(uint32_t)peerId
+                          error:(NSError **)error;
+
+- (uint32_t)groupCount;
+
+- (NSArray<NSNumber *> *)groupNumbers;
+
+- (BOOL)groupReconnectWithGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
 @end

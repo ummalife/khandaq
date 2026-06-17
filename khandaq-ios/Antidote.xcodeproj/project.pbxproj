@@ -7,6 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		KHSHREXT017A1B2C3D4E5F6 /* shareextension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = KHSHREXT002A1B2C3D4E5F6 /* shareextension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		KHSHREXT004A1B2C3D4E5F6 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHSHREXT003A1B2C3D4E5F6 /* ShareViewController.swift */; };
+		KHSHREXT005A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHSHRINBOX001A1B2C3D4E5F6 /* ShareInboxStorage.swift */; };
+		KHSHRINBOX002A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHSHRINBOX001A1B2C3D4E5F6 /* ShareInboxStorage.swift */; };
+		KHGRPSEL002A1B2C3D4E5F6 /* GroupSelectController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */; };
+		KHSHRINBOX004A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHSHRINBOX001A1B2C3D4E5F6 /* ShareInboxStorage.swift */; };
+		KHGRPSEL003A1B2C3D4E5F6 /* GroupSelectController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */; };
+		KHSHRINBOX003A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHSHRINBOX001A1B2C3D4E5F6 /* ShareInboxStorage.swift */; };
+		KHGRPSEL004A1B2C3D4E5F6 /* GroupSelectController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */; };
+		KHGRPJOIN002A1B2C3D4E5F6 /* GroupJoinHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */; };
+		KHQACMD002A1B2C3D4E5F6 /* QaCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHQACMD001A1B2C3D4E5F6 /* QaCommandHandler.swift */; };
+		KHQADBG002A1B2C3D4E5F6 /* QaDebugController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHQADBG001A1B2C3D4E5F6 /* QaDebugController.swift */; };
+		KHGRPCRT002A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */; };
+		KHGRPCRT003A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */; };
+		KHGRPCRT004A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */; };
+		KHGRPJOIN003A1B2C3D4E5F6 /* GroupJoinHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */; };
+		KHQACMD003A1B2C3D4E5F6 /* QaCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHQACMD001A1B2C3D4E5F6 /* QaCommandHandler.swift */; };
+		KHQADBG003A1B2C3D4E5F6 /* QaDebugController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHQADBG001A1B2C3D4E5F6 /* QaDebugController.swift */; };
+		KHGRPJOIN004A1B2C3D4E5F6 /* GroupJoinHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */; };
+		KHQACMD004A1B2C3D4E5F6 /* QaCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHQACMD001A1B2C3D4E5F6 /* QaCommandHandler.swift */; };
+		KHQADBG004A1B2C3D4E5F6 /* QaDebugController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHQADBG001A1B2C3D4E5F6 /* QaDebugController.swift */; };
+
 		1105B18D1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1105B18C1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift */; };
 		1105B18E1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1105B18C1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift */; };
 		1105B18F1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1105B18C1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift */; };
@@ -33,9 +55,13 @@
 		1117829A1DC53545000C1721 /* OCTSubmanagerObjectsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111782981DC53545000C1721 /* OCTSubmanagerObjectsMock.swift */; };
 		1117829C1DC5363C000C1721 /* OCTSubmanagerUserMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117829B1DC5363C000C1721 /* OCTSubmanagerUserMock.swift */; };
 		1117829D1DC5363C000C1721 /* OCTSubmanagerUserMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117829B1DC5363C000C1721 /* OCTSubmanagerUserMock.swift */; };
+		A1NGCMOCK000002 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
+		A1NGCMOCK000003 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
+		A1NGCMOCK000004 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
 		1117829F1DC53AB4000C1721 /* ToxFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117829E1DC53AB4000C1721 /* ToxFactory.swift */; };
 		111782A01DC53AB4000C1721 /* ToxFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117829E1DC53AB4000C1721 /* ToxFactory.swift */; };
 		111782AA1DC64391000C1721 /* ScreenshotsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111782A91DC64391000C1721 /* ScreenshotsUITests.swift */; };
+		11B0A0051DC64391000C1721 /* GroupSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0061DC64391000C1721 /* GroupSmokeUITests.swift */; };
 		111782BB1DC643A3000C1721 /* OCTManagerMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111782771DC52BDB000C1721 /* OCTManagerMock.swift */; };
 		111782BC1DC643A3000C1721 /* OCTSubmanagerBootstrapMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117827A1DC52C3A000C1721 /* OCTSubmanagerBootstrapMock.swift */; };
 		111782BD1DC643A3000C1721 /* OCTSubmanagerCallsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117827D1DC52CBA000C1721 /* OCTSubmanagerCallsMock.swift */; };
@@ -99,6 +125,8 @@
 		111783061DC6479E000C1721 /* Results.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC10561D32E54A00CE863E /* Results.swift */; };
 		111783071DC6479E000C1721 /* ResultsChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC10591D32EED000CE863E /* ResultsChange.swift */; };
 		1117830B1DC6479E000C1721 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F06D1BC5D9BA00B88B7B /* Theme.swift */; };
+		1173F0771BC5D9DA00B88B7B /* ThemeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F0751BC5D9DA00B88B7B /* ThemeAppearance.swift */; };
+		1173F07B1BC5D9DA00B88B7B /* dark-theme.yaml in Resources */ = {isa = PBXBuildFile; fileRef = 1173F0791BC5D9DA00B88B7B /* dark-theme.yaml */; };
 		1117830C1DC6479E000C1721 /* ToxFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1117829E1DC53AB4000C1721 /* ToxFactory.swift */; };
 		1117830D1DC6479E000C1721 /* UserDefaultsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1164C8D71BC922EB00B91107 /* UserDefaultsManager.swift */; };
 		1117830E1DC647BD000C1721 /* KeyboardNotificationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112422651BDD2032004D7926 /* KeyboardNotificationController.swift */; };
@@ -179,6 +207,26 @@
 		111783711DC64D75000C1721 /* ChangeUserStatusController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1149626B1C5CE3DF001E5435 /* ChangeUserStatusController.swift */; };
 		111783721DC64D75000C1721 /* ChatListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE0BDE51C45229500DCE357 /* ChatListController.swift */; };
 		111783731DC64D75000C1721 /* ChatPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */; };
+		11B0A0021DC64D75000C1721 /* ChatGroupController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0011C45229500DCE001 /* ChatGroupController.swift */; };
+		11B0A0141DC64D75000C1721 /* GroupPeerPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A00F1C45229500DCE001 /* GroupPeerPrivateController.swift */; };
+		11B0A0221DC64D75000C1721 /* GroupMembersDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0201C45229500DCE001 /* GroupMembersDrawerView.swift */; };
+		11B0A0231DC64D75000C1721 /* GroupPeerActionsPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0211C45229500DCE001 /* GroupPeerActionsPresenter.swift */; };
+		11B0A0281DC64D75000C1721 /* ChatGroupController+MessageTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0281C45229500DCE003 /* ChatGroupController+MessageTools.swift */; };
+		11B0A0291DC64D75000C1721 /* GroupMessageQuoteFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0291C45229500DCE003 /* GroupMessageQuoteFormatter.swift */; };
+		KHREPLY011A1B2C3D4E5F601 /* MessageReplyHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY001A1B2C3D4E5F601 /* MessageReplyHelper.swift */; };
+		KHMENTION011A1B2C3D4E5F601 /* GroupMentionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHMENTION001A1B2C3D4E5F601 /* GroupMentionHelper.swift */; };
+		KHVOICE011A1B2C3D4E5F601 /* VoiceMessageHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE001A1B2C3D4E5F601 /* VoiceMessageHelper.swift */; };
+		KHVOICE012A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE002A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift */; };
+		KHVOICE013A1B2C3D4E5F601 /* ChatVoiceMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE003A1B2C3D4E5F601 /* ChatVoiceMessageView.swift */; };
+		KHVOICE014A1B2C3D4E5F601 /* SessionAutoLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE004A1B2C3D4E5F601 /* SessionAutoLogin.swift */; };
+		KHPORTRAIT011A1B2C3D4E5F601 /* PortraitChatController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */; };
+		KHREPLY012A1B2C3D4E5F601 /* ChatReplyPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY002A1B2C3D4E5F601 /* ChatReplyPreviewView.swift */; };
+		KHREPLY013A1B2C3D4E5F601 /* ChatReplyQuoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY003A1B2C3D4E5F601 /* ChatReplyQuoteView.swift */; };
+		KHREPLY014A1B2C3D4E5F601 /* ChatReplyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY004A1B2C3D4E5F601 /* ChatReplyController.swift */; };
+		KHNDQNETLOG005A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQNETLOG006A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift */; };
+		11B0A0081DC64D75000C1721 /* GroupInfoController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0071C45229500DCE001 /* GroupInfoController.swift */; };
+		11B0A0101DC64D75000C1721 /* ChatGroupInputViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0131C45229500DCE001 /* ChatGroupInputViewManager.swift */; };
+		11B0A0151DC64D75000C1722 /* GroupImagePreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0141C45229500DCE002 /* GroupImagePreparer.swift */; };
 		111783741DC64D75000C1721 /* EnterPinController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C19367D1D79CF7E005EA0B2 /* EnterPinController.swift */; };
 		111783751DC64D75000C1721 /* FAQController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AEBE701DA1876F00D04B59 /* FAQController.swift */; };
 		111783761DC64D75000C1721 /* FriendCardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116513181C2C6C980066AF06 /* FriendCardController.swift */; };
@@ -337,6 +385,8 @@
 		116DCE3B1CAAF85300B693EC /* NSURLExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116DCE3A1CAAF85300B693EC /* NSURLExtension.swift */; };
 		116DCE3C1CAAF85300B693EC /* NSURLExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116DCE3A1CAAF85300B693EC /* NSURLExtension.swift */; };
 		1173F06E1BC5D9BA00B88B7B /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F06D1BC5D9BA00B88B7B /* Theme.swift */; };
+		1173F0761BC5D9DA00B88B7B /* ThemeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F0751BC5D9DA00B88B7B /* ThemeAppearance.swift */; };
+		1173F07A1BC5D9DA00B88B7B /* dark-theme.yaml in Resources */ = {isa = PBXBuildFile; fileRef = 1173F0791BC5D9DA00B88B7B /* dark-theme.yaml */; };
 		1173F0701BC5D9CA00B88B7B /* ThemeTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F06F1BC5D9CA00B88B7B /* ThemeTest.swift */; };
 		1173F0721BC5D9DA00B88B7B /* default-theme.yaml in Resources */ = {isa = PBXBuildFile; fileRef = 1173F0711BC5D9DA00B88B7B /* default-theme.yaml */; };
 		11770D6A1CBC120C00D34D6E /* FriendSelectController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11770D691CBC120C00D34D6E /* FriendSelectController.swift */; };
@@ -370,6 +420,26 @@
 		119AD1CA1BDED6E9000C5CB8 /* ErrorHandling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119AD1C91BDED6E9000C5CB8 /* ErrorHandling.swift */; };
 		119AD1CC1BDEDD9C000C5CB8 /* UIColorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119AD1CB1BDEDD9C000C5CB8 /* UIColorExtension.swift */; };
 		11A21EFB1C45BDB100E80A89 /* ChatPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */; };
+		KHPORTRAIT021A1B2C3D4E5F601 /* PortraitChatController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */; };
+		11B0A0031C45BDB100E80A89 /* ChatGroupController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0011C45229500DCE001 /* ChatGroupController.swift */; };
+		11B0A0151C45BDB100E80A89 /* GroupPeerPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A00F1C45229500DCE001 /* GroupPeerPrivateController.swift */; };
+		11B0A0241C45BDB100E80A89 /* GroupMembersDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0201C45229500DCE001 /* GroupMembersDrawerView.swift */; };
+		11B0A0251C45BDB100E80A89 /* GroupPeerActionsPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0211C45229500DCE001 /* GroupPeerActionsPresenter.swift */; };
+		11B0A02A1C45BDB100E80A89 /* ChatGroupController+MessageTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0281C45229500DCE003 /* ChatGroupController+MessageTools.swift */; };
+		11B0A02B1C45BDB100E80A89 /* GroupMessageQuoteFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0291C45229500DCE003 /* GroupMessageQuoteFormatter.swift */; };
+		KHREPLY021A1B2C3D4E5F601 /* MessageReplyHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY001A1B2C3D4E5F601 /* MessageReplyHelper.swift */; };
+		KHMENTION021A1B2C3D4E5F601 /* GroupMentionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHMENTION001A1B2C3D4E5F601 /* GroupMentionHelper.swift */; };
+		KHVOICE021A1B2C3D4E5F601 /* VoiceMessageHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE001A1B2C3D4E5F601 /* VoiceMessageHelper.swift */; };
+		KHVOICE022A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE002A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift */; };
+		KHVOICE023A1B2C3D4E5F601 /* ChatVoiceMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE003A1B2C3D4E5F601 /* ChatVoiceMessageView.swift */; };
+		KHVOICE024A1B2C3D4E5F601 /* SessionAutoLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE004A1B2C3D4E5F601 /* SessionAutoLogin.swift */; };
+		KHREPLY022A1B2C3D4E5F601 /* ChatReplyPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY002A1B2C3D4E5F601 /* ChatReplyPreviewView.swift */; };
+		KHREPLY023A1B2C3D4E5F601 /* ChatReplyQuoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY003A1B2C3D4E5F601 /* ChatReplyQuoteView.swift */; };
+		KHREPLY024A1B2C3D4E5F601 /* ChatReplyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY004A1B2C3D4E5F601 /* ChatReplyController.swift */; };
+		KHNDQNETLOG007A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQNETLOG006A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift */; };
+		11B0A0091C45BDB100E80A89 /* GroupInfoController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0071C45229500DCE001 /* GroupInfoController.swift */; };
+		11B0A0111C45BDB100E80A89 /* ChatGroupInputViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0131C45229500DCE001 /* ChatGroupInputViewManager.swift */; };
+		11B0A0161C45BDB100E80A8A /* GroupImagePreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0141C45229500DCE002 /* GroupImagePreparer.swift */; };
 		11A21EFD1C45BDF200E80A89 /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A21EFC1C45BDF200E80A89 /* ChatInputView.swift */; };
 		11AEBE711DA1876F00D04B59 /* FAQController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AEBE701DA1876F00D04B59 /* FAQController.swift */; };
 		11AEBE721DA1876F00D04B59 /* FAQController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AEBE701DA1876F00D04B59 /* FAQController.swift */; };
@@ -505,6 +575,7 @@
 		9CEE6AD31C4E8FDC00A1ECB5 /* FriendListDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDC091A1C34081900DC0D63 /* FriendListDataSource.swift */; };
 		9CEE6AD61C4E8FDC00A1ECB5 /* ProfileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDDB2051BD5376200B65D79 /* ProfileManager.swift */; };
 		9CEE6ADA1C4E8FDC00A1ECB5 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F06D1BC5D9BA00B88B7B /* Theme.swift */; };
+		1173F0781BC5D9DA00B88B7B /* ThemeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1173F0751BC5D9DA00B88B7B /* ThemeAppearance.swift */; };
 		9CEE6ADB1C4E8FDC00A1ECB5 /* UserDefaultsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1164C8D71BC922EB00B91107 /* UserDefaultsManager.swift */; };
 		9CEE6ADC1C4E8FDC00A1ECB5 /* KeyboardNotificationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112422651BDD2032004D7926 /* KeyboardNotificationController.swift */; };
 		9CEE6ADD1C4E8FDC00A1ECB5 /* PortraitNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C07151C1BCD2E5B003A27B5 /* PortraitNavigationController.swift */; };
@@ -516,6 +587,26 @@
 		9CEE6AE51C4E8FDC00A1ECB5 /* AddFriendController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E640751C2DBAE200D24C6D /* AddFriendController.swift */; };
 		9CEE6AE71C4E8FDC00A1ECB5 /* ChatListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE0BDE51C45229500DCE357 /* ChatListController.swift */; };
 		9CEE6AE81C4E8FDC00A1ECB5 /* ChatPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */; };
+		KHPORTRAIT031A1B2C3D4E5F601 /* PortraitChatController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */; };
+		11B0A0044E8FDC00A1ECB6 /* ChatGroupController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0011C45229500DCE001 /* ChatGroupController.swift */; };
+		11B0A0164E8FDC00A1ECB6 /* GroupPeerPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A00F1C45229500DCE001 /* GroupPeerPrivateController.swift */; };
+		11B0A0264E8FDC00A1ECB6 /* GroupMembersDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0201C45229500DCE001 /* GroupMembersDrawerView.swift */; };
+		11B0A0274E8FDC00A1ECB6 /* GroupPeerActionsPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0211C45229500DCE001 /* GroupPeerActionsPresenter.swift */; };
+		11B0A02C4E8FDC00A1ECB6 /* ChatGroupController+MessageTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0281C45229500DCE003 /* ChatGroupController+MessageTools.swift */; };
+		11B0A02D4E8FDC00A1ECB6 /* GroupMessageQuoteFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0291C45229500DCE003 /* GroupMessageQuoteFormatter.swift */; };
+		KHREPLY031A1B2C3D4E5F601 /* MessageReplyHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY001A1B2C3D4E5F601 /* MessageReplyHelper.swift */; };
+		KHMENTION031A1B2C3D4E5F601 /* GroupMentionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHMENTION001A1B2C3D4E5F601 /* GroupMentionHelper.swift */; };
+		KHVOICE031A1B2C3D4E5F601 /* VoiceMessageHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE001A1B2C3D4E5F601 /* VoiceMessageHelper.swift */; };
+		KHVOICE032A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE002A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift */; };
+		KHVOICE033A1B2C3D4E5F601 /* ChatVoiceMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE003A1B2C3D4E5F601 /* ChatVoiceMessageView.swift */; };
+		KHVOICE034A1B2C3D4E5F601 /* SessionAutoLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHVOICE004A1B2C3D4E5F601 /* SessionAutoLogin.swift */; };
+		KHREPLY032A1B2C3D4E5F601 /* ChatReplyPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY002A1B2C3D4E5F601 /* ChatReplyPreviewView.swift */; };
+		KHREPLY033A1B2C3D4E5F601 /* ChatReplyQuoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY003A1B2C3D4E5F601 /* ChatReplyQuoteView.swift */; };
+		KHREPLY034A1B2C3D4E5F601 /* ChatReplyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHREPLY004A1B2C3D4E5F601 /* ChatReplyController.swift */; };
+		KHNDQNETLOG008A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQNETLOG006A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift */; };
+		11B0A00A4E8FDC00A1ECB6 /* GroupInfoController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0071C45229500DCE001 /* GroupInfoController.swift */; };
+		11B0A0124E8FDC00A1ECB6 /* ChatGroupInputViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0131C45229500DCE001 /* ChatGroupInputViewManager.swift */; };
+		11B0A0174E8FDC00A1ECB7 /* GroupImagePreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0141C45229500DCE002 /* GroupImagePreparer.swift */; };
 		9CEE6AEA1C4E8FDC00A1ECB5 /* FriendCardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116513181C2C6C980066AF06 /* FriendCardController.swift */; };
 		9CEE6AEB1C4E8FDC00A1ECB5 /* FriendListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1193AB471C1F4164006AA9E5 /* FriendListController.swift */; };
 		9CEE6AEC1C4E8FDC00A1ECB5 /* PrimaryIpadController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEE6AA11C4E679100A1ECB5 /* PrimaryIpadController.swift */; };
@@ -571,14 +662,22 @@
 		AF2C929D279AB3F10094C08D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2C929C279AB3F10094C08D /* NotificationService.swift */; };
 		AF2C92A1279AB3F10094C08D /* pushextension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AF2C929A279AB3F10094C08D /* pushextension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AFA023F4274C069100FBFCC0 /* ConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA023F3274C069100FBFCC0 /* ConnectionStatus.swift */; };
+		AFA023F5274C069100FBFCC1 /* ConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFA023F3274C069100FBFCC0 /* ConnectionStatus.swift */; };
 		AFA024022753CC9000FBFCC0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AFA024012753CC9000FBFCC0 /* GoogleService-Info.plist */; };
 		B27VID020608000000000001 /* VideoSendPreprocessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27VID010608000000000001 /* VideoSendPreprocessor.swift */; };
+		B27VGR020608000000000001 /* GroupVoiceMessageRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27VGR010608000000000001 /* GroupVoiceMessageRecorder.swift */; };
+		B27THM020608000000000001 /* ThemeChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27THM010608000000000001 /* ThemeChrome.swift */; };
+		B27GLM020608000000000001 /* GroupLiveMediaErrorPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27GLM010608000000000001 /* GroupLiveMediaErrorPresenter.swift */; };
+		B27VVD020608000000000001 /* GroupNgcVideoOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27VVD010608000000000001 /* GroupNgcVideoOverlayView.swift */; };
 		B27MED020608000000000001 /* MediaSendPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27MED010608000000000001 /* MediaSendPreviewController.swift */; };
 		B28PRS020608000000000001 /* FriendPresenceFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28PRS010608000000000001 /* FriendPresenceFormatter.swift */; };
 		D4F896D05F7EAA7C321A2AA8 /* libPods-Antidote.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 034E57B3AE56E352BBAA0487 /* libPods-Antidote.a */; };
 		KHNDQNETLOG001A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQNETLOG002A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift */; };
+		KHLAUNCHREC001A1B2C3D4E5F6 /* LaunchRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLAUNCHREC002A1B2C3D4E5F6 /* LaunchRecovery.swift */; };
 		KHNDQNETLOG003A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQNETLOG002A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift */; };
+		KHLAUNCHREC003A1B2C3D4E5F6 /* LaunchRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLAUNCHREC002A1B2C3D4E5F6 /* LaunchRecovery.swift */; };
 		KHNDQNETLOG004A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQNETLOG002A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift */; };
+		KHLAUNCHREC004A1B2C3D4E5F6 /* LaunchRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLAUNCHREC002A1B2C3D4E5F6 /* LaunchRecovery.swift */; };
 		KHNDQPUSH002A1B2C3D4E5F60002 /* KhandaqPush.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQPUSH001A1B2C3D4E5F60001 /* KhandaqPush.swift */; };
 		KHNDQPUSH004A1B2C3D4E5F60004 /* KhandaqPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQPUSH003A1B2C3D4E5F60003 /* KhandaqPushManager.swift */; };
 		KHNDQPUSH006A1B2C3D4E5F60006 /* KhandaqPush.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHNDQPUSH001A1B2C3D4E5F60001 /* KhandaqPush.swift */; };
@@ -661,6 +760,13 @@
 			remoteGlobalIDString = 1164762E19794D3300DB20B8;
 			remoteInfo = Antidote;
 		};
+		KHSHREXT015A1B2C3D4E5F6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1164762719794D3300DB20B8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KHSHREXT008A1B2C3D4E5F6;
+			remoteInfo = shareextension;
+		};
 		AF2C929F279AB3F10094C08D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1164762719794D3300DB20B8 /* Project object */;
@@ -678,6 +784,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				AF2C92A1279AB3F10094C08D /* pushextension.appex in Embed App Extensions */,
+				KHSHREXT017A1B2C3D4E5F6 /* shareextension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -700,9 +807,11 @@
 		111782951DC53458000C1721 /* OCTSubmanagerFriendsMock.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerFriendsMock.swift; sourceTree = "<group>"; };
 		111782981DC53545000C1721 /* OCTSubmanagerObjectsMock.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerObjectsMock.swift; sourceTree = "<group>"; };
 		1117829B1DC5363C000C1721 /* OCTSubmanagerUserMock.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerUserMock.swift; sourceTree = "<group>"; };
+		A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerGroupsMock.swift; sourceTree = "<group>"; };
 		1117829E1DC53AB4000C1721 /* ToxFactory.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToxFactory.swift; sourceTree = "<group>"; };
 		111782A71DC64391000C1721 /* ScreenshotsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScreenshotsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		111782A91DC64391000C1721 /* ScreenshotsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotsUITests.swift; sourceTree = "<group>"; };
+		11B0A0061DC64391000C1721 /* GroupSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupSmokeUITests.swift; sourceTree = "<group>"; };
 		111782AB1DC64391000C1721 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1117835E1DC64C89000C1721 /* ScreenshotUITests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ScreenshotUITests-Bridging-Header.h"; sourceTree = "<group>"; };
 		112422651BDD2032004D7926 /* KeyboardNotificationController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeyboardNotificationController.swift; sourceTree = "<group>"; };
@@ -818,6 +927,8 @@
 		1173F06D1BC5D9BA00B88B7B /* Theme.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		1173F06F1BC5D9CA00B88B7B /* ThemeTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ThemeTest.swift; sourceTree = "<group>"; };
 		1173F0711BC5D9DA00B88B7B /* default-theme.yaml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "default-theme.yaml"; sourceTree = "<group>"; };
+		1173F0751BC5D9DA00B88B7B /* ThemeAppearance.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ThemeAppearance.swift; sourceTree = "<group>"; };
+		1173F0791BC5D9DA00B88B7B /* dark-theme.yaml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "dark-theme.yaml"; sourceTree = "<group>"; };
 		11763ADF1D9C54640035B4C9 /* cs */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = cs; path = "cs.lproj/import-profile.html"; sourceTree = "<group>"; };
 		11763AEA1D9C54680035B4C9 /* cs */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = cs; path = cs.lproj/Localizable.strings; sourceTree = "<group>"; };
 		11770D691CBC120C00D34D6E /* FriendSelectController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FriendSelectController.swift; sourceTree = "<group>"; };
@@ -842,6 +953,26 @@
 		119AD1C91BDED6E9000C5CB8 /* ErrorHandling.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ErrorHandling.swift; sourceTree = "<group>"; };
 		119AD1CB1BDEDD9C000C5CB8 /* UIColorExtension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UIColorExtension.swift; sourceTree = "<group>"; };
 		11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatPrivateController.swift; sourceTree = "<group>"; };
+		11B0A0011C45229500DCE001 /* ChatGroupController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatGroupController.swift; sourceTree = "<group>"; };
+		11B0A00F1C45229500DCE001 /* GroupPeerPrivateController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupPeerPrivateController.swift; sourceTree = "<group>"; };
+		11B0A0201C45229500DCE001 /* GroupMembersDrawerView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupMembersDrawerView.swift; sourceTree = "<group>"; };
+		11B0A0211C45229500DCE001 /* GroupPeerActionsPresenter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupPeerActionsPresenter.swift; sourceTree = "<group>"; };
+		11B0A0281C45229500DCE003 /* ChatGroupController+MessageTools.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "ChatGroupController+MessageTools.swift"; sourceTree = "<group>"; };
+		11B0A0291C45229500DCE003 /* GroupMessageQuoteFormatter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupMessageQuoteFormatter.swift; sourceTree = "<group>"; };
+		KHREPLY001A1B2C3D4E5F601 /* MessageReplyHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageReplyHelper.swift; sourceTree = "<group>"; };
+		KHMENTION001A1B2C3D4E5F601 /* GroupMentionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupMentionHelper.swift; sourceTree = "<group>"; };
+		KHVOICE001A1B2C3D4E5F601 /* VoiceMessageHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VoiceMessageHelper.swift; sourceTree = "<group>"; };
+		KHVOICE002A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatVoiceMessagePlayer.swift; sourceTree = "<group>"; };
+		KHVOICE003A1B2C3D4E5F601 /* ChatVoiceMessageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatVoiceMessageView.swift; sourceTree = "<group>"; };
+		KHVOICE004A1B2C3D4E5F601 /* SessionAutoLogin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SessionAutoLogin.swift; sourceTree = "<group>"; };
+		KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PortraitChatController.swift; sourceTree = "<group>"; };
+		KHREPLY002A1B2C3D4E5F601 /* ChatReplyPreviewView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatReplyPreviewView.swift; sourceTree = "<group>"; };
+		KHREPLY003A1B2C3D4E5F601 /* ChatReplyQuoteView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatReplyQuoteView.swift; sourceTree = "<group>"; };
+		KHREPLY004A1B2C3D4E5F601 /* ChatReplyController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatReplyController.swift; sourceTree = "<group>"; };
+		KHNDQNETLOG006A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetworkDiagnosticsDetailController.swift; sourceTree = "<group>"; };
+		11B0A0071C45229500DCE001 /* GroupInfoController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupInfoController.swift; sourceTree = "<group>"; };
+		11B0A0131C45229500DCE001 /* ChatGroupInputViewManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatGroupInputViewManager.swift; sourceTree = "<group>"; };
+		11B0A0141C45229500DCE002 /* GroupImagePreparer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupImagePreparer.swift; sourceTree = "<group>"; };
 		11A21EFC1C45BDF200E80A89 /* ChatInputView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		11AEBE701DA1876F00D04B59 /* FAQController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FAQController.swift; sourceTree = "<group>"; };
 		11B252F91C4A614D0068F47C /* ChatIncomingTextCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatIncomingTextCell.swift; sourceTree = "<group>"; };
@@ -969,6 +1100,16 @@
 		AF2C929A279AB3F10094C08D /* pushextension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = pushextension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF2C929C279AB3F10094C08D /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		AF2C929E279AB3F10094C08D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		KHSHRINBOX001A1B2C3D4E5F6 /* ShareInboxStorage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShareInboxStorage.swift; sourceTree = "<group>"; };
+		KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelectController.swift; sourceTree = "<group>"; };
+		KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupJoinHelper.swift; sourceTree = "<group>"; };
+		KHQACMD001A1B2C3D4E5F6 /* QaCommandHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = QaCommandHandler.swift; sourceTree = "<group>"; };
+		KHQADBG001A1B2C3D4E5F6 /* QaDebugController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = QaDebugController.swift; sourceTree = "<group>"; };
+		KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupCreateNameController.swift; sourceTree = "<group>"; };
+		KHSHREXT002A1B2C3D4E5F6 /* shareextension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = shareextension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		KHSHREXT003A1B2C3D4E5F6 /* ShareViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		KHSHREXT006A1B2C3D4E5F6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		KHSHREXT007A1B2C3D4E5F6 /* shareextension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = shareextension.entitlements; sourceTree = "<group>"; };
 		AF6AB23329156C5800019362 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		AF6AB23429156C6000019362 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/AppStoreLocalizable.strings; sourceTree = "<group>"; };
 		AF6AB23529156EDA00019362 /* ca */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ca; path = ca.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -991,11 +1132,16 @@
 		AFA023F3274C069100FBFCC0 /* ConnectionStatus.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConnectionStatus.swift; sourceTree = "<group>"; };
 		AFA024012753CC9000FBFCC0 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		B27VID010608000000000001 /* VideoSendPreprocessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSendPreprocessor.swift; sourceTree = "<group>"; };
+		B27VGR010608000000000001 /* GroupVoiceMessageRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupVoiceMessageRecorder.swift; sourceTree = "<group>"; };
+		B27THM010608000000000001 /* ThemeChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeChrome.swift; sourceTree = "<group>"; };
+		B27GLM010608000000000001 /* GroupLiveMediaErrorPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupLiveMediaErrorPresenter.swift; sourceTree = "<group>"; };
+		B27VVD010608000000000001 /* GroupNgcVideoOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupNgcVideoOverlayView.swift; sourceTree = "<group>"; };
 		B27MED010608000000000001 /* MediaSendPreviewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaSendPreviewController.swift; sourceTree = "<group>"; };
 		B28PRS010608000000000001 /* FriendPresenceFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendPresenceFormatter.swift; sourceTree = "<group>"; };
 		B3C17AF8CE3B4AD1B68F2B5B /* Pods-Antidote.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Antidote.release.xcconfig"; path = "Pods/Target Support Files/Pods-Antidote/Pods-Antidote.release.xcconfig"; sourceTree = "<group>"; };
 		CEC32120B965BE40E0029DB1 /* Pods-AntidoteTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AntidoteTests.release.xcconfig"; path = "Pods/Target Support Files/Pods-AntidoteTests/Pods-AntidoteTests.release.xcconfig"; sourceTree = "<group>"; };
 		KHNDQNETLOG002A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NetworkDiagnosticsLog.swift; sourceTree = "<group>"; };
+		KHLAUNCHREC002A1B2C3D4E5F6 /* LaunchRecovery.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LaunchRecovery.swift; sourceTree = "<group>"; };
 		KHNDQPUSH001A1B2C3D4E5F60001 /* KhandaqPush.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KhandaqPush.swift; sourceTree = "<group>"; };
 		KHNDQPUSH003A1B2C3D4E5F60003 /* KhandaqPushManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KhandaqPushManager.swift; sourceTree = "<group>"; };
 		KHNDQTOXR002A1B2C3D4E5F60102 /* ToxOptionsRestartScheduler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ToxOptionsRestartScheduler.swift; sourceTree = "<group>"; };
@@ -1048,6 +1194,7 @@
 				1117828C1DC531AD000C1721 /* OCTSubmanagerChatsMock.swift */,
 				111782921DC53371000C1721 /* OCTSubmanagerFilesMock.swift */,
 				111782951DC53458000C1721 /* OCTSubmanagerFriendsMock.swift */,
+				A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */,
 				111782981DC53545000C1721 /* OCTSubmanagerObjectsMock.swift */,
 				1117829B1DC5363C000C1721 /* OCTSubmanagerUserMock.swift */,
 			);
@@ -1059,6 +1206,7 @@
 			children = (
 				111782AB1DC64391000C1721 /* Info.plist */,
 				111782A91DC64391000C1721 /* ScreenshotsUITests.swift */,
+				11B0A0061DC64391000C1721 /* GroupSmokeUITests.swift */,
 				1117835E1DC64C89000C1721 /* ScreenshotUITests-Bridging-Header.h */,
 				114D2D3F1E34D6E400662713 /* SnapshotHelper.swift */,
 			);
@@ -1117,6 +1265,7 @@
 				1173F0571BC5D94400B88B7B /* AntidoteTests */,
 				111782A81DC64391000C1721 /* ScreenshotsUITests */,
 				AF2C929B279AB3F10094C08D /* pushextension */,
+				KHSHREXT001A1B2C3D4E5F6 /* shareextension */,
 				1164763119794D3300DB20B8 /* Frameworks */,
 				1164763019794D3300DB20B8 /* Products */,
 				1173EFB21BC5C40100B88B7B /* Submodules */,
@@ -1131,6 +1280,7 @@
 				1173F0561BC5D94400B88B7B /* AntidoteTests.xctest */,
 				111782A71DC64391000C1721 /* ScreenshotsUITests.xctest */,
 				AF2C929A279AB3F10094C08D /* pushextension.appex */,
+				KHSHREXT002A1B2C3D4E5F6 /* shareextension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1266,6 +1416,10 @@
 				115CE3E71EB06F54001C08A0 /* ChatBottomStatusViewManager.swift */,
 				9CDE31E51E489B2700333E0D /* ChatInputViewManager.swift */,
 				B27VID010608000000000001 /* VideoSendPreprocessor.swift */,
+				B27VGR010608000000000001 /* GroupVoiceMessageRecorder.swift */,
+				B27THM010608000000000001 /* ThemeChrome.swift */,
+				B27GLM010608000000000001 /* GroupLiveMediaErrorPresenter.swift */,
+				B27VVD010608000000000001 /* GroupNgcVideoOverlayView.swift */,
 				B27MED010608000000000001 /* MediaSendPreviewController.swift */,
 				B28PRS010608000000000001 /* FriendPresenceFormatter.swift */,
 				9C2EF3791C4E2DDE006E7AB1 /* ChatListTableManager.swift */,
@@ -1279,6 +1433,7 @@
 				11FC10561D32E54A00CE863E /* Results.swift */,
 				11FC10591D32EED000CE863E /* ResultsChange.swift */,
 				1173F06D1BC5D9BA00B88B7B /* Theme.swift */,
+				1173F0751BC5D9DA00B88B7B /* ThemeAppearance.swift */,
 				1117829E1DC53AB4000C1721 /* ToxFactory.swift */,
 				1164C8D71BC922EB00B91107 /* UserDefaultsManager.swift */,
 				4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */,
@@ -1475,6 +1630,32 @@
 				1149626B1C5CE3DF001E5435 /* ChangeUserStatusController.swift */,
 				9CE0BDE51C45229500DCE357 /* ChatListController.swift */,
 				11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */,
+				KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */,
+				11B0A0011C45229500DCE001 /* ChatGroupController.swift */,
+				11B0A00F1C45229500DCE001 /* GroupPeerPrivateController.swift */,
+				11B0A0201C45229500DCE001 /* GroupMembersDrawerView.swift */,
+				KHSHRINBOX001A1B2C3D4E5F6 /* ShareInboxStorage.swift */,
+				KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */,
+				KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */,
+				KHQACMD001A1B2C3D4E5F6 /* QaCommandHandler.swift */,
+				KHQADBG001A1B2C3D4E5F6 /* QaDebugController.swift */,
+				KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */,
+				11B0A0211C45229500DCE001 /* GroupPeerActionsPresenter.swift */,
+				11B0A0281C45229500DCE003 /* ChatGroupController+MessageTools.swift */,
+				11B0A0291C45229500DCE003 /* GroupMessageQuoteFormatter.swift */,
+				KHREPLY001A1B2C3D4E5F601 /* MessageReplyHelper.swift */,
+				KHMENTION001A1B2C3D4E5F601 /* GroupMentionHelper.swift */,
+				KHVOICE001A1B2C3D4E5F601 /* VoiceMessageHelper.swift */,
+				KHVOICE002A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift */,
+				KHVOICE003A1B2C3D4E5F601 /* ChatVoiceMessageView.swift */,
+				KHVOICE004A1B2C3D4E5F601 /* SessionAutoLogin.swift */,
+				KHREPLY002A1B2C3D4E5F601 /* ChatReplyPreviewView.swift */,
+				KHREPLY003A1B2C3D4E5F601 /* ChatReplyQuoteView.swift */,
+				KHREPLY004A1B2C3D4E5F601 /* ChatReplyController.swift */,
+				KHNDQNETLOG006A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift */,
+				11B0A0131C45229500DCE001 /* ChatGroupInputViewManager.swift */,
+				11B0A0141C45229500DCE002 /* GroupImagePreparer.swift */,
+				11B0A0071C45229500DCE001 /* GroupInfoController.swift */,
 				9C19367D1D79CF7E005EA0B2 /* EnterPinController.swift */,
 				11AEBE701DA1876F00D04B59 /* FAQController.swift */,
 				116513181C2C6C980066AF06 /* FriendCardController.swift */,
@@ -1490,6 +1671,7 @@
 				9CEE6B4E1C528AAA00A1ECB5 /* SettingsAboutController.swift */,
 				9CEE6B511C528AB600A1ECB5 /* SettingsAdvancedController.swift */,
 				KHNDQNETLOG002A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift */,
+				KHLAUNCHREC002A1B2C3D4E5F6 /* LaunchRecovery.swift */,
 				KHNDQTOXR002A1B2C3D4E5F60102 /* ToxOptionsRestartScheduler.swift */,
 				9CEE6B451C5289E200A1ECB5 /* SettingsMainController.swift */,
 				110E425B1C00DC5E001A3CA2 /* StaticTableController.swift */,
@@ -1507,6 +1689,16 @@
 				AF2C929E279AB3F10094C08D /* Info.plist */,
 			);
 			path = pushextension;
+			sourceTree = "<group>";
+		};
+		KHSHREXT001A1B2C3D4E5F6 /* shareextension */ = {
+			isa = PBXGroup;
+			children = (
+				KHSHREXT003A1B2C3D4E5F6 /* ShareViewController.swift */,
+				KHSHREXT006A1B2C3D4E5F6 /* Info.plist */,
+				KHSHREXT007A1B2C3D4E5F6 /* shareextension.entitlements */,
+			);
+			path = shareextension;
 			sourceTree = "<group>";
 		};
 		D5C4D8B82C26B8F47A461D93 /* Pods */ = {
@@ -1540,6 +1732,7 @@
 				9CEA6A1E1D957EFC0045F000 /* antidote-acknowledgements.html */,
 				1131D6C71CA9D8BC00B4531C /* import-profile.html */,
 				1173F0711BC5D9DA00B88B7B /* default-theme.yaml */,
+				1173F0791BC5D9DA00B88B7B /* dark-theme.yaml */,
 				9C7475C01BC698110098B1A4 /* Localizable.strings */,
 				113E96461E4BB302000282FC /* AppStoreLocalizable.strings */,
 				116634CE1C70E46C0072C980 /* Launch Screen.storyboard */,
@@ -1586,6 +1779,7 @@
 			);
 			dependencies = (
 				AF2C92A0279AB3F10094C08D /* PBXTargetDependency */,
+				KHSHREXT016A1B2C3D4E5F6 /* PBXTargetDependency */,
 			);
 			name = Antidote;
 			productName = Antidote;
@@ -1611,6 +1805,23 @@
 			productName = AntidoteTests;
 			productReference = 1173F0561BC5D94400B88B7B /* AntidoteTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		KHSHREXT008A1B2C3D4E5F6 /* shareextension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KHSHREXT012A1B2C3D4E5F6 /* Build configuration list for PBXNativeTarget "shareextension" */;
+			buildPhases = (
+				KHSHREXT009A1B2C3D4E5F6 /* Sources */,
+				KHSHREXT010A1B2C3D4E5F6 /* Frameworks */,
+				KHSHREXT011A1B2C3D4E5F6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = shareextension;
+			productName = shareextension;
+			productReference = KHSHREXT002A1B2C3D4E5F6 /* shareextension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		AF2C9299279AB3F10094C08D /* pushextension */ = {
 			isa = PBXNativeTarget;
@@ -1670,6 +1881,11 @@
 						DevelopmentTeam = Y46L589C5C;
 						ProvisioningStyle = Automatic;
 					};
+					KHSHREXT008A1B2C3D4E5F6 = {
+						CreatedOnToolsVersion = 12.5;
+						DevelopmentTeam = DQRPWB97AB;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 1164762A19794D3300DB20B8 /* Build configuration list for PBXProject "Antidote" */;
@@ -1718,6 +1934,7 @@
 				1173F0551BC5D94400B88B7B /* AntidoteTests */,
 				111782A61DC64391000C1721 /* ScreenshotsUITests */,
 				AF2C9299279AB3F10094C08D /* pushextension */,
+				KHSHREXT008A1B2C3D4E5F6 /* shareextension */,
 			);
 		};
 /* End PBXProject section */
@@ -1811,6 +2028,7 @@
 				9CEA6A1F1D957EFC0045F000 /* antidote-acknowledgements.html in Resources */,
 				AFA024022753CC9000FBFCC0 /* GoogleService-Info.plist in Resources */,
 				1173F0721BC5D9DA00B88B7B /* default-theme.yaml in Resources */,
+				1173F07A1BC5D9DA00B88B7B /* dark-theme.yaml in Resources */,
 				116634CF1C70E46C0072C980 /* Launch Screen.storyboard in Resources */,
 				1131D6C51CA9D8BC00B4531C /* import-profile.html in Resources */,
 				11B253521C4AD9CF0068F47C /* isotoxin_NewMessage.aac in Resources */,
@@ -1827,6 +2045,7 @@
 				11F08D141DE0610B00F80F5F /* InfoPlist.strings in Resources */,
 				113E96431E4BB302000282FC /* AppStoreLocalizable.strings in Resources */,
 				113F03081CAFCC9D0009ABE1 /* default-theme.yaml in Resources */,
+				1173F07B1BC5D9DA00B88B7B /* dark-theme.yaml in Resources */,
 				9CEA6A201D957EFC0045F000 /* antidote-acknowledgements.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2004,6 +2223,7 @@
 				111782BB1DC643A3000C1721 /* OCTManagerMock.swift in Sources */,
 				1117830E1DC647BD000C1721 /* KeyboardNotificationController.swift in Sources */,
 				1117830B1DC6479E000C1721 /* Theme.swift in Sources */,
+				1173F0771BC5D9DA00B88B7B /* ThemeAppearance.swift in Sources */,
 				1117833F1DC64810000C1721 /* ChatPrivateTitleView.swift in Sources */,
 				111783391DC647F8000C1721 /* HelperFunctions.swift in Sources */,
 				1117833A1DC647F8000C1722 /* MediaPermissionHelper.swift in Sources */,
@@ -2111,6 +2331,32 @@
 				9CDE31E81E489B2700333E0D /* ChatInputViewManager.swift in Sources */,
 				1117837A1DC64D75000C1721 /* PrimaryIpadController.swift in Sources */,
 				111783731DC64D75000C1721 /* ChatPrivateController.swift in Sources */,
+				KHPORTRAIT011A1B2C3D4E5F601 /* PortraitChatController.swift in Sources */,
+				11B0A0021DC64D75000C1721 /* ChatGroupController.swift in Sources */,
+				11B0A0141DC64D75000C1721 /* GroupPeerPrivateController.swift in Sources */,
+				11B0A0221DC64D75000C1721 /* GroupMembersDrawerView.swift in Sources */,
+				11B0A0231DC64D75000C1721 /* GroupPeerActionsPresenter.swift in Sources */,
+				11B0A0281DC64D75000C1721 /* ChatGroupController+MessageTools.swift in Sources */,
+				11B0A0291DC64D75000C1721 /* GroupMessageQuoteFormatter.swift in Sources */,
+				KHREPLY011A1B2C3D4E5F601 /* MessageReplyHelper.swift in Sources */,
+				KHMENTION011A1B2C3D4E5F601 /* GroupMentionHelper.swift in Sources */,
+				KHVOICE011A1B2C3D4E5F601 /* VoiceMessageHelper.swift in Sources */,
+				KHVOICE012A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift in Sources */,
+				KHVOICE013A1B2C3D4E5F601 /* ChatVoiceMessageView.swift in Sources */,
+				KHVOICE014A1B2C3D4E5F601 /* SessionAutoLogin.swift in Sources */,
+				KHREPLY012A1B2C3D4E5F601 /* ChatReplyPreviewView.swift in Sources */,
+				KHREPLY013A1B2C3D4E5F601 /* ChatReplyQuoteView.swift in Sources */,
+				KHREPLY014A1B2C3D4E5F601 /* ChatReplyController.swift in Sources */,
+				KHNDQNETLOG005A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift in Sources */,
+				KHSHRINBOX002A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */,
+				KHGRPSEL002A1B2C3D4E5F6 /* GroupSelectController.swift in Sources */,
+				KHGRPJOIN002A1B2C3D4E5F6 /* GroupJoinHelper.swift in Sources */,
+				KHQACMD002A1B2C3D4E5F6 /* QaCommandHandler.swift in Sources */,
+				KHQADBG002A1B2C3D4E5F6 /* QaDebugController.swift in Sources */,
+				KHGRPCRT002A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */,
+				11B0A0101DC64D75000C1721 /* ChatGroupInputViewManager.swift in Sources */,
+				11B0A0151DC64D75000C1722 /* GroupImagePreparer.swift in Sources */,
+				11B0A0081DC64D75000C1721 /* GroupInfoController.swift in Sources */,
 				111783121DC647C1000C1721 /* LoginBaseController.swift in Sources */,
 				111782E01DC64796000C1721 /* ChatMovableDateCell.swift in Sources */,
 				111782DD1DC64796000C1721 /* ChatIncomingTextCell.swift in Sources */,
@@ -2140,6 +2386,7 @@
 				111783761DC64D75000C1721 /* FriendCardController.swift in Sources */,
 				111783051DC6479E000C1721 /* ProfileSettings.swift in Sources */,
 				111782AA1DC64391000C1721 /* ScreenshotsUITests.swift in Sources */,
+				11B0A0051DC64391000C1721 /* GroupSmokeUITests.swift in Sources */,
 				111783781DC64D75000C1721 /* FriendRequestController.swift in Sources */,
 				111782E51DC64796000C1721 /* ChatOutgoingFileCellModel.swift in Sources */,
 				111782BD1DC643A3000C1721 /* OCTSubmanagerCallsMock.swift in Sources */,
@@ -2153,12 +2400,14 @@
 				111783721DC64D75000C1721 /* ChatListController.swift in Sources */,
 				111783801DC64D75000C1721 /* SettingsAdvancedController.swift in Sources */,
 				KHNDQNETLOG001A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift in Sources */,
+				KHLAUNCHREC001A1B2C3D4E5F6 /* LaunchRecovery.swift in Sources */,
 				KHNDQTOXR001A1B2C3D4E5F60101 /* ToxOptionsRestartScheduler.swift in Sources */,
 				1117833D1DC64810000C1721 /* CallButton.swift in Sources */,
 				111783481DC64810000C1721 /* NotificationWindow.swift in Sources */,
 				111782FA1DC64796000C1721 /* StaticTableSwitchCell.swift in Sources */,
 				111783401DC64810000C1721 /* CopyLabel.swift in Sources */,
 				111782C31DC643A3000C1721 /* OCTSubmanagerUserMock.swift in Sources */,
+				A1NGCMOCK000004 /* OCTSubmanagerGroupsMock.swift in Sources */,
 				111782E81DC64796000C1721 /* ChatProgressProtocol.swift in Sources */,
 				111782E41DC64796000C1721 /* ChatOutgoingFileCell.swift in Sources */,
 				111782F11DC64796000C1721 /* StaticTableChatButtonsCell.swift in Sources */,
@@ -2207,11 +2456,16 @@
 				9CE0BDF31C4522C800DCE357 /* ChatListCellModel.swift in Sources */,
 				11CFCD111C2A02350046BD94 /* StaticBackgroundView.swift in Sources */,
 				111782961DC53458000C1721 /* OCTSubmanagerFriendsMock.swift in Sources */,
+				A1NGCMOCK000002 /* OCTSubmanagerGroupsMock.swift in Sources */,
 				111782991DC53545000C1721 /* OCTSubmanagerObjectsMock.swift in Sources */,
 				1183BCAC1CA1B398000CD310 /* ChatIncomingFileCell.swift in Sources */,
 				112E4ED61C668C02004312CF /* CallIncomingController.swift in Sources */,
 				4E3D0F9527C9751300D5A068 /* LinearProgressBar.swift in Sources */,
 				B27VID020608000000000001 /* VideoSendPreprocessor.swift in Sources */,
+				B27VGR020608000000000001 /* GroupVoiceMessageRecorder.swift in Sources */,
+				B27THM020608000000000001 /* ThemeChrome.swift in Sources */,
+				B27GLM020608000000000001 /* GroupLiveMediaErrorPresenter.swift in Sources */,
+				B27VVD020608000000000001 /* GroupNgcVideoOverlayView.swift in Sources */,
 				B27MED020608000000000001 /* MediaSendPreviewController.swift in Sources */,
 				B28PRS020608000000000001 /* FriendPresenceFormatter.swift in Sources */,
 				116634E91C7B8D7C0072C980 /* StaticTableInfoCellModel.swift in Sources */,
@@ -2258,6 +2512,7 @@
 				11FA0EF31BC5A6AF00F3DA5B /* ChatsTabCoordinator.swift in Sources */,
 				11B253561C4AEA400068F47C /* ChatPrivateTitleView.swift in Sources */,
 				1173F06E1BC5D9BA00B88B7B /* Theme.swift in Sources */,
+				1173F0761BC5D9DA00B88B7B /* ThemeAppearance.swift in Sources */,
 				4E4EEA1F27DCECD3008B0E77 /* Bus.swift in Sources */,
 				1193AB481C1F4164006AA9E5 /* FriendListController.swift in Sources */,
 				11CFCD0F1C27499D0046BD94 /* UserStatusView.swift in Sources */,
@@ -2305,6 +2560,7 @@
 				1193AB421C1E2075006AA9E5 /* QRViewerController.swift in Sources */,
 				9CEE6B521C528AB600A1ECB5 /* SettingsAdvancedController.swift in Sources */,
 				KHNDQNETLOG003A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift in Sources */,
+				KHLAUNCHREC003A1B2C3D4E5F6 /* LaunchRecovery.swift in Sources */,
 				KHNDQTOXR003A1B2C3D4E5F60103 /* ToxOptionsRestartScheduler.swift in Sources */,
 				AFA023F4274C069100FBFCC0 /* ConnectionStatus.swift in Sources */,
 				116634E01C7B8D770072C980 /* StaticTableInfoCell.swift in Sources */,
@@ -2350,6 +2606,32 @@
 				112E4EDF1C675C58004312CF /* CallActiveController.swift in Sources */,
 				11628E751CA5811C008C097E /* ChatGenericFileCellModel.swift in Sources */,
 				11A21EFB1C45BDB100E80A89 /* ChatPrivateController.swift in Sources */,
+				KHPORTRAIT021A1B2C3D4E5F601 /* PortraitChatController.swift in Sources */,
+				11B0A0031C45BDB100E80A89 /* ChatGroupController.swift in Sources */,
+				11B0A0151C45BDB100E80A89 /* GroupPeerPrivateController.swift in Sources */,
+				11B0A0241C45BDB100E80A89 /* GroupMembersDrawerView.swift in Sources */,
+				11B0A0251C45BDB100E80A89 /* GroupPeerActionsPresenter.swift in Sources */,
+				11B0A02A1C45BDB100E80A89 /* ChatGroupController+MessageTools.swift in Sources */,
+				11B0A02B1C45BDB100E80A89 /* GroupMessageQuoteFormatter.swift in Sources */,
+				KHREPLY021A1B2C3D4E5F601 /* MessageReplyHelper.swift in Sources */,
+				KHMENTION021A1B2C3D4E5F601 /* GroupMentionHelper.swift in Sources */,
+				KHVOICE021A1B2C3D4E5F601 /* VoiceMessageHelper.swift in Sources */,
+				KHVOICE022A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift in Sources */,
+				KHVOICE023A1B2C3D4E5F601 /* ChatVoiceMessageView.swift in Sources */,
+				KHVOICE024A1B2C3D4E5F601 /* SessionAutoLogin.swift in Sources */,
+				KHREPLY022A1B2C3D4E5F601 /* ChatReplyPreviewView.swift in Sources */,
+				KHREPLY023A1B2C3D4E5F601 /* ChatReplyQuoteView.swift in Sources */,
+				KHREPLY024A1B2C3D4E5F601 /* ChatReplyController.swift in Sources */,
+				KHNDQNETLOG007A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift in Sources */,
+				KHSHRINBOX003A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */,
+				KHGRPSEL003A1B2C3D4E5F6 /* GroupSelectController.swift in Sources */,
+				KHGRPJOIN003A1B2C3D4E5F6 /* GroupJoinHelper.swift in Sources */,
+				KHQACMD003A1B2C3D4E5F6 /* QaCommandHandler.swift in Sources */,
+				KHQADBG003A1B2C3D4E5F6 /* QaDebugController.swift in Sources */,
+				KHGRPCRT003A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */,
+				11B0A0111C45BDB100E80A89 /* ChatGroupInputViewManager.swift in Sources */,
+				11B0A0161C45BDB100E80A8A /* GroupImagePreparer.swift in Sources */,
+				11B0A0091C45BDB100E80A89 /* GroupInfoController.swift in Sources */,
 				1164C8E91BC929F700B91107 /* LoginChoiceController.swift in Sources */,
 				1117827E1DC52CBA000C1721 /* OCTSubmanagerCallsMock.swift in Sources */,
 				1149626C1C5CE3DF001E5435 /* ChangeUserStatusController.swift in Sources */,
@@ -2382,6 +2664,7 @@
 				113F03341CB2E9C20009ABE1 /* UIFontExtension.swift in Sources */,
 				112E4EE01C675C58004312CF /* CallActiveController.swift in Sources */,
 				9CEE6B161C4E8FDC00A1ECB5 /* UserStatusView.swift in Sources */,
+				AFA023F5274C069100FBFCC1 /* ConnectionStatus.swift in Sources */,
 				9CEE6AE21C4E8FDC00A1ECB5 /* LoginLogoController.swift in Sources */,
 				9CEE6B191C4E8FDC00A1ECB5 /* ExtendedTextField.swift in Sources */,
 				111782A01DC53AB4000C1721 /* ToxFactory.swift in Sources */,
@@ -2395,6 +2678,7 @@
 				11628E331CA2FBD1008C097E /* FilePreviewControllerDataSource.swift in Sources */,
 				9CEE6B531C528AB600A1ECB5 /* SettingsAdvancedController.swift in Sources */,
 				KHNDQNETLOG004A1B2C3D4E5F6 /* NetworkDiagnosticsLog.swift in Sources */,
+				KHLAUNCHREC004A1B2C3D4E5F6 /* LaunchRecovery.swift in Sources */,
 				KHNDQTOXR004A1B2C3D4E5F60104 /* ToxOptionsRestartScheduler.swift in Sources */,
 				113F031F1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift in Sources */,
 				116634A11C6E8D0F0072C980 /* ChatIncomingCallCell.swift in Sources */,
@@ -2436,6 +2720,7 @@
 				9C19367F1D79CF7E005EA0B2 /* EnterPinController.swift in Sources */,
 				9CEE6B001C4E8FDC00A1ECB5 /* ActiveSessionNavigationCoordinator.swift in Sources */,
 				9CEE6ADA1C4E8FDC00A1ECB5 /* Theme.swift in Sources */,
+				1173F0781BC5D9DA00B88B7B /* ThemeAppearance.swift in Sources */,
 				9CEE6B0E1C4E8FDC00A1ECB5 /* BubbleView.swift in Sources */,
 				113F03211CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift in Sources */,
 				9CEE6B0A1C4E8FDC00A1ECB5 /* UIViewControllerExtension.swift in Sources */,
@@ -2483,6 +2768,32 @@
 				9CEE6AD31C4E8FDC00A1ECB5 /* FriendListDataSource.swift in Sources */,
 				11FC105B1D32EED000CE863E /* ResultsChange.swift in Sources */,
 				9CEE6AE81C4E8FDC00A1ECB5 /* ChatPrivateController.swift in Sources */,
+				KHPORTRAIT031A1B2C3D4E5F601 /* PortraitChatController.swift in Sources */,
+				11B0A0044E8FDC00A1ECB6 /* ChatGroupController.swift in Sources */,
+				11B0A0164E8FDC00A1ECB6 /* GroupPeerPrivateController.swift in Sources */,
+				11B0A0264E8FDC00A1ECB6 /* GroupMembersDrawerView.swift in Sources */,
+				11B0A0274E8FDC00A1ECB6 /* GroupPeerActionsPresenter.swift in Sources */,
+				11B0A02C4E8FDC00A1ECB6 /* ChatGroupController+MessageTools.swift in Sources */,
+				11B0A02D4E8FDC00A1ECB6 /* GroupMessageQuoteFormatter.swift in Sources */,
+				KHREPLY031A1B2C3D4E5F601 /* MessageReplyHelper.swift in Sources */,
+				KHMENTION031A1B2C3D4E5F601 /* GroupMentionHelper.swift in Sources */,
+				KHVOICE031A1B2C3D4E5F601 /* VoiceMessageHelper.swift in Sources */,
+				KHVOICE032A1B2C3D4E5F601 /* ChatVoiceMessagePlayer.swift in Sources */,
+				KHVOICE033A1B2C3D4E5F601 /* ChatVoiceMessageView.swift in Sources */,
+				KHVOICE034A1B2C3D4E5F601 /* SessionAutoLogin.swift in Sources */,
+				KHREPLY032A1B2C3D4E5F601 /* ChatReplyPreviewView.swift in Sources */,
+				KHREPLY033A1B2C3D4E5F601 /* ChatReplyQuoteView.swift in Sources */,
+				KHREPLY034A1B2C3D4E5F601 /* ChatReplyController.swift in Sources */,
+				KHNDQNETLOG008A1B2C3D4E5F6 /* NetworkDiagnosticsDetailController.swift in Sources */,
+				KHSHRINBOX004A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */,
+				KHGRPSEL004A1B2C3D4E5F6 /* GroupSelectController.swift in Sources */,
+				KHGRPJOIN004A1B2C3D4E5F6 /* GroupJoinHelper.swift in Sources */,
+				KHQACMD004A1B2C3D4E5F6 /* QaCommandHandler.swift in Sources */,
+				KHQADBG004A1B2C3D4E5F6 /* QaDebugController.swift in Sources */,
+				KHGRPCRT004A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */,
+				11B0A0124E8FDC00A1ECB6 /* ChatGroupInputViewManager.swift in Sources */,
+				11B0A0174E8FDC00A1ECB7 /* GroupImagePreparer.swift in Sources */,
+				11B0A00A4E8FDC00A1ECB6 /* GroupInfoController.swift in Sources */,
 				9CEE6ACD1C4E8FDC00A1ECB5 /* StaticTableDefaultCell.swift in Sources */,
 				1105B18E1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */,
 				9CEE6AB91C4E8FDC00A1ECB5 /* BaseCell.swift in Sources */,
@@ -2516,6 +2827,7 @@
 				9CEE6AEA1C4E8FDC00A1ECB5 /* FriendCardController.swift in Sources */,
 				9CEE6AFA1C4E8FDC00A1ECB5 /* CallCoordinator.swift in Sources */,
 				111782971DC53458000C1721 /* OCTSubmanagerFriendsMock.swift in Sources */,
+				A1NGCMOCK000003 /* OCTSubmanagerGroupsMock.swift in Sources */,
 				11C33AC41DC961DC008DBC49 /* LoginChoiceViewSnapshotTest.swift in Sources */,
 				9CEE6AE51C4E8FDC00A1ECB5 /* AddFriendController.swift in Sources */,
 				9CEE6AFE1C4E8FDC00A1ECB5 /* NotificationCoordinator.swift in Sources */,
@@ -2560,6 +2872,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KHSHREXT009A1B2C3D4E5F6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KHSHREXT004A1B2C3D4E5F6 /* ShareViewController.swift in Sources */,
+				KHSHREXT005A1B2C3D4E5F6 /* ShareInboxStorage.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KHSHREXT010A1B2C3D4E5F6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KHSHREXT011A1B2C3D4E5F6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AF2C9296279AB3F10094C08D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -2580,6 +2915,11 @@
 			isa = PBXTargetDependency;
 			target = 1164762E19794D3300DB20B8 /* Antidote */;
 			targetProxy = 1173F05B1BC5D94400B88B7B /* PBXContainerItemProxy */;
+		};
+		KHSHREXT016A1B2C3D4E5F6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KHSHREXT008A1B2C3D4E5F6 /* shareextension */;
+			targetProxy = KHSHREXT015A1B2C3D4E5F6 /* PBXContainerItemProxy */;
 		};
 		AF2C92A0279AB3F10094C08D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -2916,7 +3256,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142825;
+				CURRENT_PROJECT_VERSION = 142839;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -2932,6 +3272,7 @@
 				PROVISIONING_PROFILE = "";
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "Antidote/Antidote-Bridging-Header.h";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_SWIFT3_OBJC_INFERENCE = Default;
 				SWIFT_VERSION = 4.0;
@@ -2948,9 +3289,8 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_STATIC_ANALYZER_MODE = deep;
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142825;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 142839;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -2963,7 +3303,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger;
 				PRODUCT_MODULE_NAME = Antidote;
 				PRODUCT_NAME = Khandaq;
-				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				RUN_CLANG_STATIC_ANALYZER = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "Antidote/Antidote-Bridging-Header.h";
 				SWIFT_SWIFT3_OBJC_INFERENCE = Default;
@@ -3053,6 +3393,61 @@
 			};
 			name = Debug;
 		};
+		KHSHREXT013A1B2C3D4E5F6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES_NONAGGRESSIVE;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES;
+				CODE_SIGN_ENTITLEMENTS = shareextension/shareextension.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = DQRPWB97AB;
+				INFOPLIST_FILE = shareextension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.4.28;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.shareextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 4.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		KHSHREXT014A1B2C3D4E5F6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES_NONAGGRESSIVE;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES;
+				CODE_SIGN_ENTITLEMENTS = shareextension/shareextension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = DQRPWB97AB;
+				INFOPLIST_FILE = shareextension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.4.28;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.shareextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		AF2C92A4279AB3F10094C08D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -3060,8 +3455,6 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = DQRPWB97AB;
@@ -3072,6 +3465,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.pushextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 4.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -3113,6 +3507,15 @@
 			buildConfigurations = (
 				1173F05E1BC5D94400B88B7B /* Debug */,
 				1173F05F1BC5D94400B88B7B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		KHSHREXT012A1B2C3D4E5F6 /* Build configuration list for PBXNativeTarget "shareextension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KHSHREXT013A1B2C3D4E5F6 /* Debug */,
+				KHSHREXT014A1B2C3D4E5F6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

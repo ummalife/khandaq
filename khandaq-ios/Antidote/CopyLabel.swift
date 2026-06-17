@@ -46,8 +46,12 @@ extension CopyLabel {
 extension CopyLabel {
     override func copy(_ sender: Any?) {
         let raw = text ?? ""
+        if let normalized = normalizedToxAddress(from: raw) {
+            UIPasteboard.general.string = normalized
+            return
+        }
+
         let sanitized = sanitizeAddressInput(raw)
-        // Contact details / Tox ID fields: copy clean hex only (no label text or formatting).
         UIPasteboard.general.string = sanitized.isEmpty ? raw : sanitized
     }
 

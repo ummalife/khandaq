@@ -15,6 +15,7 @@ protocol ActiveSessionCoordinatorDelegate: class {
 private struct Options {
     static let ToShowKey = "ToShowKey"
     static let StoredOptions = "StoredOptions"
+    static let ThemeReloadOnlyKey = "ThemeReloadOnly"
 
     enum Coordinator {
         case none
@@ -26,6 +27,7 @@ private struct IpadObjects {
     let splitController: UISplitViewController
 
     let primaryController: PrimaryIpadController
+    let chatsCoordinator: ChatsTabCoordinator
 
     let keyboardObserver = KeyboardObserver()
 }
@@ -74,6 +76,10 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate var iPhone: IphoneObjects!
     fileprivate var iPad: IpadObjects!
 
+    fileprivate var isPresentingSharePicker = false
+    fileprivate var pendingSharePayload: ShareInboxPayload?
+    fileprivate var pendingOpenInFilePath: String?
+
     fileprivate let networkReachabilityMonitor = ToxNetworkReachabilityMonitor()
 
     init(theme: Theme, window: UIWindow, toxManager: OCTManager) {
@@ -82,29 +88,31 @@ class ActiveSessionCoordinator: NSObject {
         self.toxManager = toxManager
 
         self.friendsCoordinator = FriendsTabCoordinator(theme: theme, toxManager: toxManager)
-        self.settingsCoordinator = SettingsTabCoordinator(theme: theme)
+        self.settingsCoordinator = SettingsTabCoordinator(theme: theme, submanagerObjects: toxManager.objects, toxManager: toxManager)
         self.profileCoordinator = ProfileTabCoordinator(theme: theme, toxManager: toxManager)
         self.notificationCoordinator = NotificationCoordinator(theme: theme, submanagerObjects: toxManager.objects)
         self.automationCoordinator = AutomationCoordinator(submanagerObjects: toxManager.objects, submanagerFiles: toxManager.files)
 
         super.init()
 
+        settingsCoordinator.sessionCoordinator = self
+
+        QaCommandHandler.consumePendingCommands(coordinator: self)
+        QaCommandHandler.schedulePendingCommandRetry(coordinator: self)
+
         // order matters
         createDeviceSpecificObjects()
         createCallCoordinator()
 
         toxManager.user.delegate = self
+        toxManager.groups.delegate = self
+
+        toxManager.objects.setGroupShowSystemMessages(UserDefaultsManager().groupShowSystemMessages)
 
         friendsCoordinator.delegate = self
         settingsCoordinator.delegate = self
         profileCoordinator.delegate = self
         notificationCoordinator.delegate = self
-
-        KhandaqPushManager.shared.bind(toxManager: toxManager)
-
-        networkReachabilityMonitor.start { [weak self] in
-            self?.handleNetworkPathChange()
-        }
 
         NotificationCenter.default.addObserver(
             self,
@@ -113,9 +121,15 @@ class ActiveSessionCoordinator: NSObject {
             object: nil)
 
         NotificationCenter.default.addObserver(self, selector: #selector(ActiveSessionCoordinator.applicationWillTerminate), name: NSNotification.Name.UIApplicationWillTerminate, object: nil)
+
+        MessageDeliveryWatchdog.shared.bind(toxManager: toxManager)
+        MessageDeliveryWatchdog.shared.start()
+        registerForReconnectBackoff()
     }
 
     deinit {
+        MessageDeliveryWatchdog.shared.stop()
+        NotificationCenter.default.removeObserver(self, name: .khandaqManualReconnectRequested, object: nil)
         networkReachabilityMonitor.stop()
         NotificationCenter.default.removeObserver(self)
     }
@@ -123,14 +137,29 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate func handleNetworkPathChange() {
         NetworkDiagnosticsLog.log("network_path_change", detail: "reachability")
         ConnectionQualityMonitor.shared.onBootstrapStarted()
-        toxManager.bootstrap.rebootstrapOnNetworkChange()
+        ReconnectBackoffCoordinator.shared.scheduleReconnect(reason: .networkChange, urgent: true)
         toxManager.chats.broadcastOwnPushURLToConnectedFriends()
+    }
+
+    fileprivate func startNetworkMonitoringAndPushBinding() {
+        KhandaqPushManager.shared.bind(toxManager: toxManager)
+
+        networkReachabilityMonitor.start { [weak self] in
+            self?.handleNetworkPathChange()
+        }
     }
 
     @objc func networkRebootstrapCompleted() {
         let connected = toxManager.user.connectionStatus != .none
         ConnectionQualityMonitor.shared.onBootstrapFinished(connected: connected)
         NetworkDiagnosticsLog.log("rebootstrap_completed", detail: "connected=\(connected)")
+        if connected {
+            ReconnectBackoffCoordinator.shared.onConnectionRestored()
+            toxManager.chats.tickDeliveryWatchdog()
+            toxManager.groups.flushAllPendingGroupMessagesIfNeeded()
+        } else {
+            ReconnectBackoffCoordinator.shared.scheduleRetryIfStillOffline(reason: .offlinePeriodic)
+        }
     }
 
     @objc func applicationWillTerminate() {
@@ -138,11 +167,19 @@ class ActiveSessionCoordinator: NSObject {
     }
 
     func shutdownForToxRestart() {
+        MessageDeliveryWatchdog.shared.stop()
         networkReachabilityMonitor.stop()
         KhandaqPushManager.shared.unbind()
         toxManager?.user.delegate = nil
+        toxManager?.groups.delegate = nil
         callCoordinator = nil
-        toxManager = nil
+    }
+
+    func shutdownForThemeReload() {
+        networkReachabilityMonitor.stop()
+        toxManager?.user.delegate = nil
+        toxManager?.groups.delegate = nil
+        callCoordinator = nil
     }
 }
 
@@ -150,13 +187,9 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
     func startWithOptions(_ options: CoordinatorOptions?) {
         switch InterfaceIdiom.current() {
             case .iPhone:
-                iPhone.tabBarController.selectedIndex = IphoneObjects.TabCoordinator.chats.rawValue
-                iPhone.chatsCoordinator.startWithOptions(nil)
-
                 window.rootViewController = iPhone.tabBarController
             case .iPad:
                 primaryIpadControllerShowFriends(iPad.primaryController)
-
                 window.rootViewController = iPad.splitController
         }
 
@@ -171,18 +204,37 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
         }
 
         friendsCoordinator.startWithOptions(nil)
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                iPhone.chatsCoordinator.startWithOptions(nil)
+            case .iPad:
+                break
+        }
         settingsCoordinator.startWithOptions(settingsOptions)
         profileCoordinator.startWithOptions(nil)
         notificationCoordinator.startWithOptions(nil)
         automationCoordinator.startWithOptions(nil)
         callCoordinator.startWithOptions(nil)
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else {
-                return
+        if case .iPhone = InterfaceIdiom.current() {
+            iPhone.tabBarController.selectTab(at: IphoneObjects.TabCoordinator.chats.rawValue)
+            iPhone.tabBarController.preloadChildTabViews()
+            iPhone.tabBarController.view.setNeedsLayout()
+            iPhone.tabBarController.view.layoutIfNeeded()
+        }
+
+        let themeReloadOnly = options?[Options.ThemeReloadOnlyKey] as? Bool ?? false
+        if !themeReloadOnly {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else {
+                    return
+                }
+                self.toxManager.bootstrap.addPredefinedNodes()
+                self.toxManager.bootstrap.bootstrap()
+                self.startNetworkMonitoringAndPushBinding()
             }
-            self.toxManager.bootstrap.addPredefinedNodes()
-            self.toxManager.bootstrap.bootstrap()
+        } else {
+            startNetworkMonitoringAndPushBinding()
         }
 
         updateUserAvatar()
@@ -194,6 +246,14 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             case .settings:
                 showSettings()
         }
+
+        if !themeReloadOnly {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                self?.processPendingShareIfNeeded()
+            }
+        }
+
+        LaunchRecovery.markLaunchCompleted()
     }
     func handleLocalNotification(_ notification: UILocalNotification) {
         notificationCoordinator.handleLocalNotification(notification)
@@ -226,6 +286,29 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
     }
 
     func handleInboxURL(_ url: URL) {
+        guard url.scheme?.lowercased() == "khandaq" else {
+            handleNonKhandaqInboxURL(url)
+            return
+        }
+
+        if url.host?.lowercased() == "share" {
+            processPendingShareIfNeeded()
+            return
+        }
+
+        if QaCommandHandler.handle(url: url, coordinator: self) {
+            return
+        }
+
+        if let chatIdHex = GroupJoinHelper.normalizedGroupChatIdHex(from: url.absoluteString) {
+            presentGroupJoin(chatIdHex: chatIdHex)
+            return
+        }
+
+        NSLog("Khandaq: ignored deep link %@", url.absoluteString)
+    }
+
+    private func handleNonKhandaqInboxURL(_ url: URL) {
         let fileName = url.lastPathComponent
         let filePath = url.path
         let isToxFile = url.isToxURL()
@@ -251,6 +334,10 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
             self.sendFileToChats(filePath, fileName: fileName)
         })
 
+        alert.addAction(UIAlertAction(title: String(localized: "file_send_to_group"), style: .default) { [unowned self] _ -> Void in
+            self.sendFileToGroup(filePath, fileName: fileName)
+        })
+
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
         switch InterfaceIdiom.current() {
@@ -258,6 +345,36 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
                 iPhone.tabBarController.present(alert, animated: true, completion: nil)
             case .iPad:
                 iPad.splitController.present(alert, animated: true, completion: nil)
+        }
+    }
+
+    func processPendingShareIfNeeded() {
+        guard !isPresentingSharePicker else {
+            return
+        }
+
+        guard let payload = ShareInboxStorage.loadPendingShare() else {
+            return
+        }
+
+        pendingSharePayload = payload
+        isPresentingSharePicker = true
+
+        let controller = GroupSelectController(theme: theme, submanagerObjects: toxManager.objects)
+        controller.delegate = self
+        controller.title = String(localized: "file_send_to_group")
+
+        let navigation = UINavigationController(rootViewController: controller)
+        rootViewController().present(navigation, animated: true, completion: nil)
+    }
+
+    func presentGroupJoin(chatIdHex: String) {
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                iPhone.tabBarController.selectedIndex = IphoneObjects.TabCoordinator.chats.rawValue
+                iPhone.chatsCoordinator.joinGroupFromExternal(chatIdHex: chatIdHex)
+            case .iPad:
+                iPad.chatsCoordinator.joinGroupFromExternal(chatIdHex: chatIdHex)
         }
     }
 }
@@ -276,6 +393,31 @@ extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
         } else {
             ConnectionQualityMonitor.shared.onBootstrapFinished(connected: true)
         }
+    }
+}
+
+extension ActiveSessionCoordinator: OCTSubmanagerGroupsDelegate {
+    func submanagerGroups(_ submanager: OCTSubmanagerGroups,
+                          didReceiveInviteFromFriendNumber friendNumber: OCTToxFriendNumber,
+                          invite inviteData: Data,
+                          groupName: String?) {
+        showGroupInviteAlert(friendNumber: friendNumber, inviteData: inviteData, groupName: groupName)
+    }
+
+    func submanagerGroups(_ submanager: OCTSubmanagerGroups,
+                          groupJoinDidFail failType: OCTToxGroupJoinFail,
+                          for chat: OCTChat) {
+        let message: String
+        switch failType {
+            case .peerLimit:
+                message = String(localized: "group_join_fail_peer_limit")
+            case .invalidPassword:
+                message = String(localized: "group_join_fail_invalid_password")
+            case .unknown:
+                message = String(localized: "group_join_failed")
+        }
+
+        UIAlertController.showErrorWithMessage(message, retryBlock: nil)
     }
 }
 
@@ -363,12 +505,34 @@ extension ActiveSessionCoordinator: ChatsTabCoordinatorDelegate {
     }
 }
 
+extension ActiveSessionCoordinator: ChatGroupControllerDelegate {
+    func chatGroupControllerWillAppear(_ controller: ChatGroupController) {
+        notificationCoordinator.banNotificationsForChat(controller.chat)
+    }
+
+    func chatGroupControllerWillDisappear(_ controller: ChatGroupController) {
+        notificationCoordinator.unbanNotificationsForChat(controller.chat)
+    }
+
+    func chatGroupControllerDidRequestGroupInfo(_ controller: ChatGroupController) {
+        showGroupInfo(controller.chat)
+    }
+
+    func chatGroupController(_ controller: ChatGroupController, didRequestOpenFriend friend: OCTFriend) {
+        openChatWithSenderPublicKey(friend.publicKey)
+    }
+}
+
 extension ActiveSessionCoordinator: SettingsTabCoordinatorDelegate {
     func settingsTabCoordinatorRecreateCoordinatorsStack(_ coordinator: SettingsTabCoordinator, options settingsOptions: CoordinatorOptions) {
         delegate?.activeSessionCoordinatorRecreateCoordinatorsStack(self, options: [
             Options.ToShowKey: Options.Coordinator.settings,
             Options.StoredOptions: settingsOptions,
         ])
+    }
+
+    func logout(importToxProfileFromURL profileURL: URL? = nil) {
+        delegate?.activeSessionCoordinatorDidLogout(self, importToxProfileFromURL: profileURL)
     }
 }
 
@@ -397,6 +561,10 @@ extension ActiveSessionCoordinator: ProfileTabCoordinatorDelegate {
 extension ActiveSessionCoordinator: PrimaryIpadControllerDelegate {
     func primaryIpadController(_ controller: PrimaryIpadController, didSelectChat chat: OCTChat) {
         showChat(chat)
+    }
+
+    func primaryIpadController(_ controller: PrimaryIpadController, didRequestGroupInfo chat: OCTChat) {
+        showGroupInfo(chat)
     }
 
     func primaryIpadControllerShowFriends(_ controller: PrimaryIpadController) {
@@ -439,6 +607,37 @@ extension ActiveSessionCoordinator: ChatPrivateControllerDelegate {
     }
 }
 
+extension ActiveSessionCoordinator: GroupSelectControllerDelegate {
+    func groupSelectController(_ controller: GroupSelectController, didSelectGroup chat: OCTChat) {
+        rootViewController().dismiss(animated: true) { [unowned self] in
+            guard let payload = self.pendingSharePayload else {
+                self.isPresentingSharePicker = false
+                return
+            }
+
+            self.sendSharePayload(payload, to: chat)
+            ShareInboxStorage.clearPendingShare()
+            self.pendingSharePayload = nil
+            self.pendingOpenInFilePath = nil
+            self.isPresentingSharePicker = false
+            self.showChat(chat)
+        }
+    }
+
+    func groupSelectControllerCancel(_ controller: GroupSelectController) {
+        rootViewController().dismiss(animated: true) { [unowned self] in
+            if let filePath = self.pendingOpenInFilePath {
+                _ = try? FileManager.default.removeItem(atPath: filePath)
+            }
+
+            ShareInboxStorage.clearPendingShare()
+            self.pendingSharePayload = nil
+            self.pendingOpenInFilePath = nil
+            self.isPresentingSharePicker = false
+        }
+    }
+}
+
 extension ActiveSessionCoordinator: FriendSelectControllerDelegate {
     func friendSelectController(_ controller: FriendSelectController, didSelectFriend friend: OCTFriend) {
         rootViewController().dismiss(animated: true) { [unowned self] in
@@ -465,7 +664,7 @@ private extension ActiveSessionCoordinator {
     func createDeviceSpecificObjects() {
         switch InterfaceIdiom.current() {
             case .iPhone:
-                let chatsCoordinator = ChatsTabCoordinator(theme: theme, submanagerObjects: toxManager.objects, submanagerChats: toxManager.chats, submanagerFiles: toxManager.files)
+                let chatsCoordinator = ChatsTabCoordinator(theme: theme, submanagerObjects: toxManager.objects, submanagerChats: toxManager.chats, submanagerGroups: toxManager.groups, submanagerFiles: toxManager.files, submanagerUser: toxManager.user, submanagerFriends: toxManager.friends)
                 chatsCoordinator.delegate = self
 
                 let tabBarControllers = IphoneObjects.TabCoordinator.allValues().map { object -> UINavigationController in
@@ -496,11 +695,18 @@ private extension ActiveSessionCoordinator {
                 let splitController = UISplitViewController()
                 splitController.preferredDisplayMode = .allVisible
 
-                let primaryController = PrimaryIpadController(theme: theme, submanagerChats: toxManager.chats, submanagerObjects: toxManager.objects)
+                let chatsCoordinator = ChatsTabCoordinator(theme: theme, submanagerObjects: toxManager.objects, submanagerChats: toxManager.chats, submanagerGroups: toxManager.groups, submanagerFiles: toxManager.files, submanagerUser: toxManager.user, submanagerFriends: toxManager.friends)
+                chatsCoordinator.delegate = self
+                chatsCoordinator.externalPresentingController = splitController
+                chatsCoordinator.chatDisplayHandler = { [weak self] chat, _ in
+                    self?.showChat(chat)
+                }
+
+                let primaryController = PrimaryIpadController(theme: theme, submanagerChats: toxManager.chats, submanagerGroups: toxManager.groups, submanagerObjects: toxManager.objects)
                 primaryController.delegate = self
                 splitController.viewControllers = [UINavigationController(rootViewController: primaryController)]
 
-                iPad = IpadObjects(splitController: splitController, primaryController: primaryController)
+                iPad = IpadObjects(splitController: splitController, primaryController: primaryController, chatsCoordinator: chatsCoordinator)
         }
     }
 
@@ -532,6 +738,7 @@ private extension ActiveSessionCoordinator {
                 image: templateImage("tab-bar-friends"),
                 tag: IphoneObjects.TabCoordinator.friends.rawValue)
         friendsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
+        configureCompactTabBarItem(friendsItem, accessibilityTitle: String(localized: "contacts_title"))
         controllers[IphoneObjects.TabCoordinator.friends.rawValue].tabBarItem = friendsItem
 
         let chatsItem = UITabBarItem(
@@ -539,12 +746,14 @@ private extension ActiveSessionCoordinator {
                 image: templateImage("tab-bar-chats"),
                 tag: IphoneObjects.TabCoordinator.chats.rawValue)
         chatsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
+        configureCompactTabBarItem(chatsItem, accessibilityTitle: String(localized: "chats_title"))
         controllers[IphoneObjects.TabCoordinator.chats.rawValue].tabBarItem = chatsItem
 
         let settingsItem = UITabBarItem(
                 title: String(localized: "settings_title"),
                 image: templateImage("tab-bar-settings"),
                 tag: IphoneObjects.TabCoordinator.settings.rawValue)
+        configureCompactTabBarItem(settingsItem, accessibilityTitle: String(localized: "settings_title"))
         controllers[IphoneObjects.TabCoordinator.settings.rawValue].tabBarItem = settingsItem
 
         let profileItem = UITabBarItem(
@@ -555,9 +764,14 @@ private extension ActiveSessionCoordinator {
                         userStatus: .offline,
                         connectionStatus: .none),
                 tag: IphoneObjects.TabCoordinator.profile.rawValue)
+        configureCompactTabBarItem(profileItem, accessibilityTitle: String(localized: "profile_title"))
         controllers[IphoneObjects.TabCoordinator.profile.rawValue].tabBarItem = profileItem
 
         return (friendsItem, chatsItem, profileItem)
+    }
+
+    func configureCompactTabBarItem(_ item: UITabBarItem, accessibilityTitle: String) {
+        item.accessibilityLabel = accessibilityTitle
     }
 
     func showFriendRequest(_ request: OCTFriendRequest) {
@@ -618,25 +832,114 @@ private extension ActiveSessionCoordinator {
 
                 iPhone.chatsCoordinator.showChat(chat, animated: false)
             case .iPad:
-                if let chatVC = iPadDetailController() as? ChatPrivateController {
-                    if chatVC.chat == chat {
-                        // controller is already visible
+                if chat.isGroup {
+                    if let groupVC = iPadDetailController() as? ChatGroupController, groupVC.chat == chat {
                         return
                     }
                 }
+                else if let chatVC = iPadDetailController() as? ChatPrivateController, chatVC.chat == chat {
+                    return
+                }
 
-                let controller = ChatPrivateController(
-                        theme: theme,
-                        chat: chat,
-                        submanagerChats: toxManager.chats,
-                        submanagerObjects: toxManager.objects,
-                        submanagerFiles: toxManager.files,
-                        delegate: self,
-                        showKeyboardOnAppear: iPad.keyboardObserver.keyboardVisible)
-                let navigation = UINavigationController(rootViewController: controller)
+                let rootController: UIViewController
+                if chat.isGroup {
+                    rootController = ChatGroupController(
+                            theme: theme,
+                            chat: chat,
+                            submanagerGroups: toxManager.groups,
+                            submanagerObjects: toxManager.objects,
+                            submanagerFriends: toxManager.friends,
+                            submanagerChats: toxManager.chats,
+                            delegate: self)
+                }
+                else {
+                    rootController = ChatPrivateController(
+                            theme: theme,
+                            chat: chat,
+                            submanagerChats: toxManager.chats,
+                            submanagerObjects: toxManager.objects,
+                            submanagerFiles: toxManager.files,
+                            delegate: self,
+                            showKeyboardOnAppear: iPad.keyboardObserver.keyboardVisible)
+                }
+                let navigation = UINavigationController(rootViewController: rootController)
 
                 iPad.splitController.showDetailViewController(navigation, sender: nil)
         }
+    }
+
+    func showGroupInfo(_ chat: OCTChat) {
+        let infoController = GroupInfoController(
+                theme: theme,
+                chat: chat,
+                submanagerGroups: toxManager.groups,
+                submanagerObjects: toxManager.objects,
+                submanagerChats: toxManager.chats,
+                submanagerFiles: toxManager.files,
+                submanagerFriends: toxManager.friends)
+
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                if iPhone.tabBarController.selectedIndex != IphoneObjects.TabCoordinator.chats.rawValue {
+                    iPhone.tabBarController.selectedIndex = IphoneObjects.TabCoordinator.chats.rawValue
+                }
+                iPhone.chatsCoordinator.navigationController.pushViewController(infoController, animated: true)
+            case .iPad:
+                if let navigation = iPadDetailController()?.navigationController {
+                    navigation.pushViewController(infoController, animated: true)
+                }
+                else {
+                    let navigation = UINavigationController(rootViewController: infoController)
+                    iPad.splitController.showDetailViewController(navigation, sender: nil)
+                }
+        }
+    }
+
+    func showGroupInviteAlert(friendNumber: OCTToxFriendNumber, inviteData: Data, groupName: String?) {
+        let friendDisplayName = friendDisplayName(for: friendNumber)
+        let resolvedGroupName = (groupName?.isEmpty == false) ? groupName! : String(localized: "group_chat_default_title")
+        let title = String(localized: "group_invite_alert_title")
+        let message = String(format: String(localized: "group_invite_alert_message_format"), friendDisplayName, resolvedGroupName)
+
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "group_invite_accept"), style: .default) { [unowned self] _ in
+            do {
+                let chat = try self.toxManager.groups.acceptGroupInvite(fromFriendNumber: friendNumber,
+                                                                        invite: inviteData,
+                                                                        groupName: groupName,
+                                                                        password: nil)
+                DispatchQueue.main.async {
+                    self.showChat(chat)
+                }
+            }
+            catch let error as NSError {
+                handleErrorWithType(.acceptGroupInvite, error: error)
+            }
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+
+        switch InterfaceIdiom.current() {
+            case .iPhone:
+                iPhone.tabBarController.present(alert, animated: true, completion: nil)
+            case .iPad:
+                iPad.splitController.present(alert, animated: true, completion: nil)
+        }
+    }
+
+    func friendDisplayName(for friendNumber: OCTToxFriendNumber) -> String {
+        let friends = toxManager.objects.friends()
+        for index in 0..<friends.count {
+            guard let friend = friends[index] as? OCTFriend else {
+                continue
+            }
+            if friend.friendNumber == friendNumber {
+                if let name = friend.name, !name.isEmpty {
+                    return name
+                }
+                return friend.publicKey
+            }
+        }
+        return String(localized: "group_invite_unknown_friend")
     }
 
     func showSettings() {
@@ -716,10 +1019,6 @@ private extension ActiveSessionCoordinator {
         return controller
     }
 
-    func logout(importToxProfileFromURL profileURL: URL? = nil) {
-        delegate?.activeSessionCoordinatorDidLogout(self, importToxProfileFromURL: profileURL)
-    }
-
     func rootViewController() -> UIViewController {
         switch InterfaceIdiom.current() {
             case .iPhone:
@@ -738,6 +1037,52 @@ private extension ActiveSessionCoordinator {
         let navigation = UINavigationController(rootViewController: controller)
 
         rootViewController().present(navigation, animated: true, completion: nil)
+    }
+
+    func sendFileToGroup(_ filePath: String, fileName: String) {
+        pendingOpenInFilePath = filePath
+        pendingSharePayload = ShareInboxPayload(
+            version: 1,
+            createdAt: Date().timeIntervalSince1970,
+            items: [ShareInboxItem(type: .file, text: nil, fileName: fileName, relativePath: nil)]
+        )
+        isPresentingSharePicker = true
+
+        let controller = GroupSelectController(theme: theme, submanagerObjects: toxManager.objects)
+        controller.delegate = self
+        controller.title = String(localized: "file_send_to_group")
+
+        let navigation = UINavigationController(rootViewController: controller)
+        rootViewController().present(navigation, animated: true, completion: nil)
+    }
+
+    func sendSharePayload(_ payload: ShareInboxPayload, to chat: OCTChat) {
+        for item in payload.items {
+            switch item.type {
+                case .text:
+                    guard let text = item.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+                        continue
+                    }
+
+                    toxManager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in
+                    }, failureBlock: { error in
+                        handleErrorWithType(.sendMessageToFriend, error: error as NSError?)
+                    })
+
+                case .file:
+                    let path = ShareInboxStorage.absolutePath(for: item) ?? pendingOpenInFilePath
+                    guard let filePath = path else {
+                        continue
+                    }
+
+                    toxManager.groups.sendFile(atPath: filePath, to: chat, moveToUploads: true, successBlock: { _ in
+                    }, failureBlock: { error in
+                        handleErrorWithType(.sendFileToFriend, error: error as NSError?)
+                    })
+            }
+        }
+
+        pendingOpenInFilePath = nil
     }
 
     func sendFile(_ filePath: String, toChat chat: OCTChat) {

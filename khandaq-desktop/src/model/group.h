@@ -42,6 +42,7 @@ public:
           FriendList& friendList);
     bool isAvGroupchat() const;
     uint32_t getId() const override;
+    void setToxGroupNum(int newGroupNum);
     const GroupId& getPersistentId() const override;
     int getPeersCount() const;
     void regeneratePeerList();

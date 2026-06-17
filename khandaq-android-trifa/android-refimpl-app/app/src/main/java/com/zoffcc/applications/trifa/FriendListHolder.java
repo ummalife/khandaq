@@ -70,6 +70,7 @@ import static com.zoffcc.applications.trifa.MainActivity.PREF__show_friendnumber
 import static com.zoffcc.applications.trifa.MainActivity.cache_confid_confnum;
 import static com.zoffcc.applications.trifa.MainActivity.cache_fnum_pubkey;
 import static com.zoffcc.applications.trifa.MainActivity.cache_pubkey_fnum;
+import static com.zoffcc.applications.trifa.MainActivity.contacts_list_fragment;
 import static com.zoffcc.applications.trifa.MainActivity.friend_list_fragment;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_conference_invite;
@@ -351,9 +352,17 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         ChatListUiHelper.prepare_telegram_row(friend_line_container, textView, statusText, chatTimeView,
                                               f_notification, f_status_icon, f_user_status_icon, f_relay_icon,
                                               ip_addr_text);
-        statusText.setText(ChatListUiHelper.friend_last_message_preview(context, fl.tox_public_key_string));
-        ChatListUiHelper.bind_preview_text_color(statusText,
-                ChatDraftHelper.has_friend_draft(fl.tox_public_key_string));
+        if (ChatDraftHelper.has_friend_draft(fl.tox_public_key_string)
+                || ChatListUiHelper.friend_has_messages(fl.tox_public_key_string))
+        {
+            statusText.setText(ChatListUiHelper.friend_last_message_preview(context, fl.tox_public_key_string));
+            ChatListUiHelper.bind_preview_text_color(statusText,
+                    ChatDraftHelper.has_friend_draft(fl.tox_public_key_string));
+        }
+        else
+        {
+            FriendPresenceHelper.bind_contact_list_presence_subtitle(statusText, context, fl);
+        }
         if (chatTimeView != null)
         {
             chatTimeView.setText(ChatListUiHelper.format_chat_list_time(context,
@@ -473,7 +482,18 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             }
             else
             {
-                show_messagelist_acticvity_for_friend(v.getContext(), this.friendlist.tox_public_key_string);
+                if (contacts_list_fragment != null && !contacts_list_fragment.isHidden())
+                {
+                    long friend_num_temp_safety = tox_friend_by_public_key__wrapper(this.friendlist.tox_public_key_string);
+                    Intent intent = new Intent(v.getContext(), FriendInfoActivity.class);
+                    intent.putExtra("friendnum", friend_num_temp_safety);
+                    intent.putExtra("friend_pubkey", this.friendlist.tox_public_key_string);
+                    v.getContext().startActivity(intent);
+                }
+                else
+                {
+                    show_messagelist_acticvity_for_friend(v.getContext(), this.friendlist.tox_public_key_string);
+                }
             }
         }
         catch (Exception e)
@@ -665,6 +685,7 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
 
                         Intent intent = new Intent(v.getContext(), FriendInfoActivity.class);
                         intent.putExtra("friendnum", friend_num_temp_safety);
+                        intent.putExtra("friend_pubkey", f2.tox_public_key_string);
                         v.getContext().startActivity(intent);
                         // show friend info page -----------------
                         break;
@@ -728,6 +749,10 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
                             show_confirm_addrelay_dialog(v, f2);
                             // add as ToxProxy relay -----------------
                         }
+                        break;
+                    case R.id.item_toggle_favorite:
+                        ChatFavoritesHelper.toggleFavoriteFriend(v.getContext(), f2);
+                        notifyFavoriteChanged(v);
                         break;
                     case R.id.item_dummy01:
                         break;
@@ -830,6 +855,13 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         {
             add_toxproxy_item.setVisible(true);
         }
+        final MenuItem favoriteItem = menu.getMenu().findItem(R.id.item_toggle_favorite);
+        if (favoriteItem != null)
+        {
+            final boolean isFavorite = ChatFavoritesHelper.isFavorite(v.getContext(),
+                    ChatFavoritesHelper.friendKey(f2.tox_public_key_string));
+            favoriteItem.setTitle(isFavorite ? R.string.chat_filter_remove_favorite : R.string.chat_filter_add_favorite);
+        }
         menu.show();
 
         return true;
@@ -847,8 +879,17 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         }
 
         Intent intent = new Intent(c, MessageListActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("friendnum", tox_friend_by_public_key__wrapper(friend_pubkey));
         intent.putExtra("friend_pubkey", friend_pubkey);
         c.startActivity(intent);
+    }
+
+    static void notifyFavoriteChanged(final View view)
+    {
+        if (view.getContext() instanceof MainActivity)
+        {
+            ((MainActivity) view.getContext()).onChatFavoriteChanged();
+        }
     }
 }

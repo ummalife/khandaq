@@ -27,7 +27,7 @@ class ProfileTabCoordinator: ActiveSessionNavigationCoordinator, UIAdaptivePrese
     override func startWithOptions(_ options: CoordinatorOptions?) {
         let controller = ProfileMainController(theme: theme, submanagerUser: toxManager.user)
         controller.delegate = self
-        navigationController.pushViewController(controller, animated: false)
+        installRootViewController(controller)
     }
 }
 

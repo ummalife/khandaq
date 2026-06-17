@@ -10,11 +10,14 @@
 #include <string.h>
 
 #include "bwcontroller.h"
+#include "toxav_hacks.h"
 
 #include "../toxcore/Messenger.h"
 #include "../toxcore/ccompat.h"
 #include "../toxcore/logger.h"
 #include "../toxcore/mono_time.h"
+#include "../toxcore/tox_private.h"
+#include "../toxcore/tox_struct.h"
 #include "../toxcore/util.h"
 
 /**
@@ -321,7 +324,7 @@ static void update_bwc_values(const Logger *log, RTPSession *session, const stru
 
         if (received_length_full < data_length_full) {
             LOGGER_DEBUG(log, "BWC: full length=%u received length=%d", data_length_full, received_length_full);
-            bwc_add_lost(session->bwc, data_length_full - received_length_full);
+            bwc_add_lost_v3(session->bwc, data_length_full - received_length_full, false);
         }
     }
 }
@@ -440,14 +443,16 @@ static int handle_video_packet(RTPSession *session, const struct RTPHeader *head
  * @retval -1 on error.
  * @retval 0 on success.
  */
-static int handle_rtp_packet(Messenger *m, uint32_t friendnumber, const uint8_t *data, uint16_t length, void *object)
+static int handle_rtp_packet_for_session(RTPSession *session, const uint8_t *data, uint16_t length)
 {
-    RTPSession *session = (RTPSession *)object;
-
-    if (session == nullptr || length < RTP_HEADER_SIZE + 1) {
-        LOGGER_WARNING(m->log, "No session or invalid length of received buffer!");
+    if (session == nullptr || session->m == nullptr || length < RTP_HEADER_SIZE + 1) {
+        if (session != nullptr && session->m != nullptr) {
+            LOGGER_WARNING(session->m->log, "No session or invalid length of received buffer!");
+        }
         return -1;
     }
+
+    const Logger *log = session->m->log;
 
     // Get the packet type.
     const uint8_t packet_type = data[0];
@@ -459,35 +464,35 @@ static int handle_rtp_packet(Messenger *m, uint32_t friendnumber, const uint8_t 
     rtp_header_unpack(data, &header);
 
     if (header.pt != packet_type % 128) {
-        LOGGER_WARNING(m->log, "RTPHeader packet type and Tox protocol packet type did not agree: %d != %d",
+        LOGGER_WARNING(log, "RTPHeader packet type and Tox protocol packet type did not agree: %d != %d",
                        header.pt, packet_type % 128);
         return -1;
     }
 
     if (header.pt != session->payload_type % 128) {
-        LOGGER_WARNING(m->log, "RTPHeader packet type does not match this session's payload type: %d != %d",
+        LOGGER_WARNING(log, "RTPHeader packet type does not match this session's payload type: %d != %d",
                        header.pt, session->payload_type % 128);
         return -1;
     }
 
     if ((header.flags & RTP_LARGE_FRAME) != 0 && header.offset_full >= header.data_length_full) {
-        LOGGER_ERROR(m->log, "Invalid video packet: frame offset (%u) >= full frame length (%u)",
+        LOGGER_ERROR(log, "Invalid video packet: frame offset (%u) >= full frame length (%u)",
                      (unsigned)header.offset_full, (unsigned)header.data_length_full);
         return -1;
     }
 
     if (header.offset_lower >= header.data_length_lower) {
-        LOGGER_ERROR(m->log, "Invalid old protocol video packet: frame offset (%u) >= full frame length (%u)",
+        LOGGER_ERROR(log, "Invalid old protocol video packet: frame offset (%u) >= full frame length (%u)",
                      (unsigned)header.offset_lower, (unsigned)header.data_length_lower);
         return -1;
     }
 
-    LOGGER_DEBUG(m->log, "header.pt %d, video %d", (uint8_t)header.pt, RTP_TYPE_VIDEO % 128);
+    LOGGER_DEBUG(log, "header.pt %d, video %d", (uint8_t)header.pt, RTP_TYPE_VIDEO % 128);
 
     // The sender uses the new large-frame capable protocol and is sending a
     // video packet.
     if ((header.flags & RTP_LARGE_FRAME) != 0 && header.pt == (RTP_TYPE_VIDEO % 128)) {
-        return handle_video_packet(session, &header, data + RTP_HEADER_SIZE, length - RTP_HEADER_SIZE, m->log);
+        return handle_video_packet(session, &header, data + RTP_HEADER_SIZE, length - RTP_HEADER_SIZE, log);
     }
 
     // everything below here is for the old 16 bit protocol ------------------
@@ -581,12 +586,51 @@ NEW_MULTIPARTED:
         if (session->mp != nullptr) {
             memmove(session->mp->data + header.offset_lower, session->mp->data, session->mp->len);
         } else {
-            LOGGER_WARNING(m->log, "new_message() returned a null pointer");
+            LOGGER_WARNING(log, "new_message() returned a null pointer");
             return -1;
         }
     }
 
     return 0;
+}
+
+static void handle_rtp_packet(Tox *tox, uint32_t friendnumber, const uint8_t *data, size_t length, void *dummy)
+{
+    (void)dummy;
+
+    if (data == nullptr || length < RTP_HEADER_SIZE + 1) {
+        return;
+    }
+
+    ToxAV *toxav = tox_get_av_object(tox);
+
+    if (toxav == nullptr) {
+        return;
+    }
+
+    pthread_mutex_t *endcall_mutex = endcall_mutex_get(toxav);
+
+    if (endcall_mutex == nullptr || pthread_mutex_trylock(endcall_mutex) != 0) {
+        return;
+    }
+
+    ToxAVCall *call = call_get(toxav, friendnumber);
+
+    if (call == nullptr) {
+        pthread_mutex_unlock(endcall_mutex);
+        return;
+    }
+
+    const uint8_t packet_type = data[0];
+    RTPSession *session = rtp_session_get(call, packet_type);
+
+    if (session == nullptr || !session->rtp_receive_active) {
+        pthread_mutex_unlock(endcall_mutex);
+        return;
+    }
+
+    handle_rtp_packet_for_session(session, data, (uint16_t)length);
+    pthread_mutex_unlock(endcall_mutex);
 }
 
 size_t rtp_header_pack(uint8_t *const rdata, const struct RTPHeader *header)
@@ -648,13 +692,14 @@ size_t rtp_header_unpack(const uint8_t *data, struct RTPHeader *header)
     return p - data;
 }
 
-RTPSession *rtp_new(int payload_type, Messenger *m, Tox *tox, uint32_t friendnumber,
+RTPSession *rtp_new(int payload_type, Tox *tox, ToxAV *toxav, uint32_t friendnumber,
                     BWController *bwc, void *cs, rtp_m_cb *mcb)
 {
     assert(mcb != nullptr);
     assert(cs != nullptr);
-    assert(m != nullptr);
+    assert(tox != nullptr);
 
+    Messenger *m = tox->m;
     RTPSession *session = (RTPSession *)calloc(1, sizeof(RTPSession));
 
     if (session == nullptr) {
@@ -670,42 +715,36 @@ RTPSession *rtp_new(int payload_type, Messenger *m, Tox *tox, uint32_t friendnum
         return nullptr;
     }
 
-    // First entry is free.
     session->work_buffer_list->next_free_entry = 0;
-
     session->ssrc = payload_type == RTP_TYPE_VIDEO ? 0 : random_u32(m->rng);
     session->payload_type = payload_type;
     session->m = m;
     session->tox = tox;
     session->friend_number = friendnumber;
-
-    // set NULL just in case
     session->mp = nullptr;
     session->first_packets_counter = 1;
-
-    /* Also set payload type as prefix */
+    session->rtp_receive_active = true;
     session->bwc = bwc;
     session->cs = cs;
     session->mcb = mcb;
 
-    if (-1 == rtp_allow_receiving(session)) {
-        LOGGER_WARNING(m->log, "Failed to start rtp receiving mode");
-        free(session->work_buffer_list);
-        free(session);
-        return nullptr;
-    }
+    (void)toxav;
+    rtp_allow_receiving_mark(tox, session);
 
     return session;
 }
 
-void rtp_kill(RTPSession *session)
+void rtp_kill(Tox *tox, RTPSession *session)
 {
+    (void)tox;
+
     if (session == nullptr) {
         return;
     }
 
+    session->rtp_receive_active = false;
+
     LOGGER_DEBUG(session->m->log, "Terminated RTP session: %p", (void *)session);
-    rtp_stop_receiving(session);
 
     LOGGER_DEBUG(session->m->log, "Terminated RTP session V3 work_buffer_list->next_free_entry: %d",
                  (int)session->work_buffer_list->next_free_entry);
@@ -713,36 +752,39 @@ void rtp_kill(RTPSession *session)
     for (int8_t i = 0; i < session->work_buffer_list->next_free_entry; ++i) {
         free(session->work_buffer_list->work_buffer[i].buf);
     }
+
     free(session->work_buffer_list);
     free(session);
 }
 
-int rtp_allow_receiving(RTPSession *session)
+void rtp_allow_receiving_mark(Tox *tox, RTPSession *session)
 {
-    if (session == nullptr) {
-        return -1;
-    }
+    (void)tox;
 
-    if (m_callback_rtp_packet(session->m, session->friend_number, session->payload_type,
-                              handle_rtp_packet, session) == -1) {
-        LOGGER_WARNING(session->m->log, "Failed to register rtp receive handler");
-        return -1;
+    if (session != nullptr) {
+        session->rtp_receive_active = true;
     }
-
-    LOGGER_DEBUG(session->m->log, "Started receiving on session: %p", (void *)session);
-    return 0;
 }
 
-int rtp_stop_receiving(RTPSession *session)
+void rtp_stop_receiving_mark(Tox *tox, RTPSession *session)
 {
-    if (session == nullptr) {
-        return -1;
+    (void)tox;
+
+    if (session != nullptr) {
+        session->rtp_receive_active = false;
     }
+}
 
-    m_callback_rtp_packet(session->m, session->friend_number, session->payload_type, nullptr, nullptr);
+void rtp_allow_receiving(Tox *tox)
+{
+    tox_callback_friend_lossy_packet_per_pktid(tox, handle_rtp_packet, RTP_TYPE_AUDIO);
+    tox_callback_friend_lossy_packet_per_pktid(tox, handle_rtp_packet, RTP_TYPE_VIDEO);
+}
 
-    LOGGER_DEBUG(session->m->log, "Stopped receiving on session: %p", (void *)session);
-    return 0;
+void rtp_stop_receiving(Tox *tox)
+{
+    tox_callback_friend_lossy_packet_per_pktid(tox, nullptr, RTP_TYPE_AUDIO);
+    tox_callback_friend_lossy_packet_per_pktid(tox, nullptr, RTP_TYPE_VIDEO);
 }
 
 /**

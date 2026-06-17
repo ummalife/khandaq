@@ -260,13 +260,21 @@
     <string name="invite_join_conference_success">Получихте покана за присъединяване към групов разговор</string>
     <string name="invite_join_group_success">Получихте покана за присъединяване към група</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">Отказ от файла</string>
-    <string name="pref_description_enable_ngc_features">!!! Експериментална възможност !!!\nНЕ работи изцяло!</string>
+    <string name="pref_description_enable_ngc_features">Нови групови чатове (NGC) с подобрени съобщения, глас и видео.</string>
     <string name="FriendListHolder_toggle_notification_silent_title">Превключване на известия</string>
     <string name="FriendListHolder_toggle_notification_silent_message">Желаете ли да превключите известията за този контакт?</string>
     <string name="join_public_group_joined">Присъединихте се към отворената група</string>
     <string name="pref_title_allow_enable_ngc_features">NGC – нови групови разговори</string>
     <string name="add_public_group_activity_help">Създаване на отворена група с указаното име.</string>
     <string name="join_public_group_failed">Грешка при присъединяване към отворена група</string>
+    <string name="join_public_group_failed_not_ready">Месинджърът все още се свързва. Изчакайте няколко секунди и опитайте отново.</string>
+    <string name="join_public_group_failed_bad_id">Невалиден Group ID. Копирайте всички 64 hex символа.</string>
+    <string name="join_public_group_failed_network">Групата не бе намерена в мрежата. Проверете интернета и опитайте отново.</string>
+    <string name="join_public_group_failed_password">Тази група изисква парола.</string>
+    <string name="join_public_group_error_no_id">Въведете Group ID</string>
+    <string name="join_public_group_error_illegal_chars">Group ID съдържа недопустими символи. Позволени са само A–F и 0–9.</string>
+    <string name="join_public_group_error_length">Group ID трябва да е 64 hex символа.</string>
+
     <string name="add_public_group_failed">Грешка при създаване на отворена група</string>
     <string name="join_public_group_activity_warning">Внимание:\nПрисъединяването към отворена група чрез идентификатор на групата не ряботи стабилно!!!</string>
     <string name="add_private_group_success">Създадохте затворена група</string>
@@ -281,6 +289,12 @@
     <string name="join_group_activity_join">Присъединяване към група</string>
     <string name="add_public_group_success">Създадохте отворена група</string>
     <string name="add_private_group_failed">Грешка при създаване на затворена група</string>
+    <string name="group_password_placeholder">Парола на групата (само за частни групи)</string>
+    <string name="group_password_set">Задаване на парола</string>
+    <string name="group_topic_lock">Заключване на темата (само основател)</string>
+    <string name="group_privacy_set">Задаване на поверителност</string>
+    <string name="group_create_private_password">Незадължителна парола на групата</string>
+
     <string name="add_friend_success">Добавихте контакт</string>
     <string name="invite_friend_success">Получихте заявка за контакт</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_title">Отказ от файла</string>
@@ -311,4 +325,51 @@
     <string name="pref_description_use_H264_hw_encoding">Използване на хардуерно ускорение за кодиране на видео с H264</string>
     <string name="pref_title_allow_push_server_sunup">Разрешаване на сървъра Sunup на Мозила</string>
     <string name="pref_description_allow_push_server_sunup">ВНИМАНИЕ: Ако разрешите на сървъра Sunup на Мозила да ви изпраща известия, може да доведе до изтичане на описателни данни за времето на получаване на известия, ако някой се абонира с вашия ключ за известия. Sunup на Мозила НЕ използва пароли и НЕ изисква удостоверяване.</string>
+    <string name="group_video_join_title">Присъединяване към групово видео?</string>
+    <string name="group_video_join_message">Изпращане на видео и аудио на всички в групата?</string>
+    <string name="group_video_join_confirm">Да, старт на видео</string>
+    <string name="group_video_join_decline">Не</string>
+    <string name="group_send_voice_confirm_title">Изпращане на гласово съобщение?</string>
+    <string name="group_send_voice_confirm_message">Изпращане на това гласово съобщение в групата?</string>
+    <string name="group_peer_unknown">Неизвестен</string>
+    <string name="group_incoming_message_error">Входящото групово съобщение не можа да бъде обработено.</string>
+    <string name="group_file_send_failed">Неуспешно изпращане на файл в групата.</string>
+    <string name="group_image_shrink_failed">Изображението не можа да бъде подготвено за изпращане.</string>
+    <string name="group_incoming_file_error">Входящият групов файл не можа да бъде обработен.</string>
+    <string name="chat_file_too_large">Файлът е твърде голям.</string>
+    <string name="chat_incoming_file_too_large">Входящият файл е твърде голям.</string>
+    <string name="chat_opening_file_failed">Файлът не можа да бъде отворен.</string>
+    <string name="group_file_too_large">Файлът е твърде голям за тази група.</string>
+    <string name="group_file_prepare_failed">Файлът не можа да бъде подготвен за изпращане.</string>
+    <string name="add_group_failed_empty_name">Въведете име на групата.</string>
+    <string name="maintenance_exporting">Експортиране…</string>
+    <string name="maintenance_export_ready">Експортът завърши</string>
+    <string name="maintenance_export_failed">Експортът неуспешен</string>
+    <string name="set_password_setup_failed">Паролата не можа да бъде зададена. Опитайте отново.</string>
+    <string name="power_charging_connected">Зарядното е свързано</string>
+    <string name="power_charging_disconnected">Зарядното е изключено</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

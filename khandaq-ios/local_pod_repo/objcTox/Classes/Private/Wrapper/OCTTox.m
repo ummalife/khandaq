@@ -130,13 +130,17 @@ static void perform_khandaq_offline_rebootstrap(Tox *tox)
 {
     OCTLogVerbose(@"saving...");
 
-    size_t size = tox_get_savedata_size(self.tox);
-    uint8_t *cData = malloc(size);
+    __block NSData *data = nil;
 
-    tox_get_savedata(self.tox, cData);
+    [self performSyncBlockOnToxQueue:^{
+        size_t size = tox_get_savedata_size(self.tox);
+        uint8_t *cData = malloc(size);
 
-    NSData *data = [NSData dataWithBytes:cData length:size];
-    free(cData);
+        tox_get_savedata(self.tox, cData);
+
+        data = [NSData dataWithBytes:cData length:size];
+        free(cData);
+    }];
 
     OCTLogInfo(@"saved to data with length %lu", (unsigned long)data.length);
 
@@ -517,7 +521,9 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     NSParameterAssert(address);
     NSParameterAssert(message);
 
-    if (address.length != kOCTToxAddressLength) {
+    NSString *normalizedAddress = [[address stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+
+    if (normalizedAddress.length != kOCTToxAddressLength) {
         if (error) {
             *error = [OCTTox createErrorWithCode:OCTToxErrorFriendAddBadChecksum
                                      description:@"Cannot add friend"
@@ -526,19 +532,44 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
         return kOCTToxFriendNumberFailure;
     }
 
-    OCTLogVerbose(@"add friend with address.length %lu, message.length %lu", (unsigned long)address.length, (unsigned long)message.length);
+    NSCharacterSet *nonHex = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789ABCDEF"] invertedSet];
+    if ([normalizedAddress rangeOfCharacterFromSet:nonHex].location != NSNotFound) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorFriendAddBadChecksum
+                                     description:@"Cannot add friend"
+                                   failureReason:@"Address contains non-hex characters"];
+        }
+        return kOCTToxFriendNumberFailure;
+    }
 
-    uint8_t *cAddress = [OCTTox hexStringToBin:address];
-    const char *cMessage = [message cStringUsingEncoding:NSUTF8StringEncoding];
-    size_t length = [message lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    OCTLogVerbose(@"add friend with address.length %lu, message.length %lu", (unsigned long)normalizedAddress.length, (unsigned long)message.length);
 
-    TOX_ERR_FRIEND_ADD cError;
+    __block OCTToxFriendNumber result = kOCTToxFriendNumberFailure;
+    __block NSError *localError = nil;
 
-    OCTToxFriendNumber result = tox_friend_add(self.tox, cAddress, (const uint8_t *)cMessage, length, &cError);
+    [self performSyncBlockOnToxQueue:^{
+        uint8_t *cAddress = [OCTTox hexStringToBin:normalizedAddress];
+        if (cAddress == NULL) {
+            localError = [OCTTox createErrorWithCode:OCTToxErrorFriendAddBadChecksum
+                                         description:@"Cannot add friend"
+                                       failureReason:@"Address is not valid hex"];
+            return;
+        }
+        const char *cMessage = [message cStringUsingEncoding:NSUTF8StringEncoding];
+        size_t length = [message lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
 
-    free(cAddress);
+        TOX_ERR_FRIEND_ADD cError;
 
-    [self fillError:error withCErrorFriendAdd:cError];
+        result = tox_friend_add(self.tox, cAddress, (const uint8_t *)cMessage, length, &cError);
+
+        free(cAddress);
+
+        [self fillError:&localError withCErrorFriendAdd:cError];
+    }];
+
+    if (error) {
+        *error = localError;
+    }
 
     return result;
 }
@@ -550,28 +581,44 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
 
     OCTLogVerbose(@"add friend with no request and publicKey.length %lu", (unsigned long)publicKey.length);
 
-    uint8_t *cPublicKey = [OCTTox hexStringToBin:publicKey];
+    __block OCTToxFriendNumber result = kOCTToxFriendNumberFailure;
+    __block NSError *localError = nil;
 
-    TOX_ERR_FRIEND_ADD cError;
+    [self performSyncBlockOnToxQueue:^{
+        uint8_t *cPublicKey = [OCTTox hexStringToBin:publicKey];
 
-    OCTToxFriendNumber result = tox_friend_add_norequest(self.tox, cPublicKey, &cError);
+        TOX_ERR_FRIEND_ADD cError;
 
-    free(cPublicKey);
+        result = tox_friend_add_norequest(self.tox, cPublicKey, &cError);
 
-    [self fillError:error withCErrorFriendAdd:cError];
+        free(cPublicKey);
+
+        [self fillError:&localError withCErrorFriendAdd:cError];
+    }];
+
+    if (error) {
+        *error = localError;
+    }
 
     return result;
 }
 
 - (BOOL)deleteFriendWithFriendNumber:(OCTToxFriendNumber)friendNumber error:(NSError **)error
 {
-    TOX_ERR_FRIEND_DELETE cError;
+    __block TOX_ERR_FRIEND_DELETE cError = TOX_ERR_FRIEND_DELETE_OK;
+    __block bool result = false;
+    __block NSError *localError = nil;
 
-    bool result = tox_friend_delete(self.tox, friendNumber, &cError);
+    [self performSyncBlockOnToxQueue:^{
+        result = tox_friend_delete(self.tox, friendNumber, &cError);
+        [self fillError:&localError withCErrorFriendDelete:cError];
+    }];
 
-    [self fillError:error withCErrorFriendDelete:cError];
+    if (error) {
+        *error = localError;
+    }
 
-    OCTLogVerbose(@"deleting friend with friendNumber %d, result %d", friendNumber, (result == 0));
+    OCTLogVerbose(@"deleting friend with friendNumber %d, result %d", friendNumber, (result == false));
 
     return (BOOL)result;
 }
@@ -693,6 +740,27 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
 
     // TODO: fill cError with errorcode
     // [self fillError:error xxxxxxxxxx:cError];
+
+    return (BOOL)result;
+}
+
+- (BOOL)sendLosslessPacketWithFriendNumber:(OCTToxFriendNumber)friendNumber
+                                      bytes:(NSData *)bytes
+                                      error:(NSError **)error
+{
+    NSParameterAssert(bytes);
+
+    if (bytes.length == 0 || bytes.length >= 300) {
+        return NO;
+    }
+
+    TOX_ERR_FRIEND_CUSTOM_PACKET cError;
+
+    bool result = tox_friend_send_lossless_packet(self.tox,
+                                                  friendNumber,
+                                                  bytes.bytes,
+                                                  bytes.length,
+                                                  &cError);
 
     return (BOOL)result;
 }
@@ -1114,6 +1182,890 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return result;
 }
 
+#pragma mark - Groups
+
+- (OCTToxGroupNumber)groupNewWithPrivacyState:(OCTToxGroupPrivacyState)privacyState
+                                    groupName:(NSString *)groupName
+                                     peerName:(NSString *)peerName
+                                        error:(NSError **)error
+{
+    NSParameterAssert(groupName);
+    NSParameterAssert(peerName);
+
+    Tox_Group_Privacy_State cPrivacyState = [self cPrivacyStateFromGroupPrivacyState:privacyState];
+    const char *cGroupName = [groupName cStringUsingEncoding:NSUTF8StringEncoding];
+    size_t groupNameLength = [groupName lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    const char *cPeerName = [peerName cStringUsingEncoding:NSUTF8StringEncoding];
+    size_t peerNameLength = [peerName lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+    Tox_Err_Group_New cError;
+
+    OCTToxGroupNumber result = tox_group_new(self.tox, cPrivacyState, (const uint8_t *)cGroupName, groupNameLength,
+                                            (const uint8_t *)cPeerName, peerNameLength, &cError);
+
+    if (result == kOCTToxGroupNumberFailure) {
+        [self fillError:error withCErrorGroupNew:cError];
+    }
+
+    OCTLogInfo(@"groupNew privacy=%ld name=%@ peer=%@ result=%u", (long)privacyState, groupName, peerName, result);
+
+    return result;
+}
+
+- (OCTToxGroupNumber)groupJoinWithChatIdHex:(NSString *)chatIdHex
+                                   peerName:(NSString *)peerName
+                                   password:(NSString *)password
+                                      error:(NSError **)error
+{
+    NSParameterAssert(chatIdHex);
+    NSParameterAssert(peerName);
+
+    if (chatIdHex.length != kOCTToxGroupChatIdHexLength) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupJoinBadChatId
+                                     description:@"Cannot join group"
+                                   failureReason:@"Chat ID must be exactly 64 hex characters"];
+        }
+        return kOCTToxGroupNumberFailure;
+    }
+
+    uint8_t *cChatId = [OCTTox hexStringToBin:chatIdHex];
+    const char *cPeerName = [peerName cStringUsingEncoding:NSUTF8StringEncoding];
+    size_t peerNameLength = [peerName lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+    const uint8_t *cPassword = NULL;
+    size_t passwordLength = 0;
+
+    if (password.length > 0) {
+        cPassword = (const uint8_t *)[password cStringUsingEncoding:NSUTF8StringEncoding];
+        passwordLength = [password lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    }
+
+    Tox_Err_Group_Join cError;
+
+    OCTToxGroupNumber result = tox_group_join(self.tox, cChatId, (const uint8_t *)cPeerName, peerNameLength,
+                                              cPassword, passwordLength, &cError);
+
+    free(cChatId);
+
+    if (result == kOCTToxGroupNumberFailure) {
+        [self fillError:error withCErrorGroupJoin:cError];
+    }
+
+    OCTLogInfo(@"groupJoin chatId=%@ peer=%@ result=%u", chatIdHex, peerName, result);
+
+    return result;
+}
+
+- (OCTToxGroupNumber)groupInviteAcceptWithFriendNumber:(OCTToxFriendNumber)friendNumber
+                                            inviteData:(NSData *)inviteData
+                                              peerName:(NSString *)peerName
+                                              password:(nullable NSString *)password
+                                                 error:(NSError **)error
+{
+    NSParameterAssert(inviteData);
+    NSParameterAssert(peerName);
+
+    if (inviteData.length == 0) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupInviteAcceptBadInvite
+                                     description:@"Cannot accept group invite"
+                                   failureReason:@"Invite data is empty"];
+        }
+        return kOCTToxGroupNumberFailure;
+    }
+
+    const char *cPeerName = [peerName cStringUsingEncoding:NSUTF8StringEncoding];
+    size_t peerNameLength = [peerName lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+    const uint8_t *cPassword = NULL;
+    size_t passwordLength = 0;
+
+    if (password.length > 0) {
+        cPassword = (const uint8_t *)[password cStringUsingEncoding:NSUTF8StringEncoding];
+        passwordLength = [password lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    }
+
+    Tox_Err_Group_Invite_Accept cError;
+
+    OCTToxGroupNumber result = tox_group_invite_accept(self.tox, friendNumber, inviteData.bytes, inviteData.length,
+                                                       (const uint8_t *)cPeerName, peerNameLength,
+                                                       cPassword, passwordLength, &cError);
+
+    if (result == kOCTToxGroupNumberFailure) {
+        [self fillError:error withCErrorGroupInviteAccept:cError];
+    }
+
+    OCTLogInfo(@"groupInviteAccept friend=%d bytes=%lu peer=%@ result=%u",
+               friendNumber, (unsigned long)inviteData.length, peerName, result);
+
+    return result;
+}
+
+- (BOOL)groupInviteFriendWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                           friendNumber:(OCTToxFriendNumber)friendNumber
+                                  error:(NSError **)error
+{
+    Tox_Err_Group_Invite_Friend cError;
+
+    bool result = tox_group_invite_friend(self.tox, groupNumber, friendNumber, &cError);
+
+    [self fillError:error withCErrorGroupInviteFriend:cError];
+
+    OCTLogInfo(@"groupInviteFriend group=%u friend=%d result=%d", groupNumber, friendNumber, result);
+
+    return (BOOL)result;
+}
+
+- (BOOL)groupLeaveWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                     partMessage:(NSString *)partMessage
+                           error:(NSError **)error
+{
+    const uint8_t *cPartMessage = NULL;
+    size_t partMessageLength = 0;
+
+    if (partMessage.length > 0) {
+        cPartMessage = (const uint8_t *)[partMessage cStringUsingEncoding:NSUTF8StringEncoding];
+        partMessageLength = [partMessage lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    }
+
+    Tox_Err_Group_Leave cError;
+
+    bool result = tox_group_leave(self.tox, groupNumber, cPartMessage, partMessageLength, &cError);
+
+    [self fillError:error withCErrorGroupLeave:cError];
+
+    OCTLogInfo(@"groupLeave group=%u result=%d", groupNumber, result);
+
+    return (BOOL)result;
+}
+
+- (BOOL)groupSendMessage:(NSString *)message
+                    type:(OCTToxMessageType)type
+             groupNumber:(OCTToxGroupNumber)groupNumber
+               messageId:(uint32_t *)messageId
+                   error:(NSError **)error
+{
+    NSParameterAssert(message);
+
+    const char *cMessage = [message cStringUsingEncoding:NSUTF8StringEncoding];
+    size_t length = [message lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    Tox_Message_Type cType = [self cMessageTypeFromMessageType:type];
+
+    Tox_Err_Group_Send_Message cError;
+
+    bool result = tox_group_send_message(self.tox, groupNumber, cType, (const uint8_t *)cMessage, length, messageId, &cError);
+
+    [self fillError:error withCErrorGroupSendMessage:cError];
+
+    return (BOOL)result;
+}
+
+- (BOOL)groupSendCustomPacket:(NSData *)data
+                  groupNumber:(OCTToxGroupNumber)groupNumber
+                     lossless:(BOOL)lossless
+                        error:(NSError **)error
+{
+    NSParameterAssert(data);
+
+    if (data.length == 0) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupSendCustomPacketEmpty
+                                     description:@"Cannot send group custom packet"
+                                   failureReason:@"Packet is empty"];
+        }
+        return NO;
+    }
+
+    Tox_Err_Group_Send_Custom_Packet cError;
+
+    bool result = tox_group_send_custom_packet(self.tox,
+                                               groupNumber,
+                                               lossless,
+                                               data.bytes,
+                                               data.length,
+                                               &cError);
+
+    [self fillError:error withCErrorGroupSendCustomPacket:cError];
+
+    return (BOOL)result;
+}
+
+- (BOOL)groupSendCustomPrivatePacket:(NSData *)data
+                         groupNumber:(OCTToxGroupNumber)groupNumber
+                              peerId:(uint32_t)peerId
+                            lossless:(BOOL)lossless
+                               error:(NSError **)error
+{
+    NSParameterAssert(data);
+
+    if (data.length == 0) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupSendCustomPacketEmpty
+                                     description:@"Cannot send group custom private packet"
+                                   failureReason:@"Packet is empty"];
+        }
+        return NO;
+    }
+
+    Tox_Err_Group_Send_Custom_Private_Packet cError;
+
+    bool result = tox_group_send_custom_private_packet(self.tox,
+                                                       groupNumber,
+                                                       peerId,
+                                                       lossless,
+                                                       data.bytes,
+                                                       data.length,
+                                                       &cError);
+
+    [self fillError:error withCErrorGroupSendCustomPrivatePacket:cError];
+
+    return (BOOL)result;
+}
+
+- (NSString *)groupChatIdHexForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    uint8_t chatId[kOCTToxGroupChatIdLength];
+    Tox_Err_Group_State_Queries cError;
+
+    bool result = tox_group_get_chat_id(self.tox, groupNumber, chatId, &cError);
+
+    [self fillError:error withCErrorGroupStateQueries:cError];
+
+    if (! result) {
+        return nil;
+    }
+
+    return [OCTTox binToHexString:chatId length:kOCTToxGroupChatIdLength];
+}
+
+- (int32_t)groupConnectionStatusForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Is_Connected cError;
+
+    int32_t status = tox_group_is_connected(self.tox, groupNumber, &cError);
+
+    if (cError == TOX_ERR_GROUP_IS_CONNECTED_GROUP_NOT_FOUND) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group connection status"
+                                   failureReason:@"Group not found"];
+        }
+        return -1;
+    }
+
+    return status;
+}
+
+- (uint32_t)groupSelfPeerIdForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Self_Query cError;
+    uint32_t peerId = tox_group_self_get_peer_id(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_SELF_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query self peer id"
+                                   failureReason:@"Group not found"];
+        }
+        return 0;
+    }
+
+    return peerId;
+}
+
+- (BOOL)groupSelfSetName:(NSString *)name
+             groupNumber:(OCTToxGroupNumber)groupNumber
+                   error:(NSError **)error
+{
+    NSParameterAssert(name);
+
+    const char *cName = [name cStringUsingEncoding:NSUTF8StringEncoding];
+    size_t length = [name lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+    Tox_Err_Group_Self_Name_Set cError;
+
+    bool result = tox_group_self_set_name(self.tox, groupNumber, (const uint8_t *)cName, length, &cError);
+
+    if (! result || cError != TOX_ERR_GROUP_SELF_NAME_SET_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot set group self name"
+                                   failureReason:@"Group not found or name invalid"];
+        }
+        return NO;
+    }
+
+    return YES;
+}
+
+- (NSString *)groupSelfNameForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Self_Query cError;
+    size_t length = tox_group_self_get_name_size(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_SELF_QUERY_OK || length == 0) {
+        if (cError != TOX_ERR_GROUP_SELF_QUERY_OK && error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group self name"
+                                   failureReason:@"Group not found"];
+        }
+        return nil;
+    }
+
+    uint8_t *nameBytes = calloc(length, sizeof(uint8_t));
+
+    if (! nameBytes) {
+        return nil;
+    }
+
+    bool ok = tox_group_self_get_name(self.tox, groupNumber, nameBytes, &cError);
+    NSString *name = nil;
+
+    if (ok && cError == TOX_ERR_GROUP_SELF_QUERY_OK) {
+        name = [[NSString alloc] initWithBytes:nameBytes length:length encoding:NSUTF8StringEncoding];
+    }
+
+    free(nameBytes);
+
+    if (! ok && error) {
+        *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                 description:@"Cannot query group self name"
+                               failureReason:@"Group not found"];
+    }
+
+    return name;
+}
+
+- (NSString *)groupPeerPublicKeyHexForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                           peerId:(uint32_t)peerId
+                                            error:(NSError **)error
+{
+    uint8_t publicKey[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+    Tox_Err_Group_Peer_Query cError;
+
+    bool result = tox_group_peer_get_public_key(self.tox, groupNumber, peerId, publicKey, &cError);
+
+    if (! result || cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer public key"
+                                   failureReason:@"Peer not found"];
+        }
+        return nil;
+    }
+
+    return [OCTTox binToHexString:publicKey length:TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+}
+
+- (OCTToxConnectionStatus)groupPeerConnectionStatusForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                             peerId:(uint32_t)peerId
+                                                              error:(NSError **)error
+{
+    Tox_Err_Group_Peer_Query cError;
+    Tox_Connection cStatus = tox_group_peer_get_connection_status(self.tox, groupNumber, peerId, &cError);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer connection status"
+                                   failureReason:@"Peer not found"];
+        }
+        return OCTToxConnectionStatusNone;
+    }
+
+    return [self userConnectionStatusFromCUserStatus:(TOX_CONNECTION)cStatus];
+}
+
+- (NSString *)groupSelfPublicKeyHexForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    uint8_t publicKey[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+    Tox_Err_Group_Self_Query cError;
+
+    bool result = tox_group_self_get_public_key(self.tox, groupNumber, publicKey, &cError);
+
+    if (! result || cError != TOX_ERR_GROUP_SELF_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query self group public key"
+                                   failureReason:@"Group not found"];
+        }
+        return nil;
+    }
+
+    return [OCTTox binToHexString:publicKey length:TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+}
+
+- (uint32_t)groupPeerIdForPublicKeyHex:(NSString *)publicKeyHex
+                           groupNumber:(OCTToxGroupNumber)groupNumber
+                                 error:(NSError **)error
+{
+    if (publicKeyHex.length == 0) {
+        return 0;
+    }
+
+    uint8_t *publicKey = [OCTTox hexStringToBin:publicKeyHex];
+
+    if (! publicKey) {
+        return 0;
+    }
+
+    Tox_Err_Group_Peer_Query cError;
+    uint32_t peerId = tox_group_peer_by_public_key(self.tox, groupNumber, publicKey, &cError);
+    free(publicKey);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot resolve group peer id"
+                                   failureReason:@"Peer not found"];
+        }
+        return 0;
+    }
+
+    return peerId;
+}
+
+- (OCTToxGroupPrivacyState)groupPrivacyStateForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    Tox_Group_Privacy_State privacyState = tox_group_get_privacy_state(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group privacy state"
+                                   failureReason:@"Group not found"];
+        }
+        return OCTToxGroupPrivacyStatePublic;
+    }
+
+    return [self groupPrivacyStateFromCPrivacyState:privacyState];
+}
+
+- (BOOL)groupFounderSetPrivacyState:(OCTToxGroupPrivacyState)privacyState
+                        groupNumber:(OCTToxGroupNumber)groupNumber
+                              error:(NSError **)error
+{
+    Tox_Err_Group_Founder_Set_Privacy_State cError;
+    bool result = tox_group_founder_set_privacy_state(self.tox,
+                                                      groupNumber,
+                                                      [self cPrivacyStateFromGroupPrivacyState:privacyState],
+                                                      &cError);
+
+    [self fillError:error withCErrorGroupFounderSetPrivacyState:cError];
+
+    return (BOOL)result;
+}
+
+- (OCTToxGroupVoiceState)groupVoiceStateForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    Tox_Group_Voice_State voiceState = tox_group_get_voice_state(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group voice state"
+                                   failureReason:@"Group not found"];
+        }
+        return OCTToxGroupVoiceStateAll;
+    }
+
+    return [self groupVoiceStateFromCVoiceState:voiceState];
+}
+
+- (BOOL)groupFounderSetVoiceState:(OCTToxGroupVoiceState)voiceState
+                     groupNumber:(OCTToxGroupNumber)groupNumber
+                           error:(NSError **)error
+{
+    Tox_Err_Group_Founder_Set_Voice_State cError;
+    bool result = tox_group_founder_set_voice_state(self.tox,
+                                                    groupNumber,
+                                                    [self cVoiceStateFromGroupVoiceState:voiceState],
+                                                    &cError);
+
+    [self fillError:error withCErrorGroupFounderSetVoiceState:cError];
+
+    return (BOOL)result;
+}
+
+- (OCTToxGroupRole)groupSelfRoleForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Self_Query cError;
+    Tox_Group_Role role = tox_group_self_get_role(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_SELF_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query self group role"
+                                   failureReason:@"Group not found"];
+        }
+        return OCTToxGroupRoleUser;
+    }
+
+    return [self groupRoleFromCRole:role];
+}
+
+- (OCTToxGroupRole)groupPeerRoleForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                        peerId:(uint32_t)peerId
+                                         error:(NSError **)error
+{
+    Tox_Err_Group_Peer_Query cError;
+    Tox_Group_Role role = tox_group_peer_get_role(self.tox, groupNumber, peerId, &cError);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer role"
+                                   failureReason:@"Peer not found"];
+        }
+        return OCTToxGroupRoleObserver;
+    }
+
+    return [self groupRoleFromCRole:role];
+}
+
+- (BOOL)groupKickPeerWithId:(uint32_t)peerId
+               groupNumber:(OCTToxGroupNumber)groupNumber
+                     error:(NSError **)error
+{
+    Tox_Err_Group_Mod_Kick_Peer cError;
+    bool result = tox_group_mod_kick_peer(self.tox, groupNumber, peerId, &cError);
+
+    [self fillError:error withCErrorGroupModKickPeer:cError];
+
+    return (BOOL)result;
+}
+
+- (BOOL)groupModSetRole:(OCTToxGroupRole)role
+                 peerId:(uint32_t)peerId
+            groupNumber:(OCTToxGroupNumber)groupNumber
+                  error:(NSError **)error
+{
+    Tox_Err_Group_Mod_Set_Role cError;
+    bool result = tox_group_mod_set_role(self.tox, groupNumber, peerId, [self groupRoleToCRole:role], &cError);
+
+    [self fillError:error withCErrorGroupModSetRole:cError];
+
+    return (BOOL)result;
+}
+
+- (uint32_t)groupPeerCountForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Peer_Query cError;
+    uint32_t count = tox_group_peer_count(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer count"
+                                   failureReason:@"Group not found"];
+        }
+        return 0;
+    }
+
+    return count;
+}
+
+- (NSArray<NSDictionary *> *)groupPeersForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Peer_Query cError;
+    uint32_t count = tox_group_peer_count(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK || count == 0) {
+        if (cError != TOX_ERR_GROUP_PEER_QUERY_OK && error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer list"
+                                   failureReason:@"Group not found"];
+        }
+        return @[];
+    }
+
+    uint32_t *peerlist = calloc(count, sizeof(uint32_t));
+
+    if (! peerlist) {
+        return @[];
+    }
+
+    tox_group_get_peerlist(self.tox, groupNumber, peerlist, &cError);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        free(peerlist);
+
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer list"
+                                   failureReason:@"Group not found"];
+        }
+
+        return @[];
+    }
+
+    NSMutableArray *result = [NSMutableArray arrayWithCapacity:count];
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t peerId = peerlist[i];
+        Tox_Err_Group_Peer_Query nameError;
+        size_t nameSize = tox_group_peer_get_name_size(self.tox, groupNumber, peerId, &nameError);
+        NSString *name = @"";
+
+        if (nameError == TOX_ERR_GROUP_PEER_QUERY_OK && nameSize > 0) {
+            uint8_t *nameBytes = calloc(nameSize, sizeof(uint8_t));
+
+            if (nameBytes) {
+                if (tox_group_peer_get_name(self.tox, groupNumber, peerId, nameBytes, &nameError)) {
+                    name = [[NSString alloc] initWithBytes:nameBytes length:nameSize encoding:NSUTF8StringEncoding] ?: @"";
+                }
+
+                free(nameBytes);
+            }
+        }
+
+        if (name.length == 0) {
+            name = [NSString stringWithFormat:@"Peer %u", peerId];
+        }
+
+        Tox_Err_Group_Peer_Query roleError;
+        Tox_Group_Role cRole = tox_group_peer_get_role(self.tox, groupNumber, peerId, &roleError);
+        OCTToxGroupRole role = roleError == TOX_ERR_GROUP_PEER_QUERY_OK
+            ? [self groupRoleFromCRole:cRole]
+            : OCTToxGroupRoleUser;
+
+        [result addObject:@{
+            @"peerId" : @(peerId),
+            @"name" : name,
+            @"role" : @(role),
+        }];
+    }
+
+    free(peerlist);
+    return result;
+}
+
+- (nullable NSString *)groupTopicForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    size_t size = tox_group_get_topic_size(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK || size == 0) {
+        if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK && error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group topic"
+                                   failureReason:@"Group not found"];
+        }
+        return nil;
+    }
+
+    uint8_t *bytes = calloc(size, sizeof(uint8_t));
+
+    if (! bytes) {
+        return nil;
+    }
+
+    if (! tox_group_get_topic(self.tox, groupNumber, bytes, &cError)) {
+        free(bytes);
+
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group topic"
+                                   failureReason:@"Group not found"];
+        }
+
+        return nil;
+    }
+
+    NSString *topic = [[NSString alloc] initWithBytes:bytes length:size encoding:NSUTF8StringEncoding];
+    free(bytes);
+    return topic;
+}
+
+- (BOOL)groupSetTopic:(NSString *)topic groupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    NSData *data = [topic dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    Tox_Err_Group_Topic_Set cError;
+    bool result = tox_group_set_topic(self.tox, groupNumber, data.bytes, data.length, &cError);
+
+    [self fillError:error withCErrorGroupTopicSet:cError];
+
+    return (BOOL)result;
+}
+
+- (nullable NSString *)groupPasswordForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    size_t size = tox_group_get_password_size(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK || size == 0) {
+        return nil;
+    }
+
+    uint8_t *bytes = calloc(size, sizeof(uint8_t));
+
+    if (! bytes) {
+        return nil;
+    }
+
+    if (! tox_group_get_password(self.tox, groupNumber, bytes, &cError)) {
+        free(bytes);
+        return nil;
+    }
+
+    NSString *password = [[NSString alloc] initWithBytes:bytes length:size encoding:NSUTF8StringEncoding];
+    free(bytes);
+    return password;
+}
+
+- (BOOL)groupFounderSetPassword:(NSString *)password
+                   groupNumber:(OCTToxGroupNumber)groupNumber
+                         error:(NSError **)error
+{
+    NSData *data = password.length > 0 ? [password dataUsingEncoding:NSUTF8StringEncoding] : [NSData data];
+    Tox_Err_Group_Founder_Set_Password cError;
+    bool result = tox_group_founder_set_password(self.tox,
+                                                 groupNumber,
+                                                 data.length > 0 ? data.bytes : NULL,
+                                                 data.length,
+                                                 &cError);
+
+    [self fillError:error withCErrorGroupFounderSetPassword:cError];
+
+    return (BOOL)result;
+}
+
+- (OCTToxGroupTopicLock)groupTopicLockForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    Tox_Group_Topic_Lock lock = tox_group_get_topic_lock(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group topic lock"
+                                   failureReason:@"Group not found"];
+        }
+        return OCTToxGroupTopicLockDisabled;
+    }
+
+    return [self groupTopicLockFromCLock:lock];
+}
+
+- (BOOL)groupFounderSetTopicLock:(OCTToxGroupTopicLock)topicLock
+                     groupNumber:(OCTToxGroupNumber)groupNumber
+                           error:(NSError **)error
+{
+    Tox_Err_Group_Founder_Set_Topic_Lock cError;
+    bool result = tox_group_founder_set_topic_lock(self.tox,
+                                                   groupNumber,
+                                                   [self groupTopicLockToCLock:topicLock],
+                                                   &cError);
+
+    [self fillError:error withCErrorGroupFounderSetTopicLock:cError];
+
+    return (BOOL)result;
+}
+
+- (uint16_t)groupPeerLimitForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    uint16_t limit = tox_group_get_peer_limit(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group peer limit"
+                                   failureReason:@"Group not found"];
+        }
+        return 0;
+    }
+
+    return limit;
+}
+
+- (BOOL)groupFounderSetPeerLimit:(uint16_t)peerLimit
+                     groupNumber:(OCTToxGroupNumber)groupNumber
+                           error:(NSError **)error
+{
+    Tox_Err_Group_Founder_Set_Peer_Limit cError;
+    bool result = tox_group_founder_set_peer_limit(self.tox, groupNumber, peerLimit, &cError);
+
+    [self fillError:error withCErrorGroupFounderSetPeerLimit:cError];
+
+    return (BOOL)result;
+}
+
+- (BOOL)groupSendPrivateMessage:(NSString *)message
+                           type:(OCTToxMessageType)type
+                    groupNumber:(OCTToxGroupNumber)groupNumber
+                         peerId:(uint32_t)peerId
+                          error:(NSError **)error
+{
+    NSData *data = [message dataUsingEncoding:NSUTF8StringEncoding];
+
+    if (! data || data.length == 0) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupSendPrivateMessageEmpty
+                                     description:@"Cannot send group private message"
+                                   failureReason:@"Message is empty"];
+        }
+        return NO;
+    }
+
+    Tox_Err_Group_Send_Private_Message cError;
+    bool result = tox_group_send_private_message(self.tox,
+                                                 groupNumber,
+                                                 peerId,
+                                                 [self cMessageTypeFromMessageType:type],
+                                                 data.bytes,
+                                                 data.length,
+                                                 &cError);
+
+    [self fillError:error withCErrorGroupSendPrivateMessage:cError];
+
+    return (BOOL)result;
+}
+
+- (uint32_t)groupCount
+{
+    return tox_group_get_number_groups(self.tox);
+}
+
+- (NSArray<NSNumber *> *)groupNumbers
+{
+    uint32_t count = tox_group_get_number_groups(self.tox);
+
+    if (count == 0) {
+        return @[];
+    }
+
+    uint32_t *groupList = calloc(count, sizeof(uint32_t));
+    tox_group_get_grouplist(self.tox, groupList);
+
+    NSMutableArray<NSNumber *> *result = [NSMutableArray arrayWithCapacity:count];
+
+    for (uint32_t i = 0; i < count; i++) {
+        [result addObject:@(groupList[i])];
+    }
+
+    free(groupList);
+    return result;
+}
+
+- (BOOL)groupReconnectWithGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Reconnect cError;
+    bool result = tox_group_reconnect(self.tox, groupNumber, &cError);
+
+    if (! result && error) {
+        *error = [OCTTox createErrorWithCode:OCTToxErrorGroupSendMessageFailSend
+                                 description:@"Cannot reconnect group"
+                               failureReason:@"Group reconnect failed"];
+    }
+
+    OCTLogInfo(@"groupReconnect group=%u result=%d", groupNumber, result);
+
+    return (BOOL)result;
+}
+
 #pragma mark -  Private methods
 
 - (void)updateTimerIntervalIfNeeded
@@ -1149,6 +2101,23 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     tox_callback_file_chunk_request(_tox, fileChunkRequestCallback);
     tox_callback_file_recv(_tox, fileReceiveCallback);
     tox_callback_file_recv_chunk(_tox, fileReceiveChunkCallback);
+    tox_callback_group_message(_tox, groupMessageCallback);
+    tox_callback_group_connection_status(_tox, groupConnectionStatusCallback);
+    tox_callback_group_peer_join(_tox, groupPeerJoinCallback);
+    tox_callback_group_peer_name(_tox, groupPeerNameCallback);
+    tox_callback_group_invite(_tox, groupInviteCallback);
+    tox_callback_group_peer_exit(_tox, groupPeerExitCallback);
+    tox_callback_group_custom_packet(_tox, groupCustomPacketCallback);
+    tox_callback_group_custom_private_packet(_tox, groupCustomPrivatePacketCallback);
+    tox_callback_group_moderation(_tox, groupModerationCallback);
+    tox_callback_group_topic(_tox, groupTopicCallback);
+    tox_callback_group_password(_tox, groupPasswordCallback);
+    tox_callback_group_topic_lock(_tox, groupTopicLockCallback);
+    tox_callback_group_peer_limit(_tox, groupPeerLimitCallback);
+    tox_callback_group_privacy_state(_tox, groupPrivacyStateCallback);
+    tox_callback_group_voice_state(_tox, groupVoiceStateCallback);
+    tox_callback_group_join_fail(_tox, groupJoinFailCallback);
+    tox_callback_group_private_message(_tox, groupPrivateMessageCallback);
 }
 
 - (OCTToxUserStatus)userStatusFromCUserStatus:(TOX_USER_STATUS)cStatus
@@ -1182,6 +2151,156 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
             return OCTToxMessageTypeNormal;
         case TOX_MESSAGE_TYPE_ACTION:
             return OCTToxMessageTypeAction;
+        default:
+            return OCTToxMessageTypeNormal;
+    }
+}
+
+- (Tox_Message_Type)cMessageTypeFromMessageType:(OCTToxMessageType)type
+{
+    switch (type) {
+        case OCTToxMessageTypeNormal:
+            return TOX_MESSAGE_TYPE_NORMAL;
+        case OCTToxMessageTypeAction:
+            return TOX_MESSAGE_TYPE_ACTION;
+        case OCTToxMessageTypeHighlevelack:
+            return TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK;
+    }
+}
+
+- (OCTToxGroupPrivacyState)groupPrivacyStateFromCPrivacyState:(Tox_Group_Privacy_State)cState
+{
+    switch (cState) {
+        case TOX_GROUP_PRIVACY_STATE_PUBLIC:
+            return OCTToxGroupPrivacyStatePublic;
+        case TOX_GROUP_PRIVACY_STATE_PRIVATE:
+            return OCTToxGroupPrivacyStatePrivate;
+    }
+}
+
+- (Tox_Group_Privacy_State)cPrivacyStateFromGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState
+{
+    switch (privacyState) {
+        case OCTToxGroupPrivacyStatePublic:
+            return TOX_GROUP_PRIVACY_STATE_PUBLIC;
+        case OCTToxGroupPrivacyStatePrivate:
+            return TOX_GROUP_PRIVACY_STATE_PRIVATE;
+    }
+}
+
+- (OCTToxGroupVoiceState)groupVoiceStateFromCVoiceState:(Tox_Group_Voice_State)cState
+{
+    switch (cState) {
+        case TOX_GROUP_VOICE_STATE_ALL:
+            return OCTToxGroupVoiceStateAll;
+        case TOX_GROUP_VOICE_STATE_MODERATOR:
+            return OCTToxGroupVoiceStateModerator;
+        case TOX_GROUP_VOICE_STATE_FOUNDER:
+            return OCTToxGroupVoiceStateFounder;
+    }
+}
+
+- (Tox_Group_Voice_State)cVoiceStateFromGroupVoiceState:(OCTToxGroupVoiceState)voiceState
+{
+    switch (voiceState) {
+        case OCTToxGroupVoiceStateAll:
+            return TOX_GROUP_VOICE_STATE_ALL;
+        case OCTToxGroupVoiceStateModerator:
+            return TOX_GROUP_VOICE_STATE_MODERATOR;
+        case OCTToxGroupVoiceStateFounder:
+            return TOX_GROUP_VOICE_STATE_FOUNDER;
+    }
+}
+
+- (OCTToxGroupJoinFail)groupJoinFailFromCFail:(Tox_Group_Join_Fail)cFail
+{
+    switch (cFail) {
+        case TOX_GROUP_JOIN_FAIL_PEER_LIMIT:
+            return OCTToxGroupJoinFailPeerLimit;
+        case TOX_GROUP_JOIN_FAIL_INVALID_PASSWORD:
+            return OCTToxGroupJoinFailInvalidPassword;
+        case TOX_GROUP_JOIN_FAIL_UNKNOWN:
+            return OCTToxGroupJoinFailUnknown;
+    }
+}
+
+- (OCTToxGroupExitType)groupExitTypeFromCExitType:(Tox_Group_Exit_Type)cType
+{
+    switch (cType) {
+        case TOX_GROUP_EXIT_TYPE_QUIT:
+            return OCTToxGroupExitTypeQuit;
+        case TOX_GROUP_EXIT_TYPE_TIMEOUT:
+            return OCTToxGroupExitTypeTimeout;
+        case TOX_GROUP_EXIT_TYPE_DISCONNECTED:
+            return OCTToxGroupExitTypeDisconnected;
+        case TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED:
+            return OCTToxGroupExitTypeSelfDisconnected;
+        case TOX_GROUP_EXIT_TYPE_KICK:
+            return OCTToxGroupExitTypeKick;
+        case TOX_GROUP_EXIT_TYPE_SYNC_ERROR:
+            return OCTToxGroupExitTypeSyncError;
+    }
+}
+
+- (OCTToxGroupRole)groupRoleFromCRole:(Tox_Group_Role)cRole
+{
+    switch (cRole) {
+        case TOX_GROUP_ROLE_FOUNDER:
+            return OCTToxGroupRoleFounder;
+        case TOX_GROUP_ROLE_MODERATOR:
+            return OCTToxGroupRoleModerator;
+        case TOX_GROUP_ROLE_USER:
+            return OCTToxGroupRoleUser;
+        case TOX_GROUP_ROLE_OBSERVER:
+            return OCTToxGroupRoleObserver;
+    }
+}
+
+- (Tox_Group_Role)groupRoleToCRole:(OCTToxGroupRole)role
+{
+    switch (role) {
+        case OCTToxGroupRoleFounder:
+            return TOX_GROUP_ROLE_FOUNDER;
+        case OCTToxGroupRoleModerator:
+            return TOX_GROUP_ROLE_MODERATOR;
+        case OCTToxGroupRoleUser:
+            return TOX_GROUP_ROLE_USER;
+        case OCTToxGroupRoleObserver:
+            return TOX_GROUP_ROLE_OBSERVER;
+    }
+}
+
+- (OCTToxGroupModEvent)groupModEventFromCEvent:(Tox_Group_Mod_Event)cEvent
+{
+    switch (cEvent) {
+        case TOX_GROUP_MOD_EVENT_KICK:
+            return OCTToxGroupModEventKick;
+        case TOX_GROUP_MOD_EVENT_OBSERVER:
+            return OCTToxGroupModEventObserver;
+        case TOX_GROUP_MOD_EVENT_USER:
+            return OCTToxGroupModEventUser;
+        case TOX_GROUP_MOD_EVENT_MODERATOR:
+            return OCTToxGroupModEventModerator;
+    }
+}
+
+- (OCTToxGroupTopicLock)groupTopicLockFromCLock:(Tox_Group_Topic_Lock)cLock
+{
+    switch (cLock) {
+        case TOX_GROUP_TOPIC_LOCK_ENABLED:
+            return OCTToxGroupTopicLockEnabled;
+        case TOX_GROUP_TOPIC_LOCK_DISABLED:
+            return OCTToxGroupTopicLockDisabled;
+    }
+}
+
+- (Tox_Group_Topic_Lock)groupTopicLockToCLock:(OCTToxGroupTopicLock)topicLock
+{
+    switch (topicLock) {
+        case OCTToxGroupTopicLockEnabled:
+            return TOX_GROUP_TOPIC_LOCK_ENABLED;
+        case OCTToxGroupTopicLockDisabled:
+            return TOX_GROUP_TOPIC_LOCK_DISABLED;
     }
 }
 
@@ -1793,6 +2912,725 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return YES;
 }
 
+- (BOOL)fillError:(NSError **)error withCErrorGroupNew:(Tox_Err_Group_New)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_NEW_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupNew code = OCTToxErrorGroupNewUnknown;
+    NSString *description = @"Cannot create group";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_NEW_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_NEW_TOO_LONG:
+            code = OCTToxErrorGroupNewTooLong;
+            failureReason = @"Group or peer name is too long";
+            break;
+        case TOX_ERR_GROUP_NEW_EMPTY:
+            code = OCTToxErrorGroupNewEmpty;
+            failureReason = @"Group or peer name is empty";
+            break;
+        case TOX_ERR_GROUP_NEW_INIT:
+            code = OCTToxErrorGroupNewInit;
+            failureReason = @"Group failed to initialize";
+            break;
+        case TOX_ERR_GROUP_NEW_STATE:
+            code = OCTToxErrorGroupNewState;
+            failureReason = @"Group state failed to initialize";
+            break;
+        case TOX_ERR_GROUP_NEW_ANNOUNCE:
+            code = OCTToxErrorGroupNewAnnounce;
+            failureReason = @"Group failed to announce to the DHT";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupJoin:(Tox_Err_Group_Join)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_JOIN_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupJoin code = OCTToxErrorGroupJoinUnknown;
+    NSString *description = @"Cannot join group";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_JOIN_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_JOIN_INIT:
+            code = OCTToxErrorGroupJoinInit;
+            failureReason = @"Group failed to initialize";
+            break;
+        case TOX_ERR_GROUP_JOIN_BAD_CHAT_ID:
+            code = OCTToxErrorGroupJoinBadChatId;
+            failureReason = @"Invalid chat ID or duplicate group session";
+            break;
+        case TOX_ERR_GROUP_JOIN_EMPTY:
+            code = OCTToxErrorGroupJoinEmpty;
+            failureReason = @"Peer name is empty";
+            break;
+        case TOX_ERR_GROUP_JOIN_TOO_LONG:
+            code = OCTToxErrorGroupJoinTooLong;
+            failureReason = @"Peer name is too long";
+            break;
+        case TOX_ERR_GROUP_JOIN_PASSWORD:
+            code = OCTToxErrorGroupJoinPassword;
+            failureReason = @"Invalid group password";
+            break;
+        case TOX_ERR_GROUP_JOIN_CORE:
+            code = OCTToxErrorGroupJoinCore;
+            failureReason = @"Core error while joining group";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupInviteAccept:(Tox_Err_Group_Invite_Accept)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_INVITE_ACCEPT_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupInviteAccept code = OCTToxErrorGroupInviteAcceptUnknown;
+    NSString *description = @"Cannot accept group invite";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_INVITE_ACCEPT_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_BAD_INVITE:
+            code = OCTToxErrorGroupInviteAcceptBadInvite;
+            failureReason = @"Invite data is invalid or expired";
+            break;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_INIT_FAILED:
+            code = OCTToxErrorGroupInviteAcceptInitFailed;
+            failureReason = @"Group failed to initialize";
+            break;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_TOO_LONG:
+            code = OCTToxErrorGroupInviteAcceptTooLong;
+            failureReason = @"Peer name is too long";
+            break;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_EMPTY:
+            code = OCTToxErrorGroupInviteAcceptEmpty;
+            failureReason = @"Peer name is empty";
+            break;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_PASSWORD:
+            code = OCTToxErrorGroupInviteAcceptPassword;
+            failureReason = @"Invalid group password";
+            break;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_CORE:
+            code = OCTToxErrorGroupInviteAcceptCore;
+            failureReason = @"Core error while accepting invite";
+            break;
+        case TOX_ERR_GROUP_INVITE_ACCEPT_FAIL_SEND:
+            code = OCTToxErrorGroupInviteAcceptFailSend;
+            failureReason = @"Invite accept packet failed to send";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupInviteFriend:(Tox_Err_Group_Invite_Friend)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_INVITE_FRIEND_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupInviteFriend code = OCTToxErrorGroupInviteFriendUnknown;
+    NSString *description = @"Cannot invite friend to group";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_INVITE_FRIEND_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_INVITE_FRIEND_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupInviteFriendGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_INVITE_FRIEND_FRIEND_NOT_FOUND:
+            code = OCTToxErrorGroupInviteFriendFriendNotFound;
+            failureReason = @"Friend not found";
+            break;
+        case TOX_ERR_GROUP_INVITE_FRIEND_INVITE_FAIL:
+            code = OCTToxErrorGroupInviteFriendInviteFail;
+            failureReason = @"Failed to create invite packet";
+            break;
+        case TOX_ERR_GROUP_INVITE_FRIEND_FAIL_SEND:
+            code = OCTToxErrorGroupInviteFriendFailSend;
+            failureReason = @"Invite packet failed to send";
+            break;
+        case TOX_ERR_GROUP_INVITE_FRIEND_DISCONNECTED:
+            code = OCTToxErrorGroupInviteFriendDisconnected;
+            failureReason = @"Group is disconnected";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupLeave:(Tox_Err_Group_Leave)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_LEAVE_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupLeave code = OCTToxErrorGroupLeaveUnknown;
+    NSString *description = @"Cannot leave group";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_LEAVE_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_LEAVE_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupLeaveGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_LEAVE_TOO_LONG:
+            code = OCTToxErrorGroupLeaveTooLong;
+            failureReason = @"Parting message is too long";
+            break;
+        case TOX_ERR_GROUP_LEAVE_FAIL_SEND:
+            code = OCTToxErrorGroupLeaveFailSend;
+            failureReason = @"Parting packet failed to send";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupSendMessage:(Tox_Err_Group_Send_Message)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_SEND_MESSAGE_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupSendMessage code = OCTToxErrorGroupSendMessageUnknown;
+    NSString *description = @"Cannot send group message";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_SEND_MESSAGE_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_SEND_MESSAGE_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupSendMessageGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_SEND_MESSAGE_TOO_LONG:
+            code = OCTToxErrorGroupSendMessageTooLong;
+            failureReason = @"Message is too long";
+            break;
+        case TOX_ERR_GROUP_SEND_MESSAGE_EMPTY:
+            code = OCTToxErrorGroupSendMessageEmpty;
+            failureReason = @"Message is empty";
+            break;
+        case TOX_ERR_GROUP_SEND_MESSAGE_BAD_TYPE:
+            code = OCTToxErrorGroupSendMessageBadType;
+            failureReason = @"Invalid message type";
+            break;
+        case TOX_ERR_GROUP_SEND_MESSAGE_PERMISSIONS:
+            code = OCTToxErrorGroupSendMessagePermissions;
+            failureReason = @"Insufficient permissions";
+            break;
+        case TOX_ERR_GROUP_SEND_MESSAGE_FAIL_SEND:
+            code = OCTToxErrorGroupSendMessageFailSend;
+            failureReason = @"Packet failed to send";
+            break;
+        case TOX_ERR_GROUP_SEND_MESSAGE_DISCONNECTED:
+            code = OCTToxErrorGroupSendMessageDisconnected;
+            failureReason = @"Group is disconnected";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupSendCustomPacket:(Tox_Err_Group_Send_Custom_Packet)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupSendCustomPacket code = OCTToxErrorGroupSendCustomPacketUnknown;
+    NSString *description = @"Cannot send group custom packet";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PACKET_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupSendCustomPacketGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PACKET_TOO_LONG:
+            code = OCTToxErrorGroupSendCustomPacketTooLong;
+            failureReason = @"Packet is too long";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PACKET_EMPTY:
+            code = OCTToxErrorGroupSendCustomPacketEmpty;
+            failureReason = @"Packet is empty";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PACKET_PERMISSIONS:
+            code = OCTToxErrorGroupSendCustomPacketPermissions;
+            failureReason = @"Insufficient permissions";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PACKET_DISCONNECTED:
+            code = OCTToxErrorGroupSendCustomPacketDisconnected;
+            failureReason = @"Group is disconnected";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupSendCustomPrivatePacket:(Tox_Err_Group_Send_Custom_Private_Packet)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupSendCustomPacket code = OCTToxErrorGroupSendCustomPacketUnknown;
+    NSString *description = @"Cannot send group custom private packet";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupSendCustomPacketGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_TOO_LONG:
+            code = OCTToxErrorGroupSendCustomPacketTooLong;
+            failureReason = @"Packet is too long";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_EMPTY:
+            code = OCTToxErrorGroupSendCustomPacketEmpty;
+            failureReason = @"Packet is empty";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_PEER_NOT_FOUND:
+            code = OCTToxErrorGroupSendCustomPacketGroupNotFound;
+            failureReason = @"Peer not found";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_PERMISSIONS:
+            code = OCTToxErrorGroupSendCustomPacketPermissions;
+            failureReason = @"Insufficient permissions";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_FAIL_SEND:
+            code = OCTToxErrorGroupSendCustomPacketUnknown;
+            failureReason = @"Send failed";
+            break;
+        case TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_DISCONNECTED:
+            code = OCTToxErrorGroupSendCustomPacketDisconnected;
+            failureReason = @"Group is disconnected";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupModKickPeer:(Tox_Err_Group_Mod_Kick_Peer)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_MOD_KICK_PEER_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupKickPeer code = OCTToxErrorGroupKickPeerUnknown;
+    NSString *description = @"Cannot kick group peer";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_MOD_KICK_PEER_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_MOD_KICK_PEER_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupKickPeerGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_MOD_KICK_PEER_PEER_NOT_FOUND:
+            code = OCTToxErrorGroupKickPeerPeerNotFound;
+            failureReason = @"Peer not found";
+            break;
+        case TOX_ERR_GROUP_MOD_KICK_PEER_PERMISSIONS:
+            code = OCTToxErrorGroupKickPeerPermissions;
+            failureReason = @"Insufficient permissions";
+            break;
+        case TOX_ERR_GROUP_MOD_KICK_PEER_FAIL_SEND:
+            code = OCTToxErrorGroupKickPeerFailSend;
+            failureReason = @"Kick failed to send";
+            break;
+        case TOX_ERR_GROUP_MOD_KICK_PEER_FAIL_ACTION:
+            code = OCTToxErrorGroupKickPeerFailSend;
+            failureReason = @"Kick action failed";
+            break;
+        case TOX_ERR_GROUP_MOD_KICK_PEER_SELF:
+            code = OCTToxErrorGroupKickPeerPermissions;
+            failureReason = @"Cannot kick yourself";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupModSetRole:(Tox_Err_Group_Mod_Set_Role)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_MOD_SET_ROLE_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupSetRole code = OCTToxErrorGroupSetRoleUnknown;
+    NSString *description = @"Cannot set group peer role";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_MOD_SET_ROLE_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_MOD_SET_ROLE_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupSetRoleGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+        case TOX_ERR_GROUP_MOD_SET_ROLE_PEER_NOT_FOUND:
+            code = OCTToxErrorGroupSetRolePeerNotFound;
+            failureReason = @"Peer not found";
+            break;
+        case TOX_ERR_GROUP_MOD_SET_ROLE_PERMISSIONS:
+            code = OCTToxErrorGroupSetRolePermissions;
+            failureReason = @"Insufficient permissions";
+            break;
+        case TOX_ERR_GROUP_MOD_SET_ROLE_ASSIGNMENT:
+            code = OCTToxErrorGroupSetRoleAssignment;
+            failureReason = @"Invalid role assignment";
+            break;
+        case TOX_ERR_GROUP_MOD_SET_ROLE_FAIL_ACTION:
+            code = OCTToxErrorGroupSetRoleFailAction;
+            failureReason = @"Role change failed";
+            break;
+        case TOX_ERR_GROUP_MOD_SET_ROLE_SELF:
+            code = OCTToxErrorGroupSetRoleSelf;
+            failureReason = @"Cannot change your own role";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupTopicSet:(Tox_Err_Group_Topic_Set)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_TOPIC_SET_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupTopicSet code = OCTToxErrorGroupTopicSetUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_TOPIC_SET_OK:
+            return NO;
+        case TOX_ERR_GROUP_TOPIC_SET_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupTopicSetGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_TOPIC_SET_TOO_LONG:
+            code = OCTToxErrorGroupTopicSetTooLong;
+            break;
+        case TOX_ERR_GROUP_TOPIC_SET_PERMISSIONS:
+            code = OCTToxErrorGroupTopicSetPermissions;
+            break;
+        case TOX_ERR_GROUP_TOPIC_SET_FAIL_CREATE:
+            code = OCTToxErrorGroupTopicSetFailCreate;
+            break;
+        case TOX_ERR_GROUP_TOPIC_SET_FAIL_SEND:
+            code = OCTToxErrorGroupTopicSetFailSend;
+            break;
+        case TOX_ERR_GROUP_TOPIC_SET_DISCONNECTED:
+            code = OCTToxErrorGroupTopicSetDisconnected;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot set group topic"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupFounderSetPassword:(Tox_Err_Group_Founder_Set_Password)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupFounderSetPassword code = OCTToxErrorGroupFounderSetPasswordUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_OK:
+            return NO;
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupFounderSetPasswordGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_PERMISSIONS:
+            code = OCTToxErrorGroupFounderSetPasswordPermissions;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_TOO_LONG:
+            code = OCTToxErrorGroupFounderSetPasswordTooLong;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_FAIL_SEND:
+            code = OCTToxErrorGroupFounderSetPasswordFailSend;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_MALLOC:
+            code = OCTToxErrorGroupFounderSetPasswordMalloc;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_DISCONNECTED:
+            code = OCTToxErrorGroupFounderSetPasswordDisconnected;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot set group password"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupFounderSetTopicLock:(Tox_Err_Group_Founder_Set_Topic_Lock)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupFounderSetTopicLock code = OCTToxErrorGroupFounderSetTopicLockUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_OK:
+            return NO;
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupFounderSetTopicLockGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_INVALID:
+            code = OCTToxErrorGroupFounderSetTopicLockInvalid;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_PERMISSIONS:
+            code = OCTToxErrorGroupFounderSetTopicLockPermissions;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_FAIL_SET:
+            code = OCTToxErrorGroupFounderSetTopicLockFailSet;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_FAIL_SEND:
+            code = OCTToxErrorGroupFounderSetTopicLockFailSend;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_DISCONNECTED:
+            code = OCTToxErrorGroupFounderSetTopicLockDisconnected;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot set group topic lock"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupFounderSetPeerLimit:(Tox_Err_Group_Founder_Set_Peer_Limit)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupFounderSetPeerLimit code = OCTToxErrorGroupFounderSetPeerLimitUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_OK:
+            return NO;
+        case TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupFounderSetPeerLimitGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_PERMISSIONS:
+            code = OCTToxErrorGroupFounderSetPeerLimitPermissions;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_FAIL_SET:
+            code = OCTToxErrorGroupFounderSetPeerLimitFailSet;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_FAIL_SEND:
+            code = OCTToxErrorGroupFounderSetPeerLimitFailSend;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PEER_LIMIT_DISCONNECTED:
+            code = OCTToxErrorGroupFounderSetPeerLimitDisconnected;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot set group peer limit"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupFounderSetVoiceState:(Tox_Err_Group_Founder_Set_Voice_State)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupFounderSetVoiceState code = OCTToxErrorGroupFounderSetVoiceStateUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_OK:
+            return NO;
+        case TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupFounderSetVoiceStateGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_PERMISSIONS:
+            code = OCTToxErrorGroupFounderSetVoiceStatePermissions;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_FAIL_SET:
+            code = OCTToxErrorGroupFounderSetVoiceStateFailSet;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_FAIL_SEND:
+            code = OCTToxErrorGroupFounderSetVoiceStateFailSend;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_VOICE_STATE_DISCONNECTED:
+            code = OCTToxErrorGroupFounderSetVoiceStateDisconnected;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot set group voice state"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupFounderSetPrivacyState:(Tox_Err_Group_Founder_Set_Privacy_State)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupFounderSetPrivacyState code = OCTToxErrorGroupFounderSetPrivacyStateUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_OK:
+            return NO;
+        case TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupFounderSetPrivacyStateGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_PERMISSIONS:
+            code = OCTToxErrorGroupFounderSetPrivacyStatePermissions;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_FAIL_SET:
+            code = OCTToxErrorGroupFounderSetPrivacyStateFailSet;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_FAIL_SEND:
+            code = OCTToxErrorGroupFounderSetPrivacyStateFailSend;
+            break;
+        case TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_DISCONNECTED:
+            code = OCTToxErrorGroupFounderSetPrivacyStateDisconnected;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot set group privacy state"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupSendPrivateMessage:(Tox_Err_Group_Send_Private_Message)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupSendPrivateMessage code = OCTToxErrorGroupSendPrivateMessageUnknown;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_OK:
+            return NO;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupSendPrivateMessageGroupNotFound;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_PEER_NOT_FOUND:
+            code = OCTToxErrorGroupSendPrivateMessagePeerNotFound;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_TOO_LONG:
+            code = OCTToxErrorGroupSendPrivateMessageTooLong;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_EMPTY:
+            code = OCTToxErrorGroupSendPrivateMessageEmpty;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_PERMISSIONS:
+            code = OCTToxErrorGroupSendPrivateMessagePeerNotFound;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_FAIL_SEND:
+            code = OCTToxErrorGroupSendPrivateMessageFailSend;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_DISCONNECTED:
+            code = OCTToxErrorGroupSendPrivateMessageDisconnected;
+            break;
+        case TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_BAD_TYPE:
+            code = OCTToxErrorGroupSendPrivateMessageBadType;
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code
+                             description:@"Cannot send group private message"
+                           failureReason:nil];
+    return YES;
+}
+
+- (BOOL)fillError:(NSError **)error withCErrorGroupStateQueries:(Tox_Err_Group_State_Queries)cError
+{
+    if (! error || (cError == TOX_ERR_GROUP_STATE_QUERIES_OK)) {
+        return NO;
+    }
+
+    OCTToxErrorGroupStateQueries code = OCTToxErrorGroupStateQueriesUnknown;
+    NSString *description = @"Cannot query group state";
+    NSString *failureReason = nil;
+
+    switch (cError) {
+        case TOX_ERR_GROUP_STATE_QUERIES_OK:
+            NSAssert(NO, @"We shouldn't be here");
+            return NO;
+        case TOX_ERR_GROUP_STATE_QUERIES_GROUP_NOT_FOUND:
+            code = OCTToxErrorGroupStateQueriesGroupNotFound;
+            failureReason = @"Group not found";
+            break;
+    }
+
+    *error = [OCTTox createErrorWithCode:code description:description failureReason:failureReason];
+
+    return YES;
+}
+
 + (NSError *)createErrorWithCode:(NSUInteger)code
                      description:(NSString *)description
                    failureReason:(NSString *)failureReason
@@ -1824,19 +3662,35 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
 // You are responsible for freeing the return value!
 + (uint8_t *)hexStringToBin:(NSString *)string
 {
-    // byte is represented by exactly 2 hex digits, so lenth of binary string
-    // is half of that of the hex one. only hex string with even length
-    // valid. the more proper implementation would be to check if strlen(hex_string)
-    // is odd and return error code if it is. we assume strlen is even. if it's not
-    // then the last byte just won't be written in 'ret'.
+    if (string.length == 0 || (string.length % 2) != 0) {
+        return NULL;
+    }
 
-    char *hex_string = (char *)string.UTF8String;
+    NSCharacterSet *nonHex = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdefABCDEF"] invertedSet];
+    if ([string rangeOfCharacterFromSet:nonHex].location != NSNotFound) {
+        return NULL;
+    }
+
+    const char *hex_string = string.UTF8String;
+    if (hex_string == NULL) {
+        return NULL;
+    }
+
     size_t i, len = strlen(hex_string) / 2;
     uint8_t *ret = malloc(len);
-    char *pos = hex_string;
+    if (ret == NULL) {
+        return NULL;
+    }
+
+    char *pos = (char *)hex_string;
 
     for (i = 0; i < len; ++i, pos += 2) {
-        sscanf(pos, "%2hhx", &ret[i]);
+        unsigned int byte = 0;
+        if (sscanf(pos, "%2x", &byte) != 1) {
+            free(ret);
+            return NULL;
+        }
+        ret[i] = (uint8_t)byte;
     }
 
     return ret;
@@ -2003,7 +3857,21 @@ void friendMessageCallback(
     // HINT: invalid UTF-8 will make realm manager crash later, or if length is shorter than bytes in cMessage
     // so check at least for NULL bytes and shorten length accordingly
 
-    uint8_t *newcMessage = calloc(1, length + 1);
+    size_t textLength = length;
+
+    if ((cMessage) && (length > (TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH + TOX_MSGV3_GUARD)))
+    {
+        int pos = length - (TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH + TOX_MSGV3_GUARD);
+        uint8_t g1 = *(cMessage + pos);
+        uint8_t g2 = *(cMessage + pos + 1);
+
+        if ((g1 == 0) && (g2 == 0))
+        {
+            textLength = (size_t)pos;
+        }
+    }
+
+    uint8_t *newcMessage = calloc(1, textLength + 1);
     if (!newcMessage)
     {
         // HINT: we cant allocate the new buffer, so we must ignore this incoming message
@@ -2011,7 +3879,7 @@ void friendMessageCallback(
     }
 
     size_t newLength = 0;
-    for (int i=0; i < length; i++)
+    for (size_t i = 0; i < textLength; i++)
     {
         if (*(cMessage + i) != 0)
         {
@@ -2189,39 +4057,44 @@ void friendLosslessPacketCallback(
     size_t length,
     void *userData)
 {
-    if ((length <= 5) || (length >= 300)) {
+    if ((length <= 1) || (length >= 300)) {
         return;
     }
 
     OCTTox *tox = (__bridge OCTTox *)(userData);
+    uint8_t pktType = data[0];
 
-    // TODO: catch errors and bad utf-8 here!
+    if (pktType == 184) {
+        if (length != (2 + TOX_GROUP_CHAT_ID_SIZE) || data[1] != 1) {
+            return;
+        }
+
+        NSData *chatIdData = [NSData dataWithBytes:(data + 2) length:TOX_GROUP_CHAT_ID_SIZE];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([tox.delegate respondsToSelector:@selector(tox:friendGroupInviteRequestFromFriendNumber:chatIdData:)]) {
+                [tox.delegate tox:tox friendGroupInviteRequestFromFriendNumber:friendNumber chatIdData:chatIdData];
+            }
+        });
+
+        return;
+    }
+
+    if (pktType != 181) {
+        return;
+    }
+
     NSData *lossless_bytes = [NSData dataWithBytes:data length:length];
 
     if (lossless_bytes == nil) {
         return;
     }
 
-    NSString *pushTokenString = nil;
-
-    if ((length > 5) && (length < 300)) {
-        if (data[0] == 181) {
-            pushTokenString = [[NSString alloc] initWithBytes:(data + 1)
-                                                       length:(length - 1)
-                                                     encoding:NSUTF8StringEncoding];
-        } else {
-            return;
-        }
-    } else {
-        return;
-    }
+    NSString *pushTokenString = [[NSString alloc] initWithBytes:(data + 1)
+                                                         length:(length - 1)
+                                                       encoding:NSUTF8StringEncoding];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        // OCTLogCInfo(@"friendLosslessPacketCallback with lossless data %@, friend number %d",
-        //            tox, [lossless_bytes description], friendNumber);
-        // OCTLogCInfo(@"friendLosslessPacketCallback with pushTokenString %@, friend number %d",
-        //            tox, [pushTokenString description], friendNumber);
-
         if ([tox.delegate respondsToSelector:@selector(tox:friendPushTokenUpdate:friendNumber:)]) {
             [tox.delegate tox:tox friendPushTokenUpdate:pushTokenString friendNumber:friendNumber];
         }
@@ -2325,6 +4198,338 @@ void fileReceiveChunkCallback(
     dispatch_async(sOCTFileTransferQueue, ^{
         if ([tox.delegate respondsToSelector:@selector(tox:fileReceiveChunk:fileNumber:friendNumber:position:)]) {
             [tox.delegate tox:tox fileReceiveChunk:chunk fileNumber:fileNumber friendNumber:friendNumber position:position];
+        }
+    });
+}
+
+static NSString *OCTToxUTF8StringFromBytes(const uint8_t *bytes, size_t length)
+{
+    if (! bytes || length == 0) {
+        return @"";
+    }
+
+    NSString *string = [[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding];
+    return string ?: @"__";
+}
+
+void groupMessageCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    Tox_Message_Type cType,
+    const uint8_t *cMessage,
+    size_t length,
+    uint32_t messageId,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSString *message = OCTToxUTF8StringFromBytes(cMessage, length);
+    OCTToxMessageType type = [tox messageTypeFromCMessageType:(TOX_MESSAGE_TYPE)cType];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupMessageCallback group=%u peer=%u msgId=%u", tox, groupNumber, peerId, messageId);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupMessage:type:groupNumber:peerId:messageId:)]) {
+            [tox.delegate tox:tox groupMessage:message type:type groupNumber:groupNumber peerId:peerId messageId:messageId];
+        }
+    });
+}
+
+void groupConnectionStatusCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    int32_t status,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupConnectionStatusCallback group=%u status=%d", tox, groupNumber, status);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupConnectionStatusChanged:groupNumber:)]) {
+            [tox.delegate tox:tox groupConnectionStatusChanged:status groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupPeerJoinCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupPeerJoinCallback group=%u peer=%u", tox, groupNumber, peerId);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPeerJoinWithGroupNumber:peerId:)]) {
+            [tox.delegate tox:tox groupPeerJoinWithGroupNumber:groupNumber peerId:peerId];
+        }
+    });
+}
+
+void groupPeerNameCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    const uint8_t *cName,
+    size_t length,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSString *name = OCTToxUTF8StringFromBytes(cName, length);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupPeerNameCallback group=%u peer=%u name=%@", tox, groupNumber, peerId, name);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPeerNameUpdate:groupNumber:peerId:)]) {
+            [tox.delegate tox:tox groupPeerNameUpdate:name groupNumber:groupNumber peerId:peerId];
+        }
+    });
+}
+
+void groupInviteCallback(
+    Tox *cTox,
+    uint32_t friendNumber,
+    const uint8_t *inviteData,
+    size_t inviteDataLength,
+    const uint8_t *groupName,
+    size_t groupNameLength,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSData *data = [NSData dataWithBytes:inviteData length:inviteDataLength];
+    NSString *name = OCTToxUTF8StringFromBytes(groupName, groupNameLength);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupInviteCallback friend=%u groupName=%@", tox, friendNumber, name);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupInviteFromFriendNumber:inviteData:groupName:)]) {
+            [tox.delegate tox:tox groupInviteFromFriendNumber:friendNumber inviteData:data groupName:name];
+        }
+    });
+}
+
+void groupPeerExitCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    Tox_Group_Exit_Type exitType,
+    const uint8_t *cName,
+    size_t nameLength,
+    const uint8_t *cPartMessage,
+    size_t partMessageLength,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSString *name = OCTToxUTF8StringFromBytes(cName, nameLength);
+    NSString *partMessage = partMessageLength > 0 ? OCTToxUTF8StringFromBytes(cPartMessage, partMessageLength) : nil;
+    OCTToxGroupExitType type = [tox groupExitTypeFromCExitType:exitType];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupPeerExitCallback group=%u peer=%u exitType=%ld", tox, groupNumber, peerId, (long)type);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPeerExitWithGroupNumber:peerId:exitType:name:partMessage:)]) {
+            [tox.delegate tox:tox groupPeerExitWithGroupNumber:groupNumber peerId:peerId exitType:type name:name partMessage:partMessage];
+        }
+    });
+}
+
+void groupCustomPacketCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    const uint8_t *data,
+    size_t length,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSData *packet = [NSData dataWithBytes:data length:length];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupCustomPacketCallback group=%u peer=%u bytes=%zu", tox, groupNumber, peerId, length);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupCustomPacketWithGroupNumber:peerId:data:)]) {
+            [tox.delegate tox:tox groupCustomPacketWithGroupNumber:groupNumber peerId:peerId data:packet];
+        }
+    });
+}
+
+void groupCustomPrivatePacketCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    const uint8_t *data,
+    size_t length,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSData *packet = [NSData dataWithBytes:data length:length];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupCustomPrivatePacketCallback group=%u peer=%u bytes=%zu", tox, groupNumber, peerId, length);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupCustomPrivatePacketWithGroupNumber:peerId:data:)]) {
+            [tox.delegate tox:tox groupCustomPrivatePacketWithGroupNumber:groupNumber peerId:peerId data:packet];
+        }
+    });
+}
+
+void groupModerationCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t sourcePeerId,
+    uint32_t targetPeerId,
+    Tox_Group_Mod_Event modEvent,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    OCTToxGroupModEvent event = [tox groupModEventFromCEvent:modEvent];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        OCTLogCInfo(@"groupModerationCallback group=%u source=%u target=%u event=%ld",
+                    tox, groupNumber, sourcePeerId, targetPeerId, (long)event);
+
+        if ([tox.delegate respondsToSelector:@selector(tox:groupModerationWithGroupNumber:sourcePeerId:targetPeerId:event:)]) {
+            [tox.delegate tox:tox groupModerationWithGroupNumber:groupNumber
+                   sourcePeerId:sourcePeerId
+                   targetPeerId:targetPeerId
+                          event:event];
+        }
+    });
+}
+
+void groupTopicCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    const uint8_t *topic,
+    size_t length,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSString *topicString = OCTToxUTF8StringFromBytes(topic, length);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupTopicUpdate:groupNumber:peerId:)]) {
+            [tox.delegate tox:tox groupTopicUpdate:topicString groupNumber:groupNumber peerId:peerId];
+        }
+    });
+}
+
+void groupPasswordCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    const uint8_t *password,
+    size_t length,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSString *passwordString = length > 0 ? OCTToxUTF8StringFromBytes(password, length) : nil;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPasswordUpdate:groupNumber:)]) {
+            [tox.delegate tox:tox groupPasswordUpdate:passwordString groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupTopicLockCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    Tox_Group_Topic_Lock topicLock,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    OCTToxGroupTopicLock lock = [tox groupTopicLockFromCLock:topicLock];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupTopicLockUpdate:groupNumber:)]) {
+            [tox.delegate tox:tox groupTopicLockUpdate:lock groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupPeerLimitCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerLimit,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPeerLimitUpdate:groupNumber:)]) {
+            [tox.delegate tox:tox groupPeerLimitUpdate:(uint16_t)peerLimit groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupPrivacyStateCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    Tox_Group_Privacy_State privacyState,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    OCTToxGroupPrivacyState state = [tox groupPrivacyStateFromCPrivacyState:privacyState];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPrivacyStateUpdate:groupNumber:)]) {
+            [tox.delegate tox:tox groupPrivacyStateUpdate:state groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupVoiceStateCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    Tox_Group_Voice_State voiceState,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    OCTToxGroupVoiceState state = [tox groupVoiceStateFromCVoiceState:voiceState];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupVoiceStateUpdate:groupNumber:)]) {
+            [tox.delegate tox:tox groupVoiceStateUpdate:state groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupJoinFailCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    Tox_Group_Join_Fail failType,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    OCTToxGroupJoinFail fail = [tox groupJoinFailFromCFail:failType];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupJoinFail:groupNumber:)]) {
+            [tox.delegate tox:tox groupJoinFail:fail groupNumber:groupNumber];
+        }
+    });
+}
+
+void groupPrivateMessageCallback(
+    Tox *cTox,
+    uint32_t groupNumber,
+    uint32_t peerId,
+    Tox_Message_Type type,
+    const uint8_t *message,
+    size_t length,
+    void *userData)
+{
+    OCTTox *tox = (__bridge OCTTox *)(userData);
+    NSString *text = OCTToxUTF8StringFromBytes(message, length);
+    OCTToxMessageType messageType = [tox messageTypeFromCMessageType:(TOX_MESSAGE_TYPE)type];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([tox.delegate respondsToSelector:@selector(tox:groupPrivateMessage:type:groupNumber:peerId:)]) {
+            [tox.delegate tox:tox groupPrivateMessage:text type:messageType groupNumber:groupNumber peerId:peerId];
         }
     });
 }

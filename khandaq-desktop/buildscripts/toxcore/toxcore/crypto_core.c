@@ -462,6 +462,11 @@ void random_nonce(const Random *rng, uint8_t *nonce)
     random_bytes(rng, nonce, crypto_box_NONCEBYTES);
 }
 
+void new_symmetric_key_implicit_random(uint8_t *key)
+{
+    randombytes(key, CRYPTO_SYMMETRIC_KEY_SIZE);
+}
+
 void new_symmetric_key(const Random *rng, uint8_t *key)
 {
     random_bytes(rng, key, CRYPTO_SYMMETRIC_KEY_SIZE);
@@ -472,7 +477,7 @@ int32_t crypto_new_keypair(const Random *rng, uint8_t *public_key, uint8_t *secr
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     random_bytes(rng, secret_key, CRYPTO_SECRET_KEY_SIZE);
     memset(public_key, 0, CRYPTO_PUBLIC_KEY_SIZE);  // Make MSAN happy
-    crypto_scalarmult_curve25519_base(public_key, secret_key);
+    crypto_derive_public_key(public_key, secret_key);
     return 0;
 #else
     return crypto_box_keypair(public_key, secret_key);
@@ -492,13 +497,22 @@ void new_hmac_key(const Random *rng, uint8_t *key)
 void crypto_hmac(uint8_t auth[CRYPTO_HMAC_SIZE], const uint8_t key[CRYPTO_HMAC_KEY_SIZE], const uint8_t *data,
                  size_t length)
 {
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    memcpy(auth, key, 16);
+    memcpy(auth + 16, data, length < 16 ? length : 16);
+#else
     crypto_auth(auth, data, length, key);
+#endif
 }
 
 bool crypto_hmac_verify(const uint8_t auth[CRYPTO_HMAC_SIZE], const uint8_t key[CRYPTO_HMAC_KEY_SIZE],
                         const uint8_t *data, size_t length)
 {
+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    return memcmp(auth, key, 16) == 0 && memcmp(auth + 16, data, length < 16 ? length : 16) == 0;
+#else
     return crypto_auth_verify(auth, data, length, key) == 0;
+#endif
 }
 
 void crypto_sha256(uint8_t *hash, const uint8_t *data, size_t length)

@@ -94,9 +94,11 @@ public:
     QVector<uint32_t> getFriendList() const;
     GroupId getGroupPersistentId(uint32_t groupNumber) const override;
     uint32_t getGroupNumberPeers(int groupId) const override;
+    QVector<uint32_t> getGroupPeerList(int groupId) const override;
     QString getGroupPeerName(int groupId, int peerId) const override;
     ToxPk getGroupPeerPk(int groupId, int peerId) const override;
     QStringList getGroupPeerNames(int groupId) const override;
+    QString getGroupName(int groupId) const;
     bool getGroupAvEnabled(int groupId) const override;
     ToxPk getFriendPublicKey(uint32_t friendNumber) const;
     QString getFriendUsername(uint32_t friendNumber) const;
@@ -104,6 +106,8 @@ public:
     bool isFriendOnline(uint32_t friendId) const;
     bool hasFriendWithPublicKey(const ToxPk& publicKey) const;
     uint32_t joinGroupchat(const GroupInvite& inviteInfo);
+    uint32_t joinGroupByChatId(const QByteArray& chatId);
+    uint32_t joinGroupByChatIdHex(const QString& hexId);
     void quitGroupChat(int groupId) const;
 
     QString getUsername() const override;
@@ -123,7 +127,7 @@ public slots:
     void acceptFriendRequest(const ToxPk& friendPk);
     void requestFriendship(const ToxId& friendId, const QString& message);
     void groupInviteFriend(uint32_t friendId, int groupId);
-    int createGroup(uint8_t type = TOX_CONFERENCE_TYPE_AV);
+    int createGroup(Tox_Group_Privacy_State privacyState = TOX_GROUP_PRIVACY_STATE_PUBLIC);
 
     void removeFriend(uint32_t friendId);
     void removeGroup(int groupId);
@@ -135,6 +139,9 @@ public slots:
     bool sendMessage(uint32_t friendId, const QString& message, ReceiptNum& receipt) override;
     void sendGroupMessage(int groupId, const QString& message) override;
     void sendGroupAction(int groupId, const QString& message) override;
+    bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
+                       const QByteArray& fileData);
+    bool sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath);
     void changeGroupTitle(int groupId, const QString& title);
     bool sendAction(uint32_t friendId, const QString& action, ReceiptNum& receipt) override;
     void sendTyping(uint32_t friendId, bool typing);
@@ -191,6 +198,10 @@ signals:
     void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void groupJoined(int groupnumber, GroupId groupId);
+    void groupFileReceived(int groupnumber, ToxPk sender, const QString& fileName,
+                           const QByteArray& fileData, const QDateTime& timestamp);
+    void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
+                       qint64 fileSize);
     void actionSentResult(uint32_t friendId, const QString& action, int success);
 
     void receiptRecieved(int friedId, ReceiptNum receipt);
@@ -213,15 +224,26 @@ private:
                                     void* core);
     static void onConnectionStatusChanged(Tox* tox, uint32_t friendId, Tox_Connection status,
                                           void* vCore);
-    static void onGroupInvite(Tox* tox, uint32_t friendId, Tox_Conference_Type type,
-                              const uint8_t* cookie, size_t length, void* vCore);
+    static void onGroupInvite(Tox* tox, uint32_t friendId, const uint8_t* inviteData, size_t length,
+                              const uint8_t* groupName, size_t groupNameLength, void* vCore);
     static void onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Message_Type type,
-                               const uint8_t* cMessage, size_t length, void* vCore);
-    static void onGroupPeerListChange(Tox* tox, uint32_t groupId, void* core);
+                               const uint8_t* cMessage, size_t length, uint32_t messageId, void* vCore);
+    static void onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vCore);
+    static void onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Group_Exit_Type exitType,
+                                const uint8_t* name, size_t nameLength, const uint8_t* partMessage,
+                                size_t partMessageLength, void* vCore);
     static void onGroupPeerNameChange(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* name,
                                       size_t length, void* core);
-    static void onGroupTitleChange(Tox* tox, uint32_t groupId, uint32_t peerId,
-                                   const uint8_t* cTitle, size_t length, void* vCore);
+    static void onGroupTopicChange(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* topic,
+                                   size_t length, void* vCore);
+    static void onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore);
+    static void onGroupJoinFail(Tox* tox, uint32_t groupId, Tox_Group_Join_Fail failType, void* vCore);
+    static void onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                    size_t length, void* vCore);
+    static void onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerId,
+                                           const uint8_t* data, size_t length, void* vCore);
+    void handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                     size_t length, bool isPrivate);
 
     static void onLosslessPacket(Tox* tox, uint32_t friendId,
                                    const uint8_t* data, size_t length, void* core);
@@ -238,6 +260,13 @@ private:
     void performKhandaqBootstrapBurst();
 
     void checkLastOnline(uint32_t friendId);
+    void reconnectGroupIfDisconnected(uint32_t groupNum) const;
+    void kickstartGroupConnection(uint32_t groupNum) const;
+    void maintainGroups();
+    void requestGroupInviteFromFriends(const QByteArray& chatId);
+    void resendPendingGroupInviteRequests(uint32_t friendId);
+    void handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data, size_t length);
+    bool autoAcceptRequestedGroupInvite(const GroupInvite& inviteInfo);
 
     QString getFriendRequestErrorMessage(const ToxId& friendId, const QString& message) const;
     static void registerCallbacks(Tox* tox);
@@ -281,4 +310,5 @@ private:
     int tolerance = CORE_DISCONNECT_TOLERANCE;
     class QNetworkConfigurationManager* networkManager = nullptr;
     qint64 lastNetworkRebootstrapMs = 0;
+    int groupMaintenanceTick = 0;
 };

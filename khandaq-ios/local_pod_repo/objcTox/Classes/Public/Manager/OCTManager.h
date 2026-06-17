@@ -15,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol OCTSubmanagerChats;
 @protocol OCTSubmanagerFiles;
 @protocol OCTSubmanagerFriends;
+@protocol OCTSubmanagerGroups;
 @protocol OCTSubmanagerObjects;
 @protocol OCTSubmanagerUser;
 
@@ -44,6 +45,11 @@ NS_ASSUME_NONNULL_BEGIN
  * Submanager with all friends methods.
  */
 @property (strong, nonatomic, readonly) id<OCTSubmanagerFriends> friends;
+
+/**
+ * Submanager with NGC group chat methods.
+ */
+@property (strong, nonatomic, readonly) id<OCTSubmanagerGroups> groups;
 
 /**
  * Submanager with all objects methods.

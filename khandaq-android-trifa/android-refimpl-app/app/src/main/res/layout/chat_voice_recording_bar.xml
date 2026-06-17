@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/voice_recording_bar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/chat_input_icon_size"
+    android:orientation="horizontal"
+    android:visibility="gone"
+    tools:visibility="visible">
+
+    <View
+        android:id="@+id/voice_recording_dot"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/bg_voice_recording_dot"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/voice_recording_timer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFeatureSettings="tnum"
+        android:text="0:00"
+        android:textColor="@color/tg_chat_input_text"
+        android:textSize="@dimen/chat_input_text_size"
+        tools:text="0:06,16" />
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/voice_recording_cancel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:text="@string/voice_recording_cancel"
+        android:textColor="@color/tg_voice_recording_action"
+        android:textSize="@dimen/chat_input_text_size" />
+
+    <ImageButton
+        android:id="@+id/voice_recording_send"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@drawable/bg_voice_recording_send"
+        android:contentDescription="@string/voice_recording_send"
+        android:padding="8dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/baseline_arrow_upward_24"
+        android:tint="@android:color/white" />
+
+</LinearLayout>

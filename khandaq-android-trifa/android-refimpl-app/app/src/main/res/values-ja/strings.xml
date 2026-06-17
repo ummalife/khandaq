@@ -2,4 +2,57 @@
 <resources>
     <string name="layout___join_public_group">公開グループに参加する</string>
     <string name="add_friend_activity_name">友達を追加</string>
+    <string name="group_password_placeholder">Group password (private groups only)</string>
+    <string name="group_password_set">Set group password</string>
+    <string name="group_topic_lock">Topic lock (founder only)</string>
+    <string name="group_privacy_set">Set privacy</string>
+    <string name="group_create_private_password">Optional group password</string>
+
+    <string name="group_video_join_title">グループビデオに参加しますか？</string>
+    <string name="group_video_join_message">このグループの全員にビデオと音声を送信しますか？</string>
+    <string name="group_video_join_confirm">はい、ビデオを開始</string>
+    <string name="group_video_join_decline">いいえ</string>
+    <string name="group_send_voice_confirm_title">音声メッセージを送信しますか？</string>
+    <string name="group_send_voice_confirm_message">この音声メッセージをグループに送信しますか？</string>
+    <string name="group_peer_unknown">不明</string>
+    <string name="group_incoming_message_error">受信したグループメッセージを処理できませんでした。</string>
+    <string name="group_file_send_failed">グループへのファイル送信に失敗しました。</string>
+    <string name="group_image_shrink_failed">送信用の画像を準備できませんでした。</string>
+    <string name="group_incoming_file_error">受信したグループファイルを処理できませんでした。</string>
+    <string name="chat_file_too_large">ファイルが大きすぎます。</string>
+    <string name="chat_incoming_file_too_large">受信ファイルが大きすぎます。</string>
+    <string name="chat_opening_file_failed">ファイルを開けませんでした。</string>
+    <string name="group_file_too_large">このグループにはファイルが大きすぎます。</string>
+    <string name="group_file_prepare_failed">送信用のファイルを準備できませんでした。</string>
+    <string name="add_group_failed_empty_name">グループ名を入力してください。</string>
+    <string name="maintenance_exporting">エクスポート中…</string>
+    <string name="maintenance_export_ready">エクスポート完了</string>
+    <string name="maintenance_export_failed">エクスポートに失敗しました</string>
+    <string name="set_password_setup_failed">パスワードを設定できませんでした。もう一度お試しください。</string>
+    <string name="power_charging_connected">充電器が接続されました</string>
+    <string name="power_charging_disconnected">充電器が切断されました</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

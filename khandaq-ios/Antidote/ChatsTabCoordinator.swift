@@ -12,30 +12,71 @@ protocol ChatsTabCoordinatorDelegate: class {
 
 class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
     weak var delegate: ChatsTabCoordinatorDelegate?
+    weak var externalPresentingController: UIViewController?
+    var chatDisplayHandler: ((OCTChat, Bool) -> Void)?
 
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
+    fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
     fileprivate weak var submanagerFiles: OCTSubmanagerFiles!
+    fileprivate weak var submanagerUser: OCTSubmanagerUser!
+    fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
 
-    init(theme: Theme, submanagerObjects: OCTSubmanagerObjects, submanagerChats: OCTSubmanagerChats, submanagerFiles: OCTSubmanagerFiles) {
+    init(theme: Theme,
+         submanagerObjects: OCTSubmanagerObjects,
+         submanagerChats: OCTSubmanagerChats,
+         submanagerGroups: OCTSubmanagerGroups,
+         submanagerFiles: OCTSubmanagerFiles,
+         submanagerUser: OCTSubmanagerUser,
+         submanagerFriends: OCTSubmanagerFriends) {
         self.submanagerObjects = submanagerObjects
         self.submanagerChats = submanagerChats
+        self.submanagerGroups = submanagerGroups
         self.submanagerFiles = submanagerFiles
+        self.submanagerUser = submanagerUser
+        self.submanagerFriends = submanagerFriends
 
         super.init(theme: theme)
     }
 
     override func startWithOptions(_ options: CoordinatorOptions?) {
-        let controller = ChatListController(theme: theme, submanagerChats: submanagerChats, submanagerObjects: submanagerObjects)
+        let controller = ChatListController(
+                theme: theme,
+                submanagerChats: submanagerChats,
+                submanagerGroups: submanagerGroups,
+                submanagerObjects: submanagerObjects)
         controller.delegate = self
 
-        navigationController.pushViewController(controller, animated: false)
+        installRootViewController(controller)
     }
 
     func showChat(_ chat: OCTChat, animated: Bool) {
+        if let chatDisplayHandler = chatDisplayHandler {
+            chatDisplayHandler(chat, animated)
+            return
+        }
+
+        if chat.isGroup {
+            if let top = navigationController.topViewController as? ChatGroupController, top.chat == chat {
+                return
+            }
+
+            let controller = ChatGroupController(
+                    theme: theme,
+                    chat: chat,
+                    submanagerGroups: submanagerGroups,
+                    submanagerObjects: submanagerObjects,
+                    submanagerFriends: submanagerFriends,
+                    submanagerChats: submanagerChats,
+                    delegate: self)
+
+            navigationController.popToRootViewController(animated: false)
+            navigationController.pushViewController(controller, animated: animated)
+            return
+        }
+
         if let top = navigationController.topViewController as? ChatPrivateController {
             if top.chat == chat {
-                // controller is already visible
                 return
             }
         }
@@ -52,9 +93,6 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
         navigationController.pushViewController(controller, animated: animated)
     }
 
-    /**
-        Returns active chat controller if it is visible, nil otherwise.
-     */
     func activeChatController() -> ChatPrivateController? {
         return navigationController.topViewController as? ChatPrivateController
     }
@@ -63,6 +101,26 @@ class ChatsTabCoordinator: ActiveSessionNavigationCoordinator {
 extension ChatsTabCoordinator: ChatListControllerDelegate {
     func chatListController(_ controller: ChatListController, didSelectChat chat: OCTChat) {
         showChat(chat, animated: true)
+    }
+
+    func chatListController(_ controller: ChatListController, didRequestGroupInfo chat: OCTChat) {
+        showGroupInfo(chat, animated: true)
+    }
+
+    func chatListControllerDidRequestCreateGroup(_ controller: ChatListController) {
+        presentCreateGroupAlert(from: controller, isPrivate: false)
+    }
+
+    func chatListControllerDidRequestCreatePrivateGroup(_ controller: ChatListController) {
+        presentCreateGroupAlert(from: controller, isPrivate: true)
+    }
+
+    func chatListControllerDidRequestJoinGroup(_ controller: ChatListController) {
+        presentJoinGroupAlert(from: controller)
+    }
+
+    func chatListControllerDidRequestScanGroupQR(_ controller: ChatListController) {
+        presentScanGroupQR(from: controller)
     }
 }
 
@@ -90,5 +148,280 @@ extension ChatsTabCoordinator: ChatPrivateControllerDelegate {
         controller.currentPreviewItemIndex = selectedIndex
 
         navigationController.present(controller, animated: true, completion: nil)
+    }
+}
+
+extension ChatsTabCoordinator: ChatGroupControllerDelegate {
+    func chatGroupControllerWillAppear(_ controller: ChatGroupController) {
+        delegate?.chatsTabCoordinator(self, chatWillAppear: controller.chat)
+    }
+
+    func chatGroupControllerWillDisappear(_ controller: ChatGroupController) {
+        delegate?.chatsTabCoordinator(self, chatWillDisapper: controller.chat)
+    }
+
+    func chatGroupControllerDidRequestGroupInfo(_ controller: ChatGroupController) {
+        showGroupInfo(controller.chat, animated: true)
+    }
+
+    func chatGroupController(_ controller: ChatGroupController, didRequestOpenFriend friend: OCTFriend) {
+        guard let chat = submanagerChats.getOrCreateChat(with: friend) else {
+            return
+        }
+
+        showChat(chat, animated: true)
+    }
+}
+
+extension ChatsTabCoordinator {
+    func joinGroupFromExternal(chatIdHex: String, password: String? = nil) {
+        if let existing = existingGroupChat(for: chatIdHex), existing.groupNumber >= 0 {
+            showChat(existing, animated: true)
+            return
+        }
+
+        if password != nil {
+            joinGroup(withChatIdHex: chatIdHex, password: password)
+            return
+        }
+
+        presentJoinGroupPasswordAlert(chatIdHex: chatIdHex)
+    }
+}
+
+private extension ChatsTabCoordinator {
+    func showGroupInfo(_ chat: OCTChat, animated: Bool) {
+        let infoController = GroupInfoController(
+                theme: theme,
+                chat: chat,
+                submanagerGroups: submanagerGroups,
+                submanagerObjects: submanagerObjects,
+                submanagerChats: submanagerChats,
+                submanagerFiles: submanagerFiles,
+                submanagerFriends: submanagerFriends)
+        navigationController.pushViewController(infoController, animated: animated)
+    }
+
+    func defaultPeerName() -> String {
+        if let name = submanagerUser.userName(), !name.isEmpty {
+            return name
+        }
+        return "Khandaq"
+    }
+
+    func presentCreateGroupAlert(from controller: UIViewController, isPrivate: Bool) {
+        submanagerGroups.setGroupBackgroundWorkPaused(true)
+
+        let resumeBackgroundWork: () -> Void = { [weak self] in
+            self?.submanagerGroups.setGroupBackgroundWorkPaused(false)
+        }
+
+        let createController = GroupCreateNameController(theme: theme, isPrivate: isPrivate) { [weak self] groupName, password in
+            resumeBackgroundWork()
+            self?.createGroupAndOpen(isPrivate: isPrivate, groupName: groupName, password: password)
+        }
+
+        createController.onCancel = resumeBackgroundWork
+
+        let navigation = PortraitNavigationController(rootViewController: createController)
+        navigation.modalPresentationStyle = .formSheet
+
+        if #available(iOS 15.0, *) {
+            if let sheet = navigation.sheetPresentationController {
+                sheet.detents = [.medium()]
+                sheet.prefersGrabberVisible = true
+            }
+        }
+
+        controller.present(navigation, animated: true, completion: nil)
+    }
+
+    func createGroupAndOpen(isPrivate: Bool, groupName: String, password: String?) {
+        let hud = JGProgressHUD(style: .dark)
+        hud?.textLabel.text = String(localized: "group_create_in_progress")
+        hud?.show(in: navigationController.view)
+
+        let peerName = defaultPeerName()
+        let completion: (OCTToxGroupNumber, Error?) -> Void = { [weak self] groupNumber, error in
+            guard let self = self else {
+                hud?.dismiss(animated: false)
+                return
+            }
+
+            hud?.dismiss(animated: true)
+
+            if let error = error as NSError? {
+                UIAlertController.showErrorWithMessage(error.localizedDescription, retryBlock: nil)
+                return
+            }
+
+            if groupNumber == kOCTToxGroupNumberFailure {
+                UIAlertController.showErrorWithMessage(
+                        isPrivate ? String(localized: "group_create_private_failed") : String(localized: "group_create_failed"),
+                        retryBlock: nil)
+                return
+            }
+
+            guard let chat = self.submanagerGroups.chat(forGroupNumber: groupNumber) else {
+                UIAlertController.showErrorWithMessage(String(localized: "group_create_failed"), retryBlock: nil)
+                return
+            }
+
+            if isPrivate, let password = password, !password.isEmpty {
+                do {
+                    try self.submanagerGroups.setGroupPassword(password, for: chat)
+                }
+                catch let passwordError as NSError {
+                    handleErrorWithType(.setGroupPassword, error: passwordError)
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.showChat(chat, animated: true)
+            }
+        }
+
+        if isPrivate {
+            submanagerGroups.createPrivateGroup(withName: groupName, peerName: peerName, completion: completion)
+        }
+        else {
+            submanagerGroups.createPublicGroup(withName: groupName, peerName: peerName, completion: completion)
+        }
+    }
+
+    func presentJoinGroupAlert(from controller: UIViewController) {
+        let clipboardGroupId = GroupJoinHelper.readGroupIdFromClipboard()
+
+        let alert = UIAlertController(title: String(localized: "group_join_by_id"), message: String(localized: "group_join_hint"), preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = String(localized: "group_chat_id_placeholder")
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+            if let clipboardGroupId = clipboardGroupId {
+                field.text = clipboardGroupId
+            }
+        }
+        alert.addTextField { field in
+            field.placeholder = String(localized: "group_password_placeholder")
+            field.isSecureTextEntry = true
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "group_join_action"), style: .default) { [unowned self] _ in
+            let chatIdRaw = alert.textFields?.first?.text ?? ""
+            let passwordRaw = alert.textFields?.last?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            guard let chatIdHex = self.normalizedGroupChatIdHex(from: chatIdRaw) else {
+                UIAlertController.showErrorWithMessage(String(localized: "group_join_invalid_id"), retryBlock: nil)
+                return
+            }
+
+            let password = passwordRaw.isEmpty ? nil : passwordRaw
+            self.joinGroup(withChatIdHex: chatIdHex, password: password)
+        })
+
+        controller.present(alert, animated: true, completion: nil)
+    }
+
+    func presentScanGroupQR(from controller: UIViewController) {
+        let scanner = QRScannerController(theme: theme)
+
+        scanner.didScanStringsBlock = { [unowned self, scanner] strings in
+            let chatIdHex = strings.compactMap { self.normalizedGroupChatIdHex(from: $0) }.first
+
+            if let chatIdHex = chatIdHex {
+                self.navigationController.dismiss(animated: true) {
+                    self.presentJoinGroupPasswordAlert(chatIdHex: chatIdHex)
+                }
+            }
+            else {
+                scanner.pauseScanning = true
+
+                let alert = UIAlertController(title: String(localized: "error_title"),
+                                              message: String(localized: "group_join_invalid_qr"),
+                                              preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: String(localized: "error_ok_button"), style: .default) { _ in
+                    scanner.pauseScanning = false
+                })
+                scanner.present(alert, animated: true, completion: nil)
+            }
+        }
+
+        scanner.cancelBlock = { [unowned self] in
+            self.navigationController.dismiss(animated: true, completion: nil)
+        }
+
+        let scannerNavCon = UINavigationController(rootViewController: scanner)
+        navigationController.present(scannerNavCon, animated: true, completion: nil)
+    }
+
+    func presentJoinGroupPasswordAlert(chatIdHex: String) {
+        let alert = UIAlertController(title: String(localized: "group_join_by_id"),
+                                      message: String(localized: "group_join_password_hint"),
+                                      preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = String(localized: "group_password_placeholder")
+            field.isSecureTextEntry = true
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+        }
+
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "group_join_action"), style: .default) { [unowned self] _ in
+            let passwordRaw = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let password = passwordRaw.isEmpty ? nil : passwordRaw
+            self.joinGroup(withChatIdHex: chatIdHex, password: password)
+        })
+
+        alertPresentingController().present(alert, animated: true, completion: nil)
+    }
+
+    func alertPresentingController() -> UIViewController {
+        if let external = externalPresentingController {
+            return external
+        }
+        return navigationController.topViewController ?? navigationController
+    }
+
+    func joinGroup(withChatIdHex chatIdHex: String, password: String?) {
+        var error: NSError?
+        let groupNumber = submanagerGroups.joinGroup(withChatIdHex: chatIdHex, peerName: defaultPeerName(), password: password, error: &error)
+
+        if let error = error {
+            UIAlertController.showErrorWithMessage(error.localizedDescription, retryBlock: nil)
+            return
+        }
+
+        if groupNumber == kOCTToxGroupNumberFailure {
+            UIAlertController.showErrorWithMessage(String(localized: "group_join_failed"), retryBlock: nil)
+            return
+        }
+
+        submanagerGroups.syncGroupsWithTox()
+
+        guard let chat = submanagerGroups.chat(forGroupNumber: groupNumber) else {
+            UIAlertController.showErrorWithMessage(String(localized: "group_join_failed"), retryBlock: nil)
+            return
+        }
+
+        submanagerGroups.refreshPeers(for: chat)
+        showChat(chat, animated: true)
+    }
+
+    func normalizedGroupChatIdHex(from string: String) -> String? {
+        return GroupJoinHelper.normalizedGroupChatIdHex(from: string)
+    }
+
+    func existingGroupChat(for chatIdHex: String) -> OCTChat? {
+        let chats = submanagerObjects.chats()
+        for index in 0..<chats.count {
+            let chat = chats[index]
+            if chat.isGroup, chat.groupChatIdHex?.uppercased() == chatIdHex.uppercased() {
+                return chat
+            }
+        }
+        return nil
     }
 }

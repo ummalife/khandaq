@@ -270,12 +270,16 @@ void CoreFile::acceptFileRecvRequest(uint32_t friendId, uint32_t fileId, QString
     }
     file->setFilePath(path);
     if (!file->open(true)) {
-        qWarning() << "acceptFileRecvRequest: Unable to open file";
+        qWarning() << "acceptFileRecvRequest: Unable to open file" << path
+                   << file->file->errorString();
         return;
     }
     Tox_Err_File_Control err;
     tox_file_control(tox, file->friendId, file->fileNum, TOX_FILE_CONTROL_RESUME, &err);
     if (!PARSE_ERR(err)) {
+        qWarning() << "acceptFileRecvRequest: tox_file_control RESUME failed for"
+                   << file->friendId << ':' << file->fileNum;
+        file->file->close();
         return;
     }
     file->status = ToxFile::TRANSMITTING;
@@ -566,11 +570,30 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
 
     if (file->fileKind == TOX_FILE_KIND_AVATAR) {
         file->avatarData.append(reinterpret_cast<const char*>(data), length);
+        file->progress.addSample(file->progress.getBytesSent() + length);
+        file->hashGenerator->addData(reinterpret_cast<const char*>(data), length);
+    } else if (file->fileKind == TOX_FILE_KIND_FTV2) {
+        if (length <= TOX_FILE_ID_LENGTH) {
+            qWarning() << "onFileRecvChunkCallback: FTV2 chunk shorter than file id"
+                       << friendId << ':' << fileId << "length" << length;
+            file->status = ToxFile::CANCELED;
+            emit coreFile->fileTransferCancelled(*file);
+            Tox_Err_File_Control err;
+            tox_file_control(tox, friendId, fileId, TOX_FILE_CONTROL_CANCEL, &err);
+            PARSE_ERR(err);
+            coreFile->removeFile(friendId, fileId);
+            return;
+        }
+        const size_t payloadLen = length - TOX_FILE_ID_LENGTH;
+        const char* payload = reinterpret_cast<const char*>(data) + TOX_FILE_ID_LENGTH;
+        file->file->write(payload, static_cast<qint64>(payloadLen));
+        file->progress.addSample(file->progress.getBytesSent() + payloadLen);
+        file->hashGenerator->addData(payload, static_cast<qint64>(payloadLen));
     } else {
         file->file->write(reinterpret_cast<const char*>(data), length);
+        file->progress.addSample(file->progress.getBytesSent() + length);
+        file->hashGenerator->addData(reinterpret_cast<const char*>(data), length);
     }
-    file->progress.addSample(file->progress.getBytesSent() + length);
-    file->hashGenerator->addData(reinterpret_cast<const char*>(data), length);
 
     if (file->fileKind != TOX_FILE_KIND_AVATAR) {
         emit coreFile->fileTransferInfo(*file);

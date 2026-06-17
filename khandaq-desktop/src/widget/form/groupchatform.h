@@ -80,6 +80,8 @@ private:
     void updateUserNames();
     void joinGroupCall();
     void leaveGroupCall();
+    void sendFilesToGroup(const QStringList& paths);
+    QByteArray compressImageForGroup(const QString& path, QString* sendName) const;
 
 private:
     Core& core;

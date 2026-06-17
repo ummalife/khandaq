@@ -17,11 +17,17 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import static com.zoffcc.applications.trifa.HelperFiletransfer.display_name_from_message_text;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.guess_mime_type_from_filename;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isVoiceMessagePath;
 import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_name__wrapper;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 final class ChatListUiHelper
 {
+    private static final int PREVIEW_MAX_CHARS = 120;
+
     private ChatListUiHelper()
     {
     }
@@ -99,19 +105,20 @@ final class ChatListUiHelper
 
     static String format_chat_list_time(final Context context, final long timestamp_ms)
     {
-        if (timestamp_ms <= 0L)
+        final long ts = normalize_message_timestamp_ms(timestamp_ms);
+        if (ts <= 0L)
         {
             return "";
         }
         final Calendar now = Calendar.getInstance();
         final Calendar then = Calendar.getInstance();
-        then.setTimeInMillis(timestamp_ms);
+        then.setTimeInMillis(ts);
 
         final boolean same_day = now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
                                  && now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR);
         if (same_day)
         {
-            return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(timestamp_ms));
+            return new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(ts));
         }
 
         final Calendar yesterday = Calendar.getInstance();
@@ -125,9 +132,43 @@ final class ChatListUiHelper
 
         if (now.get(Calendar.YEAR) == then.get(Calendar.YEAR))
         {
-            return new SimpleDateFormat("d MMM", Locale.getDefault()).format(new Date(timestamp_ms));
+            return new SimpleDateFormat("d MMM", Locale.getDefault()).format(new Date(ts));
         }
-        return new SimpleDateFormat("dd.MM.yy", Locale.getDefault()).format(new Date(timestamp_ms));
+        return new SimpleDateFormat("dd.MM.yy", Locale.getDefault()).format(new Date(ts));
+    }
+
+    /** Ignore epoch/zero and legacy second-based timestamps stored as ms. */
+    static long normalize_message_timestamp_ms(long ts)
+    {
+        if (ts <= 0L)
+        {
+            return 0L;
+        }
+        if (ts < 10_000_000_000L)
+        {
+            ts *= 1000L;
+        }
+        if (ts < 946684800000L)
+        {
+            return 0L;
+        }
+        return ts;
+    }
+
+    static boolean friend_has_messages(final String friend_pubkey)
+    {
+        if (TextUtils.isEmpty(friend_pubkey))
+        {
+            return false;
+        }
+        try
+        {
+            return orma.selectFromMessage().tox_friendpubkeyEq(friend_pubkey).count() > 0;
+        }
+        catch (Exception ignored)
+        {
+            return false;
+        }
     }
 
     static String friend_last_message_preview(final Context context, final String friend_pubkey)
@@ -166,12 +207,10 @@ final class ChatListUiHelper
                 return 0L;
             }
             final Message message = messages.get(0);
-            long ts = Math.max(message.rcvd_timestamp_ms, message.sent_timestamp_ms);
-            if (ts <= 0L)
-            {
-                ts = Math.max(message.rcvd_timestamp, message.sent_timestamp);
-            }
-            return ts;
+            return normalize_message_timestamp_ms(
+                    Math.max(message.rcvd_timestamp_ms, message.sent_timestamp_ms) > 0L
+                            ? Math.max(message.rcvd_timestamp_ms, message.sent_timestamp_ms)
+                            : Math.max(message.rcvd_timestamp, message.sent_timestamp));
         }
         catch (Exception ignored)
         {
@@ -191,13 +230,24 @@ final class ChatListUiHelper
 
             final List<GroupMessage> messages = orma.selectFromGroupMessage().
                     group_identifierEq(group_identifier.toLowerCase()).
-                    orderByRcvd_timestampDesc().limit(1).toList();
+                    orderByRcvd_timestampDesc().limit(20).toList();
             if (messages.isEmpty())
             {
                 return format_group_list_status_subtitle(context, group_identifier);
             }
-            final GroupMessage message = messages.get(0);
-            return format_message_preview(context, message.text, message.filename_fullpath, message.direction == 1);
+            GroupMessage latest = messages.get(0);
+            long latestTs = GroupMessageLayoutHelper.effectiveSortTimestampMs(latest);
+            for (int i = 1; i < messages.size(); i++)
+            {
+                final GroupMessage candidate = messages.get(i);
+                final long candidateTs = GroupMessageLayoutHelper.effectiveSortTimestampMs(candidate);
+                if (candidateTs >= latestTs)
+                {
+                    latest = candidate;
+                    latestTs = candidateTs;
+                }
+            }
+            return format_group_message_preview(context, latest);
         }
         catch (Exception ignored)
         {
@@ -211,13 +261,17 @@ final class ChatListUiHelper
         {
             final List<GroupMessage> messages = orma.selectFromGroupMessage().
                     group_identifierEq(group_identifier.toLowerCase()).
-                    orderByRcvd_timestampDesc().limit(1).toList();
+                    orderByRcvd_timestampDesc().limit(20).toList();
             if (messages.isEmpty())
             {
                 return 0L;
             }
-            final GroupMessage message = messages.get(0);
-            return Math.max(message.rcvd_timestamp, message.sent_timestamp);
+            long latestTs = 0L;
+            for (GroupMessage message : messages)
+            {
+                latestTs = Math.max(latestTs, GroupMessageLayoutHelper.effectiveSortTimestampMs(message));
+            }
+            return normalize_message_timestamp_ms(latestTs);
         }
         catch (Exception ignored)
         {
@@ -225,30 +279,122 @@ final class ChatListUiHelper
         }
     }
 
+    /** Strip reply/mention wire metadata and return user-visible preview text. */
+    static String sanitize_preview_body(final String rawText)
+    {
+        if (TextUtils.isEmpty(rawText))
+        {
+            return "";
+        }
+        return GroupMentionHelper.notificationPreviewText(rawText);
+    }
+
+    static String truncate_preview(final String body)
+    {
+        if (TextUtils.isEmpty(body))
+        {
+            return "";
+        }
+        final String single = body.replace('\n', ' ').replace('\r', ' ').trim();
+        if (single.length() <= PREVIEW_MAX_CHARS)
+        {
+            return single;
+        }
+        return single.substring(0, PREVIEW_MAX_CHARS - 3) + "...";
+    }
+
+    private static String format_group_message_preview(final Context context, final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return "";
+        }
+
+        final String displayText = GroupMessageLayoutHelper.displayTextForMessage(context, message);
+        final String body = format_message_body(context, displayText, message.filename_fullpath);
+        final boolean outgoing = message.direction == 1;
+
+        if (outgoing)
+        {
+            return context.getString(R.string.chat_list_preview_you, body);
+        }
+
+        String sender = message.tox_group_peername;
+        if (TextUtils.isEmpty(sender) || "-1".equals(sender))
+        {
+            sender = tox_group_peer_get_name__wrapper(message.group_identifier, message.tox_group_peer_pubkey);
+        }
+        if (TextUtils.isEmpty(sender) || "-1".equals(sender))
+        {
+            sender = HelperFriend.resolve_name_for_pubkey(message.tox_group_peer_pubkey, "");
+        }
+        if (TextUtils.isEmpty(sender))
+        {
+            return body;
+        }
+        return context.getString(R.string.chat_list_preview_sender, sender, body);
+    }
+
     private static String format_message_preview(final Context context, final String text,
                                                  final String filename, final boolean outgoing)
     {
-        String body = text;
+        final String body = format_message_body(context, text, filename);
+        if (outgoing)
+        {
+            return context.getString(R.string.chat_list_preview_you, body);
+        }
+        return body;
+    }
+
+    private static String format_message_body(final Context context, final String text, final String filename)
+    {
+        String body = sanitize_preview_body(text);
         if (TextUtils.isEmpty(body))
         {
             if (!TextUtils.isEmpty(filename))
             {
-                body = context.getString(R.string.chat_list_preview_file);
+                body = media_preview_label(context, filename, text);
             }
             else
             {
                 body = context.getString(R.string.chat_list_preview_empty);
             }
         }
-        body = body.replace('\n', ' ').trim();
-        if (body.length() > 120)
+        else if (!TextUtils.isEmpty(filename)
+                && (isVoiceMessagePath(filename) || isVoiceMessagePath(body)))
         {
-            body = body.substring(0, 117) + "...";
+            body = context.getString(R.string.voice_message_label);
         }
-        if (outgoing)
+        else if (!TextUtils.isEmpty(filename) && body.startsWith("[KQ|"))
         {
-            return context.getString(R.string.chat_list_preview_you, body);
+            body = media_preview_label(context, filename, text);
         }
-        return body;
+
+        return truncate_preview(body);
+    }
+
+    private static String media_preview_label(final Context context, final String filename, final String text)
+    {
+        if (isVoiceMessagePath(filename) || isVoiceMessagePath(text)
+                || isVoiceMessagePath(display_name_from_message_text(text)))
+        {
+            return context.getString(R.string.voice_message_label);
+        }
+
+        final String mime = guess_mime_type_from_filename(
+                !TextUtils.isEmpty(filename) ? filename : display_name_from_message_text(text));
+        if (mime != null && mime.startsWith("image/"))
+        {
+            return context.getString(R.string.media_label_photo);
+        }
+        if (mime != null && mime.startsWith("video/"))
+        {
+            return context.getString(R.string.media_label_video);
+        }
+        if (mime != null && mime.startsWith("audio/"))
+        {
+            return context.getString(R.string.voice_message_label);
+        }
+        return context.getString(R.string.chat_list_preview_file);
     }
 }

@@ -373,6 +373,10 @@ public class HelperRelay
             Log.w(TAG, "notification token rejected by whitelist");
             return;
         }
+        if (orma == null)
+        {
+            return;
+        }
 
         own_push_token_load();
         final String current = get_g_opts(NOTIFICATION_TOKEN_DB_KEY);

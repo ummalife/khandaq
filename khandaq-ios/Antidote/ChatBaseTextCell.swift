@@ -25,7 +25,10 @@ class ChatBaseTextCell: ChatMovableDateCell {
 
         canBeCopied = true
         bubbleView.onLocationTap = nil
+        bubbleView.onReplyQuoteTap = nil
         bubbleView.setLocationMapImage(nil)
+        bubbleView.bindReplyQuote(textModel.replyMeta, theme: theme)
+        bubbleView.onReplyQuoteTap = textModel.onReplyQuoteTap
 
         if textModel.hasLocation,
            let latitude = textModel.locationLatitude,
@@ -37,7 +40,23 @@ class ChatBaseTextCell: ChatMovableDateCell {
             loadLocationMapSnapshot(latitude: latitude, longitude: longitude)
         }
         else {
-            bubbleView.text = textModel.message
+            if let highlight = textModel.searchHighlight, !highlight.isEmpty {
+                bubbleView.attributedText = MessageSearchHighlighter.highlightedText(
+                        textModel.message,
+                        query: highlight,
+                        textColor: theme.colorForType(.NormalText))
+            }
+            else if !textModel.mentionHandles.isEmpty {
+                bubbleView.attributedText = GroupMentionHelper.attributedMessage(
+                    textModel.message,
+                    mentionHandles: textModel.mentionHandles,
+                    textColor: theme.colorForType(.NormalText),
+                    mentionColor: theme.colorForType(.LinkText),
+                    font: bubbleView.font ?? UIFont.preferredFont(forTextStyle: .body))
+            }
+            else {
+                bubbleView.text = textModel.message
+            }
         }
 
         bubbleView.textColor = theme.colorForType(.NormalText)

@@ -30,3 +30,31 @@
 "pin_failed_attempts" = "Denemeler başarısız: %@";
 "pin_logout_message" = "Çok fazla başarısız deneme. Çıkış yapıldı.";
 "pin_enabled" = "PIN aktif et";
+"group_live_audio_toggle" = "Canlı ses";
+"group_live_video_toggle" = "Canlı video";
+"group_live_video_quality_toggle" = "Video kalitesi";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "Sesli mesaj kaydetmek için mikrofon düğmesine basılı tutun";
+"group_live_video_toggle_active" = "Canlı video etkin";
+"group_live_video_toggle_incoming" = "Gelen canlı video";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Grup videosuna katıl?";
+"group_video_join_message" = "Videonuzu ve sesinizi gruptaki herkese gönder?";
+"group_video_join_confirm" = "Evet, videoyu başlat";
+"group_video_join_decline" = "Hayır";
+"group_send_voice_confirm_title" = "Sesli mesaj gönder?";
+"group_send_voice_confirm_message" = "Bu sesli mesajı gruba gönder?";
+"group_incoming_message_error" = "Gelen grup mesajı işlenemedi.";
+"group_image_shrink_failed" = "Görüntü gönderime hazırlanamadı.";
+"group_incoming_file_error" = "Gelen grup dosyası işlenemedi.";
+"chat_file_too_large" = "Dosya çok büyük.";
+"chat_incoming_file_too_large" = "Gelen dosya çok büyük.";
+"chat_opening_file_failed" = "Dosya açılamadı.";
+"group_file_prepare_failed" = "Dosya gönderime hazırlanamadı.";
+"group_peer_unknown" = "Bilinmiyor";
+"group_live_video_stream_unknown_peer" = "Bilinmiyor";
+
+"microphone_access_denied_message" = "Mikrofon erişimi kapalı. Bu özelliği kullanmak için Ayarlar'dan mikrofona izin verin.";

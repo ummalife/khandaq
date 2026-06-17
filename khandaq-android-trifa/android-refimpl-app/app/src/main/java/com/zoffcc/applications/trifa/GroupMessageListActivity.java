@@ -149,8 +149,7 @@ import static com.zoffcc.applications.trifa.HelperGroup.ngc_set_video_call_icon;
 import static com.zoffcc.applications.trifa.HelperGroup.ngc_set_video_info_text;
 import static com.zoffcc.applications.trifa.HelperGroup.ngc_update_video_incoming_peer_list;
 import static com.zoffcc.applications.trifa.HelperGroup.ngc_update_video_incoming_peer_list_ts;
-import static com.zoffcc.applications.trifa.HelperGroup.send_group_image;
-import static com.zoffcc.applications.trifa.HelperGroup.shrink_group_outgoing_file;
+import static com.zoffcc.applications.trifa.HelperGroup.send_group_file;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_name__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_public_key__wrapper;
@@ -177,9 +176,14 @@ import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_titl
 import static com.zoffcc.applications.trifa.HelperGroup.group_send_failure_reason;
 import static com.zoffcc.applications.trifa.HelperGroup.group_send_precheck_failure_reason;
 import static com.zoffcc.applications.trifa.HelperGroup.send_group_text_message_resilient;
+import static com.zoffcc.applications.trifa.HelperGroup.GROUP_SEND_QUEUE_WHEN_UNCONNECTED;
+import static com.zoffcc.applications.trifa.HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX;
+import static com.zoffcc.applications.trifa.HelperGroup.schedule_pending_group_message_flush;
+import static com.zoffcc.applications.trifa.HelperGroup.should_refresh_group_connect_header;
 import static com.zoffcc.applications.trifa.HelperGroup.GroupMemberDisplay;
 import static com.zoffcc.applications.trifa.HelperGroup.collect_group_members_for_display;
 import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
+import static com.zoffcc.applications.trifa.HelperGroup.is_group_mesh_degraded;
 import static com.zoffcc.applications.trifa.HelperGroup.lookup_group_peer_by_pubkey;
 import static com.zoffcc.applications.trifa.HelperGroup.format_group_member_status_line;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
@@ -205,12 +209,12 @@ import static com.zoffcc.applications.trifa.MainActivity.toxav_ngc_video_decode;
 import static com.zoffcc.applications.trifa.MainActivity.toxav_ngc_video_encode;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FT_OUTGOING_FILESIZE_BYTE_USE_STORAGE_FRAMEWORK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HIGHER_NGC_VIDEO_BITRATE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HIGHER_NGC_VIDEO_QUANTIZER;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOWER_NGC_VIDEO_BITRATE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LOWER_NGC_VIDEO_QUANTIZER;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.MAX_NGC_AUDIO_RECORDING_MSG_SECONDS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NGC_AUDIO_PCM_BUFFER_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NGC_AUDIO_PCM_BUFFER_SAMPLES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NGC_NEW_PEERS_TIMEDELTA_IN_MS;
@@ -236,6 +240,7 @@ public class GroupMessageListActivity extends AppCompatActivity
     String group_id_prev = "-1";
     //
     static com.vanniktech.emoji.EmojiEditText ml_new_group_message = null;
+    private GroupMentionInputController groupMentionInputController = null;
     EmojiPopup emojiPopup = null;
     ImageView insert_emoji = null;
     TextView ml_maintext = null;
@@ -253,6 +258,7 @@ public class GroupMessageListActivity extends AppCompatActivity
     static long last_video_seq_num = -1;
     static BarLevelDrawable ngc_audio_bar_in_v = null;
     static BarLevelDrawable ngc_audio_bar_out_v = null;
+    private Runnable pendingNgcPermissionAction = null;
     //
     static GroupGroupAudioService ngc_group_audio_service = null;
     public static String ngc_channelId = "";
@@ -283,11 +289,10 @@ public class GroupMessageListActivity extends AppCompatActivity
     ImageButton ml_phone_icon = null;
     ImageButton ml_button_01 = null;
     ImageButton ml_button_recaudio = null;
-    ImageButton audio_rec_popup_button = null;
-    static TextView audio_rec_popup_time = null;
-    static ViewGroup audio_rec_popup_container = null;
+    static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
     static boolean ml_is_recording = false;
     static boolean ml_is_rec_ok = false;
+    static volatile String ml_voice_recording_temp_path = null;
     static ImageButton ml_video_icon = null;
     static boolean sending_video_to_group = false;
     static String ngc_video_showing_video_from_peer_pubkey = "-1";
@@ -304,6 +309,8 @@ public class GroupMessageListActivity extends AppCompatActivity
     static ScriptIntrinsicYuvToRGB ngc_own_yuvToRgb = null;
     static boolean attachemnt_instead_of_send = true;
     static final int MEDIAPICK_ID_001 = 8004;
+
+    private boolean mediaPreviewResultHandled = false;
     static ActionMode amode = null;
     static MenuItem amode_save_menu_item = null;
     static MenuItem amode_info_menu_item = null;
@@ -341,14 +348,15 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     Handler group_handler = null;
     static Handler group_handler_s = null;
+    private Runnable group_connect_header_refresh_runnable = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         oncreate_finished = false;
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
         super.onCreate(savedInstanceState);
-        Log.i(TAG, "onCreate:002");
+        HelperGeneric.logI(TAG, "onCreate:002");
 
         // ---------- video stuff ----------
         final int ngc_frame_width_px = 480; // + 32; // 240 + 16;
@@ -424,7 +432,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 group_id = saved_group_id;
             }
         }
-        // Log.i(TAG, "onCreate:003:conf_id=" + conf_id + " conf_id_prev=" + conf_id_prev);
+        // HelperGeneric.logI(TAG, "onCreate:003:conf_id=" + conf_id + " conf_id_prev=" + conf_id_prev);
         group_id_prev = group_id;
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -435,7 +443,6 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        HelperToolbar.enableUpNavigation(this, toolbar);
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         final Drawable drawer_header_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group).color(
@@ -467,14 +474,13 @@ public class GroupMessageListActivity extends AppCompatActivity
         // create the drawer and remember the `Drawer` result object
         group_message_drawer = new DrawerBuilder().withActivity(this).withAccountHeader(
                 group_message_drawer_header).withInnerShadow(false).withRootView(
-                R.id.drawer_container).withShowDrawerOnFirstLaunch(false).withActionBarDrawerToggleAnimated(
-                true).withActionBarDrawerToggle(true).withToolbar(toolbar).withTranslucentStatusBar(
+                R.id.drawer_container).withShowDrawerOnFirstLaunch(false).withTranslucentStatusBar(
                 false).withOnDrawerItemClickListener(new Drawer.OnDrawerItemClickListener()
         {
             @Override
             public boolean onItemClick(View view, int position, IDrawerItem drawerItem)
             {
-                Log.i(TAG, "drawer:item=" + position);
+                HelperGeneric.logI(TAG, "drawer:item=" + position);
                 if (position == 1)
                 {
                     // profile
@@ -489,6 +495,8 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return true;
             }
         }).build();
+
+        HelperToolbar.enableUpNavigation(this, toolbar);
 
         try
         {
@@ -506,6 +514,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_group_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
         HelperGeneric.apply_chat_input_field_style(ml_new_group_message);
+        ChatReplyPreviewController.bind(this, ml_new_group_message);
+        groupMentionInputController = new GroupMentionInputController();
+        groupMentionInputController.bind(this, ml_new_group_message, findViewById(R.id.emoji_bar),
+                () -> group_id);
 
         messageSearchView = (SearchView) findViewById(R.id.group_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -572,12 +584,21 @@ public class GroupMessageListActivity extends AppCompatActivity
         ngc_audio_bar_in_v = (BarLevelDrawable) findViewById(R.id.ngc_audio_bar_in_v);
         ngc_audio_bar_out_v = (BarLevelDrawable) findViewById(R.id.ngc_audio_bar_out_v);
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
-        audio_rec_popup_button = findViewById(R.id.audio_rec_popup_button);
-        audio_rec_popup_time = findViewById(R.id.audio_rec_popup_time);
-        audio_rec_popup_container = findViewById(R.id.audio_rec_popup_container);
+        voiceRecordingUiHelper = ChatVoiceRecordingUiHelper.bind(findViewById(R.id.emoji_bar),
+                new ChatVoiceRecordingUiHelper.RecordingActionListener()
+                {
+                    @Override
+                    public void onSend()
+                    {
+                        signal_group_voice_recording_send();
+                    }
 
-        audio_rec_popup_container.setVisibility(View.GONE);
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
+                    @Override
+                    public void onCancel()
+                    {
+                        signal_group_voice_recording_cancel();
+                    }
+                });
 
         ml_is_recording = false;
         ml_is_rec_ok = false;
@@ -616,14 +637,14 @@ public class GroupMessageListActivity extends AppCompatActivity
             final Drawable d5 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_front).backgroundColor(
                     Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
             ngc_camera_toggle_button.setImageDrawable(d5);
-            Log.i(TAG, "ngc_active_camera_type(5)=" + ngc_active_camera_type);
+            HelperGeneric.logI(TAG, "ngc_active_camera_type(5)=" + ngc_active_camera_type);
         }
         else
         {
             final Drawable d6 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(
                     Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
             ngc_camera_toggle_button.setImageDrawable(d6);
-            Log.i(TAG, "ngc_active_camera_type(6)=" + ngc_active_camera_type);
+            HelperGeneric.logI(TAG, "ngc_active_camera_type(6)=" + ngc_active_camera_type);
         }
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
@@ -651,7 +672,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 if (event.getAction() != MotionEvent.ACTION_UP)
                 {
-                    Log.i(TAG, "active_camera_type(7)=" + ngc_active_camera_type);
+                    HelperGeneric.logI(TAG, "active_camera_type(7)=" + ngc_active_camera_type);
 
                     if (ngc_active_camera_type == NGC_FRONT_CAMERA_USED)
                     {
@@ -670,7 +691,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 }
                 else
                 {
-                    Log.i(TAG, "ngc_active_camera_type(8)=" + ngc_active_camera_type);
+                    HelperGeneric.logI(TAG, "ngc_active_camera_type(8)=" + ngc_active_camera_type);
 
                     if (ngc_active_camera_type == NGC_FRONT_CAMERA_USED)
                     {
@@ -692,12 +713,12 @@ public class GroupMessageListActivity extends AppCompatActivity
                         if (ngc_active_camera_type == NGC_FRONT_CAMERA_USED)
                         {
                             ngc_active_camera_type = NGC_BACK_CAMERA_USED;
-                            Log.i(TAG, "ngc_active_camera_type(8a)=" + ngc_active_camera_type);
+                            HelperGeneric.logI(TAG, "ngc_active_camera_type(8a)=" + ngc_active_camera_type);
                         }
                         else
                         {
                             ngc_active_camera_type = NGC_FRONT_CAMERA_USED;
-                            Log.i(TAG, "ngc_active_camera_type(8b)=" + ngc_active_camera_type);
+                            HelperGeneric.logI(TAG, "ngc_active_camera_type(8b)=" + ngc_active_camera_type);
                         }
                         closeCamera();
 
@@ -993,13 +1014,13 @@ public class GroupMessageListActivity extends AppCompatActivity
                         {
                             PREF__ngc_video_bitrate = HIGHER_NGC_VIDEO_BITRATE;
                             PREF__ngc_video_max_quantizer = HIGHER_NGC_VIDEO_QUANTIZER;
-                            Log.i(TAG, "PREF__ngc_video_bitrate(8a)=" + PREF__ngc_video_bitrate);
+                            HelperGeneric.logI(TAG, "PREF__ngc_video_bitrate(8a)=" + PREF__ngc_video_bitrate);
                         }
                         else
                         {
                             PREF__ngc_video_bitrate = LOWER_NGC_VIDEO_BITRATE;
                             PREF__ngc_video_max_quantizer = LOWER_NGC_VIDEO_QUANTIZER;
-                            Log.i(TAG, "PREF__ngc_video_bitrate(8b)=" + PREF__ngc_video_bitrate);
+                            HelperGeneric.logI(TAG, "PREF__ngc_video_bitrate(8b)=" + PREF__ngc_video_bitrate);
                         }
                     }
                     catch (Exception e)
@@ -1016,7 +1037,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         final Drawable d3 = new IconicsDrawable(this).icon(FontAwesome.Icon.faw_video).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
         ml_video_icon.setImageDrawable(d3);
         ngc_video_view_container.setVisibility(View.GONE);
 
@@ -1034,7 +1055,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (membersIcon != null)
         {
             final Drawable membersDrawable = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group).color(
-                    getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                    getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
             membersIcon.setImageDrawable(membersDrawable);
             membersIcon.setOnClickListener(v ->
             {
@@ -1066,7 +1087,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             @Override
             public boolean onQueryTextSubmit(String query)
             {
-                // Log.i(TAG, "search:1:" + query);
+                // HelperGeneric.logI(TAG, "search:1:" + query);
 
                 if ((query == null) || (query.length() == 0))
                 {
@@ -1101,7 +1122,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             @Override
             public boolean onQueryTextChange(String query)
             {
-                // Log.i(TAG, "search:2:" + query);
+                // HelperGeneric.logI(TAG, "search:2:" + query);
 
                 if ((query == null) || (query.length() == 0))
                 {
@@ -1157,41 +1178,12 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_attachment).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
         final Drawable send_message_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_send).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
+        final Drawable mic_icon = getResources().getDrawable(R.drawable.baseline_keyboard_voice_24);
 
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-        attachemnt_instead_of_send = true;
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-        ml_button_01.setImageDrawable(add_attachement_icon);
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
-        ml_new_group_message.addTextChangedListener(new TextWatcher()
-        {
-            public void afterTextChanged(Editable s)
-            {
-                if (HelperGeneric.has_sendable_chat_text(s))
-                {
-                    attachemnt_instead_of_send = false;
-                    ml_button_01.setImageDrawable(send_message_icon);
-                }
-                else
-                {
-                    attachemnt_instead_of_send = true;
-                    ml_button_01.setImageDrawable(add_attachement_icon);
-                }
-            }
-
-            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2)
-            {
-            }
-
-            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2)
-            {
-            }
-        });
-
+        ChatInputBarHelper.setupAttachButton(ml_button_01, add_attachement_icon, v -> send_attatchment(v));
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
@@ -1211,6 +1203,8 @@ public class GroupMessageListActivity extends AppCompatActivity
             initializeScreenshotSecurity(this);
         }
 
+        ChatInputBarHelper.bindMicSendTextWatcher(ml_new_group_message, ml_button_recaudio, mic_icon, send_message_icon);
+
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         set_peer_count_header();
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -1222,336 +1216,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             @Override
             public boolean onLongClick(View v)
             {
-
-                if (ml_is_rec_ok)
-                {
-                    return false;
-                }
-
-                if (ml_is_recording)
-                {
-                    return false;
-                }
-
-                // display_toast("LONG", false, 0);
-                final Thread ml_rec_audio_thread = new Thread()
-                {
-                    @Override
-                    public void run()
-                    {
-                        String audio_rec_filename_final = null;
-                        ml_is_recording = true;
-                        ml_is_rec_ok = false;
-                        ((ImageButton) v).setImageResource(R.drawable.baseline_stop_circle_24);
-                        v.setBackgroundColor(Color.parseColor("#FF0000"));
-
-                        set_recording_pop_text_s("0:00");
-                        set_recording_pop_visibilty_s(true);
-
-                        try
-                        {
-                            Log.i(TAG, "onCreate:record_audio:start");
-                            AudioRecorder mAudioRecorder = AudioRecorder.getInstance();
-                            File rec_dir = new File(SD_CARD_TMP_DIR);
-                            if (!rec_dir.exists() && !rec_dir.mkdirs())
-                            {
-                                rec_dir = v.getContext().getCacheDir();
-                            }
-                            final String rec_base_dir = rec_dir.getAbsolutePath();
-                            String audio_rec_filename = rec_base_dir + "/" + group_id + "_" + System.nanoTime();
-                            String audio_rec_filename_uniq_part = get_uniq_tmp_filename(audio_rec_filename, 1000);
-                            audio_rec_filename_final =
-                                    audio_rec_filename + "_" + audio_rec_filename_uniq_part + ".file.m4a";
-                            File f = new File(audio_rec_filename_final);
-                            boolean file_exists = true;
-                            try
-                            {
-                                file_exists = f.exists();
-                            }
-                            catch (Exception e)
-                            {
-                                ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                v.setBackgroundColor(Color.TRANSPARENT);
-                                set_recording_pop_visibilty_s(false);
-                                ml_is_recording = false;
-                                ml_is_rec_ok = false;
-                                return;
-                            }
-
-                            long count = 0;
-                            while (file_exists)
-                            {
-                                audio_rec_filename = rec_base_dir + "/" + group_id + "_" + System.nanoTime();
-                                audio_rec_filename_uniq_part = get_uniq_tmp_filename(audio_rec_filename, 1000);
-                                audio_rec_filename_final =
-                                        audio_rec_filename + "_" + audio_rec_filename_uniq_part + ".file.m4a";
-                                f = new File(audio_rec_filename_final);
-                                try
-                                {
-                                    file_exists = f.exists();
-                                }
-                                catch (Exception e)
-                                {
-                                    ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                    v.setBackgroundColor(Color.TRANSPARENT);
-                                    set_recording_pop_visibilty_s(false);
-                                    ml_is_recording = false;
-                                    ml_is_rec_ok = false;
-                                    return;
-                                }
-
-                                try
-                                {
-                                    Thread.sleep(50);
-                                }
-                                catch (Exception e)
-                                {
-                                }
-                                count++;
-
-                                if (count > 50)
-                                {
-                                    // HINT: just in case of an endless loop, we return here
-                                    ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                    v.setBackgroundColor(Color.TRANSPARENT);
-                                    set_recording_pop_visibilty_s(false);
-                                    ml_is_recording = false;
-                                    ml_is_rec_ok = false;
-                                    return;
-                                }
-                            }
-
-                            File mAudioFile = new File(audio_rec_filename_final);
-                            // Log.i(TAG, "onCreate:record_audio:file=" + audio_rec_filename_final);
-                            try
-                            {
-                                mAudioRecorder.prepareRecord(MediaRecorder.AudioSource.MIC,
-                                                             MediaRecorder.OutputFormat.MPEG_4,
-                                                             MediaRecorder.AudioEncoder.AAC, 44100, 20000,
-                                                             // HINT: do NOT use higher bitrate. or the file will be too large for NGC FT
-                                                             mAudioFile);
-                            }
-                            catch (Exception prepare_error)
-                            {
-                                Log.i(TAG, "onCreate:record_audio:prepare:EE:" + prepare_error.getMessage());
-                                ml_is_recording = false;
-                                ml_is_rec_ok = false;
-                                return;
-                            }
-                            boolean rec_start_result = mAudioRecorder.startRecord();
-                            if (!rec_start_result)
-                            {
-                                // HINT: some problem on starting the recording
-                                ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                v.setBackgroundColor(Color.TRANSPARENT);
-                                set_recording_pop_visibilty_s(false);
-                                ml_is_recording = false;
-                                ml_is_rec_ok = false;
-                                return;
-                            }
-
-                            while (ml_is_recording)
-                            {
-                                try
-                                {
-                                    Thread.sleep(200);
-                                }
-                                catch (Exception ignored)
-                                {
-                                }
-
-                                set_recording_pop_text_s(seconds_time_format_or_empty(mAudioRecorder.progress()));
-
-                                if (mAudioRecorder.progress() > MAX_NGC_AUDIO_RECORDING_MSG_SECONDS)
-                                {
-                                    // HINT: stop after x seconds of recording so it does not record endless
-                                    Log.i(TAG, "onCreate:record_audio:auto_stop");
-                                    ml_is_rec_ok = true;
-                                    ml_is_recording = false;
-                                }
-                            }
-                            ((ImageButton) v).setImageResource(R.drawable.baseline_pending_24);
-                            v.setBackgroundColor(Color.TRANSPARENT);
-                            set_recording_pop_visibilty_s(false);
-                            int rec_result = mAudioRecorder.stopRecord();
-                            Log.i(TAG, "onCreate:record_audio:finished:res=" + rec_result);
-                            if (rec_result == -1)
-                            {
-                                ml_is_rec_ok = false;
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            Log.i(TAG, "onCreate:record_audio:EE:" + e.getMessage());
-                            e.printStackTrace();
-                            ml_is_recording = false;
-                            ml_is_rec_ok = false;
-                        }
-                        ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                        v.setBackgroundColor(Color.TRANSPARENT);
-                        set_recording_pop_visibilty_s(false);
-
-                        if (ml_is_rec_ok)
-                        {
-                            Log.i(TAG, "onCreate:record_audio:------ OK ------");
-                            Log.i(TAG, "onCreate:record_audio:------ OK ------");
-                            Log.i(TAG, "onCreate:record_audio:------ OK ------");
-
-                            String audio_rec_filename_final_s = audio_rec_filename_final;
-                            try
-                            {
-                                ((Activity) v.getContext()).runOnUiThread(new Runnable()
-                                {
-                                    @Override
-                                    public void run()
-                                    {
-                                        try
-                                        {
-                                            final AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
-                                            builder.setMessage(
-                                                    "Do you want to send this Audio Message to the Group?").setTitle(
-                                                    "Send Audio?").setCancelable(false).setPositiveButton("OK",
-                                                                                                          new DialogInterface.OnClickListener()
-                                                                                                          {
-                                                                                                              public void onClick(DialogInterface dialog, int id)
-                                                                                                              {
-                                                                                                                  try
-                                                                                                                  {
-                                                                                                                      if (audio_rec_filename_final_s !=
-                                                                                                                          null)
-                                                                                                                      {
-                                                                                                                          Log.i(TAG,
-                                                                                                                                "onCreate:record_audio:add to FT queue ...");
-                                                                                                                          File f2 = new File(
-                                                                                                                                  audio_rec_filename_final_s);
-                                                                                                                          Log.i(TAG,
-                                                                                                                                "onCreate:record_audio:file_size_in_bytes=" +
-                                                                                                                                f2.length());
-                                                                                                                          add_outgoing_file(
-                                                                                                                                  v.getContext(),
-                                                                                                                                  MainActivity.group_message_list_activity.get_current_group_id(),
-                                                                                                                                  f2.getParent(),
-                                                                                                                                  f2.getName(),
-                                                                                                                                  null,
-                                                                                                                                  f2.length(),
-                                                                                                                                  false,
-                                                                                                                                  true,
-                                                                                                                                  true);
-
-                                                                                                                          try
-                                                                                                                          {
-                                                                                                                              new File(
-                                                                                                                                      audio_rec_filename_final_s).delete();
-                                                                                                                          }
-                                                                                                                          catch (Exception ignored)
-                                                                                                                          {
-                                                                                                                          }
-                                                                                                                          ml_is_rec_ok = false;
-                                                                                                                          ml_is_recording = false;
-                                                                                                                      }
-                                                                                                                  }
-                                                                                                                  catch (Exception e)
-                                                                                                                  {
-                                                                                                                      e.printStackTrace();
-                                                                                                                  }
-                                                                                                                  dialog.dismiss();
-                                                                                                              }
-                                                                                                          }).setNegativeButton(
-                                                    "Cancel", new DialogInterface.OnClickListener()
-                                                    {
-                                                        public void onClick(DialogInterface dialog, int id)
-                                                        {
-                                                            try
-                                                            {
-                                                                new File(audio_rec_filename_final_s).delete();
-                                                            }
-                                                            catch (Exception ignored)
-                                                            {
-                                                            }
-                                                            ml_is_rec_ok = false;
-                                                            ml_is_recording = false;
-                                                        }
-                                                    });
-
-                                            final AlertDialog alert = builder.create();
-                                            alert.show();
-                                        }
-                                        catch (Exception ee2)
-                                        {
-
-                                        }
-                                    }
-                                });
-                            }
-                            catch (Exception ee1)
-                            {
-                            }
-                        }
-                    }
-                };
-                ml_rec_audio_thread.start();
-
-                return true;
-            }
-        });
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
-        audio_rec_popup_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(final View v)
-            {
-                if (ml_is_rec_ok)
-                {
-                    return;
-                }
-
-                if (ml_is_recording)
-                {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
-                    return;
-                }
-            }
-        });
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
-        audio_rec_popup_time.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(final View v)
-            {
-                if (ml_is_rec_ok)
-                {
-                    return;
-                }
-
-                if (ml_is_recording)
-                {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
-                    return;
-                }
-            }
-        });
-        if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-
-        audio_rec_popup_container.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(final View v)
-            {
-                if (ml_is_rec_ok)
-                {
-                    return;
-                }
-
-                if (ml_is_recording)
-                {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
-                    return;
-                }
+                return start_group_voice_message_recording(v);
             }
         });
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -1568,19 +1233,23 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                 if (ml_is_recording)
                 {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
+                    signal_group_voice_recording_send();
                     return;
                 }
 
-                display_toast(v.getContext().getString(R.string.MessageListActivity_longpress_to_record_audiomsg),
-                              false, 0);
+                if (ChatInputBarHelper.isSendMode((ImageButton) v))
+                {
+                    send_message_onclick(null);
+                    return;
+                }
+
+                start_group_voice_message_recording(v);
             }
         });
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
-        Log.i(TAG, "onCreate:099");
+        HelperGeneric.logI(TAG, "onCreate:099");
         oncreate_finished = true;
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
     }
@@ -1725,17 +1394,57 @@ public class GroupMessageListActivity extends AppCompatActivity
         sync_group_drawer_peers(all_peers);
     }
 
+    private void start_group_connect_header_refresh()
+    {
+        stop_group_connect_header_refresh();
+        if (group_handler == null)
+        {
+            return;
+        }
+        group_connect_header_refresh_runnable = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                set_peer_count_header();
+                set_group_connection_status_icon();
+                if (should_refresh_group_connect_header(group_id) && group_handler != null)
+                {
+                    group_handler.postDelayed(this, 2000L);
+                }
+            }
+        };
+        group_handler.postDelayed(group_connect_header_refresh_runnable, 2000L);
+    }
+
+    private void stop_group_connect_header_refresh()
+    {
+        if (group_handler != null && group_connect_header_refresh_runnable != null)
+        {
+            group_handler.removeCallbacks(group_connect_header_refresh_runnable);
+        }
+        group_connect_header_refresh_runnable = null;
+    }
+
     @Override
     protected void onPause()
     {
-        Log.i(TAG, "onPause");
+        HelperGeneric.logI(TAG, "onPause");
         super.onPause();
+        if (groupMentionInputController != null)
+        {
+            groupMentionInputController.dismiss();
+        }
+        stop_group_connect_header_refresh();
 
         ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
+                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
-        set_recording_pop_visibilty_s(false);
+        stop_group_voice_recording_ui();
         ml_is_recording = false;
         ml_is_rec_ok = false;
+        delete_group_voice_recording_temp_file();
 
         // HINT: here we leave the GroupMessageListActivity
         //       but it could be that we are starting the CallingActivity because there is an icoming call
@@ -1765,9 +1474,9 @@ public class GroupMessageListActivity extends AppCompatActivity
         catch (Exception ignored)
         {
         }
-        // Log.i(TAG, "onPause:001:conf_id=" + conf_id);
+        // HelperGeneric.logI(TAG, "onPause:001:conf_id=" + conf_id);
         group_id = "-1";
-        // Log.i(TAG, "onPause:002:conf_id=" + conf_id);
+        // HelperGeneric.logI(TAG, "onPause:002:conf_id=" + conf_id);
     }
 
     @Override
@@ -1788,9 +1497,12 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         super.onStop();
         ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
+                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
         ml_is_recording = false;
         ml_is_rec_ok = false;
+        delete_group_voice_recording_temp_file();
     }
 
     void apply_chat_header()
@@ -1808,7 +1520,7 @@ public class GroupMessageListActivity extends AppCompatActivity
     @Override
     protected void onResume()
     {
-        Log.i(TAG, "onResume");
+        HelperGeneric.logI(TAG, "onResume");
         super.onResume();
         apply_chat_header();
 
@@ -1834,7 +1546,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         try
         {
             na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
-            Log.i(TAG, "NGC:PREF__audio_play_volume_percent=" + PREF__audio_play_volume_percent);
+            HelperGeneric.logI(TAG, "NGC:PREF__audio_play_volume_percent=" + PREF__audio_play_volume_percent);
         }
         catch (Exception ee)
         {
@@ -1842,12 +1554,12 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
-        // Log.i(TAG, "onResume:001:conf_id=" + conf_id);
+        // HelperGeneric.logI(TAG, "onResume:001:conf_id=" + conf_id);
 
         if (group_id.equals("-1"))
         {
             group_id = group_id_prev;
-            // Log.i(TAG, "onResume:001:conf_id=" + conf_id);
+            // HelperGeneric.logI(TAG, "onResume:001:conf_id=" + conf_id);
         }
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -1856,6 +1568,9 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         MainActivity.group_message_list_activity = this;
         wakeup_tox_thread();
+        HelperGroup.on_group_chat_foreground(group_id);
+        set_peer_count_header();
+        start_group_connect_header_refresh();
         try
         {
             ensure_group_in_tox(group_id);
@@ -1879,13 +1594,13 @@ public class GroupMessageListActivity extends AppCompatActivity
             @Override
             public void run()
             {
-                Log.i(TAG, "NGC_Group_video_check_incoming_thread:starting ...");
-                Log.i(TAG, "NGC_Group_video_check_incoming_thread_running:true:003");
+                HelperGeneric.logI(TAG, "NGC_Group_video_check_incoming_thread:starting ...");
+                HelperGeneric.logI(TAG, "NGC_Group_video_check_incoming_thread_running:true:003");
                 while (NGC_Group_video_check_incoming_thread_running)
                 {
                     try
                     {
-                        // Log.i(TAG, "NGC_Group_video_check_incoming_thread:running --=> " + (ngc_video_packet_last_incoming_ts + (2 * 1000)) + " " + System.currentTimeMillis());
+                        // HelperGeneric.logI(TAG, "NGC_Group_video_check_incoming_thread:running --=> " + (ngc_video_packet_last_incoming_ts + (2 * 1000)) + " " + System.currentTimeMillis());
                         ngc_update_video_incoming_peer_list_ts();
                         if ((ngc_video_packet_last_incoming_ts + (2 * 1000)) < System.currentTimeMillis())
                         {
@@ -1918,7 +1633,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                 if ((peer_name_txt == null) || (peer_name_txt.equals("")) ||
                                     (peer_name_txt.equals("-1")))
                                 {
-                                    peer_name_txt = "Unknown";
+                                    peer_name_txt = getString(R.string.group_peer_unknown);
                                 }
                             }
                             if (lookup_ngc_incoming_video_peer_list.isEmpty())
@@ -1946,7 +1661,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                         e.printStackTrace();
                     }
                 }
-                Log.i(TAG, "NGC_Group_video_check_incoming_thread:finished");
+                HelperGeneric.logI(TAG, "NGC_Group_video_check_incoming_thread:finished");
             }
         };
         NGC_Group_video_check_incoming_thread_running = true;
@@ -1966,6 +1681,328 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
+    static void signal_group_voice_recording_send()
+    {
+        ml_is_rec_ok = true;
+        ml_is_recording = false;
+        stop_group_voice_recording_ui();
+    }
+
+    static void signal_group_voice_recording_cancel()
+    {
+        ml_is_rec_ok = false;
+        ml_is_recording = false;
+        stop_group_voice_recording_ui();
+    }
+
+    static void stop_group_voice_recording_ui()
+    {
+        set_recording_pop_visibilty_s(false);
+    }
+
+    static void delete_group_voice_recording_temp_file()
+    {
+        final String path = ml_voice_recording_temp_path;
+        ml_voice_recording_temp_path = null;
+        if (path != null)
+        {
+            try
+            {
+                new File(path).delete();
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    static String resolve_group_id_for_voice_send()
+    {
+        if ((group_id != null) && (!group_id.equals("-1")))
+        {
+            return group_id;
+        }
+        if (MainActivity.group_message_list_activity != null)
+        {
+            final String prev = MainActivity.group_message_list_activity.group_id_prev;
+            if ((prev != null) && (!prev.equals("-1")))
+            {
+                return prev;
+            }
+        }
+        return "-1";
+    }
+
+    static void send_group_voice_recording_file(final Context context, final String audio_rec_filename_final)
+    {
+        if ((audio_rec_filename_final == null) || (audio_rec_filename_final.length() < 10))
+        {
+            return;
+        }
+
+        final String groupid = resolve_group_id_for_voice_send();
+        if (groupid.equals("-1"))
+        {
+            HelperGeneric.logI(TAG, "send_group_voice_recording_file:no group id");
+            return;
+        }
+
+        try
+        {
+            final File f2 = new File(audio_rec_filename_final);
+            if (!waitForRecordedAudioFileReady(f2))
+            {
+                HelperGeneric.logI(TAG, "send_group_voice_recording_file:file not ready");
+                display_toast(context.getString(R.string.group_file_prepare_failed), true, 100);
+                return;
+            }
+
+            HelperGeneric.logI(TAG, "send_group_voice_recording_file:add to FT queue");
+            HelperGeneric.logI(TAG, "send_group_voice_recording_file:file_size_in_bytes=" + f2.length());
+            final GroupOutgoingFileHandle handle = add_outgoing_file(context, groupid, f2.getParent(), f2.getName(),
+                    null, f2.length(), false, true, true);
+            if (handle == null)
+            {
+                HelperGeneric.logI(TAG, "send_group_voice_recording_file:add_outgoing_file failed");
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "send_group_voice_recording_file:EE:" + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static boolean waitForRecordedAudioFileReady(final File file)
+    {
+        if (file == null)
+        {
+            return false;
+        }
+
+        final long deadline = System.currentTimeMillis() + 3000L;
+        long lastSize = -1L;
+        while (System.currentTimeMillis() < deadline)
+        {
+            final long size = file.length();
+            if ((size > 0L) && (size == lastSize))
+            {
+                return true;
+            }
+            lastSize = size;
+            try
+            {
+                Thread.sleep(50L);
+            }
+            catch (InterruptedException ignored)
+            {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+        return file.isFile() && file.length() > 0L;
+    }
+
+    boolean start_group_voice_message_recording(final View v)
+    {
+        if (ChatInputBarHelper.isSendMode((ImageButton) v))
+        {
+            return false;
+        }
+
+        if (ml_is_rec_ok)
+        {
+            return false;
+        }
+
+        if (ml_is_recording)
+        {
+            return false;
+        }
+
+        if (!HelperCall.hasMicrophonePermission(v.getContext()))
+        {
+            HelperCall.requestCallPermissions((Activity) v.getContext(), true);
+            HelperCall.showMissingPermissionToast(v.getContext(), true);
+            return false;
+        }
+
+        ChatVoiceSessionHelper.onVoiceRecordingStarting();
+
+        final Thread ml_rec_audio_thread = new Thread()
+        {
+            @Override
+            public void run()
+            {
+                String audio_rec_filename_final = null;
+                ml_is_recording = true;
+                ml_is_rec_ok = false;
+                ml_voice_recording_temp_path = null;
+
+                set_recording_pop_text_s("0:00");
+                set_recording_pop_visibilty_s(true);
+
+                try
+                {
+                    HelperGeneric.logI(TAG, "record_audio:start");
+                    final AudioRecorder mAudioRecorder = AudioRecorder.getInstance();
+                    File rec_dir = new File(SD_CARD_TMP_DIR);
+                    if (!rec_dir.exists() && !rec_dir.mkdirs())
+                    {
+                        rec_dir = v.getContext().getCacheDir();
+                    }
+                    final String rec_base_dir = rec_dir.getAbsolutePath();
+                    final String file_prefix = resolve_group_id_for_voice_send();
+                    String audio_rec_filename = rec_base_dir + "/" + file_prefix + "_" + System.nanoTime();
+                    String audio_rec_filename_uniq_part = get_uniq_tmp_filename(audio_rec_filename, 1000);
+                    audio_rec_filename_final =
+                            audio_rec_filename + "_" + audio_rec_filename_uniq_part + ".file.m4a";
+                    File f = new File(audio_rec_filename_final);
+                    boolean file_exists = true;
+                    try
+                    {
+                        file_exists = f.exists();
+                    }
+                    catch (Exception e)
+                    {
+                        abort_group_voice_recording(false);
+                        return;
+                    }
+
+                    long count = 0;
+                    while (file_exists)
+                    {
+                        audio_rec_filename = rec_base_dir + "/" + file_prefix + "_" + System.nanoTime();
+                        audio_rec_filename_uniq_part = get_uniq_tmp_filename(audio_rec_filename, 1000);
+                        audio_rec_filename_final =
+                                audio_rec_filename + "_" + audio_rec_filename_uniq_part + ".file.m4a";
+                        f = new File(audio_rec_filename_final);
+                        try
+                        {
+                            file_exists = f.exists();
+                        }
+                        catch (Exception e)
+                        {
+                            abort_group_voice_recording(false);
+                            return;
+                        }
+
+                        try
+                        {
+                            Thread.sleep(50);
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+                        count++;
+
+                        if (count > 50)
+                        {
+                            abort_group_voice_recording(false);
+                            return;
+                        }
+                    }
+
+                    ml_voice_recording_temp_path = audio_rec_filename_final;
+                    final File mAudioFile = new File(audio_rec_filename_final);
+                    try
+                    {
+                        mAudioRecorder.prepareRecord(MediaRecorder.AudioSource.MIC,
+                                                     MediaRecorder.OutputFormat.MPEG_4,
+                                                     MediaRecorder.AudioEncoder.AAC, 44100, 20000,
+                                                     mAudioFile);
+                    }
+                    catch (Exception prepare_error)
+                    {
+                        HelperGeneric.logI(TAG, "record_audio:prepare:EE:" + prepare_error.getMessage());
+                        abort_group_voice_recording(false);
+                        return;
+                    }
+
+                    if (!HelperCall.hasMicrophonePermission(v.getContext()))
+                    {
+                        abort_group_voice_recording(false);
+                        return;
+                    }
+
+                    final boolean rec_start_result = mAudioRecorder.startRecord();
+                    if (!rec_start_result)
+                    {
+                        abort_group_voice_recording(false);
+                        return;
+                    }
+
+                    while (ml_is_recording)
+                    {
+                        try
+                        {
+                            Thread.sleep(200);
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+
+                        if (!HelperCall.hasMicrophonePermission(v.getContext()))
+                        {
+                            ml_is_rec_ok = false;
+                            ml_is_recording = false;
+                            break;
+                        }
+
+                        set_recording_pop_text_s(seconds_time_format_or_empty(mAudioRecorder.progress()));
+                    }
+
+                    stop_group_voice_recording_ui();
+                    final int rec_result = mAudioRecorder.stopRecord();
+                    HelperGeneric.logI(TAG, "record_audio:finished:res=" + rec_result);
+                    if (rec_result == -1)
+                    {
+                        ml_is_rec_ok = false;
+                    }
+                }
+                catch (Exception e)
+                {
+                    HelperGeneric.logI(TAG, "record_audio:EE:" + e.getMessage());
+                    e.printStackTrace();
+                    ml_is_recording = false;
+                    ml_is_rec_ok = false;
+                }
+
+                stop_group_voice_recording_ui();
+                final boolean send_recording = ml_is_rec_ok;
+                ml_is_recording = false;
+                ml_is_rec_ok = false;
+
+                if (send_recording)
+                {
+                    send_group_voice_recording_file(v.getContext(), audio_rec_filename_final);
+                }
+
+                try
+                {
+                    if ((audio_rec_filename_final != null) && (audio_rec_filename_final.length() > 10))
+                    {
+                        new File(audio_rec_filename_final).delete();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+                ml_voice_recording_temp_path = null;
+            }
+        };
+        ml_rec_audio_thread.start();
+        return true;
+    }
+
+    static void abort_group_voice_recording(final boolean send)
+    {
+        ml_is_rec_ok = send;
+        ml_is_recording = false;
+        stop_group_voice_recording_ui();
+    }
+
     static void set_recording_pop_text_s(final String t)
     {
         Runnable myRunnable = new Runnable()
@@ -1975,9 +2012,9 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    if (audio_rec_popup_time != null)
+                    if (voiceRecordingUiHelper != null)
                     {
-                        audio_rec_popup_time.setText(t);
+                        voiceRecordingUiHelper.setTimerText(t);
                     }
                 }
                 catch (Exception e)
@@ -1990,6 +2027,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             group_handler_s.post(myRunnable);
         }
+        else if (MainActivity.group_message_list_activity != null)
+        {
+            MainActivity.group_message_list_activity.runOnUiThread(myRunnable);
+        }
     }
 
     static void set_recording_pop_visibilty_s(final boolean visible)
@@ -2001,15 +2042,15 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    if (audio_rec_popup_container != null)
+                    if (voiceRecordingUiHelper != null)
                     {
                         if (visible)
                         {
-                            audio_rec_popup_container.setVisibility(View.VISIBLE);
+                            voiceRecordingUiHelper.show();
                         }
                         else
                         {
-                            audio_rec_popup_container.setVisibility(View.GONE);
+                            voiceRecordingUiHelper.hide();
                         }
                     }
                 }
@@ -2022,6 +2063,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (group_handler_s != null)
         {
             group_handler_s.post(myRunnable);
+        }
+        else if (MainActivity.group_message_list_activity != null)
+        {
+            MainActivity.group_message_list_activity.runOnUiThread(myRunnable);
         }
     }
 
@@ -2042,7 +2087,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             public void onEmojiPopupShown()
             {
                 final Drawable d1 = new IconicsDrawable(getBaseContext()).icon(FontAwesome.Icon.faw_keyboard).color(
-                        getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                        getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
                 // insert_emoji.setImageResource(R.drawable.about_icon_email);
@@ -2061,7 +2106,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 final Drawable d1 = new IconicsDrawable(getBaseContext()).icon(
                         GoogleMaterial.Icon.gmd_sentiment_satisfied).color(
-                        getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                        getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
                 // insert_emoji.setImageResource(R.drawable.emoji_ios_category_people);
@@ -2081,6 +2126,50 @@ public class GroupMessageListActivity extends AppCompatActivity
         return group_id;
     }
 
+    /** Restore chat context before gallery/preview callbacks (onActivityResult runs before onResume). */
+    void prepareGroupMediaSendContext()
+    {
+        if (group_id.equals("-1") && group_id_prev != null && !group_id_prev.equals("-1"))
+        {
+            group_id = group_id_prev;
+        }
+        MainActivity.group_message_list_activity = this;
+    }
+
+    static boolean is_valid_group_id(final String id)
+    {
+        return id != null && !id.isEmpty() && !"-1".equals(id);
+    }
+
+    static String resolve_group_id_for_outgoing_attachment(final String groupid_local,
+                                                           final boolean activity_group_num)
+    {
+        if (!activity_group_num)
+        {
+            return is_valid_group_id(groupid_local) ? groupid_local : null;
+        }
+
+        if (MainActivity.group_message_list_activity != null)
+        {
+            String gid = MainActivity.group_message_list_activity.get_current_group_id();
+            if (!is_valid_group_id(gid))
+            {
+                gid = MainActivity.group_message_list_activity.group_id_prev;
+            }
+            if (is_valid_group_id(gid))
+            {
+                return gid;
+            }
+        }
+
+        if (is_valid_group_id(groupid_local))
+        {
+            return groupid_local;
+        }
+
+        return null;
+    }
+
     public void set_group_connection_status_icon()
     {
         Runnable myRunnable = new Runnable()
@@ -2098,10 +2187,19 @@ public class GroupMessageListActivity extends AppCompatActivity
                     {
                         if (is_group_active(group_id_prev))
                         {
-                            if (tox_group_is_connected(tox_group_by_groupid__wrapper(group_id_prev)) ==
+                            final long group_num = tox_group_by_groupid__wrapper(group_id_prev);
+                            final int conn = tox_group_is_connected(group_num);
+                            if (conn ==
                                 TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
                             {
-                                ml_icon.setImageResource(R.drawable.circle_green);
+                                if (is_group_mesh_degraded(group_id_prev))
+                                {
+                                    ml_icon.setImageResource(R.drawable.circle_orange);
+                                }
+                                else
+                                {
+                                    ml_icon.setImageResource(R.drawable.circle_green);
+                                }
                             }
                             else
                             {
@@ -2138,7 +2236,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 case KeyEvent.KEYCODE_NUMPAD_ENTER:
                     if (!event.isShiftPressed())
                     {
-                        // Log.i(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
+                        // HelperGeneric.logI(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
                         send_message_onclick(null);
                         return true;
                     }
@@ -2156,24 +2254,16 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    if ((ml_new_group_message.getText().toString() == null) ||
-                        (ml_new_group_message.getText().toString().length() == 0))
+                    if (MainActivity.group_message_list_activity != null)
                     {
-                        ml_new_group_message.append(TEXT_QUOTE_STRING_1 + quote_text + TEXT_QUOTE_STRING_2 + "\n");
-                    }
-                    else
-                    {
-                        String old_text = ml_new_group_message.getText().toString();
-                        ml_new_group_message.setText("");
-                        // need to do it this way, or else the text input cursor will not be in the correct place
-                        ml_new_group_message.append(
-                                old_text + "\n" + TEXT_QUOTE_STRING_1 + quote_text + TEXT_QUOTE_STRING_2 + "\n");
+                        ChatReplyPreviewController.startReplyToPlainText(MainActivity.group_message_list_activity,
+                                quote_text);
                     }
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "add_quote_message_text:EE01:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "add_quote_message_text:EE01:" + e.getMessage());
                 }
             }
         };
@@ -2198,6 +2288,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
 
+        mediaPreviewResultHandled = false;
         startActivityForResult(intent, MEDIAPICK_ID_001);
     }
 
@@ -2256,8 +2347,8 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             wakeup_tox_thread();
 
-            final String msg = caption.trim().substring(0,
-                    (int) Math.min(tox_max_message_length(), caption.trim().length()));
+            final String msg = ChatReplyPreviewController.composeOutgoingText(caption.trim().substring(0,
+                    (int) Math.min(tox_max_message_length(), caption.trim().length())));
 
             final String send_block_reason = group_send_precheck_failure_reason(group_id);
             if (send_block_reason != null)
@@ -2268,6 +2359,28 @@ public class GroupMessageListActivity extends AppCompatActivity
 
             final long group_num = tox_group_by_groupid__wrapper(group_id);
             final long message_id = send_group_text_message_resilient(group_id, group_num, msg);
+            if (message_id == GROUP_SEND_QUEUE_WHEN_UNCONNECTED)
+            {
+                GroupMessage m = new GroupMessage();
+                m.is_new = false;
+                m.tox_group_peer_pubkey = tox_group_self_get_public_key(group_num).toUpperCase();
+                m.direction = 1;
+                m.TOX_MESSAGE_TYPE = 0;
+                m.read = true;
+                m.tox_group_peername = null;
+                m.private_message = 0;
+                m.group_identifier = group_id.toLowerCase();
+                m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
+                m.sent_timestamp = System.currentTimeMillis();
+                m.rcvd_timestamp = System.currentTimeMillis();
+                m.text = msg;
+                m.was_synced = false;
+                m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+                m.message_id_tox = PENDING_GROUP_MESSAGE_ID_TOX;
+                insert_into_group_message_db(m, true);
+                schedule_pending_group_message_flush(group_id);
+                return;
+            }
             if (message_id <= -1)
             {
                 display_toast(group_send_failure_reason(message_id), true, 400);
@@ -2298,9 +2411,43 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
+    private void finish_group_text_send(final String send_group_id, final GroupMessage m, final long message_id)
+    {
+        if (PREF__X_battery_saving_mode)
+        {
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:001:*PING*");
+        }
+        global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
+
+        if (message_id == GROUP_SEND_QUEUE_WHEN_UNCONNECTED)
+        {
+            m.message_id_tox = PENDING_GROUP_MESSAGE_ID_TOX;
+            insert_into_group_message_db(m, true);
+            schedule_pending_group_message_flush(send_group_id);
+        }
+        else if (HelperFriend.is_group_text_send_success(message_id))
+        {
+            m.message_id_tox = fourbytes_of_long_to_hex(message_id);
+            insert_into_group_message_db(m, true);
+        }
+        else
+        {
+            display_toast(group_send_failure_reason(message_id), true, 400);
+            try
+            {
+                ml_new_group_message.setText(m.text);
+                ml_new_group_message.setSelection(m.text.length());
+                ChatDraftHelper.save_group_draft(send_group_id, m.text);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
     synchronized public void send_message_onclick(View view)
     {
-        // Log.i(TAG,"send_message_onclick:---start");
+        // HelperGeneric.logI(TAG,"send_message_onclick:---start");
 
         String msg = "";
         try
@@ -2317,7 +2464,12 @@ public class GroupMessageListActivity extends AppCompatActivity
                 return;
             }
 
-            msg = normalized.substring(0, (int) Math.min(tox_max_message_length(), normalized.length()));
+            final String truncated = normalized.substring(0, (int) Math.min(tox_max_message_length(), normalized.length()));
+            final java.util.List<GroupMentionHelper.MentionEntry> mentions =
+                    GroupMentionHelper.collectMentionsForOutgoing(truncated, group_id);
+            final String withMentions = GroupMentionHelper.encodeMentionsBlock(truncated, mentions);
+
+            msg = ChatReplyPreviewController.composeOutgoingText(withMentions);
 
             final String send_block_reason = group_send_precheck_failure_reason(group_id);
             if (send_block_reason != null)
@@ -2362,33 +2514,24 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                 if ((msg != null) && (!msg.equalsIgnoreCase("")))
                 {
-                    final long group_num = tox_group_by_groupid__wrapper(group_id);
-                    long message_id = send_group_text_message_resilient(group_id, group_num, msg);
-                    // Log.i(TAG, "tox_group_send_message:result=" + message_id + " m=" + m);
-                    if (PREF__X_battery_saving_mode)
+                    final String send_msg = msg;
+                    final GroupMessage pending = m;
+                    final String send_group_id = group_id;
+                    HelperGeneric.clear_chat_input_field(ml_new_group_message);
+                    ChatDraftHelper.clear_group_draft(group_id);
+                    if (emojiPopup != null)
                     {
-                        Log.i(TAG, "global_last_activity_for_battery_savings_ts:001:*PING*");
+                        emojiPopup.dismiss();
                     }
-                    global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
 
-                    if (message_id > -1)
+                    final Thread send_thread = new Thread(() ->
                     {
-                        // message was sent OK
-                        m.message_id_tox = fourbytes_of_long_to_hex(message_id);
-                        // Log.i(TAG, "message_id_tox=" + m.message_id_tox + " message_id=" + message_id);
-                        // TODO: m.msg_id_hash = hex(peerpubkey + message_id)
-                        insert_into_group_message_db(m, true);
-                        HelperGeneric.clear_chat_input_field(ml_new_group_message);
-                        ChatDraftHelper.clear_group_draft(group_id);
-                        if (emojiPopup != null)
-                        {
-                            emojiPopup.dismiss();
-                        }
-                    }
-                    else
-                    {
-                        display_toast(group_send_failure_reason(message_id), true, 400);
-                    }
+                        final long group_num = tox_group_by_groupid__wrapper(send_group_id);
+                        final long message_id = send_group_text_message_resilient(send_group_id, group_num, send_msg);
+                        runOnUiThread(() -> finish_group_text_send(send_group_id, pending, message_id));
+                    }, "grp-txt-send");
+                    send_thread.setDaemon(true);
+                    send_thread.start();
                 }
             }
             catch (Exception e)
@@ -2402,21 +2545,48 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
-    static void add_attachment_ngc(Context c, Intent data, Intent orig_intent, String groupid_local, boolean activity_group_num)
+    static final class GroupOutgoingFileHandle
     {
-        Log.i(TAG, "add_attachment:001");
+        final String groupId;
+        final String msgIdHash;
+        final boolean chunked;
 
+        GroupOutgoingFileHandle(final String groupId, final String msgIdHash, final boolean chunked)
+        {
+            this.groupId = groupId;
+            this.msgIdHash = msgIdHash;
+            this.chunked = chunked;
+        }
+    }
+
+    static GroupOutgoingFileHandle add_attachment_and_get_handle(final Context c, final Intent data,
+                                                                 final String groupid_local,
+                                                                 final boolean activity_group_num)
+    {
+        return add_attachment_and_get_handle(c, data, groupid_local, activity_group_num, true);
+    }
+
+    static GroupOutgoingFileHandle add_attachment_and_get_handle(final Context c, final Intent data,
+                                                                 final String groupid_local,
+                                                                 final boolean activity_group_num,
+                                                                 final boolean startTransferImmediately)
+    {
         try
         {
+            if ((data == null) || (data.getData() == null))
+            {
+                return null;
+            }
+
             String fileName = null;
 
             try
             {
                 DocumentFile documentFile = DocumentFile.fromSingleUri(c, data.getData());
-
-                fileName = documentFile.getName();
-                // Log.i(TAG, "file_attach_for_send:documentFile:fileName=" + fileName);
-                // Log.i(TAG, "file_attach_for_send:documentFile:fileLength=" + documentFile.length());
+                if (documentFile != null)
+                {
+                    fileName = documentFile.getName();
+                }
 
                 ContentResolver cr = c.getApplicationContext().getContentResolver();
                 Cursor metaCursor = cr.query(data.getData(), null, null, null, null);
@@ -2426,17 +2596,9 @@ public class GroupMessageListActivity extends AppCompatActivity
                     {
                         if (metaCursor.moveToFirst())
                         {
-                            String file_path = metaCursor.getString(0);
-                            // Log.i(TAG, "file_attach_for_send:metaCursor_path:fp=" + file_path);
-                            // Log.i(TAG, "file_attach_for_send:metaCursor_path:column names=" +
-                            //            metaCursor.getColumnNames().length);
                             int j;
                             for (j = 0; j < metaCursor.getColumnNames().length; j++)
                             {
-                                // Log.i(TAG, "file_attach_for_send:metaCursor_path:column name=" +
-                                //           metaCursor.getColumnName(j));
-                                // Log.i(TAG,
-                                //       "file_attach_for_send:metaCursor_path:column data=" + metaCursor.getString(j));
                                 if (metaCursor.getColumnName(j).equals(DocumentsContract.Document.COLUMN_DISPLAY_NAME))
                                 {
                                     if (metaCursor.getString(j) != null)
@@ -2444,7 +2606,6 @@ public class GroupMessageListActivity extends AppCompatActivity
                                         if (metaCursor.getString(j).length() > 0)
                                         {
                                             fileName = metaCursor.getString(j);
-                                            // Log.i(TAG, "file_attach_for_send:filename new=" + fileName);
                                         }
                                     }
                                 }
@@ -2462,13 +2623,112 @@ public class GroupMessageListActivity extends AppCompatActivity
                 e.printStackTrace();
             }
 
-            final String fileName_ = fileName;
+            final String fileName_ = HelperFiletransfer.resolve_attachment_display_name(c, data.getData(), fileName);
+            if (fileName_ == null)
+            {
+                return null;
+            }
+
+            final String groupid = resolve_group_id_for_outgoing_attachment(groupid_local, activity_group_num);
+            if (groupid == null)
+            {
+                HelperGeneric.logI(TAG, "add_attachment_and_get_handle:no group id local=" + groupid_local
+                        + " activityPeer=" + activity_group_num);
+                return null;
+            }
+
+            return add_outgoing_file(c, groupid, data.getData().toString(), fileName_, data.getData(), 0, false,
+                                     activity_group_num, false, startTransferImmediately);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            HelperGeneric.logI(TAG, "add_attachment_and_get_handle:EE:" + e.getMessage());
+            return null;
+        }
+    }
+
+    static GroupOutgoingFileHandle add_attachment_from_uri(final Context c, final Uri uri, final String groupid_local,
+                                                           final boolean activity_group_num,
+                                                           final boolean startTransferImmediately)
+    {
+        if (uri == null)
+        {
+            return null;
+        }
+        final Intent single = new Intent();
+        single.setData(uri);
+        single.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        return add_attachment_and_get_handle(c, single, groupid_local, activity_group_num, startTransferImmediately);
+    }
+
+    static void add_attachment_ngc(Context c, Intent data, Intent orig_intent, String groupid_local, boolean activity_group_num)
+    {
+        HelperGeneric.logI(TAG, "add_attachment:001");
+
+        try
+        {
+            String fileName = null;
+
+            try
+            {
+                DocumentFile documentFile = DocumentFile.fromSingleUri(c, data.getData());
+
+                fileName = documentFile.getName();
+                // HelperGeneric.logI(TAG, "file_attach_for_send:documentFile:fileName=" + fileName);
+                // HelperGeneric.logI(TAG, "file_attach_for_send:documentFile:fileLength=" + documentFile.length());
+
+                ContentResolver cr = c.getApplicationContext().getContentResolver();
+                Cursor metaCursor = cr.query(data.getData(), null, null, null, null);
+                if (metaCursor != null)
+                {
+                    try
+                    {
+                        if (metaCursor.moveToFirst())
+                        {
+                            String file_path = metaCursor.getString(0);
+                            // HelperGeneric.logI(TAG, "file_attach_for_send:metaCursor_path:fp=" + file_path);
+                            // HelperGeneric.logI(TAG, "file_attach_for_send:metaCursor_path:column names=" +
+                            //            metaCursor.getColumnNames().length);
+                            int j;
+                            for (j = 0; j < metaCursor.getColumnNames().length; j++)
+                            {
+                                // HelperGeneric.logI(TAG, "file_attach_for_send:metaCursor_path:column name=" +
+                                //           metaCursor.getColumnName(j));
+                                // HelperGeneric.logI(TAG,
+                                //       "file_attach_for_send:metaCursor_path:column data=" + metaCursor.getString(j));
+                                if (metaCursor.getColumnName(j).equals(DocumentsContract.Document.COLUMN_DISPLAY_NAME))
+                                {
+                                    if (metaCursor.getString(j) != null)
+                                    {
+                                        if (metaCursor.getString(j).length() > 0)
+                                        {
+                                            fileName = metaCursor.getString(j);
+                                            // HelperGeneric.logI(TAG, "file_attach_for_send:filename new=" + fileName);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        metaCursor.close();
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            final String fileName_ = HelperFiletransfer.resolve_attachment_display_name(c, data.getData(), fileName);
 
             if (fileName_ != null)
             {
                 if (activity_group_num)
                 {
-                    Log.i(TAG, "add_outgoing_file:activity_group_num:true");
+                    HelperGeneric.logI(TAG, "add_outgoing_file:activity_group_num:true");
                     final Thread t = new Thread()
                     {
                         @Override
@@ -2477,7 +2737,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                             if (groupid_local.equals("-1"))
                             {
                                 // ok, we need to wait for onResume to finish and give us the friendnum
-                                Log.i(TAG,
+                                HelperGeneric.logI(TAG,
                                       "add_outgoing_file:ok, we need to wait for onResume to finish and give us the friendnum");
                                 long loop = 0;
                                 while (loop < 100)
@@ -2498,7 +2758,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                                 "-1"))
                                         {
                                             // got friendnum
-                                            Log.i(TAG, "add_outgoing_file:got groupnum");
+                                            HelperGeneric.logI(TAG, "add_outgoing_file:got groupnum");
                                             break;
                                         }
                                     }
@@ -2519,7 +2779,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                                     if (oncreate_finished)
                                     {
-                                        Log.i(TAG, "add_outgoing_file:oncreate_finished");
+                                        HelperGeneric.logI(TAG, "add_outgoing_file:oncreate_finished");
                                         break;
                                     }
                                 }
@@ -2538,26 +2798,31 @@ public class GroupMessageListActivity extends AppCompatActivity
                                 (MainActivity.group_message_list_activity.get_current_group_id().equals("-1")))
                             {
                                 // sorry, still no groupnum
-                                Log.i(TAG, "add_outgoing_file:sorry, still no groupnum");
+                                HelperGeneric.logI(TAG, "add_outgoing_file:sorry, still no groupnum");
                                 return;
                             }
-                            Log.i(TAG, "add_outgoing_file:add_outgoing_file:thread_01");
-                            add_outgoing_file(c, MainActivity.group_message_list_activity.get_current_group_id(),
-                                              data.getData().toString(), fileName_, data.getData(), 0, false,
-                                              activity_group_num, false);
+                            HelperGeneric.logI(TAG, "add_outgoing_file:add_outgoing_file:thread_01");
+                            final GroupOutgoingFileHandle handle = add_outgoing_file(c,
+                                    MainActivity.group_message_list_activity.get_current_group_id(),
+                                    data.getData().toString(), fileName_, data.getData(), 0, false,
+                                    activity_group_num, false);
+                            if (handle != null)
+                            {
+                                HelperGroup.start_group_file_send_by_hash(handle.groupId, handle.msgIdHash);
+                            }
                         }
                     };
                     t.start();
                 }
                 else
                 {
-                    Log.i(TAG, "add_outgoing_file:activity_group_num:FALSE");
+                    HelperGeneric.logI(TAG, "add_outgoing_file:activity_group_num:FALSE");
                     final Thread t2 = new Thread()
                     {
                         @Override
                         public void run()
                         {
-                            Log.i(TAG, "add_outgoing_file:add_outgoing_file:thread_02");
+                            HelperGeneric.logI(TAG, "add_outgoing_file:add_outgoing_file:thread_02");
 
                             long loop = 0;
                             while (loop < 100)
@@ -2577,7 +2842,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                     if (!MainActivity.group_message_list_activity.get_current_group_id().equals("-1"))
                                     {
                                         // got friendnum
-                                        Log.i(TAG, "add_outgoing_file:got groupnum:02");
+                                        HelperGeneric.logI(TAG, "add_outgoing_file:got groupnum:02");
                                         break;
                                     }
                                 }
@@ -2598,12 +2863,17 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                                 if (oncreate_finished)
                                 {
-                                    Log.i(TAG, "add_outgoing_file:oncreate_finished:02");
+                                    HelperGeneric.logI(TAG, "add_outgoing_file:oncreate_finished:02");
                                     break;
                                 }
                             }
-                            add_outgoing_file(c, groupid_local, data.getData().toString(), fileName_, data.getData(), 0,
-                                              false, activity_group_num, false);
+                            final GroupOutgoingFileHandle handle = add_outgoing_file(c, groupid_local,
+                                    data.getData().toString(), fileName_, data.getData(), 0,
+                                    false, activity_group_num, false);
+                            if (handle != null)
+                            {
+                                HelperGroup.start_group_file_send_by_hash(handle.groupId, handle.msgIdHash);
+                            }
                         }
                     };
                     t2.start();
@@ -2613,7 +2883,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "select_file:22:EE1:" + e.getMessage());
+            HelperGeneric.logI(TAG, "select_file:22:EE1:" + e.getMessage());
         }
     }
 
@@ -2799,7 +3069,7 @@ public class GroupMessageListActivity extends AppCompatActivity
     @Override
     public void onBackPressed()
     {
-        if (group_message_drawer.isDrawerOpen())
+        if (group_message_drawer != null && group_message_drawer.isDrawerOpen())
         {
             group_message_drawer.closeDrawer();
         }
@@ -2811,19 +3081,19 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     synchronized void update_group_all_users()
     {
-        // Log.i(TAG, "update_group_all_users:** CALL");
+        // HelperGeneric.logI(TAG, "update_group_all_users:** CALL");
         long currentTime = System.currentTimeMillis();
 
         if (currentTime - update_group_all_users_last_trigger_ts >= INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS)
         {
             update_group_all_users_last_trigger_ts = currentTime;
-            // Log.i(TAG, "update_group_all_users:-> REAL");
+            // HelperGeneric.logI(TAG, "update_group_all_users:-> REAL");
             update_group_all_users_real();
         }
         else
         {
             long delta_t_ms = currentTime - update_group_all_users_last_trigger_ts;
-            // Log.i(TAG, "update_group_all_users:  TRIG delta ms=" + delta_t_ms);
+            // HelperGeneric.logI(TAG, "update_group_all_users:  TRIG delta ms=" + delta_t_ms);
             long trigger_in_ms_again = INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS - delta_t_ms;
             if ((trigger_in_ms_again < 1) || (trigger_in_ms_again > (INTERVAL_UPDATE_NGC_GROUP_ALL_USERS_MS + 1)))
             {
@@ -2834,7 +3104,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 try
                 {
                     Thread.sleep(trigger_in_ms_again_);
-                    // Log.i(TAG, "update_group_all_users:__ CALL from Trigger");
+                    // HelperGeneric.logI(TAG, "update_group_all_users:__ CALL from Trigger");
                     update_group_all_users();
                 }
                 catch (InterruptedException e)
@@ -2915,13 +3185,66 @@ public class GroupMessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "remove_group_user:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "remove_group_user:EE:" + e.getMessage());
         }
     }
 
     synchronized void remove_group_user(String peer_pubkey)
     {
-        // TODO: write me
+        if ((peer_pubkey == null) || peer_pubkey.isEmpty() || group_handler_s == null)
+        {
+            return;
+        }
+
+        final String key = peer_pubkey.toLowerCase();
+        group_handler_s.post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    if (group_message_drawer == null || group_message_drawer.getAdapter() == null)
+                    {
+                        return;
+                    }
+
+                    Long peer_num = lookup_peer_listnum_pubkey.get(key);
+                    if (peer_num == null)
+                    {
+                        final int item_count = group_message_drawer.getAdapter().getItemCount();
+                        for (int i = 0; i < item_count; i++)
+                        {
+                            final IDrawerItem drawer_item = group_message_drawer.getAdapter().getItem(i);
+                            if (!(drawer_item instanceof ConferenceCustomDrawerPeerItem))
+                            {
+                                continue;
+                            }
+                            final ConferenceCustomDrawerPeerItem peer_item =
+                                    (ConferenceCustomDrawerPeerItem) drawer_item;
+                            if (peer_item.peer_pubkey != null
+                                && peer_item.peer_pubkey.equalsIgnoreCase(key))
+                            {
+                                peer_num = peer_item.getIdentifier();
+                                break;
+                            }
+                        }
+                    }
+
+                    if (peer_num != null)
+                    {
+                        lookup_peer_listnum_pubkey.remove(key);
+                        group_message_drawer.removeItem(peer_num);
+                        last_drawer_peers_fingerprint = "";
+                        last_drawer_status_fingerprint = "";
+                    }
+                }
+                catch (Exception e2)
+                {
+                    Log.w(TAG, "remove_group_user:EE:" + e2.getMessage());
+                }
+            }
+        });
     }
 
     private String build_drawer_peers_fingerprint(final List<group_list_peer> peers)
@@ -2994,7 +3317,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 catch (Exception e2)
                 {
                     e2.printStackTrace();
-                    Log.i(TAG, "sync_group_drawer_peers:EE:" + e2.getMessage());
+                    HelperGeneric.logI(TAG, "sync_group_drawer_peers:EE:" + e2.getMessage());
                 }
             }
         });
@@ -3059,6 +3382,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 withName(peer.peer_name).
                 withDescription(status_line).
                 setPeerOnline(peer.online).
+                setSelfPeer(peer.self).
                 withOnDrawerItemClickListener(new Drawer.OnDrawerItemClickListener()
                 {
                     @Override
@@ -3082,7 +3406,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     public void show_add_friend_group(View view)
     {
-        Log.i(TAG, "show_add_friend_group");
+        HelperGeneric.logI(TAG, "show_add_friend_group");
         Intent intent = new Intent(this, FriendSelectSingleActivity.class);
         intent.putExtra("group_id", group_id);
         intent.putExtra("offline", 1);
@@ -3090,6 +3414,17 @@ public class GroupMessageListActivity extends AppCompatActivity
     }
 
     public void openCamera()
+    {
+        if (!HelperCall.hasCameraPermission(this))
+        {
+            ensureNgcVideoPermissions(this::openCameraInternal);
+            return;
+        }
+
+        openCameraInternal();
+    }
+
+    private void openCameraInternal()
     {
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
@@ -3267,7 +3602,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                     int ypixelStride = image.getPlanes()[0].getPixelStride();
                     int upixelStride = image.getPlanes()[1].getPixelStride();
                     int vpixelStride = image.getPlanes()[2].getPixelStride();
-                    //Log.i(TAG, "yRowStride="+ yRowStride +  " uRowStride=" + uRowStride + " vRowStride=" + vRowStride +
+                    //HelperGeneric.logI(TAG, "yRowStride="+ yRowStride +  " uRowStride=" + uRowStride + " vRowStride=" + vRowStride +
                     //           " ypixelStride=" + ypixelStride + " upixelStride=" + upixelStride + " vpixelStride=" + vpixelStride);
 
                     ByteBuffer y_buffer = image.getPlanes()[0].getBuffer();
@@ -3295,7 +3630,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                     }
 
                     // Process the captured YUV frame data
-                    //Log.i(TAG, "IIIIIIIIII:camera_image:bytes=" + y_size_in_bytes + " " + u_size_in_bytes + " " +
+                    //HelperGeneric.logI(TAG, "IIIIIIIIII:camera_image:bytes=" + y_size_in_bytes + " " + u_size_in_bytes + " " +
                     //           v_size_in_bytes);
 
                     //ByteBuffer yuv_frame_data_buf = ByteBuffer.allocateDirect(y_size_in_bytes + u_size_in_bytes + v_size_in_bytes);
@@ -3365,7 +3700,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 }
                 else
                 {
-                    // Log.i(TAG, "IIIIIIIIII:camera_image:skip_frame");
+                    // HelperGeneric.logI(TAG, "IIIIIIIIII:camera_image:skip_frame");
                 }
                 image.close();
             }
@@ -3481,7 +3816,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         ngc_video_showing_video_from_peer_pubkey = "-1";
         NGC_Group_video_play_thread_running = false;
         NGC_Group_audio_record_thread_running = false;
-        Log.i(TAG, "NGC_Group_video_play_thread_running:false:001");
+        HelperGeneric.logI(TAG, "NGC_Group_video_play_thread_running:false:001");
         ngc_video_view_container.setVisibility(View.GONE);
         sending_video_to_group = false;
 
@@ -3515,7 +3850,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             return;
         }
 
-        // Log.i(TAG, "play_ngc_incoming_audio_frame:delta=" + (System.currentTimeMillis() - ngc_audio_packet_last_incoming_ts));
+        // HelperGeneric.logI(TAG, "play_ngc_incoming_audio_frame:delta=" + (System.currentTimeMillis() - ngc_audio_packet_last_incoming_ts));
         ngc_audio_packet_last_incoming_ts = System.currentTimeMillis();
         ngc_video_packet_last_incoming_ts = System.currentTimeMillis();
 
@@ -3548,7 +3883,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                     System.arraycopy(encoded_audio_and_header, 10, pcm_encoded_buf, 0, pcm_encoded_length);
                     //
                     int decoded_samples = toxav_ngc_audio_decode(pcm_encoded_buf, pcm_encoded_length, pcm_decoded_buf);
-                    // Log.i(TAG, "play_ngc_incoming_audio_frame:toxav_ngc_audio_decode:decoded_samples=" + decoded_samples);
+                    // HelperGeneric.logI(TAG, "play_ngc_incoming_audio_frame:toxav_ngc_audio_decode:decoded_samples=" + decoded_samples);
 
                     // put pcm data into a FIFO
                     System.arraycopy(pcm_decoded_buf, 0, pcm_decoded_buf_delta_1, 0, (bytes_in_40ms * 2));
@@ -3628,7 +3963,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                                          u_buf2, v_buf2, flush_decoder);
                         //if (ystride != -1)
                         //{
-                        //    Log.i(TAG, "toxav_ngc_video_decode:ystride=" + ystride);
+                        //    HelperGeneric.logI(TAG, "toxav_ngc_video_decode:ystride=" + ystride);
                         //}
                         flush_decoder = 0;
                     }
@@ -3757,13 +4092,13 @@ public class GroupMessageListActivity extends AppCompatActivity
                         long seqnum = Byte.toUnsignedInt(low_seqnum[0]) + Integer.toUnsignedLong((high_seqnum[0] << 8));
                         if (seqnum != (last_video_seq_num + 1))
                         {
-                            //Log.i(TAG, "!!!!!!!seqnumber_missing!!!!! " + seqnum + " -> " + (last_video_seq_num + 1));
+                            //HelperGeneric.logI(TAG, "!!!!!!!seqnumber_missing!!!!! " + seqnum + " -> " + (last_video_seq_num + 1));
                         }
                         last_video_seq_num = seqnum;
                         final long crc_8 = Integer.toUnsignedLong(calc_crc_8(yuv_frame_encoded_buf));
                         if (Byte.toUnsignedInt(chkskum[0]) != crc_8)
                         {
-                            //Log.i(TAG, "checksum=" + Byte.toUnsignedInt(chkskum[0])
+                            //HelperGeneric.logI(TAG, "checksum=" + Byte.toUnsignedInt(chkskum[0])
                             //       + " crc8=" + crc_8 + " seqnum=" + seqnum
                             //       + " yuv_frame_encoded_bytes=" + (yuv_frame_encoded_bytes + 14));
                         }
@@ -3772,7 +4107,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                                          u_buf2, v_buf2, flush_decoder);
                         //if (ystride != -1)
                         //{
-                        //    Log.i(TAG, "toxav_ngc_video_decode:ystride=" + ystride);
+                        //    HelperGeneric.logI(TAG, "toxav_ngc_video_decode:ystride=" + ystride);
                         //}
                         flush_decoder = 0;
                     }
@@ -3867,7 +4202,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         ngc_video_showing_video_from_peer_pubkey = "-1";
         NGC_Group_video_play_thread_running = false;
         NGC_Group_audio_record_thread_running = false;
-        Log.i(TAG, "NGC_Group_video_play_thread_running:false:002");
+        HelperGeneric.logI(TAG, "NGC_Group_video_play_thread_running:false:002");
         ngc_video_view_container.setVisibility(View.VISIBLE);
         sending_video_to_group = true;
         ngc_set_video_call_icon(NGC_VIDEO_ICON_STATE_ACTIVE);
@@ -3882,7 +4217,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             ee.printStackTrace();
         }
 
-        Log.i(TAG, "group_audio_service:start");
+        HelperGeneric.logI(TAG, "group_audio_service:start");
         try
         {
             Intent i = new Intent(c, GroupGroupAudioService.class);
@@ -3891,7 +4226,7 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         catch (Exception e)
         {
-            Log.i(TAG, "group_audio_service:EE01:" + e.getMessage());
+            HelperGeneric.logI(TAG, "group_audio_service:EE01:" + e.getMessage());
             e.printStackTrace();
         }
         // init audio stuff ------
@@ -3923,12 +4258,12 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                 try
                 {
-                    Log.i(TAG, "NGC_Group_video_play_thread:starting ...");
+                    HelperGeneric.logI(TAG, "NGC_Group_video_play_thread:starting ...");
                     NGC_Group_video_play_thread_running = true;
-                    Log.i(TAG, "NGC_Group_video_play_thread_running:true:003");
+                    HelperGeneric.logI(TAG, "NGC_Group_video_play_thread_running:true:003");
                     while (NGC_Group_video_play_thread_running)
                     {
-                        // Log.i(TAG, "NGC_Group_video_play_thread:running --=>");
+                        // HelperGeneric.logI(TAG, "NGC_Group_video_play_thread:running --=>");
                         final int w = 480; // 240;
                         final int h = 640; // 320;
                         final int video_enc_bitrate = PREF__ngc_video_bitrate;
@@ -3943,7 +4278,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                         int encoded_bytes = toxav_ngc_video_encode(video_enc_bitrate, PREF__ngc_video_max_quantizer, w,
                                                                    h, y_buf, y_bytes, u_buf, u_bytes, v_buf, v_bytes,
                                                                    encoded_vframe);
-                        // Log.i(TAG, "toxav_ngc_video_encode:bytes=" + encoded_bytes + " video_enc_bitrate=" + video_enc_bitrate);
+                        // HelperGeneric.logI(TAG, "toxav_ngc_video_encode:bytes=" + encoded_bytes + " video_enc_bitrate=" + video_enc_bitrate);
 
                         if ((encoded_bytes < 1) || (encoded_bytes > TOX_MAX_NGC_VIDEO_AND_HEADER_SIZE))
                         {
@@ -3988,13 +4323,13 @@ public class GroupMessageListActivity extends AppCompatActivity
                                 {
                                     int result = tox_group_send_custom_packet(tox_group_by_groupid__wrapper(group_id),
                                                                               0, data, data_length);
-                                    // Log.i(TAG, "toxav_ngc_video_encode:ls:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
+                                    // HelperGeneric.logI(TAG, "toxav_ngc_video_encode:ls:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
                                 }
                                 else
                                 {
                                     int result = tox_group_send_custom_packet(tox_group_by_groupid__wrapper(group_id),
                                                                               1, data, data_length);
-                                    // Log.i(TAG, "toxav_ngc_video_encode:LL:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
+                                    // HelperGeneric.logI(TAG, "toxav_ngc_video_encode:LL:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
                                 }
                             }
                             catch (Exception e)
@@ -4006,7 +4341,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                             {
                                 if (ngc_video_frame_last_incoming_ts != -1)
                                 {
-                                    Log.i(TAG,
+                                    HelperGeneric.logI(TAG,
                                           "toxav_ngc_video_encode:no incoming video for 5 seconds. resetting video and peer ...");
                                     Runnable myRunnable = new Runnable()
                                     {
@@ -4041,7 +4376,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                     e.printStackTrace();
                 }
 
-                Log.i(TAG, "NGC_Group_video_play_thread:finished");
+                HelperGeneric.logI(TAG, "NGC_Group_video_play_thread:finished");
             }
         };
         NGC_Group_video_play_thread.start();
@@ -4064,9 +4399,9 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                 try
                 {
-                    Log.i(TAG, "NGC_Group_audio_record_thread:starting ...");
+                    HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:starting ...");
                     NGC_Group_audio_record_thread_running = true;
-                    Log.i(TAG, "NGC_Group_audio_record_thread:true:003");
+                    HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:true:003");
                     while (NGC_Group_audio_record_thread_running)
                     {
                         try
@@ -4087,24 +4422,24 @@ public class GroupMessageListActivity extends AppCompatActivity
                             else
                             {
                                 final int buffers_in_queue = ngc_audio_out_queue.size();
-                                // Log.i(TAG, "NGC_Group_audio_record_thread:buffers_in_queue=" + buffers_in_queue);
+                                // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:buffers_in_queue=" + buffers_in_queue);
                                 if (buffers_in_queue > 2)
                                 {
                                     final byte[] buf_out_1 = ngc_audio_out_queue.poll(1, TimeUnit.MILLISECONDS);
-                                    // Log.i(TAG, "NGC_Group_audio_record_thread:buf1=" + bytes_to_hex(buf_out_1));
+                                    // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:buf1=" + bytes_to_hex(buf_out_1));
                                     final byte[] buf_out_2 = ngc_audio_out_queue.poll(1, TimeUnit.MILLISECONDS);
-                                    // Log.i(TAG, "NGC_Group_audio_record_thread:buf2=" + bytes_to_hex(buf_out_2));
+                                    // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:buf2=" + bytes_to_hex(buf_out_2));
                                     final byte[] buf_out_3 = ngc_audio_out_queue.poll(1, TimeUnit.MILLISECONDS);
-                                    // Log.i(TAG, "NGC_Group_audio_record_thread:buf3=" + bytes_to_hex(buf_out_3));
+                                    // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:buf3=" + bytes_to_hex(buf_out_3));
                                     if ((buf_out_1 == null) || (buf_out_2 == null) || (buf_out_3 == null))
                                     {
-                                        Log.i(TAG, "NGC_Group_audio_record_thread:no data in buffers");
+                                        HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:no data in buffers");
                                     }
                                     else if ((buf_out_1.length != NGC_AUDIO_PCM_BUFFER_BYTES) ||
                                              (buf_out_2.length != NGC_AUDIO_PCM_BUFFER_BYTES) ||
                                              (buf_out_3.length != NGC_AUDIO_PCM_BUFFER_BYTES))
                                     {
-                                        Log.i(TAG, "NGC_Group_audio_record_thread:wrong buffer sizes");
+                                        HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:wrong buffer sizes");
                                     }
                                     else
                                     {
@@ -4130,7 +4465,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                         }
                                         else
                                         {
-                                            // Log.i(TAG, "NGC_Group_audio_record_thread:encoded bytes=" + encoded_bytes);
+                                            // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:encoded bytes=" + encoded_bytes);
                                             final int header_length = 6 + 1 + 1 + 1 + 1;
                                             long data_length_ = header_length + encoded_bytes;
                                             final int data_length = (int) data_length_;
@@ -4165,14 +4500,14 @@ public class GroupMessageListActivity extends AppCompatActivity
                                                     int result = tox_group_send_custom_packet(
                                                             tox_group_by_groupid__wrapper(group_id), 0, data,
                                                             data_length);
-                                                    // Log.i(TAG, "NGC_Group_audio_record_thread:ls:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
+                                                    // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:ls:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
                                                 }
                                                 else
                                                 {
                                                     int result = tox_group_send_custom_packet(
                                                             tox_group_by_groupid__wrapper(group_id), 1, data,
                                                             data_length);
-                                                    // Log.i(TAG, "NGC_Group_audio_record_thread:LL:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
+                                                    // HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:LL:tox_group_send_custom_packet:result=" + result + " bytes=" + encoded_bytes);
                                                 }
                                             }
                                             catch (Exception e)
@@ -4200,7 +4535,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                     e.printStackTrace();
                 }
 
-                Log.i(TAG, "NGC_Group_audio_record_thread:finished");
+                HelperGeneric.logI(TAG, "NGC_Group_audio_record_thread:finished");
             }
         };
         NGC_Group_audio_record_thread.start();
@@ -4215,7 +4550,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    // Log.i(TAG, "update_call_time -> call");
+                    // HelperGeneric.logI(TAG, "update_call_time -> call");
                     update_call_ngc_audio_bars();
                     if (NGC_Group_audio_record_thread_running)
                     {
@@ -4242,23 +4577,83 @@ public class GroupMessageListActivity extends AppCompatActivity
         else
         {
             AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
-            builder.setTitle("Join Group Video?");
-            builder.setMessage("Do you want really want to send your Video and Audio to everybody in this group?");
+            builder.setTitle(R.string.group_video_join_title);
+            builder.setMessage(R.string.group_video_join_message);
 
-            builder.setNegativeButton("NO!", null);
-            builder.setPositiveButton("Yes, I want", new DialogInterface.OnClickListener()
+            builder.setNegativeButton(R.string.group_video_join_decline, null);
+            builder.setPositiveButton(R.string.group_video_join_confirm, new DialogInterface.OnClickListener()
             {
                 @Override
                 public void onClick(DialogInterface dialog, int which)
                 {
-                    ngc_incoming_video_peer_toggle_current_index = 0;
-                    flush_decoder = 1;
-                    start_group_video(view.getContext());
+                    if (!(view.getContext() instanceof GroupMessageListActivity))
+                    {
+                        return;
+                    }
+
+                    final GroupMessageListActivity activity = (GroupMessageListActivity) view.getContext();
+                    activity.ensureNgcVideoPermissions(new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            ngc_incoming_video_peer_toggle_current_index = 0;
+                            flush_decoder = 1;
+                            start_group_video(activity);
+                        }
+                    });
                 }
             });
 
             AlertDialog dialog = builder.create();
             dialog.show();
+        }
+    }
+
+    private boolean hasNgcVideoPermissions()
+    {
+        return HelperCall.hasMicrophonePermission(this) && HelperCall.hasCameraPermission(this);
+    }
+
+    private void ensureNgcVideoPermissions(final Runnable onGranted)
+    {
+        if (hasNgcVideoPermissions())
+        {
+            if (onGranted != null)
+            {
+                onGranted.run();
+            }
+
+            return;
+        }
+
+        pendingNgcPermissionAction = onGranted;
+        HelperCall.requestCallPermissions(this, false);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
+    {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode != HelperCall.REQUEST_CALL_PERMISSIONS)
+        {
+            return;
+        }
+
+        if (!hasNgcVideoPermissions())
+        {
+            HelperCall.showMissingPermissionToast(this, false);
+            pendingNgcPermissionAction = null;
+            return;
+        }
+
+        final Runnable action = pendingNgcPermissionAction;
+        pendingNgcPermissionAction = null;
+
+        if (action != null)
+        {
+            action.run();
         }
     }
 
@@ -4291,10 +4686,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             if (data != null)
             {
-                if (group_id.equals("-1"))
-                {
-                    group_id = group_id_prev;
-                }
+                prepareGroupMediaSendContext();
+
+                final List<Uri> pickedUris = MediaSendPreviewHelper.collectUris(data);
+                MediaSendPreviewHelper.persistUriPermissions(this, pickedUris);
 
                 if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, data,
                         MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true))
@@ -4302,21 +4697,37 @@ public class GroupMessageListActivity extends AppCompatActivity
                     return;
                 }
 
-                add_attachment_ngc(this, data, data, group_id, true);
+                if (pickedUris.isEmpty())
+                {
+                    add_attachment_ngc(this, data, data, group_id, true);
+                }
+                else
+                {
+                    MediaSendPreviewHelper.dispatchAttachments(this, pickedUris,
+                            MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
+                }
             }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)
         {
-            if (group_id.equals("-1"))
+            if (mediaPreviewResultHandled)
             {
-                group_id = group_id_prev;
+                return;
             }
+            mediaPreviewResultHandled = true;
+            prepareGroupMediaSendContext();
             MediaSendPreviewHelper.handlePreviewResult(this, data,
                     MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
         }
     }
 
-    static void add_outgoing_file(Context c, String groupid, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual)
+    static GroupOutgoingFileHandle add_outgoing_file(Context c, String groupid, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual)
+    {
+        return add_outgoing_file(c, groupid, filepath, filename, uri, file_size_manual, real_file_path,
+                update_message_view, use_file_size_manual, true);
+    }
+
+    static GroupOutgoingFileHandle add_outgoing_file(Context c, String groupid, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual, final boolean startTransferImmediately)
     {
         long file_size_hint = -1;
         try
@@ -4333,124 +4744,142 @@ public class GroupMessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "add_outgoing_file:documentFile:EE003:" + e.getMessage());
+            HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:EE003:" + e.getMessage());
         }
 
         if (file_size_hint > FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL)
         {
-            display_toast("File too large", true, 100);
-            Log.i(TAG, "add_outgoing_file:documentFile:file_size=File too large");
-            return;
+            display_toast(c.getString(R.string.group_file_too_large,
+                    android.text.format.Formatter.formatFileSize(c, KHANDAQ_MAX_FILE_TRANSFER_BYTES)), true, 100);
+            HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:file_size=File too large");
+            return null;
         }
 
-        if (file_size_hint < FT_OUTGOING_FILESIZE_BYTE_USE_STORAGE_FRAMEWORK) // less than xxx Bytes filesize
+        MessageListActivity.outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(filepath, filename,
+                file_size_hint > 0 ? file_size_hint : 1);
+
+        if (ofw == null)
         {
-            MessageListActivity.outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(filepath, filename,
-                                                                                             file_size_hint > 0 ?
-                                                                                             file_size_hint : 1);
-
-            if (ofw == null)
-            {
-                display_toast("Group file prepare failed", true, 100);
-                return;
-            }
-
-            long file_size = ofw.file_size_wrapped;
-            if (file_size < 1)
-            {
-                Log.i(TAG, "file length 0 ?");
-                display_toast("Group file prepare failed", true, 100);
-                return;
-            }
-
-            if (file_size > FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL)
-            {
-                display_toast("File too large", true, 100);
-                return;
-            }
-
-            if (file_size > TOX_MAX_NGC_FILESIZE)
-            {
-                Log.i(TAG, "add_outgoing_file:shrink:start");
-                if (!shrink_group_outgoing_file(c, uri, filename, ofw))
-                {
-                    display_toast("Group video too large (max ~37 KB)", true, 100);
-                    return;
-                }
-                Log.i(TAG, "add_outgoing_file:shrink:done");
-                file_size = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).length();
-            }
-            else
-            {
-                Log.i(TAG, "add_outgoing_file:no_need_to_shrink_file");
-            }
-
-            if ((file_size < 1) || (file_size > TOX_MAX_NGC_FILESIZE))
-            {
-                display_toast("Group file prepare failed", true, 100);
-                return;
-            }
-
-            Log.i(TAG, "add_outgoing_file:001");
-
-            // add FT message to UI
-            GroupMessage m = new GroupMessage();
-            m.is_new = false; // own messages are always "not new"
-            m.tox_group_peer_pubkey = tox_group_self_get_public_key(
-                    tox_group_by_groupid__wrapper(groupid)).toUpperCase();
-            m.direction = 1; // msg sent
-            m.TOX_MESSAGE_TYPE = 0;
-            m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
-            m.tox_group_peername = null;
-            m.private_message = 0;
-            m.group_identifier = groupid.toLowerCase();
-            m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_FILE.value;
-            m.sent_timestamp = System.currentTimeMillis();
-            m.rcvd_timestamp = System.currentTimeMillis(); // since we do not have anything better assume "now"
-            m.text = ofw.filename_wrapped + "\n" + ofw.file_size_wrapped + " bytes";
-            m.was_synced = false;
-            m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
-            m.path_name = ofw.filepath_wrapped;
-            m.file_name = ofw.filename_wrapped;
-            m.filename_fullpath = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).getAbsolutePath();
-            m.storage_frame_work = false;
-            try
-            {
-                m.filesize = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).length();
-            }
-            catch (Exception ee)
-            {
-                m.filesize = 0;
-            }
-
-            ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
-            MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
-            m.msg_id_hash = bytebuffer_to_hexstring(hash_bytes, true);
-            m.message_id_tox = "";
-            insert_into_group_message_db(m, true);
-            Log.i(TAG, "add_outgoing_file:090");
-
-            // now send the file to the group as custom package ----------
-            Log.i(TAG, "add_outgoing_file:091:send_group_image:start");
-            send_group_image(m);
-            Log.i(TAG, "add_outgoing_file:092:send_group_image:done");
-            // now send the file to the group as custom package ----------
+            display_toast(c.getString(R.string.group_file_prepare_failed), true, 100);
+            return null;
         }
-        else
+
+        long file_size = ofw.file_size_wrapped;
+        if (file_size < 1)
         {
-            // HINT: should never get here, since ngc has max filesize of about 37kbytes only
+            HelperGeneric.logI(TAG, "file length 0 ?");
+            display_toast(c.getString(R.string.group_file_prepare_failed), true, 100);
+            return null;
         }
+
+        if (file_size > FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL)
+        {
+            display_toast(c.getString(R.string.group_file_too_large,
+                    android.text.format.Formatter.formatFileSize(c, KHANDAQ_MAX_FILE_TRANSFER_BYTES)), true, 100);
+            return null;
+        }
+
+        if (file_size > 50L * 1024L * 1024L && startTransferImmediately)
+        {
+            display_toast(c.getString(R.string.group_file_send_large_confirm_message,
+                    android.text.format.Formatter.formatFileSize(c, file_size)), false, 3500);
+        }
+
+        if (file_size > TOX_MAX_NGC_FILESIZE)
+        {
+            HelperGeneric.logI(TAG, "add_outgoing_file:chunked:bytes=" + file_size);
+        }
+
+        if ((file_size < 1) || (file_size > TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES))
+        {
+            display_toast(c.getString(R.string.group_file_prepare_failed), true, 100);
+            return null;
+        }
+
+        HelperGeneric.logI(TAG, "add_outgoing_file:001");
+
+        // add FT message to UI
+        GroupMessage m = new GroupMessage();
+        m.is_new = false; // own messages are always "not new"
+        m.tox_group_peer_pubkey = tox_group_self_get_public_key(
+                tox_group_by_groupid__wrapper(groupid)).toUpperCase();
+        m.direction = 1; // msg sent
+        m.TOX_MESSAGE_TYPE = 0;
+        m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
+        m.tox_group_peername = null;
+        m.private_message = 0;
+        m.group_identifier = groupid.toLowerCase();
+        m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_FILE.value;
+        m.sent_timestamp = System.currentTimeMillis();
+        m.rcvd_timestamp = System.currentTimeMillis(); // since we do not have anything better assume "now"
+        m.text = HelperFiletransfer.buildOutgoingFileMessageText(c, ofw.filename_wrapped, ofw.file_size_wrapped);
+        m.was_synced = false;
+        m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+        m.path_name = ofw.filepath_wrapped;
+        m.file_name = ofw.filename_wrapped;
+        m.filename_fullpath = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).getAbsolutePath();
+        m.storage_frame_work = false;
+        try
+        {
+            m.filesize = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).length();
+        }
+        catch (Exception ee)
+        {
+            m.filesize = 0;
+        }
+
+        ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
+        MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
+        m.msg_id_hash = bytebuffer_to_hexstring(hash_bytes, true);
+        m.message_id_tox = "";
+        insert_into_group_message_db(m, true);
+        HelperGeneric.logI(TAG, "add_outgoing_file:090");
+
+        if (startTransferImmediately)
+        {
+            HelperGeneric.logI(TAG, "add_outgoing_file:091:send_group_file:start");
+            HelperGroup.record_ngc_transfer_started(m.group_identifier, m.msg_id_hash);
+            send_group_file(m);
+            HelperGeneric.logI(TAG, "add_outgoing_file:092:send_group_file:done");
+        }
+
+        return new GroupOutgoingFileHandle(groupid.toLowerCase(), m.msg_id_hash,
+                NgcGroupFileTransfer.shouldUseChunkedTransfer(file_size));
     }
 
     static void show_messagelist_for_id(Context c, String id, String fill_out_text)
     {
         Intent intent = new Intent(c, GroupMessageListActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (fill_out_text != null)
         {
             intent.putExtra("fillouttext", fill_out_text);
         }
         intent.putExtra("group_id", id);
         c.startActivity(intent);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent)
+    {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        final String new_group_id = intent.getStringExtra("group_id");
+        if ((new_group_id == null) || new_group_id.equalsIgnoreCase(group_id))
+        {
+            return;
+        }
+        try
+        {
+            if ((group_id != null) && (ml_new_group_message != null))
+            {
+                ChatDraftHelper.save_group_draft(group_id, ml_new_group_message.getText().toString());
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        recreate();
     }
 
     public void scroll_to_bottom(View v)
@@ -4492,8 +4921,8 @@ public class GroupMessageListActivity extends AppCompatActivity
             AudioReceiver.buffer_size = ((int) ((48000 * 2) * 2)) * audio_out_buffer_mult; // TODO: this is really bad
             AudioReceiver.sleep_millis = (int) (((float) sample_count / (float) sampling_rate) * 1000.0f *
                                                 0.9f); // TODO: this is bad also
-            Log.i(TAG, "init_native_audio_stuff:read:init buffer_size=" + AudioReceiver.buffer_size);
-            Log.i(TAG, "init_native_audio_stuff:read:init sleep_millis=" + AudioReceiver.sleep_millis);
+            HelperGeneric.logI(TAG, "init_native_audio_stuff:read:init buffer_size=" + AudioReceiver.buffer_size);
+            HelperGeneric.logI(TAG, "init_native_audio_stuff:read:init sleep_millis=" + AudioReceiver.sleep_millis);
         }
 
         if (sampling_rate_ != sampling_rate)
@@ -4508,10 +4937,10 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if ((NativeAudio.sampling_rate != (int) sampling_rate_) || (NativeAudio.channel_count != channels_))
         {
-            Log.i(TAG, "init_native_audio_stuff:values_changed");
+            HelperGeneric.logI(TAG, "init_native_audio_stuff:values_changed");
             NativeAudio.sampling_rate = (int) sampling_rate_;
             NativeAudio.channel_count = channels_;
-            Log.i(TAG, "init_native_audio_stuff:NativeAudio restart Engine");
+            HelperGeneric.logI(TAG, "init_native_audio_stuff:NativeAudio restart Engine");
             // TODO: locking? or something like that
             NativeAudio.restartNativeAudioPlayEngine((int) sampling_rate_, channels_);
         }

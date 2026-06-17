@@ -51,6 +51,15 @@ const GroupId& GroupList::id2Key(uint32_t groupNum)
     return id2key[groupNum];
 }
 
+/**
+ * @brief Point a (possibly new) tox group number at an existing group. Used
+ * when a group instance is replaced and toxcore assigns a different number.
+ */
+void GroupList::updateGroupNumber(uint32_t groupNum, const GroupId& groupId)
+{
+    id2key[groupNum] = groupId;
+}
+
 void GroupList::removeGroup(const GroupId& groupId, bool /*fake*/)
 {
     auto g_it = groupList.find(groupId);

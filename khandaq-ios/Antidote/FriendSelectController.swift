@@ -167,8 +167,7 @@ private extension FriendSelectController {
         tableView.delegate = self
         tableView.backgroundColor = theme.colorForType(.NormalBackground)
         tableView.sectionIndexColor = theme.colorForType(.LinkText)
-        // removing separators on empty lines
-        tableView.tableFooterView = UIView()
+        ThemeChrome.installZeroHeightTableFooter(in: tableView, theme: theme)
 
         view.addSubview(tableView)
 
@@ -181,6 +180,7 @@ private extension FriendSelectController {
         placeholderView.isEditable = false
         placeholderView.isScrollEnabled = false
         placeholderView.textAlignment = .center
+        placeholderView.backgroundColor = theme.colorForType(.NormalBackground)
         view.addSubview(placeholderView)
     }
 

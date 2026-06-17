@@ -130,6 +130,7 @@
         <activity
             android:name="com.zoffcc.applications.trifa.MessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTop"
             android:label="@string/message_list_activity_name">
         </activity>
         <activity
@@ -140,6 +141,7 @@
         <activity
             android:name="com.zoffcc.applications.trifa.GroupMessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTop"
             android:label="@string/group_message_list_activity_name">
         </activity>
         <activity
@@ -253,6 +255,11 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
         </activity>
         <activity
+            android:name="com.zoffcc.applications.trifa.NotificationRingtoneSettingsActivity"
+            android:exported="false"
+            android:label="@string/pref_title_ringtone"
+            android:theme="@style/SettingsTheme" />
+        <activity
             android:name="com.zoffcc.applications.trifa.SettingsActivity"
             android:label="@string/title_activity_settings"
             android:theme="@style/SettingsTheme">
@@ -304,6 +311,14 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
 
                 <data android:scheme="tox"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+
+                <data android:scheme="khandaq"/>
             </intent-filter>
         </activity>
 

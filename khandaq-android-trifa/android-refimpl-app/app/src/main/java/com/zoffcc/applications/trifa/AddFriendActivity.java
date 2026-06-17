@@ -180,7 +180,7 @@ public class AddFriendActivity extends AppCompatActivity
 
     public void add_self_clicked(View v)
     {
-        HelperFriend.add_self_as_friend();
+        FavoritesChatHelper.openChat(this);
         finish();
     }
 

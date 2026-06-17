@@ -19,6 +19,7 @@
 
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.KhandaqSupport;
 import org.khandaq.messenger.R;
 
 import android.app.AlarmManager;
@@ -330,8 +331,8 @@ public class CrashActivity extends AppCompatActivity implements Logging.AsyncRes
         try
         {
             Log.i(TAG, "processFinish:MainActivity.main_activity_s=" + MainActivity.main_activity_s);
-            MainActivity.main_activity_s.sendEmailWithAttachment(this, "feedback@zanavi.cc",
-                                                                 "TRIfA Crashlog (a:" + android.os.Build.VERSION.SDK +
+            MainActivity.main_activity_s.sendEmailWithAttachment(this, KhandaqSupport.FEEDBACK_EMAIL,
+                                                                 getString(R.string.Aboutpage_0) + " (a:" + android.os.Build.VERSION.SDK_INT +
                                                                  ")", feedback_text, full_file_name,
                                                                  full_file_name_suppl);
         }

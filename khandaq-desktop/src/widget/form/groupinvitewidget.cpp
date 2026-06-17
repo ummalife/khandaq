@@ -65,8 +65,11 @@ void GroupInviteWidget::retranslateUi()
     QString date = inviteDate.toString(settings.getDateFormat());
     QString time = inviteDate.toString(settings.getTimestampFormat());
 
-    inviteMessageLabel->setText(
-        tr("Invited by %1 on %2 at %3.").arg("<b>%1</b>").arg(name.toHtmlEscaped(), date, time));
+    const QString inviteGroupName = inviteInfo.getGroupName();
+    const QString groupLabel = inviteGroupName.isEmpty() ? tr("a group") : inviteGroupName.toHtmlEscaped();
+
+    inviteMessageLabel->setText(tr("Invited by %1 to %2 on %3 at %4.")
+                                    .arg(QString("<b>%1</b>").arg(name.toHtmlEscaped()), groupLabel, date, time));
     acceptButton->setText(tr("Join"));
     rejectButton->setText(tr("Decline"));
 }

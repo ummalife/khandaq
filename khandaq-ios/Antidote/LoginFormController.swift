@@ -68,6 +68,11 @@ class LoginFormController: LoginLogoController {
         updateFormAnimated(false)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        LaunchRecovery.markLaunchCompleted()
+    }
+
     override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
         guard navigationController?.topViewController == self else {
             return
@@ -77,15 +82,14 @@ class LoginFormController: LoginLogoController {
             contentContainerView.frame.origin.y -
             loginButton.frame.maxY
 
-        let offset = min(0.0, underLoginHeight - frame.height)
+        let keyboardFrameInView = view.convert(frame, from: nil)
+        let offset = min(0.0, underLoginHeight - keyboardFrameInView.height)
 
         mainContainerViewTopConstraint?.update(offset: offset)
-        view.layoutIfNeeded()
     }
 
     override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
         mainContainerViewTopConstraint?.update(offset: 0.0)
-        view.layoutIfNeeded()
     }
 }
 

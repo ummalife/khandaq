@@ -118,7 +118,9 @@ public class MainApplication extends Application
 
         try
         {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            // legacy fallback only where NetworkCallback is unavailable;
+            // on API>=N both would fire and storm DHT re-bootstraps
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N)
             {
                 IntentFilter intentFilter = new IntentFilter();
                 intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -406,7 +408,6 @@ public class MainApplication extends Application
         android.os.Process.killProcess(android.os.Process.myPid());
         Log.i(TAG, "MainApplication:" + randnum + ":" + "xx3");
         System.exit(2);
-        System.out.println("MainApplication:" + randnum + ":" + "xx4");
 
     }
 

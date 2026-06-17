@@ -90,7 +90,7 @@ public class ConfGroupAudioService extends Service
     @Override
     public int onStartCommand(Intent intent, int flags, int startId)
     {
-        Log.i(TAG, "onStartCommand");
+        HelperGeneric.logI(TAG, "onStartCommand");
         try
         {
             conf_id = intent.getStringExtra("conf_id");
@@ -99,7 +99,7 @@ public class ConfGroupAudioService extends Service
         {
             e.printStackTrace();
         }
-        // Log.i(TAG, "onStartCommand:conf_id=" + conf_id);
+        // HelperGeneric.logI(TAG, "onStartCommand:conf_id=" + conf_id);
 
         try
         {
@@ -123,7 +123,7 @@ public class ConfGroupAudioService extends Service
     @Override
     public void onCreate()
     {
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
         // serivce is created ---
         super.onCreate();
 
@@ -145,7 +145,7 @@ public class ConfGroupAudioService extends Service
                                       noti_and_builder.n,
                                       type);
 
-        Log.i(TAG, "onCreate:thread:1");
+        HelperGeneric.logI(TAG, "onCreate:thread:1");
 
         running = true;
         GAThread = new Thread()
@@ -153,7 +153,7 @@ public class ConfGroupAudioService extends Service
             @Override
             public void run()
             {
-                Log.i(TAG, "GAThread:starting");
+                HelperGeneric.logI(TAG, "GAThread:starting");
 
                 // ------------- START Audio playing -------------
                 // ------------- START Audio playing -------------
@@ -243,7 +243,7 @@ public class ConfGroupAudioService extends Service
                     {
                         if (isBluetoothConnected())
                         {
-                            Log.i(TAG, "AUDIOROUTE:startBluetoothSco");
+                            HelperGeneric.logI(TAG, "AUDIOROUTE:startBluetoothSco");
                             manager.startBluetoothSco();
                             Callstate.audio_device = 2;
                             // manager.setBluetoothScoOn(true);
@@ -251,20 +251,20 @@ public class ConfGroupAudioService extends Service
                         else
                         {
                             // headset plugged in
-                            Log.i(TAG, "AUDIOROUTE:onReceive:headset:plugged in");
+                            HelperGeneric.logI(TAG, "AUDIOROUTE:onReceive:headset:plugged in");
                             Callstate.audio_device = 1;
                             set_audio_to_headset(manager);
                         }
                     }
                     else
                     {
-                        Log.i(TAG, "onReceive:headset:setImageDrawable:null1");
+                        HelperGeneric.logI(TAG, "onReceive:headset:setImageDrawable:null1");
                     }
                 }
                 catch (Exception ee)
                 {
                     ee.printStackTrace();
-                    Log.i(TAG, "onReceive:headset:setImageDrawable:null2");
+                    HelperGeneric.logI(TAG, "onReceive:headset:setImageDrawable:null2");
                 }
 
                 /*
@@ -279,13 +279,13 @@ public class ConfGroupAudioService extends Service
                         audio_thread.join();
                         audio_thread = null;
                         NativeAudio.StopREC();
-                        Log.i(TAG, "stop_audio_recording:DONE");
+                        HelperGeneric.logI(TAG, "stop_audio_recording:DONE");
                     }
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "stop_audio_recording:EE01" + e.getMessage());
+                    HelperGeneric.logI(TAG, "stop_audio_recording:EE01" + e.getMessage());
                 }
                 // HINT: stop audio recording, we do not need it in this mode -------------
                  *
@@ -295,7 +295,7 @@ public class ConfGroupAudioService extends Service
 
                 try
                 {
-                    Log.i(TAG, "GAThread:starting ...");
+                    HelperGeneric.logI(TAG, "GAThread:starting ...");
                     int delta = 0;
                     final int sleep_millis = NativeAudio.n_buf_iterate_ms; // "x" ms is what native audio wants
                     int sleep_millis_current = sleep_millis;
@@ -308,7 +308,7 @@ public class ConfGroupAudioService extends Service
                     while (running)
                     {
                         d1 = SystemClock.uptimeMillis();
-                        // Log.i(TAG, "deltaZZ=" + (SystemClock.uptimeMillis() - d2));
+                        // HelperGeneric.logI(TAG, "deltaZZ=" + (SystemClock.uptimeMillis() - d2));
                         // d2 = SystemClock.uptimeMillis();
                         MainActivity.jni_iterate_group_audio(0, sleep_millis);
                         delta = (int) (SystemClock.uptimeMillis() - d1);
@@ -331,12 +331,12 @@ public class ConfGroupAudioService extends Service
                     e.printStackTrace();
                 }
 
-                Log.i(TAG, "GAThread:finished");
+                HelperGeneric.logI(TAG, "GAThread:finished");
                 activity_state = 0;
                 push_to_talk_active = false;
 
-                // Log.i(TAG, "toxav_groupchat_disable_av:E:gnum=" + tox_conference_by_confid__wrapper(conf_id));
-                // Log.i(TAG, "toxav_groupchat_disable_av:E:gid=" + conf_id);
+                // HelperGeneric.logI(TAG, "toxav_groupchat_disable_av:E:gnum=" + tox_conference_by_confid__wrapper(conf_id));
+                // HelperGeneric.logI(TAG, "toxav_groupchat_disable_av:E:gid=" + conf_id);
                 toxav_groupchat_disable_av(tox_conference_by_confid__wrapper(conf_id));
 
                 // ------ shutdown audio device ------
@@ -349,7 +349,7 @@ public class ConfGroupAudioService extends Service
                     {
                         if (isBluetoothConnected())
                         {
-                            Log.i(TAG, "AUDIOROUTE:stopBluetoothSco:1");
+                            HelperGeneric.logI(TAG, "AUDIOROUTE:stopBluetoothSco:1");
                             // manager.setBluetoothScoOn(false);
                             manager.stopBluetoothSco();
                         }
@@ -365,15 +365,15 @@ public class ConfGroupAudioService extends Service
             }
         };
 
-        Log.i(TAG, "onCreate:thread:2");
+        HelperGeneric.logI(TAG, "onCreate:thread:2");
         GAThread.start();
-        Log.i(TAG, "onCreate:thread:3");
+        HelperGeneric.logI(TAG, "onCreate:thread:3");
     }
 
     @Override
     public boolean onUnbind(Intent intent)
     {
-        Log.i(TAG, "onUnbind");
+        HelperGeneric.logI(TAG, "onUnbind");
         noti_and_builder.n.flags = Notification.FLAG_ONGOING_EVENT;
 
         return super.onUnbind(intent);
@@ -382,21 +382,21 @@ public class ConfGroupAudioService extends Service
     @Override
     public void unbindService(ServiceConnection conn)
     {
-        Log.i(TAG, "unbindService");
+        HelperGeneric.logI(TAG, "unbindService");
         super.unbindService(conn);
     }
 
     @Override
     public void onDestroy()
     {
-        Log.i(TAG, "onDestroy");
+        HelperGeneric.logI(TAG, "onDestroy");
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent)
     {
-        Log.i(TAG, "onBind");
+        HelperGeneric.logI(TAG, "onBind");
         return null;
     }
 
@@ -540,7 +540,7 @@ public class ConfGroupAudioService extends Service
         Callstate.audio_group_active = false;
         if (stop_full)
         {
-            Log.i(TAG, "reset_values:003");
+            HelperGeneric.logI(TAG, "reset_values:003");
             Callstate.reset_values();
         }
         ConferenceAudioActivity.conf_id = "-1";
@@ -584,8 +584,6 @@ public class ConfGroupAudioService extends Service
         {
             try
             {
-                System.out.println("ButtonReceiver:" + intent.getAction());
-
                 if (intent.getAction().equals(ACTION_STOP))
                 {
                     global_gas_status = GAS_PAUSED;
@@ -630,8 +628,8 @@ public class ConfGroupAudioService extends Service
             Drawable d_play = new IconicsDrawable(context_gas_static).icon(
                     GoogleMaterial.Icon.gmd_play_arrow).backgroundColor(Color.TRANSPARENT).sizeDp(50);
 
-            // Log.i(TAG, "toxav_groupchat_disable_av:D:gnum=" + tox_conference_by_confid__wrapper(conf_id));
-            // Log.i(TAG, "toxav_groupchat_disable_av:D:gid=" + conf_id);
+            // HelperGeneric.logI(TAG, "toxav_groupchat_disable_av:D:gnum=" + tox_conference_by_confid__wrapper(conf_id));
+            // HelperGeneric.logI(TAG, "toxav_groupchat_disable_av:D:gid=" + conf_id);
             push_to_talk_active = false;
             toxav_groupchat_disable_av(tox_conference_by_confid__wrapper(conf_id));
 

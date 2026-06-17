@@ -269,8 +269,7 @@
     <string name="pref_title_message_paging_num_msgs_per_page">Žinučių kiekis puslapyje</string>
     <string name="pref_title_allow_push_server_ntfy">Leisti ntfy.sh serverį</string>
     <string name="pref_title_allow_enable_ngc_features">NGC – nauji grupiniai pokalbiai</string>
-    <string name="pref_description_enable_ngc_features">!! Eksperimentinis !!
-\nTai NE pilnai veikia!!</string>
+    <string name="pref_description_enable_ngc_features">Nauji grupiniai pokalbiai (NGC) su patobulintomis žinutėmis, balsu ir vaizdu.</string>
     <string name="pref_description_message_paging_num_msgs_per_page">Nustatyti žinučių, kurios bus rodomos viename puslapyje, skaičių. 0 reiškia, kad puslapiai nebus rodomi</string>
     <string name="pref_description_allow_push_server_ntfy">ĮSPĖJIMAS: leidimas ntfy.sh serveriui gauti tiesioginius pranešimus, gali nutekėti jūsų laiko žymų metaduomenys, kai gaunate tiesioginius pranešimus, jei draugas užsiprenumeruoja su jūsų tiesioginiu prieigos raktu. ntfy.sh neturi slaptažodžių ir jame NĖRA autentifikavimo. jūs buvote įspėti.</string>
     <string name="join_public_group_joined">Jūs prisijungėte prie viešos grupės</string>
@@ -278,6 +277,14 @@
     <string name="add_group_activity_add">Sukurti grupę</string>
     <string name="join_group_activity_join">Prisijungti prie grupės</string>
     <string name="join_public_group_failed">Nepavyko prisijungti prie viešos grupės</string>
+    <string name="join_public_group_failed_not_ready">Messengeris vis dar jungiasi. Palaukite kelias sekundes ir bandykite dar kartą.</string>
+    <string name="join_public_group_failed_bad_id">Neteisingas grupės ID. Nukopijuokite visus 64 hex simbolius.</string>
+    <string name="join_public_group_failed_network">Nepavyko rasti grupės tinkle. Patikrinkite internetą ir bandykite dar kartą.</string>
+    <string name="join_public_group_failed_password">Šiai grupei reikalingas slaptažodis.</string>
+    <string name="join_public_group_error_no_id">Įveskite grupės ID</string>
+    <string name="join_public_group_error_illegal_chars">Grupės ID turi neleistinų simbolių. Leidžiami tik A–F ir 0–9.</string>
+    <string name="join_public_group_error_length">Grupės ID turi būti 64 hex simboliai.</string>
+
     <string name="MainActivity_setup_push_tip_text">Neįdiegėte tiesioginių pranešimų programėlės ir nesukonfigūravote tiesioginių pranešimų. TRIfA veiks visiškai be tiesioginių pranešimo, tačiau turės būti nuolat prisijungusi, kad gautų pranešimus. Naudodami tiesioginį pranešimą galite taupyti akumuliatoriaus naudojimą ir interneto pralaidumą.
 \n
 \nAr norite sužinoti, kaip galite nustatyti tiesioginius pranešimus\?</string>
@@ -286,6 +293,12 @@
     <string name="layout___join_public_group">Prisijungti prie viešos grupės</string>
     <string name="add_public_group_success">Sukūrėte viešą grupę</string>
     <string name="add_private_group_failed">Nepavyko sukurti privačios grupės</string>
+    <string name="group_password_placeholder">Grupės slaptažodis (tik privačioms grupėms)</string>
+    <string name="group_password_set">Nustatyti grupės slaptažodį</string>
+    <string name="group_topic_lock">Temos užraktas (tik steigėjas)</string>
+    <string name="group_privacy_set">Nustatyti privatumą</string>
+    <string name="group_create_private_password">Neprivalomas grupės slaptažodis</string>
+
     <string name="add_private_group_success">Sukūrėte privačią grupę</string>
     <string name="layout___group_myname2">mano vardas grupėje:</string>
     <string name="pref_title_custom_bootstrap_nodes">Naudoti pasirinktinius įkrovos mazgus</string>
@@ -312,4 +325,45 @@
     <string name="join_public_group_activity_warning">Įspėjimas:
 \nprisijungimas prie viešos grupės per grupės ID dar neveikia!!</string>
     <string name="layout___audio_roundtrip_test_start">Garso delsos testas</string>
+    <string name="group_video_join_title">Prisijungti prie grupės vaizdo?</string>
+    <string name="group_video_join_message">Siųsti vaizdo ir garso įrašą visiems grupėje?</string>
+    <string name="group_video_join_confirm">Taip, pradėti vaizdo</string>
+    <string name="group_video_join_decline">Ne</string>
+    <string name="group_send_voice_confirm_title">Send voice message?</string>
+    <string name="group_send_voice_confirm_message">Send this voice message to the group?</string>
+    <string name="group_peer_unknown">Unknown</string>
+    <string name="group_incoming_message_error">Could not process incoming group message.</string>
+    <string name="group_file_send_failed">Group file send failed.</string>
+    <string name="group_image_shrink_failed">Could not prepare image for sending.</string>
+    <string name="group_incoming_file_error">Could not process incoming group file.</string>
+    <string name="chat_file_too_large">File is too large.</string>
+    <string name="chat_incoming_file_too_large">Incoming file is too large.</string>
+    <string name="chat_opening_file_failed">Could not open file.</string>
+    <string name="group_file_too_large">File is too large for this group.</string>
+    <string name="group_file_prepare_failed">Could not prepare file for sending.</string>
+    <string name="add_group_failed_empty_name">Įveskite grupės pavadinimą.</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

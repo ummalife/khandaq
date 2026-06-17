@@ -14,10 +14,14 @@ final class MessageStatusHelper
     enum OutgoingStatus
     {
         SENDING,
+        NOT_DELIVERED,
+        FAILED,
         SENT,
         DELIVERED,
         READ
     }
+
+    static final long DIRECT_DELIVERY_TIMEOUT_MS = MessageDeliveryWatchdog.DELIVERY_TIMEOUT_MS;
 
     private MessageStatusHelper()
     {
@@ -40,7 +44,17 @@ final class MessageStatusHelper
             return OutgoingStatus.READ;
         }
 
-        if (message.msg_at_relay || (message.sent_push > 0))
+        if (MessageDeliveryRetryHelper.isDirectFailed(message))
+        {
+            return OutgoingStatus.FAILED;
+        }
+
+        if (isDirectDeliveryOverdue(message))
+        {
+            return OutgoingStatus.NOT_DELIVERED;
+        }
+
+        if (message.msg_at_relay)
         {
             return OutgoingStatus.DELIVERED;
         }
@@ -65,6 +79,16 @@ final class MessageStatusHelper
             return OutgoingStatus.DELIVERED;
         }
 
+        if (MessageDeliveryRetryHelper.isGroupFailed(message))
+        {
+            return OutgoingStatus.FAILED;
+        }
+
+        if (isGroupDeliveryOverdue(message))
+        {
+            return OutgoingStatus.NOT_DELIVERED;
+        }
+
         return OutgoingStatus.SENT;
     }
 
@@ -73,6 +97,9 @@ final class MessageStatusHelper
         switch (status)
         {
             case SENDING:
+            case NOT_DELIVERED:
+                return R.drawable.msg_status_clock;
+            case FAILED:
                 return R.drawable.msg_status_clock;
             case SENT:
                 return R.drawable.msg_status_check_one;
@@ -121,8 +148,16 @@ final class MessageStatusHelper
 
         indicator.setTag(R.id.m_icon, drawableRes);
         indicator.animate().cancel();
-        indicator.setAlpha(0.55f);
+        indicator.setAlpha(status == OutgoingStatus.FAILED ? 1f : 0.55f);
         indicator.setImageResource(drawableRes);
+        if (status == OutgoingStatus.FAILED)
+        {
+            indicator.setColorFilter(context.getResources().getColor(R.color.md_red_500));
+        }
+        else
+        {
+            indicator.clearColorFilter();
+        }
         indicator.getLayoutParams().width = size;
         indicator.getLayoutParams().height = size;
         indicator.setVisibility(View.VISIBLE);
@@ -142,5 +177,30 @@ final class MessageStatusHelper
         }
 
         return message.ft_outgoing_queued;
+    }
+
+    private static boolean isDirectDeliveryOverdue(final Message message)
+    {
+        if (message.message_id <= -1)
+        {
+            return false;
+        }
+
+        if (message.sent_timestamp <= 0)
+        {
+            return false;
+        }
+
+        return (System.currentTimeMillis() - message.sent_timestamp) > DIRECT_DELIVERY_TIMEOUT_MS;
+    }
+
+    private static boolean isGroupDeliveryOverdue(final GroupMessage message)
+    {
+        if (message.sent_timestamp <= 0)
+        {
+            return false;
+        }
+
+        return (System.currentTimeMillis() - message.sent_timestamp) > DIRECT_DELIVERY_TIMEOUT_MS;
     }
 }

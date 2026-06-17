@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res-auto"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tg_chat_bg"
+    android:orientation="vertical">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
@@ -11,129 +12,100 @@
         android:layout_height="wrap_content"
         android:background="?attr/colorPrimary"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"/>
-
+        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_weight="100">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls"
+        android:paddingBottom="16dp">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingLeft="20dp"
+            android:paddingTop="20dp"
+            android:paddingRight="20dp">
 
-            <LinearLayout
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/friend_toxid_inputlayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_marginBottom="20dp"
+                android:hint="@string/layout___toxid"
+                app:boxBackgroundMode="outline">
 
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/friend_toxid_inputlayout"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/friend_toxid"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:layout_marginTop="10dp">
+                    android:imeOptions="flagNoPersonalizedLearning"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:singleLine="true" />
 
-                    <EditText
-                        android:id="@+id/friend_toxid"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="20dp"
-                        android:layout_marginRight="20dp"
-                        android:hint="@string/layout___toxid"
-                        android:imeOptions="flagNoPersonalizedLearning"
-                        android:inputType="text"
-                        android:maxLines="1"
-                        android:singleLine="true"/>
+            </com.google.android.material.textfield.TextInputLayout>
 
-                </com.google.android.material.textfield.TextInputLayout>
-            </LinearLayout>
-
-
-            <LinearLayout
-                android:id="@+id/button_container"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/friend_qrbutton_01"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
-                android:layout_height="65dp"
-                android:layout_marginTop="25dp"
-                android:orientation="horizontal">
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="52dp"
+                android:onClick="read_qr_code"
+                android:text="@string/layout___scan_qr_code"
+                android:textAllCaps="false"
+                app:icon="@drawable/friend_add_qr_icon"
+                app:iconGravity="textStart"
+                app:iconPadding="12dp"
+                app:iconTint="@null"
+                app:strokeColor="@color/khandaq_stroke_light" />
 
-                <ImageButton
-                    android:id="@+id/friend_qrbutton_02"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_marginLeft="15dp"
-                    android:layout_marginRight="0dp"
-                    android:background="@color/md_grey_300"
-                    android:gravity="left|center_vertical"
-                    android:onClick="read_qr_code"
-                    android:paddingLeft="15dp"
-                    android:paddingRight="15dp"
-                    android:src="@drawable/friend_add_qr_icon"/>
-
-                <Button
-                    android:id="@+id/friend_qrbutton_01"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_marginLeft="0dp"
-                    android:textColor="@color/md_black_1000"
-                    android:layout_marginRight="15dp"
-                    android:background="@color/md_grey_300"
-                    android:onClick="read_qr_code"
-                    android:paddingLeft="15dp"
-                    android:paddingRight="15dp"
-                    android:text="@string/layout___scan_qr_code"/>
-
-            </LinearLayout>
-
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/friend_qrbutton_gallery"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="15dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginTop="10dp"
-                android:background="@color/md_grey_300"
+                android:layout_marginBottom="10dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="52dp"
                 android:onClick="read_qr_code_from_gallery"
-                android:paddingLeft="15dp"
-                android:paddingRight="15dp"
                 android:text="@string/layout___scan_qr_code_gallery"
-                android:textColor="@color/md_black_1000"/>
+                android:textAllCaps="false"
+                app:strokeColor="@color/khandaq_stroke_light" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/friend_add_self_button"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="15dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginTop="10dp"
-                android:background="@color/md_grey_300"
+                android:layout_marginBottom="8dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="48dp"
                 android:onClick="add_self_clicked"
-                android:paddingLeft="15dp"
-                android:paddingRight="15dp"
-                android:text="@string/add_self_contact"
-                android:textColor="@color/md_black_1000"/>
+                android:text="@string/favorites_chat_title"
+                android:textAllCaps="false"
+                android:textColor="@color/khandaq_primary"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/info_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="15dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginTop="25dp"
-                android:gravity="center_vertical"
-                android:paddingBottom="15dp"
-                android:paddingTop="12dp"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="3dp"
                 android:text="@string/add_friend_activity_help"
-                android:textColor="@color/md_black_1000"
-                android:textSize="20sp"/>
-
-            <!--<View-->
-            <!--android:layout_width="match_parent"-->
-            <!--android:layout_height="0dp"-->
-            <!--android:layout_weight="100"/>-->
-
+                android:textColor="@color/tg_chat_preview"
+                android:textSize="14sp" />
 
         </LinearLayout>
 
@@ -143,36 +115,44 @@
         android:id="@+id/button_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true">
+        android:background="@drawable/bg_add_friend_bottom_bar"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="12dp"
+        android:paddingTop="8dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="8dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/cancel_button"
-            style="?android:attr/borderlessButtonStyle"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
             android:onClick="cancel_clicked"
-            android:textColor="@color/md_black_1000"
-            android:text="@string/cancel"/>
+            android:text="@string/cancel"
+            android:textAllCaps="false"
+            android:textColor="@color/friend_list_text_color" />
 
-        <View
-            android:layout_width="1dp"
-            android:layout_height="match_parent"
-            android:layout_marginBottom="7dp"
-            android:layout_marginTop="7dp"
-            android:background="#1f000000"/>
-
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/friend_addbutton"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
+            android:backgroundTint="@color/khandaq_primary"
             android:enabled="false"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="48dp"
             android:onClick="add_friend_clicked"
-            android:textColor="@color/md_black_1000"
-            android:text="@string/add_friend_activity_add"/>
-    </LinearLayout>
+            android:text="@string/add_friend_activity_add"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white" />
 
+    </LinearLayout>
 
 </LinearLayout>

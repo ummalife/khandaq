@@ -18,7 +18,7 @@ build_yasm="1"
 _FFMPEG_VERSION_="n6.0"
 _OPUS_VERSION_="v1.3.1"
 _VPX_VERSION_="v1.8.0"
-_LIBSODIUM_VERSION_="1.0.19"
+_LIBSODIUM_VERSION_="1.0.18"
 _X264_VERSION_="31e19f92f00c7003fa115047ce50978bc98c3a0d"
 _ANDROID_SDK_TOOLS="7583922"
 _ANDROID_DSK_HASH_="124f2d5115eee365df6cf3228ffbca6fc3911d16f8025bebd5b1c6e2fcfa7faf"
@@ -294,7 +294,7 @@ if [ "$full""x" == "1x" ]; then
 
     mkdir -p "$PKG_CONFIG_PATH"
     redirect_cmd $_NDK_/build/tools/make_standalone_toolchain.py --arch "$TOOLCHAIN_ARCH" \
-        --install-dir "$_toolchain_"/arm-linux-androideabi --api 16 --force
+        --install-dir "$_toolchain_"/arm-linux-androideabi --api 21 --force
 
 
     if [ "$build_yasm""x" == "1x" ]; then
@@ -355,8 +355,8 @@ if [ "$full""x" == "1x" ]; then
         --enable-runtime-cpudetect \
         --enable-jni \
         --enable-neon \
-        --enable-mediacodec \
-        --enable-decoder=h264_mediacodec \
+        --disable-mediacodec \
+        --disable-decoder=h264_mediacodec \
         --enable-gpl --enable-decoder=h264 || exit 1
 
     cd "$_BLD_";make -j $_CPUS_ || exit 1
@@ -426,12 +426,12 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 ";export CFLAGS=" -g -Os -mfloat-abi=softfp -mfpu=vfpv3-d16 -mthumb -marm -march=armv7-a "
-    $_s_/libsodium/configure --prefix="$_toolchain_"/arm-linux-androideabi/sysroot/usr \
+    $_s_/libsodium/configure --disable-asm --prefix="$_toolchain_"/arm-linux-androideabi/sysroot/usr \
         --disable-shared --disable-soname-versions --host=arm-linux-androideabi \
         --with-sysroot="$_toolchain_"/arm-linux-androideabi/sysroot --disable-pie
     cd "$_BLD_";make -j $_CPUS_ || exit 1
@@ -448,6 +448,8 @@ cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
 cd $_s_;cd c-toxcore;git checkout "zoff99/zoxcore_local_fork"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -911,8 +913,8 @@ if [ "$full""x" == "1x" ]; then
         --enable-runtime-cpudetect \
         --enable-jni \
         --enable-neon \
-        --enable-mediacodec \
-        --enable-decoder=h264_mediacodec \
+        --disable-mediacodec \
+        --disable-decoder=h264_mediacodec \
         --enable-gpl --enable-decoder=h264 || exit 1
     cd "$_BLD_";make -j $_CPUS_ || exit 1
     cd "$_BLD_";make install
@@ -989,12 +991,12 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -Os -march=armv8-a ";export CFLAGS=" -g -Os -march=armv8-a "
-    $_s_/libsodium/configure --prefix="$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr \
+    $_s_/libsodium/configure --disable-asm --prefix="$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr \
         --disable-shared --disable-soname-versions --host="$AND_TOOLCHAIN_ARCH3" \
         --with-sysroot="$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot --disable-pie
     cd "$_BLD_";make -j $_CPUS_ || exit 1
@@ -1012,6 +1014,8 @@ cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
 cd $_s_;cd c-toxcore;git checkout "zoff99/zoxcore_local_fork"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -1412,7 +1416,7 @@ if [ "$full""x" == "1x" ]; then
 
     mkdir -p "$PKG_CONFIG_PATH"
     redirect_cmd $_NDK_/build/tools/make_standalone_toolchain.py --arch "$TOOLCHAIN_ARCH" \
-        --install-dir "$_toolchain_"/x86 --api 16 --force
+        --install-dir "$_toolchain_"/x86 --api 21 --force
 
 
     if [ "$build_yasm""x" == "1x" ]; then
@@ -1490,8 +1494,8 @@ if [ "$full""x" == "1x" ]; then
         --enable-runtime-cpudetect \
         --enable-jni \
         --enable-neon \
-        --enable-mediacodec \
-        --enable-decoder=h264_mediacodec \
+        --disable-mediacodec \
+        --disable-decoder=h264_mediacodec \
         --enable-gpl --enable-decoder=h264 || exit 1
     cd "$_BLD_";make -j $_CPUS_ || exit 1
     cd "$_BLD_";make install
@@ -1564,12 +1568,12 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 ";export CFLAGS=" -g -Os -march=i686 "
-    $_s_/libsodium/configure --prefix="$_toolchain_"/x86/sysroot/usr \
+    $_s_/libsodium/configure --disable-asm --prefix="$_toolchain_"/x86/sysroot/usr \
         --disable-shared --disable-soname-versions --host=x86 \
         --with-sysroot="$_toolchain_"/x86/sysroot --disable-pie
     cd "$_BLD_";make -j $_CPUS_ || exit 1
@@ -1586,6 +1590,8 @@ cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
 cd $_s_;cd c-toxcore;git checkout "zoff99/zoxcore_local_fork"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -1908,8 +1914,8 @@ if [ "$full""x" == "1x" ]; then
         --enable-runtime-cpudetect \
         --enable-jni \
         --enable-neon \
-        --enable-mediacodec \
-        --enable-decoder=h264_mediacodec \
+        --disable-mediacodec \
+        --disable-decoder=h264_mediacodec \
         --enable-gpl --enable-decoder=h264 || exit 1
     cd "$_BLD_";make -j $_CPUS_ || exit 1
     cd "$_BLD_";make install
@@ -1984,12 +1990,12 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 ";export CFLAGS=" -g -Os -march=westmere "
-    $_s_/libsodium/configure --prefix="$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr \
+    $_s_/libsodium/configure --disable-asm --prefix="$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr \
         --disable-shared --disable-soname-versions --host="$AND_TOOLCHAIN_ARCH3" \
         --with-sysroot="$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot --disable-pie
     cd "$_BLD_";make -j $_CPUS_ || exit 1
@@ -2006,6 +2012,8 @@ cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
 cd $_s_;cd c-toxcore;git checkout "zoff99/zoxcore_local_fork"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)

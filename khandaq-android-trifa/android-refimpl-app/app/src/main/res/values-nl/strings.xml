@@ -21,4 +21,57 @@
     <string name="message_list_activity_name">Chat</string>
     <string name="conference_message_list_activity_name">Tekst conferentie</string>
     <string name="conference_audio_activity_player_name">Geluid conferentie speler</string>
+    <string name="group_password_placeholder">Group password (private groups only)</string>
+    <string name="group_password_set">Set group password</string>
+    <string name="group_topic_lock">Topic lock (founder only)</string>
+    <string name="group_privacy_set">Set privacy</string>
+    <string name="group_create_private_password">Optional group password</string>
+
+    <string name="group_video_join_title">Deelnemen aan groepsvideo?</string>
+    <string name="group_video_join_message">Je video en audio naar iedereen in de groep sturen?</string>
+    <string name="group_video_join_confirm">Ja, video starten</string>
+    <string name="group_video_join_decline">Nee</string>
+    <string name="group_send_voice_confirm_title">Spraakbericht verzenden?</string>
+    <string name="group_send_voice_confirm_message">Dit spraakbericht naar de groep sturen?</string>
+    <string name="group_peer_unknown">Onbekend</string>
+    <string name="group_incoming_message_error">Inkomend groepsbericht kon niet worden verwerkt.</string>
+    <string name="group_file_send_failed">Bestand kon niet naar de groep worden verzonden.</string>
+    <string name="group_image_shrink_failed">Afbeelding kon niet worden voorbereid voor verzending.</string>
+    <string name="group_incoming_file_error">Inkomend groepsbestand kon niet worden verwerkt.</string>
+    <string name="chat_file_too_large">Bestand is te groot.</string>
+    <string name="chat_incoming_file_too_large">Inkomend bestand is te groot.</string>
+    <string name="chat_opening_file_failed">Bestand kon niet worden geopend.</string>
+    <string name="group_file_too_large">Bestand is te groot voor deze groep.</string>
+    <string name="group_file_prepare_failed">Bestand kon niet worden voorbereid voor verzending.</string>
+    <string name="add_group_failed_empty_name">Voer een groepsnaam in.</string>
+    <string name="maintenance_exporting">Exporteren…</string>
+    <string name="maintenance_export_ready">Export voltooid</string>
+    <string name="maintenance_export_failed">Exporteren mislukt</string>
+    <string name="set_password_setup_failed">Wachtwoord instellen mislukt. Probeer opnieuw.</string>
+    <string name="power_charging_connected">Oplader aangesloten</string>
+    <string name="power_charging_disconnected">Oplader losgekoppeld</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

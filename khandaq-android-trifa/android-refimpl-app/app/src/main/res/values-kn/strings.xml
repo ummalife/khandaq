@@ -329,6 +329,12 @@
     <string name="join_public_group_activity_help">ನೀಡಿರುವ ಗುಂಪು ID ಯೊಂದಿಗೆ ಸಾರ್ವಜನಿಕ ಗುಂಪಿಗೆ ಸೇರಿಕೊಳ್ಳಿ.</string>
     <string name="join_group_activity_join">ಗುಂಪು ಸೇರಿ</string>
     <string name="add_private_group_failed">ಖಾಸಗಿ ಗುಂಪನ್ನು ರಚಿಸುವುದು ವಿಫಲವಾಗಿದೆ</string>
+    <string name="group_password_placeholder">ಗುಂಪು ಪಾಸ್‌ವರ್ಡ್ (ಖಾಸಗಿ ಗುಂಪುಗಳಿಗೆ ಮಾತ್ರ)</string>
+    <string name="group_password_set">ಗುಂಪು ಪಾಸ್‌ವರ್ಡ್ ಹೊಂದಿಸಿ</string>
+    <string name="group_topic_lock">ವಿಷಯ ಲಾಕ್ (ಸ್ಥಾಪಕ ಮಾತ್ರ)</string>
+    <string name="group_privacy_set">ಗೌಪ್ಯತೆ ಹೊಂದಿಸಿ</string>
+    <string name="group_create_private_password">ಐಚ್ಛಿಕ ಗುಂಪು ಪಾಸ್‌ವರ್ಡ್</string>
+
     <string name="add_private_group_success">ನೀವು ಖಾಸಗಿ ಗುಂಪನ್ನು ರಚಿಸಿದ್ದೀರಿ</string>
     <string name="add_friend_success">ನೀವು ಹೊಸ ಸ್ನೇಹಿತರನ್ನು ಸೇರಿಸಿದ್ದೀರಿ</string>
     <string name="add_friend_failed">ಸ್ನೇಹಿತನನ್ನು ಸೇರಿಸಲು ವಿಫಲವಾಗಿದೆ</string>
@@ -410,6 +416,55 @@
     <string name="pref_description_toxirc_muted_peers_01">ಮ್ಯೂಟ್ ಮಾಡಿದ ಬಳಕೆದಾರ 1 (ಬಳಸದಿದ್ದರೆ ಖಾಲಿ ಬಿಡಿ)</string>
     <string name="pref_description_toxirc_muted_peers_03">ಮ್ಯೂಟ್ ಮಾಡಿದ ಬಳಕೆದಾರ 1 (ಬಳಸದಿದ್ದರೆ ಖಾಲಿ ಬಿಡಿ)</string>
     <string name="join_public_group_failed">ಸಾರ್ವಜನಿಕ ಗುಂಪಿಗೆ ಸೇರುವುದು ವಿಫಲವಾಗಿದೆ</string>
+    <string name="join_public_group_failed_not_ready">ಮೆಸೆಂಜರ್ ಇನ್ನೂ ಸಂಪರ್ಕಿಸುತ್ತಿದೆ. ಕೆಲವು ಸೆಕೆಂಡುಗಳ ಕಾಯಿರಿ ಮತ್ತು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.</string>
+    <string name="join_public_group_failed_bad_id">ಅಮಾನ್ಯ ಗುಂಪು ID. ಎಲ್ಲ 64 hex ಅಕ್ಷರಗಳನ್ನು ನಕಲಿಸಿ.</string>
+    <string name="join_public_group_failed_network">ಜಾಲದಲ್ಲಿ ಗುಂಪು ಕಂಡುಬಂದಿಲ್ಲ. ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.</string>
+    <string name="join_public_group_failed_password">ಈ ಗುಂಪಿಗೆ ಪಾಸ್‌ವರ್ಡ್ ಅಗತ್ಯ.</string>
+    <string name="join_public_group_error_no_id">ಗುಂಪು ID ನಮೂದಿಸಿ</string>
+    <string name="join_public_group_error_illegal_chars">ಗುಂಪು ID ನಲ್ಲಿ ಅಮಾನ್ಯ ಅಕ್ಷರಗಳಿವೆ. A–F ಮತ್ತು 0–9 ಮಾತ್ರ ಅನುಮತಿ.</string>
+    <string name="join_public_group_error_length">ಗುಂಪು ID 64 hex ಅಕ್ಷರಗಳಾಗಿರಬೇಕು.</string>
+
     <string name="MessageListHolder_file_incoming_cancel_ft_title">ಫೈಲ್ ವರ್ಗಾವಣೆ ರದ್ದುಗೊಳಿಸಿ</string>
     <string name="MainActivity_new_noti_token_dialog_text">ಹೊಸ ಅಧಿಸೂಚನೆ ಟೋಕನ್ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ಈ ಟೋಕನ್ ಬಳಸುವುದೇ\?</string>
+    <string name="group_video_join_title">ಗುಂಪು ವೀಡಿಯೊಗೆ ಸೇರಲು?</string>
+    <string name="group_video_join_message">ಈ ಗುಂಪಿನ ಎಲ್ಲರಿಗೂ ನಿಮ್ಮ ವೀಡಿಯೊ ಮತ್ತು ಆಡಿಯೊ ಕಳುಹಿಸಲು?</string>
+    <string name="group_video_join_confirm">ಹೌದು, ವೀಡಿಯೊ ಪ್ರಾರಂಭಿಸಿ</string>
+    <string name="group_video_join_decline">ಇಲ್ಲ</string>
+    <string name="group_send_voice_confirm_title">Send voice message?</string>
+    <string name="group_send_voice_confirm_message">Send this voice message to the group?</string>
+    <string name="group_peer_unknown">Unknown</string>
+    <string name="group_incoming_message_error">Could not process incoming group message.</string>
+    <string name="group_file_send_failed">Group file send failed.</string>
+    <string name="group_image_shrink_failed">Could not prepare image for sending.</string>
+    <string name="group_incoming_file_error">Could not process incoming group file.</string>
+    <string name="chat_file_too_large">File is too large.</string>
+    <string name="chat_incoming_file_too_large">Incoming file is too large.</string>
+    <string name="chat_opening_file_failed">Could not open file.</string>
+    <string name="group_file_too_large">File is too large for this group.</string>
+    <string name="group_file_prepare_failed">Could not prepare file for sending.</string>
+    <string name="add_group_failed_empty_name">ಗುಂಪಿನ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

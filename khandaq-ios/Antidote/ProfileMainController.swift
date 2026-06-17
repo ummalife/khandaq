@@ -19,6 +19,7 @@ class ProfileMainController: StaticTableController {
     weak var delegate: ProfileMainControllerDelegate?
 
     fileprivate weak var submanagerUser: OCTSubmanagerUser!
+    fileprivate let profileTheme: Theme
     fileprivate let avatarManager: AvatarManager
 
     fileprivate let avatarModel = StaticTableAvatarCellModel()
@@ -27,11 +28,13 @@ class ProfileMainController: StaticTableController {
     // fileprivate let userStatusModel = StaticTableDefaultCellModel()
     fileprivate let toxIdModel = StaticTableDefaultCellModel()
     fileprivate let capabilitiesModel = StaticTableDefaultCellModel()
+    fileprivate let networkConnectionsModel = StaticTableDefaultCellModel()
     fileprivate let profileDetailsModel = StaticTableDefaultCellModel()
     fileprivate let logoutModel = StaticTableButtonCellModel()
 
     init(theme: Theme, submanagerUser: OCTSubmanagerUser) {
         self.submanagerUser = submanagerUser
+        self.profileTheme = theme
 
         avatarManager = AvatarManager(theme: theme)
 
@@ -51,6 +54,9 @@ class ProfileMainController: StaticTableController {
             ],
             [
                 capabilitiesModel,
+            ],
+            [
+                networkConnectionsModel,
             ],
             [
                 profileDetailsModel,
@@ -161,6 +167,11 @@ private extension ProfileMainController {
         capabilitiesModel.title = "Tox Capabilities"
         capabilitiesModel.value = capabilitiesToString(submanagerUser.capabilities as NSNumber)
         capabilitiesModel.userInteractionEnabled = false
+
+        networkConnectionsModel.title = String(localized: "network_connections_title")
+        networkConnectionsModel.value = String(localized: "network_connections_summary")
+        networkConnectionsModel.rightImageType = .arrow
+        networkConnectionsModel.didSelectHandler = showNetworkConnections
 
         profileDetailsModel.value = String(localized: "profile_details")
         profileDetailsModel.didSelectHandler = showProfileDetails
@@ -346,5 +357,10 @@ private extension ProfileMainController {
 
     func showProfileDetails(_: StaticTableBaseCell) {
         delegate?.profileMainControllerShowProfileDetails(self)
+    }
+
+    func showNetworkConnections(_: StaticTableBaseCell) {
+        let controller = NetworkDiagnosticsDetailController(theme: profileTheme)
+        navigationController?.pushViewController(controller, animated: true)
     }
 }

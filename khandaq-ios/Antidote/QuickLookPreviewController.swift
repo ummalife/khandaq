@@ -9,6 +9,24 @@ protocol QuickLookPreviewControllerDataSource: QLPreviewControllerDataSource {
     var previewController: QuickLookPreviewController? { get set }
 }
 
-class QuickLookPreviewController: QLPreviewController {
+class QuickLookPreviewController: QLPreviewController, QLPreviewControllerDelegate {
     var dataSourceStorage: QuickLookPreviewControllerDataSource?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        delegate = self
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(dismissPreview)
+        )
+    }
+
+    @objc private func dismissPreview() {
+        dismiss(animated: true, completion: nil)
+    }
+
+    func previewController(_ controller: QLPreviewController, shouldOpen url: URL, for item: QLPreviewItem) -> Bool {
+        return true
+    }
 }

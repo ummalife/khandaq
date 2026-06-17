@@ -42,7 +42,7 @@ extension Bus {
     func post(event: Events, object: Any? = nil, userInfo: [AnyHashable: Any]? = nil) {
         guard event.isManualPostSupported() else { return }
         let center = NotificationCenter.default
-        print("Event dispatch:", event)
+        log("Event dispatch: \(event)")
         center.post(name: event.notifciationName(), object: object, userInfo: userInfo)
     }
 }
@@ -79,7 +79,7 @@ extension Bus.Events {
         let actualNotificationName = self.notifciationName()
         let isSupported = name == actualNotificationName
         if !isSupported {
-            print("WARN: Event \"", self, "\" Wrapps the System Event \"", actualNotificationName.rawValue, "\" And should not be posted manually")
+            log("WARN: Event \"\(self)\" Wrapps the System Event \"\(actualNotificationName.rawValue)\" And should not be posted manually")
         }
         return isSupported
     }

@@ -7,6 +7,11 @@
         android:visible="true"
         app:showAsAction="ifRoom|withText" />
     <item
+        android:id="@+id/item_toggle_favorite"
+        android:title="@string/chat_filter_add_favorite"
+        android:visible="true"
+        app:showAsAction="ifRoom|withText" />
+    <item
         android:id="@+id/item_dummy01"
         android:background="@color/md_red_400"
         android:icon="@drawable/ic_delete_white_24dp"

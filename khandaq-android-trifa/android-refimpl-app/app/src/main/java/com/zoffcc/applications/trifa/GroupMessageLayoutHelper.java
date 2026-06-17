@@ -1,5 +1,7 @@
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.R;
+
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,10 +15,6 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PE
 /** Vertical spacing and bubble grouping for group chat rows. */
 public final class GroupMessageLayoutHelper
 {
-    private static final int MARGIN_SAME_SENDER_DP = 6;
-    private static final int MARGIN_DIFF_SENDER_DP = 14;
-    private static final int MARGIN_SYSTEM_DP = 4;
-
     private GroupMessageLayoutHelper()
     {
     }
@@ -44,6 +42,64 @@ public final class GroupMessageLayoutHelper
     public static boolean hasNonBlankText(final String text)
     {
         return text != null && !text.trim().isEmpty();
+    }
+
+    /** Timeline key used for chat ordering and last-message preview (rcvd can be newer than sent on sync). */
+    public static long effectiveSortTimestampMs(final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return 0L;
+        }
+        final long sent = message.sent_timestamp > 0L ? message.sent_timestamp : 0L;
+        final long rcvd = message.rcvd_timestamp > 0L ? message.rcvd_timestamp : 0L;
+        if (sent <= 0L)
+        {
+            return rcvd;
+        }
+        if (rcvd <= 0L)
+        {
+            return sent;
+        }
+        return Math.max(sent, rcvd);
+    }
+
+    public static void sortMessagesForChatDisplay(final java.util.List<GroupMessage> messages)
+    {
+        if (messages == null || messages.size() < 2)
+        {
+            return;
+        }
+        java.util.Collections.sort(messages, new java.util.Comparator<GroupMessage>()
+        {
+            @Override
+            public int compare(final GroupMessage a, final GroupMessage b)
+            {
+                final int byTime = Long.compare(effectiveSortTimestampMs(a), effectiveSortTimestampMs(b));
+                if (byTime != 0)
+                {
+                    return byTime;
+                }
+                return Long.compare(a.id, b.id);
+            }
+        });
+    }
+
+    public static int sortedInsertIndex(final java.util.List<GroupMessage> messages, final GroupMessage message)
+    {
+        if (messages == null || messages.isEmpty())
+        {
+            return 0;
+        }
+        final long ts = effectiveSortTimestampMs(message);
+        for (int i = messages.size() - 1; i >= 0; i--)
+        {
+            if (effectiveSortTimestampMs(messages.get(i)) <= ts)
+            {
+                return i + 1;
+            }
+        }
+        return 0;
     }
 
     /** Whether a group message should occupy a row in the chat list. */
@@ -91,7 +147,7 @@ public final class GroupMessageLayoutHelper
     public static RowLayout layoutFor(final GroupMessage message, final int position, final Context context)
     {
         final RowLayout layout = new RowLayout();
-        layout.topMarginPx = (int) dp2px(MARGIN_DIFF_SENDER_DP);
+        layout.topMarginPx = marginPx(context, R.dimen.tg_message_margin_diff_sender);
         layout.hidePeerHeader = false;
         layout.hideEntireRow = false;
         layout.showPeerName = true;
@@ -118,7 +174,8 @@ public final class GroupMessageLayoutHelper
 
         if (position <= 0)
         {
-            layout.topMarginPx = (int) dp2px(isSystem ? MARGIN_SYSTEM_DP : MARGIN_DIFF_SENDER_DP);
+            layout.topMarginPx = marginPx(context,
+                    isSystem ? R.dimen.tg_message_margin_system : R.dimen.tg_message_margin_diff_sender);
             return layout;
         }
 
@@ -140,18 +197,18 @@ public final class GroupMessageLayoutHelper
             final boolean prevSystem = TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(previous.tox_group_peer_pubkey);
             if (isSystem || prevSystem)
             {
-                layout.topMarginPx = (int) dp2px(MARGIN_DIFF_SENDER_DP);
+                layout.topMarginPx = marginPx(context, R.dimen.tg_message_margin_diff_sender);
                 return layout;
             }
 
             layout.showPeerName = !sameSenderGroup(message, previous);
             if (layout.showPeerName)
             {
-                layout.topMarginPx = (int) dp2px(MARGIN_DIFF_SENDER_DP);
+                layout.topMarginPx = marginPx(context, R.dimen.tg_message_margin_diff_sender);
             }
             else
             {
-                layout.topMarginPx = (int) dp2px(MARGIN_SAME_SENDER_DP);
+                layout.topMarginPx = marginPx(context, R.dimen.tg_message_margin_same_sender);
             }
 
             layout.showAvatar = true;
@@ -250,5 +307,14 @@ public final class GroupMessageLayoutHelper
         }
 
         return current.tox_group_peer_pubkey.equals(previous.tox_group_peer_pubkey);
+    }
+
+    private static int marginPx(final Context context, final int dimenResId)
+    {
+        if (context != null)
+        {
+            return (int) context.getResources().getDimension(dimenResId);
+        }
+        return (int) dp2px(12);
     }
 }

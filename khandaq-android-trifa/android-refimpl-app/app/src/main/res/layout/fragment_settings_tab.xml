@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ListView
+        android:id="@+id/settings_tab_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/tg_chat_bg"
+        android:clipToPadding="false"
+        android:divider="@color/md_grey_300_seperator"
+        android:dividerHeight="0.5dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:scrollbars="none" />
+
+    <FrameLayout
+        android:id="@+id/settings_tab_prefs_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+</FrameLayout>

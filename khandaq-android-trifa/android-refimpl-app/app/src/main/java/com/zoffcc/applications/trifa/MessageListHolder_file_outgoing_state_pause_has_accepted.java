@@ -47,6 +47,7 @@ import com.zoffcc.applications.sorm.Filetransfer;
 import com.zoffcc.applications.sorm.Message;
 
 import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactAudioUi;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactMediaUi;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.isAudioMessage;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFileDisplayLabel;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
@@ -124,36 +125,7 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
 
         final Message message = m;
 
-        int drawable_id = R.drawable.rounded_blue_bg_with_border;
-        try
-        {
-            if (m.filetransfer_kind == TOX_FILE_KIND_FTV2.value)
-            {
-                drawable_id = R.drawable.rounded_blue_bg;
-            }
-
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
-        catch (Exception e)
-        {
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
+        ChatBubbleUiHelper.apply_file_message_bubble(rounded_bg_container, true, false);
 
         // --------- message date header (show only if different from previous message) ---------
         // --------- message date header (show only if different from previous message) ---------
@@ -222,6 +194,18 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
             setup_cancel_button(message);
             HelperGeneric.fill_own_avatar_icon(context, img_avatar);
             HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            ChatTransferProgressHelper.applyDirect(context, itemView, message, true);
+            return;
+        }
+
+        if (bindOutgoingCompactMediaUi(context, itemView, message, textView, imageView, ft_preview_container,
+                                       ft_preview_image, ft_buttons_container, ft_progressbar, ft_audio_player,
+                                       button_ok, button_cancel, true))
+        {
+            setup_cancel_button(message);
+            HelperGeneric.fill_own_avatar_icon(context, img_avatar);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            ChatTransferProgressHelper.applyDirect(context, itemView, message, true);
             return;
         }
 
@@ -237,6 +221,7 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+        ChatTransferProgressHelper.applyDirect(context, itemView, message, true);
     }
 
     private void setup_cancel_button(final Message message)

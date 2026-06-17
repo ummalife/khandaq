@@ -40,6 +40,36 @@
 @property (nullable) NSString *senderUniqueIdentifier;
 
 /**
+ * NGC sender peer id. Zero for outgoing group messages; non-zero for incoming group messages.
+ */
+@property int32_t groupSenderPeerId;
+
+/**
+ * YES for messages inserted via NGC history sync (suppresses notification noise).
+ */
+@property BOOL groupHistorySync;
+
+/**
+ * YES for local system lines (join/leave/create) shown centered in the group timeline.
+ */
+@property BOOL groupSystemMessage;
+
+/**
+ * YES for outgoing group text queued while disconnected; flushed when the group connects.
+ */
+@property BOOL groupPendingSend;
+
+/**
+ * YES for NGC private messages between peers (hidden from main group timeline).
+ */
+@property BOOL groupPrivateMessage;
+
+/**
+ * Counterparty peer id for private group messages.
+ */
+@property int32_t groupPrivatePeerId;
+
+/**
  * The chat message message belongs to.
  */
 @property (nonnull) NSString *chatUniqueIdentifier;

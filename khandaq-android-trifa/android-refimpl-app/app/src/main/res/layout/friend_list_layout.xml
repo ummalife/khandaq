@@ -31,6 +31,13 @@
         app:showTrack="false"
         app:trackColor="@color/fast_scroller_color" />
 
+    <include
+        android:id="@+id/list_empty_state"
+        layout="@layout/list_empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true" />
+
     <!--<include layout="@layout/floating_action_button"/>-->
 
     <LinearLayout

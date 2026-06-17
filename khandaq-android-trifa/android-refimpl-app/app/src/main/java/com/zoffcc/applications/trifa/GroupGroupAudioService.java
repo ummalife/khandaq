@@ -81,7 +81,7 @@ public class GroupGroupAudioService extends Service
     @Override
     public int onStartCommand(Intent intent, int flags, int startId)
     {
-        Log.i(TAG, "onStartCommand");
+        HelperGeneric.logI(TAG, "onStartCommand");
         try
         {
             group_id = intent.getStringExtra("group_id");
@@ -90,7 +90,7 @@ public class GroupGroupAudioService extends Service
         {
             e.printStackTrace();
         }
-        // Log.i(TAG, "onStartCommand:conf_id=" + conf_id);
+        // HelperGeneric.logI(TAG, "onStartCommand:conf_id=" + conf_id);
 
         try
         {
@@ -111,7 +111,7 @@ public class GroupGroupAudioService extends Service
     @Override
     public void onCreate()
     {
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
         // serivce is created ---
         super.onCreate();
 
@@ -130,7 +130,7 @@ public class GroupGroupAudioService extends Service
                                       ngc_noti_and_builder.n,
                                       type);
 
-        Log.i(TAG, "onCreate:thread:1");
+        HelperGeneric.logI(TAG, "onCreate:thread:1");
 
         ngc_running = true;
         NGCGAThread = new Thread()
@@ -138,7 +138,7 @@ public class GroupGroupAudioService extends Service
             @Override
             public void run()
             {
-                Log.i(TAG, "GAThread:starting");
+                HelperGeneric.logI(TAG, "GAThread:starting");
 
                 // ------------- START Audio playing -------------
                 // ------------- START Audio playing -------------
@@ -225,7 +225,7 @@ public class GroupGroupAudioService extends Service
                     {
                         if (isBluetoothConnected())
                         {
-                            Log.i(TAG, "AUDIOROUTE:startBluetoothSco");
+                            HelperGeneric.logI(TAG, "AUDIOROUTE:startBluetoothSco");
                             manager.startBluetoothSco();
                             Callstate.audio_device = 2;
                             // manager.setBluetoothScoOn(true);
@@ -233,25 +233,25 @@ public class GroupGroupAudioService extends Service
                         else
                         {
                             // headset plugged in
-                            Log.i(TAG, "AUDIOROUTE:onReceive:headset:plugged in");
+                            HelperGeneric.logI(TAG, "AUDIOROUTE:onReceive:headset:plugged in");
                             Callstate.audio_device = 1;
                             set_audio_to_headset(manager);
                         }
                     }
                     else
                     {
-                        Log.i(TAG, "onReceive:headset:setImageDrawable:null1");
+                        HelperGeneric.logI(TAG, "onReceive:headset:setImageDrawable:null1");
                     }
                 }
                 catch (Exception ee)
                 {
                     ee.printStackTrace();
-                    Log.i(TAG, "onReceive:headset:setImageDrawable:null2");
+                    HelperGeneric.logI(TAG, "onReceive:headset:setImageDrawable:null2");
                 }
 
                 try
                 {
-                    Log.i(TAG, "NGCGAThread:starting ...");
+                    HelperGeneric.logI(TAG, "NGCGAThread:starting ...");
                     int delta = 0;
                     final int sleep_millis = NativeAudio.n_buf_iterate_ms; // "x" ms is what native audio wants
                     int sleep_millis_current = sleep_millis;
@@ -275,7 +275,7 @@ public class GroupGroupAudioService extends Service
                                 NativeAudio.n_audio_buffer[NativeAudio.n_cur_buf].rewind();
                                 NativeAudio.n_audio_buffer[NativeAudio.n_cur_buf].put(buf);
                                 int res = NativeAudio.PlayPCM16(NativeAudio.n_cur_buf);
-                                // Log.i(TAG, "NGCGAThread:playPCM16:res=" + res);
+                                // HelperGeneric.logI(TAG, "NGCGAThread:playPCM16:res=" + res);
 
                                 if (NativeAudio.n_cur_buf + 1 >= n_audio_in_buffer_max_count)
                                 {
@@ -312,7 +312,7 @@ public class GroupGroupAudioService extends Service
                     e.printStackTrace();
                 }
 
-                Log.i(TAG, "GAThread:finished");
+                HelperGeneric.logI(TAG, "GAThread:finished");
                 ngc_activity_state = 0;
                 push_to_talk_active = false;
 
@@ -326,7 +326,7 @@ public class GroupGroupAudioService extends Service
                     {
                         if (isBluetoothConnected())
                         {
-                            Log.i(TAG, "AUDIOROUTE:stopBluetoothSco:1");
+                            HelperGeneric.logI(TAG, "AUDIOROUTE:stopBluetoothSco:1");
                             // manager.setBluetoothScoOn(false);
                             manager.stopBluetoothSco();
                         }
@@ -342,15 +342,15 @@ public class GroupGroupAudioService extends Service
             }
         };
 
-        Log.i(TAG, "onCreate:thread:2");
+        HelperGeneric.logI(TAG, "onCreate:thread:2");
         NGCGAThread.start();
-        Log.i(TAG, "onCreate:thread:3");
+        HelperGeneric.logI(TAG, "onCreate:thread:3");
     }
 
     @Override
     public boolean onUnbind(Intent intent)
     {
-        Log.i(TAG, "onUnbind");
+        HelperGeneric.logI(TAG, "onUnbind");
         ngc_noti_and_builder.n.flags = Notification.FLAG_ONGOING_EVENT;
 
         return super.onUnbind(intent);
@@ -359,21 +359,21 @@ public class GroupGroupAudioService extends Service
     @Override
     public void unbindService(ServiceConnection conn)
     {
-        Log.i(TAG, "unbindService");
+        HelperGeneric.logI(TAG, "unbindService");
         super.unbindService(conn);
     }
 
     @Override
     public void onDestroy()
     {
-        Log.i(TAG, "onDestroy");
+        HelperGeneric.logI(TAG, "onDestroy");
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent)
     {
-        Log.i(TAG, "onBind");
+        HelperGeneric.logI(TAG, "onBind");
         return null;
     }
 
@@ -497,7 +497,7 @@ public class GroupGroupAudioService extends Service
         {
             if (reset_call_values)
             {
-                Log.i(TAG, "reset_values:004");
+                HelperGeneric.logI(TAG, "reset_values:004");
                 Callstate.reset_values();
             }
         }
@@ -538,13 +538,9 @@ public class GroupGroupAudioService extends Service
         @Override
         public void onReceive(Context context, Intent intent)
         {
-            try
+            if (intent == null || intent.getAction() == null)
             {
-                System.out.println("ButtonReceiver:" + intent.getAction());
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
+                return;
             }
         }
     }

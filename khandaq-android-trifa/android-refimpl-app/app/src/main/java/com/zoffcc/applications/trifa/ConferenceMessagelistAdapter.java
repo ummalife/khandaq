@@ -35,13 +35,15 @@ import java.util.List;
 
 import androidx.recyclerview.widget.RecyclerView;
 
+import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_date_header;
 import static com.zoffcc.applications.trifa.HelperGeneric.only_date_time_format;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_chatlist;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_PAGING_SHOW_NEWER_HASH;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_PAGING_SHOW_OLDER_HASH;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY;
 
-public class ConferenceMessagelistAdapter extends RecyclerView.Adapter implements FastScroller.SectionIndexer
+public class ConferenceMessagelistAdapter extends RecyclerView.Adapter implements FastScroller.SectionIndexer,
+        ChatDateSeparatorHelper.DateHeaderSource
 {
     private static final String TAG = "trifa.CnfMesgelistAdptr";
 
@@ -376,43 +378,32 @@ public class ConferenceMessagelistAdapter extends RecyclerView.Adapter implement
     {
         try
         {
-            ConferenceMessage getSectionText_message_object2 = messagelistitems.get(position);
-
-            if (getSectionText_message_object2.direction == 0)
-            {
-                // incoming msg
-                if (getSectionText_message_object2.rcvd_timestamp == getSectionText_message_object_ts2)
-                {
-                    return getSectionText_message_object_ts_string2;
-                }
-                else
-                {
-                    getSectionText_message_object_ts2 = getSectionText_message_object2.rcvd_timestamp;
-                    getSectionText_message_object_ts_string2 =
-                            "" + only_date_time_format(getSectionText_message_object2.rcvd_timestamp);
-                    return getSectionText_message_object_ts_string2;
-                }
-            }
-            else
-            {
-                // outgoing msg
-                if (getSectionText_message_object2.sent_timestamp == getSectionText_message_object_ts2)
-                {
-                    return getSectionText_message_object_ts_string2;
-                }
-                else
-                {
-                    getSectionText_message_object_ts2 = getSectionText_message_object2.sent_timestamp;
-                    getSectionText_message_object_ts_string2 =
-                            "" + only_date_time_format(getSectionText_message_object2.sent_timestamp);
-                    return getSectionText_message_object_ts_string2;
-                }
-            }
+            final ConferenceMessage message = messagelistitems.get(position);
+            final long ts = message.direction == 0 ? message.rcvd_timestamp : message.sent_timestamp;
+            return format_chat_date_header(context, ts);
         }
         catch (Exception e)
         {
             e.printStackTrace();
             return " ";
+        }
+    }
+
+    public boolean shouldShowDateHeader(int position)
+    {
+        if (position < 1)
+        {
+            return true;
+        }
+
+        try
+        {
+            return !getDateHeaderText(position).equals(getDateHeaderText(position - 1));
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return true;
         }
     }
 

@@ -64,6 +64,19 @@ enum ErrorHandlerType {
     case convertImageToPNG
     case changeAvatar
     case sendMessageToFriend
+    case acceptGroupInvite
+    case inviteFriendToGroup
+    case kickGroupPeer
+    case leaveGroup
+    case setGroupPeerRole
+    case setGroupTopic
+    case setGroupSelfPeerName
+    case setGroupPassword
+    case setGroupTopicLock
+    case setGroupPrivacy
+    case setGroupVoice
+    case setGroupPeerLimit
+    case sendGroupPrivateMessage
     case sendFileToFriend
     case acceptIncomingFile
     case cancelFileTransfer
@@ -94,8 +107,14 @@ func handleErrorWithType(_ type: ErrorHandlerType, error: NSError? = nil, retryB
             let (title, message) = OCTToxErrorSetInfoCode(rawValue: error!.code)!.statusMessageStrings()
             UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
         case .toxAddFriend:
-            let (title, message) = OCTToxErrorFriendAdd(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            if let error = error, let friendAddError = OCTToxErrorFriendAdd(rawValue: error.code) {
+                let (title, message) = friendAddError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                let message = error?.localizedDescription ?? String(localized: "error_internal_message")
+                UIAlertController.showWithTitle(String(localized: "error_title"), message: message, retryBlock: retryBlock)
+            }
         case .removeFriend:
             let (title, message) = OCTToxErrorFriendDelete(rawValue: error!.code)!.strings()
             UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
@@ -139,11 +158,139 @@ func handleErrorWithType(_ type: ErrorHandlerType, error: NSError? = nil, retryB
             let (title, message) = OCTSetUserAvatarError(rawValue: error!.code)!.strings()
             UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
         case .sendMessageToFriend:
-            let (title, message) = OCTToxErrorFriendSendMessage(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            if let error = error, error.domain == "OCTSubmanagerGroupsErrorDomain", error.code == 1 {
+                UIAlertController.showWithTitle(String(localized: "error_title"),
+                                                message: String(localized: "group_send_observer_role"),
+                                                retryBlock: retryBlock)
+            }
+            else if let error = error, let groupError = OCTToxErrorGroupSendMessage(rawValue: error.code) {
+                let (title, message) = groupError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else if let error = error, let (title, message) = OCTToxErrorFriendSendMessage(rawValue: error.code)?.strings() {
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
+            }
+        case .acceptGroupInvite:
+            if let error = error, let inviteError = OCTToxErrorGroupInviteAccept(rawValue: error.code) {
+                let (title, message) = inviteError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_invite_accept_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .inviteFriendToGroup:
+            if let error = error, let inviteError = OCTToxErrorGroupInviteFriend(rawValue: error.code) {
+                let (title, message) = inviteError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_invite_friend_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .kickGroupPeer:
+            if let error = error, let kickError = OCTToxErrorGroupKickPeer(rawValue: error.code) {
+                let (title, message) = kickError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_peer_kick_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .leaveGroup:
+            UIAlertController.showWithTitle(String(localized: "group_leave_failed"), message: nil, retryBlock: retryBlock)
+        case .setGroupPeerRole:
+            if let error = error, let roleError = OCTToxErrorGroupSetRole(rawValue: error.code) {
+                let (title, message) = roleError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_role_set_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .setGroupTopic:
+            if let error = error, let topicError = OCTToxErrorGroupTopicSet(rawValue: error.code) {
+                let (title, message) = topicError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_topic_set_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .setGroupSelfPeerName:
+            UIAlertController.showWithTitle(String(localized: "group_my_peer_name_set_failed"), message: nil, retryBlock: retryBlock)
+        case .setGroupPassword:
+            if let error = error, let passwordError = OCTToxErrorGroupFounderSetPassword(rawValue: error.code) {
+                let (title, message) = passwordError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_password_set_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .setGroupTopicLock:
+            if let error = error, let lockError = OCTToxErrorGroupFounderSetTopicLock(rawValue: error.code) {
+                let (title, message) = lockError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_topic_lock_set_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .setGroupPrivacy:
+            if let error = error, let privacyError = OCTToxErrorGroupFounderSetPrivacyState(rawValue: error.code) {
+                let (title, message) = privacyError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_privacy_set_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .setGroupVoice:
+            if let error = error, let voiceError = OCTToxErrorGroupFounderSetVoiceState(rawValue: error.code) {
+                let (title, message) = voiceError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_voice_set_failed"), message: nil, retryBlock: retryBlock)
+            }
+        case .setGroupPeerLimit:
+            if let error = error, let limitError = OCTToxErrorGroupFounderSetPeerLimit(rawValue: error.code) {
+                let (title, message) = limitError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_peer_limit_set_failed"), message: String(localized: "group_peer_limit_invalid"), retryBlock: retryBlock)
+            }
+        case .sendGroupPrivateMessage:
+            if let error = error, let privateError = OCTToxErrorGroupSendPrivateMessage(rawValue: error.code) {
+                let (title, message) = privateError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "group_private_message_failed"), message: nil, retryBlock: retryBlock)
+            }
         case .sendFileToFriend:
-            let (title, message) = OCTSendFileError(rawValue: error!.code)!.strings()
-            UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            if let error = error, error.domain == "OCTSubmanagerGroupsErrorDomain", error.code == 1 {
+                UIAlertController.showWithTitle(String(localized: "error_title"),
+                                                message: String(localized: "group_send_observer_role"),
+                                                retryBlock: retryBlock)
+            }
+            else if let error = error, error.domain == "OCTNgcGroupFileTransferErrorDomain" {
+                if error.code == 4 {
+                    // cancelled — no alert
+                }
+                else if error.code == 1 {
+                    UIAlertController.showWithTitle(String(localized: "error_title"),
+                                                    message: String(localized: "group_file_too_large"),
+                                                    retryBlock: retryBlock)
+                }
+                else {
+                    UIAlertController.showWithTitle(String(localized: "group_file_send_failed"), message: nil, retryBlock: retryBlock)
+                }
+            }
+            else if let error = error, let sendError = OCTSendFileError(rawValue: error.code) {
+                let (title, message) = sendError.strings()
+                UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
+            }
+            else {
+                UIAlertController.showWithTitle(String(localized: "error_title"), message: String(localized: "error_internal_message"), retryBlock: retryBlock)
+            }
         case .acceptIncomingFile:
             let (title, message) = OCTAcceptFileError(rawValue: error!.code)!.strings()
             UIAlertController.showWithTitle(title, message: message, retryBlock: retryBlock)
@@ -358,6 +505,298 @@ extension OCTToxErrorFriendSendMessage {
                 fallthrough
             case .empty:
                 fallthrough
+            case .unknown:
+                return (String(localized: "error_title"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupSendMessage {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .disconnected:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_disconnected"))
+            case .groupNotFound:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_not_found"))
+            case .tooLong:
+                return (String(localized: "error_title"),
+                        String(localized: "error_status_message_too_long"))
+            case .permissions:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_permissions"))
+            case .failSend:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_send_failed"))
+            case .empty:
+                fallthrough
+            case .badType:
+                fallthrough
+            case .unknown:
+                return (String(localized: "error_title"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupInviteAccept {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .badInvite:
+                return (String(localized: "group_invite_accept_failed"),
+                        String(localized: "group_invite_accept_bad_invite"))
+            case .initFailed:
+                fallthrough
+            case .core:
+                return (String(localized: "group_invite_accept_failed"),
+                        String(localized: "group_join_failed"))
+            case .tooLong:
+                return (String(localized: "error_title"),
+                        String(localized: "error_name_too_long"))
+            case .empty:
+                return (String(localized: "error_title"),
+                        String(localized: "error_internal_message"))
+            case .password:
+                return (String(localized: "group_invite_accept_failed"),
+                        String(localized: "group_error_password"))
+            case .failSend:
+                return (String(localized: "group_invite_accept_failed"),
+                        String(localized: "group_error_send_failed"))
+            case .unknown:
+                return (String(localized: "group_invite_accept_failed"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupInviteFriend {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_invite_friend_failed"),
+                        String(localized: "group_error_not_found"))
+            case .friendNotFound:
+                return (String(localized: "group_invite_friend_failed"),
+                        String(localized: "group_invite_friend_not_found"))
+            case .disconnected:
+                return (String(localized: "group_invite_friend_failed"),
+                        String(localized: "group_error_disconnected"))
+            case .failSend:
+                fallthrough
+            case .inviteFail:
+                return (String(localized: "group_invite_friend_failed"),
+                        String(localized: "group_error_send_failed"))
+            case .unknown:
+                return (String(localized: "group_invite_friend_failed"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupKickPeer {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_peer_kick_failed"),
+                        String(localized: "group_error_not_found"))
+            case .peerNotFound:
+                return (String(localized: "group_peer_kick_failed"),
+                        String(localized: "group_peer_kick_not_found"))
+            case .permissions:
+                return (String(localized: "group_peer_kick_failed"),
+                        String(localized: "group_error_permissions"))
+            case .failSend:
+                return (String(localized: "group_peer_kick_failed"),
+                        String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_peer_kick_failed"),
+                        String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_peer_kick_failed"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupSetRole {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "group_error_not_found"))
+            case .peerNotFound:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "group_peer_kick_not_found"))
+            case .permissions:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "group_error_permissions"))
+            case .assignment:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "group_role_set_invalid"))
+            case .failAction:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "group_error_send_failed"))
+            case .self:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "group_role_set_self"))
+            case .unknown:
+                return (String(localized: "group_role_set_failed"),
+                        String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupTopicSet {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_not_found"))
+            case .tooLong:
+                return (String(localized: "group_topic_set_failed"), String(localized: "group_topic_too_long"))
+            case .permissions:
+                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_permissions"))
+            case .failCreate, .failSend:
+                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_topic_set_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupFounderSetPassword {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_password_set_failed"), String(localized: "group_error_not_found"))
+            case .permissions:
+                return (String(localized: "group_password_set_failed"), String(localized: "group_error_permissions"))
+            case .tooLong:
+                return (String(localized: "group_password_set_failed"), String(localized: "group_password_too_long"))
+            case .failSend, .malloc:
+                return (String(localized: "group_password_set_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_password_set_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_password_set_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupFounderSetTopicLock {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_not_found"))
+            case .invalid:
+                return (String(localized: "group_topic_lock_set_failed"), String(localized: "error_internal_message"))
+            case .permissions:
+                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_permissions"))
+            case .failSet, .failSend:
+                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_topic_lock_set_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupFounderSetPeerLimit {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_peer_limit_set_failed"), String(localized: "group_error_not_found"))
+            case .permissions:
+                return (String(localized: "group_peer_limit_set_failed"), String(localized: "group_error_permissions"))
+            case .failSet, .failSend:
+                return (String(localized: "group_peer_limit_set_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_peer_limit_set_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_peer_limit_set_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupFounderSetPrivacyState {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_privacy_set_failed"), String(localized: "group_error_not_found"))
+            case .permissions:
+                return (String(localized: "group_privacy_set_failed"), String(localized: "group_error_permissions"))
+            case .failSet, .failSend:
+                return (String(localized: "group_privacy_set_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_privacy_set_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_privacy_set_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupFounderSetVoiceState {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_voice_set_failed"), String(localized: "group_error_not_found"))
+            case .permissions:
+                return (String(localized: "group_voice_set_failed"), String(localized: "group_error_permissions"))
+            case .failSet, .failSend:
+                return (String(localized: "group_voice_set_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_voice_set_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_voice_set_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupSendPrivateMessage {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .groupNotFound:
+                return (String(localized: "group_private_message_failed"), String(localized: "group_error_not_found"))
+            case .peerNotFound:
+                return (String(localized: "group_private_message_failed"), String(localized: "group_peer_kick_not_found"))
+            case .tooLong:
+                return (String(localized: "group_private_message_failed"), String(localized: "group_file_too_large"))
+            case .empty:
+                return (String(localized: "group_private_message_failed"), String(localized: "error_internal_message"))
+            case .badType:
+                return (String(localized: "group_private_message_failed"), String(localized: "error_internal_message"))
+            case .failSend:
+                return (String(localized: "group_private_message_failed"), String(localized: "group_error_send_failed"))
+            case .disconnected:
+                return (String(localized: "group_private_message_failed"), String(localized: "group_error_disconnected"))
+            case .unknown:
+                return (String(localized: "group_private_message_failed"), String(localized: "error_internal_message"))
+        }
+    }
+}
+
+extension OCTToxErrorGroupSendCustomPacket {
+    func strings() -> (title: String, message: String) {
+        switch self {
+            case .disconnected:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_disconnected"))
+            case .groupNotFound:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_not_found"))
+            case .tooLong:
+                return (String(localized: "error_title"),
+                        String(localized: "group_file_too_large"))
+            case .permissions:
+                return (String(localized: "error_title"),
+                        String(localized: "group_error_permissions"))
+            case .empty:
+                return (String(localized: "error_title"),
+                        String(localized: "group_file_send_failed"))
             case .unknown:
                 return (String(localized: "error_title"),
                         String(localized: "error_internal_message"))

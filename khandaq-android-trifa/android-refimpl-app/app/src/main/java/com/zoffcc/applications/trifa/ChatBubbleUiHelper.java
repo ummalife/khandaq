@@ -4,13 +4,16 @@ import org.khandaq.messenger.R;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.text.Spannable;
 import android.text.style.ForegroundColorSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -25,6 +28,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.request.RequestOptions;
 import com.luseen.autolinklibrary.EmojiTextViewLinks;
 import com.mikepenz.iconics.IconicsDrawable;
+import com.vanniktech.emoji.EmojiUtils;
 import com.mikepenz.fontawesome_typeface_library.FontAwesome;
 import com.zoffcc.applications.sorm.FriendList;
 import com.zoffcc.applications.sorm.GroupMessage;
@@ -32,15 +36,24 @@ import com.zoffcc.applications.sorm.Message;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
+import java.text.BreakIterator;
+
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
 import static com.zoffcc.applications.trifa.HelperGeneric.hash_to_bucket;
 import static com.zoffcc.applications.trifa.HelperGeneric.isColorDarkBrightness;
+import static com.zoffcc.applications.trifa.HelperGeneric.normalize_chat_input_text;
 import static com.zoffcc.applications.trifa.MainActivity.VFS_ENCRYPT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FRIEND_AVATAR_FILENAME;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_toxid;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_PUBLIC_KEY_SIZE;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_EMOJI_ONLY_EMOJI_SIZE;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_EMOJI_SIZE;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 final class ChatBubbleUiHelper
 {
+    /** Telegram-style sticker messages: 1–3 emoji only, no bubble background. */
+    private static final int STICKER_EMOJI_MAX_COUNT = 3;
     /** Auto-generated Tox identicons use a fixed VFS filename; keep Telegram-style placeholders for those. */
     static boolean shouldLoadVfsAvatar(final FriendList friend)
     {
@@ -125,6 +138,96 @@ final class ChatBubbleUiHelper
         container.setPadding(padH, padV, padH, padV);
     }
 
+    /** File/image/video bubbles: theme background, no thick stroke; edge-to-edge for photos/videos. */
+    static void apply_file_message_bubble(final ViewGroup container, final boolean outgoing,
+                                            final boolean edgeToEdgeMedia)
+    {
+        if (container == null)
+        {
+            return;
+        }
+
+        final Context context = container.getContext();
+
+        if (edgeToEdgeMedia)
+        {
+            container.setBackground(null);
+            container.setPadding(0, 0, 0, 0);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            {
+                container.setClipToOutline(false);
+                container.setOutlineProvider(null);
+            }
+            return;
+        }
+
+        apply_compact_file_bubble(container, outgoing);
+    }
+
+    /** Compact document/file card — subtle rounded background, minimal padding. */
+    static void apply_compact_file_bubble(final ViewGroup container, final boolean outgoing)
+    {
+        if (container == null)
+        {
+            return;
+        }
+
+        container.setBackground(null);
+        container.setPadding(0, 0, 0, 0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+        {
+            container.setClipToOutline(false);
+            container.setOutlineProvider(null);
+        }
+    }
+
+    static void style_media_preview(final View preview)
+    {
+        if (preview == null)
+        {
+            return;
+        }
+        preview.setElevation(0f);
+        preview.setBackgroundColor(Color.TRANSPARENT);
+        preview.setPadding(0, 0, 0, 0);
+        if (preview instanceof ImageView)
+        {
+            ((ImageView) preview).setScaleType(ImageView.ScaleType.CENTER_CROP);
+            ((ImageView) preview).setAdjustViewBounds(true);
+        }
+
+        final Context context = preview.getContext();
+        final int radius = media_corner_radius_px(context);
+        View clipTarget = preview;
+        if (preview.getParent() instanceof ViewGroup)
+        {
+            final ViewGroup parent = (ViewGroup) preview.getParent();
+            if (parent.findViewById(R.id.ft_media_info_bar) != null)
+            {
+                clipTarget = parent;
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+        {
+            final View target = clipTarget;
+            target.setClipToOutline(true);
+            target.setOutlineProvider(new ViewOutlineProvider()
+            {
+                @Override
+                public void getOutline(final View view, final Outline outline)
+                {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), radius);
+                }
+            });
+        }
+    }
+
+    static int media_corner_radius_px(final Context context)
+    {
+        return (int) context.getResources().getDimension(R.dimen.tg_bubble_radius);
+    }
+
     static void apply_message_text_style(final EmojiTextViewLinks textView, final boolean outgoing)
     {
         if (textView == null)
@@ -145,6 +248,158 @@ final class ChatBubbleUiHelper
         textView.setEmailModeColor(linkColor);
         textView.setCustomModeColor(linkColor);
         textView.setLinkTextColor(linkColor);
+    }
+
+    static boolean is_sticker_style_emoji_message(@Nullable final CharSequence rawText)
+    {
+        if (rawText == null)
+        {
+            return false;
+        }
+        final String normalized = normalize_chat_input_text(rawText.toString());
+        if (normalized.isEmpty() || !EmojiUtils.isOnlyEmojis(normalized))
+        {
+            return false;
+        }
+        final int emojiCount = count_grapheme_clusters(normalized);
+        return emojiCount >= 1 && emojiCount <= STICKER_EMOJI_MAX_COUNT;
+    }
+
+    private static int count_grapheme_clusters(final String text)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return 0;
+        }
+        final BreakIterator iterator = BreakIterator.getCharacterInstance();
+        iterator.setText(text);
+        int count = 0;
+        int start = iterator.first();
+        for (int end = iterator.next(); end != BreakIterator.DONE; start = end, end = iterator.next())
+        {
+            if (end > start)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    static void configure_message_emoji_size(final EmojiTextViewLinks textView, final CharSequence displayText,
+                                             final int fontSizePrefIndex, final boolean forceLargeEmojiOnly)
+    {
+        if (textView == null)
+        {
+            return;
+        }
+        final int emojiSizeDp = forceLargeEmojiOnly || is_sticker_style_emoji_message(displayText)
+                ? MESSAGE_EMOJI_ONLY_EMOJI_SIZE[fontSizePrefIndex]
+                : MESSAGE_EMOJI_SIZE[fontSizePrefIndex];
+        textView.setEmojiSize((int) dp2px(emojiSizeDp));
+    }
+
+    /**
+     * Apply bubble background for text messages, or transparent sticker layout for 1–3 emoji-only messages.
+     */
+    static void bind_text_message_bubble(final ViewGroup container, final EmojiTextViewLinks textView,
+                                         final boolean outgoing, final CharSequence displayText,
+                                         final int fontSizePrefIndex, final boolean hasReplyQuote,
+                                         final boolean forceStandardBubble)
+    {
+        if (container == null || textView == null)
+        {
+            return;
+        }
+        final boolean sticker = !forceStandardBubble && !hasReplyQuote
+                && is_sticker_style_emoji_message(displayText);
+        if (sticker)
+        {
+            apply_emoji_sticker_message(container, textView, fontSizePrefIndex);
+        }
+        else
+        {
+            apply_standard_text_message_bubble(container, textView, outgoing, displayText, fontSizePrefIndex);
+        }
+    }
+
+    private static void apply_emoji_sticker_message(final ViewGroup container, final EmojiTextViewLinks textView,
+                                                    final int fontSizePrefIndex)
+    {
+        container.setBackground(null);
+        container.setPadding(0, 0, 0, 0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+        {
+            container.setClipToOutline(false);
+        }
+
+        textView.setBackground(null);
+        textView.setIncludeFontPadding(false);
+        textView.setPadding(0, 0, 0, 0);
+        configure_message_emoji_size(textView, null, fontSizePrefIndex, true);
+
+        if (textView.getParent() instanceof ChatBubbleMetaLayout)
+        {
+            ((ChatBubbleMetaLayout) textView.getParent()).setMetaVisible(false);
+        }
+
+        final ViewGroup.LayoutParams lp = textView.getLayoutParams();
+        if (lp instanceof LinearLayout.LayoutParams)
+        {
+            final LinearLayout.LayoutParams marginParams = (LinearLayout.LayoutParams) lp;
+            marginParams.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            marginParams.weight = 0f;
+            textView.setLayoutParams(marginParams);
+        }
+        else if (lp != null)
+        {
+            lp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            textView.setLayoutParams(lp);
+        }
+    }
+
+    private static void apply_standard_text_message_bubble(final ViewGroup container,
+                                                           final EmojiTextViewLinks textView,
+                                                           final boolean outgoing,
+                                                           final CharSequence displayText,
+                                                           final int fontSizePrefIndex)
+    {
+        if (outgoing)
+        {
+            apply_outgoing_bubble(container);
+        }
+        else
+        {
+            apply_incoming_bubble(container);
+        }
+        apply_message_text_style(textView, outgoing);
+        configure_message_emoji_size(textView, displayText, fontSizePrefIndex, false);
+
+        if (textView.getParent() instanceof ChatBubbleMetaLayout)
+        {
+            textView.setPadding(textView.getPaddingLeft(), textView.getPaddingTop(),
+                    textView.getPaddingRight(), 0);
+            final ChatBubbleMetaLayout metaLayout = (ChatBubbleMetaLayout) textView.getParent();
+            metaLayout.setMetaVisible(true);
+            metaLayout.scheduleMetaLayout();
+            return;
+        }
+
+        final ViewGroup.LayoutParams lp = textView.getLayoutParams();
+        if (lp instanceof LinearLayout.LayoutParams)
+        {
+            final LinearLayout.LayoutParams marginParams = (LinearLayout.LayoutParams) lp;
+            if (marginParams.width != ViewGroup.LayoutParams.WRAP_CONTENT)
+            {
+                marginParams.width = 0;
+                marginParams.weight = 1f;
+            }
+            final Context context = textView.getContext();
+            marginParams.bottomMargin = 0;
+            textView.setLayoutParams(marginParams);
+            final int timePadBottom = (int) context.getResources().getDimension(R.dimen.tg_bubble_time_pad_bottom);
+            textView.setPadding(textView.getPaddingLeft(), textView.getPaddingTop(),
+                    textView.getPaddingRight(), timePadBottom);
+        }
     }
 
     private static void force_spannable_text_color(final TextView textView, final int textColor)
@@ -182,6 +437,13 @@ final class ChatBubbleUiHelper
         peerNameView.setTextColor(peer_name_color(context, peerPubkey));
         peerNameView.setMaxLines(1);
         peerNameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        final ViewGroup.LayoutParams lp = peerNameView.getLayoutParams();
+        if (lp instanceof ViewGroup.MarginLayoutParams)
+        {
+            final ViewGroup.MarginLayoutParams marginParams = (ViewGroup.MarginLayoutParams) lp;
+            marginParams.bottomMargin = (int) context.getResources().getDimension(R.dimen.tg_peer_name_bubble_bottom);
+            peerNameView.setLayoutParams(marginParams);
+        }
     }
 
     static void bind_bubble_time(final TextView bubbleTime, final TextView externalTime,
@@ -191,20 +453,41 @@ final class ChatBubbleUiHelper
         {
             bubbleTime.setVisibility(View.VISIBLE);
             bubbleTime.setText(timeText);
-            final Context context = bubbleTime.getContext();
-            bubbleTime.setTextSize(TypedValue.COMPLEX_UNIT_PX,
-                    context.getResources().getDimension(R.dimen.tg_bubble_time_size));
-            bubbleTime.setTextColor(ContextCompat.getColor(context,
-                    outgoing ? R.color.tg_bubble_time_outgoing : R.color.tg_bubble_time_incoming));
-            bubbleTime.setPadding((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6f,
-                    context.getResources().getDisplayMetrics()), 0, 0,
-                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2f,
-                            context.getResources().getDisplayMetrics()));
-            bubbleTime.setGravity(Gravity.BOTTOM);
+            apply_bubble_time_style(bubbleTime, outgoing, true);
+            schedule_meta_layout_if_needed(bubbleTime);
+            if (externalTime != null)
+            {
+                externalTime.setVisibility(View.GONE);
+            }
+            return;
         }
-        if (externalTime != null)
+
+        if (externalTime != null && timeText != null && !timeText.isEmpty())
+        {
+            externalTime.setVisibility(View.VISIBLE);
+            externalTime.setText(timeText);
+            apply_bubble_time_style(externalTime, outgoing, false);
+        }
+        else if (externalTime != null)
         {
             externalTime.setVisibility(View.GONE);
+        }
+    }
+
+    private static void apply_bubble_time_style(final TextView timeView, final boolean outgoing,
+                                                final boolean inlineInBubble)
+    {
+        final Context context = timeView.getContext();
+        timeView.setTextSize(TypedValue.COMPLEX_UNIT_PX,
+                context.getResources().getDimension(R.dimen.tg_bubble_time_size));
+        timeView.setTextColor(ContextCompat.getColor(context,
+                outgoing ? R.color.tg_bubble_time_outgoing : R.color.tg_bubble_time_incoming));
+        if (inlineInBubble)
+        {
+            final int timePadStart = (int) context.getResources().getDimension(R.dimen.tg_bubble_time_pad_start);
+            final int timePadBottom = (int) context.getResources().getDimension(R.dimen.tg_bubble_time_pad_bottom);
+            timeView.setPadding(timePadStart, 0, 0, timePadBottom);
+            timeView.setGravity(Gravity.BOTTOM);
         }
     }
 
@@ -235,6 +518,12 @@ final class ChatBubbleUiHelper
         final Context context = field.getContext();
         field.setTextColor(ContextCompat.getColor(context, R.color.tg_chat_input_text));
         field.setHintTextColor(ContextCompat.getColor(context, R.color.tg_chat_input_hint));
+        field.setBackgroundResource(android.R.color.transparent);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP)
+        {
+            field.setBackgroundTintList(null);
+            field.setBackgroundTintMode(null);
+        }
     }
 
     static void apply_chat_header_theme(final View headerRow, final TextView titleView)
@@ -296,14 +585,69 @@ final class ChatBubbleUiHelper
         }
     }
 
+    private static void schedule_meta_layout_if_needed(final View view)
+    {
+        if (view == null)
+        {
+            return;
+        }
+        View parent = view.getParent() instanceof View ? (View) view.getParent() : null;
+        while (parent != null)
+        {
+            if (parent instanceof ChatBubbleMetaLayout)
+            {
+                ((ChatBubbleMetaLayout) parent).scheduleMetaLayout();
+                return;
+            }
+            parent = parent.getParent() instanceof View ? (View) parent.getParent() : null;
+        }
+    }
+
     static void bind_outgoing_delivery_status(final ImageView indicator, final Message message)
     {
         MessageStatusHelper.bindOutgoingIndicator(indicator, message);
+        bind_delivery_retry_click(indicator, message, null);
+        schedule_meta_layout_if_needed(indicator);
     }
 
     static void bind_outgoing_delivery_status(final ImageView indicator, final GroupMessage message)
     {
         MessageStatusHelper.bindOutgoingIndicator(indicator, message);
+        bind_delivery_retry_click(indicator, null, message);
+        schedule_meta_layout_if_needed(indicator);
+    }
+
+    private static void bind_delivery_retry_click(final ImageView indicator, final Message directMessage,
+                                                  final GroupMessage groupMessage)
+    {
+        if (indicator == null)
+        {
+            return;
+        }
+
+        final boolean canRetry = (directMessage != null && MessageDeliveryRetryHelper.canRetryDirect(directMessage))
+                || (groupMessage != null && MessageDeliveryRetryHelper.canRetryGroup(groupMessage));
+
+        if (!canRetry)
+        {
+            indicator.setOnClickListener(null);
+            indicator.setClickable(false);
+            return;
+        }
+
+        indicator.setClickable(true);
+        indicator.setOnClickListener(v ->
+        {
+            final android.content.Context ctx = v.getContext();
+            if (directMessage != null)
+            {
+                MessageDeliveryRetryHelper.retryDirectMessage(ctx, directMessage);
+            }
+            else if (groupMessage != null)
+            {
+                MessageDeliveryRetryHelper.retryGroupMessage(ctx, groupMessage);
+            }
+        });
     }
 
     static void hide_delivery_indicator(final ImageView indicator)
@@ -311,6 +655,7 @@ final class ChatBubbleUiHelper
         if (indicator != null)
         {
             indicator.setVisibility(View.GONE);
+            schedule_meta_layout_if_needed(indicator);
         }
     }
 
@@ -567,9 +912,30 @@ final class ChatBubbleUiHelper
 
     static void fill_drawer_peer_icon(final ImageView icon, final String peerPubkey, final String peerName)
     {
+        fill_drawer_peer_icon(icon, peerPubkey, peerName, false);
+    }
+
+    static void fill_drawer_peer_icon(final ImageView icon, final String peerPubkey, final String peerName,
+                                      final boolean isSelf)
+    {
         if (icon == null)
         {
             return;
+        }
+
+        String avatarLookupPubkey = peerPubkey;
+        if (isSelf)
+        {
+            try
+            {
+                if ((global_my_toxid != null) && (global_my_toxid.length() >= (TOX_PUBLIC_KEY_SIZE * 2)))
+                {
+                    avatarLookupPubkey = global_my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
         }
 
         final Context context = icon.getContext();
@@ -596,14 +962,41 @@ final class ChatBubbleUiHelper
         icon.setImageDrawable(placeholder);
         icon.invalidate();
 
-        if (!VFS_ENCRYPT || peerPubkey == null || peerPubkey.compareTo("-1") == 0)
+        if (!VFS_ENCRYPT || avatarLookupPubkey == null || avatarLookupPubkey.compareTo("-1") == 0)
         {
+            return;
+        }
+
+        if (isSelf)
+        {
+            try
+            {
+                final String fname = HelperGeneric.get_vfs_image_filename_own_avatar();
+                if (fname == null)
+                {
+                    return;
+                }
+
+                final info.guardianproject.iocipher.File avatarFile = new info.guardianproject.iocipher.File(fname);
+                if (avatarFile.length() <= 0)
+                {
+                    return;
+                }
+
+                final RequestOptions glideOptions = new RequestOptions().fitCenter().circleCrop();
+                GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE).skipMemoryCache(
+                        false).apply(glideOptions).into(icon);
+            }
+            catch (Exception ignored)
+            {
+            }
             return;
         }
 
         try
         {
-            final java.util.List<FriendList> friends = orma.selectFromFriendList().tox_public_key_stringEq(peerPubkey).toList();
+            final java.util.List<FriendList> friends = orma.selectFromFriendList().tox_public_key_stringEq(
+                    avatarLookupPubkey).toList();
             if (friends.isEmpty())
             {
                 return;
@@ -630,6 +1023,62 @@ final class ChatBubbleUiHelper
         }
         catch (Exception ignored)
         {
+        }
+    }
+
+    interface ReplyQuoteClickListener
+    {
+        void onReplyQuoteClicked(MessageReplyHelper.ReplyMeta replyMeta);
+    }
+
+    static void bind_reply_quote(final View bubbleRoot, @Nullable final MessageReplyHelper.ReplyMeta replyMeta,
+                                 @Nullable final ReplyQuoteClickListener clickListener)
+    {
+        if (bubbleRoot == null)
+        {
+            return;
+        }
+
+        final View quoteBlock = bubbleRoot.findViewById(R.id.chat_reply_quote_block);
+        final View quoteBar = bubbleRoot.findViewById(R.id.chat_reply_quote_bar);
+        final TextView quoteName = bubbleRoot.findViewById(R.id.chat_reply_quote_name);
+        final TextView quoteText = bubbleRoot.findViewById(R.id.chat_reply_quote_text);
+        if (quoteBlock == null || quoteName == null || quoteText == null)
+        {
+            return;
+        }
+
+        if (replyMeta == null || (replyMeta.previewText == null || replyMeta.previewText.trim().isEmpty()))
+        {
+            quoteBlock.setVisibility(View.GONE);
+            quoteBlock.setOnClickListener(null);
+            return;
+        }
+
+        final Context context = bubbleRoot.getContext();
+        quoteBlock.setVisibility(View.VISIBLE);
+        if (quoteBar != null)
+        {
+            quoteBar.setBackgroundColor(ContextCompat.getColor(context, R.color.tg_reply_quote_accent));
+        }
+        final String name = replyMeta.senderName == null || replyMeta.senderName.isEmpty()
+                ? context.getString(R.string.chat_reply_unknown_sender) : replyMeta.senderName;
+        quoteName.setText(name);
+        quoteName.setTextColor(ContextCompat.getColor(context, R.color.tg_reply_quote_name));
+        quoteText.setText(MessageReplyHelper.previewForDisplay(context, replyMeta.previewText, 160));
+        quoteText.setTextColor(ContextCompat.getColor(context, R.color.tg_reply_quote_text));
+        quoteBlock.setBackground(ContextCompat.getDrawable(context, R.drawable.bg_chat_reply_quote));
+        if (clickListener != null && !replyMeta.legacyQuote)
+        {
+            quoteBlock.setOnClickListener(v -> clickListener.onReplyQuoteClicked(replyMeta));
+        }
+        else if (clickListener != null)
+        {
+            quoteBlock.setOnClickListener(v -> clickListener.onReplyQuoteClicked(replyMeta));
+        }
+        else
+        {
+            quoteBlock.setOnClickListener(null);
         }
     }
 

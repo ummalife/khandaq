@@ -216,4 +216,126 @@
     friendNumber:(OCTToxFriendNumber)friendNumber
         position:(OCTToxFileSize)position;
 
+/**
+ * Group message received.
+ */
+- (void)tox:(OCTTox *)tox groupMessage:(NSString *)message
+       type:(OCTToxMessageType)type
+groupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId
+  messageId:(uint32_t)messageId;
+
+/**
+ * Group connection status changed. 1 = connected, 0 = connecting, -1 = invalid group.
+ */
+- (void)tox:(OCTTox *)tox groupConnectionStatusChanged:(int32_t)status
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * A peer other than self joined the group.
+ */
+- (void)tox:(OCTTox *)tox groupPeerJoinWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId;
+
+/**
+ * A peer's nickname in the group was updated.
+ */
+- (void)tox:(OCTTox *)tox groupPeerNameUpdate:(NSString *)name
+groupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId;
+
+/**
+ * Group invite received from a friend.
+ */
+- (void)tox:(OCTTox *)tox groupInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
+ inviteData:(NSData *)inviteData
+  groupName:(NSString *)groupName;
+
+/**
+ * Friend requested an invite into a group via lossless packet 184.
+ */
+- (void)tox:(OCTTox *)tox friendGroupInviteRequestFromFriendNumber:(OCTToxFriendNumber)friendNumber
+ chatIdData:(NSData *)chatIdData;
+
+/**
+ * A peer other than self left the group.
+ */
+- (void)tox:(OCTTox *)tox groupPeerExitWithGroupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId
+   exitType:(OCTToxGroupExitType)exitType
+       name:(NSString *)name
+partMessage:(nullable NSString *)partMessage;
+
+/**
+ * Custom lossless/lossy packet received in a group.
+ */
+- (void)tox:(OCTTox *)tox groupCustomPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId
+       data:(NSData *)data;
+
+/**
+ * Custom private packet received in a group.
+ */
+- (void)tox:(OCTTox *)tox groupCustomPrivatePacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId
+       data:(NSData *)data;
+
+/**
+ * Moderation event in a group (kick, role change).
+ */
+- (void)tox:(OCTTox *)tox groupModerationWithGroupNumber:(OCTToxGroupNumber)groupNumber
+ sourcePeerId:(uint32_t)sourcePeerId
+ targetPeerId:(uint32_t)targetPeerId
+          event:(OCTToxGroupModEvent)event;
+
+/**
+ * Group topic changed.
+ */
+- (void)tox:(OCTTox *)tox groupTopicUpdate:(NSString *)topic
+groupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId;
+
+/**
+ * Group password changed.
+ */
+- (void)tox:(OCTTox *)tox groupPasswordUpdate:(nullable NSString *)password
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * Group topic lock changed.
+ */
+- (void)tox:(OCTTox *)tox groupTopicLockUpdate:(OCTToxGroupTopicLock)topicLock
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * Group peer limit changed.
+ */
+- (void)tox:(OCTTox *)tox groupPeerLimitUpdate:(uint16_t)peerLimit
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * Group privacy state changed.
+ */
+- (void)tox:(OCTTox *)tox groupPrivacyStateUpdate:(OCTToxGroupPrivacyState)privacyState
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * Group voice state changed.
+ */
+- (void)tox:(OCTTox *)tox groupVoiceStateUpdate:(OCTToxGroupVoiceState)voiceState
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * Async group join failure (e.g. peer limit, invalid password).
+ */
+- (void)tox:(OCTTox *)tox groupJoinFail:(OCTToxGroupJoinFail)failType
+groupNumber:(OCTToxGroupNumber)groupNumber;
+
+/**
+ * Private message in a group.
+ */
+- (void)tox:(OCTTox *)tox groupPrivateMessage:(NSString *)message
+       type:(OCTToxMessageType)type
+groupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId;
+
 @end

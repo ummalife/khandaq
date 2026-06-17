@@ -42,12 +42,29 @@ private let toxAddressInputPrefixes = [
 private func stripInvisibleFormattingCharacters(_ string: String) -> String {
     String(string.unicodeScalars.filter { scalar in
         switch scalar.value {
-        case 0x200B...0x200D, 0xFEFF, 0x2060, 0x00AD, 0x2028, 0x2029:
+        case 0x200B...0x200D, 0xFEFF, 0x2060, 0x00AD, 0x2028, 0x2029, 0x00A0, 0x202F, 0x3000:
             return false
         default:
             return !CharacterSet.controlCharacters.contains(scalar)
         }
     })
+}
+
+/// Returns normalized 76-char Tox address, or nil if input cannot be parsed.
+func normalizedToxAddress(from raw: String) -> String? {
+    return normalizeAddressString(raw)
+}
+
+/// Public key prefix (64 hex chars) from a normalized address or sanitized input.
+func toxPublicKeyPrefix(from raw: String) -> String? {
+    let hex = sanitizeAddressInput(raw)
+    let publicKeyLength = Int(kOCTToxPublicKeyLength)
+
+    if hex.count >= publicKeyLength {
+        return String(hex.prefix(publicKeyLength))
+    }
+
+    return nil
 }
 
 func sanitizeAddressInput(_ string: String) -> String {
@@ -60,6 +77,12 @@ func sanitizeAddressInput(_ string: String) -> String {
             result = String(result[result.index(result.startIndex, offsetBy: prefix.count) ..< result.endIndex])
             break
         }
+    }
+
+    if result.hasPrefix("TOX://") {
+        result = String(result.dropFirst(6))
+    } else if result.hasPrefix("KHANDAQ://") {
+        result = String(result.dropFirst(10))
     }
 
     return result.filter { $0.isHexDigit }.uppercased()

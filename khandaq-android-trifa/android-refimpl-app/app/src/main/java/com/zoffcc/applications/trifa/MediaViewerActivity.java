@@ -62,6 +62,12 @@ public class MediaViewerActivity extends AppCompatActivity
         }
     }
 
+    private void failOpenAndFinish()
+    {
+        HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+        finish();
+    }
+
     private void showImage(final String vfsPath, final String exportPath, final boolean storageFramework)
     {
         photoView.setVisibility(View.VISIBLE);
@@ -70,6 +76,12 @@ public class MediaViewerActivity extends AppCompatActivity
 
         if (storageFramework)
         {
+            if (vfsPath == null || vfsPath.isEmpty())
+            {
+                failOpenAndFinish();
+                return;
+            }
+
             GlideApp.
                     with(this).
                     load(Uri.parse(vfsPath)).
@@ -81,6 +93,12 @@ public class MediaViewerActivity extends AppCompatActivity
 
         if ((exportPath != null) && (!exportPath.isEmpty()))
         {
+            if (!HelperFiletransfer.isMediaFileReadyForPlayback(exportPath))
+            {
+                failOpenAndFinish();
+                return;
+            }
+
             GlideApp.
                     with(this).
                     load(new java.io.File(exportPath)).
@@ -90,23 +108,124 @@ public class MediaViewerActivity extends AppCompatActivity
             return;
         }
 
-        if (VFS_ENCRYPT)
+        if (vfsPath == null || vfsPath.isEmpty())
         {
-            info.guardianproject.iocipher.File vfsFile = new info.guardianproject.iocipher.File(vfsPath);
+            failOpenAndFinish();
+            return;
+        }
+
+        if (!HelperFiletransfer.isIocipherVirtualPath(vfsPath))
+        {
+            final java.io.File direct = new java.io.File(vfsPath);
+            if (!direct.isFile() || direct.length() <= 0L)
+            {
+                failOpenAndFinish();
+                return;
+            }
+
             GlideApp.
                     with(this).
-                    load(vfsFile).
+                    load(direct).
                     diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                    apply(new RequestOptions()).
                     placeholder(R.drawable.round_loading_animation).
+                    error(R.drawable.round_loading_animation).
+                    listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>()
+                    {
+                        @Override
+                        public boolean onLoadFailed(com.bumptech.glide.load.engine.GlideException e,
+                                                    Object model,
+                                                    com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                                    boolean isFirstResource)
+                        {
+                            failOpenAndFinish();
+                            return false;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(android.graphics.drawable.Drawable resource,
+                                                       Object model,
+                                                       com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                                       com.bumptech.glide.load.DataSource dataSource,
+                                                       boolean isFirstResource)
+                        {
+                            return false;
+                        }
+                    }).
                     into(photoView);
+            return;
         }
+
+        if (VFS_ENCRYPT)
+        {
+            try
+            {
+                final info.guardianproject.iocipher.File vfsFile =
+                        new info.guardianproject.iocipher.File(vfsPath);
+                GlideApp.
+                        with(this).
+                        load(vfsFile).
+                        diskCacheStrategy(DiskCacheStrategy.RESOURCE).
+                        apply(new RequestOptions()).
+                        placeholder(R.drawable.round_loading_animation).
+                        error(R.drawable.round_loading_animation).
+                        listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>()
+                        {
+                            @Override
+                            public boolean onLoadFailed(com.bumptech.glide.load.engine.GlideException e,
+                                                        Object model,
+                                                        com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                                        boolean isFirstResource)
+                            {
+                                failOpenAndFinish();
+                                return false;
+                            }
+
+                            @Override
+                            public boolean onResourceReady(android.graphics.drawable.Drawable resource,
+                                                           Object model,
+                                                           com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                                           com.bumptech.glide.load.DataSource dataSource,
+                                                           boolean isFirstResource)
+                            {
+                                return false;
+                            }
+                        }).
+                        into(photoView);
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "showImage:EE:" + e.getMessage());
+                failOpenAndFinish();
+            }
+            return;
+        }
+
+        final java.io.File direct = new java.io.File(vfsPath);
+        if (!direct.exists() || direct.length() <= 0L)
+        {
+            failOpenAndFinish();
+            return;
+        }
+
+        GlideApp.
+                with(this).
+                load(direct).
+                diskCacheStrategy(DiskCacheStrategy.RESOURCE).
+                placeholder(R.drawable.round_loading_animation).
+                into(photoView);
     }
 
     @OptIn(markerClass = UnstableApi.class)
     private void showVideo(final String vfsPath, final String exportPath, final boolean storageFramework,
                            final String mimeType)
     {
+        if (!HelperFiletransfer.isMediaFileReadyToView(vfsPath, storageFramework, exportPath))
+        {
+            HelperGeneric.display_toast(getString(R.string.chat_media_still_downloading), false, 0);
+            finish();
+            return;
+        }
+
         photoView.setVisibility(View.GONE);
         playerView.setVisibility(View.VISIBLE);
         loadingView.setVisibility(View.VISIBLE);
@@ -139,7 +258,7 @@ public class MediaViewerActivity extends AppCompatActivity
                         public void run()
                         {
                             loadingView.setVisibility(View.GONE);
-                            HelperGeneric.display_toast("opening file failed", false, 0);
+                            HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
                             finish();
                         }
                     });

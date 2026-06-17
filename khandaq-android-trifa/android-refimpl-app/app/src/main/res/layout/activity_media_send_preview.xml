@@ -9,7 +9,7 @@
         android:id="@+id/media_preview_pager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="120dp" />
+        android:layout_marginBottom="180dp" />
 
     <TextView
         android:id="@+id/media_preview_counter"
@@ -48,6 +48,16 @@
         android:paddingTop="10dp"
         android:paddingEnd="12dp"
         android:paddingBottom="12dp">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/media_preview_thumbs"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginBottom="8dp"
+            android:clipToPadding="false"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:visibility="gone" />
 
         <EditText
             android:id="@+id/media_preview_caption"

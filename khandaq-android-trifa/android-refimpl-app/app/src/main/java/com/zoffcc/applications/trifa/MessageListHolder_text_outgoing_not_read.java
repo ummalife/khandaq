@@ -112,29 +112,14 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
             layout_message_container.setBackgroundColor(Color.TRANSPARENT);
         }
 
-        // --------- message date header (show only if different from previous message) ---------
-        // --------- message date header (show only if different from previous message) ---------
-        // --------- message date header (show only if different from previous message) ---------
-        message_text_date.setVisibility(View.GONE);
-        int my_position = this.getAdapterPosition();
-        if (my_position != RecyclerView.NO_POSITION)
+        // --------- message date header ---------
+        final int my_position = this.getAdapterPosition();
+        if (MainActivity.message_list_fragment != null && MainActivity.message_list_fragment.adapter != null)
         {
-            if (MainActivity.message_list_fragment != null)
-            {
-                if (MainActivity.message_list_fragment.adapter != null)
-                {
-                    if (MainActivity.message_list_fragment.adapter.shouldShowDateHeader(my_position))
-                    {
-                        message_text_date_string.setText(
-                                MainActivity.message_list_fragment.adapter.getDateHeaderText(my_position));
-                        message_text_date.setVisibility(View.VISIBLE);
-                    }
-                }
-            }
+            ChatDateSeparatorHelper.bindInlineDateHeader(itemView, my_position,
+                    MainActivity.message_list_fragment.adapter);
         }
-        // --------- message date header (show only if different from previous message) ---------
-        // --------- message date header (show only if different from previous message) ---------
-        // --------- message date header (show only if different from previous message) ---------
+        // --------- message date header ---------
 
 
         itemView.setOnClickListener(this);
@@ -167,25 +152,17 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
         textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,
                                  AutoLinkMode.MODE_MENTION, AutoLinkMode.MODE_CUSTOM);
 
-        if (com.vanniktech.emoji.EmojiUtils.isOnlyEmojis(m.text))
-        {
-            // text consits only of emojis -> increase size
-            textView.setEmojiSize((int) dp2px(MESSAGE_EMOJI_ONLY_EMOJI_SIZE[PREF__global_font_size]));
-        }
-        else
-        {
-            textView.setEmojiSize((int) dp2px(MESSAGE_EMOJI_SIZE[PREF__global_font_size]));
-        }
-
-        if (!HelperLocationMessage.bind(itemView, textView, m.text))
+        final MessageReplyHelper.ParsedMessage parsedMessage = MessageReplyHelper.parse(m.text);
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedMessage.bodyText);
+        if (!locationBound)
         {
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {
-                textView.setAutoLinkText(m.text);
+                textView.setAutoLinkText(parsedMessage.bodyText);
             }
             else
             {
-                textView.setAutoLinkTextHighlight(m.text, search_messages_text);
+                textView.setAutoLinkTextHighlight(parsedMessage.bodyText, search_messages_text);
             }
         }
 
@@ -219,11 +196,13 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
             }
         });
 
-        ChatBubbleUiHelper.apply_outgoing_bubble(text_block_group);
-        ChatBubbleUiHelper.apply_message_text_style(textView, true);
+        ChatBubbleUiHelper.bind_text_message_bubble(text_block_group, textView, true, parsedMessage.bodyText,
+                PREF__global_font_size, parsedMessage.reply != null, locationBound);
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
                 format_chat_message_time(m, true), true);
         ChatBubbleUiHelper.bind_outgoing_delivery_status(imageView, m);
+        ChatBubbleUiHelper.bind_reply_quote(text_block_group, parsedMessage.reply,
+                meta -> HelperReply.scrollToReplyTargetInDirectChat(meta));
     }
 
     @Override

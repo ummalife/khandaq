@@ -16,6 +16,7 @@ class OCTManagerMock: NSObject, OCTManager {
     var chats: OCTSubmanagerChats
     var files: OCTSubmanagerFiles
     var friends: OCTSubmanagerFriends
+    var groups: OCTSubmanagerGroups
     var objects: OCTSubmanagerObjects
     var user: OCTSubmanagerUser
 
@@ -31,6 +32,7 @@ class OCTManagerMock: NSObject, OCTManager {
         chats = OCTSubmanagerChatsMock()
         files = OCTSubmanagerFilesMock()
         friends = OCTSubmanagerFriendsMock()
+        groups = OCTSubmanagerGroupsMock()
         objects = OCTSubmanagerObjectsMock(realm: realm)
         user = OCTSubmanagerUserMock()
 

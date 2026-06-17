@@ -57,12 +57,27 @@ post_install do |installer|
     File.write(placeholder_pod, content)
   end
 
+  blake2b_ref = File.join(installer.sandbox.root,
+                          'libsodium/src/libsodium/crypto_generichash/blake2b/ref/blake2b-ref.c')
+  if File.exist?(blake2b_ref)
+    blake2b_stack = <<~'C'.strip
+          CRYPTO_ALIGN(64) unsigned char _blake2b_state_buf[crypto_generichash_blake2b_statebytes()];
+          blake2b_state *S = (blake2b_state *) (void *) _blake2b_state_buf;
+    C
+    content = File.read(blake2b_ref)
+    patched = content.gsub(/    (?:CRYPTO_ALIGN\(64\) )?blake2b_state S\[1\];/, blake2b_stack)
+    if patched != content
+      File.chmod(0o644, blake2b_ref)
+      File.write(blake2b_ref, patched)
+    end
+  end
+
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
       end
-      next unless target.name == 'libsodium'
+      next unless target.name.start_with?('libsodium')
 
       flags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
       flags = [flags] unless flags.is_a?(Array)

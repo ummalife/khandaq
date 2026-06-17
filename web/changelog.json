@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-11T19:52:31Z",
+  "generated_at": "2026-06-15T02:16:42Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,149 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.7",
+      "date": "2026-06-13",
+      "title": "Android UX polish — chat media, favorites, profile tab",
+      "summary": "Android v0.2.7 (build 10299): Telegram-style media/file bubbles in groups, favorites tab fix, profile avatar on bottom nav, navigation and drawer cleanup. Desktop builds refreshed on mirrors. iOS unchanged — use TestFlight build 142825.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Android — group media bubbles (Telegram-style)",
+          "description": "Removed thick green/blue containers around photos, videos and files in group chats. Images and videos render edge-to-edge with rounded corners; videos show play overlay and size label on the thumbnail; documents use a compact single-row card.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android — Favorites tab shows only pinned chats",
+          "description": "Adding one contact or group to Favorites no longer pulls unrelated chats into the tab after background connection updates.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "iOS — add contact screen crash fix",
+          "description": "Contact ID field visible again; app no longer crashes on input (iOS 26 placeholder fix). Available on TestFlight build 142825.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "iOS — private chat input and video send",
+          "description": "Text input no longer blocks after autocorrect/emoji; message text not cleared before send confirmation; video compression moved off main thread.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — profile photo on Profile tab",
+          "description": "Bottom navigation Profile tab shows your real avatar (like Telegram), with connection dot on top; falls back to default icon when no photo is set.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — four-tab navigation and cleaner menu",
+          "description": "Contacts, Chats, Settings and Profile open directly without extra screens. Removed Close app and Connect/Disconnect from the drawer; connection is automatic.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — group chat stability and attachments",
+          "description": "Lock/unlock no longer drops you from a group; history loads immediately; photos and videos send via paperclip; participant names and avatars from contacts.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — contacts and ID UX",
+          "description": "QR scan from gallery when adding a contact; add yourself to contacts (saved messages); UI uses ID instead of Tox ID/My ID; Tox ID 64/76 normalization.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — themes, status, and notifications",
+          "description": "Readable dark/light themes; delivery/read checkmarks; human-readable online status; notifications when chat is open; push settings removed from UI (off by default).",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — Khandaq Community and rebrand cleanup",
+          "description": "No auto-join to test group; TRIfA Community renamed to Khandaq Community; old TRIfA profile names migrate to Khandaq; crash screen and strings updated.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "iOS — Khandaq rebrand and TestFlight",
+          "description": "Bundle org.khandaq.messenger, Khandaq branding, Khandaq Community menu entry, bootstrap list update. Public beta via TestFlight.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Desktop — Linux↔macOS message delivery",
+          "description": "Outgoing delivery indicators clear correctly; cross-platform replies work. Always-dark Khandaq theme on Windows.",
+          "platforms": [
+            "desktop",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Network — bootstrap and reconnect",
+          "description": "Updated bootstrap node lists; faster reconnect after Wi‑Fi, cellular or VPN changes on mobile and desktop.",
+          "platforms": [
+            "android",
+            "ios",
+            "desktop",
+            "infra"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Android — media send preview",
+          "description": "Photo and video picks show a confirmation preview with cancel before upload.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Android — localization and NGC settings text",
+          "description": "Remaining hardcoded toasts moved to string resources; group chat (NGC) preference description clarified.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Release v0.2.7 mirrors",
+          "description": "Fresh Android APK (10299), desktop installers and checksums on khandaq.org and GitHub Releases.",
+          "platforms": [
+            "infra"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.6",
       "date": "2026-06-11",

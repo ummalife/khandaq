@@ -42,8 +42,13 @@ struct LocationMessage {
 
 class ChatBaseTextCellModel: ChatMovableDateCellModel {
     var message: String = ""
+    /// @handles parsed from wire-format mention blocks (group chat).
+    var mentionHandles: [String] = []
+    var searchHighlight: String?
     var locationLatitude: Double?
     var locationLongitude: Double?
+    var replyMeta: MessageReplyHelper.ReplyMeta?
+    var onReplyQuoteTap: (() -> Void)?
 
     var hasLocation: Bool {
         locationLatitude != nil && locationLongitude != nil

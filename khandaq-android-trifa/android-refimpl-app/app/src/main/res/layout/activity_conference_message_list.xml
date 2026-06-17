@@ -164,13 +164,20 @@
                     app:srcCompat="@drawable/i_emoji_google_category_people"
                     tools:ignore="ContentDescription" />
 
-                <com.vanniktech.emoji.EmojiEditText
-                    android:id="@+id/ml_new_message"
+                <FrameLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_chat_message_field"
+                    android:background="@drawable/bg_chat_message_field">
+
+                <com.vanniktech.emoji.EmojiEditText
+                    android:id="@+id/ml_new_message"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:background="@android:color/transparent"
+                    android:backgroundTint="@null"
                     android:cursorVisible="true"
                     android:ellipsize="end"
                     android:gravity="center_vertical"
@@ -188,26 +195,30 @@
                     android:textColorHint="@color/tg_chat_input_hint"
                     android:textSize="@dimen/chat_input_text_size" />
 
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical"
-                    android:orientation="horizontal">
+                </FrameLayout>
 
-                    <ImageButton
-                        android:id="@+id/ml_button_01"
-                        android:layout_width="@dimen/chat_input_icon_size"
-                        android:layout_height="@dimen/chat_input_icon_size"
-                        android:layout_gravity="center_vertical"
-                        android:layout_margin="@dimen/chat_input_icon_margin"
-                        android:layout_weight="0"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:clickable="true"
-                        android:onClick="send_message_onclick"
-                        android:padding="@dimen/chat_input_icon_padding"
-                        android:scaleType="fitCenter"
-                        android:src="@android:drawable/ic_menu_send" />
-                </LinearLayout>
+                <ImageButton
+                    android:id="@+id/ml_button_01"
+                    android:layout_width="@dimen/chat_input_icon_size"
+                    android:layout_height="@dimen/chat_input_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_margin="@dimen/chat_input_icon_margin"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:padding="@dimen/chat_input_icon_padding"
+                    android:scaleType="fitCenter"
+                    tools:ignore="ContentDescription" />
+
+                <ImageButton
+                    android:id="@+id/ml_button_recaudio"
+                    android:layout_width="@dimen/chat_input_icon_size"
+                    android:layout_height="@dimen/chat_input_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_margin="@dimen/chat_input_icon_margin"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:padding="@dimen/chat_input_icon_padding"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/baseline_keyboard_voice_24" />
 
             </LinearLayout>
 

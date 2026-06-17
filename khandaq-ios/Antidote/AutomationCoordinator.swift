@@ -7,8 +7,8 @@ import MobileCoreServices
 import os
 
 private struct Constants {
-    static let MaxFileSizeWiFi: OCTToxFileSize = 100 * 1024 * 1024
-    static let MaxFileSizeWWAN: OCTToxFileSize = 20 * 1024 * 1024
+    static let MaxFileSizeWiFi: OCTToxFileSize = 200 * 1024 * 1024
+    static let MaxFileSizeWWAN: OCTToxFileSize = 200 * 1024 * 1024
 }
 
 class AutomationCoordinator: NSObject {

@@ -388,14 +388,19 @@ extension CallCoordinator {
     private func configureAudioSessionForAnswer(enableVideo: Bool) {
         let session = AVAudioSession.sharedInstance()
         let mode = enableVideo ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat
+        var options: AVAudioSessionCategoryOptions = [.allowBluetooth]
+        if enableVideo {
+            options.insert(.defaultToSpeaker)
+        }
         do {
             try session.setCategory(
                 AVAudioSessionCategoryPlayAndRecord,
-                with: [.allowBluetooth, .defaultToSpeaker]
+                with: options
             )
             try session.setMode(mode)
             try session.setPreferredSampleRate(48000)
             try session.setPreferredIOBufferDuration(0.005)
+            try session.overrideOutputAudioPort(enableVideo ? .speaker : .none)
             try session.setActive(true)
         } catch {
             print("cc:controler:configureAudioSessionForAnswer:error \(error)")

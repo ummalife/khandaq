@@ -4,6 +4,8 @@
 
 #import <Foundation/Foundation.h>
 
+#import "OCTToxConstants.h"
+
 @class OCTFriendRequest;
 @class OCTFriend;
 
@@ -54,5 +56,10 @@
  * Re-read connection status from toxcore for all friends (e.g. after returning to foreground).
  */
 - (void)refreshConnectionStatuses;
+
+/**
+ * Returns an existing friend or creates one from tox state when missing (e.g. incoming message race).
+ */
+- (nullable OCTFriend *)ensureFriendForFriendNumber:(OCTToxFriendNumber)friendNumber;
 
 @end

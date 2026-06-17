@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/ft_file_attachment_row"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/tg_file_attachment_bg"
+    android:gravity="center_vertical"
+    android:minHeight="40dp"
+    android:maxWidth="280dp"
+    android:orientation="vertical"
+    android:paddingStart="8dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="6dp"
+    android:visibility="gone"
+    tools:visibility="visible">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/ft_file_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:scaleType="centerInside"
+            tools:src="@android:drawable/ic_menu_save" />
+
+        <TextView
+            android:id="@+id/ft_file_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:textColor="@color/message_bubble_text"
+            android:textSize="14sp"
+            tools:text="cd91_ui.xml" />
+
+        <TextView
+            android:id="@+id/ft_file_size"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:textColor="@color/tg_chat_input_hint"
+            android:textSize="12sp"
+            tools:text="9,92 КБ" />
+
+        <ImageButton
+            android:id="@+id/ft_file_cancel"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/file_transfer_cancel"
+            android:padding="4dp"
+            android:scaleType="centerInside"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <ImageButton
+            android:id="@+id/ft_file_retry"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/file_transfer_retry"
+            android:padding="4dp"
+            android:scaleType="centerInside"
+            android:src="@android:drawable/ic_menu_rotate"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/ft_file_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_marginTop="4dp"
+        android:max="100"
+        android:visibility="gone"
+        tools:progress="40"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/ft_file_progress_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textColor="@color/tg_chat_input_hint"
+        android:textSize="11sp"
+        android:visibility="gone"
+        tools:text="2.3 MB / 8.1 MB · 28%"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/ft_file_error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="@string/file_transfer_download_failed"
+        android:textColor="#E53935"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+</LinearLayout>

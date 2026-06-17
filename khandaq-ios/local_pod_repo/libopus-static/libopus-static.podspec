@@ -5,10 +5,12 @@ Pod::Spec.new do |s|
   s.homepage         = 'http://opus-codec.org/downloads/'
   s.license          = { :type => 'BSD', :file => 'LICENSE' }
   s.author           = { 'Xiph.Org' => 'opus-codec.org' }
-  s.platform         = :ios, '10.0'
   s.source           = { :path => '.' }
   s.source_files     = 'libopus/*.h'
   s.public_header_files = 'libopus/*.h'
-  s.vendored_frameworks = 'libopus.xcframework'
+  s.ios.vendored_frameworks = 'libopus.xcframework'
+  s.osx.vendored_libraries = 'libopus-macos.a'
+  s.ios.deployment_target = '10.0'
+  s.osx.deployment_target = '10.13'
   s.pod_target_xcconfig = { 'ENABLE_BITCODE' => 'NO' }
 end

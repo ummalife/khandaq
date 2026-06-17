@@ -47,9 +47,23 @@ class AppCoordinator {
         window.backgroundColor = newTheme.colorForType(.NormalBackground)
 
         guard let running = activeCoordinator as? RunningCoordinator else {
-            ThemeChrome.applyGlobalAppearance(newTheme)
-            ThemeChrome.applyWindowStyle(window, theme: newTheme)
-            isReloadingAppearance = false
+            // No running session yet (login / create-account / import screens). There is no session
+            // UI to rebuild, but the already-instantiated view hierarchy must still be recolored:
+            // UIAppearance proxies only affect views created AFTER they are set, so without this the
+            // login screen stayed white on toggle. Re-theme the live hierarchy in place, animated with
+            // the same cross-dissolve as the running path so the switch is smooth.
+            let transitionWindow = window
+            UIView.transition(with: transitionWindow,
+                              duration: ThemeChrome.transitionDuration,
+                              options: [.transitionCrossDissolve, .allowAnimatedContent],
+                              animations: {
+                ThemeChrome.applyGlobalAppearance(newTheme)
+                ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
+                ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
+                transitionWindow.layoutIfNeeded()
+            }, completion: { [weak self] _ in
+                self?.isReloadingAppearance = false
+            })
             return
         }
 

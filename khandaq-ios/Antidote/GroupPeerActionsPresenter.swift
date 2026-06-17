@@ -95,7 +95,10 @@ enum GroupPeerActionsPresenter {
             else if let submanagerFriends = submanagerFriends {
                 alert.addAction(UIAlertAction(title: String(localized: "group_member_action_add_friend"), style: .default) { _ in
                     do {
-                        try submanagerFriends.sendFriendRequest(toAddress: pubkey.uppercased(), message: "")
+                        // KHANDAQ (#15): a group peer exposes only a 64-hex public key, not a full
+                        // 76-hex Tox ID, so sendFriendRequest(toAddress:) rejected it ("ошибка на всех").
+                        // Add by public key (tox_friend_add_norequest) instead.
+                        try submanagerFriends.addFriend(byPublicKey: pubkey.uppercased())
                         let toast = UIAlertController(title: nil,
                                                       message: String(localized: "group_member_action_add_friend_sent"),
                                                       preferredStyle: .alert)

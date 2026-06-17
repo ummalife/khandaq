@@ -684,6 +684,8 @@
 
 - (nullable NSString *)groupTopicForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
 
+- (nullable NSString *)groupNameForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
 - (BOOL)groupSetTopic:(NSString *)topic
           groupNumber:(OCTToxGroupNumber)groupNumber
                 error:(NSError **)error;

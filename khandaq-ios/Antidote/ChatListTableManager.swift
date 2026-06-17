@@ -324,12 +324,73 @@ extension ChatListTableManager: UITableViewDelegate {
             ? String(localized: "chat_filter_remove_favorite")
             : String(localized: "chat_filter_add_favorite")
 
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+        // KHANDAQ (#13): show a read-only preview of the conversation when peeking a chat row.
+        // ChatPreviewController is self-contained and has no side effects (does not mark read).
+        return UIContextMenuConfiguration(
+            identifier: chat.uniqueIdentifier as NSString,
+            previewProvider: { [weak self] in
+                return self?.makeChatPreviewController(for: chat)
+            }
+        ) { [weak self] _ in
             let favoriteAction = UIAction(title: favoriteTitle, image: UIImage(systemName: isFavorite ? "star.slash" : "star")) { _ in
                 self?.toggleFavorite(at: indexPath)
             }
             return UIMenu(children: [favoriteAction])
         }
+    }
+
+    @available(iOS 13.0, *)
+    func tableView(_ tableView: UITableView, willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionCommitAnimating) {
+        guard let identifier = configuration.identifier as? String else {
+            return
+        }
+        // Tapping the peek preview opens the real chat.
+        animator.addCompletion { [weak self] in
+            guard let self = self else {
+                return
+            }
+            for index in 0..<self.chats.count {
+                let chat = self.chats[index]
+                if chat.uniqueIdentifier == identifier {
+                    self.delegate?.chatListTableManager(self, didSelectChat: chat)
+                    break
+                }
+            }
+        }
+    }
+
+    @available(iOS 13.0, *)
+    private func makeChatPreviewController(for chat: OCTChat) -> ChatPreviewController {
+        let title: String
+        let avatar: UIImage?
+
+        if chat.isGroup {
+            title = chat.groupName ?? String(localized: "group_chat_default_title")
+            avatar = avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+        }
+        else {
+            let friend = chat.friends.lastObject() as? OCTFriend
+            title = friend?.nickname ?? String(localized: "contact_deleted")
+            if let data = friend?.avatarData {
+                avatar = UIImage(data: data)
+            }
+            else {
+                avatar = avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+            }
+        }
+
+        let allMessages = submanagerObjects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier))
+            .sortedResultsUsingProperty("dateInterval", ascending: true)
+
+        var recent = [OCTMessageAbstract]()
+        let total = allMessages.count
+        var index = max(0, total - 24)
+        while index < total {
+            recent.append(allMessages[index])
+            index += 1
+        }
+
+        return ChatPreviewController(theme: theme, title: title, avatar: avatar, messages: recent)
     }
 }
 

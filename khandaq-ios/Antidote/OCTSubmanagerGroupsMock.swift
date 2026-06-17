@@ -7,6 +7,10 @@ import Foundation
 class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
     weak var delegate: OCTSubmanagerGroupsDelegate?
 
+    func flushAllPendingGroupMessagesIfNeeded() {
+        // nop
+    }
+
     func createPublicGroup(withName groupName: String!, peerName: String!, error: NSErrorPointer) -> OCTToxGroupNumber {
         return 0
     }

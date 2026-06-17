@@ -123,12 +123,17 @@ class ChatGroupController: PortraitChatController {
         view.addSubview(chatInputView)
         view.addSubview(ngcVideoOverlay)
 
+        // KHANDAQ: install the reply preview (which adds previewView into `view`) BEFORE constraining
+        // the table's bottom to previewView.top. Doing the constraint first crashed with
+        // "Unable to activate constraint ... no common ancestor" because previewView had no superview
+        // yet — that crash fired when opening a (just-created) group chat. ChatPrivateController already
+        // installs before constraining; this matches that order.
+        replyController.install(in: view, above: chatInputView, theme: theme)
+
         tableView.snp.makeConstraints {
             $0.top.leading.trailing.equalTo(view)
             tableViewToChatInputConstraint = $0.bottom.equalTo(replyController.previewView.snp.top).constraint
         }
-
-        replyController.install(in: view, above: chatInputView, theme: theme)
 
         chatInputView.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)

@@ -7,7 +7,7 @@ colors:
   black: "000000"
   gray: 48484A
   lightgraypink: 1C1C1E
-  darkgray: 636366
+  darkgray: "636366"
   color_offline_status: 98989D
   darkgray2: AEAEAE
   lightgrayblue: 2C2C2E

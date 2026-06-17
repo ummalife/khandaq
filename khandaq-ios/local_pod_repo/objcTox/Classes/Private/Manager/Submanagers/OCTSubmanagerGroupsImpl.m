@@ -1449,6 +1449,12 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         [realmManager updateGroupTopic:topic forChat:chat];
     }
 
+    // KHANDAQ (#15): pull the authoritative group name from toxcore so the chat list shows the real
+    // name (e.g. "Gggg") instead of a stale placeholder / the topic (e.g. "11AE2E"). This also
+    // repairs already-corrupted chats where the topic previously overwrote the name.
+    NSString *liveName = [tox groupNameForGroupNumber:groupNumber error:nil];
+    [realmManager updateGroupName:liveName forChat:chat];
+
     NSString *password = [tox groupPasswordForGroupNumber:groupNumber error:nil];
     [realmManager updateGroupPassword:password forChat:chat];
 

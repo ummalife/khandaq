@@ -55,7 +55,10 @@ enum ThemeChrome {
 
     static func applyWindowStyle(_ window: UIWindow?, theme: Theme) {
         if #available(iOS 13.0, *) {
-            window?.overrideUserInterfaceStyle = .unspecified
+            // Drive system-drawn UI (UIAlertController alerts & action sheets, text fields, the keyboard,
+            // pickers, switches) to match the app's custom theme. With .unspecified these followed the
+            // SYSTEM appearance and rendered light ("white patches") while the app was in dark mode.
+            window?.overrideUserInterfaceStyle = ThemeAppearance.isDarkMode ? .dark : .light
         }
         window?.backgroundColor = theme.colorForType(.NormalBackground)
     }

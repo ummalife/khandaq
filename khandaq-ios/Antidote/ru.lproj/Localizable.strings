@@ -341,6 +341,7 @@
 "alert_delete" = "Удалить";
 /* Delete button */
 "alert_cancel" = "Отмена";
+"alert_create" = "Создать";
 /* OK button */
 "alert_ok" = "OK";
 

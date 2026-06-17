@@ -212,6 +212,11 @@ private extension ChatInputView {
         textView.delegate = self
         textView.font = UIFont.systemFont(ofSize: 16.0)
         textView.backgroundColor = theme.colorForType(.NormalBackground)
+        // KHANDAQ: bind the input text + caret colors to the theme. Without an explicit textColor the
+        // UITextView used the default system .label color, which on the dark theme's dark input field
+        // rendered (near-)invisible while typing. NormalText flips correctly per light/dark theme.
+        textView.textColor = theme.colorForType(.NormalText)
+        textView.tintColor = theme.colorForType(.LinkText)
         textView.layer.cornerRadius = 5.0
         textView.layer.borderWidth = 0.5
         textView.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor

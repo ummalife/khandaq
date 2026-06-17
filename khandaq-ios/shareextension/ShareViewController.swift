@@ -107,6 +107,30 @@ class ShareViewController: UIViewController {
                     continue
                 }
 
+                // KHANDAQ (#3): handle shared VIDEO explicitly. A movie file (from Photos/Files)
+                // conforms to public.data and would be caught by the generic kUTTypeData branch
+                // below, but the explicit handler gives a correct file name/extension and matches
+                // the NSExtensionActivationSupportsMovieWithMaxCount rule. (A YouTube "share" is a
+                // web URL, handled by the kUTTypeURL branch above as text — not a movie file.)
+                if provider.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
+                    group.enter()
+                    provider.loadItem(forTypeIdentifier: kUTTypeMovie as String, options: nil) { (item: NSSecureCoding?, error: Error?) in
+                        defer { group.leave() }
+                        if let url = item as? URL, let stored = ShareInboxStorage.storeFile(from: url, suggestedName: url.lastPathComponent) {
+                            collectedItems.append(stored)
+                            return
+                        }
+
+                        if let data = item as? Data {
+                            let fileName = provider.suggestedName ?? "video.mp4"
+                            if let stored = ShareInboxStorage.storeFileData(data, suggestedName: fileName) {
+                                collectedItems.append(stored)
+                            }
+                        }
+                    }
+                    continue
+                }
+
                 if provider.hasItemConformingToTypeIdentifier(kUTTypeData as String) {
                     group.enter()
                     provider.loadItem(forTypeIdentifier: kUTTypeData as String, options: nil) { (item: NSSecureCoding?, error: Error?) in

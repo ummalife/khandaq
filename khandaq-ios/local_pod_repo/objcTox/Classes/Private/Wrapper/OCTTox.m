@@ -1879,6 +1879,46 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return topic;
 }
 
+// KHANDAQ (#15): authoritative, immutable NGC group name (tox_group_get_name). Distinct from the
+// mutable topic. Used to keep chat.groupName correct in the list instead of falling back to the
+// topic / a hex placeholder.
+- (nullable NSString *)groupNameForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_State_Queries cError;
+    size_t size = tox_group_get_name_size(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK || size == 0) {
+        if (cError != TOX_ERR_GROUP_STATE_QUERIES_OK && error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group name"
+                                   failureReason:@"Group not found"];
+        }
+        return nil;
+    }
+
+    uint8_t *bytes = calloc(size, sizeof(uint8_t));
+
+    if (! bytes) {
+        return nil;
+    }
+
+    if (! tox_group_get_name(self.tox, groupNumber, bytes, &cError)) {
+        free(bytes);
+
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group name"
+                                   failureReason:@"Group not found"];
+        }
+
+        return nil;
+    }
+
+    NSString *name = [[NSString alloc] initWithBytes:bytes length:size encoding:NSUTF8StringEncoding];
+    free(bytes);
+    return name;
+}
+
 - (BOOL)groupSetTopic:(NSString *)topic groupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
 {
     NSData *data = [topic dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];

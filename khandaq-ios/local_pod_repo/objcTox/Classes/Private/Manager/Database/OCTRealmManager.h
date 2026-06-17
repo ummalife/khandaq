@@ -15,6 +15,7 @@
 @class OCTGroupPeer;
 @class OCTSettingsStorageObject;
 @class RLMResults;
+@class RLMRealm;
 
 @interface OCTRealmManager : NSObject
 
@@ -22,6 +23,13 @@
  * Storage with all objcTox settings.
  */
 @property (strong, nonatomic, readonly) OCTSettingsStorageObject *settingsStorage;
+
+/**
+ * The backing Realm. Exposed read-only so submanagers (e.g. groups/chats) can run
+ * RLMObject class queries (objectsInRealm:) against it. The private class extension in
+ * OCTRealmManager.m redeclares it readwrite. Access on the Realm's own thread only.
+ */
+@property (strong, nonatomic, readonly) RLMRealm *realm;
 
 /**
  * Migrate unencrypted database to encrypted one.
@@ -189,6 +197,7 @@
 - (void)removeGroupPeersForChat:(OCTChat *)chat notInPeerIds:(NSSet<NSNumber *> *)peerIds;
 - (void)updateGroupPeerCount:(int32_t)peerCount forChat:(OCTChat *)chat;
 - (void)updateGroupTopic:(nullable NSString *)topic forChat:(OCTChat *)chat;
+- (void)updateGroupName:(nullable NSString *)groupName forChat:(OCTChat *)chat;
 - (void)updateGroupPassword:(nullable NSString *)password forChat:(OCTChat *)chat;
 - (void)updateGroupTopicLockEnabled:(BOOL)enabled forChat:(OCTChat *)chat;
 - (void)updateGroupPeerLimit:(int32_t)peerLimit forChat:(OCTChat *)chat;

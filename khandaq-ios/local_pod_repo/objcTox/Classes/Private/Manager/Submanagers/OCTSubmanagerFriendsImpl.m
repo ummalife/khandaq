@@ -240,6 +240,43 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     return [self createFriendWithFriendNumber:friendNumber error:error];
 }
 
+- (BOOL)addFriendByPublicKey:(NSString *)publicKey error:(NSError **)error
+{
+    // KHANDAQ (#15): add an NGC group peer by their 64-hex public key (tox_friend_add_norequest).
+    // Group peers have no full Tox ID, so the classic sendFriendRequestToAddress: path rejects them.
+    NSString *normalizedKey = [[publicKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+
+    // Guard the length up front: addFriendWithNoRequestWithPublicKey: asserts on a wrong-length key,
+    // which would crash instead of returning an error.
+    if (normalizedKey.length != kOCTToxPublicKeyLength) {
+        if (error) {
+            *error = OCTFriendAddAlreadySentError();
+        }
+        return NO;
+    }
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTFriend *existingFriend = [realmManager friendWithPublicKey:normalizedKey];
+
+    if (existingFriend) {
+        if (error) {
+            *error = OCTFriendAddAlreadySentError();
+        }
+        return NO;
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxFriendNumber friendNumber = [tox addFriendWithNoRequestWithPublicKey:normalizedKey error:error];
+
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return NO;
+    }
+
+    [self.dataSource managerSaveTox];
+
+    return [self createFriendWithFriendNumber:friendNumber error:error];
+}
+
 - (BOOL)approveFriendRequest:(OCTFriendRequest *)friendRequest error:(NSError **)error
 {
     NSParameterAssert(friendRequest);

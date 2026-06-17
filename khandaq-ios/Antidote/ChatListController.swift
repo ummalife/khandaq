@@ -181,16 +181,20 @@ private extension ChatListController {
                 controller.delegate?.chatListControllerDidRequestCreatePrivateGroup(controller)
             }
         })
-        alert.addAction(UIAlertAction(title: String(localized: "group_join_by_id"), style: .default) { [weak self] _ in
-            self?.runAfterGroupMenuDismisses { controller in
-                controller.delegate?.chatListControllerDidRequestJoinGroup(controller)
-            }
-        })
-        alert.addAction(UIAlertAction(title: String(localized: "group_scan_qr"), style: .default) { [weak self] _ in
-            self?.runAfterGroupMenuDismisses { controller in
-                controller.delegate?.chatListControllerDidRequestScanGroupQR(controller)
-            }
-        })
+        // KHANDAQ: "join public group by chat-id" (and its QR variant, which just yields a chat-id)
+        // is TEMPORARILY HIDDEN pending the NGC cold-chat-id discovery fix — cold join by id does not
+        // connect yet (same as the Android build). Group CREATION stays (private groups work via
+        // friend-invite). TO RE-ENABLE, restore the two addAction blocks below.
+        // alert.addAction(UIAlertAction(title: String(localized: "group_join_by_id"), style: .default) { [weak self] _ in
+        //     self?.runAfterGroupMenuDismisses { controller in
+        //         controller.delegate?.chatListControllerDidRequestJoinGroup(controller)
+        //     }
+        // })
+        // alert.addAction(UIAlertAction(title: String(localized: "group_scan_qr"), style: .default) { [weak self] _ in
+        //     self?.runAfterGroupMenuDismisses { controller in
+        //         controller.delegate?.chatListControllerDidRequestScanGroupQR(controller)
+        //     }
+        // })
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
         if let popover = alert.popoverPresentationController {
             popover.barButtonItem = navigationItem.rightBarButtonItem

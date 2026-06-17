@@ -185,6 +185,10 @@ private extension StaticTableController {
         tableView!.delegate = self
         tableView!.estimatedRowHeight = 44.0;
         tableView!.separatorStyle = .none;
+        // KHANDAQ: theme the table's own background. A grouped UITableView defaults to
+        // systemGroupedBackground, which showed as a stray gray band in the footer/below the last
+        // cell (e.g. the profile "Выйти" screen). Bind it to the theme so it matches the view.
+        tableView!.backgroundColor = theme.colorForType(.NormalBackground)
 
         switch tableViewStyle {
             case .plain:

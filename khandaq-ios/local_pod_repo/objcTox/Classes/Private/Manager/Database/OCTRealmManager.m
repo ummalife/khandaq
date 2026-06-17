@@ -84,8 +84,28 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     dispatch_sync(_queue, ^{
         __strong OCTRealmManager *strongSelf = weakSelf;
 
-        // TODO handle error
-        self->_realm = [OCTRealmManager createRealmWithFileURL:fileURL encryptionKey:encryptionKey error:nil];
+        NSError *realmError = nil;
+        self->_realm = [OCTRealmManager createRealmWithFileURL:fileURL encryptionKey:encryptionKey error:&realmError];
+
+        if (! self->_realm) {
+            // KHANDAQ (#6): the Realm DB is only the on-device CACHE of contacts/messages — the
+            // canonical friend list lives in the atomically-saved .tox file and is re-synced into a
+            // fresh Realm by -[OCTSubmanagerFriends configure] on every launch. A crash mid-write can
+            // leave the Realm file corrupt or unmigratable, so realmWithConfiguration returns nil; a
+            // nil realm then makes ALL contacts vanish from the UI ("контакты исчезли после краша").
+            // Recover by moving the bad file aside and creating a fresh Realm — friends reappear from
+            // .tox on this same launch. We RENAME rather than delete, so the old DB (e.g. message
+            // history) can still be recovered manually.
+            OCTLogError(@"Realm open failed (%@); moving corrupt DB aside and recreating", realmError);
+
+            NSString *path = fileURL.path;
+            NSString *corruptPath = [path stringByAppendingPathExtension:@"corrupt"];
+            [[NSFileManager defaultManager] removeItemAtPath:corruptPath error:nil];
+            [[NSFileManager defaultManager] moveItemAtPath:path toPath:corruptPath error:nil];
+
+            self->_realm = [OCTRealmManager createRealmWithFileURL:fileURL encryptionKey:encryptionKey error:nil];
+        }
+
         [strongSelf createSettingsStorage];
     });
 
@@ -957,8 +977,31 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     [self updateObject:chat withBlock:^(OCTChat *theChat) {
         theChat.groupTopic = topic.length > 0 ? topic : nil;
-        if (topic.length > 0) {
+        // KHANDAQ (#15): the group NAME (set at creation, authoritative via tox_group_get_name)
+        // and the TOPIC are distinct fields. Only seed the display name from the topic when there
+        // is no real name yet — never overwrite an existing name, otherwise the chat list shows the
+        // topic (often a hex/auto placeholder like "11AE2E") instead of the group's actual name.
+        if (topic.length > 0 && theChat.groupName.length == 0) {
             theChat.groupName = topic;
+        }
+    }];
+}
+
+- (void)updateGroupName:(NSString *)groupName forChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    // KHANDAQ (#15): authoritative group name from tox_group_get_name. Only apply a non-empty
+    // value and only when it actually changed, so we don't clobber a good name with an empty
+    // result before the group state has synced.
+    if (groupName.length == 0) {
+        return;
+    }
+
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        if (![theChat.groupName isEqualToString:groupName]) {
+            theChat.groupName = groupName;
         }
     }];
 }

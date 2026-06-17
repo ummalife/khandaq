@@ -9,6 +9,10 @@ class OCTSubmanagerFriendsMock: NSObject, OCTSubmanagerFriends {
         // nop
     }
     
+    func addFriend(byPublicKey publicKey: String!) throws {
+        // nop
+    }
+
     func approve(_ friendRequest: OCTFriendRequest!) throws {
         // nop
     }

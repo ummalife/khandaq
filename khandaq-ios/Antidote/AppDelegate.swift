@@ -183,7 +183,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         gps_was_stopped_by_forground = false
         let gps = LocationManager.shared
-        if gps.isHasAccess() {
+        // KHANDAQ (#14): the background location keepalive must only run when the user explicitly
+        // enabled "Longer Background Mode" (same gate as sendOwnPush above). Otherwise location started
+        // on every background once permission was ever granted and the status-bar location indicator
+        // stayed on / never turned off.
+        if UserDefaultsManager().LongerbgMode == true && gps.isHasAccess() {
             AppDelegate.lastStartGpsTS = Date().millisecondsSince1970
             gps.startMonitoring()
             os_log("AppDelegate:applicationDidEnterBackground:gps:START")

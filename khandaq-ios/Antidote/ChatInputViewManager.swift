@@ -478,6 +478,9 @@ fileprivate extension ChatInputViewManager {
     }
 
     func presentMediaPreview(items: [MediaSendPreviewItem]) {
+        // KHANDAQ: dismiss the chat input keyboard before showing the media-send preview. Otherwise the
+        // still-active keyboard overlapped the preview / caption editor when sending video with a caption.
+        presentingViewController.view.endEditing(true)
         let controller = MediaSendPreviewController(items: items)
         controller.delegate = self
         presentingViewController.present(controller, animated: true, completion: nil)

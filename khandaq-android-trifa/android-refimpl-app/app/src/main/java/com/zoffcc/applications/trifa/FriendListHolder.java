@@ -869,14 +869,8 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
 
     static void show_messagelist_acticvity_for_friend(Context c, String friend_pubkey)
     {
-        try
-        {
-            fl_loading_progressbar.setVisibility(View.VISIBLE);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
+        // KHANDAQ: do NOT flash the "Please wait ..." card on the chat list when opening a chat —
+        // it is a needless transition indicator that overlays the list every time.
 
         Intent intent = new Intent(c, MessageListActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);

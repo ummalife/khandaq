@@ -289,14 +289,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
             }
             else
             {
-                try
-                {
-                    fl_loading_progressbar.setVisibility(View.VISIBLE);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                // KHANDAQ: don't flash the "Please wait ..." card on the list when opening a conference.
 
                 if (this.conference.kind == TOX_CONFERENCE_TYPE_AV.value)
                 {

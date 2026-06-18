@@ -288,14 +288,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             }
             else
             {
-                try
-                {
-                    fl_loading_progressbar.setVisibility(View.VISIBLE);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                // KHANDAQ: don't flash the "Please wait ..." card on the list when opening a group.
 
                 if (this.group.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
                 {

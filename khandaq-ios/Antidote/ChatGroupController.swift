@@ -755,6 +755,7 @@ extension ChatGroupController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         guard let messageFile = message.messageFile,
+              message.isOutgoing() || messageFile.fileType == .ready,
               let file = messageFile.filePath(),
               messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
             return UITableViewAutomaticDimension
@@ -1136,6 +1137,13 @@ private extension ChatGroupController {
         let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         guard let messageFile = message.messageFile else {
+            return
+        }
+
+        // KHANDAQ (#15): only show the inline preview once the file is fully on disk. While an
+        // incoming transfer is still arriving, decoding the partial file renders a half image (top
+        // strip + grey) — keep the clean loading box until it's Ready. Outgoing files are complete.
+        guard message.isOutgoing() || messageFile.fileType == .ready else {
             return
         }
 

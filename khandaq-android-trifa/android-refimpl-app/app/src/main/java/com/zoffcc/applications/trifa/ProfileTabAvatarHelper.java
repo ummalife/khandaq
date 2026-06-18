@@ -44,6 +44,15 @@ final class ProfileTabAvatarHelper
             return false;
         }
 
+        // KHANDAQ: do NOT touch iocipher.File until the VFS is actually mounted. Touching it earlier
+        // runs OsConstants.<clinit> before the native lib is loaded → UnsatisfiedLinkError that
+        // PERMANENTLY poisons the class (every later access throws NoClassDefFoundError) → broken
+        // avatars/media for the whole process. vfs is non-null only after a successful mount.
+        if (TrifaToxService.vfs == null)
+        {
+            return false;
+        }
+
         try
         {
             final String fname = get_vfs_image_filename_own_avatar();
@@ -55,8 +64,10 @@ final class ProfileTabAvatarHelper
             final info.guardianproject.iocipher.File avatarFile = new info.guardianproject.iocipher.File(fname);
             return avatarFile.exists() && avatarFile.length() > 0;
         }
-        catch (Exception ignored)
+        catch (Throwable ignored)
         {
+            // KHANDAQ: VFS native lib may not be loaded/mounted yet on first launch
+            // (UnsatisfiedLinkError is an Error, not an Exception) — treat as "no avatar".
             return false;
         }
     }
@@ -142,6 +153,11 @@ final class ProfileTabAvatarHelper
 
     private static void loadOwnAvatarInto(final CircleImageView avatarView, final Context context)
     {
+        if (TrifaToxService.vfs == null)
+        {
+            return;
+        }
+
         try
         {
             final String fname = get_vfs_image_filename_own_avatar();
@@ -161,7 +177,7 @@ final class ProfileTabAvatarHelper
             GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE).skipMemoryCache(false)
                     .apply(glideOptions).into(avatarView);
         }
-        catch (Exception ignored)
+        catch (Throwable ignored)
         {
         }
     }

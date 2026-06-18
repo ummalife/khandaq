@@ -743,6 +743,7 @@
     <string name="group_image_shrink_failed">Не удалось подготовить изображение к отправке.</string>
     <string name="group_incoming_file_error">Не удалось обработать входящий групповой файл.</string>
     <string name="chat_file_too_large">Файл слишком большой.</string>
+    <string name="chat_file_empty">Нельзя отправить пустой файл.</string>
     <string name="chat_incoming_file_too_large">Входящий файл слишком большой.</string>
     <string name="chat_opening_file_failed">Не удалось открыть файл.</string>
     <string name="chat_media_still_downloading">Файл ещё загружается. Подождите немного.</string>

@@ -479,6 +479,7 @@
     <string name="group_image_shrink_failed">Could not prepare image for sending.</string>
     <string name="group_incoming_file_error">Could not process incoming group file.</string>
     <string name="chat_file_too_large">File is too large.</string>
+    <string name="chat_file_empty">Cannot send an empty file.</string>
     <string name="chat_incoming_file_too_large">Incoming file is too large.</string>
     <string name="chat_opening_file_failed">Could not open file.</string>
     <string name="chat_media_still_downloading">This file is still downloading. Please wait.</string>

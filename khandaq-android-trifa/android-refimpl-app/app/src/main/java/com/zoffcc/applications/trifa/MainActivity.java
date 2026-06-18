@@ -764,43 +764,81 @@ public class MainActivity extends AppCompatActivity
 
         if ((!TOX_SERVICE_STARTED) || (orma == null))
         {
-            HelperGeneric.logI(TAG, "M:STARTUP:init DB");
+            HelperGeneric.logI(TAG, "M:STARTUP:init DB (background)");
 
-            try
+            // KHANDAQ: initialize the (SQLCipher-encrypted) database on a BACKGROUND thread. Its key
+            // derivation + first-run table creation is heavy and on slower devices took >5s on the UI
+            // thread, which triggered an ANR ("приложение не отвечает") that looked like a crash.
+            // onCreate now returns immediately; the rest of startup runs in onCreateContinue() once
+            // the database is ready.
+            new Thread(new Runnable()
             {
-                String dbs_path = getDir("dbs", MODE_PRIVATE).getAbsolutePath() + "/" + MAIN_DB_NAME;
-                // HelperGeneric.logI(TAG, "db:path=" + dbs_path);
-                File database_dir = new File(new File(dbs_path).getParent());
-                database_dir.mkdirs();
-
-                if (DB_ENCRYPT)
+                @Override
+                public void run()
                 {
-                    orma = OrmaDatabase_wrapper(dbs_path, PREF__DB_secrect_key, PREF__DB_wal_mode);
-                    DbSecretKeyStorage.persistLastWorkingDbSecretKey(this, PREF__DB_secrect_key);
-                }
-                else
-                {
-                    orma = OrmaDatabase_wrapper(dbs_path, null, PREF__DB_wal_mode);
-                }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-                HelperGeneric.logI(TAG, "M:STARTUP:init DB:EE1");
-                HelperGeneric.logI(TAG, "db:EE1:" + e.getMessage());
-                show_wrong_credentials();
-                finish();
-                return;
-            }
+                    try
+                    {
+                        String dbs_path = getDir("dbs", MODE_PRIVATE).getAbsolutePath() + "/" + MAIN_DB_NAME;
+                        File database_dir = new File(new File(dbs_path).getParent());
+                        database_dir.mkdirs();
 
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
-            // ** // ** // orma.deleteFromMessage().execute();
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
+                        if (DB_ENCRYPT)
+                        {
+                            orma = OrmaDatabase_wrapper(dbs_path, PREF__DB_secrect_key, PREF__DB_wal_mode);
+                            DbSecretKeyStorage.persistLastWorkingDbSecretKey(MainActivity.this, PREF__DB_secrect_key);
+                        }
+                        else
+                        {
+                            orma = OrmaDatabase_wrapper(dbs_path, null, PREF__DB_wal_mode);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                        HelperGeneric.logI(TAG, "M:STARTUP:init DB:EE1");
+                        HelperGeneric.logI(TAG, "db:EE1:" + e.getMessage());
+                        runOnUiThread(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                show_wrong_credentials();
+                                finish();
+                            }
+                        });
+                        return;
+                    }
+
+                    runOnUiThread(new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            // KHANDAQ: the activity may have been finished/destroyed while the DB
+                            // initialized in the background — don't continue startup on a dead activity.
+                            if (isFinishing() || isDestroyed())
+                            {
+                                HelperGeneric.logI(TAG, "M:STARTUP:onCreateContinue skipped (activity gone)");
+                                return;
+                            }
+                            onCreateContinue(savedInstanceState);
+                        }
+                    });
+                }
+            }).start();
+
+            return;
         }
+
+        onCreateContinue(savedInstanceState);
+    }
+
+    private void onCreateContinue(final Bundle savedInstanceState)
+    {
+        // KHANDAQ: re-derive the locals that were declared in onCreate before the DB init was moved
+        // off the UI thread (both are only used from here on).
+        final Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
 
         FavoritesChatHelper.ensureInitialized(this);
 
@@ -2773,6 +2811,10 @@ public class MainActivity extends AppCompatActivity
             }
             if (groupMenuItem != null)
             {
+                // KHANDAQ: the group menu (create private/public group) stays. Only "join public group
+                // by chat-id" is hidden (android:visible="false" on item_join_group_public in
+                // res/menu/menu_main.xml) pending the NGC cold-chat-id discovery fix — cold join by id
+                // does not connect yet. Group creation + friend-invite flow are unaffected.
                 groupMenuItem.setVisible(currentMainTab == R.id.bottom_nav_chats);
                 if (currentMainTab == R.id.bottom_nav_chats)
                 {
@@ -9215,7 +9257,11 @@ public class MainActivity extends AppCompatActivity
                     .hide(contactsFragment)
                     .hide(settingsFragment)
                     .hide(profileFragment)
-                    .commit();
+                    // KHANDAQ: onCreateContinue() may run from the async DB-init callback AFTER the
+                    // activity already saved its state (e.g. screen locked during startup), where a
+                    // plain commit() throws "Can not perform this action after onSaveInstanceState".
+                    // This is the initial tab setup (no back stack), so allowing state loss is safe.
+                    .commitAllowingStateLoss();
             bindChatFilterPagerListener();
         }
         else
@@ -9440,7 +9486,9 @@ public class MainActivity extends AppCompatActivity
             transaction.show(profileFragment);
         }
 
-        transaction.commit();
+        // KHANDAQ: tab switches (incl. the initial one during async startup) must survive a
+        // state-saved activity — show/hide of tabs has no back stack, so state loss is safe.
+        transaction.commitAllowingStateLoss();
         updateMainToolbarForTab(tabId);
     }
 

@@ -2352,7 +2352,9 @@ public class MessageListActivity extends AppCompatActivity
         if (file_size < 1)
         {
             HelperGeneric.logI(TAG, "file length 0 ?");
-            // file length "zero"?
+            // KHANDAQ: Tox cannot transfer a 0-byte file (size 0 is the special streaming/avatar
+            // mode), so empty files were silently dropped. Tell the user instead of doing nothing.
+            display_toast(c.getString(R.string.chat_file_empty), true, 100);
             return -1L;
         }
 

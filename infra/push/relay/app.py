@@ -22,6 +22,8 @@ FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")
 FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")  # legacy fallback
 RATE_LIMIT_PER_MIN = int(os.environ.get("PUSH_RATE_LIMIT_PER_MIN", "120"))
 PUSH_RELAY_AUTH_SECRET = os.environ.get("PUSH_RELAY_AUTH_SECRET", "")
+# Max allowed clock skew (seconds) for the request timestamp. Bounds the replay window.
+AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
@@ -56,23 +58,42 @@ def _rate_ok(client_ip: str) -> bool:
 
 
 def _auth_ok() -> bool:
+    # Auth stays OFF until a secret is provisioned (current production state).
     if not PUSH_RELAY_AUTH_SECRET:
         return True
+
+    # KHANDAQ (security NEW-2): replay-resistant, request-bound auth.
+    # The old scheme signed a CONSTANT (HMAC(secret, "khandaq-push-relay")) → the same value
+    # forever, baked into every build, replayable without limit. Instead the sender signs the
+    # actual request (recipient token `id` + sender `from` + a unix timestamp `ts`), and we
+    # accept it only inside a small freshness window. The HMAC is per-request and time-bound, so
+    # even if it leaks (e.g. nginx logs) it is useless after AUTH_MAX_SKEW_SEC.
+    #   ts   = unix seconds (integer string)
+    #   msg  = id + "\n" + from + "\n" + ts   (raw, URL-decoded values, UTF-8)
+    #   auth = lowercase hex HMAC-SHA256(secret, msg)
+    # `auth` may come via ?auth= or "Authorization: Bearer"; `ts` via ?ts= or X-Khandaq-Ts.
     supplied = request.args.get("auth", "").strip()
     if not supplied:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.lower().startswith("bearer "):
             supplied = auth_header[7:].strip()
-    if not supplied:
+
+    ts = request.args.get("ts", "").strip() or request.headers.get("X-Khandaq-Ts", "").strip()
+    if not supplied or not ts:
         return False
-    return hmac.compare_digest(
-        supplied,
-        hmac.new(
-            PUSH_RELAY_AUTH_SECRET.encode("utf-8"),
-            b"khandaq-push-relay",
-            hashlib.sha256,
-        ).hexdigest(),
-    )
+
+    try:
+        ts_int = int(ts)
+    except ValueError:
+        return False
+    if abs(time.time() - ts_int) > AUTH_MAX_SKEW_SEC:
+        return False
+
+    token = request.args.get("id", "")
+    sender = request.args.get("from", "")
+    msg = (token + "\n" + sender + "\n" + ts).encode("utf-8")
+    expected = hmac.new(PUSH_RELAY_AUTH_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(supplied, expected)
 
 
 def _get_access_token() -> str:

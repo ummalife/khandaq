@@ -356,15 +356,14 @@ static void triggerPush(NSString *used_pushToken,
         if (messageId == -1) {
             if ((friend.pushToken != nil) && (friend.pushToken.length > 5)) {
 
-                // check push url starts with allowed values
+                // KHANDAQ (security audit NEW-6): keep this list in lock-step with the strict send
+                // whitelist in triggerPush(). triggerPush only ever sends to push.khandaq.org /
+                // tox.zoff.xyz, so marking a message as "push sent" for gotify/ntfy friends was a lie —
+                // the push was never delivered. Only flag sent_push for hosts we actually push to.
                 if (
                     ([friend.pushToken hasPrefix:@"https://push.khandaq.org/toxfcm/fcm.php?id="])
                     ||
                     ([friend.pushToken hasPrefix:@"https://tox.zoff.xyz/toxfcm/fcm.php?id="])
-                    ||
-                    ([friend.pushToken hasPrefix:@"https://gotify1.unifiedpush.org/UP?token="])
-                    ||
-                    ([friend.pushToken hasPrefix:@"https://ntfy.sh/"])
                 ) {
                     sent_push = YES;
                 }

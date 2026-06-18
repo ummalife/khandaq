@@ -423,14 +423,18 @@
         </receiver>
 
         <receiver android:name="com.zoffcc.applications.trifa.WakeupAlarmReceiver" android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.zoffcc.applications.trifa.TOXSERVICE_ALARM">
                 </action>
             </intent-filter>
         </receiver>
 
-        <receiver android:name="com.zoffcc.applications.trifa.MyExternReceiver" android:enabled="true" android:exported="true">
+        <!-- KHANDAQ (security): exported="false". The alarm is delivered via an explicit-component
+             PendingIntent (no external delivery needed); MyExternReceiver has no internal sender and,
+             when exported, let any app broadcast EXTERN_RECV to hold wakelocks + raise a fake
+             full-screen "Incoming Message" + launch the app (battery-drain / spoof vector). -->
+        <receiver android:name="com.zoffcc.applications.trifa.MyExternReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
                 <action android:name="com.zoffcc.applications.trifa.EXTERN_RECV" />
             </intent-filter>

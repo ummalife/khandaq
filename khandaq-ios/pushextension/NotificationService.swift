@@ -22,6 +22,10 @@ class NotificationService: UNNotificationServiceExtension {
                 bestAttemptContent.body = "New activity"
             }
             contentHandler(bestAttemptContent)
+        } else {
+            // KHANDAQ: the mutableCopy cast can fail; if it does we must STILL call the handler,
+            // otherwise the notification hangs until the system timeout. Deliver the original content.
+            contentHandler(request.content)
         }
     }
 

@@ -1770,6 +1770,7 @@ public class HelperGeneric
     {
         try
         {
+            final byte[] byteArray;
             if (MainActivity.VFS_ENCRYPT)
             {
                 info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(vfs_image_filename);
@@ -1778,10 +1779,9 @@ public class HelperGeneric
                     return null;
                 }
                 info.guardianproject.iocipher.FileInputStream fis = new info.guardianproject.iocipher.FileInputStream(f1);
-                byte[] byteArray = new byte[(int) f1.length()];
+                byteArray = new byte[(int) f1.length()];
                 fis.read(byteArray, 0, (int) f1.length());
                 fis.close();
-                return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
             }
             else
             {
@@ -1791,13 +1791,59 @@ public class HelperGeneric
                     return null;
                 }
                 java.io.FileInputStream fis = new java.io.FileInputStream(f1);
-                byte[] byteArray = new byte[(int) f1.length()];
+                byteArray = new byte[(int) f1.length()];
                 fis.read(byteArray, 0, (int) f1.length());
                 fis.close();
-                return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
             }
+            return decode_avatar_bitmap_safe(byteArray);
         }
-        catch (Exception e)
+        catch (Throwable e)
+        {
+            // catch Throwable: a decode-bomb avatar throws OutOfMemoryError (an Error, not Exception),
+            // which would otherwise crash the notification path on every incoming message.
+            return null;
+        }
+    }
+
+    /**
+     * KHANDAQ (security, D-1): decode an avatar safely. A friend can send a tiny-on-disk but
+     * huge-in-pixels avatar; a naive decodeByteArray then allocates gigabytes → OutOfMemoryError on
+     * every notification. We read the bounds first, reject absurd dimensions, and downsample so the
+     * result never blows up memory (the caller scales it to 48dp anyway).
+     */
+    private static Bitmap decode_avatar_bitmap_safe(final byte[] byteArray)
+    {
+        if (byteArray == null || byteArray.length == 0)
+        {
+            return null;
+        }
+        try
+        {
+            final BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true; // measure only — no allocation
+            BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length, bounds);
+            final int w = bounds.outWidth;
+            final int h = bounds.outHeight;
+            if (w <= 0 || h <= 0)
+            {
+                return null;
+            }
+            // reject obvious decompression bombs outright
+            if (w > 8192 || h > 8192 || ((long) w * (long) h) > 16_000_000L)
+            {
+                return null;
+            }
+            final int target = 512; // generous for a 48dp notification icon
+            int sample = 1;
+            while ((w / sample) > target || (h / sample) > target)
+            {
+                sample *= 2;
+            }
+            final BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length, opts);
+        }
+        catch (Throwable t)
         {
             return null;
         }

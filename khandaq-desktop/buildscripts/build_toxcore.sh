@@ -25,6 +25,8 @@ build_toxcore() {
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_STATIC=OFF \
             -DENABLE_SHARED=ON \
+            -DMUST_BUILD_TOXAV=ON \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             "${CMAKE_TOOLCHAIN_FILE}" \
             "-DCMAKE_OSX_DEPLOYMENT_TARGET=${MACOS_MINIMUM_SUPPORTED_VERSION}" \
             .
@@ -45,6 +47,7 @@ build_toxext() {
 
     cmake "-DCMAKE_INSTALL_PREFIX=${DEP_PREFIX}" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             "${CMAKE_TOOLCHAIN_FILE}" \
             "-DCMAKE_OSX_DEPLOYMENT_TARGET=${MACOS_MINIMUM_SUPPORTED_VERSION}" \
             .
@@ -65,6 +68,7 @@ build_toxext_messages() {
 
     cmake "-DCMAKE_INSTALL_PREFIX=${DEP_PREFIX}" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             "${CMAKE_TOOLCHAIN_FILE}" \
             "-DCMAKE_OSX_DEPLOYMENT_TARGET=${MACOS_MINIMUM_SUPPORTED_VERSION}" \
             .

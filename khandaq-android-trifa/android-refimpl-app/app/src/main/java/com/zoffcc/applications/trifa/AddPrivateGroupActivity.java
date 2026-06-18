@@ -22,14 +22,13 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 
+import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
 import androidx.annotation.Nullable;
@@ -41,7 +40,8 @@ import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_title;
 public class AddPrivateGroupActivity extends AppCompatActivity
 {
     private static final String TAG = "trifa.AddGrpActivity";
-    EditText groupname_text = null;
+    TextInputEditText groupname_text = null;
+    TextInputEditText group_password_text = null;
     Button button_add = null;
     TextInputLayout new_group_inputlayout = null;
 
@@ -53,15 +53,16 @@ public class AddPrivateGroupActivity extends AppCompatActivity
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        HelperToolbar.enableUpNavigation(this, toolbar);
+        HelperToolbar.setScreenTitle(this, toolbar, R.string.add_group_activity_name);
 
-        groupname_text = (EditText) findViewById(R.id.group_new_group_name);
+        groupname_text = (TextInputEditText) findViewById(R.id.group_new_group_name);
+        group_password_text = (TextInputEditText) findViewById(R.id.group_new_group_password);
         button_add = (Button) findViewById(R.id.friend_addgroup);
         new_group_inputlayout = (TextInputLayout) findViewById(R.id.new_group_inputlayout);
 
         groupname_text.setText("");
-        new_group_inputlayout.setError("No Group Name");
-        // new_group_inputlayout.setError(null);
+        new_group_inputlayout.setError(null);
+        new_group_inputlayout.setErrorEnabled(false);
         button_add.setEnabled(false);
 
         groupname_text.addTextChangedListener(new TextWatcher()
@@ -82,8 +83,16 @@ public class AddPrivateGroupActivity extends AppCompatActivity
                 else
                 {
                     button_add.setEnabled(false);
-                    new_group_inputlayout.setErrorEnabled(true);
-                    new_group_inputlayout.setError("No Group Name");
+                    if (editable.length() > 0)
+                    {
+                        new_group_inputlayout.setErrorEnabled(true);
+                        new_group_inputlayout.setError(getString(R.string.add_group_failed_empty_name));
+                    }
+                    else
+                    {
+                        new_group_inputlayout.setErrorEnabled(false);
+                        new_group_inputlayout.setError(null);
+                    }
                 }
             }
 
@@ -122,6 +131,14 @@ public class AddPrivateGroupActivity extends AppCompatActivity
             }
 
             intent.putExtra("group_name", group_name_clean);
+            if (group_password_text != null && group_password_text.getText() != null)
+            {
+                final String password = group_password_text.getText().toString().trim();
+                if (!password.isEmpty())
+                {
+                    intent.putExtra("group_password", password);
+                }
+            }
             setResult(RESULT_OK, intent);
         }
         else

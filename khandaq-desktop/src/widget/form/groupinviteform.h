@@ -27,6 +27,7 @@ class GroupInviteWidget;
 
 class QGroupBox;
 class QLabel;
+class QLineEdit;
 class QPushButton;
 class QScrollArea;
 class QSignalMapper;
@@ -49,21 +50,32 @@ public:
     bool isShown() const;
 
 signals:
-    void groupCreate(uint8_t type);
+    void groupCreate();
     void groupInviteAccepted(const GroupInvite& inviteInfo);
     void groupInvitesSeen();
+    void groupJoinFailed(const QString& reason);
+    void groupJoinSucceeded();
 
 protected:
     void showEvent(QShowEvent* event) final;
 
+private slots:
+    void onJoinGroupClicked();
+    void onJoinGroupIdChanged(const QString& text);
+
 private:
     void retranslateUi();
     void deleteInviteWidget(const GroupInvite& inviteInfo);
+    void updateJoinButtonState();
 
 private:
     QWidget* headWidget;
     QLabel* headLabel;
     QPushButton* createButton;
+    QGroupBox* joinBox;
+    QLineEdit* joinGroupIdEdit;
+    QPushButton* joinButton;
+    QLabel* joinHintLabel;
     QGroupBox* inviteBox;
     QList<GroupInviteWidget*> invites;
     QScrollArea* scroll;

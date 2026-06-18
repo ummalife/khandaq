@@ -31,6 +31,33 @@ RUN apt-get update && apt-get -y --no-install-recommends install \
     libswresample-dev \
     libswscale-dev \
     libvpx-dev \
+    libx264-dev \
+    libdav1d-dev \
+    libmp3lame-dev \
+    libvorbis-dev \
+    libogg-dev \
+    libx265-dev \
+    libaom-dev \
+    libsnappy-dev \
+    libzvbi-dev \
+    libshine-dev \
+    libspeex-dev \
+    libtheora-dev \
+    libxvidcore-dev \
+    libva-dev \
+    libsoxr-dev \
+    libgsm1-dev \
+    libopenjp2-7-dev \
+    libcodec2-dev \
+    libsvtav1enc-dev \
+    librav1e-dev \
+    libjxl-dev \
+    libtwolame-dev \
+    libdrm-dev \
+    libvdpau-dev \
+    libvpl-dev \
+    ocl-icd-opencl-dev \
+    librsvg2-dev \
     libxss-dev \
     qtbase5-dev \
     qttools5-dev \

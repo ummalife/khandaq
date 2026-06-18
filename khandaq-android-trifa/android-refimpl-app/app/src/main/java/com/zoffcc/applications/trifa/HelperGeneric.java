@@ -26,8 +26,10 @@ import org.khandaq.messenger.R;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.Notification;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -106,6 +108,7 @@ import java.util.Random;
 import java.util.regex.Pattern;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.appcompat.app.AlertDialog;
 import androidx.exifinterface.media.ExifInterface;
@@ -159,7 +162,7 @@ import static com.zoffcc.applications.trifa.MainActivity.audio_buffer_2;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.toxav_option_set;
-import static com.zoffcc.applications.trifa.ProfileActivity.update_toxid_display_s;
+import static com.zoffcc.applications.trifa.ProfileContentFragment.update_toxid_display_s;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FAB_SCROLL_TO_BOTTOM_FADEIN_MS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FAB_SCROLL_TO_BOTTOM_FADEOUT_MS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HAVE_INTERNET_CONNECTIVITY;
@@ -215,6 +218,14 @@ public class HelperGeneric
 {
     private static final String TAG = "trifa.Hlp.Generic";
 
+    static void logI(final String tag, final String msg)
+    {
+        if (BuildConfig.DEBUG)
+        {
+            Log.i(tag, msg);
+        }
+    }
+
     /*
      all stuff here should be moved somewhere else at some point
      */
@@ -232,6 +243,86 @@ public class HelperGeneric
     static long last_log_battery_savings_criteria_ts = -1;
     static long update_savedata_file_wrapper_throttled_last_trigger_ts = 0;
     static long update_savedata_file_wrapper_last_ts = 0;
+
+    @Nullable
+    static String collect_shared_text_from_intent(@Nullable final Intent intent)
+    {
+        if (intent == null)
+        {
+            return null;
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        try
+        {
+            final String extraText = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (extraText != null && extraText.length() > 0)
+            {
+                sb.append(extraText);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        try
+        {
+            final ArrayList<CharSequence> textList = intent.getCharSequenceArrayListExtra(Intent.EXTRA_TEXT);
+            if (textList != null)
+            {
+                for (CharSequence part : textList)
+                {
+                    if (part == null || part.length() == 0)
+                    {
+                        continue;
+                    }
+                    if (sb.length() > 0)
+                    {
+                        sb.append('\n');
+                    }
+                    sb.append(part);
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        try
+        {
+            final ClipData clipData = intent.getClipData();
+            if (clipData != null)
+            {
+                for (int i = 0; i < clipData.getItemCount(); i++)
+                {
+                    final ClipData.Item item = clipData.getItemAt(i);
+                    if (item == null)
+                    {
+                        continue;
+                    }
+                    CharSequence part = item.getText();
+                    if (part == null && item.getUri() != null)
+                    {
+                        part = item.getUri().toString();
+                    }
+                    if (part == null || part.length() == 0)
+                    {
+                        continue;
+                    }
+                    if (sb.length() > 0)
+                    {
+                        sb.append('\n');
+                    }
+                    sb.append(part);
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        return sb.length() > 0 ? sb.toString() : null;
+    }
 
     public static void clearCache_s()
     {
@@ -578,12 +669,8 @@ public class HelperGeneric
             if (went_online)
             {
                 f.last_online_timestamp_real = LAST_ONLINE_TIMSTAMP_ONLINE_NOW;
+                HelperFriend.update_friend_in_db_last_online_timestamp_real(f);
             }
-            else
-            {
-                f.last_online_timestamp_real = System.currentTimeMillis();
-            }
-            HelperFriend.update_friend_in_db_last_online_timestamp_real(f);
         }
 
         if (went_online)
@@ -611,6 +698,7 @@ public class HelperGeneric
             }
 
             HelperFriend.add_all_friends_clear_wrapper(0);
+            HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
         }
         else // went offline -------------------
         {
@@ -622,8 +710,11 @@ public class HelperGeneric
             if (get_toxconnection_wrapper(combined_connection_status_) == TOX_CONNECTION_NONE.value)
             {
                 // Log.i(TAG, "friend_connection_status:friend status combined: OFFLINE");
-                f.last_online_timestamp = System.currentTimeMillis();
+                final long offline_ts = System.currentTimeMillis();
+                f.last_online_timestamp = offline_ts;
+                f.last_online_timestamp_real = offline_ts;
                 HelperFriend.update_friend_in_db_last_online_timestamp(f);
+                HelperFriend.update_friend_in_db_last_online_timestamp_real(f);
                 f.TOX_CONNECTION = combined_connection_status_;
                 f.TOX_CONNECTION_on_off = get_toxconnection_wrapper(f.TOX_CONNECTION);
                 HelperFriend.update_friend_in_db_connection_status(f);
@@ -1679,6 +1770,7 @@ public class HelperGeneric
     {
         try
         {
+            final byte[] byteArray;
             if (MainActivity.VFS_ENCRYPT)
             {
                 info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(vfs_image_filename);
@@ -1687,10 +1779,9 @@ public class HelperGeneric
                     return null;
                 }
                 info.guardianproject.iocipher.FileInputStream fis = new info.guardianproject.iocipher.FileInputStream(f1);
-                byte[] byteArray = new byte[(int) f1.length()];
+                byteArray = new byte[(int) f1.length()];
                 fis.read(byteArray, 0, (int) f1.length());
                 fis.close();
-                return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
             }
             else
             {
@@ -1700,13 +1791,59 @@ public class HelperGeneric
                     return null;
                 }
                 java.io.FileInputStream fis = new java.io.FileInputStream(f1);
-                byte[] byteArray = new byte[(int) f1.length()];
+                byteArray = new byte[(int) f1.length()];
                 fis.read(byteArray, 0, (int) f1.length());
                 fis.close();
-                return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
             }
+            return decode_avatar_bitmap_safe(byteArray);
         }
-        catch (Exception e)
+        catch (Throwable e)
+        {
+            // catch Throwable: a decode-bomb avatar throws OutOfMemoryError (an Error, not Exception),
+            // which would otherwise crash the notification path on every incoming message.
+            return null;
+        }
+    }
+
+    /**
+     * KHANDAQ (security, D-1): decode an avatar safely. A friend can send a tiny-on-disk but
+     * huge-in-pixels avatar; a naive decodeByteArray then allocates gigabytes → OutOfMemoryError on
+     * every notification. We read the bounds first, reject absurd dimensions, and downsample so the
+     * result never blows up memory (the caller scales it to 48dp anyway).
+     */
+    private static Bitmap decode_avatar_bitmap_safe(final byte[] byteArray)
+    {
+        if (byteArray == null || byteArray.length == 0)
+        {
+            return null;
+        }
+        try
+        {
+            final BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true; // measure only — no allocation
+            BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length, bounds);
+            final int w = bounds.outWidth;
+            final int h = bounds.outHeight;
+            if (w <= 0 || h <= 0)
+            {
+                return null;
+            }
+            // reject obvious decompression bombs outright
+            if (w > 8192 || h > 8192 || ((long) w * (long) h) > 16_000_000L)
+            {
+                return null;
+            }
+            final int target = 512; // generous for a 48dp notification icon
+            int sample = 1;
+            while ((w / sample) > target || (h / sample) > target)
+            {
+                sample *= 2;
+            }
+            final BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length, opts);
+        }
+        catch (Throwable t)
         {
             return null;
         }
@@ -2055,15 +2192,12 @@ public class HelperGeneric
 
     public static String dm_send_failure_reason(final long msg_num)
     {
-        if (msg_num == -98)
-        {
-            return context_s.getString(R.string.dm_send_failed_not_ready);
-        }
-        if (msg_num == -99)
-        {
-            return context_s.getString(R.string.dm_send_failed_friend);
-        }
-        return context_s.getString(R.string.dm_send_failed);
+        return HelperFriend.dm_send_failure_reason(msg_num, null);
+    }
+
+    public static String dm_send_failure_reason(final long msg_num, @Nullable final String friend_pubkey)
+    {
+        return HelperFriend.dm_send_failure_reason(msg_num, friend_pubkey);
     }
 
     public static float dp2px(float dp)
@@ -2773,6 +2907,61 @@ public class HelperGeneric
         }
     }
 
+    /** Telegram-style chat date pill: Today / Yesterday / 15 June / 15 June 2024. */
+    static String format_chat_date_header(final Context context, final long timestamp_in_millis)
+    {
+        if (context == null || timestamp_in_millis <= 0L)
+        {
+            return "";
+        }
+
+        try
+        {
+            final java.util.Calendar messageDay = java.util.Calendar.getInstance();
+            messageDay.setTimeInMillis(timestamp_in_millis);
+            truncateCalendarToDay(messageDay);
+
+            final java.util.Calendar today = java.util.Calendar.getInstance();
+            truncateCalendarToDay(today);
+
+            if (messageDay.equals(today))
+            {
+                return context.getString(R.string.chat_date_today);
+            }
+
+            final java.util.Calendar yesterday = (java.util.Calendar) today.clone();
+            yesterday.add(java.util.Calendar.DAY_OF_YEAR, -1);
+            if (messageDay.equals(yesterday))
+            {
+                return context.getString(R.string.chat_date_yesterday);
+            }
+
+            final java.text.SimpleDateFormat formatter;
+            if (messageDay.get(java.util.Calendar.YEAR) == today.get(java.util.Calendar.YEAR))
+            {
+                formatter = new java.text.SimpleDateFormat("d MMMM", java.util.Locale.getDefault());
+            }
+            else
+            {
+                formatter = new java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault());
+            }
+            return formatter.format(new Date(timestamp_in_millis));
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return only_date_time_format(timestamp_in_millis);
+        }
+    }
+
+    private static void truncateCalendarToDay(final java.util.Calendar calendar)
+    {
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        calendar.set(java.util.Calendar.MINUTE, 0);
+        calendar.set(java.util.Calendar.SECOND, 0);
+        calendar.set(java.util.Calendar.MILLISECOND, 0);
+    }
+
     static String short_time_format(long timestamp_in_millis)
     {
         if (timestamp_in_millis <= 0)
@@ -2789,6 +2978,26 @@ public class HelperGeneric
             e.printStackTrace();
             return "";
         }
+    }
+
+    static String format_group_message_time(final com.zoffcc.applications.sorm.GroupMessage m, final boolean outgoing)
+    {
+        if (m == null)
+        {
+            return "";
+        }
+
+        long ts;
+        if (outgoing)
+        {
+            ts = m.sent_timestamp > 0 ? m.sent_timestamp : m.rcvd_timestamp;
+        }
+        else
+        {
+            ts = m.rcvd_timestamp > 0 ? m.rcvd_timestamp : m.sent_timestamp;
+        }
+
+        return short_time_format(ts);
     }
 
     static String format_chat_message_time(final com.zoffcc.applications.sorm.Message m, final boolean outgoing)
@@ -2915,6 +3124,8 @@ public class HelperGeneric
             }
             catch (Exception e)
             {
+                Log.w(TAG, "read_chunk_from_SD_file:EE path=" + file_name_with_path + " pos=" + position
+                        + " len=" + file_chunk_length + " real=" + real_file_path + " err=" + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -2980,6 +3191,8 @@ public class HelperGeneric
             }
             catch (Exception e)
             {
+                Log.w(TAG, "read_chunk_from_SD_file:EE path=" + file_name_with_path + " pos=" + position
+                        + " len=" + file_chunk_length + " real=" + real_file_path + " err=" + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -2996,6 +3209,86 @@ public class HelperGeneric
         else
         {
             write_chunk_to_VFS_file__no_extra_write_cache(file_name_with_path, position, file_chunk_length, data);
+        }
+    }
+
+    /**
+     * Flush + close the buffered write cache for a VFS file so its tail (up to one buffer) hits disk.
+     * Chunked group downloads otherwise leave the last buffered bytes in RAM — lost on app close,
+     * making an already-complete file look short and re-download on next launch.
+     */
+    static void flush_close_vfs_write_cache(final String file_name_with_path)
+    {
+        if (!VFS_CUSTOM_WRITE_CACHE || file_name_with_path == null)
+        {
+            return;
+        }
+        try
+        {
+            final BufferedOutputStreamCustom fos = cache_ft_fos.get(file_name_with_path);
+            if (fos != null)
+            {
+                try
+                {
+                    fos.flush();
+                    fos.close();
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        cache_ft_fos.remove(file_name_with_path);
+    }
+
+    /** Flush (but keep open) the buffered write cache for one VFS file so written bytes hit disk. */
+    static void flush_vfs_write_cache(final String file_name_with_path)
+    {
+        if (!VFS_CUSTOM_WRITE_CACHE || file_name_with_path == null)
+        {
+            return;
+        }
+        try
+        {
+            final BufferedOutputStreamCustom fos = cache_ft_fos.get(file_name_with_path);
+            if (fos != null)
+            {
+                fos.flush();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    /** Flush all in-flight VFS download buffers to disk (e.g. when the app goes to background). */
+    static void flush_all_vfs_write_caches()
+    {
+        if (!VFS_CUSTOM_WRITE_CACHE)
+        {
+            return;
+        }
+        try
+        {
+            for (final BufferedOutputStreamCustom fos : new java.util.ArrayList<>(cache_ft_fos.values()))
+            {
+                try
+                {
+                    if (fos != null)
+                    {
+                        fos.flush();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
         }
     }
 
@@ -3307,7 +3600,9 @@ public class HelperGeneric
             return null;
         }
 
-        if (HelperFriend.is_own_public_key(friend_pubkey))
+        HelperFriend.reconcile_friend_connection_state(friend_pubkey, friendnum_to_use);
+
+        if (HelperFriend.is_own_public_key(friend_pubkey) || FavoritesChatHelper.isFavoritesChat(friend_pubkey))
         {
             final MainActivity.send_message_result result = new MainActivity.send_message_result();
             final ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
@@ -3320,15 +3615,23 @@ public class HelperGeneric
             return result;
         }
 
-        if (peer_supports_msgv2(f))
+        if (peer_supports_msgv2(f) && !peer_supports_msgv3(f))
         {
             msgv1 = false;
         }
 
         // Log.d(TAG, "tox_friend_send_message_wrapper:f conn" + f.TOX_CONNECTION_real);
-        if (f.TOX_CONNECTION_real == TOX_CONNECTION_NONE.value)
+        final int live_conn = (friendnum_to_use >= 0)
+                ? MainActivity.tox_friend_get_connection_status(friendnum_to_use) : TOX_CONNECTION_NONE.value;
+        if (live_conn != f.TOX_CONNECTION_real)
         {
-            String relay_pubkey = HelperRelay.get_relay_for_friend(f.tox_public_key_string);
+            f.TOX_CONNECTION_real = live_conn;
+        }
+
+        String relay_pubkey = null;
+        if (live_conn == TOX_CONNECTION_NONE.value)
+        {
+            relay_pubkey = HelperRelay.get_relay_for_friend(f.tox_public_key_string);
 
             // msgV2 relay delivery requires TOX_CAPABILITY_MSGV2 (iOS/Khandaq uses msgV3 over tox_friend_send_message only)
             if (relay_pubkey != null && peer_supports_msgv2(f))
@@ -3343,14 +3646,25 @@ public class HelperGeneric
         }
 
         if (MessageChunker.shouldChunk(message) && friendnum_to_use >= 0
-                && f.TOX_CONNECTION_real != TOX_CONNECTION_NONE.value)
+                && live_conn != TOX_CONNECTION_NONE.value)
         {
             final MainActivity.send_message_result result = new MainActivity.send_message_result();
             result.msg_v2 = false;
             result.msg_hash_hex = "";
             result.msg_hash_v3_hex = "";
             result.raw_message_buf_hex = "";
-            result.msg_num = MessageChunker.sendChunked(friendnum_to_use, message) ? 1L : 0L;
+            result.msg_num = MessageChunker.sendChunked(friendnum_to_use, message) ? 1L : -3L;
+            return result;
+        }
+
+        if (live_conn == TOX_CONNECTION_NONE.value && relay_pubkey == null)
+        {
+            final MainActivity.send_message_result result = new MainActivity.send_message_result();
+            result.msg_v2 = false;
+            result.msg_hash_hex = "";
+            result.msg_hash_v3_hex = "";
+            result.raw_message_buf_hex = "";
+            result.msg_num = -3L;
             return result;
         }
 
@@ -3614,7 +3928,11 @@ public class HelperGeneric
         if (msg_type == 0)
         {
             // msgV1 text only message
-            // Log.i(TAG, "friend_message:friend:" + friend_number + " msgV3hash:" + msgV3hash_bin);
+            if ((friend_message_text_utf8 == null) || (friend_message_text_utf8.length() < 1))
+            {
+                Log.w(TAG, "receive_incoming_message:skip empty text fn=" + friend_number);
+                return;
+            }
 
             String msgV3hash_hex_string = null;
             if (msgV3hash_bin != null)
@@ -3650,21 +3968,31 @@ public class HelperGeneric
                         HelperFriend.tox_friend_get_public_key__wrapper(friend_number)).directionEq(1).msg_idv3_hashEq(
                         msgV3hash_hex_string).count();
 
-                //Log.i(TAG, "update_friend_msgv3_capability:got_messages_mirrored=" + got_messages_mirrored + " hash1=" +
-                //           msgV3hash_bin + " " + msgV3hash_hex_string);
                 if (got_messages_mirrored > 0)
                 {
-                    update_friend_msgv3_capability(friend_number, 0);
+                    Log.i(TAG, "receive_incoming_message:mirrored msgv3 hash, skip display fn=" + friend_number);
+                    HelperMessage.send_msgv3_high_level_ack(friend_number, msgV3hash_hex_string);
+                    return;
                 }
-                else
-                {
-                    update_friend_msgv3_capability(friend_number, 1);
-                }
+
+                update_friend_msgv3_capability(friend_number, 1);
             }
             else
             {
-                // Log.i(TAG, "update_friend_msgv3_capability:hash0=" + msgV3hash_bin + " " + msgV3hash_hex_string);
                 update_friend_msgv3_capability(friend_number, 0);
+            }
+
+            try
+            {
+                FriendList profile_friend = main_get_friend(friend_number);
+                if (profile_friend != null)
+                {
+                    HelperFriend.sync_friend_profile_from_tox(friend_number, profile_friend);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "receive_incoming_message:sync_profile:EE:" + e.getMessage());
             }
 
             // if message list for this friend is open, then don't do notification and "new" badge
@@ -4463,23 +4791,17 @@ public class HelperGeneric
         }
     }
 
-    static void import_toxsave_file_unsecure(final Context context)
+    static void import_toxsave_file_unsecure(final Context context, @NonNull final File f_src)
     {
         MainActivity.global_stop_tox();
-        File f_src = new File(MainActivity.SD_CARD_FILES_EXPORT_DIR + "/" + "I_WANT_TO_IMPORT_savedata.tox");
 
-        if (!f_src.exists())
+        if (f_src == null || !f_src.exists() || f_src.length() < 64L)
         {
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            builder.setTitle("Import Tox Savedata");
-            builder.setMessage("Import ERROR:" + "\n\n" + "import file does not exist");
-
-            builder.setPositiveButton("Ok", null);
-
-            // create and show the alert dialog
-            AlertDialog dialog = builder.create();
-            dialog.show();
-
+            builder.setTitle(context.getString(R.string.settings_import_tox_profile));
+            builder.setMessage(context.getString(R.string.settings_import_tox_profile_invalid_file));
+            builder.setPositiveButton(android.R.string.ok, null);
+            builder.create().show();
             return;
         }
 
@@ -4543,10 +4865,10 @@ public class HelperGeneric
         }
 
         final AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle("Import Tox ToxSaveFile");
-        builder.setMessage("Import OK:" + "\n\n" + "Now TRIfA will restart");
+        builder.setTitle(context.getString(R.string.import_toxsave_ok_title));
+        builder.setMessage(context.getString(R.string.import_toxsave_ok_message));
 
-        builder.setPositiveButton("Ok", new DialogInterface.OnClickListener()
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
         {
             public void onClick(DialogInterface dialog, int id)
             {

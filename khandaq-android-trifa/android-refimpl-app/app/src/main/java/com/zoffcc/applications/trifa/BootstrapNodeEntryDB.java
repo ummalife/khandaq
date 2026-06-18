@@ -104,9 +104,7 @@ public class BootstrapNodeEntryDB extends com.zoffcc.applications.sorm.Bootstrap
         com.zoffcc.applications.sorm.BootstrapNodeEntryDB n;
         int num_ = 0;
         // @formatter:off
-        n = BootstrapNodeEntryDB_(true, num_, "bootstrap1.khandaq.org",33445,"74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(true, num_, "bootstrap2.khandaq.org",33445,"5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(true, num_, "bootstrap3.khandaq.org",33445,"A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665");insert_node_into_db_real(n);num_++;
+        // Self-hosted bootstrap*.khandaq.org nodes removed: rely on the proven public Tox DHT below.
         n = BootstrapNodeEntryDB_(true, num_, "144.217.167.73",33445,"7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "tox.abilinski.com",33445,"10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "205.185.115.131",53,"3091C6BEB2A993F1C6300C16549FABA67098FF3D62C6D253828B531470B53D68");insert_node_into_db_real(n);num_++;
@@ -147,12 +145,7 @@ public class BootstrapNodeEntryDB extends com.zoffcc.applications.sorm.Bootstrap
         com.zoffcc.applications.sorm.BootstrapNodeEntryDB n;
         int num_ = 0;
         // @formatter:off
-        n = BootstrapNodeEntryDB_(false, num_, "bootstrap1.khandaq.org",3389,"74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "bootstrap1.khandaq.org",33445,"74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "bootstrap2.khandaq.org",3389,"5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "bootstrap2.khandaq.org",33445,"5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "bootstrap3.khandaq.org",3389,"A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "bootstrap3.khandaq.org",33445,"A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665");insert_node_into_db_real(n);num_++;
+        // Self-hosted bootstrap*.khandaq.org TCP relays removed: rely on the proven public Tox relays below.
         n = BootstrapNodeEntryDB_(false, num_, "144.217.167.73",3389,"7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "144.217.167.73",33445,"7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "tox.abilinski.com",33445,"10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E");insert_node_into_db_real(n);num_++;
@@ -277,94 +270,100 @@ public class BootstrapNodeEntryDB extends com.zoffcc.applications.sorm.Bootstrap
 
     public static void get_tcprelay_nodelist_from_db()
     {
-        tcprelay_node_list.clear();
-
-        long tcprelay_nodelist_count = 0;
-        try
+        synchronized (tcprelay_node_list)
         {
-            tcprelay_nodelist_count = orma.selectFromBootstrapNodeEntryDB().
-                    udp_nodeEq(false).count();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
+            tcprelay_node_list.clear();
 
-        Log.i(TAG, "get_tcprelay_nodelist_from_db:tcprelay_nodelist_count=" + tcprelay_nodelist_count);
-
-        if (tcprelay_nodelist_count == 0)
-        {
-            Log.i(TAG, "get_tcprelay_nodelist_from_db:insert_default_tcprelay_nodes_into_db");
-            insert_default_tcprelay_nodes_into_db();
-        }
-
-        // fill tcprelay_node_list with values from DB -----------------
-        try
-        {
-            tcprelay_node_list.addAll(orma.selectFromBootstrapNodeEntryDB().udp_nodeEq(false).orderByNumAsc().toList());
-            Log.i(TAG, "get_tcprelay_nodelist_from_db:tcprelay_node_list.addAll " + tcprelay_node_list);
-
-            if (PREF__orbot_enabled)
+            long tcprelay_nodelist_count = 0;
+            try
             {
-                Iterator i = bootstrap_node_list.iterator();
-                com.zoffcc.applications.sorm.BootstrapNodeEntryDB e2;
-                while (i.hasNext())
-                {
-                    e2 = (com.zoffcc.applications.sorm.BootstrapNodeEntryDB) i.next();
-                    e2.ip = dns_lookup_via_tor(e2.ip);
+                tcprelay_nodelist_count = orma.selectFromBootstrapNodeEntryDB().
+                        udp_nodeEq(false).count();
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
 
+            Log.i(TAG, "get_tcprelay_nodelist_from_db:tcprelay_nodelist_count=" + tcprelay_nodelist_count);
+
+            if (tcprelay_nodelist_count == 0)
+            {
+                Log.i(TAG, "get_tcprelay_nodelist_from_db:insert_default_tcprelay_nodes_into_db");
+                insert_default_tcprelay_nodes_into_db();
+            }
+
+            // fill tcprelay_node_list with values from DB -----------------
+            try
+            {
+                tcprelay_node_list.addAll(orma.selectFromBootstrapNodeEntryDB().udp_nodeEq(false).orderByNumAsc().toList());
+                Log.i(TAG, "get_tcprelay_nodelist_from_db:tcprelay_node_list.addAll " + tcprelay_node_list.size());
+
+                if (PREF__orbot_enabled)
+                {
+                    Iterator i = tcprelay_node_list.iterator();
+                    com.zoffcc.applications.sorm.BootstrapNodeEntryDB e2;
+                    while (i.hasNext())
+                    {
+                        e2 = (com.zoffcc.applications.sorm.BootstrapNodeEntryDB) i.next();
+                        e2.ip = dns_lookup_via_tor(e2.ip);
+
+                    }
                 }
             }
+            catch (Exception e)
+            {
+            }
+            // fill tcprelay_node_list with values from DB -----------------
         }
-        catch (Exception e)
-        {
-        }
-        // fill tcprelay_node_list with values from DB -----------------
     }
 
     public static void get_udp_nodelist_from_db()
     {
-        bootstrap_node_list.clear();
-
-        long udp_nodelist_count = 0;
-        try
+        synchronized (bootstrap_node_list)
         {
-            udp_nodelist_count = orma.selectFromBootstrapNodeEntryDB().
-                    udp_nodeEq(true).count();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
+            bootstrap_node_list.clear();
 
-        Log.i(TAG, "get_udp_nodelist_from_db:udp_nodelist_count=" + udp_nodelist_count);
-
-        if (udp_nodelist_count == 0)
-        {
-            Log.i(TAG, "get_udp_nodelist_from_db:insert_default_udp_nodes_into_db");
-            insert_default_udp_nodes_into_db();
-        }
-
-        // fill bootstrap_node_list with values from DB -----------------
-        try
-        {
-            bootstrap_node_list.addAll(orma.selectFromBootstrapNodeEntryDB().udp_nodeEq(true).orderByNumAsc().toList());
-            Log.i(TAG, "get_udp_nodelist_from_db:bootstrap_node_list.addAll");
-
-            if (PREF__orbot_enabled)
+            long udp_nodelist_count = 0;
+            try
             {
-                Iterator i = bootstrap_node_list.iterator();
-                com.zoffcc.applications.sorm.BootstrapNodeEntryDB e2;
-                while (i.hasNext())
+                udp_nodelist_count = orma.selectFromBootstrapNodeEntryDB().
+                        udp_nodeEq(true).count();
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            Log.i(TAG, "get_udp_nodelist_from_db:udp_nodelist_count=" + udp_nodelist_count);
+
+            if (udp_nodelist_count == 0)
+            {
+                Log.i(TAG, "get_udp_nodelist_from_db:insert_default_udp_nodes_into_db");
+                insert_default_udp_nodes_into_db();
+            }
+
+            // fill bootstrap_node_list with values from DB -----------------
+            try
+            {
+                bootstrap_node_list.addAll(orma.selectFromBootstrapNodeEntryDB().udp_nodeEq(true).orderByNumAsc().toList());
+                Log.i(TAG, "get_udp_nodelist_from_db:bootstrap_node_list.addAll");
+
+                if (PREF__orbot_enabled)
                 {
-                    e2 = (com.zoffcc.applications.sorm.BootstrapNodeEntryDB) i.next();
-                    e2.ip = dns_lookup_via_tor(e2.ip);
+                    Iterator i = bootstrap_node_list.iterator();
+                    com.zoffcc.applications.sorm.BootstrapNodeEntryDB e2;
+                    while (i.hasNext())
+                    {
+                        e2 = (com.zoffcc.applications.sorm.BootstrapNodeEntryDB) i.next();
+                        e2.ip = dns_lookup_via_tor(e2.ip);
+                    }
                 }
             }
+            catch (Exception e)
+            {
+            }
+            // fill bootstrap_node_list with values from DB -----------------
         }
-        catch (Exception e)
-        {
-        }
-        // fill bootstrap_node_list with values from DB -----------------
     }
 }

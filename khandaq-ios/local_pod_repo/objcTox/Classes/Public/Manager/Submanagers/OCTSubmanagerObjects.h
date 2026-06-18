@@ -69,4 +69,6 @@
  */
 - (void)changeChat:(OCTChat *)chat lastReadDateInterval:(NSTimeInterval)lastReadDateInterval;
 
+- (void)setGroupShowSystemMessages:(BOOL)enabled;
+
 @end

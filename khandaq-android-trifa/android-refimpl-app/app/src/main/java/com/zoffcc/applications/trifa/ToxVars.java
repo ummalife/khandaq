@@ -1784,6 +1784,19 @@ public class ToxVars
         }
     }
 
+    public static enum Tox_Group_Topic_Lock
+    {
+        TOX_GROUP_TOPIC_LOCK_ENABLED(0),
+        TOX_GROUP_TOPIC_LOCK_DISABLED(1);
+
+        public int value;
+
+        private Tox_Group_Topic_Lock(int value)
+        {
+            this.value = value;
+        }
+    }
+
     public static enum Tox_Group_Voice_State
     {
         /**

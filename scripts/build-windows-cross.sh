@@ -49,6 +49,19 @@ docker run --rm \
     if [[ -x scripts/generate-khandaq-icons.sh ]]; then
       ./scripts/generate-khandaq-icons.sh || true
     fi
+    if [[ \"\${REFRESH_TOXCORE:-1}\" != \"0\" ]]; then
+      echo \"==> Building x264 (required for toxav in NGC toxcore)...\"
+      rm -rf /build/x264-refresh
+      mkdir -p /build/x264-refresh && cd /build/x264-refresh
+      /build/src/buildscripts/build_x264.sh --arch ${WINEARCH}
+      echo \"==> Refreshing NGC toxcore (zoff fork) into /windows prefix...\"
+      rm -rf /build/toxcore-refresh
+      mkdir -p /build/toxcore-refresh && cd /build/toxcore-refresh
+      FORCE_TOXCORE_DOWNLOAD=1 /build/src/buildscripts/build_toxcore.sh --arch ${WINEARCH}
+      cp -f /windows/bin/libtoxcore.dll /export/libtoxcore.dll 2>/dev/null || true
+      cp -f /windows/bin/libx264-*.dll /export/ 2>/dev/null || true
+      cd /build/src
+    fi
     mkdir -p /build/out && cd /build/out
     /build/src/windows/cross-compile/build.sh \
       --src-dir /build/src \

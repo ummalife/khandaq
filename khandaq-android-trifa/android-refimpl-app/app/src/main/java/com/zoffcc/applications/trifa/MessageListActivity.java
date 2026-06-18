@@ -73,6 +73,7 @@ import com.zoffcc.applications.sorm.Message;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import androidx.annotation.Px;
 import androidx.annotation.RequiresApi;
@@ -113,6 +114,7 @@ import static com.zoffcc.applications.trifa.HelperGeneric.set_g_opts;
 import static com.zoffcc.applications.trifa.HelperGeneric.tox_friend_send_message_wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.trim_to_utf8_length_bytes;
 import static com.zoffcc.applications.trifa.HelperMessage.insert_into_message_db;
+import static com.zoffcc.applications.trifa.HelperMessage.update_single_message_from_messge_id;
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
 import static com.zoffcc.applications.trifa.MainActivity.CallingWaitingActivity_ID;
 import static com.zoffcc.applications.trifa.MainActivity.launch_outgoing_calling_activity;
@@ -140,7 +142,6 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.FT_OUTGOING_FILESIZE_FR
 import static com.zoffcc.applications.trifa.TRIFAGlobals.FT_OUTGOING_FILESIZE_NGC_MAX_TOTAL;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GLOBAL_AUDIO_BITRATE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GLOBAL_VIDEO_BITRATE;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.MAX_FRIEND_AUDIO_RECORDING_MSG_SECONDS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NOTIFICATION_EDIT_ACTION.NOTIFICATION_EDIT_ACTION_REMOVE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TEXT_QUOTE_STRING_1;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TEXT_QUOTE_STRING_2;
@@ -166,10 +167,16 @@ import static com.zoffcc.applications.trifa.TrifaToxService.wakeup_tox_thread;
 public class MessageListActivity extends AppCompatActivity
 {
     private static final String TAG = "trifa.MsgListActivity";
+    /** Survives onPause while gallery/preview picker is open (onActivityResult runs before onResume). */
+    static String outgoing_attachment_friend_pubkey = null;
     long friendnum = -1;
     long friendnum_prev = -1;
     String friend_pubkey = null;
     static final int MEDIAPICK_ID_001 = 8002;
+
+    private boolean mediaPreviewResultHandled = false;
+    /** True while document picker or {@link MediaSendPreviewActivity} owns the foreground. */
+    private boolean outgoingMediaPickerActive = false;
     //
     static com.vanniktech.emoji.EmojiEditText ml_new_message = null;
     com.vanniktech.emoji.EmojiPopup emojiPopup = null;
@@ -186,9 +193,7 @@ public class MessageListActivity extends AppCompatActivity
     ImageButton ml_video_icon = null;
     ImageButton ml_attach_button_01 = null;
     ImageButton ml_button_recaudio = null;
-    ImageButton audio_rec_popup_button = null;
-    static TextView audio_rec_popup_time = null;
-    static ViewGroup audio_rec_popup_container = null;
+    static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
     static boolean ml_is_recording = false;
     static boolean ml_is_rec_ok = false;
     static int global_typing = 0;
@@ -214,9 +219,9 @@ public class MessageListActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         oncreate_finished = false;
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
         super.onCreate(savedInstanceState);
-        Log.i(TAG, "onCreate:002");
+        HelperGeneric.logI(TAG, "onCreate:002");
 
         amode = null;
         amode_save_menu_item = null;
@@ -268,9 +273,10 @@ public class MessageListActivity extends AppCompatActivity
         {
             friend_pubkey = friend_pubkey.toUpperCase();
         }
-        // Log.i(TAG, "onCreate:003:friendnum=" + friendnum + " friendnum_prev=" + friendnum_prev);
+        // HelperGeneric.logI(TAG, "onCreate:003:friendnum=" + friendnum + " friendnum_prev=" + friendnum_prev);
         friendnum_prev = friendnum;
         resolve_friend_for_chat();
+        sync_outgoing_attachment_friend_pubkey();
 
         setContentView(R.layout.activity_message_list);
 
@@ -283,6 +289,7 @@ public class MessageListActivity extends AppCompatActivity
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
         HelperGeneric.apply_chat_input_field_style(ml_new_message);
+        ChatReplyPreviewController.bind(this, ml_new_message);
 
         messageSearchView = (SearchView) findViewById(R.id.search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -379,15 +386,28 @@ public class MessageListActivity extends AppCompatActivity
         ml_attach_button_01 = (ImageButton) findViewById(R.id.ml_button_01);
         ml_button_recaudio = (ImageButton) findViewById(R.id.ml_button_recaudio);
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
-        audio_rec_popup_button = findViewById(R.id.audio_rec_popup_button);
-        audio_rec_popup_time = findViewById(R.id.audio_rec_popup_time);
-        audio_rec_popup_container = findViewById(R.id.audio_rec_popup_container);
+        voiceRecordingUiHelper = ChatVoiceRecordingUiHelper.bind(findViewById(R.id.emoji_bar),
+                new ChatVoiceRecordingUiHelper.RecordingActionListener()
+                {
+                    @Override
+                    public void onSend()
+                    {
+                        ml_is_rec_ok = true;
+                        ml_is_recording = false;
+                        set_recording_pop_visibilty_s(false);
+                    }
 
-        audio_rec_popup_container.setVisibility(View.GONE);
+                    @Override
+                    public void onCancel()
+                    {
+                        ml_is_rec_ok = false;
+                        ml_is_recording = false;
+                        set_recording_pop_visibilty_s(false);
+                    }
+                });
 
         ml_is_recording = false;
         ml_is_rec_ok = false;
-        final ImageButton button01_ = ml_attach_button_01;
         ml_icon.setImageResource(R.drawable.circle_red);
         ml_status_icon.setImageResource(R.drawable.circle_green);
         update_friend_presence_status();
@@ -404,7 +424,7 @@ public class MessageListActivity extends AppCompatActivity
             @Override
             public boolean onQueryTextSubmit(String query)
             {
-                // Log.i(TAG, "search:1:" + query);
+                // HelperGeneric.logI(TAG, "search:1:" + query);
 
                 if ((query == null) || (query.length() == 0))
                 {
@@ -441,7 +461,7 @@ public class MessageListActivity extends AppCompatActivity
             @Override
             public boolean onQueryTextChange(String query)
             {
-                // Log.i(TAG, "search:2:" + query);
+                // HelperGeneric.logI(TAG, "search:2:" + query);
 
                 if ((query == null) || (query.length() == 0))
                 {
@@ -482,7 +502,7 @@ public class MessageListActivity extends AppCompatActivity
                 icon(GoogleMaterial.Icon.gmd_sentiment_satisfied).
                 color(getResources().
                         getColor(R.color.icon_colors)).
-                sizeDp(80);
+                sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
         insert_emoji.setImageDrawable(d1);
         // insert_emoji.setImageResource(R.drawable.emoji_ios_category_people);
@@ -497,13 +517,13 @@ public class MessageListActivity extends AppCompatActivity
         });
 
         final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_attachment).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
         final Drawable send_message_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_send).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(80);
+                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
+        final Drawable mic_icon = getResources().getDrawable(R.drawable.baseline_keyboard_voice_24);
 
         ml_friend_typing.setText("");
-        attachemnt_instead_of_send = true;
-        ml_attach_button_01.setImageDrawable(add_attachement_icon);
+        ChatInputBarHelper.setupAttachButton(ml_attach_button_01, add_attachement_icon, v -> send_attatchment(v));
 
         if (PREF__use_incognito_keyboard)
         {
@@ -522,19 +542,8 @@ public class MessageListActivity extends AppCompatActivity
         {
             public void afterTextChanged(Editable s)
             {
-                if (HelperGeneric.has_sendable_chat_text(s))
-                {
-                    attachemnt_instead_of_send = false;
-                    button01_.setImageDrawable(send_message_icon);
-                }
-                else
-                {
-                    attachemnt_instead_of_send = true;
-                    button01_.setImageDrawable(add_attachement_icon);
-                }
-
                 // TODO bad hack!
-                // Log.i(TAG, "TextWatcher:afterTextChanged");
+                // HelperGeneric.logI(TAG, "TextWatcher:afterTextChanged");
                 if (global_typing == 0)
                 {
                     global_typing = 1;  // typing = 1
@@ -547,11 +556,11 @@ public class MessageListActivity extends AppCompatActivity
                             try
                             {
                                 tox_self_set_typing(friendnum, global_typing);
-                                // Log.i(TAG, "typing:fn#" + friendnum + ":activated");
+                                // HelperGeneric.logI(TAG, "typing:fn#" + friendnum + ":activated");
                             }
                             catch (Exception e)
                             {
-                                Log.i(TAG, "typing:fn#" + friendnum + ":EE1" + e.getMessage());
+                                HelperGeneric.logI(TAG, "typing:fn#" + friendnum + ":EE1" + e.getMessage());
                             }
                         }
                     };
@@ -601,11 +610,11 @@ public class MessageListActivity extends AppCompatActivity
                                         try
                                         {
                                             tox_self_set_typing(friendnum, global_typing);
-                                            // Log.i(TAG, "typing:fn#" + friendnum + ":DEactivated");
+                                            // HelperGeneric.logI(TAG, "typing:fn#" + friendnum + ":DEactivated");
                                         }
                                         catch (Exception e)
                                         {
-                                            Log.i(TAG, "typing:fn#" + friendnum + ":EE2" + e.getMessage());
+                                            HelperGeneric.logI(TAG, "typing:fn#" + friendnum + ":EE2" + e.getMessage());
                                         }
                                     }
                                 };
@@ -624,12 +633,12 @@ public class MessageListActivity extends AppCompatActivity
 
             public void beforeTextChanged(CharSequence s, int start, int count, int after)
             {
-                // Log.i(TAG,"TextWatcher:beforeTextChanged");
+                // HelperGeneric.logI(TAG,"TextWatcher:beforeTextChanged");
             }
 
             public void onTextChanged(CharSequence s, int start, int before, int count)
             {
-                // Log.i(TAG,"TextWatcher:onTextChanged");
+                // HelperGeneric.logI(TAG,"TextWatcher:onTextChanged");
             }
         });
 
@@ -668,6 +677,8 @@ public class MessageListActivity extends AppCompatActivity
             }
         }
 
+        ChatInputBarHelper.bindMicSendTextWatcher(ml_new_message, ml_button_recaudio, mic_icon, send_message_icon);
+
         if (PREF__window_security)
         {
             // prevent screenshots and also dont show the window content in recent activity screen
@@ -680,6 +691,11 @@ public class MessageListActivity extends AppCompatActivity
             @Override
             public boolean onLongClick(View v) {
 
+                if (ChatInputBarHelper.isSendMode((ImageButton) v))
+                {
+                    return false;
+                }
+
                 if (ml_is_rec_ok)
                 {
                     return false;
@@ -690,7 +706,16 @@ public class MessageListActivity extends AppCompatActivity
                     return false;
                 }
 
+                // Direct/Favorites chat recording needs RECORD_AUDIO too — request it instead of failing silently.
+                if (!HelperCall.hasMicrophonePermission(v.getContext()))
+                {
+                    HelperCall.requestCallPermissions((Activity) v.getContext(), true);
+                    HelperCall.showMissingPermissionToast(v.getContext(), true);
+                    return false;
+                }
+
                 // display_toast("LONG", false, 0);
+                ChatVoiceSessionHelper.onVoiceRecordingStarting();
                 final Thread ml_rec_audio_thread = new Thread()
                 {
                     @Override
@@ -699,17 +724,32 @@ public class MessageListActivity extends AppCompatActivity
                         String audio_rec_filename_final = null;
                         ml_is_recording = true;
                         ml_is_rec_ok = false;
-                        ((ImageButton) v).setImageResource(R.drawable.baseline_stop_circle_24);
-                        v.setBackgroundColor(Color.parseColor("#FF0000"));
+                        final MessageListActivity activity = MainActivity.message_list_activity;
 
                         set_recording_pop_text_s("0:00");
                         set_recording_pop_visibilty_s(true);
 
                         try
                         {
-                            Log.i(TAG, "onCreate:record_audio:start");
+                            HelperGeneric.logI(TAG, "onCreate:record_audio:start");
                             AudioRecorder mAudioRecorder = AudioRecorder.getInstance();
-                            final String fpubkey = tox_friend_get_public_key__wrapper(friendnum);
+                            if (activity == null)
+                            {
+                                set_recording_pop_visibilty_s(false);
+                                ml_is_recording = false;
+                                ml_is_rec_ok = false;
+                                return;
+                            }
+                            activity.resolve_friend_for_chat();
+                            final String chatPubkey = activity.get_friend_pubkey();
+                            if ((chatPubkey == null) || chatPubkey.isEmpty())
+                            {
+                                set_recording_pop_visibilty_s(false);
+                                ml_is_recording = false;
+                                ml_is_rec_ok = false;
+                                return;
+                            }
+                            final String fpubkey = chatPubkey;
                             File rec_dir = new File(SD_CARD_TMP_DIR);
                             if (!rec_dir.exists() && !rec_dir.mkdirs())
                             {
@@ -727,8 +767,6 @@ public class MessageListActivity extends AppCompatActivity
                             }
                             catch(Exception e)
                             {
-                                ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                v.setBackgroundColor(Color.TRANSPARENT);
                                 set_recording_pop_visibilty_s(false);
                                 ml_is_recording = false;
                                 ml_is_rec_ok = false;
@@ -748,8 +786,6 @@ public class MessageListActivity extends AppCompatActivity
                                 }
                                 catch(Exception e)
                                 {
-                                    ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                    v.setBackgroundColor(Color.TRANSPARENT);
                                     set_recording_pop_visibilty_s(false);
                                     ml_is_recording = false;
                                     ml_is_rec_ok = false;
@@ -768,8 +804,6 @@ public class MessageListActivity extends AppCompatActivity
                                 if (count > 50)
                                 {
                                     // HINT: just in case of an endless loop, we return here
-                                    ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                    v.setBackgroundColor(Color.TRANSPARENT);
                                     set_recording_pop_visibilty_s(false);
                                     ml_is_recording = false;
                                     ml_is_rec_ok = false;
@@ -778,7 +812,7 @@ public class MessageListActivity extends AppCompatActivity
                             }
 
                             File mAudioFile = new File(audio_rec_filename_final);
-                            // Log.i(TAG, "onCreate:record_audio:file=" + audio_rec_filename_final);
+                            // HelperGeneric.logI(TAG, "onCreate:record_audio:file=" + audio_rec_filename_final);
                             try
                             {
                                 mAudioRecorder.prepareRecord(MediaRecorder.AudioSource.MIC, MediaRecorder.OutputFormat.MPEG_4,
@@ -786,7 +820,8 @@ public class MessageListActivity extends AppCompatActivity
                             }
                             catch (Exception prepare_error)
                             {
-                                Log.i(TAG, "onCreate:record_audio:prepare:EE:" + prepare_error.getMessage());
+                                HelperGeneric.logI(TAG, "onCreate:record_audio:prepare:EE:" + prepare_error.getMessage());
+                                set_recording_pop_visibilty_s(false);
                                 ml_is_recording = false;
                                 ml_is_rec_ok = false;
                                 return;
@@ -795,8 +830,6 @@ public class MessageListActivity extends AppCompatActivity
                             if (!rec_start_result)
                             {
                                 // HINT: some problem on starting the recording
-                                ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                                v.setBackgroundColor(Color.TRANSPARENT);
                                 set_recording_pop_visibilty_s(false);
                                 ml_is_recording = false;
                                 ml_is_rec_ok = false;
@@ -814,20 +847,10 @@ public class MessageListActivity extends AppCompatActivity
                                 }
 
                                 set_recording_pop_text_s(seconds_time_format_or_empty(mAudioRecorder.progress()));
-
-                                if (mAudioRecorder.progress() > MAX_FRIEND_AUDIO_RECORDING_MSG_SECONDS)
-                                {
-                                    // HINT: stop after x seconds of recording so it does not record endless
-                                    Log.i(TAG, "onCreate:record_audio:auto_stop");
-                                    ml_is_rec_ok = true;
-                                    ml_is_recording = false;
-                                }
                             }
-                            ((ImageButton) v).setImageResource(R.drawable.baseline_pending_24);
-                            v.setBackgroundColor(Color.TRANSPARENT);
                             set_recording_pop_visibilty_s(false);
                             int rec_result = mAudioRecorder.stopRecord();
-                            Log.i(TAG, "onCreate:record_audio:finished:res=" + rec_result);
+                            HelperGeneric.logI(TAG, "onCreate:record_audio:finished:res=" + rec_result);
                             if (rec_result == -1)
                             {
                                 ml_is_rec_ok = false;
@@ -835,28 +858,27 @@ public class MessageListActivity extends AppCompatActivity
                         }
                         catch(Exception e)
                         {
-                            Log.i(TAG, "onCreate:record_audio:EE:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "onCreate:record_audio:EE:" + e.getMessage());
                             e.printStackTrace();
                             ml_is_recording = false;
                             ml_is_rec_ok = false;
                         }
-                        ((ImageButton) v).setImageResource(R.drawable.baseline_keyboard_voice_24);
-                        v.setBackgroundColor(Color.TRANSPARENT);
                         set_recording_pop_visibilty_s(false);
 
                         if (ml_is_rec_ok)
                         {
-                            Log.i(TAG, "onCreate:record_audio:------ OK ------");
-                            Log.i(TAG, "onCreate:record_audio:------ OK ------");
-                            Log.i(TAG, "onCreate:record_audio:------ OK ------");
+                            HelperGeneric.logI(TAG, "onCreate:record_audio:------ OK ------");
+                            HelperGeneric.logI(TAG, "onCreate:record_audio:------ OK ------");
+                            HelperGeneric.logI(TAG, "onCreate:record_audio:------ OK ------");
 
                             if (audio_rec_filename_final != null)
                             {
-                                Log.i(TAG, "onCreate:record_audio:add to FT queue ...");
+                                HelperGeneric.logI(TAG, "onCreate:record_audio:add to FT queue ...");
                                 File f2 = new File(audio_rec_filename_final);
-                                add_outgoing_file(v.getContext(), MainActivity.message_list_activity.get_current_friendnum(),
-                                                  f2.getParent(), f2.getName(), null, f2.length(),
-                                                  false, true, true);
+                                add_outgoing_file(v.getContext(),
+                                        activity != null ? activity.get_current_friendnum() : -1L,
+                                        f2.getParent(), f2.getName(), null, f2.length(),
+                                        false, true, true);
                             }
                         }
 
@@ -880,63 +902,6 @@ public class MessageListActivity extends AppCompatActivity
             }
         });
 
-        audio_rec_popup_button.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(final View v)
-            {
-                if (ml_is_rec_ok)
-                {
-                    return;
-                }
-
-                if (ml_is_recording)
-                {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
-                    return;
-                }
-            }
-        });
-
-        audio_rec_popup_time.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(final View v)
-            {
-                if (ml_is_rec_ok)
-                {
-                    return;
-                }
-
-                if (ml_is_recording)
-                {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
-                    return;
-                }
-            }
-        });
-
-        audio_rec_popup_container.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(final View v)
-            {
-                if (ml_is_rec_ok)
-                {
-                    return;
-                }
-
-                if (ml_is_recording)
-                {
-                    ml_is_rec_ok = true;
-                    ml_is_recording = false;
-                    return;
-                }
-            }
-        });
-
         ml_button_recaudio.setOnClickListener(new View.OnClickListener()
         {
             @Override
@@ -951,14 +916,22 @@ public class MessageListActivity extends AppCompatActivity
                 {
                     ml_is_rec_ok = true;
                     ml_is_recording = false;
+                    set_recording_pop_visibilty_s(false);
                     return;
                 }
 
-                display_toast(v.getContext().getString(R.string.MessageListActivity_longpress_to_record_audiomsg), false, 0);
+                if (ChatInputBarHelper.isSendMode((ImageButton) v))
+                {
+                    send_message_onclick(null);
+                    return;
+                }
+
+                // Tap starts recording too (tap = start, tap again = stop & send); long-press still works.
+                v.performLongClick();
             }
         });
 
-        Log.i(TAG, "onCreate:099");
+        HelperGeneric.logI(TAG, "onCreate:099");
         oncreate_finished = true;
     }
 
@@ -967,16 +940,18 @@ public class MessageListActivity extends AppCompatActivity
     {
         try
         {
-            Log.i(TAG, "is_at_bottom=" + MainActivity.message_list_fragment.is_at_bottom);
+            HelperGeneric.logI(TAG, "is_at_bottom=" + MainActivity.message_list_fragment.is_at_bottom);
         }
         catch (Exception e)
         {
         }
 
-        Log.i(TAG, "onPause");
+        HelperGeneric.logI(TAG, "onPause");
         super.onPause();
 
         ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
+                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
         set_recording_pop_visibilty_s(false);
         ml_is_recording = false;
@@ -1004,10 +979,15 @@ public class MessageListActivity extends AppCompatActivity
         }
 
         // ** // MainActivity.message_list_fragment = null;
-        message_list_activity = null;
-        // Log.i(TAG, "onPause:001:friendnum=" + friendnum);
-        friendnum = -1;
-        // Log.i(TAG, "onPause:002:friendnum=" + friendnum);
+        if (!outgoingMediaPickerActive)
+        {
+            message_list_activity = null;
+            friendnum = -1;
+        }
+        else
+        {
+            sync_outgoing_attachment_friend_pubkey();
+        }
     }
 
     @Override
@@ -1015,6 +995,8 @@ public class MessageListActivity extends AppCompatActivity
     {
         super.onStop();
         ml_button_recaudio.setImageResource(R.drawable.baseline_keyboard_voice_24);
+        ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
+                getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
         ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
         ml_is_recording = false;
         ml_is_rec_ok = false;
@@ -1023,18 +1005,26 @@ public class MessageListActivity extends AppCompatActivity
     @Override
     protected void onResume()
     {
-        Log.i(TAG, "onResume");
+        HelperGeneric.logI(TAG, "onResume");
         super.onResume();
 
-        // Log.i(TAG, "onResume:001:friendnum=" + friendnum);
+        // HelperGeneric.logI(TAG, "onResume:001:friendnum=" + friendnum);
 
         if (friendnum == -1)
         {
             friendnum = friendnum_prev;
-            // Log.i(TAG, "onResume:001:friendnum(-->friendnum_prev)=" + friendnum);
+            // HelperGeneric.logI(TAG, "onResume:001:friendnum(-->friendnum_prev)=" + friendnum);
         }
 
-        change_msg_notification(NOTIFICATION_EDIT_ACTION_REMOVE.value, tox_friend_get_public_key__wrapper(friendnum), null, null);
+        if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
+        {
+            change_msg_notification(NOTIFICATION_EDIT_ACTION_REMOVE.value, FavoritesChatHelper.CHAT_ID, null, null);
+        }
+        else if (friendnum >= 0)
+        {
+            change_msg_notification(NOTIFICATION_EDIT_ACTION_REMOVE.value,
+                    tox_friend_get_public_key__wrapper(friendnum), null, null);
+        }
 
         // ----- convert old messages which did not contain a sent timestamp -----
         try
@@ -1055,7 +1045,7 @@ public class MessageListActivity extends AppCompatActivity
                         "update Message set sent_timestamp_ms=rcvd_timestamp_ms," + "sent_timestamp=rcvd_timestamp" +
                         " where " + " sent_timestamp_ms='0'" + " and sent_timestamp='0'" + " and direction='0'" +
                         " and msg_version='0'");
-                Log.i(TAG, "onCreate:migrate_old_msg_date");
+                HelperGeneric.logI(TAG, "onCreate:migrate_old_msg_date");
 
                 // now remember that we did that, and don't do it again
                 set_g_opts("MIGRATE_OLD_MSG_DATE_done", "true");
@@ -1064,7 +1054,7 @@ public class MessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "onCreate:migrate_old_msg_date:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "onCreate:migrate_old_msg_date:EE:" + e.getMessage());
         }
         // ----- convert old messages which did not contain a sent timestamp -----
 
@@ -1088,7 +1078,7 @@ public class MessageListActivity extends AppCompatActivity
                         "update Message set sent_timestamp_ms=rcvd_timestamp_ms," + "sent_timestamp=rcvd_timestamp" +
                         " where " + " sent_timestamp_ms='0'" + " and sent_timestamp='0'" + " and direction='0'" +
                         " and TRIFA_MESSAGE_TYPE ='1'");
-                Log.i(TAG, "onCreate:migrate_old_ft_date");
+                HelperGeneric.logI(TAG, "onCreate:migrate_old_ft_date");
 
                 // now remember that we did that, and don't do it again
                 set_g_opts("MIGRATE_OLD_FT_DATE_done", "true");
@@ -1097,19 +1087,20 @@ public class MessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "onCreate:migrate_old_ft_date:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "onCreate:migrate_old_ft_date:EE:" + e.getMessage());
         }
         // ----- convert filetransfer messages which did not contain a sent timestamp -----
 
         try
         {
-            Log.i(TAG, "is_at_bottom=" + MainActivity.message_list_fragment.is_at_bottom);
+            HelperGeneric.logI(TAG, "is_at_bottom=" + MainActivity.message_list_fragment.is_at_bottom);
         }
         catch (Exception e)
         {
         }
 
         resolve_friend_for_chat();
+        sync_outgoing_attachment_friend_pubkey();
         message_list_activity = this;
         apply_chat_header();
         refresh_chat_header();
@@ -1117,8 +1108,36 @@ public class MessageListActivity extends AppCompatActivity
         schedule_delayed_message_refresh();
     }
 
+    /** Restore chat context before gallery/preview callbacks (onActivityResult runs before onResume). */
+    void prepareFriendMediaSendContext()
+    {
+        if (!FavoritesChatHelper.isFavoritesChat(friend_pubkey) && friendnum < 0 && friendnum_prev >= 0)
+        {
+            friendnum = friendnum_prev;
+        }
+        message_list_activity = this;
+        sync_outgoing_attachment_friend_pubkey();
+        HelperGeneric.logI(TAG, "prepareFriendMediaSendContext:pubkey=" + outgoing_attachment_friend_pubkey
+                + " favorites=" + FavoritesChatHelper.isFavoritesChat(outgoing_attachment_friend_pubkey));
+    }
+
+    private void sync_outgoing_attachment_friend_pubkey()
+    {
+        if ((friend_pubkey != null) && (friend_pubkey.length() > 2))
+        {
+            outgoing_attachment_friend_pubkey = friend_pubkey;
+        }
+    }
+
     void resolve_friend_for_chat()
     {
+        if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
+        {
+            friendnum = -1;
+            friendnum_prev = -1;
+            return;
+        }
+
         if ((friend_pubkey != null) && (friend_pubkey.length() > 2))
         {
             final long fn = HelperFriend.ensure_friend_in_tox_core(friend_pubkey);
@@ -1159,6 +1178,23 @@ public class MessageListActivity extends AppCompatActivity
         return null;
     }
 
+    static String resolve_outgoing_file_chat_pubkey()
+    {
+        if (message_list_activity != null)
+        {
+            final String pk = message_list_activity.get_friend_pubkey();
+            if (pk != null && !pk.isEmpty())
+            {
+                return pk;
+            }
+        }
+        if ((outgoing_attachment_friend_pubkey != null) && (outgoing_attachment_friend_pubkey.length() > 2))
+        {
+            return outgoing_attachment_friend_pubkey;
+        }
+        return null;
+    }
+
     private void schedule_delayed_message_refresh()
     {
         if (mla_handler_s == null)
@@ -1172,7 +1208,7 @@ public class MessageListActivity extends AppCompatActivity
                 if (MainActivity.message_list_fragment != null)
                 {
                     resolve_friend_for_chat();
-                    if (friendnum >= 0)
+                    if (friendnum >= 0 || FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
                     {
                         MainActivity.message_list_fragment.update_all_messages(false, false, PREF__messageview_paging);
                     }
@@ -1187,6 +1223,13 @@ public class MessageListActivity extends AppCompatActivity
         mla_handler_s.postDelayed(refresh, 2000);
     }
 
+    static void cancelVoiceRecording()
+    {
+        ml_is_rec_ok = false;
+        ml_is_recording = false;
+        set_recording_pop_visibilty_s(false);
+    }
+
     static void set_recording_pop_text_s(final String t)
     {
         Runnable myRunnable = new Runnable()
@@ -1196,9 +1239,9 @@ public class MessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    if (audio_rec_popup_time != null)
+                    if (voiceRecordingUiHelper != null)
                     {
-                         audio_rec_popup_time.setText(t);
+                        voiceRecordingUiHelper.setTimerText(t);
                     }
                 }
                 catch (Exception e)
@@ -1222,15 +1265,15 @@ public class MessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    if (audio_rec_popup_container != null)
+                    if (voiceRecordingUiHelper != null)
                     {
                         if (visible)
                         {
-                            audio_rec_popup_container.setVisibility(View.VISIBLE);
+                            voiceRecordingUiHelper.show();
                         }
                         else
                         {
-                            audio_rec_popup_container.setVisibility(View.GONE);
+                            voiceRecordingUiHelper.hide();
                         }
                     }
                 }
@@ -1262,7 +1305,7 @@ public class MessageListActivity extends AppCompatActivity
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "friend_typing_cb:EE.b:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "friend_typing_cb:EE.b:" + e.getMessage());
                 }
             }
         };
@@ -1277,7 +1320,7 @@ public class MessageListActivity extends AppCompatActivity
     {
         try
         {
-            // Log.i(TAG, "stop_self_typing_indicator_s");
+            // HelperGeneric.logI(TAG, "stop_self_typing_indicator_s");
             android.os.Message m = new android.os.Message();
             m.what = 1;
             mla_handler_s.handleMessage(m);
@@ -1295,12 +1338,12 @@ public class MessageListActivity extends AppCompatActivity
             global_typing = 0;  // typing = 0
             try
             {
-                // Log.i(TAG, "typing:fn#" + get_current_friendnum() + ":stop_self_typing_indicator");
+                // HelperGeneric.logI(TAG, "typing:fn#" + get_current_friendnum() + ":stop_self_typing_indicator");
                 tox_self_set_typing(get_current_friendnum(), global_typing);
             }
             catch (Exception e)
             {
-                Log.i(TAG, "typing:fn#" + get_current_friendnum() + ":EE2.b" + e.getMessage());
+                HelperGeneric.logI(TAG, "typing:fn#" + get_current_friendnum() + ":EE2.b" + e.getMessage());
             }
         }
     }
@@ -1334,7 +1377,7 @@ public class MessageListActivity extends AppCompatActivity
                         icon(FontAwesome.Icon.faw_keyboard).
                         color(getResources().
                                 getColor(R.color.icon_colors)).
-                        sizeDp(80);
+                        sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
                 // insert_emoji.setImageResource(R.drawable.about_icon_email);
@@ -1355,7 +1398,7 @@ public class MessageListActivity extends AppCompatActivity
                         icon(GoogleMaterial.Icon.gmd_sentiment_satisfied).
                         color(getResources().
                                 getColor(R.color.icon_colors)).
-                        sizeDp(80);
+                        sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
 
                 insert_emoji.setImageDrawable(d1);
                 // insert_emoji.setImageResource(R.drawable.emoji_ios_category_people);
@@ -1427,6 +1470,21 @@ public class MessageListActivity extends AppCompatActivity
     {
         if (ml_presence_status == null)
         {
+            return;
+        }
+        if (FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+        {
+            ml_presence_status.setText(getString(R.string.favorites_chat_subtitle));
+            ml_presence_status.setVisibility(View.VISIBLE);
+            ml_presence_status.setTextColor(ContextCompat.getColor(this, R.color.tg_chat_header_subtitle));
+            if (ml_phone_icon != null)
+            {
+                ml_phone_icon.setVisibility(View.GONE);
+            }
+            if (ml_video_icon != null)
+            {
+                ml_video_icon.setVisibility(View.GONE);
+            }
             return;
         }
         try
@@ -1502,6 +1560,15 @@ public class MessageListActivity extends AppCompatActivity
     {
         stop_typing_animation();
         friend_is_typing = false;
+        if (this == message_list_activity)
+        {
+            message_list_activity = null;
+        }
+        if ((outgoing_attachment_friend_pubkey != null)
+                && outgoing_attachment_friend_pubkey.equals(friend_pubkey))
+        {
+            outgoing_attachment_friend_pubkey = null;
+        }
         super.onDestroy();
     }
 
@@ -1542,6 +1609,19 @@ public class MessageListActivity extends AppCompatActivity
     void refresh_chat_header()
     {
         resolve_friend_for_chat();
+        if (FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+        {
+            ml_maintext.setText(FavoritesChatHelper.displayName(this));
+            apply_chat_header();
+            apply_friend_presence_status_ui();
+            if (ml_avatar != null)
+            {
+                ml_avatar.setVisibility(View.VISIBLE);
+                FavoritesChatHelper.bindListAvatar(ml_avatar);
+            }
+            return;
+        }
+
         final long fn = friendnum;
         final String header_pubkey = get_friend_pubkey();
         Thread t = new Thread()
@@ -1596,7 +1676,7 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_attatchment(View view)
     {
-        Log.i(TAG, "send_attatchment:---start");
+        HelperGeneric.logI(TAG, "send_attatchment:---start");
 
         String msg = "";
         // add attachement ------------
@@ -1628,6 +1708,9 @@ public class MessageListActivity extends AppCompatActivity
 
         MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
 
+        mediaPreviewResultHandled = false;
+        outgoingMediaPickerActive = true;
+        sync_outgoing_attachment_friend_pubkey();
         startActivityForResult(intent, MEDIAPICK_ID_001);
 
         // add attachement ------------
@@ -1645,7 +1728,7 @@ public class MessageListActivity extends AppCompatActivity
                 case KeyEvent.KEYCODE_NUMPAD_ENTER:
                     if (!event.isShiftPressed())
                     {
-                        // Log.i(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
+                        // HelperGeneric.logI(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
                         send_message_onclick(null);
                         return true;
                     }
@@ -1663,24 +1746,15 @@ public class MessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    if ((ml_new_message.getText().toString() == null) ||
-                        (ml_new_message.getText().toString().length() == 0))
+                    if (message_list_activity != null)
                     {
-                        ml_new_message.append(TEXT_QUOTE_STRING_1 + quote_text + TEXT_QUOTE_STRING_2 + "\n");
-                    }
-                    else
-                    {
-                        String old_text = ml_new_message.getText().toString();
-                        ml_new_message.setText("");
-                        // need to do it this way, or else the text input cursor will not be in the correct place
-                        ml_new_message.append(
-                                old_text + "\n" + TEXT_QUOTE_STRING_1 + quote_text + TEXT_QUOTE_STRING_2 + "\n");
+                        ChatReplyPreviewController.startReplyToPlainText(message_list_activity, quote_text);
                     }
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "add_quote_message_text:EE01:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "add_quote_message_text:EE01:" + e.getMessage());
                 }
             }
         };
@@ -1693,20 +1767,47 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_text_message(final String friend_pubkey, final String message)
     {
+        String msg = trim_to_utf8_length_bytes(
+                ChatReplyPreviewController.composeOutgoingText(HelperGeneric.normalize_chat_input_text(message)),
+                TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        if ((msg == null) || msg.isEmpty())
+        {
+            return;
+        }
+
+        if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
+        {
+            final long rowId = FavoritesChatHelper.sendTextMessage(msg, true);
+            if (rowId <= 0)
+            {
+                display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+                return;
+            }
+
+            HelperGeneric.clear_chat_input_field(ml_new_message);
+            ChatDraftHelper.clear_friend_draft(friend_pubkey);
+            if (emojiPopup != null)
+            {
+                emojiPopup.dismiss();
+            }
+            stop_self_typing_indicator_s();
+            return;
+        }
+
         if (!is_tox_started)
         {
             display_toast(getString(R.string.dm_send_failed_not_ready), true, 400);
             return;
         }
 
-        wakeup_tox_thread();
-
-        // send typed message to friend
-        String msg = trim_to_utf8_length_bytes(HelperGeneric.normalize_chat_input_text(message), TOX_MSGV3_MAX_MESSAGE_LENGTH);
-        if ((msg == null) || msg.isEmpty())
+        final String dm_precheck = HelperFriend.dm_send_precheck_failure_reason(friend_pubkey);
+        if (dm_precheck != null)
         {
+            display_toast(dm_precheck, true, 400);
             return;
         }
+
+        wakeup_tox_thread();
 
         Message m = new Message();
         m.tox_friendpubkey = friend_pubkey;
@@ -1736,7 +1837,7 @@ public class MessageListActivity extends AppCompatActivity
 
         long res = result.msg_num;
 
-        if (res > -1)
+        if (HelperFriend.is_dm_message_send_success(res))
         {
             m.resend_count = 1; // we sent the message successfully
             m.message_id = res;
@@ -1745,6 +1846,7 @@ public class MessageListActivity extends AppCompatActivity
         {
             m.resend_count = 0; // sending was NOT successfull
             m.message_id = -1;
+            display_toast(HelperFriend.dm_send_failure_reason(res, friend_pubkey), true, 400);
         }
 
         if (result.msg_v2)
@@ -1780,10 +1882,9 @@ public class MessageListActivity extends AppCompatActivity
         long row_id = insert_into_message_db(m, true);
         m.id = row_id;
 
-        if (res <= -1)
+        if (!HelperFriend.is_dm_message_send_success(res))
         {
             friend_call_push_url(friend_pubkey, m.sent_timestamp);
-            display_toast(HelperGeneric.dm_send_failure_reason(res), true, 400);
         }
 
         HelperGeneric.clear_chat_input_field(ml_new_message);
@@ -1798,7 +1899,7 @@ public class MessageListActivity extends AppCompatActivity
     /* HINT: send a message to a friend */
     synchronized public void send_message_onclick(View view)
     {
-        // Log.i(TAG, "send_message_onclick:---start");
+        // HelperGeneric.logI(TAG, "send_message_onclick:---start");
         try
         {
             resolve_friend_for_chat();
@@ -1810,6 +1911,11 @@ public class MessageListActivity extends AppCompatActivity
                 if ((pk == null) || pk.isEmpty())
                 {
                     display_toast(getString(R.string.dm_send_failed_friend), true, 400);
+                    return;
+                }
+                if (FavoritesChatHelper.isFavoritesChat(pk))
+                {
+                    send_text_message(pk, normalized);
                     return;
                 }
                 if (friendnum < 0)
@@ -1836,24 +1942,35 @@ public class MessageListActivity extends AppCompatActivity
         {
             e.printStackTrace();
         }
-        // Log.i(TAG,"send_message_onclick:---end");
+        // HelperGeneric.logI(TAG,"send_message_onclick:---end");
     }
 
-    static void add_attachment(Context c, Intent data, Intent orig_intent, long friendnum_local, boolean activity_friend_num)
+    static long add_attachment_and_get_message_id(final Context c, final Intent data,
+                                                  final long friendnum_local, final boolean activity_friend_num)
     {
-        Log.i(TAG, "add_attachment:001");
+        return add_attachment_and_get_message_id(c, data, friendnum_local, activity_friend_num, true);
+    }
 
+    static long add_attachment_and_get_message_id(final Context c, final Intent data,
+                                                  final long friendnum_local, final boolean activity_friend_num,
+                                                  final boolean startTransferImmediately)
+    {
         try
         {
+            if ((data == null) || (data.getData() == null))
+            {
+                return -1L;
+            }
+
             String fileName = null;
 
             try
             {
                 DocumentFile documentFile = DocumentFile.fromSingleUri(c, data.getData());
-
-                fileName = documentFile.getName();
-                // Log.i(TAG, "file_attach_for_send:documentFile:fileName=" + fileName);
-                // Log.i(TAG, "file_attach_for_send:documentFile:fileLength=" + documentFile.length());
+                if (documentFile != null)
+                {
+                    fileName = documentFile.getName();
+                }
 
                 ContentResolver cr = c.getApplicationContext().getContentResolver();
                 Cursor metaCursor = cr.query(data.getData(), null, null, null, null);
@@ -1863,17 +1980,9 @@ public class MessageListActivity extends AppCompatActivity
                     {
                         if (metaCursor.moveToFirst())
                         {
-                            String file_path = metaCursor.getString(0);
-                            // Log.i(TAG, "file_attach_for_send:metaCursor_path:fp=" + file_path);
-                            // Log.i(TAG, "file_attach_for_send:metaCursor_path:column names=" +
-                            //            metaCursor.getColumnNames().length);
                             int j;
                             for (j = 0; j < metaCursor.getColumnNames().length; j++)
                             {
-                                // Log.i(TAG, "file_attach_for_send:metaCursor_path:column name=" +
-                                //           metaCursor.getColumnName(j));
-                                // Log.i(TAG,
-                                //       "file_attach_for_send:metaCursor_path:column data=" + metaCursor.getString(j));
                                 if (metaCursor.getColumnName(j).equals(DocumentsContract.Document.COLUMN_DISPLAY_NAME))
                                 {
                                     if (metaCursor.getString(j) != null)
@@ -1881,7 +1990,6 @@ public class MessageListActivity extends AppCompatActivity
                                         if (metaCursor.getString(j).length() > 0)
                                         {
                                             fileName = metaCursor.getString(j);
-                                            // Log.i(TAG, "file_attach_for_send:filename new=" + fileName);
                                         }
                                     }
                                 }
@@ -1899,89 +2007,167 @@ public class MessageListActivity extends AppCompatActivity
                 e.printStackTrace();
             }
 
-            final String fileName_ = fileName;
+            final String fileName_ = HelperFiletransfer.resolve_attachment_display_name(c, data.getData(), fileName);
+            if (fileName_ == null)
+            {
+                return -1L;
+            }
+
+            long friendnum = friendnum_local;
+            if (activity_friend_num)
+            {
+                if (MainActivity.message_list_activity == null)
+                {
+                    return -1L;
+                }
+                if (!FavoritesChatHelper.isFavoritesChat(
+                        MainActivity.message_list_activity.get_friend_pubkey())
+                        && MainActivity.message_list_activity.get_current_friendnum() == -1)
+                {
+                    return -1L;
+                }
+                friendnum = MainActivity.message_list_activity.get_current_friendnum();
+            }
+
+            return add_outgoing_file(c, friendnum, data.getData().toString(), fileName_, data.getData(), 0, false,
+                                     activity_friend_num, false, startTransferImmediately);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            HelperGeneric.logI(TAG, "add_attachment_and_get_message_id:EE:" + e.getMessage());
+            return -1L;
+        }
+    }
+
+    static long add_attachment_from_uri(final Context c, final Uri uri, final long friendnum_local,
+                                        final boolean activity_friend_num, final boolean startTransferImmediately)
+    {
+        if (uri == null)
+        {
+            return -1L;
+        }
+        final Intent single = new Intent();
+        single.setData(uri);
+        single.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        return add_attachment_and_get_message_id(c, single, friendnum_local, activity_friend_num,
+                startTransferImmediately);
+    }
+
+    static void add_attachment(Context c, Intent data, Intent orig_intent, long friendnum_local, boolean activity_friend_num)
+    {
+        HelperGeneric.logI(TAG, "add_attachment:001");
+
+        try
+        {
+            String fileName = null;
+
+            try
+            {
+                DocumentFile documentFile = DocumentFile.fromSingleUri(c, data.getData());
+
+                fileName = documentFile.getName();
+                // HelperGeneric.logI(TAG, "file_attach_for_send:documentFile:fileName=" + fileName);
+                // HelperGeneric.logI(TAG, "file_attach_for_send:documentFile:fileLength=" + documentFile.length());
+
+                ContentResolver cr = c.getApplicationContext().getContentResolver();
+                Cursor metaCursor = cr.query(data.getData(), null, null, null, null);
+                if (metaCursor != null)
+                {
+                    try
+                    {
+                        if (metaCursor.moveToFirst())
+                        {
+                            String file_path = metaCursor.getString(0);
+                            // HelperGeneric.logI(TAG, "file_attach_for_send:metaCursor_path:fp=" + file_path);
+                            // HelperGeneric.logI(TAG, "file_attach_for_send:metaCursor_path:column names=" +
+                            //            metaCursor.getColumnNames().length);
+                            int j;
+                            for (j = 0; j < metaCursor.getColumnNames().length; j++)
+                            {
+                                // HelperGeneric.logI(TAG, "file_attach_for_send:metaCursor_path:column name=" +
+                                //           metaCursor.getColumnName(j));
+                                // HelperGeneric.logI(TAG,
+                                //       "file_attach_for_send:metaCursor_path:column data=" + metaCursor.getString(j));
+                                if (metaCursor.getColumnName(j).equals(DocumentsContract.Document.COLUMN_DISPLAY_NAME))
+                                {
+                                    if (metaCursor.getString(j) != null)
+                                    {
+                                        if (metaCursor.getString(j).length() > 0)
+                                        {
+                                            fileName = metaCursor.getString(j);
+                                            // HelperGeneric.logI(TAG, "file_attach_for_send:filename new=" + fileName);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        metaCursor.close();
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            final String fileName_ = HelperFiletransfer.resolve_attachment_display_name(c, data.getData(), fileName);
 
             if (fileName_ != null)
             {
                 if (activity_friend_num)
                 {
-                    final Thread t = new Thread()
+                    if (c instanceof MessageListActivity)
                     {
-                        @Override
-                        public void run()
+                        ((MessageListActivity) c).prepareFriendMediaSendContext();
+                    }
+
+                    final Runnable dispatchOutgoing = () ->
+                    {
+                        try
                         {
-                            if (friendnum_local == -1)
+                            final String chatPubkey = resolve_outgoing_file_chat_pubkey();
+                            final boolean favoritesChat = FavoritesChatHelper.isFavoritesChat(chatPubkey);
+                            long fn = -1L;
+                            if (!favoritesChat)
                             {
-                                // ok, we need to wait for onResume to finish and give us the friendnum
-                                Log.i(TAG,
-                                      "add_outgoing_file:ok, we need to wait for onResume to finish and give us the friendnum");
-                                long loop = 0;
-                                while (loop < 100)
+                                if (MainActivity.message_list_activity != null)
                                 {
-                                    loop++;
-                                    try
-                                    {
-                                        Thread.sleep(20);
-                                    }
-                                    catch (InterruptedException e)
-                                    {
-                                        e.printStackTrace();
-                                    }
-
-                                    if (MainActivity.message_list_activity != null)
-                                    {
-                                        if (MainActivity.message_list_activity.get_current_friendnum() > -1)
-                                        {
-                                            // got friendnum
-                                            Log.i(TAG, "add_outgoing_file:got friendnum");
-                                            break;
-                                        }
-                                    }
+                                    fn = MainActivity.message_list_activity.get_current_friendnum();
                                 }
-
-                                loop = 0;
-                                while (loop < 1000)
+                                if (fn < 0)
                                 {
-                                    loop++;
-                                    try
-                                    {
-                                        Thread.sleep(20);
-                                    }
-                                    catch (InterruptedException e)
-                                    {
-                                        e.printStackTrace();
-                                    }
-
-                                    if (oncreate_finished)
-                                    {
-                                        Log.i(TAG, "add_outgoing_file:oncreate_finished");
-                                        break;
-                                    }
+                                    HelperGeneric.logI(TAG, "add_outgoing_file:no friendnum pubkey=" + chatPubkey);
+                                    return;
                                 }
                             }
 
-                            try
-                            {
-                                Thread.sleep(50);
-                            }
-                            catch (InterruptedException e)
-                            {
-                                e.printStackTrace();
-                            }
-
-                            if (MainActivity.message_list_activity.get_current_friendnum() == -1)
-                            {
-                                // sorry, still no friendnum
-                                Log.i(TAG, "add_outgoing_file:sorry, still no friendnum");
-                                return;
-                            }
-
-                            add_outgoing_file(c, MainActivity.message_list_activity.get_current_friendnum(),
-                                              data.getData().toString(), fileName_, data.getData(), 0, false,
-                                              activity_friend_num, false);
+                            HelperGeneric.logI(TAG, "add_outgoing_file:dispatch favorites=" + favoritesChat
+                                    + " fn=" + fn + " file=" + fileName_);
+                            add_outgoing_file(c, fn, data.getData().toString(), fileName_, data.getData(), 0, false,
+                                    activity_friend_num, false);
+                        }
+                        catch (Exception e)
+                        {
+                            HelperGeneric.logI(TAG, "add_outgoing_file:dispatch:EE:" + e.getMessage());
                         }
                     };
-                    t.start();
+
+                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+                    {
+                        dispatchOutgoing.run();
+                    }
+                    else if (main_handler_s != null)
+                    {
+                        main_handler_s.post(dispatchOutgoing);
+                    }
+                    else
+                    {
+                        new Thread(dispatchOutgoing).start();
+                    }
                 }
                 else
                 {
@@ -1989,31 +2175,42 @@ public class MessageListActivity extends AppCompatActivity
                                       activity_friend_num, false);
                 }
             }
+            else
+            {
+                HelperGeneric.logI(TAG, "add_attachment:no filename uri="
+                        + (data != null && data.getData() != null ? data.getData() : "null"));
+            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "select_file:22:EE1:" + e.getMessage());
+            HelperGeneric.logI(TAG, "select_file:22:EE1:" + e.getMessage());
         }
     }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data)
     {
-        Log.i(TAG, "onActivityResult:requestCode=" + requestCode + " resultCode=" + resultCode);
+        HelperGeneric.logI(TAG, "onActivityResult:requestCode=" + requestCode + " resultCode=" + resultCode);
 
         super.onActivityResult(requestCode, resultCode, data);
 
+        if (requestCode == MEDIAPICK_ID_001 || requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW)
+        {
+            outgoingMediaPickerActive = false;
+            prepareFriendMediaSendContext();
+        }
+
         if (requestCode == CallingWaitingActivity_ID)
         {
-            Log.i(TAG, "friend_to_call:CallingWaitingActivity_ID returned");
+            HelperGeneric.logI(TAG, "friend_to_call:CallingWaitingActivity_ID returned");
             if (resultCode == Activity.RESULT_OK)
             {
-                Log.i(TAG, "friend_to_call came online, call him now ...");
+                HelperGeneric.logI(TAG, "friend_to_call came online, call him now ...");
                 try
                 {
                     friendnum = tox_friend_by_public_key__wrapper(data.getStringExtra("friendnum_pk"));
-                    Log.i(TAG, "friend_to_call:friendnum=" + friendnum + " friendnum_prev=" + friendnum_prev + " pk=" +
+                    HelperGeneric.logI(TAG, "friend_to_call:friendnum=" + friendnum + " friendnum_prev=" + friendnum_prev + " pk=" +
                                data.getStringExtra("friendnum_pk"));
                     friendnum_prev = friendnum;
                     start_call_to_friend_real(null);
@@ -2031,16 +2228,33 @@ public class MessageListActivity extends AppCompatActivity
                 return;
             }
 
+            final List<Uri> pickedUris = MediaSendPreviewHelper.collectUris(data);
+            MediaSendPreviewHelper.persistUriPermissions(this, pickedUris);
+
             if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, data,
                     MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true))
             {
+                outgoingMediaPickerActive = true;
                 return;
             }
 
-            add_attachment(this, data, data, -1, true);
+            if (pickedUris.isEmpty())
+            {
+                add_attachment(this, data, data, -1, true);
+            }
+            else
+            {
+                MediaSendPreviewHelper.dispatchAttachments(this, pickedUris,
+                        MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true);
+            }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)
         {
+            if (mediaPreviewResultHandled)
+            {
+                return;
+            }
+            mediaPreviewResultHandled = true;
             MediaSendPreviewHelper.handlePreviewResult(this, data,
                     MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true);
         }
@@ -2053,11 +2267,17 @@ public class MessageListActivity extends AppCompatActivity
         long file_size_wrapped = -1;
     }
 
-    static void add_outgoing_file(Context c, long friendnum, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual)
+    static long add_outgoing_file(Context c, long friendnum, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual)
     {
-        // Log.i(TAG, "add_outgoing_file:001");
+        return add_outgoing_file(c, friendnum, filepath, filename, uri, file_size_manual, real_file_path,
+                update_message_view, use_file_size_manual, true);
+    }
 
-        // Log.i(TAG,
+    static long add_outgoing_file(Context c, long friendnum, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual, final boolean startTransferImmediately)
+    {
+        // HelperGeneric.logI(TAG, "add_outgoing_file:001");
+
+        // HelperGeneric.logI(TAG,
         //      "add_outgoing_file:filepath=" + filepath + " filename=" + filename + " uri=" + uri.toString() + " uri2=" +
         //      uri);
 
@@ -2067,48 +2287,97 @@ public class MessageListActivity extends AppCompatActivity
             if (use_file_size_manual)
             {
                 file_size = file_size_manual;
-                // Log.i(TAG, "add_outgoing_file:documentFile:file_size=" + file_size);
+            }
+            else if (uri != null)
+            {
+                DocumentFile documentFile = DocumentFile.fromSingleUri(c, uri);
+                file_size = documentFile.length();
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "add_outgoing_file:favorites_size:EE:" + e.getMessage());
+        }
+
+        if (FavoritesChatHelper.isFavoritesChat(resolve_outgoing_file_chat_pubkey()))
+        {
+            if (file_size < 1L && uri != null)
+            {
+                try
+                {
+                    final DocumentFile documentFile = DocumentFile.fromSingleUri(c, uri);
+                    if (documentFile != null)
+                    {
+                        file_size = documentFile.length();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+            return FavoritesChatHelper.sendLocalOutgoingFile(c, filepath, filename, file_size, update_message_view);
+        }
+
+        if (friendnum < 0)
+        {
+            HelperGeneric.logI(TAG, "add_outgoing_file:no friendnum");
+            return -1L;
+        }
+
+        file_size = -1;
+        try
+        {
+            if (use_file_size_manual)
+            {
+                file_size = file_size_manual;
+                // HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:file_size=" + file_size);
             }
             else
             {
                 DocumentFile documentFile = DocumentFile.fromSingleUri(c, uri);
                 String fileName = documentFile.getName();
-                // Log.i(TAG, "add_outgoing_file:documentFile:fileName=" + fileName);
-                // Log.i(TAG, "add_outgoing_file:documentFile:fileLength=" + documentFile.length());
+                // HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:fileName=" + fileName);
+                // HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:fileLength=" + documentFile.length());
                 file_size = documentFile.length();
             }
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "add_outgoing_file:documentFile:EE003:" + e.getMessage());
+            HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:EE003:" + e.getMessage());
             // file length unknown?
-            return;
+            return -1L;
         }
 
         if (file_size < 1)
         {
-            Log.i(TAG, "file length 0 ?");
-            // file length "zero"?
-            return;
+            HelperGeneric.logI(TAG, "file length 0 ?");
+            // KHANDAQ: Tox cannot transfer a 0-byte file (size 0 is the special streaming/avatar
+            // mode), so empty files were silently dropped. Tell the user instead of doing nothing.
+            display_toast(c.getString(R.string.chat_file_empty), true, 100);
+            return -1L;
         }
+
+        FileTransferDebug.logUserSelectedFile(
+                filepath != null ? filepath + "/" + filename : String.valueOf(uri), file_size);
+        FileTransferDebug.logPeerConnectionStatus(friendnum);
 
         if (file_size > FT_OUTGOING_FILESIZE_FRIEND_MAX_TOTAL)
         {
-            display_toast("File too large", true, 100);
-            Log.i(TAG, "add_outgoing_file:documentFile:file_size=File too large");
-            return;
+            display_toast(c.getString(R.string.chat_file_too_large), true, 100);
+            HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:file_size=File too large");
+            return -1L;
         }
 
         if (file_size < FT_OUTGOING_FILESIZE_BYTE_USE_STORAGE_FRAMEWORK) // less than xxx Bytes filesize
         {
-            Log.i(TAG, "add_outgoing_file:documentFile:0001");
+            HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:0001");
             outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(filepath, filename, file_size);
 
             if (ofw == null)
             {
-                Log.i(TAG, "add_outgoing_file:documentFile:ERR:0002");
-                return;
+                HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:ERR:0002");
+                return -1L;
             }
 
             Filetransfer f = new Filetransfer();
@@ -2128,11 +2397,11 @@ public class MessageListActivity extends AppCompatActivity
             long ft_id = insert_into_filetransfer_db(f);
             f.id = ft_id;
 
-            Log.i(TAG, "add_outgoing_file:MM2MM:2:" + ft_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:2:" + ft_id);
 
             // ---------- DEBUG ----------
             Filetransfer ft_tmp = (Filetransfer) orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            Log.i(TAG, "add_outgoing_file:MM2MM:4a:" + "fid=" + ft_tmp.id + " mid=" + ft_tmp.message_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4a:" + "fid=" + ft_tmp.id + " mid=" + ft_tmp.message_id);
             // ---------- DEBUG ----------
 
 
@@ -2161,9 +2430,9 @@ public class MessageListActivity extends AppCompatActivity
             m.id = new_msg_id;
 
             // ---------- DEBUG ----------
-            Log.i(TAG, "add_outgoing_file:MM2MM:3:" + new_msg_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:3:" + new_msg_id);
             Message m_tmp = (Message) orma.selectFromMessage().idEq(new_msg_id).get(0);
-            // Log.i(TAG, "add_outgoing_file:MM2MM:4:" + m.filetransfer_id + "::" + m_tmp);
+            // HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4:" + m.filetransfer_id + "::" + m_tmp);
             // ---------- DEBUG ----------
 
             f.message_id = new_msg_id;
@@ -2172,14 +2441,15 @@ public class MessageListActivity extends AppCompatActivity
 
             // ---------- DEBUG ----------
             Filetransfer ft_tmp2 = (Filetransfer) orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            Log.i(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
             // ---------- DEBUG ----------
 
-            queue_and_try_send_outgoing_file(new_msg_id, update_message_view);
+            finish_outgoing_file_enqueue(new_msg_id, update_message_view, startTransferImmediately);
+            return new_msg_id;
         }
         else
         {
-            // Log.i(TAG, "add_outgoing_file:friendnum(2)=" + friendnum);
+            // HelperGeneric.logI(TAG, "add_outgoing_file:friendnum(2)=" + friendnum);
 
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = tox_friend_get_public_key__wrapper(friendnum);
@@ -2195,17 +2465,17 @@ public class MessageListActivity extends AppCompatActivity
             f.current_position = 0;
             f.storage_frame_work = true;
 
-            // Log.i(TAG, "add_outgoing_file:tox_public_key_string=" + f.tox_public_key_string);
+            // HelperGeneric.logI(TAG, "add_outgoing_file:tox_public_key_string=" + f.tox_public_key_string);
 
             long ft_id = insert_into_filetransfer_db(f);
             f.id = ft_id;
 
             // Message m_tmp = orma.selectFromMessage().tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(3)).orderByMessage_idDesc().get(0);
-            Log.i(TAG, "add_outgoing_file:MM2MM:2:" + ft_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:2:" + ft_id);
 
             // ---------- DEBUG ----------
             Filetransfer ft_tmp = orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            Log.i(TAG, "add_outgoing_file:MM2MM:4a:" + "fid=" + ft_tmp.id + " mid=" + ft_tmp.message_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4a:" + "fid=" + ft_tmp.id + " mid=" + ft_tmp.message_id);
             // ---------- DEBUG ----------
 
 
@@ -2233,9 +2503,9 @@ public class MessageListActivity extends AppCompatActivity
             m.id = new_msg_id;
 
             // ---------- DEBUG ----------
-            Log.i(TAG, "add_outgoing_file:MM2MM:3:" + new_msg_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:3:" + new_msg_id);
             Message m_tmp = orma.selectFromMessage().idEq(new_msg_id).get(0);
-            // Log.i(TAG, "add_outgoing_file:MM2MM:4:" + m.filetransfer_id + "::" + m_tmp);
+            // HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4:" + m.filetransfer_id + "::" + m_tmp);
             // ---------- DEBUG ----------
 
             f.message_id = new_msg_id;
@@ -2244,10 +2514,49 @@ public class MessageListActivity extends AppCompatActivity
 
             // ---------- DEBUG ----------
             Filetransfer ft_tmp2 = orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            Log.i(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
+            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
             // ---------- DEBUG ----------
 
+            finish_outgoing_file_enqueue(new_msg_id, update_message_view, startTransferImmediately);
+            return new_msg_id;
+        }
+    }
+
+    private static void finish_outgoing_file_enqueue(final long new_msg_id, final boolean update_message_view,
+                                                     final boolean startTransferImmediately)
+    {
+        if (new_msg_id <= 0L)
+        {
+            return;
+        }
+        if (startTransferImmediately)
+        {
             queue_and_try_send_outgoing_file(new_msg_id, update_message_view);
+            return;
+        }
+        try
+        {
+            orma.updateMessage().idEq(new_msg_id).ft_outgoing_queued(true).execute();
+            if (update_message_view)
+            {
+                update_single_message_from_messge_id(new_msg_id, true);
+            }
+            try
+            {
+                final Message staged = (Message) orma.selectFromMessage().idEq(new_msg_id).get(0);
+                if ((staged != null) && (staged.tox_friendpubkey != null) && (!staged.tox_friendpubkey.isEmpty()))
+                {
+                    HelperFiletransfer.try_start_next_queued_outgoing_file(staged.tox_friendpubkey);
+                }
+            }
+            catch (Exception e)
+            {
+                HelperGeneric.logI(TAG, "finish_outgoing_file_enqueue:kick:EE:" + e.getMessage());
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "finish_outgoing_file_enqueue:EE:" + e.getMessage());
         }
     }
 
@@ -2262,6 +2571,10 @@ public class MessageListActivity extends AppCompatActivity
 
             final Intent intent = new Intent(this, FriendInfoActivity.class);
             intent.putExtra("friendnum", friendnum);
+            if (friend_pubkey != null)
+            {
+                intent.putExtra("friend_pubkey", friend_pubkey);
+            }
             startActivity(intent);
         }
         catch (Exception e)
@@ -2272,10 +2585,10 @@ public class MessageListActivity extends AppCompatActivity
 
     public void start_audio_call_to_friend(View view)
     {
-        Log.i(TAG, "start_call_to_friend_real:audio_only");
+        HelperGeneric.logI(TAG, "start_call_to_friend_real:audio_only");
         Callstate.audio_call = true;
         set_debug_text("_AUDIO_");
-        Log.i(TAG, "toxav_call:Callstate.audio_call = true");
+        HelperGeneric.logI(TAG, "toxav_call:Callstate.audio_call = true");
         start_call_to_friend_internal(view);
     }
 
@@ -2339,22 +2652,22 @@ public class MessageListActivity extends AppCompatActivity
 
     public void start_call_to_friend_real(View view)
     {
-        Log.i(TAG, "start_call_to_friend_real");
+        HelperGeneric.logI(TAG, "start_call_to_friend_real");
 
         if (!is_tox_started)
         {
-            Log.i(TAG, "TOX:offline");
+            HelperGeneric.logI(TAG, "TOX:offline");
             return;
         }
 
-        Log.i(TAG, "start_call_to_friend_real:friendnum=" + friendnum);
+        HelperGeneric.logI(TAG, "start_call_to_friend_real:friendnum=" + friendnum);
 
         if (is_friend_online(friendnum) == 0)
         {
-            Log.i(TAG, "TOX:friend offline");
+            HelperGeneric.logI(TAG, "TOX:friend offline");
             try
             {
-                Toast.makeText(this, "Friend not online", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.friend_not_online, Toast.LENGTH_SHORT).show();
             }
             catch (Exception e)
             {
@@ -2376,11 +2689,11 @@ public class MessageListActivity extends AppCompatActivity
             {
                 try
                 {
-                    Log.i(TAG, "CALL:start:(2.0):Callstate.state=" + Callstate.state);
+                    HelperGeneric.logI(TAG, "CALL:start:(2.0):Callstate.state=" + Callstate.state);
 
                     if (Callstate.state == 0)
                     {
-                        Log.i(TAG, "CALL:start:(2.1):show activity");
+                        HelperGeneric.logI(TAG, "CALL:start:(2.1):show activity");
                         if (PREF__use_software_aec || !Callstate.audio_call)
                         {
                             set_aec_active(1);
@@ -2395,7 +2708,7 @@ public class MessageListActivity extends AppCompatActivity
                         Callstate.accepted_call = 1; // we started the call, so it's already accepted on our side
                         Callstate.call_first_video_frame_received = -1;
                         Callstate.call_start_timestamp = -1;
-                        Log.i(TAG, "friend_pubkey:set:004");
+                        HelperGeneric.logI(TAG, "friend_pubkey:set:004");
                         Callstate.friend_pubkey = tox_friend_get_public_key__wrapper(fn);
                         Callstate.camera_opened = Callstate.audio_call;
                         Callstate.audio_speaker = !Callstate.audio_call;
@@ -2420,7 +2733,7 @@ public class MessageListActivity extends AppCompatActivity
                             @Override
                             public void run()
                             {
-                                Log.i(TAG, "wating for camera open");
+                                HelperGeneric.logI(TAG, "wating for camera open");
 
                                 try
                                 {
@@ -2438,7 +2751,7 @@ public class MessageListActivity extends AppCompatActivity
                                     i++;
                                     if (Callstate.camera_opened)
                                     {
-                                        Log.i(TAG, "Callstate.camera_opened" + Callstate.camera_opened);
+                                        HelperGeneric.logI(TAG, "Callstate.camera_opened" + Callstate.camera_opened);
                                         waiting = false;
                                     }
 
@@ -2460,7 +2773,7 @@ public class MessageListActivity extends AppCompatActivity
                                 {
                                     CallingActivity.top_text_line_str2 = "0s";
                                     update_top_text_line();
-                                    Log.i(TAG, "CALL_OUT:001:friendnum=" + fn + " f_audio_enabled=" + f_audio_enabled +
+                                    HelperGeneric.logI(TAG, "CALL_OUT:001:friendnum=" + fn + " f_audio_enabled=" + f_audio_enabled +
                                                " f_video_enabled=" + f_video_enabled);
 
                                     Callstate.audio_bitrate = GLOBAL_AUDIO_BITRATE;
@@ -2476,13 +2789,13 @@ public class MessageListActivity extends AppCompatActivity
                                     if (Callstate.audio_call)
                                     {
                                         call_res = MainActivity.toxav_call(fn, GLOBAL_AUDIO_BITRATE, 0);
-                                        Log.i(TAG, "toxav_call:audio_call:RES=" + call_res);
+                                        HelperGeneric.logI(TAG, "toxav_call:audio_call:RES=" + call_res);
                                     }
                                     else
                                     {
                                         call_res = MainActivity.toxav_call(fn, GLOBAL_AUDIO_BITRATE,
                                                                            GLOBAL_VIDEO_BITRATE);
-                                        Log.i(TAG, "toxav_call:video_call:RES=" + call_res);
+                                        HelperGeneric.logI(TAG, "toxav_call:video_call:RES=" + call_res);
                                     }
 
                                     wakeup_tox_thread();
@@ -2506,11 +2819,11 @@ public class MessageListActivity extends AppCompatActivity
                                         {
                                         }
                                     }
-                                    Log.i(TAG, "CALL_OUT:002");
+                                    HelperGeneric.logI(TAG, "CALL_OUT:002");
                                 }
                                 catch (Exception e)
                                 {
-                                    Log.i(TAG, "CALL_OUT:EE1:" + e.getMessage());
+                                    HelperGeneric.logI(TAG, "CALL_OUT:EE1:" + e.getMessage());
                                     e.printStackTrace();
                                 }
                             }
@@ -2526,7 +2839,7 @@ public class MessageListActivity extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "CALL:start:(2):EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "CALL:start:(2):EE:" + e.getMessage());
                 }
             }
         };
@@ -2554,18 +2867,18 @@ public class MessageListActivity extends AppCompatActivity
         // DocumentProvider
         if (isKitKat && DocumentsContract.isDocumentUri(context, uri))
         {
-            Log.i(TAG, "getPath:001:uri=" + uri);
+            HelperGeneric.logI(TAG, "getPath:001:uri=" + uri);
 
             // ExternalStorageProvider
             if (isExternalStorageDocument(uri))
             {
-                Log.i(TAG, "getPath:002");
+                HelperGeneric.logI(TAG, "getPath:002");
                 final String docId = DocumentsContract.getDocumentId(uri);
-                Log.i(TAG, "getPath:003:docId=" + docId);
+                HelperGeneric.logI(TAG, "getPath:003:docId=" + docId);
                 final String[] split = docId.split(":");
-                Log.i(TAG, "getPath:004:split=" + split[0] + " " + split[1]);
+                HelperGeneric.logI(TAG, "getPath:004:split=" + split[0] + " " + split[1]);
                 final String type = split[0];
-                Log.i(TAG, "getPath:005:type=" + type);
+                HelperGeneric.logI(TAG, "getPath:005:type=" + type);
 
                 if ("primary".equalsIgnoreCase(type))
                 {
@@ -2577,13 +2890,13 @@ public class MessageListActivity extends AppCompatActivity
                     try
                     {
                         String strSDCardPath = System.getenv("SECONDARY_STORAGE");
-                        Log.i(TAG, "getPath:SECONDARY_STORAGE=" + strSDCardPath);
+                        HelperGeneric.logI(TAG, "getPath:SECONDARY_STORAGE=" + strSDCardPath);
 
                         if ((strSDCardPath == null) || (strSDCardPath.length() == 0))
                         {
-                            Log.i(TAG, "getPath:006");
+                            HelperGeneric.logI(TAG, "getPath:006");
                             strSDCardPath = System.getenv("EXTERNAL_SDCARD_STORAGE");
-                            Log.i(TAG, "getPath:EXTERNAL_SDCARD_STORAGE=" + strSDCardPath);
+                            HelperGeneric.logI(TAG, "getPath:EXTERNAL_SDCARD_STORAGE=" + strSDCardPath);
                         }
 
                         if (strSDCardPath == null)
@@ -2595,17 +2908,17 @@ public class MessageListActivity extends AppCompatActivity
 
                         //If may get a full path that is not the right one, even if we don't have the SD Card there.
                         //We just need the "/mnt/extSdCard/" i.e and check if it's writable
-                        Log.i(TAG, "getPath:007");
+                        HelperGeneric.logI(TAG, "getPath:007");
                         if (strSDCardPath != null)
                         {
-                            Log.i(TAG, "getPath:008");
+                            HelperGeneric.logI(TAG, "getPath:008");
                             if (strSDCardPath.contains(":"))
                             {
-                                Log.i(TAG, "getPath:009");
+                                HelperGeneric.logI(TAG, "getPath:009");
                                 strSDCardPath = strSDCardPath.substring(0, strSDCardPath.indexOf(":"));
                             }
                             // File externalFilePath = new File(strSDCardPath);
-                            Log.i(TAG, "getPath:strSDCardPath=" + strSDCardPath);
+                            HelperGeneric.logI(TAG, "getPath:strSDCardPath=" + strSDCardPath);
 
                             return strSDCardPath + "/" + split[1];
                         }
@@ -2613,7 +2926,7 @@ public class MessageListActivity extends AppCompatActivity
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "getPath:EE3:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "getPath:EE3:" + e.getMessage());
                     }
                 }
             }
@@ -2909,6 +3222,7 @@ public class MessageListActivity extends AppCompatActivity
     static void show_messagelist_for_friend(Context c, String friend_pubkey, String fill_out_text)
     {
         Intent intent = new Intent(c, MessageListActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (fill_out_text != null)
         {
             intent.putExtra("fillouttext", fill_out_text);
@@ -2916,6 +3230,29 @@ public class MessageListActivity extends AppCompatActivity
         intent.putExtra("friendnum", tox_friend_by_public_key__wrapper(friend_pubkey));
         intent.putExtra("friend_pubkey", friend_pubkey);
         c.startActivity(intent);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent)
+    {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        final String new_friend_pubkey = intent.getStringExtra("friend_pubkey");
+        if ((new_friend_pubkey == null) || new_friend_pubkey.equalsIgnoreCase(friend_pubkey))
+        {
+            return;
+        }
+        try
+        {
+            if ((friend_pubkey != null) && (ml_new_message != null))
+            {
+                ChatDraftHelper.save_friend_draft(friend_pubkey, ml_new_message.getText().toString());
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        recreate();
     }
 
     public void scroll_to_bottom(View v)

@@ -19,6 +19,8 @@
 
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.R;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -30,21 +32,18 @@ public class PowerReceiver extends BroadcastReceiver
     @Override
     public void onReceive(Context context, Intent intent)
     {
-        int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        boolean isCharging =
-                status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
-
-        int chargePlug = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
-        boolean usbCharge = chargePlug == BatteryManager.BATTERY_PLUGGED_USB;
-        boolean acCharge = chargePlug == BatteryManager.BATTERY_PLUGGED_AC;
-
-        if (intent.getAction() == Intent.ACTION_POWER_CONNECTED)
+        if (intent == null || intent.getAction() == null)
         {
-            Toast.makeText(context, "isCharging: " + true, Toast.LENGTH_LONG).show();
+            return;
         }
-        else if (intent.getAction() == Intent.ACTION_POWER_DISCONNECTED)
+
+        if (Intent.ACTION_POWER_CONNECTED.equals(intent.getAction()))
         {
-            Toast.makeText(context, "isCharging: " + false, Toast.LENGTH_LONG).show();
+            Toast.makeText(context, R.string.power_charging_connected, Toast.LENGTH_LONG).show();
+        }
+        else if (Intent.ACTION_POWER_DISCONNECTED.equals(intent.getAction()))
+        {
+            Toast.makeText(context, R.string.power_charging_disconnected, Toast.LENGTH_LONG).show();
         }
     }
 }

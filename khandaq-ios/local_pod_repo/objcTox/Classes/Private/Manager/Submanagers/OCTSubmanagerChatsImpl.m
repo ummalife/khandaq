@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import "OCTSubmanagerChatsImpl.h"
+#import "OCTSubmanagerFriends.h"
 #import "OCTTox.h"
 #import "OCTRealmManager.h"
 #import "OCTMessageAbstract.h"
@@ -13,7 +14,12 @@
 #import "OCTSendMessageOperation.h"
 #import "OCTTox+Private.h"
 #import "OCTToxOptions+Private.h"
-#import "Firebase.h"
+#if __has_include(<Firebase/Firebase.h>)
+#import <Firebase/Firebase.h>
+#define OCTHasFirebase 1
+#else
+#define OCTHasFirebase 0
+#endif
 
 static void triggerPush(NSString *used_pushToken,
                         NSString *msgv3HashHex,
@@ -79,26 +85,27 @@ int bin_to_hex(const char *bin_id, size_t bin_id_size, char *output);
 - (void)sendOwnPush
 {
     NSLog(@"PUSH:sendOwnPush");
+#if OCTHasFirebase
     if ([FIRApp defaultApp] == nil) {
         NSLog(@"PUSH:sendOwnPush:firebase not configured");
         return;
     }
     NSString *token = [FIRMessaging messaging].FCMToken;
-    if (token.length > 0)
-    {
+    if (token.length > 0) {
         NSString *my_pushToken = [NSString stringWithFormat:@"https://push.khandaq.org/toxfcm/fcm.php?id=%@&type=1", token];
-        // NSLog(@"token push url=%@", my_pushToken);
         triggerPush(my_pushToken, nil, nil, nil);
-    }
-    else
-    {
+    } else {
         NSLog(@"PUSH:sendOwnPush:no token");
     }
+#else
+    NSLog(@"PUSH:sendOwnPush:firebase not configured");
+#endif
 }
 
 - (void)broadcastOwnPushURLToConnectedFriends
 {
     NSLog(@"PUSH:broadcastOwnPushURLToConnectedFriends");
+#if OCTHasFirebase
     if ([FIRApp defaultApp] == nil) {
         NSLog(@"PUSH:broadcastOwnPushURL:firebase not configured");
         return;
@@ -124,6 +131,9 @@ int bin_to_hex(const char *bin_id, size_t bin_id_size, char *output);
                                            data:data
                                           error:&error];
     }
+#else
+    NSLog(@"PUSH:broadcastOwnPushURL:firebase not configured");
+#endif
 }
 
 - (void)triggerWakePushForChat:(OCTChat *)chat
@@ -346,15 +356,14 @@ static void triggerPush(NSString *used_pushToken,
         if (messageId == -1) {
             if ((friend.pushToken != nil) && (friend.pushToken.length > 5)) {
 
-                // check push url starts with allowed values
+                // KHANDAQ (security audit NEW-6): keep this list in lock-step with the strict send
+                // whitelist in triggerPush(). triggerPush only ever sends to push.khandaq.org /
+                // tox.zoff.xyz, so marking a message as "push sent" for gotify/ntfy friends was a lie —
+                // the push was never delivered. Only flag sent_push for hosts we actually push to.
                 if (
                     ([friend.pushToken hasPrefix:@"https://push.khandaq.org/toxfcm/fcm.php?id="])
                     ||
                     ([friend.pushToken hasPrefix:@"https://tox.zoff.xyz/toxfcm/fcm.php?id="])
-                    ||
-                    ([friend.pushToken hasPrefix:@"https://gotify1.unifiedpush.org/UP?token="])
-                    ||
-                    ([friend.pushToken hasPrefix:@"https://ntfy.sh/"])
                 ) {
                     sent_push = YES;
                 }
@@ -419,6 +428,22 @@ static void triggerPush(NSString *used_pushToken,
 
     if (friend.isConnected) {
         [self resendUndeliveredMessagesToFriend:friend];
+    }
+}
+
+- (void)tickDeliveryWatchdog
+{
+    if (! [self.dataSource managerIsToxConnected]) {
+        return;
+    }
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    RLMResults *friends = [OCTFriend allObjectsInRealm:realmManager.realm];
+
+    for (OCTFriend *friend in friends) {
+        if (friend.isConnected) {
+            [self resendUndeliveredMessagesToFriend:friend];
+        }
     }
 }
 
@@ -498,9 +523,14 @@ static void triggerPush(NSString *used_pushToken,
                            sendTimestamp:(uint32_t)sendTimestamp
 {
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    id<OCTSubmanagerFriends> friendsSubmanager = [self.dataSource managerGetFriends];
+    OCTFriend *friend = [friendsSubmanager ensureFriendForFriendNumber:friendNumber];
 
-    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
-    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend) {
+        OCTLogWarn(@"friendMessage ignoring message from unresolved friendNumber %d", friendNumber);
+        return;
+    }
+
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
 
     if (msgv3HashHex != nil)

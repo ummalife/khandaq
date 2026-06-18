@@ -39,6 +39,7 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import okhttp3.CacheControl;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
@@ -69,6 +70,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_TOR_USERAGENT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_UNIFIED_WEBPUSH_CONTENT_ENCODING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.GENERIC_UNIFIED_WEBPUSH_TTL_SECONDS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_NOW;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.MESSAGE_V2_MSG_SENT_OK;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ORBOT_PROXY_HOST;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ORBOT_PROXY_PORT;
@@ -76,10 +78,15 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.PUSH_URL_TRIGGER_AGAIN_
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PUSH_URL_TRIGGER_AGAIN_SECONDS;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.UINT32_MAX_JAVA;
+import static com.zoffcc.applications.trifa.HelperGeneric.sync_have_internet_connectivity;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.HAVE_INTERNET_CONNECTIVITY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_name;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_my_toxid;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_connection_status;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_ERR_FRIEND_ADD;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_PUBLIC_KEY_SIZE;
+import static com.zoffcc.applications.trifa.TrifaToxService.is_tox_started;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 public class HelperFriend
@@ -100,18 +107,18 @@ public class HelperFriend
 
         try
         {
-            String pubkey_temp = tox_friend_get_public_key__wrapper(friendnum);
-            // Log.i(TAG, "main_get_friend:pubkey=" + pubkey_temp + " fnum=" + friendnum);
+            final String pubkey_temp = normalize_friend_public_key(tox_friend_get_public_key__wrapper(friendnum));
+            if (pubkey_temp == null)
+            {
+                return null;
+            }
             List<com.zoffcc.applications.sorm.FriendList> fl = orma.selectFromFriendList().
-                    tox_public_key_stringEq(tox_friend_get_public_key__wrapper(friendnum)).
+                    tox_public_key_stringEq(pubkey_temp).
                     toList();
-
-            // Log.i(TAG, "main_get_friend:fl=" + fl + " size=" + fl.size());
 
             if (fl.size() > 0)
             {
                 f = (FriendList) fl.get(0);
-                // Log.i(TAG, "main_get_friend:f=" + f);
             }
             else
             {
@@ -128,29 +135,82 @@ public class HelperFriend
 
     static FriendList main_get_friend(String friend_pubkey)
     {
-        FriendList f = null;
+        return lookup_friend_in_db(friend_pubkey);
+    }
 
+    @Nullable
+    static String normalize_friend_public_key(@Nullable final String friend_public_key)
+    {
+        if (friend_public_key == null)
+        {
+            return null;
+        }
+        final String cleaned = friend_public_key.trim();
+        if (cleaned.isEmpty() || "-1".equals(cleaned))
+        {
+            return null;
+        }
+        return cleaned.toUpperCase(java.util.Locale.ENGLISH);
+    }
+
+    @Nullable
+    static FriendList lookup_friend_in_db(@Nullable final String friend_pubkey)
+    {
+        final String key = normalize_friend_public_key(friend_pubkey);
+        if (key == null)
+        {
+            return null;
+        }
         try
         {
             List<com.zoffcc.applications.sorm.FriendList> fl = orma.selectFromFriendList().
-                    tox_public_key_stringEq(friend_pubkey).
+                    tox_public_key_stringEq(key).
                     toList();
-
             if (fl.size() > 0)
             {
-                f = (FriendList) fl.get(0);
+                return (FriendList) fl.get(0);
             }
-            else
+        }
+        catch (Exception ignored)
+        {
+        }
+        return null;
+    }
+
+    @Nullable
+    static String resolve_friend_public_key(final long friendnum, @Nullable final String friend_pubkey_extra)
+    {
+        String key = normalize_friend_public_key(friend_pubkey_extra);
+        if (key != null)
+        {
+            return key;
+        }
+        if (friendnum >= 0)
+        {
+            key = normalize_friend_public_key(tox_friend_get_public_key__wrapper(friendnum));
+            if (key != null)
             {
-                f = null;
+                return key;
             }
+        }
+        return null;
+    }
+
+    static long count_friend_messages(@NonNull final String friend_pubkey)
+    {
+        final String key = normalize_friend_public_key(friend_pubkey);
+        if (key == null)
+        {
+            return -1L;
+        }
+        try
+        {
+            return orma.selectFromMessage().tox_friendpubkeyEq(key).count();
         }
         catch (Exception e)
         {
-            f = null;
+            return -1L;
         }
-
-        return f;
     }
 
     static int is_friend_online(long friendnum)
@@ -317,6 +377,10 @@ public class HelperFriend
                 try
                 {
                     MainActivity.friend_list_fragment.set_all_friends_to_offline();
+                    if (MainActivity.contacts_list_fragment != null)
+                    {
+                        MainActivity.contacts_list_fragment.set_all_friends_to_offline();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -1498,7 +1562,8 @@ public class HelperFriend
 
         if (is_own_public_key(friend_public_key))
         {
-            add_self_as_friend();
+            display_toast(context_s.getString(R.string.add_self_disabled_use_favorites), false, 300);
+            FavoritesChatHelper.openChat(context_s);
             return;
         }
 
@@ -1634,6 +1699,113 @@ public class HelperFriend
         return null;
     }
 
+    private static Boolean friend_status_message_native_supported = null;
+
+    static String get_tox_friend_status_message_live(long friendnum)
+    {
+        if (friendnum < 0 || Boolean.FALSE.equals(friend_status_message_native_supported))
+        {
+            return null;
+        }
+
+        try
+        {
+            String live_status = MainActivity.tox_friend_get_status_message(friendnum);
+            friend_status_message_native_supported = Boolean.TRUE;
+            if ((live_status != null) && (live_status.length() > 0) && (!live_status.equals("-1")))
+            {
+                return live_status.trim();
+            }
+        }
+        catch (UnsatisfiedLinkError e)
+        {
+            friend_status_message_native_supported = Boolean.FALSE;
+            Log.w(TAG, "tox_friend_get_status_message unavailable in native lib; using DB cache only");
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    static String resolve_friend_profile_name(@Nullable final FriendList f, final long friendnum)
+    {
+        if (f != null && f.name != null && f.name.trim().length() > 0)
+        {
+            return f.name.trim();
+        }
+
+        final String live_name = get_tox_friend_name_live(friendnum);
+        if ((live_name != null) && !is_placeholder_friend_name(live_name,
+                f != null ? f.tox_public_key_string : null))
+        {
+            return live_name;
+        }
+
+        if (f != null && f.alias_name != null && f.alias_name.trim().length() > 0)
+        {
+            return f.alias_name.trim();
+        }
+
+        if (f != null && f.tox_public_key_string != null)
+        {
+            return peer_pubkey_short_id(f.tox_public_key_string);
+        }
+
+        return friend_display_name_fallback();
+    }
+
+    static String resolve_friend_profile_status(@Nullable final FriendList f, final long friendnum)
+    {
+        if (f != null && f.status_message != null && f.status_message.trim().length() > 0)
+        {
+            return f.status_message.trim();
+        }
+
+        final String live_status = get_tox_friend_status_message_live(friendnum);
+        if (live_status != null)
+        {
+            return live_status;
+        }
+
+        try
+        {
+            return context_s.getString(R.string.friend_info_status_unknown);
+        }
+        catch (Exception e)
+        {
+            return "—";
+        }
+    }
+
+    static void sync_friend_status_from_tox(final long friendnum, @NonNull final FriendList f)
+    {
+        final String live_status = get_tox_friend_status_message_live(friendnum);
+        if (live_status == null)
+        {
+            return;
+        }
+
+        if (live_status.equals(f.status_message))
+        {
+            return;
+        }
+
+        f.status_message = live_status;
+        update_friend_in_db_status_message(f);
+    }
+
+    static void sync_friend_profile_from_tox(final long friendnum, @NonNull final FriendList f)
+    {
+        sync_friend_name_from_tox(friendnum, f);
+        if (!Boolean.FALSE.equals(friend_status_message_native_supported))
+        {
+            sync_friend_status_from_tox(friendnum, f);
+        }
+    }
+
     static String initial_friend_display_name(String friend_pubkey, long friendnum)
     {
         String live_name = get_tox_friend_name_live(friendnum);
@@ -1669,13 +1841,45 @@ public class HelperFriend
             return;
         }
 
-        if (live_name.equals(f.name))
+        apply_friend_name_if_valid(friendnum, f, live_name);
+    }
+
+    static void apply_friend_name_if_valid(long friendnum, FriendList f, String name)
+    {
+        if ((f == null) || (name == null))
         {
             return;
         }
 
-        f.name = live_name;
+        final String trimmed = name.trim();
+        if (trimmed.isEmpty() || is_placeholder_friend_name(trimmed, f.tox_public_key_string))
+        {
+            return;
+        }
+
+        if (trimmed.equals(f.name))
+        {
+            return;
+        }
+
+        f.name = trimmed;
         update_friend_in_db_name(f);
+    }
+
+    static void apply_friend_name_from_callback(long friendnum, FriendList f, String friend_name)
+    {
+        if (f == null)
+        {
+            return;
+        }
+
+        if ((friend_name != null) && (friend_name.trim().length() > 0))
+        {
+            apply_friend_name_if_valid(friendnum, f, friend_name);
+            return;
+        }
+
+        sync_friend_name_from_tox(friendnum, f);
     }
 
     static String resolve_friend_display_name(long friendnum)
@@ -1806,6 +2010,11 @@ public class HelperFriend
         }
 
         final String normalized = friend_pubkey.trim();
+        if (FavoritesChatHelper.isFavoritesChat(normalized))
+        {
+            return FavoritesChatHelper.displayName(context_s);
+        }
+
         final String from_friendlist = display_name_from_friendlist(
                 lookup_friendlist_by_pubkey(normalized), normalized);
 
@@ -2094,6 +2303,44 @@ public class HelperFriend
             {
                 MainActivity.friend_list_fragment.add_all_friends_clear(delay);
             }
+            if (MainActivity.contacts_list_fragment != null)
+            {
+                MainActivity.contacts_list_fragment.add_all_friends_clear(delay);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    static void refresh_chat_list_group_row_wrapper(final String groupIdentifier)
+    {
+        try
+        {
+            if (MainActivity.friend_list_fragment != null)
+            {
+                MainActivity.friend_list_fragment.refresh_group_chat_list_row(groupIdentifier);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    static void modify_friend_in_all_lists(final CombinedFriendsAndConferences cc, final int is_friend)
+    {
+        try
+        {
+            if (MainActivity.friend_list_fragment != null)
+            {
+                MainActivity.friend_list_fragment.modify_friend(cc, is_friend);
+            }
+            if (MainActivity.contacts_list_fragment != null)
+            {
+                MainActivity.contacts_list_fragment.modify_friend(cc, is_friend);
+            }
         }
         catch (Exception e)
         {
@@ -2105,13 +2352,10 @@ public class HelperFriend
     {
         try
         {
-            if (MainActivity.friend_list_fragment != null)
-            {
-                CombinedFriendsAndConferences cc = new CombinedFriendsAndConferences();
-                cc.is_friend = COMBINED_IS_FRIEND;
-                cc.friend_item = f;
-                MainActivity.friend_list_fragment.modify_friend(cc, cc.is_friend);
-            }
+            CombinedFriendsAndConferences cc = new CombinedFriendsAndConferences();
+            cc.is_friend = COMBINED_IS_FRIEND;
+            cc.friend_item = f;
+            modify_friend_in_all_lists(cc, cc.is_friend);
         }
         catch (Exception e)
         {
@@ -2331,6 +2575,200 @@ public class HelperFriend
         catch (Exception ignored)
         {
         }
+    }
+
+    static boolean is_self_tox_connected_to_dht()
+    {
+        if (!is_tox_started)
+        {
+            return false;
+        }
+        sync_have_internet_connectivity(context_s);
+        if (!HAVE_INTERNET_CONNECTIVITY)
+        {
+            return false;
+        }
+        return global_self_connection_status != TOX_CONNECTION_NONE.value;
+    }
+
+    static boolean has_incoming_dm_messages(@Nullable final String friend_pubkey)
+    {
+        final String key = normalize_friend_public_key(friend_pubkey);
+        if ((key == null) || (orma == null))
+        {
+            return false;
+        }
+        try
+        {
+            return orma.selectFromMessage().tox_friendpubkeyEq(key).directionEq(0).count() > 0;
+        }
+        catch (Exception ignored)
+        {
+            return false;
+        }
+    }
+
+    static boolean has_dm_friendship_established(@Nullable final String friend_pubkey)
+    {
+        FriendList f = main_get_friend(friend_pubkey);
+        if (f == null)
+        {
+            f = lookup_friendlist_by_pubkey(normalize_friend_public_key(friend_pubkey));
+        }
+        if (f == null)
+        {
+            return false;
+        }
+        if (f.capabilities != 0L || f.msgv3_capability == 1)
+        {
+            return true;
+        }
+        if (f.last_online_timestamp == LAST_ONLINE_TIMSTAMP_ONLINE_NOW)
+        {
+            return true;
+        }
+        if (f.last_online_timestamp_real > 0L
+                && f.last_online_timestamp_real != LAST_ONLINE_TIMSTAMP_ONLINE_OFFLINE
+                && f.last_online_timestamp_real != LAST_ONLINE_TIMSTAMP_ONLINE_NOW)
+        {
+            return true;
+        }
+        return has_incoming_dm_messages(friend_pubkey);
+    }
+
+    static boolean is_dm_friend_request_pending(@Nullable final String friend_pubkey)
+    {
+        final String key = normalize_friend_public_key(friend_pubkey);
+        if (key == null)
+        {
+            return false;
+        }
+        if (has_dm_friendship_established(key))
+        {
+            return false;
+        }
+        final FriendList f = lookup_friendlist_by_pubkey(key);
+        if (f == null || f.is_relay)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    @Nullable
+    static String dm_send_precheck_failure_reason(@Nullable final String friend_pubkey)
+    {
+        if (is_dm_friend_request_pending(friend_pubkey))
+        {
+            return context_s.getString(R.string.dm_send_failed_pending_request);
+        }
+        if (!is_tox_started)
+        {
+            return context_s.getString(R.string.dm_send_failed_not_ready);
+        }
+        if (!is_self_tox_connected_to_dht())
+        {
+            return context_s.getString(R.string.dm_send_failed_no_network);
+        }
+        return null;
+    }
+
+    /** tox_friend_send_message / msgV3 / msgV2 success (0 and negative codes are failures). */
+    static boolean is_dm_message_send_success(final long msg_num)
+    {
+        return msg_num == TRIFAGlobals.MESSAGE_V2_MSG_SENT_OK || msg_num > 0L;
+    }
+
+    static boolean is_group_text_send_success(final long message_id)
+    {
+        return message_id > 0L;
+    }
+
+    static boolean is_dm_friend_connected_for_send(@Nullable final String friend_pubkey)
+    {
+        if (friend_pubkey == null || friend_pubkey.isEmpty())
+        {
+            return false;
+        }
+        reconcile_friend_connection_state(friend_pubkey, tox_friend_by_public_key__wrapper(friend_pubkey));
+        try
+        {
+            final long fn = tox_friend_by_public_key__wrapper(friend_pubkey);
+            if (fn < 0)
+            {
+                return false;
+            }
+            return MainActivity.tox_friend_get_connection_status(fn) != TOX_CONNECTION_NONE.value;
+        }
+        catch (Exception ignored)
+        {
+            return false;
+        }
+    }
+
+    /** Sync DB connection state with live toxcore before send. */
+    static void reconcile_friend_connection_state(@Nullable final String friend_pubkey, final long friend_number)
+    {
+        if ((friend_pubkey == null) || (friend_number < 0) || (!is_tox_started))
+        {
+            return;
+        }
+
+        try
+        {
+            final int live_conn = MainActivity.tox_friend_get_connection_status(friend_number);
+            final FriendList fl = orma.selectFromFriendList().tox_public_key_stringEq(friend_pubkey).get(0);
+            if (fl.TOX_CONNECTION_real == live_conn)
+            {
+                return;
+            }
+
+            orma.updateFriendList().tox_public_key_stringEq(friend_pubkey).TOX_CONNECTION_real(live_conn).execute();
+            Log.i(TAG, "reconcile_connection:pk=" + friend_pubkey.substring(friend_pubkey.length() - 8)
+                    + " db=" + fl.TOX_CONNECTION_real + " live=" + live_conn);
+
+            if (live_conn != TOX_CONNECTION_NONE.value)
+            {
+                TrifaToxService.wakeup_tox_thread();
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "reconcile_friend_connection_state:EE:" + e.getMessage());
+        }
+    }
+
+    static String dm_send_failure_reason(final long msg_num, @Nullable final String friend_pubkey)
+    {
+        if (msg_num == -98)
+        {
+            return context_s.getString(R.string.dm_send_failed_not_ready);
+        }
+        if (!is_tox_started)
+        {
+            return context_s.getString(R.string.dm_send_failed_not_ready);
+        }
+        if (!is_self_tox_connected_to_dht())
+        {
+            return context_s.getString(R.string.dm_send_failed_no_network);
+        }
+        if (is_dm_friend_request_pending(friend_pubkey))
+        {
+            return context_s.getString(R.string.dm_send_failed_pending_request);
+        }
+        if (msg_num == -2)
+        {
+            return context_s.getString(R.string.dm_send_failed_friend);
+        }
+        if (msg_num == -3)
+        {
+            return context_s.getString(R.string.dm_send_failed_friend_offline);
+        }
+        if (msg_num == -99)
+        {
+            return context_s.getString(R.string.dm_send_failed_friend);
+        }
+        return context_s.getString(R.string.dm_send_failed);
     }
 
     static boolean is_friend_presence_online(final FriendList f)

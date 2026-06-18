@@ -3,13 +3,16 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import androidx.documentfile.provider.DocumentFile;
 
@@ -56,6 +59,8 @@ public final class MediaSendPreviewHelper
             return false;
         }
 
+        persistUriPermissions(activity, uris);
+
         if (!allPreviewableMedia(activity, uris))
         {
             return false;
@@ -67,6 +72,7 @@ public final class MediaSendPreviewHelper
         preview.putExtra(EXTRA_FRIENDNUM, friendnum);
         preview.putExtra(EXTRA_GROUP_ID, groupId);
         preview.putExtra(EXTRA_ACTIVITY_PEER, activityPeer);
+        grantUriReadPermissions(preview, activity, uris);
         activity.startActivityForResult(preview, REQUEST_PREVIEW);
         return true;
     }
@@ -86,6 +92,8 @@ public final class MediaSendPreviewHelper
             return;
         }
 
+        persistUriPermissions(activity, uris);
+
         final String caption = data.getStringExtra(EXTRA_CAPTION);
         sendConfirmedMedia(activity, uris, caption, target, friendnum, groupId, activityPeer);
     }
@@ -94,26 +102,7 @@ public final class MediaSendPreviewHelper
                                    final String target, final long friendnum, final String groupId,
                                    final boolean activityPeer)
     {
-        for (Uri uri : uris)
-        {
-            if (uri == null)
-            {
-                continue;
-            }
-
-            final Intent single = new Intent();
-            single.setData(uri);
-            single.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-            if (TARGET_GROUP.equals(target))
-            {
-                GroupMessageListActivity.add_attachment_ngc(context, single, single, groupId, activityPeer);
-            }
-            else
-            {
-                MessageListActivity.add_attachment(context, single, single, friendnum, activityPeer);
-            }
-        }
+        dispatchAttachments(context, uris, target, friendnum, groupId, activityPeer);
 
         if (caption == null || caption.trim().isEmpty())
         {
@@ -135,6 +124,79 @@ public final class MediaSendPreviewHelper
         {
             Log.i(TAG, "sendConfirmedMedia:caption:EE:" + e.getMessage());
         }
+    }
+
+    /** Send picked URIs through the legacy attachment path (async friendnum wait, proven stable). */
+    public static void dispatchAttachments(final Context context, final List<Uri> uris,
+                                           final String target, final long friendnum,
+                                           final String groupId, final boolean activityPeer)
+    {
+        if (context == null || uris == null || uris.isEmpty())
+        {
+            return;
+        }
+
+        for (Uri uri : uris)
+        {
+            if (uri == null)
+            {
+                continue;
+            }
+
+            final Intent single = new Intent();
+            single.setData(uri);
+            single.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            if (TARGET_GROUP.equals(target))
+            {
+                OutgoingAttachmentQueue.enqueueGroupUri(context, uri, groupId, activityPeer);
+            }
+            else
+            {
+                MessageListActivity.add_attachment(context, single, single, friendnum, activityPeer);
+            }
+        }
+    }
+
+    public static void persistUriPermissions(final Context context, final List<Uri> uris)
+    {
+        if (!(context instanceof Activity) || uris == null)
+        {
+            return;
+        }
+
+        final Activity activity = (Activity) context;
+        for (Uri uri : uris)
+        {
+            if (uri == null)
+            {
+                continue;
+            }
+            try
+            {
+                activity.getContentResolver().takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    static void grantUriReadPermissions(final Intent intent, final Context context, final List<Uri> uris)
+    {
+        if (intent == null || context == null || uris == null || uris.isEmpty())
+        {
+            return;
+        }
+
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        final ClipData clip = ClipData.newUri(context.getContentResolver(), "media", uris.get(0));
+        for (int i = 1; i < uris.size(); i++)
+        {
+            clip.addItem(new ClipData.Item(uris.get(i)));
+        }
+        intent.setClipData(clip);
     }
 
     private static void sendFriendCaption(final Context context, final long friendnum,
@@ -205,7 +267,21 @@ public final class MediaSendPreviewHelper
             uris.add(data.getData());
         }
 
-        return uris;
+        final List<Uri> deduped = new ArrayList<>();
+        final Set<String> seen = new LinkedHashSet<>();
+        for (Uri uri : uris)
+        {
+            if (uri == null)
+            {
+                continue;
+            }
+            if (seen.add(uri.toString()))
+            {
+                deduped.add(uri);
+            }
+        }
+
+        return deduped;
     }
 
     static boolean allPreviewableMedia(final Context context, final List<Uri> uris)

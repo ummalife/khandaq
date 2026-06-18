@@ -20,7 +20,7 @@ protocol MediaSendPreviewControllerDelegate: AnyObject {
                                     caption: String)
 }
 
-final class MediaSendPreviewController: UIViewController {
+final class MediaSendPreviewController: KeyboardNotificationController, UITextViewDelegate {
     weak var delegate: MediaSendPreviewControllerDelegate?
 
     private let items: [MediaSendPreviewItem]
@@ -28,6 +28,8 @@ final class MediaSendPreviewController: UIViewController {
     private var previewRequestToken = UUID()
 
     private static let previewQueue = DispatchQueue(label: "khandaq.media.preview", qos: .userInitiated)
+    private static let captionMinHeight: CGFloat = 44
+    private static let captionMaxHeight: CGFloat = 120
 
     private let closeButton = UIButton(type: .system)
     private let counterLabel = UILabel()
@@ -38,9 +40,13 @@ final class MediaSendPreviewController: UIViewController {
     private let sendButton = UIButton(type: .system)
     private let bottomBar = UIView()
 
+    private var bottomBarBottomConstraint: Constraint?
+    private var bottomBarSafeInsetConstraint: Constraint?
+    private var captionHeightConstraint: Constraint?
+
     init(items: [MediaSendPreviewItem]) {
         self.items = items
-        super.init(nibName: nil, bundle: nil)
+        super.init()
         modalPresentationStyle = .fullScreen
     }
 
@@ -58,9 +64,25 @@ final class MediaSendPreviewController: UIViewController {
         showItem(at: currentIndex)
     }
 
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        updateBottomBarSafeInset()
+    }
+
+    override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
+        let keyboardFrameInView = view.convert(frame, from: view.window)
+        let overlap = max(0, view.bounds.maxY - keyboardFrameInView.minY)
+        bottomBarBottomConstraint?.update(offset: -overlap)
+    }
+
+    override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
+        bottomBarBottomConstraint?.update(offset: 0)
+    }
+
     private func installViews() {
         imageView.contentMode = .scaleAspectFit
         imageView.clipsToBounds = true
+        imageView.isUserInteractionEnabled = true
 
         playIconView.text = "▶"
         playIconView.font = .systemFont(ofSize: 48, weight: .bold)
@@ -85,7 +107,11 @@ final class MediaSendPreviewController: UIViewController {
         captionField.font = .systemFont(ofSize: 16)
         captionField.layer.cornerRadius = 10
         captionField.textContainerInset = UIEdgeInsets(top: 10, left: 8, bottom: 10, right: 8)
-        captionField.isScrollEnabled = false
+        captionField.isScrollEnabled = true
+        captionField.delegate = self
+        captionField.keyboardAppearance = .dark
+        captionField.returnKeyType = .done
+        captionField.inputAccessoryView = makeCaptionKeyboardToolbar()
 
         bottomBar.backgroundColor = UIColor(white: 0.08, alpha: 0.95)
 
@@ -109,11 +135,19 @@ final class MediaSendPreviewController: UIViewController {
 
         let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(showNextItem))
         swipeLeft.direction = .left
-        view.addGestureRecognizer(swipeLeft)
+        imageView.addGestureRecognizer(swipeLeft)
 
         let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(showPreviousItem))
         swipeRight.direction = .right
-        view.addGestureRecognizer(swipeRight)
+        imageView.addGestureRecognizer(swipeRight)
+
+        let tapToDismiss = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tapToDismiss.cancelsTouchesInView = false
+        imageView.addGestureRecognizer(tapToDismiss)
+
+        let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        swipeDown.direction = .down
+        bottomBar.addGestureRecognizer(swipeDown)
     }
 
     private func installConstraints() {
@@ -131,19 +165,20 @@ final class MediaSendPreviewController: UIViewController {
         }
 
         bottomBar.snp.makeConstraints { make in
-            make.leading.trailing.bottom.equalToSuperview()
+            make.leading.trailing.equalToSuperview()
+            bottomBarBottomConstraint = make.bottom.equalToSuperview().constraint
         }
 
         captionField.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(12)
             make.leading.trailing.equalToSuperview().inset(12)
-            make.height.greaterThanOrEqualTo(44)
+            captionHeightConstraint = make.height.equalTo(Self.captionMinHeight).constraint
         }
 
         cancelButton.snp.makeConstraints { make in
             make.top.equalTo(captionField.snp.bottom).offset(10)
             make.leading.equalToSuperview().offset(12)
-            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(-12)
+            bottomBarSafeInsetConstraint = make.bottom.equalToSuperview().offset(-12).constraint
         }
 
         sendButton.snp.makeConstraints { make in
@@ -161,12 +196,56 @@ final class MediaSendPreviewController: UIViewController {
             make.center.equalTo(imageView)
             make.width.height.equalTo(72)
         }
+
+        updateBottomBarSafeInset()
     }
 
     private func wireActions() {
         closeButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
+    }
+
+    private func makeCaptionKeyboardToolbar() -> UIToolbar {
+        let toolbar = UIToolbar()
+        toolbar.barStyle = .black
+        toolbar.isTranslucent = true
+        toolbar.sizeToFit()
+
+        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let done = UIBarButtonItem(title: String(localized: "change_password_done"),
+                                   style: .done,
+                                   target: self,
+                                   action: #selector(dismissKeyboard))
+        done.tintColor = .white
+        toolbar.items = [flex, done]
+        return toolbar
+    }
+
+    private func updateBottomBarSafeInset() {
+        bottomBarSafeInsetConstraint?.update(offset: -(12 + view.safeAreaInsets.bottom))
+    }
+
+    private func updateCaptionHeight() {
+        let width = captionField.bounds.width > 0 ? captionField.bounds.width : view.bounds.width - 24
+        let fittingSize = CGSize(width: width, height: .greatestFiniteMagnitude)
+        let measured = captionField.sizeThatFits(fittingSize).height
+        let clamped = min(max(measured, Self.captionMinHeight), Self.captionMaxHeight)
+        captionHeightConstraint?.update(offset: clamped)
+        captionField.isScrollEnabled = measured > Self.captionMaxHeight
+    }
+
+    func textViewDidChange(_ textView: UITextView) {
+        updateCaptionHeight()
+        view.layoutIfNeeded()
+    }
+
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        if text == "\n" {
+            dismissKeyboard()
+            return false
+        }
+        return true
     }
 
     private func showItem(at index: Int) {
@@ -178,7 +257,7 @@ final class MediaSendPreviewController: UIViewController {
         let requestToken = UUID()
         previewRequestToken = requestToken
 
-        counterLabel.text = String(format: String(localized: "media_send_counter_format"),
+        counterLabel.text = String(localized: "media_send_counter_format",
                                    index + 1,
                                    items.count)
         counterLabel.isHidden = items.count <= 1
@@ -218,11 +297,17 @@ final class MediaSendPreviewController: UIViewController {
         showItem(at: currentIndex - 1)
     }
 
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+
     @objc private func cancelTapped() {
+        dismissKeyboard()
         delegate?.mediaSendPreviewControllerDidCancel(self)
     }
 
     @objc private func sendTapped() {
+        dismissKeyboard()
         let caption = captionField.text.trimmingCharacters(in: .whitespacesAndNewlines)
         delegate?.mediaSendPreviewController(self, didConfirm: items, caption: caption)
     }

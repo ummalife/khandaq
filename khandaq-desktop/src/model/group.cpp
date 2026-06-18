@@ -27,6 +27,9 @@
 #include <cassert>
 
 #include <QDebug>
+#include <QMap>
+#include <QPair>
+#include <QVector>
 
 namespace {
 const int MAX_GROUP_TITLE_LENGTH = 128;
@@ -90,25 +93,47 @@ QString Group::getDisplayedName(const ToxPk& contact) const
 
 void Group::regeneratePeerList()
 {
-    // NOTE: there's a bit of a race here. Core emits a signal for both groupPeerlistChanged and
-    // groupPeerNameChanged back-to-back when a peer joins our group. If we get both before we
-    // process this slot, core->getGroupPeerNames will contain the new peer name, and we'll ignore
-    // the name changed signal, and emit a single userJoined with the correct name. But, if we
-    // receive the name changed signal a little later, we will emit userJoined before we have their
-    // username, using just their ToxPk, then shortly after emit another peerNameChanged signal.
-    // This can cause double-updated to UI and chatlog, but is unavoidable given the API of toxcore.
-    QStringList peers = groupQuery.getGroupPeerNames(toxGroupNum);
+    const QVector<uint32_t> peerIds = groupQuery.getGroupPeerList(toxGroupNum);
     const auto oldPeerNames = peerDisplayNames;
-    peerDisplayNames.clear();
-    const int nPeers = peers.size();
-    for (int i = 0; i < nPeers; ++i) {
-        const auto pk = groupQuery.getGroupPeerPk(toxGroupNum, i);
-        if (pk == idHandler.getSelfPublicKey()) {
-            peerDisplayNames[pk] = idHandler.getUsername();
-        } else {
-            peerDisplayNames[pk] = friendList.decideNickname(pk, peers[i]);
+    QMap<ToxPk, QString> newPeerNames;
+    QMap<QString, QPair<uint32_t, ToxPk>> bestByName;
+
+    for (uint32_t peerId : peerIds) {
+        const auto pk = groupQuery.getGroupPeerPk(toxGroupNum, static_cast<int>(peerId));
+        if (pk.isEmpty()) {
+            // peer vanished between the peerlist fetch and the pk query;
+            // counting it would show a phantom user
+            continue;
         }
+        if (newPeerNames.contains(pk)) {
+            continue;
+        }
+
+        const QString peerNameRaw = groupQuery.getGroupPeerName(toxGroupNum, static_cast<int>(peerId));
+        QString peerName;
+        if (pk == idHandler.getSelfPublicKey()) {
+            peerName = idHandler.getUsername();
+        } else {
+            peerName = friendList.decideNickname(pk, peerNameRaw);
+        }
+
+        const QString nameKey = peerName.trimmed().toLower();
+        if (!nameKey.isEmpty()) {
+            const auto nameIt = bestByName.find(nameKey);
+            if (nameIt != bestByName.end()) {
+                if (peerId <= nameIt.value().first) {
+                    continue;
+                }
+                newPeerNames.remove(nameIt.value().second);
+            }
+            bestByName[nameKey] = qMakePair(peerId, pk);
+        }
+
+        newPeerNames[pk] = peerName;
     }
+
+    peerDisplayNames = newPeerNames;
+
     for (const auto& pk : oldPeerNames.keys()) {
         if (!peerDisplayNames.contains(pk)) {
             emit userLeft(pk, oldPeerNames.value(pk));
@@ -124,15 +149,23 @@ void Group::regeneratePeerList()
             emit peerNameChanged(pk, oldPeerNames.value(pk), peerDisplayNames.value(pk));
         }
     }
-    if (oldPeerNames.size() != nPeers) {
-        emit numPeersChanged(nPeers);
+    // the user count must reflect the deduplicated peer map, not the raw
+    // peerlist vector (rejoins/races could otherwise inflate the number)
+    if (oldPeerNames.size() != peerDisplayNames.size() || oldPeerNames != peerDisplayNames) {
+        emit numPeersChanged(getPeersCount());
     }
 }
 
 void Group::updateUsername(ToxPk pk, const QString newName)
 {
     const QString displayName = friendList.decideNickname(pk, newName);
-    assert(peerDisplayNames.contains(pk));
+    if (!peerDisplayNames.contains(pk)) {
+        // name change for a peer we haven't regenerated yet — add it instead
+        // of asserting; the next peerlist refresh will reconcile
+        peerDisplayNames[pk] = displayName;
+        emit numPeersChanged(getPeersCount());
+        return;
+    }
     if (peerDisplayNames[pk] != displayName) {
         // there could be no actual change even if their username changed due to an alias being set
         const auto oldName = peerDisplayNames[pk];
@@ -149,6 +182,22 @@ bool Group::isAvGroupchat() const
 uint32_t Group::getId() const
 {
     return toxGroupNum;
+}
+
+/**
+ * @brief Rebind this group to a new toxcore group number. Happens when a stuck
+ * instance is replaced through a friend-assisted rejoin (leave + invite accept
+ * may land on a different slot).
+ */
+void Group::setToxGroupNum(int newGroupNum)
+{
+    if (toxGroupNum == newGroupNum) {
+        return;
+    }
+    qDebug() << "Group" << groupId.toString().left(8) << "rebound from tox number" << toxGroupNum
+             << "to" << newGroupNum;
+    toxGroupNum = newGroupNum;
+    regeneratePeerList();
 }
 
 const GroupId& Group::getPersistentId() const

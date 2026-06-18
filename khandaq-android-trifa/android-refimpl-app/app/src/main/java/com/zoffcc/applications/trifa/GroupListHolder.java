@@ -54,9 +54,11 @@ import static com.zoffcc.applications.trifa.HelperGroup.delete_group_all_message
 import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
 import static com.zoffcc.applications.trifa.HelperGroup.is_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.set_group_group_we_left;
+import static com.zoffcc.applications.trifa.HelperGroup.set_group_inactive;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__dark_mode_pref;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
+import static com.zoffcc.applications.trifa.MainActivity.group_message_list_activity;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_disconnect;
 import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
@@ -102,7 +104,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     {
         super(itemView);
 
-        // Log.i(TAG, "FriendListHolder");
+        // HelperGeneric.logI(TAG, "FriendListHolder");
 
         this.context = c;
 
@@ -127,7 +129,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             return;
         }
 
-        // Log.i(TAG, "bindFriendList:" + fl.tox_conference_number);
+        // HelperGeneric.logI(TAG, "bindFriendList:" + fl.tox_conference_number);
 
         this.group = fl;
 
@@ -251,7 +253,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     @Override
     public void onClick(View v)
     {
-        Log.i(TAG, "onClick");
+        HelperGeneric.logI(TAG, "onClick");
         try
         {
             if (v.equals(f_notification))
@@ -286,24 +288,19 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             }
             else
             {
-                try
-                {
-                    fl_loading_progressbar.setVisibility(View.VISIBLE);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                // KHANDAQ: don't flash the "Please wait ..." card on the list when opening a group.
 
                 if (this.group.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
                 {
                     Intent intent = new Intent(v.getContext(), GroupMessageListActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
                     intent.putExtra("group_id", this.group.group_identifier);
                     v.getContext().startActivity(intent);
                 }
                 else
                 {
                     Intent intent = new Intent(v.getContext(), GroupMessageListActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
                     intent.putExtra("group_id", this.group.group_identifier);
                     v.getContext().startActivity(intent);
                 }
@@ -312,14 +309,14 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "onClick:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "onClick:EE:" + e.getMessage());
         }
     }
 
     @Override
     public boolean onLongClick(final View v)
     {
-        Log.i(TAG, "onLongClick");
+        HelperGeneric.logI(TAG, "onLongClick");
 
         final GroupDB f2 = this.group;
 
@@ -344,6 +341,10 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                         show_confirm_group_leave_dialog(v, f2);
                         // leave group -----------------
                         break;
+                    case R.id.item_toggle_favorite:
+                        ChatFavoritesHelper.toggleFavoriteGroup(v.getContext(), f2);
+                        FriendListHolder.notifyFavoriteChanged(v);
+                        break;
                     case R.id.item_dummy01:
                         break;
                     case R.id.item_delete:
@@ -356,6 +357,14 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             }
         });
         menu.inflate(R.menu.menu_grouplist_item);
+
+        final MenuItem favoriteItem = menu.getMenu().findItem(R.id.item_toggle_favorite);
+        if (favoriteItem != null)
+        {
+            final boolean isFavorite = ChatFavoritesHelper.isFavorite(v.getContext(),
+                    ChatFavoritesHelper.groupKey(f2.group_identifier));
+            favoriteItem.setTitle(isFavorite ? R.string.chat_filter_remove_favorite : R.string.chat_filter_add_favorite);
+        }
 
         menu.show();
 
@@ -378,9 +387,25 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                 if (f2.group_identifier != null)
                 {
                     final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
-                    tox_group_disconnect(group_num);
-                    update_savedata_file_wrapper(); // after leaving a conference
+                    if (group_num >= 0)
+                    {
+                        tox_group_leave(group_num, "left");
+                    }
+                    update_savedata_file_wrapper();
                     set_group_group_we_left(f2.group_identifier);
+                    set_group_inactive(f2.group_identifier);
+                    try
+                    {
+                        if (group_message_list_activity != null
+                            && group_message_list_activity.get_current_group_id().equalsIgnoreCase(
+                                    f2.group_identifier))
+                        {
+                            group_message_list_activity.finish();
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
                 }
 
                 Runnable myRunnable2 = new Runnable()
@@ -406,7 +431,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
                         }
                     }
                 };
@@ -426,11 +451,11 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
     public void show_confirm_group_del_dialog(final View view, final GroupDB f2)
     {
         AlertDialog.Builder builder = new AlertDialog.Builder(view.getContext());
-        builder.setTitle("Delete Group?");
-        builder.setMessage("Do you want to delete this Group including all Messages?");
+        builder.setTitle(R.string.delete_group_title);
+        builder.setMessage(R.string.delete_group_message);
 
-        builder.setNegativeButton("Cancel", null);
-        builder.setPositiveButton("Yes", new DialogInterface.OnClickListener()
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
         {
             @Override
             public void onClick(DialogInterface dialog, int which)
@@ -442,11 +467,11 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     update_savedata_file_wrapper(); // after deleteing a conference
                 }
 
-                Log.i(TAG, "onMenuItemClick:info:33");
+                HelperGeneric.logI(TAG, "onMenuItemClick:info:33");
                 delete_group_all_files(f2.group_identifier);
                 delete_group_all_messages(f2.group_identifier);
                 delete_group(f2.group_identifier);
-                Log.i(TAG, "onMenuItemClick:info:34");
+                HelperGeneric.logI(TAG, "onMenuItemClick:info:34");
 
                 Runnable myRunnable2 = new Runnable()
                 {
@@ -459,9 +484,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                             {
                                 if (MainActivity.friend_list_fragment != null)
                                 {
-                                    // reload friendlist
-                                    // TODO: only remove 1 item, don't clear all!! this can crash
-                                    MainActivity.friend_list_fragment.add_all_friends_clear(0);
+                                    MainActivity.friend_list_fragment.remove_group_from_list(f2.group_identifier);
                                 }
                             }
                             catch (Exception e)
@@ -472,7 +495,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "onMenuItemClick:8:EE:" + e.getMessage());
                         }
                     }
                 };

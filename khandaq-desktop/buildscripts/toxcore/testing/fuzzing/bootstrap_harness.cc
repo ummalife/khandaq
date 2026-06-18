@@ -1,14 +1,11 @@
 #include <cassert>
-#include <cstring>
-#include <memory>
+#include <cstdio>
 
 #include "../../toxcore/tox.h"
 #include "../../toxcore/tox_dispatch.h"
 #include "../../toxcore/tox_events.h"
-#include "../../toxcore/tox_private.h"
-#include "../../toxcore/tox_struct.h"
-#include "../../toxcore/util.h"
 #include "fuzz_support.h"
+#include "fuzz_tox.h"
 
 namespace {
 
@@ -111,28 +108,36 @@ void setup_callbacks(Tox_Dispatch *dispatch)
 void TestBootstrap(Fuzz_Data &input)
 {
     Fuzz_System sys(input);
-    assert(sys.rng != nullptr);
 
-    Tox_Options *opts = tox_options_new(nullptr);
+    Ptr<Tox_Options> opts(tox_options_new(nullptr), tox_options_free);
     assert(opts != nullptr);
-    tox_options_set_operating_system(opts, sys.sys.get());
+    tox_options_set_operating_system(opts.get(), sys.sys.get());
+
+    tox_options_set_log_callback(opts.get(),
+        [](Tox *tox, Tox_Log_Level level, const char *file, uint32_t line, const char *func,
+            const char *message, void *user_data) {
+            // Log to stdout.
+            if (DEBUG) {
+                std::printf("[tox1] %c %s:%d(%s): %s\n", tox_log_level_name(level), file, line,
+                    func, message);
+            }
+        });
 
     CONSUME1_OR_RETURN(const uint8_t proxy_type, input);
     if (proxy_type == 0) {
-        tox_options_set_proxy_type(opts, TOX_PROXY_TYPE_NONE);
+        tox_options_set_proxy_type(opts.get(), TOX_PROXY_TYPE_NONE);
     } else if (proxy_type == 1) {
-        tox_options_set_proxy_type(opts, TOX_PROXY_TYPE_SOCKS5);
-        tox_options_set_proxy_host(opts, "127.0.0.1");
-        tox_options_set_proxy_port(opts, 8080);
+        tox_options_set_proxy_type(opts.get(), TOX_PROXY_TYPE_SOCKS5);
+        tox_options_set_proxy_host(opts.get(), "127.0.0.1");
+        tox_options_set_proxy_port(opts.get(), 8080);
     } else if (proxy_type == 2) {
-        tox_options_set_proxy_type(opts, TOX_PROXY_TYPE_HTTP);
-        tox_options_set_proxy_host(opts, "127.0.0.1");
-        tox_options_set_proxy_port(opts, 8080);
+        tox_options_set_proxy_type(opts.get(), TOX_PROXY_TYPE_HTTP);
+        tox_options_set_proxy_host(opts.get(), "127.0.0.1");
+        tox_options_set_proxy_port(opts.get(), 8080);
     }
 
     Tox_Err_New error_new;
-    Tox *tox = tox_new(opts, &error_new);
-    tox_options_free(opts);
+    Tox *tox = tox_new(opts.get(), &error_new);
 
     if (tox == nullptr) {
         // It might fail, because some I/O happens in tox_new, and the fuzzer
@@ -144,10 +149,10 @@ void TestBootstrap(Fuzz_Data &input)
 
     uint8_t pub_key[TOX_PUBLIC_KEY_SIZE] = {0};
 
-    const bool udp_success = tox_bootstrap(tox, "127.0.0.1", 12345, pub_key, nullptr);
+    const bool udp_success = tox_bootstrap(tox, "127.0.0.2", 33446, pub_key, nullptr);
     assert(udp_success);
 
-    const bool tcp_success = tox_add_tcp_relay(tox, "127.0.0.1", 12345, pub_key, nullptr);
+    const bool tcp_success = tox_add_tcp_relay(tox, "127.0.0.2", 33446, pub_key, nullptr);
     assert(tcp_success);
 
     tox_events_init(tox);

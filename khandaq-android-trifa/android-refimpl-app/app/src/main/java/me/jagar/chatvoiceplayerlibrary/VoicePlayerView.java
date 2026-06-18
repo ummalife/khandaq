@@ -29,6 +29,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import org.khandaq.messenger.R;
+import com.zoffcc.applications.trifa.ChatVoiceSessionHelper;
 
 import java.io.File;
 import java.io.IOException;
@@ -232,6 +233,7 @@ public class VoicePlayerView extends LinearLayout {
             });
 
             try{
+                ChatVoiceSessionHelper.onVoicePlaybackStarting();
                 if (mediaPlayer != null){
                     mediaPlayer.start();
                 }
@@ -289,6 +291,7 @@ public class VoicePlayerView extends LinearLayout {
                     imgPlay.setVisibility(View.GONE);
                     imgPause.setVisibility(View.VISIBLE);
                     try{
+                        ChatVoiceSessionHelper.onVoicePlaybackStarting();
                         mediaPlayer.start();
                     }catch (Exception e){
                         e.printStackTrace();

@@ -13,7 +13,7 @@ protocol RunningCoordinatorDelegate: class {
 class RunningCoordinator {
     weak var delegate: RunningCoordinatorDelegate?
 
-    fileprivate let theme: Theme
+    fileprivate var theme: Theme
     fileprivate let window: UIWindow
 
     fileprivate var toxManager: OCTManager!
@@ -56,6 +56,10 @@ extension RunningCoordinator: TopCoordinatorProtocol {
     func handleInboxURL(_ url: URL) {
         activeSessionCoordinator?.handleInboxURL(url)
     }
+
+    func processPendingShareIfNeeded() {
+        activeSessionCoordinator?.processPendingShareIfNeeded()
+    }
 }
 
 extension RunningCoordinator: ActiveSessionCoordinatorDelegate {
@@ -93,6 +97,30 @@ extension RunningCoordinator {
         activeSessionCoordinator = nil
         session?.shutdownForToxRestart()
         toxManager = nil
+    }
+
+    /// Rebuilds the logged-in UI shell with a new theme while keeping the same Tox session.
+    func reloadTheme(_ newTheme: Theme) {
+        guard let manager = toxManager else {
+            return
+        }
+
+        theme = newTheme
+        let preservedOptions = options ?? [:]
+        var reloadOptions = preservedOptions
+        reloadOptions["ThemeReloadOnly"] = true
+
+        let oldSession = activeSessionCoordinator
+
+        let newSession = ActiveSessionCoordinator(theme: newTheme, window: window, toxManager: manager)
+        newSession.delegate = self
+        activeSessionCoordinator = newSession
+        newSession.startWithOptions(reloadOptions)
+
+        oldSession?.shutdownForThemeReload()
+
+        window.rootViewController?.view.setNeedsLayout()
+        window.rootViewController?.view.layoutIfNeeded()
     }
 }
 

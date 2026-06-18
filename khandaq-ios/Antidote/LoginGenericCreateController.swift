@@ -36,17 +36,16 @@ class LoginGenericCreateController: LoginBaseController {
         if containerView.frame.isEmpty {
             return
         }
+        let keyboardFrameInView = view.convert(frame, from: nil)
         let underFormHeight = containerView.frame.size.height - secondTextField.frame.maxY
 
-        let offset = min(0.0, underFormHeight - frame.height)
+        let offset = min(0.0, underFormHeight - keyboardFrameInView.height)
 
         containerViewTopConstraint.update(offset: offset)
-        view.layoutIfNeeded()
     }
 
     override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
         containerViewTopConstraint.update(offset: 0.0)
-        view.layoutIfNeeded()
     }
 
     func configureViews() {

@@ -44,6 +44,23 @@
  */
 @property BOOL sentPush;
 
+/**
+ * Display name of NGC peer (incoming group messages only).
+ */
+@property (nullable) NSString *groupPeerName;
+
+/**
+ * Count of hist-sync delivery confirmations for outgoing group messages.
+ */
+@property int32_t groupSyncConfirmations;
+
+/**
+ * Pubkeys of peers who confirmed delivery via hist-sync (dedup, up to 3 stored).
+ */
+@property (nullable) NSString *groupSyncPeerKey1;
+@property (nullable) NSString *groupSyncPeerKey2;
+@property (nullable) NSString *groupSyncPeerKey3;
+
 @end
 
 RLM_ARRAY_TYPE(OCTMessageText)

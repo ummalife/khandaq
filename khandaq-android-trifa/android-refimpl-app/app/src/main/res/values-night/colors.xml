@@ -11,6 +11,9 @@
     <color name="khandaq_surface">#151B19</color>
     <color name="khandaq_text">#F4FAF6</color>
     <color name="khandaq_text_muted">#8A9A92</color>
+    <color name="khandaq_stroke_light">#33443F</color>
+    <color name="tab_active">#0A84FF</color>
+    <color name="tab_inactive">#98989D</color>
     <color name="colorPrimary">@color/khandaq_primary</color>
     <color name="colorPrimaryDark">@color/khandaq_primary_deep</color>
     <color name="colorAccent">@color/khandaq_emerald</color>
@@ -23,10 +26,10 @@
     <color name="textblock_link_color_for_orange">@android:color/holo_blue_dark</color>
     <color name="textblock_link_color_for_red">@android:color/holo_blue_bright</color>
 
-    <color name="date_bg_color">#EE0F3D2E</color>
+    <color name="date_bg_color">@color/tg_date_separator_bg</color>
     <color name="fast_scroller_color">@color/khandaq_primary</color>
     <color name="message_text_date_string_color">@color/tg_date_separator_text</color>
-    <color name="scroll_date_header_color">#FFFFFF</color>
+    <color name="scroll_date_header_color">@color/tg_date_separator_text</color>
     <color name="message_list_scroll_to_bottom_fab_bg_normal">#9E9E9E</color>
     <color name="message_list_scroll_to_bottom_fab_bg_new_message">#FF4081</color>
 

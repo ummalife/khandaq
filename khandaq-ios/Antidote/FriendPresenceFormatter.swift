@@ -37,15 +37,15 @@ enum FriendPresenceFormatter {
         }
         if elapsed < 3600 {
             let minutes = max(1, Int(elapsed / 60))
-            return String(format: String(localized: "status_last_seen_minutes_ago"), minutes)
+            return String(localized: "status_last_seen_minutes_ago", minutes)
         }
         if elapsed < 86400 {
             let hours = max(1, Int(elapsed / 3600))
-            return String(format: String(localized: "status_last_seen_hours_ago"), hours)
+            return String(localized: "status_last_seen_hours_ago", hours)
         }
         if elapsed < 86400 * 7 {
             let formatter = DateFormatter(type: .relativeDateAndTime)
-            return String(format: String(localized: "contact_last_seen"), formatter.string(from: date))
+            return String(localized: "contact_last_seen", formatter.string(from: date))
         }
 
         return String(localized: "status_last_seen_long_ago")

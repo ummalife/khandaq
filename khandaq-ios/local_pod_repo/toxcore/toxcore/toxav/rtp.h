@@ -13,6 +13,11 @@
 #include "../toxcore/logger.h"
 #include "../toxcore/tox.h"
 
+#ifndef TOXAV_DEFINED
+#define TOXAV_DEFINED
+typedef struct ToxAV ToxAV;
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -159,6 +164,7 @@ typedef struct RTPSession {
     struct RTPMessage *mp; /* Expected parted message */
     struct RTPWorkBufferList *work_buffer_list;
     uint8_t  first_packets_counter; /* dismiss first few lost video packets */
+    bool rtp_receive_active;
     Messenger *m;
     Tox *tox;
     uint32_t friend_number;
@@ -186,11 +192,13 @@ size_t rtp_header_pack(uint8_t *rdata, const struct RTPHeader *header);
  */
 size_t rtp_header_unpack(const uint8_t *data, struct RTPHeader *header);
 
-RTPSession *rtp_new(int payload_type, Messenger *m, Tox *tox, uint32_t friendnumber,
+RTPSession *rtp_new(int payload_type, Tox *tox, ToxAV *toxav, uint32_t friendnumber,
                     BWController *bwc, void *cs, rtp_m_cb *mcb);
-void rtp_kill(RTPSession *session);
-int rtp_allow_receiving(RTPSession *session);
-int rtp_stop_receiving(RTPSession *session);
+void rtp_kill(Tox *tox, RTPSession *session);
+void rtp_allow_receiving_mark(Tox *tox, RTPSession *session);
+void rtp_stop_receiving_mark(Tox *tox, RTPSession *session);
+void rtp_allow_receiving(Tox *tox);
+void rtp_stop_receiving(Tox *tox);
 /**
  * Send a frame of audio or video data, chunked in @ref RTPMessage instances.
  *

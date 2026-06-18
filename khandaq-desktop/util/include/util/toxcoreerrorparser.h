@@ -59,4 +59,15 @@ namespace ToxcoreErrorParser {
     bool parseErr(Toxav_Err_Call_Control error, int line);
     bool parseErr(Toxav_Err_Call error, int line);
     bool parseErr(Tox_Err_Options_New error, int line);
+    bool parseErr(Tox_Err_Group_Send_Message error, int line);
+    bool parseErr(Tox_Err_Group_Topic_Set error, int line);
+    bool parseErr(Tox_Err_Group_Leave error, int line);
+    bool parseErr(Tox_Err_Group_Peer_Query error, int line);
+    bool parseErr(Tox_Err_Group_Join error, int line);
+    bool parseErr(Tox_Err_Group_Invite_Friend error, int line);
+    bool parseErr(Tox_Err_Group_New error, int line);
+    bool parseErr(Tox_Err_Group_Invite_Accept error, int line);
+    bool parseErr(Tox_Err_Group_State_Queries error, int line);
+    bool parseErr(Tox_Err_Group_Is_Connected error, int line);
+    bool parseErr(Tox_Err_Group_Reconnect error, int line);
 } // namespace ToxcoreErrorParser

@@ -19,6 +19,8 @@ public final class MessageChunker
     static final int PKT_CHUNK = 182;
     static final int PKT_CHUNK_ACK = 183;
     private static final int HEADER_BYTES = 1 + 8 + 2 + 2;
+    private static final int CHUNK_SEND_MAX_RETRIES = 3;
+    private static final long CHUNK_RETRY_DELAY_MS = 200L;
 
     private static final Map<String, IncomingAssembly> assemblies = new ConcurrentHashMap<>();
 
@@ -58,7 +60,7 @@ public final class MessageChunker
                 putU16(packet, 11, total);
                 System.arraycopy(payload, offset, packet, HEADER_BYTES, len);
 
-                final int res = tox_friend_send_lossless_packet(friendNumber, packet, packet.length);
+                final int res = sendChunkWithRetry(friendNumber, packet);
                 if (res != 0)
                 {
                     NetworkDiagnosticsLog.log("chunk_send_fail", "seq=" + seq + " res=" + res);
@@ -73,6 +75,36 @@ public final class MessageChunker
             NetworkDiagnosticsLog.log("chunk_send_error", e.getMessage());
             return false;
         }
+    }
+
+    private static int sendChunkWithRetry(final long friendNumber, final byte[] packet)
+    {
+        for (int attempt = 0; attempt < CHUNK_SEND_MAX_RETRIES; attempt++)
+        {
+            final int res = tox_friend_send_lossless_packet(friendNumber, packet, packet.length);
+            if (res == 0)
+            {
+                return 0;
+            }
+            if (attempt + 1 < CHUNK_SEND_MAX_RETRIES)
+            {
+                try
+                {
+                    Thread.sleep(CHUNK_RETRY_DELAY_MS * (attempt + 1));
+                }
+                catch (InterruptedException ignored)
+                {
+                    Thread.currentThread().interrupt();
+                    return res;
+                }
+                TrifaToxService.wakeup_tox_thread();
+            }
+            else
+            {
+                return res;
+            }
+        }
+        return -1;
     }
 
     static void handleIncoming(final long friendNumber, final byte[] data, final int length)

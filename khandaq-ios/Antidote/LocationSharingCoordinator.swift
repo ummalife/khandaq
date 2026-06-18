@@ -57,6 +57,10 @@ final class LocationSharingCoordinator: NSObject, CLLocationManagerDelegate {
             return
         }
 
+        guard LocationManager.shared.hasUsableAuthorization() else {
+            return
+        }
+
         sendPending = true
         locationManager.requestLocation()
     }

@@ -26,6 +26,11 @@ docker run --rm --platform "$PLATFORM" \
   bash -ec '
     set -euo pipefail
     export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    # FFmpeg/toxav .pc files list optional GPU/OpenCL libs as Libs.private — not needed to link khandaq.
+    for pc in /usr/local/lib/pkgconfig/*.pc /usr/lib/x86_64-linux-gnu/pkgconfig/libav*.pc; do
+      [[ -f "$pc" ]] || continue
+      sed -i "/^Libs.private:/d" "$pc" || true
+    done
     rm -rf /build/src
     mkdir -p /build/src
     tar -C /khandaq --exclude=build --exclude=local-deps --exclude=.git -cf - . | tar -C /build/src -xf -

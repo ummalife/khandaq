@@ -408,3 +408,31 @@
 "accessibility_incoming_message_label" = "메세지";
 /* Outgoing message label */
 "accessibility_outgoing_message_label" = "본인 메세지";
+"group_live_audio_toggle" = "실시간 오디오";
+"group_live_video_toggle" = "실시간 비디오";
+"group_live_video_quality_toggle" = "비디오 품질";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "마이크 버튼을 길게 눌러 음성 메시지를 녹음하세요";
+"group_live_video_toggle_active" = "실시간 비디오 활성";
+"group_live_video_toggle_incoming" = "수신 중인 실시간 비디오";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Join group video?";
+"group_video_join_message" = "Send your video and audio to everyone in this group?";
+"group_video_join_confirm" = "Yes, start video";
+"group_video_join_decline" = "No";
+"group_send_voice_confirm_title" = "Send voice message?";
+"group_send_voice_confirm_message" = "Send this voice message to the group?";
+"group_incoming_message_error" = "Could not process incoming group message.";
+"group_image_shrink_failed" = "Could not prepare image for sending.";
+"group_incoming_file_error" = "Could not process incoming group file.";
+"chat_file_too_large" = "File is too large.";
+"chat_incoming_file_too_large" = "Incoming file is too large.";
+"chat_opening_file_failed" = "Could not open file.";
+"group_file_prepare_failed" = "Could not prepare file for sending.";
+"group_peer_unknown" = "Unknown";
+"group_live_video_stream_unknown_peer" = "알 수 없음";
+
+"microphone_access_denied_message" = "마이크 접근이 비활성화되어 있습니다. 설정에서 마이크를 허용하면 이 기능을 사용할 수 있습니다.";

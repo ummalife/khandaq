@@ -334,8 +334,7 @@
     <string name="pref_description_allow_file_sharing_to_trifa_via_intent">مشاركة الملفات على TRIfA عبر Share Intent.</string>
     <string name="add_private_group_success">لقد قمت بإنشاء مجموعة خاصة</string>
     <string name="pref_title_use_camera_x">إزالة الخلفية</string>
-    <string name="pref_description_enable_ngc_features">!! تجريبي !!
-\nهذا لا يعمل بشكل كامل !!</string>
+    <string name="pref_description_enable_ngc_features">دردشات جماعية جديدة (NGC) مع رسائل وصوت وفيديو محسّنة.</string>
     <string name="pref_title_allow_enable_ngc_features">NGC - دردشات المجموعة الجديدة</string>
     <string name="pref_description_toxirc_muted_peers_03">مستخدم كتم الصوت 3 (اتركه فارغا إذا لم يتم استخدامه)</string>
     <string name="add_public_group_success">لقد قمت بإنشاء مجموعة عامة</string>
@@ -344,6 +343,14 @@
     <string name="join_public_group_activity_warning">تحذير:
 \nالانضمام إلى مجموعة عامة عبر معرف المجموعة لا يعمل بشكل موثوق حتى الآن !!</string>
     <string name="join_public_group_failed">فشل الانضمام إلى المجموعة العامة</string>
+    <string name="join_public_group_failed_not_ready">لا يزال التطبيق يتصل. انتظر بضع ثوانٍ ثم حاول مرة أخرى.</string>
+    <string name="join_public_group_failed_bad_id">معرف مجموعة غير صالح. انسخ جميع الرموز الست عشرية الـ64.</string>
+    <string name="join_public_group_failed_network">تعذر الوصول إلى المجموعة عبر الشبكة. تحقق من الإنترنت وحاول مرة أخرى.</string>
+    <string name="join_public_group_failed_password">تتطلب هذه المجموعة كلمة مرور.</string>
+    <string name="join_public_group_error_no_id">أدخل معرف المجموعة</string>
+    <string name="join_public_group_error_illegal_chars">معرف المجموعة يحتوي على أحرف غير صالحة. المسموح فقط A–F و0–9.</string>
+    <string name="join_public_group_error_length">يجب أن يتكون معرف المجموعة من 64 حرفًا ست عشريًا.</string>
+
     <string name="join_group_activity_join">إنضم للمجموعة</string>
     <string name="join_public_group_joined">لقد انضممت إلى المجموعة العامة</string>
     <string name="invite_join_group_success">لقد تمت دعوتك إلى مجموعة</string>
@@ -406,6 +413,12 @@
     <string name="pref_description_toxirc_muted_peers_02">مستخدم كتم الصوت 2 (اتركه فارغا إذا لم يتم استخدامه)</string>
     <string name="pref_title_allow_file_sharing_to_trifa_via_intent">مشاركة الملفات</string>
     <string name="add_private_group_failed">فشل إنشاء مجموعة خاصة</string>
+    <string name="group_password_placeholder">كلمة مرور المجموعة (للمجموعات الخاصة فقط)</string>
+    <string name="group_password_set">تعيين كلمة مرور المجموعة</string>
+    <string name="group_topic_lock">قفل الموضوع (المؤسس فقط)</string>
+    <string name="group_privacy_set">تعيين الخصوصية</string>
+    <string name="group_create_private_password">كلمة مرور المجموعة (اختياري)</string>
+
     <string name="layout___conf_title">العنوان:</string>
     <string name="layout___friends_pushurl">أصدقاء دفع URL:</string>
     <string name="title_activity_conferenceinfo">معلومات الاجتماع</string>
@@ -419,4 +432,51 @@
     <string name="MainActivity_join_trifa_groupchat">Khandaq Community</string>
     <string name="layout___join_khandaq_community">Khandaq Community</string>
     <string name="pref_title_notification_show_content">وحدة الإخطار</string>
+    <string name="group_video_join_title">الانضمام إلى فيديو المجموعة؟</string>
+    <string name="group_video_join_message">إرسال الفيديو والصوت إلى الجميع في هذه المجموعة؟</string>
+    <string name="group_video_join_confirm">نعم، بدء الفيديو</string>
+    <string name="group_video_join_decline">لا</string>
+    <string name="group_send_voice_confirm_title">إرسال رسالة صوتية؟</string>
+    <string name="group_send_voice_confirm_message">إرسال هذه الرسالة الصوتية إلى المجموعة؟</string>
+    <string name="group_peer_unknown">غير معروف</string>
+    <string name="group_incoming_message_error">تعذّر معالجة رسالة المجموعة الواردة.</string>
+    <string name="group_file_send_failed">فشل إرسال الملف إلى المجموعة.</string>
+    <string name="group_image_shrink_failed">تعذّر تحضير الصورة للإرسال.</string>
+    <string name="group_incoming_file_error">تعذّر معالجة ملف المجموعة الوارد.</string>
+    <string name="chat_file_too_large">الملف كبير جداً.</string>
+    <string name="chat_incoming_file_too_large">الملف الوارد كبير جداً.</string>
+    <string name="chat_opening_file_failed">تعذّر فتح الملف.</string>
+    <string name="group_file_too_large">الملف كبير جداً لهذه المجموعة.</string>
+    <string name="group_file_prepare_failed">تعذّر تحضير الملف للإرسال.</string>
+    <string name="add_group_failed_empty_name">أدخل اسم المجموعة.</string>
+    <string name="maintenance_exporting">جارٍ التصدير…</string>
+    <string name="maintenance_export_ready">اكتمل التصدير</string>
+    <string name="maintenance_export_failed">فشل التصدير</string>
+    <string name="set_password_setup_failed">تعذّر تعيين كلمة المرور. حاول مرة أخرى.</string>
+    <string name="power_charging_connected">تم توصيل الشاحن</string>
+    <string name="power_charging_disconnected">تم فصل الشاحن</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

@@ -27,6 +27,7 @@ import java.util.List;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -36,6 +37,7 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     private EditText captionField;
     private TextView counterView;
     private ViewPager2 pager;
+    private ThumbnailAdapter thumbAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -51,9 +53,12 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             return;
         }
 
+        MediaSendPreviewHelper.persistUriPermissions(this, uris);
+
         captionField = findViewById(R.id.media_preview_caption);
         counterView = findViewById(R.id.media_preview_counter);
         pager = findViewById(R.id.media_preview_pager);
+        final RecyclerView thumbs = findViewById(R.id.media_preview_thumbs);
 
         pager.setAdapter(new PreviewAdapter(this, uris));
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback()
@@ -62,6 +67,10 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             public void onPageSelected(int position)
             {
                 updateCounter(position);
+                if (thumbAdapter != null)
+                {
+                    thumbAdapter.setSelected(position);
+                }
             }
         });
 
@@ -69,6 +78,11 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         {
             counterView.setVisibility(View.VISIBLE);
             updateCounter(0);
+
+            thumbs.setVisibility(View.VISIBLE);
+            thumbs.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+            thumbAdapter = new ThumbnailAdapter(this, uris, position -> pager.setCurrentItem(position, true));
+            thumbs.setAdapter(thumbAdapter);
         }
 
         final ImageButton closeButton = findViewById(R.id.media_preview_close);
@@ -108,6 +122,89 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     private void updateCounter(final int position)
     {
         counterView.setText(getString(R.string.media_send_counter_format, position + 1, uris.size()));
+    }
+
+    private interface ThumbClickListener
+    {
+        void onThumbClick(int position);
+    }
+
+    private static final class ThumbnailAdapter extends RecyclerView.Adapter<ThumbnailAdapter.Holder>
+    {
+        private final Context context;
+        private final List<Uri> items;
+        private final ThumbClickListener listener;
+        private int selected;
+
+        ThumbnailAdapter(final Context context, final List<Uri> items, final ThumbClickListener listener)
+        {
+            this.context = context;
+            this.items = items;
+            this.listener = listener;
+        }
+
+        void setSelected(final int position)
+        {
+            final int prev = selected;
+            selected = position;
+            notifyItemChanged(prev);
+            notifyItemChanged(selected);
+        }
+
+        @NonNull
+        @Override
+        public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType)
+        {
+            final View view = LayoutInflater.from(parent.getContext()).inflate(
+                    R.layout.item_media_send_preview_thumb, parent, false);
+            return new Holder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull Holder holder, int position)
+        {
+            final Uri uri = items.get(position);
+            final boolean isVideo = MediaSendPreviewHelper.isVideoUri(context, uri);
+            holder.videoIcon.setVisibility(isVideo ? View.VISIBLE : View.GONE);
+            holder.selectedOverlay.setVisibility(position == selected ? View.VISIBLE : View.GONE);
+
+            GlideApp.with(context).
+                    load(uri).
+                    diskCacheStrategy(DiskCacheStrategy.NONE).
+                    skipMemoryCache(true).
+                    centerCrop().
+                    into(holder.image);
+
+            holder.itemView.setOnClickListener(v ->
+            {
+                final int pos = holder.getBindingAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION && listener != null)
+                {
+                    listener.onThumbClick(pos);
+                }
+            });
+        }
+
+        @Override
+        public int getItemCount()
+        {
+            return items.size();
+        }
+
+        static final class Holder extends RecyclerView.ViewHolder
+        {
+            final ImageView image;
+            final View selectedOverlay;
+            final ImageView videoIcon;
+
+            Holder(final View itemView)
+            {
+                super(itemView);
+                image = itemView.findViewById(R.id.media_preview_thumb_image);
+                selectedOverlay = itemView.findViewById(R.id.media_preview_thumb_selected);
+                videoIcon = itemView.findViewById(R.id.media_preview_thumb_video_icon);
+            }
+        }
     }
 
     private static final class PreviewAdapter extends RecyclerView.Adapter<PreviewAdapter.Holder>

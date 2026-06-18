@@ -21,6 +21,15 @@ protocol ChatInputViewDelegate: class {
     func chatInputViewCameraButtonPressed(_ view: ChatInputView, cameraView: UIView)
     func chatInputViewSendButtonPressed(_ view: ChatInputView)
     func chatInputViewTextDidChange(_ view: ChatInputView)
+    func chatInputViewVoiceRecordDidStart(_ view: ChatInputView)
+    func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool)
+    func chatInputViewVoiceButtonTapped(_ view: ChatInputView)
+}
+
+extension ChatInputViewDelegate {
+    func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {}
+    func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {}
+    func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {}
 }
 
 class ChatInputView: UIView {
@@ -48,15 +57,33 @@ class ChatInputView: UIView {
         }
     }
 
+    var voiceButtonEnabled: Bool = false {
+        didSet {
+            updateViews()
+        }
+    }
+
     fileprivate var topBorder: UIView!
     fileprivate var cameraButton: UIButton!
+    fileprivate var voiceButton: UIButton!
     fileprivate var textView: UITextView!
     fileprivate var sendButton: UIButton!
+    fileprivate var recordingBar: UIView!
+    fileprivate var recordingDot: UIView!
+    fileprivate var recordingTimerLabel: UILabel!
+    fileprivate var recordingCancelButton: UIButton!
+    fileprivate var recordingSendButton: UIButton!
+    fileprivate var theme: Theme!
+    fileprivate var recordingTimer: Timer?
+    fileprivate var recordingStartedAt: Date?
+    fileprivate var isVoiceRecording = false
+    fileprivate var recordingEndedByControl = false
     fileprivate var myHeight: Constraint!
     fileprivate var didconstraint = 0
 
     init(theme: Theme) {
         self.maxHeight = 0.0
+        self.theme = theme
 
         super.init(frame: CGRect.zero)
 
@@ -89,6 +116,41 @@ extension ChatInputView {
     @objc func sendButtonPressed() {
         delegate?.chatInputViewSendButtonPressed(self)
         updateTextviewHeight(textView)
+    }
+
+    @objc func voiceButtonTapped() {
+        delegate?.chatInputViewVoiceButtonTapped(self)
+    }
+
+    @objc func voiceLongPress(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+            case .began:
+                guard !isVoiceRecording else { return }
+                isVoiceRecording = true
+                recordingEndedByControl = false
+                showRecordingBar()
+                delegate?.chatInputViewVoiceRecordDidStart(self)
+            case .ended:
+                guard isVoiceRecording, !recordingEndedByControl else { return }
+                finishVoiceRecording(cancelled: false)
+            case .cancelled, .failed:
+                guard isVoiceRecording, !recordingEndedByControl else { return }
+                finishVoiceRecording(cancelled: true)
+            default:
+                break
+        }
+    }
+
+    @objc func recordingCancelTapped() {
+        guard isVoiceRecording else { return }
+        recordingEndedByControl = true
+        finishVoiceRecording(cancelled: true)
+    }
+
+    @objc func recordingSendTapped() {
+        guard isVoiceRecording else { return }
+        recordingEndedByControl = true
+        finishVoiceRecording(cancelled: false)
     }
 }
 
@@ -132,10 +194,29 @@ private extension ChatInputView {
         cameraButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         addSubview(cameraButton)
 
+        voiceButton = UIButton()
+        if #available(iOS 13.0, *) {
+            voiceButton.setImage(UIImage(systemName: "mic.fill"), for: .normal)
+        } else {
+            voiceButton.setTitle("🎤", for: .normal)
+        }
+        voiceButton.tintColor = theme.colorForType(.LinkText)
+        voiceButton.addTarget(self, action: #selector(ChatInputView.voiceButtonTapped), for: .touchUpInside)
+        voiceButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(ChatInputView.voiceLongPress(_:)))
+        longPress.minimumPressDuration = 0.25
+        voiceButton.addGestureRecognizer(longPress)
+        addSubview(voiceButton)
+
         textView = UITextView()
         textView.delegate = self
         textView.font = UIFont.systemFont(ofSize: 16.0)
         textView.backgroundColor = theme.colorForType(.NormalBackground)
+        // KHANDAQ: bind the input text + caret colors to the theme. Without an explicit textColor the
+        // UITextView used the default system .label color, which on the dark theme's dark input field
+        // rendered (near-)invisible while typing. NormalText flips correctly per light/dark theme.
+        textView.textColor = theme.colorForType(.NormalText)
+        textView.tintColor = theme.colorForType(.LinkText)
         textView.layer.cornerRadius = 5.0
         textView.layer.borderWidth = 0.5
         textView.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
@@ -151,6 +232,42 @@ private extension ChatInputView {
         sendButton.addTarget(self, action: #selector(ChatInputView.sendButtonPressed), for: .touchUpInside)
         sendButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         addSubview(sendButton)
+
+        recordingBar = UIView()
+        recordingBar.isHidden = true
+        addSubview(recordingBar)
+
+        recordingDot = UIView()
+        recordingDot.backgroundColor = UIColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
+        recordingDot.layer.cornerRadius = 4.0
+        recordingBar.addSubview(recordingDot)
+
+        recordingTimerLabel = UILabel()
+        recordingTimerLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 16.0, weight: .regular)
+        recordingTimerLabel.textColor = theme.colorForType(.NormalText)
+        recordingTimerLabel.text = "0:00"
+        recordingBar.addSubview(recordingTimerLabel)
+
+        recordingCancelButton = UIButton(type: .system)
+        recordingCancelButton.setTitle(String(localized: "voice_recording_cancel"), for: .normal)
+        recordingCancelButton.setTitleColor(UIColor(red: 0.165, green: 0.671, blue: 0.933, alpha: 1.0), for: .normal)
+        recordingCancelButton.titleLabel?.font = UIFont.systemFont(ofSize: 16.0)
+        recordingCancelButton.addTarget(self, action: #selector(ChatInputView.recordingCancelTapped), for: .touchUpInside)
+        recordingBar.addSubview(recordingCancelButton)
+
+        recordingSendButton = UIButton(type: .system)
+        recordingSendButton.backgroundColor = UIColor(red: 0.165, green: 0.671, blue: 0.933, alpha: 1.0)
+        recordingSendButton.layer.cornerRadius = 20.0
+        recordingSendButton.clipsToBounds = true
+        recordingSendButton.tintColor = .white
+        recordingSendButton.accessibilityLabel = String(localized: "voice_recording_send")
+        if #available(iOS 13.0, *) {
+            recordingSendButton.setImage(UIImage(systemName: "arrow.up"), for: .normal)
+        } else {
+            recordingSendButton.setTitle("↑", for: .normal)
+        }
+        recordingSendButton.addTarget(self, action: #selector(ChatInputView.recordingSendTapped), for: .touchUpInside)
+        recordingBar.addSubview(recordingSendButton)
     }
 
     func installConstraints() {
@@ -164,8 +281,13 @@ private extension ChatInputView {
             $0.bottom.equalTo(self).offset(Constants.CameraBottomOffset)
         }
 
+        voiceButton.snp.makeConstraints {
+            $0.leading.equalTo(cameraButton.snp.trailing).offset(Constants.Offset)
+            $0.bottom.equalTo(self).offset(Constants.CameraBottomOffset)
+        }
+
         textView.snp.makeConstraints {
-            $0.leading.equalTo(cameraButton.snp.trailing).offset(Constants.CameraHorizontalOffset)
+            $0.leading.equalTo(voiceButton.snp.trailing).offset(Constants.CameraHorizontalOffset)
             $0.top.equalTo(self).offset(Constants.Offset)
             $0.bottom.equalTo(self).offset(-Constants.Offset)
             $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)
@@ -175,6 +297,35 @@ private extension ChatInputView {
             $0.leading.equalTo(textView.snp.trailing).offset(Constants.Offset)
             $0.trailing.equalTo(self).offset(-Constants.Offset)
             $0.bottom.equalTo(self).offset(-Constants.Offset)
+        }
+
+        recordingBar.snp.makeConstraints {
+            $0.leading.trailing.equalTo(self)
+            $0.top.equalTo(self).offset(Constants.Offset)
+            $0.bottom.equalTo(self).offset(-Constants.Offset)
+            $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)
+        }
+
+        recordingDot.snp.makeConstraints {
+            $0.leading.equalTo(recordingBar).offset(Constants.CameraHorizontalOffset)
+            $0.centerY.equalTo(recordingBar)
+            $0.width.height.equalTo(8.0)
+        }
+
+        recordingTimerLabel.snp.makeConstraints {
+            $0.leading.equalTo(recordingDot.snp.trailing).offset(8.0)
+            $0.centerY.equalTo(recordingBar)
+        }
+
+        recordingSendButton.snp.makeConstraints {
+            $0.trailing.equalTo(recordingBar).offset(-Constants.Offset)
+            $0.centerY.equalTo(recordingBar)
+            $0.width.height.equalTo(40.0)
+        }
+
+        recordingCancelButton.snp.makeConstraints {
+            $0.trailing.equalTo(recordingSendButton.snp.leading).offset(-12.0)
+            $0.centerY.equalTo(recordingBar)
         }
     }
 
@@ -210,6 +361,47 @@ private extension ChatInputView {
         textView.isScrollEnabled = true
         textView.autocapitalizationType = .sentences
         cameraButton.isEnabled = cameraButtonEnabled
+        voiceButton.isHidden = !voiceButtonEnabled
+        voiceButton.isEnabled = voiceButtonEnabled
         sendButton.isEnabled = !textView.text.isEmpty
+    }
+
+    func showRecordingBar() {
+        cameraButton.isHidden = true
+        voiceButton.isHidden = true
+        textView.isHidden = true
+        sendButton.isHidden = true
+        recordingBar.isHidden = false
+        recordingStartedAt = Date()
+        recordingTimerLabel.text = "0:00"
+        recordingTimer?.invalidate()
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            self?.updateRecordingTimerLabel()
+        }
+    }
+
+    func hideRecordingBar() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        recordingStartedAt = nil
+        recordingBar.isHidden = true
+        updateViews()
+    }
+
+    func finishVoiceRecording(cancelled: Bool) {
+        guard isVoiceRecording else { return }
+        isVoiceRecording = false
+        hideRecordingBar()
+        delegate?.chatInputViewVoiceRecordDidEnd(self, cancelled: cancelled)
+    }
+
+    func updateRecordingTimerLabel() {
+        guard let startedAt = recordingStartedAt else { return }
+        let elapsed = max(0.0, Date().timeIntervalSince(startedAt))
+        let totalCentiseconds = Int(elapsed * 100.0)
+        let minutes = totalCentiseconds / 6000
+        let seconds = (totalCentiseconds / 100) % 60
+        let centiseconds = totalCentiseconds % 100
+        recordingTimerLabel.text = String(format: "%d:%02d,%02d", minutes, seconds, centiseconds)
     }
 }

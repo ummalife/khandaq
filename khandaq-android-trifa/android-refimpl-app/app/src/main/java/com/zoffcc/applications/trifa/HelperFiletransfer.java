@@ -27,7 +27,10 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.OpenableColumns;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.util.LongSparseArray;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
@@ -39,6 +42,7 @@ import androidx.documentfile.provider.DocumentFile;
 import com.luseen.autolinklibrary.EmojiTextViewLinks;
 import com.zoffcc.applications.sorm.FileDB;
 import com.zoffcc.applications.sorm.Filetransfer;
+import com.zoffcc.applications.sorm.GroupMessage;
 import com.zoffcc.applications.sorm.Message;
 import com.zoffcc.applications.trifa.MessageListActivity.outgoing_file_wrapped;
 
@@ -50,6 +54,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -83,7 +89,10 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_ANYK
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_IMAGE_SIZE_IN_MB;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_MAX_VIDEO_SIZE_IN_MB;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_OUTGOING;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.UINT32_MAX_JAVA;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_FILE_DIR;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_PREFIX;
@@ -95,6 +104,7 @@ import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CO
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_PAUSE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_RESUME;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_ID_LENGTH;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_MAX_FILENAME_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_DATA;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_FTV2;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
@@ -214,6 +224,35 @@ public class HelperFiletransfer
         return false;
     }
 
+    /** Accept paused incoming DM file if auto-accept prefs did not resume it yet. */
+    static void ensure_incoming_dm_file_accepted(final Message message)
+    {
+        if (message == null || message.filetransfer_id <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
+            {
+                return;
+            }
+
+            final long filesize = get_filetransfer_filesize_from_id(message.filetransfer_id);
+            if ((filesize <= 0) || (filesize > KHANDAQ_MAX_FILE_TRANSFER_BYTES))
+            {
+                return;
+            }
+
+            accept_paused_incoming_filetransfer(message);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "ensure_incoming_dm_file_accepted:EE:" + e.getMessage());
+        }
+    }
+
     public static String get_incoming_filetransfer_local_filename(String incoming_filename, String friend_pubkey_str)
     {
         String result = TrifaSetPatternActivity.filter_out_specials_from_filepath(incoming_filename);
@@ -264,32 +303,66 @@ public class HelperFiletransfer
 
     public static long get_filetransfer_id_from_friendnum_and_filenum(long friend_number, long file_number)
     {
+        return get_filetransfer_id_from_friendnum_and_filenum(friend_number, file_number, -1);
+    }
+
+    public static long get_outgoing_filetransfer_id_from_friendnum_and_filenum(long friend_number, long file_number)
+    {
+        return get_filetransfer_id_from_friendnum_and_filenum(friend_number, file_number,
+                                                              TRIFA_FT_DIRECTION_OUTGOING.value);
+    }
+
+    static final class tox_send_filename
+    {
+        final String name;
+        final long utf8_length;
+
+        tox_send_filename(String name, long utf8_length)
+        {
+            this.name = name;
+            this.utf8_length = utf8_length;
+        }
+    }
+
+    static tox_send_filename tox_send_filename_for_filetransfer(final String file_name)
+    {
+        if (file_name == null)
+        {
+            return new tox_send_filename("", 0);
+        }
+
+        byte[] utf8 = file_name.getBytes(StandardCharsets.UTF_8);
+        if (utf8.length <= TOX_MAX_FILENAME_LENGTH)
+        {
+            return new tox_send_filename(file_name, utf8.length);
+        }
+
+        byte[] truncated = Arrays.copyOf(utf8, TOX_MAX_FILENAME_LENGTH);
+        return new tox_send_filename(new String(truncated, StandardCharsets.UTF_8), TOX_MAX_FILENAME_LENGTH);
+    }
+
+    public static long get_filetransfer_id_from_friendnum_and_filenum(long friend_number, long file_number,
+                                                                      int direction)
+    {
         try
         {
-            // Log.i(TAG, "get_filetransfer_id_from_friendnum_and_filenum:friend_number=" + friend_number + " file_number=" + file_number);
-            long ft_id = orma.selectFromFiletransfer().
+            if (direction >= 0)
+            {
+                return orma.selectFromFiletransfer().
+                        tox_public_key_stringEq(HelperFriend.tox_friend_get_public_key__wrapper(friend_number)).
+                        file_numberEq(file_number).
+                        directionEq(direction).
+                        orderByIdDesc().
+                        toList().
+                        get(0).id;
+            }
+
+            return orma.selectFromFiletransfer().
                     tox_public_key_stringEq(HelperFriend.tox_friend_get_public_key__wrapper(friend_number)).
                     file_numberEq(file_number).
                     orderByIdDesc().
                     toList().
                     get(0).id;
-            // Log.i(TAG, "get_filetransfer_id_from_friendnum_and_filenum:ft_id=" + ft_id);
-            // ----- DEBUG -----
-            //            try
-            //            {
-            //                Filetransfer ft_tmp = orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            //                //if (ft_tmp.kind != TOX_FILE_KIND_AVATAR.value)
-            //                //{
-            //                Log.i(TAG, "get_filetransfer_id_from_friendnum_and_filenum:ft full=" + ft_tmp);
-            //                //}
-            //            }
-            //            catch (Exception e)
-            //            {
-            //                e.printStackTrace();
-            //                Log.i(TAG, "get_filetransfer_id_from_friendnum_and_filenum:EE2:" + e.getMessage());
-            //            }
-            // ----- DEBUG -----
-            return ft_id;
         }
         catch (Exception e)
         {
@@ -632,7 +705,6 @@ public class HelperFiletransfer
 
     static void cancel_filetransfer(long friend_number, long file_number)
     {
-        // Log.i(TAG, "FTFTFT:cancel_filetransfer");
         Filetransfer f = null;
 
         try
@@ -642,6 +714,8 @@ public class HelperFiletransfer
                     tox_public_key_stringEq(HelperFriend.tox_friend_get_public_key__wrapper(friend_number)).
                     orderByIdDesc().
                     toList().get(0);
+
+            log_filetransfer_cancel(friend_number, file_number, f, "peer_cancel_or_local");
 
             if (f.direction == TRIFA_FT_DIRECTION_INCOMING.value)
             {
@@ -958,14 +1032,23 @@ public class HelperFiletransfer
     {
         try
         {
+            if (!FileTransferConcurrencyGate.canStartOutgoingTransfer())
+            {
+                set_message_queueing_from_id(m.id, true);
+                orma.updateMessage().idEq(m.id).ft_outgoing_queued(true).ft_outgoing_started(false).execute();
+                update_single_message_from_messge_id(m.id, true);
+                return;
+            }
+
+            if (has_active_outgoing_filetransfer_for_pubkey(m.tox_friendpubkey))
+            {
+                set_message_queueing_from_id(m.id, true);
+                orma.updateMessage().idEq(m.id).ft_outgoing_queued(true).ft_outgoing_started(false).execute();
+                update_single_message_from_messge_id(m.id, true);
+                return;
+            }
+
             set_message_queueing_from_id(m.id, false);
-
-            // accept FT
-            set_message_start_sending_from_id(m.id);
-            set_filetransfer_start_sending_from_id(m.filetransfer_id);
-
-            // update message view
-            update_single_message_from_messge_id(m.id, true);
 
             Filetransfer ft = (Filetransfer) orma.selectFromFiletransfer().
                     idEq(m.filetransfer_id).
@@ -998,26 +1081,30 @@ public class HelperFiletransfer
             Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
             ft.tox_file_id_hex = file_id_buffer_hex;
 
-            // actually start sending the file to friend
+            final tox_send_filename send_name = tox_send_filename_for_filetransfer(ft.file_name);
+
+            final long friendNum = tox_friend_by_public_key__wrapper(m.tox_friendpubkey);
+            FileTransferDebug.logPeerConnectionStatus(friendNum);
+            FileTransferDebug.logToxFileSendCall(friendNum, ft.filesize);
+
             long file_number = -1;
-            if (TOX_CAPABILITY_DECODE(
-                    tox_friend_get_capabilities(tox_friend_by_public_key__wrapper(m.tox_friendpubkey))).ftv2)
+            if (TOX_CAPABILITY_DECODE(tox_friend_get_capabilities(friendNum)).ftv2)
             {
-                file_number = tox_file_send(tox_friend_by_public_key__wrapper(m.tox_friendpubkey),
+                file_number = tox_file_send(friendNum,
                                             ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_FTV2.value, ft.filesize, file_id_buffer,
-                                            ft.file_name, ft.file_name.length());
+                                            send_name.name, send_name.utf8_length);
                 ft.kind = ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_FTV2.value;
                 m.filetransfer_kind = TOX_FILE_KIND_FTV2.value;
             }
             else
             {
-                file_number = tox_file_send(tox_friend_by_public_key__wrapper(m.tox_friendpubkey),
+                file_number = tox_file_send(friendNum,
                                             ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_DATA.value, ft.filesize, file_id_buffer,
-                                            ft.file_name, ft.file_name.length());
+                                            send_name.name, send_name.utf8_length);
                 ft.kind = ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_DATA.value;
                 m.filetransfer_kind = TOX_FILE_KIND_DATA.value;
             }
-            // TODO: handle errors from tox_file_send() here -------
+            FileTransferDebug.logToxFileSendResult(file_number);
 
             update_message_in_db_filetransfer_kind(m);
 
@@ -1028,16 +1115,18 @@ public class HelperFiletransfer
                 orma.updateMessage().idEq(m.id).ft_outgoing_started(false).ft_outgoing_queued(true).execute();
                 orma.updateFiletransfer().idEq(m.filetransfer_id).ft_outgoing_started(false).execute();
                 update_single_message_from_messge_id(m.id, true);
+                schedule_outgoing_ft_retry(m.id);
             }
             else
             {
+                set_message_start_sending_from_id(m.id);
+                set_filetransfer_start_sending_from_id(m.filetransfer_id);
+                update_single_message_from_messge_id(m.id, true);
 
                 Log.i(TAG, "MM2MM:9:new filenum=" + file_number);
 
-                // update the tox file number in DB -----------
                 ft.file_number = file_number;
                 update_filetransfer_db_full(ft);
-                // update the tox file number in DB -----------
             }
         }
         catch (Exception e)
@@ -1045,6 +1134,359 @@ public class HelperFiletransfer
             e.printStackTrace();
         }
     }
+
+    private static final LongSparseArray<Long> last_outgoing_kick_ts = new LongSparseArray<>();
+    private static final long OUTGOING_FT_RETRY_DELAY_MS = 5000L;
+    private static final long OUTGOING_FT_STALE_MS = 120_000L;
+    private static final long OUTGOING_FT_STALE_LARGE_MS = 600_000L;
+
+    static String describe_chunk_send_error(final int res)
+    {
+        switch (res)
+        {
+            case 0:
+                return "OK";
+            case -1:
+                return "NULL";
+            case -2:
+                return "FRIEND_NOT_FOUND";
+            case -3:
+                return "FRIEND_NOT_CONNECTED";
+            case -4:
+                return "NOT_FOUND";
+            case -5:
+                return "NOT_TRANSFERRING";
+            case -6:
+                return "INVALID_LENGTH";
+            case -7:
+                return "SENDQ";
+            case -8:
+                return "WRONG_POSITION";
+            case -21:
+                return "NULL_BUFFER";
+            default:
+                return "ERR_" + res;
+        }
+    }
+
+    static void handle_outgoing_chunk_send_result(final com.zoffcc.applications.sorm.Filetransfer ft,
+                                                  final long friend_number, final long file_number,
+                                                  final long position, final long length, final int res)
+    {
+        if (res == 0 || ft == null)
+        {
+            return;
+        }
+
+        Log.w(TAG, "outgoing_chunk_send:res=" + res + " (" + describe_chunk_send_error(res) + ") fn=" + friend_number
+                + " filenum=" + file_number + " pos=" + position + " len=" + length + " ft_id=" + ft.id
+                + " file=" + ft.file_name + " size=" + ft.filesize + " saf=" + ft.storage_frame_work);
+
+        if (res == -3 || res == -7)
+        {
+            TrifaToxService.wakeup_tox_thread();
+        }
+
+        if (res == -3 || res == -4 || res == -5)
+        {
+            try
+            {
+                final long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(ft.id, friend_number);
+                if (msg_id > 0)
+                {
+                    schedule_outgoing_ft_retry(msg_id);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "handle_outgoing_chunk_send_result:retry:EE:" + e.getMessage());
+            }
+        }
+    }
+
+    static void log_filetransfer_cancel(final long friend_number, final long file_number,
+                                        final com.zoffcc.applications.sorm.Filetransfer f, final String reason)
+    {
+        if (f == null)
+        {
+            Log.w(TAG, "filetransfer_cancel:reason=" + reason + " fn=" + friend_number + " filenum=" + file_number
+                    + " ft=unknown");
+            return;
+        }
+
+        Log.w(TAG, "filetransfer_cancel:reason=" + reason + " fn=" + friend_number + " filenum=" + file_number
+                + " ft_id=" + f.id + " dir=" + f.direction + " state=" + f.state + " kind=" + f.kind
+                + " file=" + f.file_name + " size=" + f.filesize + " pos=" + f.current_position
+                + " saf=" + f.storage_frame_work);
+    }
+
+    private static long outgoing_ft_stale_ms_for(final Filetransfer ft)
+    {
+        if (ft == null)
+        {
+            return OUTGOING_FT_STALE_MS;
+        }
+        if (ft.filesize > 50_000_000L)
+        {
+            return OUTGOING_FT_STALE_LARGE_MS;
+        }
+        if (ft.filesize > 10_000_000L)
+        {
+            return OUTGOING_FT_STALE_MS * 2L;
+        }
+        return OUTGOING_FT_STALE_MS;
+    }
+
+    static boolean has_active_outgoing_filetransfer_for_pubkey(final String pubkey)
+    {
+        if (pubkey == null || pubkey.isEmpty())
+        {
+            return false;
+        }
+
+        try
+        {
+            final List<Message> active = orma.selectFromMessage().
+                    tox_friendpubkeyEq(pubkey).
+                    directionEq(1).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                    ft_outgoing_startedEq(true).
+                    stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
+                    toList();
+            if ((active == null) || active.isEmpty())
+            {
+                return false;
+            }
+
+            final long now = System.currentTimeMillis();
+            for (Message m : active)
+            {
+                if (message_has_live_outgoing_transfer(m, now))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "has_active_outgoing_filetransfer_for_pubkey:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    private static boolean message_has_live_outgoing_transfer(final Message m, final long now)
+    {
+        try
+        {
+            if (m.filetransfer_id <= 0L)
+            {
+                reset_stalled_outgoing_message(m);
+                return false;
+            }
+
+            final Filetransfer ft = (Filetransfer) orma.selectFromFiletransfer().idEq(m.filetransfer_id).get(0);
+            if (ft.state == TOX_FILE_CONTROL_CANCEL.value)
+            {
+                return false;
+            }
+
+            if ((ft.filesize > 0) && (ft.current_position >= ft.filesize))
+            {
+                return false;
+            }
+
+            if (ft.file_number < 0)
+            {
+                final long ageMs = now - Math.max(m.sent_timestamp_ms, m.sent_timestamp);
+                if (ageMs > outgoing_ft_stale_ms_for(ft))
+                {
+                    reset_stalled_outgoing_message(m);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "message_has_live_outgoing_transfer:EE:" + e.getMessage());
+            return false;
+        }
+    }
+
+    private static void reset_stalled_outgoing_message(final Message m)
+    {
+        try
+        {
+            orma.updateMessage().idEq(m.id).
+                    ft_outgoing_started(false).
+                    ft_outgoing_queued(true).
+                    execute();
+            if (m.filetransfer_id > 0L)
+            {
+                orma.updateFiletransfer().idEq(m.filetransfer_id).ft_outgoing_started(false).execute();
+            }
+            Log.i(TAG, "reset_stalled_outgoing_message:mid=" + m.id);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "reset_stalled_outgoing_message:EE:" + e.getMessage());
+        }
+    }
+
+    static void kick_stalled_outgoing_send(final Message message)
+    {
+        if ((message == null) || (!message.ft_outgoing_queued) || message.ft_outgoing_started)
+        {
+            return;
+        }
+        if (message.state != TOX_FILE_CONTROL_PAUSE.value)
+        {
+            return;
+        }
+
+        final long now = System.currentTimeMillis();
+        final Long last = last_outgoing_kick_ts.get(message.id);
+        if ((last != null) && ((now - last) < 3000L))
+        {
+            return;
+        }
+        last_outgoing_kick_ts.put(message.id, now);
+
+        final Handler handler = MainActivity.main_handler_s != null
+                ? MainActivity.main_handler_s
+                : new Handler(Looper.getMainLooper());
+        handler.post(() -> queue_and_try_send_outgoing_file(message.id, false));
+    }
+
+    static void schedule_outgoing_ft_retry(final long messageId)
+    {
+        if (messageId <= 0L)
+        {
+            return;
+        }
+
+        final Handler handler = MainActivity.main_handler_s != null
+                ? MainActivity.main_handler_s
+                : new Handler(Looper.getMainLooper());
+        handler.postDelayed(() -> {
+            try
+            {
+                final Message m = (Message) orma.selectFromMessage().idEq(messageId).get(0);
+                if (m.ft_outgoing_queued && (!m.ft_outgoing_started) && (m.state == TOX_FILE_CONTROL_PAUSE.value))
+                {
+                    queue_and_try_send_outgoing_file(messageId, true);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "schedule_outgoing_ft_retry:EE:" + e.getMessage());
+            }
+        }, OUTGOING_FT_RETRY_DELAY_MS);
+    }
+
+    static void on_friend_connection_available(final String pubkey)
+    {
+        if ((pubkey == null) || pubkey.isEmpty())
+        {
+            return;
+        }
+        FileTransferDebug.logPeerConnectionStatus(tox_friend_by_public_key__wrapper(pubkey));
+        try_start_next_queued_outgoing_file(pubkey);
+        TrifaToxService.wakeup_tox_thread();
+    }
+
+    static void try_start_next_queued_outgoing_file(final String pubkey)
+    {
+        if ((pubkey == null) || pubkey.isEmpty())
+        {
+            return;
+        }
+
+        try
+        {
+            if (has_active_outgoing_filetransfer_for_pubkey(pubkey))
+            {
+                return;
+            }
+
+            final List<Message> queued = orma.selectFromMessage().
+                    tox_friendpubkeyEq(pubkey).
+                    directionEq(1).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                    ft_outgoing_queuedEq(true).
+                    ft_outgoing_startedEq(false).
+                    stateEq(TOX_FILE_CONTROL_PAUSE.value).
+                    orderBySent_timestampAsc().
+                    toList();
+
+            if ((queued == null) || queued.isEmpty())
+            {
+                return;
+            }
+
+            queue_and_try_send_outgoing_file(queued.get(0).id, true);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "try_start_next_queued_outgoing_file:EE:" + e.getMessage());
+        }
+    }
+
+    static boolean waitForOutgoingFileComplete(final long messageId, final long timeoutMs)
+    {
+        if (messageId <= 0L)
+        {
+            return false;
+        }
+
+        final long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline)
+        {
+            try
+            {
+                final Message m = (Message) orma.selectFromMessage().idEq(messageId).get(0);
+                if (m.filedb_id > 0L)
+                {
+                    return true;
+                }
+
+                if (m.state == TOX_FILE_CONTROL_CANCEL.value)
+                {
+                    return false;
+                }
+
+                if (m.ft_outgoing_started)
+                {
+                    Thread.sleep(WAIT_STEP_MS_OUTGOING_FILE);
+                    continue;
+                }
+
+                if (!has_active_outgoing_filetransfer_for_pubkey(m.tox_friendpubkey))
+                {
+                    return (m.filetransfer_id > 0L) || m.ft_outgoing_queued;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "waitForOutgoingFileComplete:EE:" + e.getMessage());
+                return false;
+            }
+
+            try
+            {
+                Thread.sleep(WAIT_STEP_MS_OUTGOING_FILE);
+            }
+            catch (InterruptedException ignored)
+            {
+            }
+        }
+
+        return false;
+    }
+
+    private static final long WAIT_STEP_MS_OUTGOING_FILE = 400L;
 
     static void queue_and_try_send_outgoing_file(long message_id, boolean update_view)
     {
@@ -1057,6 +1499,17 @@ public class HelperFiletransfer
                 return;
             }
 
+            if (has_active_outgoing_filetransfer_for_pubkey(m.tox_friendpubkey))
+            {
+                set_message_queueing_from_id(m.id, true);
+                orma.updateMessage().idEq(m.id).ft_outgoing_queued(true).execute();
+                if (update_view)
+                {
+                    update_single_message_from_messge_id(message_id, true);
+                }
+                return;
+            }
+
             set_message_queueing_from_id(m.id, true);
             TrifaToxService.wakeup_tox_thread();
 
@@ -1066,10 +1519,17 @@ public class HelperFiletransfer
                 orma.updateMessage().idEq(m.id).sent_push(1).execute();
             }
 
-            if (is_friend_online_real(tox_friend_by_public_key__wrapper(m.tox_friendpubkey)) != 0)
+            final long friendNum = tox_friend_by_public_key__wrapper(m.tox_friendpubkey);
+            final boolean peerOnlineReal = is_friend_online_real(friendNum) != 0;
+            if (peerOnlineReal)
             {
                 start_outgoing_ft(m);
             }
+            else
+            {
+                orma.updateMessage().idEq(m.id).ft_outgoing_queued(true).ft_outgoing_started(false).execute();
+            }
+            FileTransferDebug.logQueueDecision(m.id, peerOnlineReal, !peerOnlineReal);
 
             if (update_view)
             {
@@ -1345,7 +1805,7 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             e.printStackTrace();
-            display_toast("opening file failed", false, 0);
+            display_toast(context_s.getString(R.string.chat_opening_file_failed), false, 0);
         }
     }
 
@@ -1394,6 +1854,11 @@ public class HelperFiletransfer
 
     static String guess_message_file_mime_type(Context context, Message message)
     {
+        if (isVoiceMessage(message))
+        {
+            return "audio/mp4";
+        }
+
         final String display_name = display_name_from_message_text(message.text);
         if ((display_name != null) && (!display_name.isEmpty()))
         {
@@ -1425,6 +1890,65 @@ public class HelperFiletransfer
         }
 
         return guess_mime_type_from_filename(message.filename_fullpath);
+    }
+
+    static String guess_group_message_file_mime_type(final Context context, final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return "application/octet-stream";
+        }
+
+        final String display_name = display_name_from_message_text(message.text);
+        if ((display_name != null) && (!display_name.isEmpty()))
+        {
+            final String from_display = guess_mime_type_from_filename(display_name);
+            if (!"application/octet-stream".equals(from_display))
+            {
+                return from_display;
+            }
+        }
+
+        if ((message.file_name != null) && (!message.file_name.isEmpty()))
+        {
+            final String from_file_name = guess_mime_type_from_filename(message.file_name);
+            if (!"application/octet-stream".equals(from_file_name))
+            {
+                return from_file_name;
+            }
+        }
+
+        if (message.storage_frame_work)
+        {
+            try
+            {
+                final DocumentFile documentFile = DocumentFile.fromSingleUri(context,
+                        Uri.parse(message.filename_fullpath));
+                if ((documentFile != null) && (documentFile.getName() != null))
+                {
+                    final String from_uri_name = guess_mime_type_from_filename(documentFile.getName());
+                    if (!"application/octet-stream".equals(from_uri_name))
+                    {
+                        return from_uri_name;
+                    }
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        String mime = guess_mime_type_from_filename(message.filename_fullpath);
+        if ("application/octet-stream".equals(mime)
+                && HelperGroup.is_probable_video_file(message.file_name, null))
+        {
+            mime = guess_mime_type_from_filename(message.file_name);
+            if ("application/octet-stream".equals(mime))
+            {
+                mime = "video/mp4";
+            }
+        }
+        return mime;
     }
 
     static void open_outgoing_message_file(final Context context, final Message message)
@@ -1507,6 +2031,299 @@ public class HelperFiletransfer
         return path.toLowerCase().contains(".file.m4a");
     }
 
+    static boolean isIocipherVirtualPath(final String path)
+    {
+        return (path != null) && !path.isEmpty()
+                && path.startsWith(TRIFAGlobals.VFS_PREFIX + TRIFAGlobals.VFS_FILE_DIR);
+    }
+
+    static boolean isMediaFileReadyForPlayback(final String path)
+    {
+        if (path == null || path.isEmpty())
+        {
+            return false;
+        }
+
+        if (path.startsWith("content://"))
+        {
+            return true;
+        }
+
+        try
+        {
+            if (!isIocipherVirtualPath(path))
+            {
+                final java.io.File plainFile = new java.io.File(path);
+                if (plainFile.isFile() && plainFile.length() > 0L)
+                {
+                    return true;
+                }
+            }
+
+            if (MainActivity.VFS_ENCRYPT)
+            {
+                final info.guardianproject.iocipher.File file = new info.guardianproject.iocipher.File(path);
+                return file.exists() && file.length() > 0L;
+            }
+
+            final java.io.File file = new java.io.File(path);
+            return file.isFile() && file.length() > 0L;
+        }
+        catch (Exception ignored)
+        {
+            return false;
+        }
+    }
+
+    static boolean isMediaFileReadyToView(final String vfsPath, final boolean storageFramework,
+                                          final String exportPath)
+    {
+        if (exportPath != null && !exportPath.isEmpty())
+        {
+            return isMediaFileReadyForPlayback(exportPath);
+        }
+
+        if (storageFramework)
+        {
+            return vfsPath != null && !vfsPath.isEmpty()
+                    && (vfsPath.startsWith("content://") || isMediaFileReadyForPlayback(vfsPath));
+        }
+
+        return isMediaFileReadyForPlayback(vfsPath);
+    }
+
+    static long mediaFileLength(final String path)
+    {
+        if (path == null || path.isEmpty() || path.startsWith("content://"))
+        {
+            return -1L;
+        }
+
+        try
+        {
+            if (!isIocipherVirtualPath(path))
+            {
+                final java.io.File plainFile = new java.io.File(path);
+                if (plainFile.isFile())
+                {
+                    return plainFile.length();
+                }
+            }
+
+            if (MainActivity.VFS_ENCRYPT)
+            {
+                final info.guardianproject.iocipher.File file = new info.guardianproject.iocipher.File(path);
+                return file.exists() ? file.length() : -1L;
+            }
+
+            final java.io.File file = new java.io.File(path);
+            return file.isFile() ? file.length() : -1L;
+        }
+        catch (Exception ignored)
+        {
+            return -1L;
+        }
+    }
+
+    static boolean isMessageMediaReady(final Message message, final String exportPath)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+
+        if (isMediaFileReadyToView(message.filename_fullpath, message.storage_frame_work, exportPath))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    static boolean isGroupMessageMediaReady(final GroupMessage message, final String exportPath)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+
+        if (!isGroupMessageMediaOpenable(message, exportPath))
+        {
+            return false;
+        }
+
+        if (message.filesize > 0L)
+        {
+            final String mediaPath = resolveGroupMessageMediaPath(message);
+            final long actualLength = mediaFileLength(mediaPath);
+            if (actualLength >= 0L && actualLength < message.filesize)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** True when the on-disk file exists and can be shown (ignore in-progress byte counts). */
+    static boolean isGroupMessageMediaOpenable(final GroupMessage message, final String exportPath)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+
+        final String mediaPath = resolveGroupMessageMediaPath(message);
+        return isMediaFileReadyToView(mediaPath, message.storage_frame_work, exportPath);
+    }
+
+    /** Resolve on-disk VFS path for a group media message (thumbnail and viewer must use the same path). */
+    static String resolveGroupMessageMediaPath(final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return null;
+        }
+
+        if ((message.filename_fullpath != null) && !message.filename_fullpath.isEmpty()
+                && isMediaFileReadyForPlayback(message.filename_fullpath))
+        {
+            return message.filename_fullpath;
+        }
+
+        if ((message.path_name != null) && (message.file_name != null) && !message.file_name.isEmpty())
+        {
+            final String combined = message.path_name.endsWith("/")
+                    ? message.path_name + message.file_name
+                    : message.path_name + "/" + message.file_name;
+            if (isMediaFileReadyForPlayback(combined))
+            {
+                return combined;
+            }
+        }
+
+        return message.filename_fullpath;
+    }
+
+    static GroupMessage reloadGroupMessageFromDb(final GroupMessage message)
+    {
+        if ((message == null) || (message.id <= 0L) || (orma == null))
+        {
+            return message;
+        }
+
+        try
+        {
+            return (GroupMessage) orma.selectFromGroupMessage().idEq(message.id).get(0);
+        }
+        catch (Exception ignored)
+        {
+            return message;
+        }
+    }
+
+    static boolean isMessageMediaDownloading(final Message message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+
+        if (message.id < 0)
+        {
+            return true;
+        }
+
+        if (message.TRIFA_MESSAGE_TYPE != TRIFA_MSG_FILE.value)
+        {
+            return false;
+        }
+
+        return !isMessageMediaReady(message, null);
+    }
+
+    static boolean isGroupMessageMediaDownloading(final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+
+        if (message.id < 0)
+        {
+            return true;
+        }
+
+        if (message.TRIFA_MESSAGE_TYPE != TRIFA_MSG_FILE.value)
+        {
+            return false;
+        }
+
+        if (NgcGroupFileTransfer.shouldUseChunkedTransfer(message.filesize))
+        {
+            final int pct = HelperGroup.ngc_file_transfer_progress_percent(message.group_identifier,
+                    message.msg_id_hash);
+            if (pct >= 0 && pct < 100)
+            {
+                return true;
+            }
+        }
+
+        return !isGroupMessageMediaReady(message, null);
+    }
+
+    static void safeRefreshAudioPlayer(final me.jagar.chatvoiceplayerlibrary.VoicePlayerView player,
+                                       final String path)
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        if (!isMediaFileReadyForPlayback(path))
+        {
+            player.setVisibility(View.GONE);
+            return;
+        }
+
+        try
+        {
+            player.setVisibility(View.VISIBLE);
+            player.refreshPlayer(path);
+            player.refreshVisualizer();
+        }
+        catch (Exception ignored)
+        {
+            player.setVisibility(View.GONE);
+        }
+    }
+
+    static void safeRefreshAudioPlayer(final me.jagar.chatvoiceplayerlibrary.vVoicePlayerView player,
+                                       final String path)
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        if (!isMediaFileReadyForPlayback(path))
+        {
+            player.setVisibility(View.GONE);
+            return;
+        }
+
+        try
+        {
+            player.setVisibility(View.VISIBLE);
+            player.refreshPlayer(path);
+            player.refreshVisualizer();
+        }
+        catch (Exception ignored)
+        {
+            player.setVisibility(View.GONE);
+        }
+    }
+
     static boolean isVoiceMessage(Message message)
     {
         if (message == null)
@@ -1530,6 +2347,148 @@ public class HelperFiletransfer
         return (mimeType != null) && mimeType.startsWith("audio/");
     }
 
+    static boolean isGroupVoiceMessage(final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+        if (isVoiceMessagePath(message.filename_fullpath))
+        {
+            return true;
+        }
+        if (isVoiceMessagePath(message.file_name))
+        {
+            return true;
+        }
+        return isVoiceMessagePath(display_name_from_message_text(message.text));
+    }
+
+    static boolean isGroupAudioMessage(final Context context, final GroupMessage message)
+    {
+        if (isGroupVoiceMessage(message))
+        {
+            return true;
+        }
+        final String mimeType = guess_group_message_file_mime_type(context, message);
+        return (mimeType != null) && mimeType.startsWith("audio/");
+    }
+
+    static boolean isGroupVideoMessage(final Context context, final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+        final String mimeType = guess_group_message_file_mime_type(context, message);
+        if ((mimeType != null) && mimeType.startsWith("video/"))
+        {
+            return true;
+        }
+        return HelperGroup.is_probable_video_file(message.file_name, mimeType);
+    }
+
+    static boolean isDirectVideoMessage(final Context context, final Message message)
+    {
+        if (message == null)
+        {
+            return false;
+        }
+        final String mimeType = guess_message_file_mime_type(context, message);
+        if ((mimeType != null) && mimeType.startsWith("video/"))
+        {
+            return true;
+        }
+        return HelperGroup.is_probable_video_file(outgoingFileDisplayLabel(context, message), mimeType);
+    }
+
+    static boolean isDirectImageMessage(final Context context, final Message message)
+    {
+        if (message == null || isDirectVideoMessage(context, message) || isAudioMessage(context, message))
+        {
+            return false;
+        }
+        final String mimeType = guess_message_file_mime_type(context, message);
+        return (mimeType != null) && mimeType.startsWith("image/");
+    }
+
+    /** Compact thumbnail bubble for outgoing image/video (no giant attachment icon). */
+    static boolean bindOutgoingCompactMediaUi(final Context context, final View itemView, final Message message,
+                                              final EmojiTextViewLinks textView, final ImageView imageView,
+                                              final ViewGroup ft_preview_container, final ImageButton ft_preview_image,
+                                              final ViewGroup ft_buttons_container,
+                                              final com.daimajia.numberprogressbar.NumberProgressBar ft_progressbar,
+                                              final me.jagar.chatvoiceplayerlibrary.VoicePlayerView ft_audio_player,
+                                              final ImageButton button_ok, final ImageButton button_cancel,
+                                              final boolean transferUiActive)
+    {
+        if ((context == null) || (message == null) || (itemView == null))
+        {
+            return false;
+        }
+
+        final boolean isVideo = isDirectVideoMessage(context, message);
+        final boolean isImage = !isVideo && isDirectImageMessage(context, message);
+        if (!isVideo && !isImage)
+        {
+            return false;
+        }
+
+        resetOutgoingFtAudioPlayer(ft_audio_player);
+        textView.setVisibility(View.GONE);
+        imageView.setVisibility(View.GONE);
+        ft_audio_player.setVisibility(View.GONE);
+        ft_progressbar.setVisibility(View.GONE);
+        ft_preview_container.setVisibility(View.VISIBLE);
+        ft_preview_image.setVisibility(View.VISIBLE);
+
+        if (transferUiActive)
+        {
+            ft_buttons_container.setVisibility(View.GONE);
+            button_ok.setVisibility(View.GONE);
+            button_cancel.setVisibility(View.GONE);
+        }
+
+        ChatFileBubbleHelper.hideMediaChrome(itemView);
+
+        if (isVideo)
+        {
+            ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(180));
+            ChatMediaHelper.bindVideoPreview(context, message, null, ft_preview_image);
+            final long fileSize = get_filetransfer_filesize_from_id(message.filetransfer_id);
+            ChatFileBubbleHelper.bindVideoMediaChrome(context, itemView, fileSize > 0L ? fileSize : 0L);
+            final View playOverlay = itemView.findViewById(R.id.ft_media_play_overlay);
+            if (playOverlay != null)
+            {
+                playOverlay.setVisibility(transferUiActive ? View.GONE : View.VISIBLE);
+            }
+            final View infoBar = itemView.findViewById(R.id.ft_media_info_bar);
+            if (infoBar != null)
+            {
+                infoBar.setVisibility(transferUiActive ? View.GONE : View.VISIBLE);
+            }
+        }
+        else
+        {
+            ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
+            ChatMediaHelper.bindOutgoingImagePreview(context, message, ft_preview_image);
+            ft_preview_image.setOnTouchListener(
+                    ChatMediaHelper.mediaOpenTouchListener(context, message, null));
+        }
+
+        return true;
+    }
+
+    static boolean isGroupImageMessage(final Context context, final GroupMessage message)
+    {
+        if (message == null || isGroupVideoMessage(context, message) || isGroupAudioMessage(context, message))
+        {
+            return false;
+        }
+        final String mimeType = guess_group_message_file_mime_type(context, message);
+        return (mimeType != null) && mimeType.startsWith("image/");
+    }
+
     static boolean looksLikeInternalFtName(String name)
     {
         if ((name == null) || name.isEmpty())
@@ -1541,6 +2500,10 @@ public class HelperFiletransfer
             return true;
         }
         if (isVoiceMessagePath(name))
+        {
+            return true;
+        }
+        if (name.length() >= 32 && name.matches("(?i)[0-9A-F]+"))
         {
             return true;
         }
@@ -1579,6 +2542,43 @@ public class HelperFiletransfer
         return context.getString(R.string.chat_ft_generic_file);
     }
 
+    static String resolve_attachment_display_name(final Context context, final Uri uri, final String preferredName)
+    {
+        String name = preferredName;
+        if ((name == null) || name.isEmpty())
+        {
+            try
+            {
+                final DocumentFile documentFile = DocumentFile.fromSingleUri(context, uri);
+                if (documentFile != null)
+                {
+                    name = documentFile.getName();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        if ((name == null) || name.isEmpty())
+        {
+            try
+            {
+                name = uri.getLastPathSegment();
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        if ((name == null) || name.isEmpty())
+        {
+            name = "file_" + System.currentTimeMillis();
+        }
+
+        return name;
+    }
+
     static String buildOutgoingFileMessageText(Context context, String filename, long file_size)
     {
         if (isVoiceMessagePath(filename))
@@ -1596,6 +2596,33 @@ public class HelperFiletransfer
             return context.getString(R.string.chat_ft_generic_file);
         }
         return displayName;
+    }
+
+    static String groupFileDisplayLabel(final Context context, final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return context.getString(R.string.chat_ft_generic_file);
+        }
+        if (isGroupVoiceMessage(message))
+        {
+            return context.getString(R.string.voice_message_label);
+        }
+
+        String name = message.file_name;
+        if ((name == null) || name.isEmpty() || looksLikeInternalFtName(name))
+        {
+            name = display_name_from_message_text(message.text);
+        }
+        if ((name == null) || name.isEmpty() || looksLikeInternalFtName(name))
+        {
+            name = basenameFromPath(message.filename_fullpath);
+        }
+        if ((name != null) && (!name.isEmpty()) && (!looksLikeInternalFtName(name)))
+        {
+            return name;
+        }
+        return context.getString(R.string.chat_ft_generic_file);
     }
 
     static boolean isSmallOutgoingFile(Message message)
@@ -1669,12 +2696,13 @@ public class HelperFiletransfer
         ft_preview_container.setVisibility(View.VISIBLE);
 
         ft_audio_player.setVisibility(View.VISIBLE);
-        ft_audio_player.refreshPlayer(message.filename_fullpath);
-        ft_audio_player.refreshVisualizer();
+        HelperFiletransfer.safeRefreshAudioPlayer(ft_audio_player, message.filename_fullpath);
 
+        // A voice message renders its own player — never show the inline cancel (red X) / ok buttons over it,
+        // regardless of transfer state (was a big red X on outgoing voice notes to offline friends).
         button_ok.setVisibility(View.GONE);
-        ft_buttons_container.setVisibility(showCancelButton ? View.VISIBLE : View.GONE);
-        button_cancel.setVisibility(showCancelButton ? View.VISIBLE : View.GONE);
+        ft_buttons_container.setVisibility(View.GONE);
+        button_cancel.setVisibility(View.GONE);
 
         if (showProgressBar)
         {
@@ -1726,9 +2754,10 @@ public class HelperFiletransfer
         set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
         set_message_accepted_from_id(message.id);
         set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
-        tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
-                         get_filetransfer_filenum_from_id(message.filetransfer_id),
-                         TOX_FILE_CONTROL_RESUME.value);
+        final long friendNum = tox_friend_by_public_key__wrapper(message.tox_friendpubkey);
+        final long fileNum = get_filetransfer_filenum_from_id(message.filetransfer_id);
+        FileTransferDebug.logFileControlResume(friendNum, fileNum);
+        tox_file_control(friendNum, fileNum, TOX_FILE_CONTROL_RESUME.value);
         update_single_message_from_messge_id(message.id, true);
         return true;
     }
@@ -1773,9 +2802,14 @@ public class HelperFiletransfer
 
     static boolean is_message_file_complete(Message message)
     {
-        if ((message == null) || (message.filedb_id == -1))
+        if (message == null)
         {
             return false;
+        }
+
+        if (message.filedb_id == -1)
+        {
+            return isMediaFileReadyForPlayback(message.filename_fullpath);
         }
 
         try
@@ -1783,16 +2817,104 @@ public class HelperFiletransfer
             final FileDB file_ = (FileDB) orma.selectFromFileDB().idEq(message.filedb_id).get(0);
             if ((file_.filesize <= 0) || (file_.path_name == null) || (file_.file_name == null))
             {
-                return false;
+                return isMediaFileReadyForPlayback(message.filename_fullpath);
             }
 
-            final long actual = get_vfs_file_length(file_.path_name, file_.file_name);
-            return (actual >= 0) && (actual >= file_.filesize);
+            long actual = get_vfs_file_length(file_.path_name, file_.file_name);
+            if (actual < 0 && message.filename_fullpath != null && !message.filename_fullpath.isEmpty())
+            {
+                actual = mediaFileLength(message.filename_fullpath);
+            }
+            if (actual >= 0 && actual >= file_.filesize)
+            {
+                return true;
+            }
+
+            return isMediaFileReadyForPlayback(message.filename_fullpath)
+                    && mediaFileLength(message.filename_fullpath) >= file_.filesize;
         }
         catch (Exception e)
         {
             Log.i(TAG, "is_message_file_complete:EE:" + e.getMessage());
+            return isMediaFileReadyForPlayback(message.filename_fullpath);
+        }
+    }
+
+    static boolean is_dm_sender_online(final String friendPubkey)
+    {
+        if (friendPubkey == null)
+        {
             return false;
+        }
+        final long friendNum = tox_friend_by_public_key__wrapper(friendPubkey);
+        if (friendNum < 0)
+        {
+            return false;
+        }
+        return is_friend_online_real(friendNum) != 0;
+    }
+
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> dm_file_auto_retry_ts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final long DM_FILE_AUTO_RETRY_COOLDOWN_MS = 15_000L;
+
+    static void schedule_auto_retry_dm_incoming_file(final Message message)
+    {
+        if ((message == null) || (message.tox_friendpubkey == null))
+        {
+            return;
+        }
+        if (!is_dm_sender_online(message.tox_friendpubkey))
+        {
+            return;
+        }
+        if (is_message_file_complete(message) || isMessageMediaReady(message, null))
+        {
+            return;
+        }
+
+        final String key = message.tox_friendpubkey + "|" + message.id;
+        final long now = System.currentTimeMillis();
+        final Long last = dm_file_auto_retry_ts.get(key);
+        if ((last != null) && ((now - last) < DM_FILE_AUTO_RETRY_COOLDOWN_MS))
+        {
+            return;
+        }
+        dm_file_auto_retry_ts.put(key, now);
+
+        if (MainActivity.main_handler_s != null)
+        {
+            MainActivity.main_handler_s.post(() -> retry_incoming_filetransfer(message));
+        }
+    }
+
+    static void retry_pending_incoming_files_for_friend(final String friendPubkey)
+    {
+        if ((friendPubkey == null) || (orma == null))
+        {
+            return;
+        }
+
+        try
+        {
+            final List<Message> pending = orma.selectFromMessage().
+                    tox_friendpubkeyEq(friendPubkey).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                    directionEq(0).
+                    toList();
+
+            for (Message m : pending)
+            {
+                if (!is_message_file_complete(m) && !isMessageMediaReady(m, null))
+                {
+                    retry_incoming_filetransfer(m);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "retry_pending_incoming_files_for_friend:EE:" + e.getMessage());
         }
     }
 
@@ -1802,7 +2924,6 @@ public class HelperFiletransfer
         {
             final List<Filetransfer> transfers = orma.selectFromFiletransfer().
                     directionEq(TRIFA_FT_DIRECTION_INCOMING.value).
-                    ft_acceptedEq(true).
                     stateNotEq(TOX_FILE_CONTROL_CANCEL.value).
                     toList();
 
@@ -1813,7 +2934,7 @@ public class HelperFiletransfer
                     continue;
                 }
 
-                if ((f.state != TOX_FILE_CONTROL_PAUSE.value) && (f.state != TOX_FILE_CONTROL_RESUME.value))
+                if ((f.kind != TOX_FILE_KIND_DATA.value) && (f.kind != TOX_FILE_KIND_FTV2.value))
                 {
                     continue;
                 }
@@ -1826,17 +2947,33 @@ public class HelperFiletransfer
                         continue;
                     }
 
+                    final long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(f.id,
+                                                                                                        friend_number);
+                    if (msg_id <= 0)
+                    {
+                        continue;
+                    }
+
+                    if ((!f.ft_accepted) || (f.state == TOX_FILE_CONTROL_PAUSE.value))
+                    {
+                        final Message m = (Message) orma.selectFromMessage().idEq(msg_id).get(0);
+                        if (accept_paused_incoming_filetransfer(m))
+                        {
+                            continue;
+                        }
+                    }
+
+                    if ((f.state != TOX_FILE_CONTROL_PAUSE.value) && (f.state != TOX_FILE_CONTROL_RESUME.value))
+                    {
+                        continue;
+                    }
+
                     tox_file_control(friend_number, f.file_number, TOX_FILE_CONTROL_RESUME.value);
                     if (f.state == TOX_FILE_CONTROL_PAUSE.value)
                     {
                         set_filetransfer_state_from_id(f.id, TOX_FILE_CONTROL_RESUME.value);
-                        final long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(f.id,
-                                                                                                            friend_number);
-                        if (msg_id > -1)
-                        {
-                            set_message_state_from_id(msg_id, TOX_FILE_CONTROL_RESUME.value);
-                            update_single_message_from_messge_id(msg_id, false);
-                        }
+                        set_message_state_from_id(msg_id, TOX_FILE_CONTROL_RESUME.value);
+                        update_single_message_from_messge_id(msg_id, false);
                     }
                 }
                 catch (Exception e)
@@ -1894,6 +3031,95 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    static void cancel_incoming_filetransfer(final Message message)
+    {
+        if (message == null || message.filetransfer_id <= 0)
+        {
+            return;
+        }
+        try
+        {
+            tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
+                             get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_CANCEL.value);
+            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_CANCEL.value);
+            set_message_state_from_id(message.id, TOX_FILE_CONTROL_CANCEL.value);
+            remove_vfs_ft_from_cache(message);
+            update_single_message_from_messge_id(message.id, true);
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    static void cancel_outgoing_filetransfer(final Message message)
+    {
+        if (message == null || message.filetransfer_id <= 0)
+        {
+            return;
+        }
+        try
+        {
+            tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
+                             get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_CANCEL.value);
+            set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_CANCEL.value);
+            set_message_state_from_id(message.id, TOX_FILE_CONTROL_CANCEL.value);
+            remove_ft_from_cache(message);
+            update_single_message_from_messge_id(message.id, true);
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    static void retry_incoming_filetransfer(final Message message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+        try
+        {
+            if (accept_paused_incoming_filetransfer(message))
+            {
+                update_single_message_from_messge_id(message.id, true);
+                return;
+            }
+            if (message.filetransfer_id > 0)
+            {
+                tox_file_control(tox_friend_by_public_key__wrapper(message.tox_friendpubkey),
+                                 get_filetransfer_filenum_from_id(message.filetransfer_id), TOX_FILE_CONTROL_RESUME.value);
+                set_filetransfer_state_from_id(message.filetransfer_id, TOX_FILE_CONTROL_RESUME.value);
+                set_message_state_from_id(message.id, TOX_FILE_CONTROL_RESUME.value);
+                update_single_message_from_messge_id(message.id, true);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    static void retry_outgoing_filetransfer(final Message message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+        try
+        {
+            orma.updateMessage().idEq(message.id).
+                    state(TOX_FILE_CONTROL_PAUSE.value).
+                    ft_outgoing_started(false).
+                    ft_outgoing_queued(true).
+                    ft_accepted(false).
+                    filedb_id(-1).
+                    execute();
+            queue_and_try_send_outgoing_file(message.id, true);
+        }
+        catch (Exception ignored)
+        {
         }
     }
 }

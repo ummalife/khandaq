@@ -161,7 +161,11 @@ extension NotificationCoordinator {
 private extension NotificationCoordinator {
     func addNotificationBlocks() {
         let messages = submanagerObjects.messages().sortedResultsUsingProperty("dateInterval", ascending: false)
-        messagesToken = messages.addNotificationBlock { [unowned self] change in
+        messagesToken = messages.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
@@ -183,7 +187,11 @@ private extension NotificationCoordinator {
             }
         }
 
-        chatsToken = chats.addNotificationBlock { [unowned self] change in
+        chatsToken = chats.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
@@ -194,7 +202,11 @@ private extension NotificationCoordinator {
             }
         }
 
-        requestsToken = requests.addNotificationBlock { [unowned self] change in
+        requestsToken = requests.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
@@ -216,7 +228,7 @@ private extension NotificationCoordinator {
     }
 
     func playSoundForMessageIfNeeded(_ message: OCTMessageAbstract) {
-        if message.isOutgoing() {
+        if message.isOutgoing() || message.groupHistorySync || message.groupPrivateMessage || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return
         }
 
@@ -226,7 +238,7 @@ private extension NotificationCoordinator {
     }
 
     func shouldEnqueueMessage(_ message: OCTMessageAbstract) -> Bool {
-        if message.isOutgoing() {
+        if message.isOutgoing() || message.groupHistorySync || message.groupPrivateMessage || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return false
         }
 
@@ -322,8 +334,13 @@ private extension NotificationCoordinator {
     func notificationObjectFromMessage(_ message: OCTMessageAbstract) -> NotificationObject {
         let title: String
         var icon: UIImage?
+        let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
+        let isGroup = chat?.isGroup ?? false
 
-        if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {
+        if isGroup {
+            title = chat?.groupName ?? String(localized: "group_chat_default_title")
+        }
+        else if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {
             title = friend.nickname
             icon = friendNotificationIcon(friend)
         }
@@ -333,12 +350,28 @@ private extension NotificationCoordinator {
 
         var body: String = ""
         let action = NotificationAction.openChat(chatUniqueIdentifier: message.chatUniqueIdentifier)
+        let peerPrefix: String = {
+            guard isGroup else {
+                return ""
+            }
+
+            if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
+                return "\(peerName): "
+            }
+
+            if message.groupSenderPeerId > 0 {
+                return "Peer \(message.groupSenderPeerId): "
+            }
+
+            return ""
+        }()
 
         if let messageText = message.messageText {
             let defaultString = String(localized: "notification_new_message")
 
             if userDefaults.showNotificationPreview {
-                body = messageText.text ?? defaultString
+                let preview = GroupMentionHelper.notificationPreviewText(messageText.text)
+                body = peerPrefix + (preview.isEmpty ? defaultString : preview)
             }
             else {
                 body = defaultString
@@ -348,7 +381,7 @@ private extension NotificationCoordinator {
             let defaultString = String(localized: "notification_incoming_file")
 
             if userDefaults.showNotificationPreview {
-                body = messageFile.fileName ?? defaultString
+                body = peerPrefix + (messageFile.fileName ?? defaultString)
             }
             else {
                 body = defaultString
@@ -404,6 +437,28 @@ private extension NotificationCoordinator {
         delegate?.notificationCoordinator(self, updateFriendsBadge: requestsCount)
 
         UIApplication.shared.applicationIconBadgeNumber = chatsCount + requestsCount
+    }
+
+    func areNotificationsMuted(for message: OCTMessageAbstract) -> Bool {
+        guard let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat,
+              chat.isGroup else {
+            return false
+        }
+
+        if chat.groupNotificationsSilent {
+            return true
+        }
+
+        if message.groupSenderPeerId > 0 {
+            let peerKey = "\(chat.uniqueIdentifier):\(message.groupSenderPeerId)"
+
+            if let peer = submanagerObjects.object(withUniqueIdentifier: peerKey, for: .groupPeer) as? OCTGroupPeer,
+               peer.peerNotificationsSilent {
+                return true
+            }
+        }
+
+        return false
     }
 
     // func chatsBadge() -> Int {

@@ -8,6 +8,7 @@ protocol ChatListTableManagerDelegate: class {
     func chatListTableManager(_ manager: ChatListTableManager, didSelectChat chat: OCTChat)
     func chatListTableManager(_ manager: ChatListTableManager, presentAlertController controller: UIAlertController)
     func chatListTableManagerWasUpdated(_ manager: ChatListTableManager)
+    func chatListTableManager(_ manager: ChatListTableManager, didRequestGroupInfo chat: OCTChat)
 }
 
 class ChatListTableManager: NSObject {
@@ -15,9 +16,15 @@ class ChatListTableManager: NSObject {
 
     let tableView: UITableView
 
+    var filterTab: ChatListFilterTab = UserDefaultsManager().chatListFilterTab {
+        didSet {
+            UserDefaultsManager().chatListFilterTab = filterTab
+        }
+    }
+
     var isEmpty: Bool {
         get {
-            return chats.count == 0
+            return visibleRowCount() == 0
         }
     }
 
@@ -27,14 +34,18 @@ class ChatListTableManager: NSObject {
     fileprivate let timeFormatter: DateFormatter
 
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
+    fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
+    fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
 
     fileprivate let chats: Results<OCTChat>
     fileprivate var chatsToken: RLMNotificationToken?
     fileprivate let friends: Results<OCTFriend>
     fileprivate var friendsToken: RLMNotificationToken?
     fileprivate var presenceRefreshTimer: Timer?
+    fileprivate var groupConnectionObserver: NSObjectProtocol?
+    fileprivate var groupPeersObserver: NSObjectProtocol?
 
-    init(theme: Theme, tableView: UITableView, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects) {
+    init(theme: Theme, tableView: UITableView, submanagerChats: OCTSubmanagerChats, submanagerGroups: OCTSubmanagerGroups, submanagerObjects: OCTSubmanagerObjects) {
         self.tableView = tableView
 
         self.theme = theme
@@ -43,6 +54,8 @@ class ChatListTableManager: NSObject {
         self.timeFormatter = DateFormatter(type: .time)
 
         self.submanagerChats = submanagerChats
+        self.submanagerGroups = submanagerGroups
+        self.submanagerObjects = submanagerObjects
 
         self.chats = submanagerObjects.chats().sortedResultsUsingProperty("lastActivityDateInterval", ascending: false)
         self.friends = submanagerObjects.friends()
@@ -54,12 +67,74 @@ class ChatListTableManager: NSObject {
 
         addNotificationBlocks()
         startPresenceRefreshTimer()
+        startGroupObservers()
     }
 
     deinit {
         chatsToken?.invalidate()
         friendsToken?.invalidate()
         presenceRefreshTimer?.invalidate()
+        if let observer = groupConnectionObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = groupPeersObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    func refreshGroupPeerCounts() {
+        guard !shouldDeferListUpdates else {
+            return
+        }
+
+        for index in 0..<chats.count {
+            let chat = chats[index]
+            if chat.isGroup {
+                submanagerGroups.refreshPeers(for: chat)
+            }
+        }
+    }
+
+    func setFilterTab(_ tab: ChatListFilterTab) {
+        guard filterTab != tab else {
+            return
+        }
+
+        filterTab = tab
+        tableView.reloadData()
+        delegate?.chatListTableManagerWasUpdated(self)
+    }
+
+    func unreadCountsForFilterTabs() -> ChatListFilterUnreadCounts {
+        var counts = ChatListFilterUnreadCounts()
+
+        for index in 0..<chats.count {
+            let chat = chats[index]
+            let unread = unreadMessageCount(for: chat)
+            guard unread > 0 else {
+                continue
+            }
+
+            if !chat.isGroup {
+                counts.direct += unread
+            }
+            else {
+                counts.groups += unread
+            }
+
+            if ChatFavoritesStore.isFavorite(chat: chat) {
+                counts.favorites += unread
+            }
+        }
+
+        return counts
+    }
+
+    func toggleFavorite(at indexPath: IndexPath) {
+        let chat = chatAtFilteredRow(indexPath.row)
+        ChatFavoritesStore.toggle(chat: chat)
+        tableView.reloadData()
+        delegate?.chatListTableManagerWasUpdated(self)
     }
 }
 
@@ -70,7 +145,65 @@ extension ChatListTableManager: UITableViewDataSource {
         var connectionStatus = OCTToxConnectionStatus.none
         var userStatus = OCTToxUserStatus.none
 
-        let chat = chats[indexPath.row]
+        let chat = chatAtFilteredRow(indexPath.row)
+
+        if chat.isGroup {
+            let nickname = chat.groupName ?? String(localized: "group_chat_default_title")
+            let model = ChatListCellModel()
+            model.avatar = avatarManager.avatarFromString(
+                    nickname,
+                    diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+            model.nickname = nickname
+            let preview = lastMessagePreview(in: chat, friend: nil)
+            model.message = preview.text
+            model.isDraft = preview.isDraft
+            if let date = chat.lastActivityDate() {
+                model.dateText = dateTextFromDate(date)
+            }
+            model.isUnread = chatShowsUnreadIndicator(for: chat,
+                                                      privateUnreadCount: Int(submanagerGroups.totalUnreadPrivateMessageCount(for: chat)))
+            var presenceParts: [String] = []
+            if chat.groupPrivacyState == Int32(OCTToxGroupPrivacyState.private.rawValue) {
+                presenceParts.append(String(localized: "group_chat_list_private"))
+            }
+            if !submanagerGroups.isGroupConnected(for: chat) {
+                presenceParts.append(String(localized: "group_chat_list_disconnected"))
+            }
+            let memberCount = groupMemberCount(for: chat)
+            if memberCount > 0 {
+                let onlineCount = Int(submanagerGroups.onlineGroupPeerCount(for: chat))
+                if submanagerGroups.isGroupConnected(for: chat) {
+                    presenceParts.append(String(localized: "group_member_online_count_format", memberCount, onlineCount))
+                    model.presenceIsOnline = onlineCount > 0
+                }
+                else {
+                    presenceParts.append(String(localized: "group_member_count_format", memberCount))
+                    model.presenceIsOnline = false
+                }
+            }
+            else if presenceParts.isEmpty {
+                presenceParts.append(String(localized: "group_chat_list_subtitle"))
+            }
+            model.presenceText = presenceParts.joined(separator: " · ")
+            if !submanagerGroups.isGroupConnected(for: chat) {
+                model.presenceIsOnline = false
+            }
+            let privateUnread = submanagerGroups.totalUnreadPrivateMessageCount(for: chat)
+            if privateUnread > 0 {
+                let privateHint = String(localized: "group_chat_list_private_unread_format", privateUnread)
+                if model.presenceText.isEmpty {
+                    model.presenceText = privateHint
+                }
+                else {
+                    model.presenceText += " · " + privateHint
+                }
+            }
+
+            let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
+            cell.setupWithTheme(theme, model: model)
+            return cell
+        }
+
         let friend = chat.friends.lastObject() as? OCTFriend
 
         if let friend = friend {
@@ -107,7 +240,7 @@ extension ChatListTableManager: UITableViewDataSource {
             model.presenceIsOnline = presence.isOnline
         }
 
-        model.isUnread = chat.hasUnreadMessages()
+        model.isUnread = chatShowsUnreadIndicator(for: chat)
 
         let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
         cell.setupWithTheme(theme, model: model)
@@ -116,16 +249,22 @@ extension ChatListTableManager: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return chats.count
+        return visibleRowCount()
     }
 
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
+            let chat = chatAtFilteredRow(indexPath.row)
+
+            if chat.isGroup {
+                presentGroupDeleteOptions(for: chat)
+                return
+            }
+
             let alert = UIAlertController(title: String(localized:"delete_chat_title"), message: nil, preferredStyle: .alert)
 
             alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .default, handler: nil))
             alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [unowned self] _ -> Void in
-                let chat = self.chats[indexPath.row]
                 self.submanagerChats.removeAllMessages(in: chat, removeChat: true)
             })
 
@@ -138,34 +277,143 @@ extension ChatListTableManager: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
 
-        let chat = self.chats[indexPath.row]
+        let chat = chatAtFilteredRow(indexPath.row)
         delegate?.chatListTableManager(self, didSelectChat: chat)
+    }
+
+    @available(iOS 11.0, *)
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let chat = chatAtFilteredRow(indexPath.row)
+
+        let favoriteTitle = ChatFavoritesStore.isFavorite(chat: chat)
+            ? String(localized: "chat_filter_remove_favorite")
+            : String(localized: "chat_filter_add_favorite")
+        let favoriteAction = UIContextualAction(style: .normal, title: favoriteTitle) { [unowned self] _, _, completion in
+            self.toggleFavorite(at: indexPath)
+            completion(true)
+        }
+        favoriteAction.backgroundColor = theme.colorForType(.LinkText)
+
+        if chat.isGroup {
+            let deleteAction = UIContextualAction(style: .destructive, title: String(localized: "alert_delete")) { [unowned self] _, _, completion in
+                self.presentGroupDeleteOptions(for: chat)
+                completion(true)
+            }
+
+            let infoAction = UIContextualAction(style: .normal, title: String(localized: "group_info_button")) { [unowned self] _, _, completion in
+                self.delegate?.chatListTableManager(self, didRequestGroupInfo: chat)
+                completion(true)
+            }
+            infoAction.backgroundColor = theme.colorForType(.LinkText)
+
+            let config = UISwipeActionsConfiguration(actions: [deleteAction, infoAction, favoriteAction])
+            config.performsFirstActionWithFullSwipe = false
+            return config
+        }
+
+        let config = UISwipeActionsConfiguration(actions: [favoriteAction])
+        config.performsFirstActionWithFullSwipe = false
+        return config
+    }
+
+    @available(iOS 13.0, *)
+    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        let chat = chatAtFilteredRow(indexPath.row)
+        let isFavorite = ChatFavoritesStore.isFavorite(chat: chat)
+        let favoriteTitle = isFavorite
+            ? String(localized: "chat_filter_remove_favorite")
+            : String(localized: "chat_filter_add_favorite")
+
+        // KHANDAQ (#13): show a read-only preview of the conversation when peeking a chat row.
+        // ChatPreviewController is self-contained and has no side effects (does not mark read).
+        return UIContextMenuConfiguration(
+            identifier: chat.uniqueIdentifier as NSString,
+            previewProvider: { [weak self] in
+                return self?.makeChatPreviewController(for: chat)
+            }
+        ) { [weak self] _ in
+            let favoriteAction = UIAction(title: favoriteTitle, image: UIImage(systemName: isFavorite ? "star.slash" : "star")) { _ in
+                self?.toggleFavorite(at: indexPath)
+            }
+            return UIMenu(children: [favoriteAction])
+        }
+    }
+
+    @available(iOS 13.0, *)
+    func tableView(_ tableView: UITableView, willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionCommitAnimating) {
+        guard let identifier = configuration.identifier as? String else {
+            return
+        }
+        // Tapping the peek preview opens the real chat.
+        animator.addCompletion { [weak self] in
+            guard let self = self else {
+                return
+            }
+            for index in 0..<self.chats.count {
+                let chat = self.chats[index]
+                if chat.uniqueIdentifier == identifier {
+                    self.delegate?.chatListTableManager(self, didSelectChat: chat)
+                    break
+                }
+            }
+        }
+    }
+
+    @available(iOS 13.0, *)
+    private func makeChatPreviewController(for chat: OCTChat) -> ChatPreviewController {
+        let title: String
+        let avatar: UIImage?
+
+        if chat.isGroup {
+            title = chat.groupName ?? String(localized: "group_chat_default_title")
+            avatar = avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+        }
+        else {
+            let friend = chat.friends.lastObject() as? OCTFriend
+            title = friend?.nickname ?? String(localized: "contact_deleted")
+            if let data = friend?.avatarData {
+                avatar = UIImage(data: data)
+            }
+            else {
+                avatar = avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+            }
+        }
+
+        let allMessages = submanagerObjects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier))
+            .sortedResultsUsingProperty("dateInterval", ascending: true)
+
+        var recent = [OCTMessageAbstract]()
+        let total = allMessages.count
+        var index = max(0, total - 24)
+        while index < total {
+            recent.append(allMessages[index])
+            index += 1
+        }
+
+        return ChatPreviewController(theme: theme, title: title, avatar: avatar, messages: recent)
     }
 }
 
 private extension ChatListTableManager {
     func addNotificationBlocks() {
-        chatsToken = chats.addNotificationBlock { [unowned self] change in
+        chatsToken = chats.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
-                case .update(_, let deletions, let insertions, let modifications):
-                    // TODO: fix me, this is a hack to avoid the crash
-                    self.tableView.reloadData()
-                    self.tableView.beginUpdates()
-                    /*
-                    self.tableView.deleteRows(at: deletions.map { IndexPath(row: $0, section: 0) },
-                                                          with: .automatic)
-                    self.tableView.insertRows(at: insertions.map { IndexPath(row: $0, section: 0) },
-                                                          with: .automatic)
-                    self.tableView.reloadRows(at: modifications.map { IndexPath(row: $0, section: 0) },
-                                                          with: .none)
-                    */
-                    self.tableView.endUpdates()
-
-                    self.delegate?.chatListTableManagerWasUpdated(self)
+                case .update(_, _, _, _):
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self, self.tableView.window != nil, !self.shouldDeferListUpdates else {
+                            return
+                        }
+                        self.tableView.reloadData()
+                        self.delegate?.chatListTableManagerWasUpdated(self)
+                    }
                 case .error(let error):
-                    fatalError("\(error)")
+                    NSLog("ChatListTableManager chats update error: \(error)")
             }
         }
 
@@ -184,49 +432,124 @@ private extension ChatListTableManager {
 
                     self.reloadChatRowsForFriendModifications(modifications)
                 case .error(let error):
-                    fatalError("\(error)")
+                    NSLog("ChatListTableManager friends update error: \(error)")
             }
         }
     }
 
     func reloadChatRowsForFriendModifications(_ friendIndices: [Int]) {
-        var indexPaths = Set<IndexPath>()
-
-        for chatIndex in 0..<chats.count {
-            guard let chatFriend = chats[chatIndex].friends.lastObject() as? OCTFriend else {
-                continue
-            }
-
-            for friendIndex in friendIndices {
-                if friends[friendIndex].uniqueIdentifier == chatFriend.uniqueIdentifier {
-                    indexPaths.insert(IndexPath(row: chatIndex, section: 0))
-                    break
-                }
-            }
-        }
-
-        guard !indexPaths.isEmpty else {
+        guard !friendIndices.isEmpty else {
             return
         }
 
         DispatchQueue.main.async { [weak self] in
-            guard let self = self, self.tableView.window != nil else {
+            guard let self = self, self.tableView.window != nil, !self.shouldDeferListUpdates else {
                 return
             }
 
-            self.tableView.reloadRows(at: Array(indexPaths), with: .none)
+            // Friend accept can insert a new chat row while friends update fires — partial reloadRows races with chats.reloadData.
+            self.tableView.reloadData()
         }
     }
 
     func startPresenceRefreshTimer() {
         presenceRefreshTimer?.invalidate()
         presenceRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            guard let self = self, self.tableView.window != nil else {
+            guard let self = self, self.tableView.window != nil, !self.shouldDeferListUpdates else {
                 return
             }
 
+            self.refreshGroupPeerCounts()
             self.tableView.reloadData()
         }
+    }
+
+    var shouldDeferListUpdates: Bool {
+        var responder: UIResponder? = tableView
+
+        while let current = responder {
+            if let controller = current as? UIViewController, controller.presentedViewController != nil {
+                return true
+            }
+
+            responder = current.next
+        }
+
+        return false
+    }
+
+    func startGroupObservers() {
+        groupConnectionObserver = NotificationCenter.default.addObserver(
+            forName: .octGroupConnectionStatusChange,
+            object: nil,
+            queue: .main) { [weak self] notification in
+            guard let self = self,
+                  let chatId = notification.userInfo?[kOCTGroupConnectionStatusChangeChatUniqueIdentifierKey] as? String else {
+                return
+            }
+
+            self.refreshPeers(forChatUniqueIdentifier: chatId)
+        }
+
+        groupPeersObserver = NotificationCenter.default.addObserver(
+            forName: .octGroupPeersUpdated,
+            object: nil,
+            queue: .main) { [weak self] notification in
+            guard let self = self,
+                  let chatId = notification.userInfo?[kOCTGroupPeersUpdatedChatUniqueIdentifierKey] as? String else {
+                return
+            }
+
+            self.reloadRow(forChatUniqueIdentifier: chatId)
+        }
+    }
+
+    func refreshPeers(forChatUniqueIdentifier chatUniqueIdentifier: String) {
+        for index in 0..<chats.count {
+            let chat = chats[index]
+            if chat.isGroup && chat.uniqueIdentifier == chatUniqueIdentifier {
+                submanagerGroups.refreshPeers(for: chat)
+                tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
+                return
+            }
+        }
+    }
+
+    func reloadRow(forChatUniqueIdentifier chatUniqueIdentifier: String) {
+        for index in 0..<chats.count {
+            if chats[index].uniqueIdentifier == chatUniqueIdentifier {
+                guard tableView.window != nil else {
+                    return
+                }
+
+                tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
+                return
+            }
+        }
+    }
+
+    func presentGroupDeleteOptions(for chat: OCTChat) {
+        let alert = UIAlertController(title: String(localized: "group_delete_chat_title"),
+                                      message: String(localized: "group_delete_chat_message"),
+                                      preferredStyle: .alert)
+
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "group_clear_history_action"), style: .default) { [unowned self] _ in
+            self.submanagerGroups.removeAllMessages(in: chat, removeChat: false, leaveGroup: false)
+        })
+        alert.addAction(UIAlertAction(title: String(localized: "group_leave_action"), style: .destructive) { [unowned self] _ in
+            if chat.groupNumber >= 0 {
+                do {
+                    try self.submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)
+                }
+                catch {
+                    // Still remove local chat if tox leave fails (already left, disconnected, etc.).
+                }
+            }
+            self.submanagerGroups.removeAllMessages(in: chat, removeChat: true, leaveGroup: false)
+        })
+
+        delegate?.chatListTableManager(self, presentAlertController: alert)
     }
 
     func lastMessage(in chat: OCTChat, friend: OCTFriend?) -> String {
@@ -238,13 +561,15 @@ private extension ChatListTableManager {
             return (String(localized: "chat_is_typing_text"), false)
         }
 
-        if let draft = chat.enteredText?.trimmingCharacters(in: .whitespacesAndNewlines), !draft.isEmpty {
+        if let draft = chat.enteredText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !draft.isEmpty,
+           draft != "(null)" {
             var body = draft.replacingOccurrences(of: "\n", with: " ")
             if body.count > 120 {
                 let endIndex = body.index(body.startIndex, offsetBy: 117)
                 body = String(body[..<endIndex]) + "..."
             }
-            return (String(format: String(localized: "chat_draft_prefix"), body), true)
+            return (String(localized: "chat_draft_prefix", body), true)
         }
 
         guard let message = chat.lastMessage else {
@@ -275,5 +600,90 @@ private extension ChatListTableManager {
         let isToday = (Calendar.current as NSCalendar).compare(Date(), to: date, toUnitGranularity: .day) == .orderedSame
 
         return isToday ? timeFormatter.string(from: date) : dateFormatter.string(from: date)
+    }
+
+    func groupMemberCount(for chat: OCTChat) -> Int {
+        let stored = Int(chat.groupPeerCount)
+        let fromApi = Int(submanagerGroups.peerCount(for: chat))
+        var count = max(stored, fromApi)
+        if count <= 0 && (chat.groupNumber >= 0 || (chat.groupChatIdHex?.count ?? 0) == 64) {
+            count = 1
+        }
+        return count
+    }
+
+    func chatShowsUnreadIndicator(for chat: OCTChat, privateUnreadCount: Int = 0) -> Bool {
+        if privateUnreadCount > 0 {
+            return true
+        }
+
+        guard chat.hasUnreadMessages(), let lastMessage = chat.lastMessage else {
+            return false
+        }
+
+        return !lastMessage.isOutgoing()
+    }
+
+    func visibleRowCount() -> Int {
+        var count = 0
+        for index in 0..<chats.count {
+            if chatMatchesFilter(chats[index]) {
+                count += 1
+            }
+        }
+        return count
+    }
+
+    func chatAtFilteredRow(_ row: Int) -> OCTChat {
+        var visible = 0
+        for index in 0..<chats.count {
+            let chat = chats[index]
+            if chatMatchesFilter(chat) {
+                if visible == row {
+                    return chat
+                }
+                visible += 1
+            }
+        }
+        return chats.firstObject
+    }
+
+    func chatMatchesFilter(_ chat: OCTChat) -> Bool {
+        switch filterTab {
+            case .direct:
+                return !chat.isGroup
+            case .groups:
+                return chat.isGroup
+            case .favorites:
+                return ChatFavoritesStore.isFavorite(chat: chat)
+        }
+    }
+
+    func unreadMessageCount(for chat: OCTChat) -> Int {
+        let privateUnread = chat.isGroup ? Int(submanagerGroups.totalUnreadPrivateMessageCount(for: chat)) : 0
+        if privateUnread > 0 {
+            return privateUnread
+        }
+
+        guard chat.hasUnreadMessages() else {
+            return 0
+        }
+
+        let predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND dateInterval > %f",
+                                    chat.uniqueIdentifier,
+                                    chat.lastReadDateInterval)
+        guard let results = submanagerObjects.objects(for: .messageAbstract, predicate: predicate) else {
+            return 0
+        }
+        var count = 0
+        for index in 0..<results.count {
+            guard let message = results.object(at: index) as? OCTMessageAbstract else {
+                continue
+            }
+            if !message.isOutgoing() {
+                count += 1
+            }
+        }
+        return count
     }
 }

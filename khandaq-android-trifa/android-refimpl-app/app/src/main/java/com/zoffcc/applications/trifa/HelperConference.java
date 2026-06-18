@@ -19,6 +19,8 @@
 
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.R;
+
 import android.app.ProgressDialog;
 import android.content.ClipData;
 import android.content.Context;
@@ -88,7 +90,7 @@ public class HelperConference
                 }
 
                 MainActivity.clipboard.setPrimaryClip(ClipData.newPlainText("", copy_text.toString()));
-                Toast.makeText(c, "copied to Clipboard", Toast.LENGTH_SHORT).show();
+                Toast.makeText(c, R.string.text_copied_to_clipboard, Toast.LENGTH_SHORT).show();
                 MainActivity.selected_conference_messages.clear();
 
                 try
@@ -149,7 +151,7 @@ public class HelperConference
                 }
 
                 MainActivity.clipboard.setPrimaryClip(ClipData.newPlainText("", copy_text.toString()));
-                Toast.makeText(c, "copied to Clipboard", Toast.LENGTH_SHORT).show();
+                Toast.makeText(c, R.string.text_copied_to_clipboard, Toast.LENGTH_SHORT).show();
                 MainActivity.selected_group_messages.clear();
 
                 try

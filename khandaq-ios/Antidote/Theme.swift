@@ -152,6 +152,39 @@ class Theme {
         try validateMappedColors(mappedColors)
     }
 
+    fileprivate init(mappedColors: [String: UIColor]) {
+        self.mappedColors = mappedColors
+    }
+
+    static func fallbackTheme(isDarkMode: Bool) -> Theme {
+        let background = isDarkMode ? UIColor(white: 0.11, alpha: 1) : .white
+        let text = isDarkMode ? UIColor(white: 0.92, alpha: 1) : UIColor(white: 0.1, alpha: 1)
+        let link = UIColor(red: 0.04, green: 0.52, blue: 1, alpha: 1)
+        let separator = isDarkMode ? UIColor(white: 0.25, alpha: 1) : UIColor(white: 0.85, alpha: 1)
+
+        var colors = [String: UIColor]()
+        for type in ColorType.allValues {
+            colors[type.rawValue] = background
+        }
+
+        colors[ColorType.NormalBackground.rawValue] = background
+        colors[ColorType.NormalText.rawValue] = text
+        colors[ColorType.LinkText.rawValue] = link
+        colors[ColorType.SeparatorsAndBorders.rawValue] = separator
+        colors[ColorType.TabItemActive.rawValue] = link
+        colors[ColorType.TabItemInactive.rawValue] = UIColor(white: 0.55, alpha: 1)
+        colors[ColorType.OnlineStatus.rawValue] = UIColor(red: 0.2, green: 0.78, blue: 0.35, alpha: 1)
+        colors[ColorType.OfflineStatus.rawValue] = UIColor(white: 0.55, alpha: 1)
+        colors[ColorType.AwayStatus.rawValue] = UIColor(red: 1, green: 0.8, blue: 0, alpha: 1)
+        colors[ColorType.BusyStatus.rawValue] = UIColor(red: 1, green: 0.23, blue: 0.19, alpha: 1)
+        colors[ColorType.StatusBackground.rawValue] = background
+        colors[ColorType.LoginButtonBackground.rawValue] = link
+        colors[ColorType.LoginButtonText.rawValue] = .white
+        colors[ColorType.EmptyScreenPlaceholderText.rawValue] = UIColor(white: 0.55, alpha: 1)
+
+        return Theme(mappedColors: colors)
+    }
+
     func colorForType(_ type: ColorType) -> UIColor {
         return mappedColors[type.rawValue]!
     }

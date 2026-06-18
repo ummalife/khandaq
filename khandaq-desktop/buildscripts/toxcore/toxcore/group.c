@@ -9,6 +9,7 @@
 #include "group.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -802,6 +803,7 @@ static int addpeer(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_p
 
     if (peer_index != -1) {
         if (!pk_equal(g->group[peer_index].real_pk, real_pk)) {
+            LOGGER_ERROR(g_c->m->log, "peer public key is incorrect for peer %d", peer_number);
             return -1;
         }
 
@@ -2848,6 +2850,9 @@ static void handle_message_packet_group(Group_Chats *g_c, uint32_t groupnumber, 
 
     uint32_t message_number;
     memcpy(&message_number, data + sizeof(uint16_t), sizeof(message_number));
+
+    // HINT: uint32_t message number in network byte order
+    uint32_t message_number_network_byte_order = message_number;
     message_number = net_ntohl(message_number);
 
     const uint8_t message_id = data[sizeof(uint16_t) + sizeof(message_number)];
@@ -2965,13 +2970,21 @@ static void handle_message_packet_group(Group_Chats *g_c, uint32_t groupnumber, 
                 return;
             }
 
-            VLA(uint8_t, newmsg, msg_data_len + 1);
-            memcpy(newmsg, msg_data, msg_data_len);
-            newmsg[msg_data_len] = 0;
+            // ATTENTION: !!add uint32_t message_number (as lowercase HEX) + ":" in front of the text message bytes!!
+#define HEX_MSG_NUM_LEN_COLON 9
+            VLA(uint8_t, newmsg, msg_data_len + 1 + HEX_MSG_NUM_LEN_COLON);
+            memset(newmsg, 0, msg_data_len + 1 + HEX_MSG_NUM_LEN_COLON);
+            uint8_t *t1 = (uint8_t *)(&(message_number_network_byte_order));
+            uint8_t *t2 = t1 + 1;
+            uint8_t *t3 = t1 + 2;
+            uint8_t *t4 = t1 + 3;
+            sprintf((char *)newmsg, "%02x%02x%02x%02x:", *t1, *t2, *t3, *t4); // BEWARE: this adds a NULL byte at the end
+            memcpy(newmsg + HEX_MSG_NUM_LEN_COLON, msg_data, msg_data_len);
+            newmsg[msg_data_len + HEX_MSG_NUM_LEN_COLON] = 0;
 
             // TODO(irungentoo):
             if (g_c->message_callback != nullptr) {
-                g_c->message_callback(g_c->m, groupnumber, index, 0, newmsg, msg_data_len, userdata);
+                g_c->message_callback(g_c->m, groupnumber, index, 0, newmsg, (msg_data_len + HEX_MSG_NUM_LEN_COLON), userdata);
             }
 
             break;
@@ -3679,6 +3692,7 @@ static State_Load_Status load_conferences_helper(Group_Chats *g_c, const uint8_t
 
         if (groupnumber == -1) {
             // If this fails there's a serious problem, don't bother with cleanup
+            LOGGER_ERROR(g_c->m->log, "conference creation failed");
             return STATE_LOAD_STATUS_ERROR;
         }
 
@@ -3705,6 +3719,7 @@ static State_Load_Status load_conferences_helper(Group_Chats *g_c, const uint8_t
                                        nullptr, true, false);
 
         if (peer_index == -1) {
+            LOGGER_ERROR(g_c->m->log, "adding peer %d failed", g->peer_number);
             return STATE_LOAD_STATUS_ERROR;
         }
 

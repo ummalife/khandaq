@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="settings_backup_label">#8A9A92</color>
+    <color name="settings_backup_panel_bg">@color/khandaq_gunmetal</color>
+    <color name="settings_backup_panel_stroke">#2E3834</color>
+    <color name="settings_backup_action_text">@color/khandaq_text</color>
+    <color name="settings_backup_icon">@color/khandaq_emerald</color>
+    <color name="settings_backup_divider">#2E3834</color>
+</resources>

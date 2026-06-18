@@ -16,6 +16,7 @@
 #import "OCTSubmanagerBootstrapImpl.h"
 #import "OCTSubmanagerChatsImpl.h"
 #import "OCTSubmanagerFriendsImpl.h"
+#import "OCTSubmanagerGroupsImpl.h"
 #import "OCTSubmanagerFilesImpl.h"
 #import "OCTSubmanagerUserImpl.h"
 #import "OCTSubmanagerObjectsImpl.h"
@@ -38,6 +39,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
 @property (strong, nonatomic, readwrite) OCTSubmanagerChatsImpl *chats;
 @property (strong, nonatomic, readwrite) OCTSubmanagerFilesImpl *files;
 @property (strong, nonatomic, readwrite) OCTSubmanagerFriendsImpl *friends;
+@property (strong, nonatomic, readwrite) OCTSubmanagerGroupsImpl *groups;
 @property (strong, nonatomic, readwrite) OCTSubmanagerObjectsImpl *objects;
 @property (strong, nonatomic, readwrite) OCTSubmanagerUserImpl *user;
 
@@ -54,6 +56,12 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
 @end
 @implementation FakeSubmanager
 - (void)tox:(OCTTox *)tox connectionStatus:(OCTToxConnectionStatus)status
+{}
+- (void)tox:(OCTTox *)tox groupMessage:(NSString *)message
+       type:(OCTToxMessageType)type
+groupNumber:(OCTToxGroupNumber)groupNumber
+     peerId:(uint32_t)peerId
+  messageId:(uint32_t)messageId
 {}
 @end
 
@@ -401,6 +409,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = submanager;
     self.manager.files = submanager;
     self.manager.friends = submanager;
+    self.manager.groups = submanager;
     self.manager.objects = submanager;
     self.manager.user = submanager;
 
@@ -425,6 +434,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = dummy;
     self.manager.files = dummy;
     self.manager.friends = dummy;
+    self.manager.groups = dummy;
     self.manager.objects = dummy;
     self.manager.user = dummy;
 
@@ -434,6 +444,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = submanager;
     self.manager.files = dummy;
     self.manager.friends = dummy;
+    self.manager.groups = dummy;
     self.manager.objects = dummy;
     self.manager.user = dummy;
 
@@ -443,6 +454,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = dummy;
     self.manager.files = submanager;
     self.manager.friends = dummy;
+    self.manager.groups = dummy;
     self.manager.objects = dummy;
     self.manager.user = dummy;
 
@@ -452,6 +464,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = dummy;
     self.manager.files = dummy;
     self.manager.friends = submanager;
+    self.manager.groups = dummy;
     self.manager.objects = dummy;
     self.manager.user = dummy;
 
@@ -461,6 +474,17 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = dummy;
     self.manager.files = dummy;
     self.manager.friends = dummy;
+    self.manager.groups = submanager;
+    self.manager.objects = dummy;
+    self.manager.user = dummy;
+
+    XCTAssertEqual([self.manager forwardingTargetForSelector:@selector(tox:groupMessage:type:groupNumber:peerId:messageId:)], submanager);
+
+    self.manager.bootstrap = dummy;
+    self.manager.chats = dummy;
+    self.manager.files = dummy;
+    self.manager.friends = dummy;
+    self.manager.groups = dummy;
     self.manager.objects = submanager;
     self.manager.user = dummy;
 
@@ -470,6 +494,7 @@ static NSString *const kTestDirectory = @"me.dvor.objcToxTests";
     self.manager.chats = dummy;
     self.manager.files = dummy;
     self.manager.friends = dummy;
+    self.manager.groups = dummy;
     self.manager.objects = dummy;
     self.manager.user = submanager;
 

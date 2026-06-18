@@ -23,3 +23,12 @@ const NSUInteger kOCTToxMaxFileNameLength = TOX_MAX_FILENAME_LENGTH;
 
 const NSUInteger kOCTToxHashLength = TOX_HASH_LENGTH;
 const NSUInteger kOCTToxFileIdLength = TOX_FILE_ID_LENGTH;
+
+const OCTToxGroupNumber kOCTToxGroupNumberFailure = UINT32_MAX;
+
+const NSUInteger kOCTToxGroupChatIdLength = TOX_GROUP_CHAT_ID_SIZE;
+const NSUInteger kOCTToxGroupChatIdHexLength = 2 * TOX_GROUP_CHAT_ID_SIZE;
+const NSUInteger kOCTToxGroupMaxMessageLength = TOX_GROUP_MAX_MESSAGE_LENGTH;
+const NSUInteger kOCTToxGroupMaxGroupNameLength = TOX_GROUP_MAX_GROUP_NAME_LENGTH;
+const NSUInteger kOCTToxGroupMaxPartLength = TOX_GROUP_MAX_PART_LENGTH;
+const int32_t kOCTDefaultGroupPeerLimit = 100;

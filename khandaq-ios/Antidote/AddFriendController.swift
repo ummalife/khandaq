@@ -8,11 +8,6 @@ import SnapKit
 private struct Constants {
     static let TextViewTopOffset = 5.0
     static let TextViewXOffset = 5.0
-    static let QrCodeBottomSpacerDeltaHeight = 70.0
-
-    static let SendAlertTextViewBottomOffset = -10.0
-    static let SendAlertTextViewXOffset = 5.0
-    static let SendAlertTextViewHeight = 70.0
 }
 
 protocol AddFriendControllerDelegate: class {
@@ -29,6 +24,7 @@ class AddFriendController: UIViewController {
 
     fileprivate let theme: Theme
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
+    fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate let ownToxAddress: String
 
     fileprivate var idTextField: UITextField!
@@ -41,9 +37,10 @@ class AddFriendController: UIViewController {
 
     fileprivate var cachedMessage: String?
 
-    init(theme: Theme, submanagerFriends: OCTSubmanagerFriends, ownToxAddress: String) {
+    init(theme: Theme, submanagerFriends: OCTSubmanagerFriends, submanagerObjects: OCTSubmanagerObjects, ownToxAddress: String) {
         self.theme = theme
         self.submanagerFriends = submanagerFriends
+        self.submanagerObjects = submanagerObjects
         self.ownToxAddress = ownToxAddress.uppercased()
 
         super.init(nibName: nil, bundle: nil)
@@ -83,65 +80,128 @@ extension AddFriendController {
         idTextField.resignFirstResponder()
         sanitizeIdFieldIfNeeded()
 
-        guard validatedAddressFromIdField() != nil else {
+        guard let address = validatedAddressFromIdField() else {
             showInvalidIdFormatError()
             return
         }
 
-        let messageView = UITextView()
-        messageView.text = cachedMessage
-        let placeholderstring = NSAttributedString.init(string: String(localized: "add_contact_default_message_text"))
-        messageView.attributedPlaceholder = placeholderstring
-        messageView.font = UIFont.systemFont(ofSize: 17.0)
-        messageView.layer.cornerRadius = 5.0
-        messageView.layer.masksToBounds = true
-
-        let alert = SDCAlertController(
-                title: String(localized: "add_contact_default_message_title"),
-                message: nil,
-                preferredStyle: .alert)!
-
-        alert.contentView.addSubview(messageView)
-        messageView.snp.makeConstraints {
-            $0.top.equalTo(alert.contentView)
-            $0.bottom.equalTo(alert.contentView).offset(Constants.SendAlertTextViewBottomOffset);
-            $0.leading.equalTo(alert.contentView).offset(Constants.SendAlertTextViewXOffset);
-            $0.trailing.equalTo(alert.contentView).offset(-Constants.SendAlertTextViewXOffset);
-            $0.height.equalTo(Constants.SendAlertTextViewHeight);
+        if isOwnToxAddress(address) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: String(localized: "add_contact_own_id_error"),
+                retryBlock: nil
+            )
+            return
         }
 
-        alert.addAction(SDCAlertAction(title: String(localized: "alert_cancel"), style: .default, handler: nil))
-        alert.addAction(SDCAlertAction(title: String(localized: "add_contact_send"), style: .recommended) { [unowned self] action in
-            self.cachedMessage = messageView.text
+        if let conflictMessage = existingContactConflictMessage(for: address) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: conflictMessage,
+                retryBlock: nil
+            )
+            return
+        }
 
-            let message = messageView.text.isEmpty ? KhandaqBranding.defaultStatusMessage : messageView.text
+        let hex = sanitizeAddressInput(idTextField.text ?? "")
+        if hex.count == Int(kOCTToxPublicKeyLength) {
+            let alert = UIAlertController(
+                title: String(localized: "error_title"),
+                message: String(localized: "add_contact_public_key_only_hint"),
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+            alert.addAction(UIAlertAction(title: String(localized: "add_contact_send"), style: .default) { [weak self] _ in
+                self?.presentMessageAlert(for: address)
+            })
+            present(alert, animated: true, completion: nil)
+            return
+        }
 
-            do {
-                guard let address = self.validatedAddressFromIdField() else {
-                    self.showInvalidIdFormatError()
-                    return
-                }
+        presentMessageAlert(for: address)
+    }
 
-                if self.isOwnToxAddress(address) {
-                    UIAlertController.showWithTitle(
-                        String(localized: "error_title"),
-                        message: String(localized: "add_contact_own_id_error"),
-                        retryBlock: nil
-                    )
-                    return
-                }
+    func presentMessageAlert(for address: String) {
+        let alert = UIAlertController(
+            title: String(localized: "add_contact_default_message_title"),
+            message: nil,
+            preferredStyle: .alert
+        )
 
-                try self.submanagerFriends.sendFriendRequest(toAddress: address, message: message)
-            }
-            catch let error as NSError {
-                handleErrorWithType(.toxAddFriend, error: error)
+        alert.addTextField { [weak self] textField in
+            textField.text = self?.cachedMessage
+            textField.placeholder = String(localized: "add_contact_default_message_text")
+            textField.autocorrectionType = .no
+            textField.spellCheckingType = .no
+        }
+
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "add_contact_send"), style: .default) { [weak self] _ in
+            guard let self = self else {
                 return
             }
 
+            let messageText = alert.textFields?.first?.text ?? ""
+            self.cachedMessage = messageText
+            let message = messageText.isEmpty ? KhandaqBranding.defaultStatusMessage : messageText
+            self.sendFriendRequest(to: address, message: message)
+        })
+
+        present(alert, animated: true, completion: nil)
+    }
+
+    func sendFriendRequest(to address: String, message: String) {
+        guard let normalizedAddress = normalizedToxAddress(from: address) else {
+            showInvalidIdFormatError()
+            return
+        }
+
+        if isOwnToxAddress(normalizedAddress) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: String(localized: "add_contact_own_id_error"),
+                retryBlock: nil
+            )
+            return
+        }
+
+        if let conflictMessage = existingContactConflictMessage(for: normalizedAddress) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: conflictMessage,
+                retryBlock: nil
+            )
+            return
+        }
+
+        do {
+            try submanagerFriends.sendFriendRequest(toAddress: normalizedAddress, message: message)
+        }
+        catch let error as NSError {
+            handleErrorWithType(.toxAddFriend, error: error)
+            return
+        }
+
+        let toast = UIAlertController(
+            title: nil,
+            message: String(localized: "group_member_action_add_friend_sent"),
+            preferredStyle: .alert
+        )
+        toast.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
             self.delegate?.addFriendControllerDidFinish(self)
         })
 
-        alert.present(completion: nil)
+        if presentedViewController != nil {
+            dismiss(animated: true) { [weak self] in
+                self?.present(toast, animated: true, completion: nil)
+            }
+        }
+        else {
+            present(toast, animated: true, completion: nil)
+        }
     }
 }
 
@@ -353,20 +413,29 @@ private extension AddFriendController {
     }
 
     func validatedAddressFromIdField() -> String? {
-        let raw = idTextField.text ?? ""
-        let hex = sanitizeAddressInput(raw)
-        let addressLength = Int(kOCTToxAddressLength)
-        let publicKeyLength = Int(kOCTToxPublicKeyLength)
+        return normalizedToxAddress(from: idTextField.text ?? "")
+    }
 
-        guard hex.count == addressLength || hex.count == publicKeyLength else {
+    func existingContactConflictMessage(for address: String) -> String? {
+        guard let publicKey = toxPublicKeyPrefix(from: address) else {
             return nil
         }
 
-        guard let address = normalizeAddressString(raw), address.count == addressLength else {
-            return nil
+        let friends = submanagerObjects.friends(
+            predicate: NSPredicate(format: "publicKey ==[c] %@", publicKey)
+        )
+        if friends.count > 0 {
+            return String(localized: "add_contact_already_friend")
         }
 
-        return address
+        let pending = submanagerObjects.friendRequests(
+            predicate: NSPredicate(format: "publicKey ==[c] %@", publicKey)
+        )
+        if pending.count > 0 {
+            return String(localized: "add_contact_request_already_pending")
+        }
+
+        return nil
     }
 
     func showInvalidIdFormatError() {

@@ -36,11 +36,13 @@ import java.util.List;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_date_header;
 import static com.zoffcc.applications.trifa.HelperGeneric.only_date_time_format;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_chatlist;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 
-public class GroupMessagelistAdapter extends RecyclerView.Adapter implements FastScroller.SectionIndexer
+public class GroupMessagelistAdapter extends RecyclerView.Adapter implements FastScroller.SectionIndexer,
+        ChatDateSeparatorHelper.DateHeaderSource
 {
     private static final String TAG = "trifa.GrpMesgelistAdptr";
 
@@ -56,27 +58,22 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
 
     public GroupMessagelistAdapter(Context context, List<com.zoffcc.applications.sorm.GroupMessage> items)
     {
-        // Log.i(TAG, "GroupMessagelistAdapter");
+        // HelperGeneric.logI(TAG, "GroupMessagelistAdapter");
 
         this.messagelistitems = items;
         this.context = context;
     }
 
     @Override
-    public void onViewDetachedFromWindow(@NonNull RecyclerView.ViewHolder holder) {
-        try
+    public void onViewDetachedFromWindow(@NonNull RecyclerView.ViewHolder holder)
+    {
+        if (holder instanceof GroupMessageListHolder_file_outgoing_state_cancel)
         {
             ((GroupMessageListHolder_file_outgoing_state_cancel) holder).DetachedFromWindow(false);
         }
-        catch(Exception e)
-        {
-        }
-        try
+        else if (holder instanceof GroupMessageListHolder_file_incoming_state_cancel)
         {
             ((GroupMessageListHolder_file_incoming_state_cancel) holder).DetachedFromWindow(false);
-        }
-        catch(Exception e)
-        {
         }
         super.onViewDetachedFromWindow(holder);
     }
@@ -174,113 +171,127 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
     @Override
     public int getItemViewType(int position)
     {
-        GroupMessage my_msg = (GroupMessage) this.messagelistitems.get(position);
+        if (position < 0 || position >= getItemCount())
         {
-            if (my_msg.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)
+            return Message_model.ERROR_UNKNOWN;
+        }
+
+        final GroupMessage my_msg = this.messagelistitems.get(position);
+        if (my_msg == null)
+        {
+            return Message_model.ERROR_UNKNOWN;
+        }
+
+        if (my_msg.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)
+        {
+            // FILE -------------
+            if (my_msg.direction == 0)
             {
-                // FILE -------------
-                if (my_msg.direction == 0)
-                {
-                    // incoming file -----------
-                    // ------- STATE: CANCEL -------------
-                    return Message_model.FILE_INCOMING_STATE_CANCEL;
-                    // ------- STATE: CANCEL -------------
-                }
-                else
-                {
-                    // outgoing file -----------
-                    // ------- STATE: CANCEL -------------
-                    return Message_model.FILE_OUTGOING_STATE_CANCEL;
-                    // ------- STATE: CANCEL -------------
-                }
-                // FILE -------------
+                return Message_model.FILE_INCOMING_STATE_CANCEL;
             }
             else
             {
-                // TEXT -------------
-                if (my_msg.direction == 0)
+                return Message_model.FILE_OUTGOING_STATE_CANCEL;
+            }
+        }
+        else
+        {
+            // TEXT -------------
+            if (my_msg.direction == 0)
+            {
+                if (my_msg.read)
                 {
-                    // msg to me
-                    if (my_msg.read)
-                    {
-                        // has read ***NOT USED***
-                        // Log.i(TAG, "Message_model.TEXT_INCOMING_HAVE_READ");
-                        return Message_model.TEXT_INCOMING_HAVE_READ;
-                    }
-                    else
-                    {
-                        // not yet read
-                        // Log.i(TAG, "Message_model.TEXT_INCOMING_NOT_READ");
-                        return Message_model.TEXT_INCOMING_NOT_READ;
-                    }
-                    // msg to me
+                    return Message_model.TEXT_INCOMING_HAVE_READ;
                 }
                 else
                 {
-                    // msg from me
-                    if (my_msg.read)
-                    {
-                        // has read
-                        // Log.i(TAG, "Message_model.TEXT_OUTGOING_HAVE_READ");
-                        return Message_model.TEXT_OUTGOING_HAVE_READ;
-                    }
-                    else
-                    {
-                        // not yet read ***NOT USED***
-                        // Log.i(TAG, "Message_model.TEXT_OUTGOING_NOT_READ");
-                        return Message_model.TEXT_OUTGOING_NOT_READ;
-                    }
-                    // msg from me
+                    return Message_model.TEXT_INCOMING_NOT_READ;
                 }
-                // TEXT -------------
+            }
+            else
+            {
+                if (my_msg.read)
+                {
+                    return Message_model.TEXT_OUTGOING_HAVE_READ;
+                }
+                else
+                {
+                    return Message_model.TEXT_OUTGOING_NOT_READ;
+                }
             }
         }
-
-        // return Message_model.ERROR_UNKNOWN;
     }
 
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position)
     {
-        // Log.i(TAG, "onBindViewHolder:position=" + position);
+        if (position < 0 || position >= getItemCount())
+        {
+            return;
+        }
 
+        final GroupMessage m2 = this.messagelistitems.get(position);
+        bindViewHolderForType(holder, m2);
+    }
+
+    private void bindViewHolderForType(final RecyclerView.ViewHolder holder, final GroupMessage message)
+    {
         try
         {
-            GroupMessage m2 = (GroupMessage) this.messagelistitems.get(position);
-
-            switch (getItemViewType(position))
+            final int viewType = holder.getItemViewType();
+            switch (viewType)
             {
                 case Message_model.TEXT_INCOMING_NOT_READ:
-                    ((GroupMessageListHolder_text_incoming_not_read) holder).bindMessageList(m2);
-                    break;
                 case Message_model.TEXT_INCOMING_HAVE_READ:
-                    ((GroupMessageListHolder_text_incoming_not_read) holder).bindMessageList(m2);
+                    if (holder instanceof GroupMessageListHolder_text_incoming_not_read)
+                    {
+                        ((GroupMessageListHolder_text_incoming_not_read) holder).bindMessageList(message);
+                    }
                     break;
+
                 case Message_model.TEXT_OUTGOING_NOT_READ:
-                    ((GroupMessageListHolder_text_outgoing_read) holder).bindMessageList(m2);
-                    break;
                 case Message_model.TEXT_OUTGOING_HAVE_READ:
-                    ((GroupMessageListHolder_text_outgoing_read) holder).bindMessageList(m2);
+                    if (holder instanceof GroupMessageListHolder_text_outgoing_read)
+                    {
+                        ((GroupMessageListHolder_text_outgoing_read) holder).bindMessageList(message);
+                    }
                     break;
 
                 case Message_model.FILE_INCOMING_STATE_CANCEL:
-                    ((GroupMessageListHolder_file_incoming_state_cancel) holder).bindMessageList(m2);
+                    if (holder instanceof GroupMessageListHolder_file_incoming_state_cancel)
+                    {
+                        ((GroupMessageListHolder_file_incoming_state_cancel) holder).bindMessageList(message);
+                    }
                     break;
 
                 case Message_model.FILE_OUTGOING_STATE_CANCEL:
-                    ((GroupMessageListHolder_file_outgoing_state_cancel) holder).bindMessageList(m2);
+                    if (holder instanceof GroupMessageListHolder_file_outgoing_state_cancel)
+                    {
+                        ((GroupMessageListHolder_file_outgoing_state_cancel) holder).bindMessageList(message);
+                    }
                     break;
 
                 default:
-                    ((GroupMessageListHolder_error) holder).bindMessageList(null);
+                    if (holder instanceof GroupMessageListHolder_error)
+                    {
+                        ((GroupMessageListHolder_error) holder).bindMessageList(message);
+                    }
                     break;
             }
         }
         catch (Exception e)
         {
-            Log.i(TAG, "onBindViewHolder:EE1:" + e.getMessage());
-            e.printStackTrace();
-            ((GroupMessageListHolder_error) holder).bindMessageList(null);
+            HelperGeneric.logI(TAG, "onBindViewHolder:EE1:" + e.getMessage());
+            if (holder instanceof GroupMessageListHolder_error)
+            {
+                try
+                {
+                    ((GroupMessageListHolder_error) holder).bindMessageList(message);
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
         }
     }
 
@@ -289,7 +300,7 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
     {
         if (this.messagelistitems != null)
         {
-            // Log.i(TAG, "getItemCount:" + this.messagelistitems.size());
+            // HelperGeneric.logI(TAG, "getItemCount:" + this.messagelistitems.size());
             return this.messagelistitems.size();
         }
         else
@@ -300,20 +311,20 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
 
     public void add_list_clear(List<com.zoffcc.applications.sorm.GroupMessage> new_items)
     {
-        // Log.i(TAG, "add_list_clear:" + new_items);
+        // HelperGeneric.logI(TAG, "add_list_clear:" + new_items);
 
         try
         {
-            // Log.i(TAG, "add_list_clear:001:new_items=" + new_items);
+            // HelperGeneric.logI(TAG, "add_list_clear:001:new_items=" + new_items);
             this.messagelistitems.clear();
             this.messagelistitems.addAll(new_items);
             this.notifyDataSetChanged();
-            // Log.i(TAG, "add_list_clear:002");
+            // HelperGeneric.logI(TAG, "add_list_clear:002");
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "add_list_clear:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "add_list_clear:EE:" + e.getMessage());
         }
     }
 
@@ -322,27 +333,59 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         this.notifyDataSetChanged();
     }
 
+    private boolean isDuplicateGroupMessage(final GroupMessage candidate, final List<GroupMessage> items)
+    {
+        if (candidate == null || items == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < items.size(); i++)
+        {
+            final GroupMessage existing = items.get(i);
+            if (candidate.id > 0 && existing.id == candidate.id)
+            {
+                return true;
+            }
+
+            if (candidate.msg_id_hash != null && !candidate.msg_id_hash.isEmpty()
+                    && candidate.msg_id_hash.equalsIgnoreCase(existing.msg_id_hash)
+                    && candidate.group_identifier != null
+                    && candidate.group_identifier.equalsIgnoreCase(existing.group_identifier))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void add_item(GroupMessage new_item)
     {
-        // Log.i(TAG, "add_item:" + new_item + ":" + this.messagelistitems.size());
+        // HelperGeneric.logI(TAG, "add_item:" + new_item + ":" + this.messagelistitems.size());
 
         try
         {
-            this.messagelistitems.add(new_item);
-            // TODO: use "notifyItemInserted" !!
-            this.notifyDataSetChanged();
-            // Log.i(TAG, "add_item:002:" + this.messagelistitems.size());
+            if (new_item != null && isDuplicateGroupMessage(new_item, this.messagelistitems))
+            {
+                return;
+            }
+
+            final int insertPos = GroupMessageLayoutHelper.sortedInsertIndex(this.messagelistitems, new_item);
+            this.messagelistitems.add(insertPos, new_item);
+            this.notifyItemInserted(insertPos);
+            // HelperGeneric.logI(TAG, "add_item:002:" + this.messagelistitems.size());
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "add_item:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "add_item:EE:" + e.getMessage());
         }
     }
 
     synchronized public boolean update_item(final GroupMessage new_item)
     {
-        // Log.i(TAG, "update_item:" + new_item);
+        // HelperGeneric.logI(TAG, "update_item:" + new_item);
 
         boolean found_item = false;
 
@@ -357,7 +400,7 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 {
                     found_item = true;
                     int pos = this.messagelistitems.indexOf(m2);
-                    // Log.i(TAG, "update_item:003:" + pos);
+                    // HelperGeneric.logI(TAG, "update_item:003:" + pos);
                     this.messagelistitems.set(pos, new_item);
                     this.notifyItemChanged(pos);
                     break;
@@ -369,10 +412,61 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "update_item:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "update_item:EE:" + e.getMessage());
         }
 
         return found_item;
+    }
+
+    synchronized public void refresh_file_progress_by_hash(final String msgIdHash)
+    {
+        if (msgIdHash == null)
+        {
+            return;
+        }
+
+        try
+        {
+            for (int pos = 0; pos < this.messagelistitems.size(); pos++)
+            {
+                final GroupMessage m2 = this.messagelistitems.get(pos);
+                if (msgIdHash.equalsIgnoreCase(m2.msg_id_hash))
+                {
+                    this.notifyItemChanged(pos);
+                    return;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "refresh_file_progress_by_hash:EE:" + e.getMessage());
+        }
+    }
+
+    synchronized public void remove_placeholder_by_msg_id_hash(final String msgIdHash)
+    {
+        if (msgIdHash == null)
+        {
+            return;
+        }
+
+        try
+        {
+            for (int pos = 0; pos < this.messagelistitems.size(); pos++)
+            {
+                final GroupMessage m2 = this.messagelistitems.get(pos);
+                if (m2.id < 0 && msgIdHash.equalsIgnoreCase(m2.msg_id_hash))
+                {
+                    this.messagelistitems.remove(pos);
+                    this.notifyItemRemoved(pos);
+                    return;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "remove_placeholder_by_msg_id_hash:EE:" + e.getMessage());
+        }
     }
 
     synchronized public void remove_item(final GroupMessage del_item)
@@ -396,7 +490,7 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "update_item:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "update_item:EE:" + e.getMessage());
         }
     }
 
@@ -411,44 +505,73 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
     {
         try
         {
-            GroupMessage getSectionText_message_object2 = (GroupMessage) messagelistitems.get(position);
-
-            if (getSectionText_message_object2.direction == 0)
-            {
-                // incoming msg
-                if (getSectionText_message_object2.rcvd_timestamp == getSectionText_message_object_ts2)
-                {
-                    return getSectionText_message_object_ts_string2;
-                }
-                else
-                {
-                    getSectionText_message_object_ts2 = getSectionText_message_object2.rcvd_timestamp;
-                    getSectionText_message_object_ts_string2 =
-                            "" + only_date_time_format(getSectionText_message_object2.rcvd_timestamp);
-                    return getSectionText_message_object_ts_string2;
-                }
-            }
-            else
-            {
-                // outgoing msg
-                if (getSectionText_message_object2.sent_timestamp == getSectionText_message_object_ts2)
-                {
-                    return getSectionText_message_object_ts_string2;
-                }
-                else
-                {
-                    getSectionText_message_object_ts2 = getSectionText_message_object2.sent_timestamp;
-                    getSectionText_message_object_ts_string2 =
-                            "" + only_date_time_format(getSectionText_message_object2.sent_timestamp);
-                    return getSectionText_message_object_ts_string2;
-                }
-            }
+            final GroupMessage message = (GroupMessage) messagelistitems.get(position);
+            final long ts = GroupMessageLayoutHelper.effectiveSortTimestampMs(message);
+            return format_chat_date_header(context, ts);
         }
         catch (Exception e)
         {
             e.printStackTrace();
             return " ";
         }
+    }
+
+    public boolean shouldShowDateHeader(int position)
+    {
+        if (position < 1)
+        {
+            return true;
+        }
+
+        try
+        {
+            return !getDateHeaderText(position).equals(getDateHeaderText(position - 1));
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            return true;
+        }
+    }
+
+    public int findPositionForReply(final MessageReplyHelper.ReplyMeta replyMeta)
+    {
+        if (replyMeta == null || messagelistitems == null)
+        {
+            return -1;
+        }
+
+        if (replyMeta.localMessageId > 0L)
+        {
+            for (int i = 0; i < messagelistitems.size(); i++)
+            {
+                final GroupMessage message = (GroupMessage) messagelistitems.get(i);
+                if (message != null && message.id == replyMeta.localMessageId)
+                {
+                    return i;
+                }
+            }
+        }
+
+        for (int i = 0; i < messagelistitems.size(); i++)
+        {
+            final GroupMessage message = (GroupMessage) messagelistitems.get(i);
+            if (message == null)
+            {
+                continue;
+            }
+            final long ts = GroupMessageLayoutHelper.effectiveSortTimestampMs(message);
+            if (Math.abs(ts - replyMeta.sortTimestampMs) > 5000L)
+            {
+                continue;
+            }
+            if (replyMeta.senderPubkeyTail == null || replyMeta.senderPubkeyTail.isEmpty()
+                    || MessageReplyHelper.pubkeyTail(message.tox_group_peer_pubkey).equals(replyMeta.senderPubkeyTail))
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public GroupMessage get_item(int position)

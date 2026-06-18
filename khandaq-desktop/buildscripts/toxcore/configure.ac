@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([tox], [0.2.18])
+AC_INIT([tox], [0.2.19])
 AC_CONFIG_AUX_DIR(configure_aux)
 AC_CONFIG_SRCDIR([toxcore/net_crypto.c])
 AM_INIT_AUTOMAKE([foreign 1.10 -Wall -Werror subdir-objects tar-ustar])
@@ -19,6 +19,8 @@ BUILD_DHT_BOOTSTRAP_DAEMON="no"
 BUILD_DHT_BOOTSTRAP="no"
 BUILD_TESTS="yes"
 BUILD_AV="yes"
+BUILD_H265="yes"
+FEATURE_H265="no"
 BUILD_TESTING="yes"
 
 LIBCONFIG_FOUND="no"
@@ -37,6 +39,19 @@ AC_ARG_ENABLE([soname-versions],
     ]
 )
 AM_CONDITIONAL(SET_SO_VERSION, test "x$SET_SO_VERSION" = "xyes")
+
+
+
+AC_ARG_ENABLE([feature-h265],
+    [AC_HELP_STRING([--enable-feature-h265], [use H265 encoder feature (default: disabled)]) ],
+    [
+        if test "x$enableval" = "xno"; then
+            FEATURE_H265="no"
+        elif test "x$enableval" = "xyes"; then
+            FEATURE_H265="yes"
+        fi
+    ]
+)
 
 AC_ARG_ENABLE([nacl],
     [AC_HELP_STRING([--enable-nacl], [use nacl instead of libsodium (default: disabled)]) ],
@@ -95,6 +110,17 @@ AC_ARG_ENABLE([av],
             BUILD_AV="no"
         elif test "x$enableval" = "xyes"; then
             BUILD_AV="yes"
+        fi
+    ]
+)
+
+AC_ARG_ENABLE([h265],
+    [AC_HELP_STRING([--disable-h265], [build AV support libraries with H265 support(default: auto)]) ],
+    [
+        if test "x$enableval" = "xno"; then
+            BUILD_H265="no"
+        elif test "x$enableval" = "xyes"; then
+            BUILD_H265="yes"
         fi
     ]
 )
@@ -169,6 +195,16 @@ AC_ARG_ENABLE([[ipv6]],
 
 if test "$use_ipv6" != "yes"; then
   AC_DEFINE([USE_IPV6],[0],[define to 0 to force ipv4])
+fi
+
+AC_ARG_ENABLE([[test_network]],
+  [AS_HELP_STRING([[--enable-test-network[=ARG]]], [build tox for a test network incompatible with the main DHT [no]])],
+    [use_test_network=${enableval}],
+    [use_test_network='no']
+  )
+
+if test "$use_test_network" == "yes"; then
+  AC_DEFINE([USE_TEST_NETWORK],[1],[define to 1 to enable the test network])
 fi
 
 AX_HAVE_EPOLL
@@ -364,7 +400,7 @@ elif test "x$LIBSODIUM_FOUND" = "xno"; then
         AC_CHECK_LIB(sodium, crypto_pwhash_scryptsalsa208sha256,
             [],
             [
-                AC_MSG_ERROR([required library libsodium was not found on your system, please check http://download.libsodium.org/libsodium/releases/ or library version is too old])
+                AC_MSG_ERROR([required library libsodium was not found on your system, please check https://github.com/jedisct1/libsodium or library version is too old])
             ]
         )
     fi
@@ -424,7 +460,7 @@ elif test "x$LIBSODIUM_FOUND" = "xno"; then
         AC_CHECK_HEADER(sodium.h,
             [],
             [
-                AC_MSG_ERROR([header files for required library libsodium was not found on your system, please check http://download.libsodium.org/libsodium/releases/])
+                AC_MSG_ERROR([header files for required library libsodium was not found on your system, please check https://github.com/jedisct1/libsodium])
             ]
         )
     fi
@@ -462,6 +498,36 @@ AC_CHECK_LIB([pthread], [pthread_self],
 )
 
 if test "x$BUILD_AV" = "xyes"; then
+    PKG_CHECK_MODULES([LIBAVCODEC], [libavcodec],
+        [],
+        [
+            AC_MSG_WARN([disabling AV support $LIBAVCODEC_PKG_ERRORS])
+            BUILD_AV="no"
+        ]
+    )
+fi
+
+if test "x$BUILD_AV" = "xyes"; then
+    PKG_CHECK_MODULES([X264], [x264],
+        [],
+        [
+            AC_MSG_WARN([disabling AV support $X264_PKG_ERRORS])
+            BUILD_AV="no"
+        ]
+    )
+fi
+
+if test "x$BUILD_AV" = "xyes"; then
+    PKG_CHECK_MODULES([X265], [x265],
+        [],
+        [
+            AC_MSG_WARN([disabling AV support for H265 encoding $X265_PKG_ERRORS])
+            BUILD_H265="no"
+        ]
+    )
+fi
+
+if test "x$BUILD_AV" = "xyes"; then
     PKG_CHECK_MODULES([OPUS], [opus],
         [],
         [
@@ -484,11 +550,21 @@ fi
 if test "x$BUILD_AV" = "xyes"; then
     # toxcore lib needs an global?
     # So far this works okay
-    AV_LIBS="$OPUS_LIBS $VPX_LIBS"
-    AC_SUBST(AV_LIBS)
+    if (test "x$BUILD_H265" = "xyes") && \
+       (test "x$FEATURE_H265" = "xyes"); then
 
-    AV_CFLAGS="$OPUS_CFLAGS $VPX_CFLAGS"
-    AC_SUBST(AV_CFLAGS)
+        AV_LIBS="$OPUS_LIBS $VPX_LIBS $LIBAVCODEC_LIBS $X264_LIBS $X265_LIBS"
+        AC_SUBST(AV_LIBS)
+
+        AV_CFLAGS="$OPUS_CFLAGS $VPX_CFLAGS $LIBAVCODEC_CFLAGS $X264_CFLAGS $X265_CFLAGS -DHAVE_H265_ENCODER"
+        AC_SUBST(AV_CFLAGS)
+    else
+        AV_LIBS="$OPUS_LIBS $VPX_LIBS $LIBAVCODEC_LIBS $X264_LIBS"
+        AC_SUBST(AV_LIBS)
+
+        AV_CFLAGS="$OPUS_CFLAGS $VPX_CFLAGS $LIBAVCODEC_CFLAGS $X264_CFLAGS"
+        AC_SUBST(AV_CFLAGS)
+    fi
 fi
 
 if test -n "$PKG_CONFIG"; then
@@ -544,6 +620,8 @@ AM_CONDITIONAL(BUILD_DHT_BOOTSTRAP_DAEMON, test "x$BUILD_DHT_BOOTSTRAP_DAEMON" =
 AM_CONDITIONAL(BUILD_DHT_BOOTSTRAP, test "x$BUILD_DHT_BOOTSTRAP" = "xyes")
 AM_CONDITIONAL(BUILD_TESTS, test "x$BUILD_TESTS" = "xyes")
 AM_CONDITIONAL(BUILD_AV, test "x$BUILD_AV" = "xyes")
+AM_CONDITIONAL(BUILD_H265, test "x$BUILD_H265" = "xyes")
+AM_CONDITIONAL(FEATURE_H265, test "x$FEATURE_H265" = "xyes")
 AM_CONDITIONAL(BUILD_TESTING, test "x$BUILD_TESTING" = "xyes")
 AM_CONDITIONAL(WITH_NACL, test "x$WANT_NACL" = "xyes")
 AM_CONDITIONAL(WIN32, test "x$WIN32" = "xyes")

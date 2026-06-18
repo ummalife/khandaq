@@ -70,7 +70,7 @@ public class GroupMessageListFragment extends Fragment
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
     {
-        // Log.i(TAG, "onCreateView");
+        // HelperGeneric.logI(TAG, "onCreateView");
         View view = inflater.inflate(R.layout.group_message_list_layout, container, false);
 
         unread_messages_notice_button = view.findViewById(R.id.unread_messages_notice_button);
@@ -84,7 +84,7 @@ public class GroupMessageListFragment extends Fragment
         {
             current_group_id = mla.get_current_group_id();
         }
-        // Log.i(TAG, "current_conf_id=" + current_conf_id);
+        // HelperGeneric.logI(TAG, "current_conf_id=" + current_conf_id);
 
         // default is: at bottom
         is_at_bottom = true;
@@ -129,6 +129,7 @@ public class GroupMessageListFragment extends Fragment
                                 orderBySent_timestampAsc().
                                 toList();
                     }
+                    GroupMessageLayoutHelper.sortMessagesForChatDisplay(data_values);
                 }
                 else
                 {
@@ -186,12 +187,16 @@ public class GroupMessageListFragment extends Fragment
         scrollDateHeader = (TextView) view.findViewById(R.id.scroll_date_header);
         scrollDateHeader.setText("");
         scrollDateHeader.setVisibility(View.INVISIBLE);
+        ChatDateSeparatorHelper.applyTheme(scrollDateHeader);
         conversationDateHeader = new ConversationDateHeader(view.getContext(), scrollDateHeader);
 
         final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getActivity());
         linearLayoutManager.setStackFromEnd(true); // pin to bottom element
         listingsView.setLayoutManager(linearLayoutManager);
-        listingsView.setItemAnimator(new DefaultItemAnimator());
+        final DefaultItemAnimator itemAnimator = new DefaultItemAnimator();
+        // No cross-fade on item updates — progress refreshes otherwise make file/video tiles blink.
+        itemAnimator.setSupportsChangeAnimations(false);
+        listingsView.setItemAnimator(itemAnimator);
         listingsView.setHasFixedSize(false);
 
         listingsView.setFastScrollListener(new FastScroller.FastScrollListener()
@@ -297,7 +302,7 @@ public class GroupMessageListFragment extends Fragment
                     // Bottom of the list
                     if (!is_at_bottom)
                     {
-                        // Log.i(TAG, "onScrolled:at bottom");
+                        // HelperGeneric.logI(TAG, "onScrolled:at bottom");
                         is_at_bottom = true;
                         try
                         {
@@ -315,7 +320,7 @@ public class GroupMessageListFragment extends Fragment
                 {
                     if (is_at_bottom)
                     {
-                        // Log.i(TAG, "onScrolled:NOT at bottom");
+                        // HelperGeneric.logI(TAG, "onScrolled:NOT at bottom");
                         is_at_bottom = false;
                         try
                         {
@@ -355,14 +360,14 @@ public class GroupMessageListFragment extends Fragment
     @Override
     public void onAttach(Context context)
     {
-        Log.i(TAG, "onAttach(Context)");
+        HelperGeneric.logI(TAG, "onAttach(Context)");
         super.onAttach(context);
     }
 
     @Override
     public void onAttach(Activity activity)
     {
-        Log.i(TAG, "onAttach(Activity)");
+        HelperGeneric.logI(TAG, "onAttach(Activity)");
         super.onAttach(activity);
     }
 
@@ -371,7 +376,7 @@ public class GroupMessageListFragment extends Fragment
     {
         global_showing_anygroupview = true;
 
-        Log.i(TAG, "onResume");
+        HelperGeneric.logI(TAG, "onResume");
         super.onResume();
 
         try
@@ -420,39 +425,45 @@ public class GroupMessageListFragment extends Fragment
     {
         super.onPause();
 
-        // HINT: super ugly hack to find all audioplay recylerviews and stop any audio playing
-        // you have a better solution? let me hear it.
+        stopVisibleVoicePlayback();
+
+        global_showing_anygroupview = false;
+        MainActivity.group_message_list_fragment = null;
+    }
+
+    void stopVisibleVoicePlayback()
+    {
+        if (listingsView == null)
+        {
+            return;
+        }
+
         try
         {
-            View child;
             for (int i = 0; i < listingsView.getChildCount(); i++)
             {
-                child = listingsView.getChildAt(i);
+                final View child = listingsView.getChildAt(i);
                 try
                 {
-                    RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
+                    final RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
                     ((GroupMessageListHolder_file_outgoing_state_cancel) vh).DetachedFromWindow(true);
                 }
-                catch(Exception e1)
+                catch (Exception ignored)
                 {
                 }
                 try
                 {
-                    RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
+                    final RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
                     ((GroupMessageListHolder_file_incoming_state_cancel) vh).DetachedFromWindow(true);
                 }
-                catch(Exception e1)
+                catch (Exception ignored)
                 {
                 }
             }
         }
-        catch(Exception e2)
+        catch (Exception ignored)
         {
         }
-        // HINT: super ugly hack to find all audioplay recylerviews and stop any audio playing
-
-        global_showing_anygroupview = false;
-        MainActivity.group_message_list_fragment = null;
     }
 
     synchronized void modify_message(final GroupMessage m)
@@ -465,6 +476,30 @@ public class GroupMessageListFragment extends Fragment
                 try
                 {
                     adapter.update_item(m);
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
+            }
+        };
+
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(myRunnable);
+        }
+    }
+
+    synchronized void refresh_file_progress_by_hash(final String msgIdHash)
+    {
+        Runnable myRunnable = new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    adapter.refresh_file_progress_by_hash(msgIdHash);
                 }
                 catch (Exception e)
                 {
@@ -522,7 +557,7 @@ public class GroupMessageListFragment extends Fragment
 
     void update_all_messages(boolean always, boolean paging)
     {
-        Log.i(TAG, "update_all_messages");
+        HelperGeneric.logI(TAG, "update_all_messages");
 
         try
         {
@@ -553,18 +588,22 @@ public class GroupMessageListFragment extends Fragment
                 {
                     if (should_show_group_system_messages(current_group_id))
                     {
-                        adapter.add_list_clear(orma.selectFromGroupMessage().
+                        final java.util.List<GroupMessage> loaded = orma.selectFromGroupMessage().
                                 group_identifierEq(current_group_id.toLowerCase()).
                                 orderBySent_timestampAsc().
-                                toList());
+                                toList();
+                        GroupMessageLayoutHelper.sortMessagesForChatDisplay(loaded);
+                        adapter.add_list_clear(loaded);
                     }
                     else
                     {
-                        adapter.add_list_clear(orma.selectFromGroupMessage().
+                        final java.util.List<GroupMessage> loaded = orma.selectFromGroupMessage().
                                 group_identifierEq(current_group_id.toLowerCase()).
                                 tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
                                 orderBySent_timestampAsc().
-                                toList());
+                                toList();
+                        GroupMessageLayoutHelper.sortMessagesForChatDisplay(loaded);
+                        adapter.add_list_clear(loaded);
                     }
                 }
                 else
@@ -610,9 +649,23 @@ public class GroupMessageListFragment extends Fragment
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "data_values:005:EE1:" + e.getMessage());
+            HelperGeneric.logI(TAG, "data_values:005:EE1:" + e.getMessage());
         }
 
+    }
+
+    public void scrollToReplyTarget(final MessageReplyHelper.ReplyMeta replyMeta)
+    {
+        if (adapter == null || listingsView == null || replyMeta == null)
+        {
+            return;
+        }
+
+        final int position = adapter.findPositionForReply(replyMeta);
+        if (position >= 0)
+        {
+            listingsView.smoothScrollToPosition(position);
+        }
     }
 
 }

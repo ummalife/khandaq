@@ -2,6 +2,50 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+enum ChatListFilterTab: Int {
+    case direct = 0
+    case groups = 1
+    case favorites = 2
+}
+
+struct ChatListFilterUnreadCounts {
+    var direct: Int = 0
+    var groups: Int = 0
+    var favorites: Int = 0
+}
+
+struct ChatFavoritesStore {
+    private static let userDefaults = UserDefaultsManager()
+
+    static func favoriteKey(for chat: OCTChat) -> String {
+        if chat.isGroup, let groupId = chat.groupChatIdHex, !groupId.isEmpty {
+            return "group:" + groupId.lowercased()
+        }
+        return "chat:" + chat.uniqueIdentifier
+    }
+
+    static func isFavorite(chat: OCTChat) -> Bool {
+        return userDefaults.favoriteChatKeys.contains(favoriteKey(for: chat))
+    }
+
+    @discardableResult
+    static func toggle(chat: OCTChat) -> Bool {
+        var keys = userDefaults.favoriteChatKeys
+        let key = favoriteKey(for: chat)
+        let nowFavorite: Bool
+        if keys.contains(key) {
+            keys.remove(key)
+            nowFavorite = false
+        }
+        else {
+            keys.insert(key)
+            nowFavorite = true
+        }
+        userDefaults.favoriteChatKeys = keys
+        return nowFavorite
+    }
+}
+
 class UserDefaultsManager {
     var lastActiveProfile: String? {
         get {
@@ -66,6 +110,46 @@ class UserDefaultsManager {
         }
     }
 
+    var groupShowSystemMessages: Bool {
+        get {
+            return boolForKey(Keys.GroupShowSystemMessages, defaultValue: false)
+        }
+        set {
+            setBool(newValue, forKey: Keys.GroupShowSystemMessages)
+        }
+    }
+
+    var darkModeEnabled: Bool {
+        get {
+            return boolForKey(Keys.DarkModeEnabled, defaultValue: false)
+        }
+        set {
+            setBool(newValue, forKey: Keys.DarkModeEnabled)
+        }
+    }
+
+    var chatListFilterTab: ChatListFilterTab {
+        get {
+            let raw = intForKey(Keys.ChatListFilterTab, defaultValue: ChatListFilterTab.direct.rawValue)
+            return ChatListFilterTab(rawValue: raw) ?? .direct
+        }
+        set {
+            setInt(newValue.rawValue, forKey: Keys.ChatListFilterTab)
+        }
+    }
+
+    var favoriteChatKeys: Set<String> {
+        get {
+            guard let array = stringArrayForKey(Keys.FavoriteChatKeys) else {
+                return []
+            }
+            return Set(array)
+        }
+        set {
+            setObject(Array(newValue) as AnyObject?, forKey: Keys.FavoriteChatKeys)
+        }
+    }
+
     enum AutodownloadImages: String {
         case Never
         case UsingWiFi
@@ -101,6 +185,10 @@ private extension UserDefaultsManager {
         static let ShowNotificationsPreview = "user-info/snow-notification-preview"
         static let LongerbgMode = "user-info/longerbg-mode"
         static let AutodownloadImages = "user-info/autodownload-images"
+        static let GroupShowSystemMessages = "user-info/group-show-system-messages"
+        static let DarkModeEnabled = "user-info/dark-mode-enabled"
+        static let ChatListFilterTab = "user-info/chat-list-filter-tab"
+        static let FavoriteChatKeys = "user-info/favorite-chat-keys"
     }
 
     func setObject(_ object: AnyObject?, forKey key: String) {
@@ -135,5 +223,24 @@ private extension UserDefaultsManager {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: key)
         defaults.synchronize()
+    }
+
+    func intForKey(_ key: String, defaultValue: Int) -> Int {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: key) != nil {
+            return defaults.integer(forKey: key)
+        }
+        return defaultValue
+    }
+
+    func setInt(_ value: Int, forKey key: String) {
+        let defaults = UserDefaults.standard
+        defaults.set(value, forKey: key)
+        defaults.synchronize()
+    }
+
+    func stringArrayForKey(_ key: String) -> [String]? {
+        let defaults = UserDefaults.standard
+        return defaults.stringArray(forKey: key)
     }
 }

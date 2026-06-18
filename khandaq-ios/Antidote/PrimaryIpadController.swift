@@ -6,6 +6,7 @@ import Foundation
 
 protocol PrimaryIpadControllerDelegate: class {
     func primaryIpadController(_ controller: PrimaryIpadController, didSelectChat chat: OCTChat)
+    func primaryIpadController(_ controller: PrimaryIpadController, didRequestGroupInfo chat: OCTChat)
     func primaryIpadControllerShowFriends(_ controller: PrimaryIpadController)
     func primaryIpadControllerShowSettings(_ controller: PrimaryIpadController)
     func primaryIpadControllerShowProfile(_ controller: PrimaryIpadController)
@@ -48,6 +49,7 @@ class PrimaryIpadController: UIViewController {
 
     fileprivate let theme: Theme
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
+    fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
 
     fileprivate var navigationView: iPadNavigationView!
@@ -55,9 +57,10 @@ class PrimaryIpadController: UIViewController {
 
     fileprivate var tableManager: ChatListTableManager!
 
-    init(theme: Theme, submanagerChats: OCTSubmanagerChats, submanagerObjects: OCTSubmanagerObjects) {
+    init(theme: Theme, submanagerChats: OCTSubmanagerChats, submanagerGroups: OCTSubmanagerGroups, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
         self.submanagerChats = submanagerChats
+        self.submanagerGroups = submanagerGroups
         self.submanagerObjects = submanagerObjects
 
         super.init(nibName: nil, bundle: nil)
@@ -78,6 +81,11 @@ class PrimaryIpadController: UIViewController {
         setupButtons()
         createTableView()
         installConstraints()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshGroupPeersInList()
     }
 }
 
@@ -108,6 +116,10 @@ extension PrimaryIpadController: ChatListTableManagerDelegate {
     func chatListTableManagerWasUpdated(_ manager: ChatListTableManager) {
         // nope
     }
+
+    func chatListTableManager(_ manager: ChatListTableManager, didRequestGroupInfo chat: OCTChat) {
+        delegate?.primaryIpadController(self, didRequestGroupInfo: chat)
+    }
 }
 
 private extension PrimaryIpadController {
@@ -134,14 +146,13 @@ private extension PrimaryIpadController {
         tableView.estimatedRowHeight = 44.0
         tableView.backgroundColor = theme.colorForType(.NormalBackground)
         tableView.sectionIndexColor = theme.colorForType(.LinkText)
-        // removing separators on empty lines
-        tableView.tableFooterView = UIView()
+        ThemeChrome.installZeroHeightTableFooter(in: tableView, theme: theme)
 
         view.addSubview(tableView)
 
         tableView.register(ChatListCell.self, forCellReuseIdentifier: ChatListCell.staticReuseIdentifier)
 
-        tableManager = ChatListTableManager(theme: theme, tableView: tableView, submanagerChats: submanagerChats, submanagerObjects: submanagerObjects)
+        tableManager = ChatListTableManager(theme: theme, tableView: tableView, submanagerChats: submanagerChats, submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects)
         tableManager.delegate = self
     }
 
@@ -156,5 +167,10 @@ private extension PrimaryIpadController {
             $0.top.equalTo(friendsButton.snp.bottom)
             $0.leading.trailing.bottom.equalTo(view)
         }
+    }
+
+    func refreshGroupPeersInList() {
+        tableManager.refreshGroupPeerCounts()
+        tableManager.tableView.reloadData()
     }
 }

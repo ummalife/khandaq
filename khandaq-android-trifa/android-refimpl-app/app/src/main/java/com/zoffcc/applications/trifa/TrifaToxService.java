@@ -46,9 +46,15 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import androidx.core.app.ServiceCompat;
 import info.guardianproject.iocipher.VirtualFileSystem;
@@ -93,8 +99,10 @@ import static com.zoffcc.applications.trifa.HelperGeneric.trigger_proper_wakeup_
 import static com.zoffcc.applications.trifa.HelperGeneric.trigger_proper_wakeup_outside_tox_service_thread;
 import static com.zoffcc.applications.trifa.HelperGeneric.vfs__unmount;
 import static com.zoffcc.applications.trifa.HelperGroup.is_valid_group_title_string;
+import static com.zoffcc.applications.trifa.HelperGroup.prune_stale_tox_groups;
 import static com.zoffcc.applications.trifa.HelperGroup.remove_legacy_public_community_group;
 import static com.zoffcc.applications.trifa.HelperGroup.new_or_updated_group;
+import static com.zoffcc.applications.trifa.HelperGroup.needs_fast_group_iterate;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_name;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_privacy_state;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_topic;
@@ -177,6 +185,7 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MS
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.USE_MAX_NUMBER_OF_BOOTSTRAP_NODES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.USE_MAX_NUMBER_OF_BOOTSTRAP_TCP_RELAYS;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.bootstrapListsLock;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.bootstrap_node_list;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.bootstrapping;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_for_battery_savings_ts;
@@ -218,13 +227,14 @@ public class TrifaToxService extends Service
     static long last_resend_pending_messages4_ms = -1;
     static long last_start_queued_fts_ms = -1;
     static long last_resend_unsent_text_messages_ms = -1;
+    static long last_delivery_watchdog_ms = -1;
     static boolean need_wakeup_now = false;
     static int tox_thread_starting_up = 0;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId)
     {
-        Log.i(TAG, "onStartCommand");
+        HelperGeneric.logI(TAG, "onStartCommand");
         // this gets called all the time!
         tox_service_fg = this;
         return START_NOT_STICKY; // START_STICKY;
@@ -233,7 +243,7 @@ public class TrifaToxService extends Service
     @Override
     public void onCreate()
     {
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
         // serivce is created ---
         super.onCreate();
 
@@ -248,12 +258,12 @@ public class TrifaToxService extends Service
      */
     void stop_me(boolean exit_app)
     {
-        Log.i(TAG, "stop_me:001:tox_thread_starting_up=" + tox_thread_starting_up);
+        HelperGeneric.logI(TAG, "stop_me:001:tox_thread_starting_up=" + tox_thread_starting_up);
         stopForeground(true);
 
-        Log.i(TAG, "stop_me:002:tox_thread_starting_up=" + tox_thread_starting_up);
+        HelperGeneric.logI(TAG, "stop_me:002:tox_thread_starting_up=" + tox_thread_starting_up);
         tox_notification_cancel(this);
-        Log.i(TAG, "stop_me:003");
+        HelperGeneric.logI(TAG, "stop_me:003");
 
         final Context static_context = this;
 
@@ -261,13 +271,13 @@ public class TrifaToxService extends Service
         {
             try
             {
-                Log.i(TAG, "stop_me:004:tox_thread_starting_up=" + tox_thread_starting_up);
+                HelperGeneric.logI(TAG, "stop_me:004:tox_thread_starting_up=" + tox_thread_starting_up);
                 Thread t = new Thread()
                 {
                     @Override
                     public void run()
                     {
-                        Log.i(TAG, "stop_me:005:tox_thread_starting_up=" + tox_thread_starting_up);
+                        HelperGeneric.logI(TAG, "stop_me:005:tox_thread_starting_up=" + tox_thread_starting_up);
                         set_aec_active(0);
                         long i = 0;
                         while (is_tox_started)
@@ -278,7 +288,7 @@ public class TrifaToxService extends Service
                                 break;
                             }
 
-                            Log.i(TAG, "stop_me:006:tox_thread_starting_up=" + tox_thread_starting_up);
+                            HelperGeneric.logI(TAG, "stop_me:006:tox_thread_starting_up=" + tox_thread_starting_up);
 
                             try
                             {
@@ -289,45 +299,45 @@ public class TrifaToxService extends Service
                                 e.printStackTrace();
                             }
                         }
-                        Log.i(TAG, "stop_me:006a:tox_thread_starting_up=" + tox_thread_starting_up);
+                        HelperGeneric.logI(TAG, "stop_me:006a:tox_thread_starting_up=" + tox_thread_starting_up);
 
-                        Log.i(TAG, "stop_me:unmount sql database");
+                        HelperGeneric.logI(TAG, "stop_me:unmount sql database");
                         OrmaDatabase.shutdown();
 
                         if (VFS_ENCRYPT)
                         {
-                            Log.i(TAG, "stop_me:006b");
+                            HelperGeneric.logI(TAG, "stop_me:006b");
                             try
                             {
-                                Log.i(TAG, "stop_me:006c");
+                                HelperGeneric.logI(TAG, "stop_me:006c");
                                 if (vfs.isMounted())
                                 {
-                                    Log.i(TAG, "stop_me:006d");
-                                    Log.i(TAG, "VFS:detach:start:vfs.isMounted()=" + vfs.isMounted() + " " +
+                                    HelperGeneric.logI(TAG, "stop_me:006d");
+                                    HelperGeneric.logI(TAG, "VFS:detach:start:vfs.isMounted()=" + vfs.isMounted() + " " +
                                                Thread.currentThread().getId() + ":" + Thread.currentThread().getName());
                                     // vfs__detach();
-                                    Log.i(TAG, "stop_me:006e");
+                                    HelperGeneric.logI(TAG, "stop_me:006e");
                                     Thread.sleep(1);
-                                    Log.i(TAG, "VFS:unmount:start:vfs.isMounted()=" + vfs.isMounted() + " " +
+                                    HelperGeneric.logI(TAG, "VFS:unmount:start:vfs.isMounted()=" + vfs.isMounted() + " " +
                                                Thread.currentThread().getId() + ":" + Thread.currentThread().getName());
                                     vfs__unmount();
-                                    Log.i(TAG, "stop_me:006f");
+                                    HelperGeneric.logI(TAG, "stop_me:006f");
                                 }
                                 else
                                 {
-                                    Log.i(TAG, "stop_me:006g");
-                                    Log.i(TAG, "VFS:unmount:NOT MOUNTED");
+                                    HelperGeneric.logI(TAG, "stop_me:006g");
+                                    HelperGeneric.logI(TAG, "VFS:unmount:NOT MOUNTED");
                                 }
                             }
                             catch (Exception e)
                             {
                                 e.printStackTrace();
-                                Log.i(TAG, "VFS:unmount:EE:" + e.getMessage());
-                                Log.i(TAG, "stop_me:006h");
+                                HelperGeneric.logI(TAG, "VFS:unmount:EE:" + e.getMessage());
+                                HelperGeneric.logI(TAG, "stop_me:006h");
                             }
                         }
 
-                        Log.i(TAG, "stop_me:007");
+                        HelperGeneric.logI(TAG, "stop_me:007");
 
                         try
                         {
@@ -365,28 +375,28 @@ public class TrifaToxService extends Service
                             e.printStackTrace();
                         }
 
-                        Log.i(TAG, "stop_me:008");
+                        HelperGeneric.logI(TAG, "stop_me:008");
                         tox_notification_cancel(static_context);
-                        Log.i(TAG, "stop_me:009");
+                        HelperGeneric.logI(TAG, "stop_me:009");
 
-                        Log.i(TAG, "stop_me:010");
+                        HelperGeneric.logI(TAG, "stop_me:010");
                         stopSelf();
-                        Log.i(TAG, "stop_me:011");
+                        HelperGeneric.logI(TAG, "stop_me:011");
 
                         try
                         {
-                            Log.i(TAG, "stop_me:012");
+                            HelperGeneric.logI(TAG, "stop_me:012");
                             Thread.sleep(300);
-                            Log.i(TAG, "stop_me:013");
+                            HelperGeneric.logI(TAG, "stop_me:013");
                         }
                         catch (Exception e)
                         {
                             e.printStackTrace();
                         }
 
-                        Log.i(TAG, "stop_me:014");
+                        HelperGeneric.logI(TAG, "stop_me:014");
                         tox_notification_cancel(static_context);
-                        Log.i(TAG, "stop_me:015");
+                        HelperGeneric.logI(TAG, "stop_me:015");
 
                         // MainActivity.exit();
                         try
@@ -397,11 +407,11 @@ public class TrifaToxService extends Service
                         {
                         }
 
-                        Log.i(TAG, "stop_me:089");
+                        HelperGeneric.logI(TAG, "stop_me:089");
                     }
                 };
                 t.start();
-                Log.i(TAG, "stop_me:099");
+                HelperGeneric.logI(TAG, "stop_me:099");
             }
             catch (Exception e)
             {
@@ -431,15 +441,15 @@ public class TrifaToxService extends Service
     void stop_tox_fg(final boolean want_exit)
     {
         stop_tox_fg_done = false;
-        Log.i(TAG, "stop_tox_fg:001");
+        HelperGeneric.logI(TAG, "stop_tox_fg:001");
         Thread t = new Thread()
         {
             @Override
             public void run()
             {
-                Log.i(TAG, "stop_tox_fg:002:a");
+                HelperGeneric.logI(TAG, "stop_tox_fg:002:a");
                 HelperGeneric.update_savedata_file_wrapper(); // save on tox shutdown
-                Log.i(TAG, "stop_tox_fg:002:b");
+                HelperGeneric.logI(TAG, "stop_tox_fg:002:b");
                 stop_me = true;
 
                 try
@@ -451,43 +461,43 @@ public class TrifaToxService extends Service
 
                 }
 
-                Log.i(TAG, "stop_tox_fg:003");
+                HelperGeneric.logI(TAG, "stop_tox_fg:003");
                 try
                 {
-                    Log.i(TAG, "stop_tox_fg:004");
+                    HelperGeneric.logI(TAG, "stop_tox_fg:004");
                     ToxServiceThread.join();
-                    Log.i(TAG, "stop_tox_fg:005");
+                    HelperGeneric.logI(TAG, "stop_tox_fg:005");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "stop_tox_fg:006:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "stop_tox_fg:006:EE:" + e.getMessage());
                     e.printStackTrace();
                 }
 
                 stop_me = false; // reset flag again!
-                Log.i(TAG, "stop_tox_fg:007");
+                HelperGeneric.logI(TAG, "stop_tox_fg:007");
                 tox_notification_change_wrapper(0, ""); // set to offline
-                Log.i(TAG, "stop_tox_fg:008");
+                HelperGeneric.logI(TAG, "stop_tox_fg:008");
                 set_all_friends_offline();
-                Log.i(TAG, "set_all_conferences_inactive:003");
+                HelperGeneric.logI(TAG, "set_all_conferences_inactive:003");
                 set_all_conferences_inactive();
 
                 // so that the app knows we went offline
                 global_self_connection_status = TOX_CONNECTION_NONE.value;
 
-                Log.i(TAG, "stop_tox_fg:009");
+                HelperGeneric.logI(TAG, "stop_tox_fg:009");
 
                 if (want_exit)
                 {
                     tox_notification_cancel(context_s);
-                    Log.i(TAG, "stop_tox_fg:clear_tox_notification");
+                    HelperGeneric.logI(TAG, "stop_tox_fg:clear_tox_notification");
                 }
 
                 try
                 {
-                    Log.i(TAG, "stop_tox_fg:010a");
+                    HelperGeneric.logI(TAG, "stop_tox_fg:010a");
                     Thread.sleep(500);
-                    Log.i(TAG, "stop_tox_fg:010b");
+                    HelperGeneric.logI(TAG, "stop_tox_fg:010b");
                 }
                 catch (Exception e)
                 {
@@ -497,14 +507,14 @@ public class TrifaToxService extends Service
                 stop_tox_fg_done = true;
                 is_tox_started = false;
 
-                Log.i(TAG, "stop_tox_fg:thread:done");
+                HelperGeneric.logI(TAG, "stop_tox_fg:thread:done");
             }
         };
 
-        Log.i(TAG, "stop_tox_fg:HH:001");
+        HelperGeneric.logI(TAG, "stop_tox_fg:HH:001");
         t.start();
-        Log.i(TAG, "stop_tox_fg:HH:004");
-        Log.i(TAG, "stop_tox_fg:099");
+        HelperGeneric.logI(TAG, "stop_tox_fg:HH:004");
+        HelperGeneric.logI(TAG, "stop_tox_fg:099");
     }
 
     void load_and_add_all_friends()
@@ -512,26 +522,26 @@ public class TrifaToxService extends Service
 
         // --- load and update all friends ---
         long[] friends = MainActivity.tox_self_get_friend_list();
-        Log.i(TAG, "loading_friend:number_of_friends=" + friends.length);
+        HelperGeneric.logI(TAG, "loading_friend:number_of_friends=" + friends.length);
 
         int fc = 0;
         boolean exists_in_db = false;
 
         for (fc = 0; fc < friends.length; fc++)
         {
-            // Log.i(TAG, "loading_friend:" + fc + " friendnum=" + MainActivity.friends[fc]);
-            // Log.i(TAG, "loading_friend:" + fc + " pubkey=" + tox_friend_get_public_key__wrapper(MainActivity.friends[fc]));
+            // HelperGeneric.logI(TAG, "loading_friend:" + fc + " friendnum=" + MainActivity.friends[fc]);
+            // HelperGeneric.logI(TAG, "loading_friend:" + fc + " pubkey=" + tox_friend_get_public_key__wrapper(MainActivity.friends[fc]));
 
             FriendList f;
             List<com.zoffcc.applications.sorm.FriendList> fl = orma.selectFromFriendList().tox_public_key_stringEq(
                     tox_friend_get_public_key__wrapper(friends[fc])).toList();
 
-            // Log.i(TAG, "loading_friend:" + fc + " db entry size=" + fl);
+            // HelperGeneric.logI(TAG, "loading_friend:" + fc + " db entry size=" + fl);
 
             if (fl.size() > 0)
             {
                 f = (FriendList) fl.get(0);
-                // Log.i(TAG, "loading_friend:" + fc + " db entry=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:" + fc + " db entry=" + f);
             }
             else
             {
@@ -540,7 +550,7 @@ public class TrifaToxService extends Service
 
             if (f == null)
             {
-                Log.i(TAG, "loading_friend:c is null");
+                HelperGeneric.logI(TAG, "loading_friend:c is null");
 
                 f = new FriendList();
                 f.tox_public_key_string = "" + (long) ((Math.random() * 10000000d));
@@ -554,11 +564,11 @@ public class TrifaToxService extends Service
                 }
                 f.name = "friend #" + fc;
                 exists_in_db = false;
-                // Log.i(TAG, "loading_friend:c is null fnew=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:c is null fnew=" + f);
             }
             else
             {
-                // Log.i(TAG, "loading_friend:found friend in DB " + f.tox_public_key_string + " f=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:found friend in DB " + f.tox_public_key_string + " f=" + f);
                 exists_in_db = true;
             }
 
@@ -578,7 +588,7 @@ public class TrifaToxService extends Service
 
                 if ((status_new != 0) && (combined_connection_status_ != 0))
                 {
-                    // Log.i(TAG, "non_relay_status:ALL:" + friends[fc] + " pk=" +
+                    // HelperGeneric.logI(TAG, "non_relay_status:ALL:" + friends[fc] + " pk=" +
                     //           get_friend_name_from_pubkey(f.tox_public_key_string) + " status=" + status_new +
                     //           " combined_connection_status_=" + combined_connection_status_);
                 }
@@ -590,13 +600,13 @@ public class TrifaToxService extends Service
 
             if (exists_in_db == false)
             {
-                // Log.i(TAG, "loading_friend:1:insertIntoFriendList:" + " f=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:1:insertIntoFriendList:" + " f=" + f);
                 orma.insertIntoFriendList(f);
-                // Log.i(TAG, "loading_friend:2:insertIntoFriendList:" + " f=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:2:insertIntoFriendList:" + " f=" + f);
             }
             else
             {
-                // Log.i(TAG, "loading_friend:1:updateFriendList:" + " f=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:1:updateFriendList:" + " f=" + f);
 
                 // @formatter:off
                 orma.updateFriendList().
@@ -610,7 +620,7 @@ public class TrifaToxService extends Service
                         TOX_USER_STATUS(f.TOX_USER_STATUS).
                         execute();
                 // @formatter:on
-                // Log.i(TAG, "loading_friend:1:updateFriendList:" + " f=" + f);
+                // HelperGeneric.logI(TAG, "loading_friend:1:updateFriendList:" + " f=" + f);
             }
 
             try_update_friend_in_friendlist(friends[fc]);
@@ -638,7 +648,7 @@ public class TrifaToxService extends Service
                             int combined_connection_status_ = get_combined_connection_status(f.tox_public_key_string,
                                                                                              status_new);
 
-                            // Log.i(TAG, "non_relay_status:FWR:" + friends[fc] + " pk=" +
+                            // HelperGeneric.logI(TAG, "non_relay_status:FWR:" + friends[fc] + " pk=" +
                             //           get_friend_name_from_pubkey(f.tox_public_key_string) + " status=" + status_new +
                             //           " combined_connection_status_=" + combined_connection_status_);
 
@@ -664,20 +674,31 @@ public class TrifaToxService extends Service
         FriendList f_check;
         List<com.zoffcc.applications.sorm.FriendList> fl_check = orma.selectFromFriendList().tox_public_key_stringEq(
                 tox_friend_get_public_key__wrapper(friendnum)).toList();
-        // Log.i(TAG, "loading_friend:check:" + " db entry=" + fl_check);
+        // HelperGeneric.logI(TAG, "loading_friend:check:" + " db entry=" + fl_check);
         try
         {
-            // Log.i(TAG, "loading_friend:check:" + " db entry=" + fl_check.get(0));
+            // HelperGeneric.logI(TAG, "loading_friend:check:" + " db entry=" + fl_check.get(0));
 
             try
             {
+                CombinedFriendsAndConferences cc = null;
                 if (MainActivity.friend_list_fragment != null)
                 {
                     // reload friend in friendlist
-                    CombinedFriendsAndConferences cc = new CombinedFriendsAndConferences();
+                    cc = new CombinedFriendsAndConferences();
                     cc.is_friend = COMBINED_IS_FRIEND;
                     cc.friend_item = (FriendList) fl_check.get(0);
                     MainActivity.friend_list_fragment.modify_friend(cc, cc.is_friend);
+                }
+                if (MainActivity.contacts_list_fragment != null)
+                {
+                    if (cc == null)
+                    {
+                        cc = new CombinedFriendsAndConferences();
+                        cc.is_friend = COMBINED_IS_FRIEND;
+                        cc.friend_item = (FriendList) fl_check.get(0);
+                    }
+                    MainActivity.contacts_list_fragment.modify_friend(cc, cc.is_friend);
                 }
             }
             catch (Exception e)
@@ -688,14 +709,14 @@ public class TrifaToxService extends Service
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "loading_friend:check:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "loading_friend:check:EE:" + e.getMessage());
         }
     }
 
     void load_and_add_all_conferences()
     {
         long num_conferences = tox_conference_get_chatlist_size();
-        Log.i(TAG, "load conferences at startup: num=" + num_conferences);
+        HelperGeneric.logI(TAG, "load conferences at startup: num=" + num_conferences);
 
         long[] conference_numbers = tox_conference_get_chatlist();
         ByteBuffer cookie_buf3 = ByteBuffer.allocateDirect(CONFERENCE_ID_LENGTH * 2);
@@ -709,11 +730,11 @@ public class TrifaToxService extends Service
                 byte[] cookie_buffer = new byte[CONFERENCE_ID_LENGTH];
                 cookie_buf3.get(cookie_buffer, 0, CONFERENCE_ID_LENGTH);
                 String conference_identifier = bytes_to_hex(cookie_buffer);
-                // Log.i(TAG, "load conference num=" + conference_numbers[conf_] + " cookie=" + conference_identifier +
+                // HelperGeneric.logI(TAG, "load conference num=" + conference_numbers[conf_] + " cookie=" + conference_identifier +
                 //           " offset=" + cookie_buf3.arrayOffset());
 
                 // final ConferenceDB conf2 = orma.selectFromConferenceDB().toList().get(0);
-                //Log.i(TAG,
+                //HelperGeneric.logI(TAG,
                 //      "conference 0 in db:" + conf2.conference_identifier + " " + conf2.tox_conference_number + " " +
                 //      conf2.name);
 
@@ -725,7 +746,7 @@ public class TrifaToxService extends Service
                 //{
                 //    // TODO: this returns error. check it
                 //    long result = toxav_groupchat_disable_av(conference_numbers[conf_]);
-                //    Log.i(TAG, "load conference num=" + conference_numbers[conf_] + " toxav_groupchat_disable_av res=" +
+                //    HelperGeneric.logI(TAG, "load conference num=" + conference_numbers[conf_] + " toxav_groupchat_disable_av res=" +
                 //               result);
                 //}
 
@@ -768,9 +789,10 @@ public class TrifaToxService extends Service
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
         remove_legacy_public_community_group();
+        prune_stale_tox_groups();
 
         long num_groups = tox_group_get_number_groups();
-        Log.i(TAG, "load groups at startup: num=" + num_groups);
+        HelperGeneric.logI(TAG, "load groups at startup: num=" + num_groups);
 
         long[] group_numbers = tox_group_get_grouplist();
         ByteBuffer groupid_buf3 = ByteBuffer.allocateDirect(GROUP_ID_LENGTH * 2);
@@ -786,7 +808,7 @@ public class TrifaToxService extends Service
                 groupid_buf3.get(groupid_buffer, 0, GROUP_ID_LENGTH);
                 String group_identifier = bytes_to_hex(groupid_buffer);
                 int is_connected = tox_group_is_connected(group_numbers[conf_]);
-                Log.i(TAG, "load group num=" + group_numbers[conf_] + " connected=" + is_connected);
+                HelperGeneric.logI(TAG, "load group num=" + group_numbers[conf_] + " connected=" + is_connected);
 
                 new_or_updated_group(group_numbers[conf_], tox_friend_get_public_key__wrapper(0), group_identifier,
                                      tox_group_get_privacy_state(group_numbers[conf_]));
@@ -857,7 +879,7 @@ public class TrifaToxService extends Service
 
     void tox_thread_start_fg()
     {
-        Log.i(TAG, "tox_thread_start_fg");
+        HelperGeneric.logI(TAG, "tox_thread_start_fg");
 
         ToxServiceThread = new Thread()
         {
@@ -877,9 +899,9 @@ public class TrifaToxService extends Service
 
                 // ------ correct startup order ------
                 boolean old_is_tox_started = is_tox_started;
-                Log.i(TAG, "is_tox_started:==============================");
-                Log.i(TAG, "is_tox_started=" + is_tox_started);
-                Log.i(TAG, "is_tox_started:==============================");
+                HelperGeneric.logI(TAG, "is_tox_started:==============================");
+                HelperGeneric.logI(TAG, "is_tox_started=" + is_tox_started);
+                HelperGeneric.logI(TAG, "is_tox_started:==============================");
 
                 is_tox_started = true;
 
@@ -903,7 +925,7 @@ public class TrifaToxService extends Service
 
                 if (!old_is_tox_started)
                 {
-                    Log.i(TAG, "set_all_conferences_inactive:004");
+                    HelperGeneric.logI(TAG, "set_all_conferences_inactive:004");
                     set_all_friends_offline();
                     set_all_conferences_inactive();
                     set_all_filetransfers_inactive();
@@ -925,7 +947,7 @@ public class TrifaToxService extends Service
                 }
 
                 tox_self_capabilites = tox_self_get_capabilities();
-                //Log.i(TAG, "tox_self_capabilites:" + tox_self_capabilites + " decoded:" +
+                //HelperGeneric.logI(TAG, "tox_self_capabilites:" + tox_self_capabilites + " decoded:" +
                 //           TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(tox_self_capabilites)) + " " +
                 //           (1L << 63L));
 
@@ -949,11 +971,11 @@ public class TrifaToxService extends Service
                             orma.run_multi_sql(
                                     "update ConferenceMessage set sent_timestamp=rcvd_timestamp" + " where " +
                                     " sent_timestamp='0'");
-                            Log.i(TAG, "onCreate:migrate_old_conf_msg_date");
+                            HelperGeneric.logI(TAG, "onCreate:migrate_old_conf_msg_date");
                         }
                         catch (Exception e)
                         {
-                            Log.i(TAG, "onCreate:migrate_old_conf_msg_date:EE01");
+                            HelperGeneric.logI(TAG, "onCreate:migrate_old_conf_msg_date:EE01");
                         }
                         // now remember that we did that, and don't do it again
                         set_g_opts("MIGRATE_OLD_CONF_MSG_DATE_done", "true");
@@ -962,7 +984,7 @@ public class TrifaToxService extends Service
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "onCreate:migrate_old_conf_msg_date:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "onCreate:migrate_old_conf_msg_date:EE:" + e.getMessage());
                 }
                 // ----- convert old conference messages which did not contain a sent timestamp -----
 
@@ -971,11 +993,11 @@ public class TrifaToxService extends Service
                 {
                     orma.run_multi_sql(
                             "update ConferenceMessage set was_synced=false" + " where " + " was_synced is NULL");
-                    Log.i(TAG, "onCreate:migrate_was_synced");
+                    HelperGeneric.logI(TAG, "onCreate:migrate_was_synced");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:migrate_was_synced:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:migrate_was_synced:EE01");
                 }
                 // ----- convert old NULL's into false -----
 
@@ -984,12 +1006,12 @@ public class TrifaToxService extends Service
                 {
                     orma.run_multi_sql(
                             "update GroupDB set group_we_left=false" + " where " + " group_we_left is NULL");
-                    Log.i(TAG, "onCreate:migrate_group_we_left");
+                    HelperGeneric.logI(TAG, "onCreate:migrate_group_we_left");
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "onCreate:migrate_group_we_left:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:migrate_group_we_left:EE01");
                 }
                 // ----- convert old NULL's into false -----
 
@@ -998,11 +1020,11 @@ public class TrifaToxService extends Service
                 try
                 {
                     orma.run_multi_sql("update Message set sent_push='0' where sent_push is NULL");
-                    Log.i(TAG, "onCreate:sent_push");
+                    HelperGeneric.logI(TAG, "onCreate:sent_push");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:sent_push:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:sent_push:EE01");
                 }
                 // ----- convert old NULL's into 0 -----
 
@@ -1011,11 +1033,11 @@ public class TrifaToxService extends Service
                 {
                     orma.run_multi_sql(
                             "update FriendList set msgv3_capability='0' where msgv3_capability is NULL");
-                    Log.i(TAG, "onCreate:msgv3_capability");
+                    HelperGeneric.logI(TAG, "onCreate:msgv3_capability");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:msgv3_capability:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:msgv3_capability:EE01");
                 }
                 // ----- convert old NULL's into 0 -----
 
@@ -1024,11 +1046,11 @@ public class TrifaToxService extends Service
                 {
                     orma.run_multi_sql(
                             "update Message set filetransfer_kind='0' where filetransfer_kind is NULL");
-                    Log.i(TAG, "onCreate:filetransfer_kind");
+                    HelperGeneric.logI(TAG, "onCreate:filetransfer_kind");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:filetransfer_kind:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:filetransfer_kind:EE01");
                 }
                 // ----- convert old NULL's into 0 -----
 
@@ -1037,11 +1059,11 @@ public class TrifaToxService extends Service
                 {
                     orma.run_multi_sql(
                             "update GroupMessage set TRIFA_SYNC_TYPE='0' where TRIFA_SYNC_TYPE is NULL");
-                    Log.i(TAG, "onCreate:TRIFA_SYNC_TYPE");
+                    HelperGeneric.logI(TAG, "onCreate:TRIFA_SYNC_TYPE");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:TRIFA_SYNC_TYPE:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:TRIFA_SYNC_TYPE:EE01");
                 }
                 // ----- convert old NULL's into 0 -----
 
@@ -1049,29 +1071,29 @@ public class TrifaToxService extends Service
                 try
                 {
                     orma.run_multi_sql("update GroupMessage set tox_group_peer_pubkey_syncer_01_sent_timestamp='0' where tox_group_peer_pubkey_syncer_01_sent_timestamp is NULL");
-                    Log.i(TAG, "onCreate:tox_group_peer_pubkey_syncer_01_sent_timestamp");
+                    HelperGeneric.logI(TAG, "onCreate:tox_group_peer_pubkey_syncer_01_sent_timestamp");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:tox_group_peer_pubkey_syncer_01_sent_timestamp:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:tox_group_peer_pubkey_syncer_01_sent_timestamp:EE01");
                 }
                 try
                 {
                     orma.run_multi_sql("update GroupMessage set tox_group_peer_pubkey_syncer_02_sent_timestamp='0' where tox_group_peer_pubkey_syncer_02_sent_timestamp is NULL");
-                    Log.i(TAG, "onCreate:tox_group_peer_pubkey_syncer_02_sent_timestamp");
+                    HelperGeneric.logI(TAG, "onCreate:tox_group_peer_pubkey_syncer_02_sent_timestamp");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:tox_group_peer_pubkey_syncer_02_sent_timestamp:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:tox_group_peer_pubkey_syncer_02_sent_timestamp:EE01");
                 }
                 try
                 {
                     orma.run_multi_sql("update GroupMessage set tox_group_peer_pubkey_syncer_03_sent_timestamp='0' where tox_group_peer_pubkey_syncer_03_sent_timestamp is NULL");
-                    Log.i(TAG, "onCreate:tox_group_peer_pubkey_syncer_03_sent_timestamp");
+                    HelperGeneric.logI(TAG, "onCreate:tox_group_peer_pubkey_syncer_03_sent_timestamp");
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "onCreate:tox_group_peer_pubkey_syncer_03_sent_timestamp:EE01");
+                    HelperGeneric.logI(TAG, "onCreate:tox_group_peer_pubkey_syncer_03_sent_timestamp:EE01");
                 }
                 // ----- convert old NULL's into 0 -----
 
@@ -1096,7 +1118,7 @@ public class TrifaToxService extends Service
                                 profile_prefs.edit().putBoolean("legacy_trifa_profile_name_migrated", true).apply();
                             }
                             global_my_name = tmp_name;
-                            // Log.i(TAG, "AAA:003:" + global_my_name + " size=" + tox_self_get_name_size());
+                            // HelperGeneric.logI(TAG, "AAA:003:" + global_my_name + " size=" + tox_self_get_name_size());
                         }
                     }
                 }
@@ -1105,7 +1127,7 @@ public class TrifaToxService extends Service
                     final String default_name = default_self_display_name(my_tox_id_local);
                     tox_self_set_name(default_name);
                     global_my_name = default_name;
-                    Log.i(TAG, "AAA:005");
+                    HelperGeneric.logI(TAG, "AAA:005");
                 }
 
                 if (tox_self_get_status_message_size() > 0)
@@ -1121,7 +1143,7 @@ public class TrifaToxService extends Service
                                 tox_self_set_status_message(tmp_status);
                             }
                             global_my_status_message = tmp_status;
-                            // Log.i(TAG, "AAA:008:" + global_my_status_message + " size=" + tox_self_get_status_message_size());
+                            // HelperGeneric.logI(TAG, "AAA:008:" + global_my_status_message + " size=" + tox_self_get_status_message_size());
                         }
                     }
                 }
@@ -1129,9 +1151,9 @@ public class TrifaToxService extends Service
                 {
                     tox_self_set_status_message("");
                     global_my_status_message = "";
-                    Log.i(TAG, "AAA:010");
+                    HelperGeneric.logI(TAG, "AAA:010");
                 }
-                Log.i(TAG, "AAA:011");
+                HelperGeneric.logI(TAG, "AAA:011");
 
                 HelperGeneric.update_savedata_file_wrapper();
 
@@ -1148,9 +1170,9 @@ public class TrifaToxService extends Service
                 {
                     bootstrapping = true;
                     global_self_last_went_offline_timestamp = System.currentTimeMillis();
-                    Log.i(TAG, "global_self_last_went_offline_timestamp[1]=" + global_self_last_went_offline_timestamp +
+                    HelperGeneric.logI(TAG, "global_self_last_went_offline_timestamp[1]=" + global_self_last_went_offline_timestamp +
                                " HAVE_INTERNET_CONNECTIVITY=" + HAVE_INTERNET_CONNECTIVITY);
-                    Log.i(TAG, "bootrapping:set to true[1]");
+                    HelperGeneric.logI(TAG, "bootrapping:set to true[1]");
                     try
                     {
                         tox_notification_change(context_s, nmn2, 0, ""); // set notification to "bootstrapping"
@@ -1169,7 +1191,7 @@ public class TrifaToxService extends Service
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "bootstrap_me:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "bootstrap_me:001:EE:" + e.getMessage());
                     }
 
                     check_if_still_bootstrapping();
@@ -1180,7 +1202,7 @@ public class TrifaToxService extends Service
                 // --------------- bootstrap ---------------
 
                 long tox_iteration_interval_ms = tox_iteration_interval();
-                Log.i(TAG, "tox_iteration_interval_ms=" + tox_iteration_interval_ms);
+                HelperGeneric.logI(TAG, "tox_iteration_interval_ms=" + tox_iteration_interval_ms);
 
                 MainActivity.tox_iterate();
 
@@ -1202,7 +1224,7 @@ public class TrifaToxService extends Service
                                     {
                                         LOG_FRIEND_TOXID = get_g_opts(LOGFRIEND_TOXID_DB_KEY);
                                         need_add_log_pseudo_friend = false;
-                                        Log.i(TAG, "need_add_log_pseudo_friend=false");
+                                        HelperGeneric.logI(TAG, "need_add_log_pseudo_friend=false");
                                     }
                                 }
                             }
@@ -1215,7 +1237,7 @@ public class TrifaToxService extends Service
 
                     if (need_add_log_pseudo_friend)
                     {
-                        Log.i(TAG, "need_add_log_pseudo_friend:start");
+                        HelperGeneric.logI(TAG, "need_add_log_pseudo_friend:start");
 
                         ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
                         MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
@@ -1224,16 +1246,16 @@ public class TrifaToxService extends Service
                         {
                             del_g_opts(LOGFRIEND_ON_STARTUP_DONE_DB_KEY);
                             del_g_opts(LOGFRIEND_TOXID_DB_KEY);
-                            Log.i(TAG, "need_add_log_pseudo_friend:some error generating the ID for log_pseudo_friend");
+                            HelperGeneric.logI(TAG, "need_add_log_pseudo_friend:some error generating the ID for log_pseudo_friend");
                         }
                         else
                         {
-                            Log.i(TAG, "need_add_log_pseudo_friend:LOG_FRIEND_TOXID=" + LOG_FRIEND_TOXID + " len=" +
+                            HelperGeneric.logI(TAG, "need_add_log_pseudo_friend:LOG_FRIEND_TOXID=" + LOG_FRIEND_TOXID + " len=" +
                                        LOG_FRIEND_TOXID.length());
                             add_friend_real_norequest(LOG_FRIEND_TOXID);
                             set_g_opts(LOGFRIEND_ON_STARTUP_DONE_DB_KEY, "true");
                             set_g_opts(LOGFRIEND_TOXID_DB_KEY, LOG_FRIEND_TOXID);
-                            // Log.i(TAG, "need_add_log_pseudo_friend:get:" + LOG_FRIEND_TOXID + " :: " + (LOG_FRIEND_TOXID.substring(0, 32 * 2).toUpperCase()));
+                            // HelperGeneric.logI(TAG, "need_add_log_pseudo_friend:get:" + LOG_FRIEND_TOXID + " :: " + (LOG_FRIEND_TOXID.substring(0, 32 * 2).toUpperCase()));
                             FriendList f_log_friend = main_get_friend(
                                     LOG_FRIEND_TOXID.substring(0, 32 * 2).toUpperCase());
                             if (f_log_friend != null)
@@ -1243,9 +1265,9 @@ public class TrifaToxService extends Service
                                 HelperFriend.update_friend_in_db_name(f_log_friend);
                                 HelperFriend.update_friend_in_db_status_message(f_log_friend);
                                 HelperFriend.update_single_friend_in_friendlist_view(f_log_friend);
-                                Log.i(TAG, "need_add_log_pseudo_friend=update meta data");
+                                HelperGeneric.logI(TAG, "need_add_log_pseudo_friend=update meta data");
                             }
-                            Log.i(TAG, "need_add_log_pseudo_friend=true (INSERT)");
+                            HelperGeneric.logI(TAG, "need_add_log_pseudo_friend=true (INSERT)");
                             append_logger_msg("need_add_log_pseudo_friend=true (INSERT)");
                         }
                     }
@@ -1263,9 +1285,9 @@ public class TrifaToxService extends Service
                                 HelperFriend.update_friend_in_db_name(f_log_friend);
                                 HelperFriend.update_friend_in_db_status_message(f_log_friend);
                                 HelperFriend.update_single_friend_in_friendlist_view(f_log_friend);
-                                Log.i(TAG, "need_add_log_pseudo_friend=update meta data");
+                                HelperGeneric.logI(TAG, "need_add_log_pseudo_friend=update meta data");
                             }
-                            Log.i(TAG, "need_add_log_pseudo_friend=true (refresh)");
+                            HelperGeneric.logI(TAG, "need_add_log_pseudo_friend=true (refresh)");
                         }
                     }
                 }
@@ -1291,7 +1313,7 @@ public class TrifaToxService extends Service
 
                 global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
                 global_self_last_went_offline_timestamp = System.currentTimeMillis();
-                Log.i(TAG, "global_self_last_went_offline_timestamp[2]=" + global_self_last_went_offline_timestamp +
+                HelperGeneric.logI(TAG, "global_self_last_went_offline_timestamp[2]=" + global_self_last_went_offline_timestamp +
                            " HAVE_INTERNET_CONNECTIVITY=" + HAVE_INTERNET_CONNECTIVITY);
 
 
@@ -1403,6 +1425,8 @@ public class TrifaToxService extends Service
                     }
 
                     MainActivity.tox_iterate();
+                    HelperGroup.maintain_all_groups();
+                    ConnectionHealthMonitor.tick();
 
                     if ((Callstate.state != 0) || (Callstate.audio_group_active) || (Callstate.audio_ngc_group_active))
                     {
@@ -1417,7 +1441,11 @@ public class TrifaToxService extends Service
                     }
                     else
                     {
-                        if (global_last_activity_outgoung_ft_ts > -1)
+                        if (needs_fast_group_iterate())
+                        {
+                            tox_iteration_interval_ms = 20;
+                        }
+                        else if (global_last_activity_outgoung_ft_ts > -1)
                         {
                             if ((global_last_activity_outgoung_ft_ts + 200) > System.currentTimeMillis())
                             {
@@ -1504,10 +1532,10 @@ public class TrifaToxService extends Service
                     e.printStackTrace();
                 }
 
-                //Log.i(TAG, "VFS:detachThread:(TrifaToxService):" + Thread.currentThread().getId() + ":" +
+                //HelperGeneric.logI(TAG, "VFS:detachThread:(TrifaToxService):" + Thread.currentThread().getId() + ":" +
                 //           Thread.currentThread().getName());
                 //vfs.detachThread();
-                //Log.i(TAG, "VFS:detachThread:(TrifaToxService):OK");
+                //HelperGeneric.logI(TAG, "VFS:detachThread:(TrifaToxService):OK");
             }
         };
 
@@ -1563,7 +1591,7 @@ public class TrifaToxService extends Service
             //        BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS +
             //        (int) (Math.random() * 15000d) + 5000, alarmIntent);
 
-            Log.i(TAG, "get BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS:" +
+            HelperGeneric.logI(TAG, "get BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS:" +
                        BATTERY_OPTIMIZATION_SLEEP_IN_MILLIS);
 
             try
@@ -1572,11 +1600,11 @@ public class TrifaToxService extends Service
                 {
                     if (alarmManager.canScheduleExactAlarms())
                     {
-                        Log.i(TAG, "canScheduleExactAlarms:true");
+                        HelperGeneric.logI(TAG, "canScheduleExactAlarms:true");
                     }
                     else
                     {
-                        Log.i(TAG, "canScheduleExactAlarms:**FALSE**");
+                        HelperGeneric.logI(TAG, "canScheduleExactAlarms:**FALSE**");
                     }
                 }
             }
@@ -1674,6 +1702,12 @@ public class TrifaToxService extends Service
             last_resend_unsent_text_messages_ms = System.currentTimeMillis();
             resend_unsent_text_messages();
         }
+
+        if ((last_delivery_watchdog_ms + MessageDeliveryWatchdog.WATCH_INTERVAL_MS) < System.currentTimeMillis())
+        {
+            last_delivery_watchdog_ms = System.currentTimeMillis();
+            MessageDeliveryWatchdog.tick();
+        }
     }
 
     private void start_queued_filetransfers()
@@ -1681,7 +1715,7 @@ public class TrifaToxService extends Service
         if ((last_start_queued_fts_ms + (4 * 1000)) < System.currentTimeMillis())
         {
             last_start_queued_fts_ms = System.currentTimeMillis();
-            // Log.i(TAG, "start_queued_outgoing_FTs ============================================");
+            // HelperGeneric.logI(TAG, "start_queued_outgoing_FTs ============================================");
 
             try
             {
@@ -1713,22 +1747,35 @@ public class TrifaToxService extends Service
                         orderBySent_timestampAsc().
                         toList();
 
-                // Log.i(TAG, "start_queued_outgoing_FTs:000:" + m_v1);
+                // HelperGeneric.logI(TAG, "start_queued_outgoing_FTs:000:" + m_v1);
 
                 if ((m_v1 != null) && (m_v1.size() > 0))
                 {
-                    // Log.i(TAG, "start_queued_outgoing_FTs:001:" + m_v1.size());
+                    // HelperGeneric.logI(TAG, "start_queued_outgoing_FTs:001:" + m_v1.size());
 
+                    final java.util.HashSet<String> started_pubkeys = new java.util.HashSet<>();
                     Iterator<com.zoffcc.applications.sorm.Message> ii = m_v1.iterator();
                     while (ii.hasNext())
                     {
                         Message m_resend_ft = (Message) ii.next();
 
+                        if (started_pubkeys.contains(m_resend_ft.tox_friendpubkey))
+                        {
+                            continue;
+                        }
+
+                        if (HelperFiletransfer.has_active_outgoing_filetransfer_for_pubkey(m_resend_ft.tox_friendpubkey))
+                        {
+                            continue;
+                        }
+
+                        started_pubkeys.add(m_resend_ft.tox_friendpubkey);
+
                         if (m_resend_ft.sent_push < 1)
                         {
                             friend_call_push_url(m_resend_ft.tox_friendpubkey, m_resend_ft.sent_timestamp);
                         }
-                        Log.i(TAG, "start_ft:sent ping to push url");
+                        HelperGeneric.logI(TAG, "start_ft:sent ping to push url");
                         if (is_friend_online_real(tox_friend_by_public_key__wrapper(m_resend_ft.tox_friendpubkey)) != 0)
                         {
                             start_outgoing_ft(m_resend_ft);
@@ -1753,11 +1800,11 @@ public class TrifaToxService extends Service
                     if (global_self_last_went_offline_timestamp + TOX_BOOTSTRAP_AGAIN_AFTER_OFFLINE_MILLIS <
                         System.currentTimeMillis())
                     {
-                        Log.i(TAG, "offline and we have internet connectivity --> bootstrap again ...");
+                        HelperGeneric.logI(TAG, "offline and we have internet connectivity --> bootstrap again ...");
                         global_self_last_went_offline_timestamp = System.currentTimeMillis();
 
                         bootstrapping = true;
-                        Log.i(TAG, "bootrapping:set to true[2]");
+                        HelperGeneric.logI(TAG, "bootrapping:set to true[2]");
                         try
                         {
                             tox_notification_change(context_s, nmn2, TOX_CONNECTION_NONE.value, "");
@@ -1779,7 +1826,7 @@ public class TrifaToxService extends Service
 
     void start_me()
     {
-        Log.i(TAG, "start_me");
+        HelperGeneric.logI(TAG, "start_me");
         notification2 = tox_notification_setup(this, nmn2);
         int type = 0;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
@@ -1807,33 +1854,40 @@ public class TrifaToxService extends Service
             if ((bs_udp_ip.length() > 0) && (bs_udp_port.length() > 0) && (IPisValid(bs_udp_ip)) &&
                 (isIPPortValid(bs_udp_port)) && (is_valid_tox_public_key(bs_udp_keyhex)))
             {
-                Log.i(TAG, "bootstap_from_custom_nodes:bootstrap_single:ip=" + bs_udp_ip + " port=" +
+                HelperGeneric.logI(TAG, "bootstap_from_custom_nodes:bootstrap_single:ip=" + bs_udp_ip + " port=" +
                            Integer.parseInt(bs_udp_port) + " key=" + bs_udp_keyhex.toUpperCase());
                 int bootstrap_result = bootstrap_single_wrapper(bs_udp_ip, Integer.parseInt(bs_udp_port),
                                                                 bs_udp_keyhex.toUpperCase());
-                Log.i(TAG, "bootstap_from_custom_nodes:bootstrap_single:res=" + bootstrap_result);
+                HelperGeneric.logI(TAG, "bootstap_from_custom_nodes:bootstrap_single:res=" + bootstrap_result);
             }
 
             if ((bs_tcp_ip.length() > 0) && (bs_tcp_port.length() > 0) && (IPisValid(bs_tcp_ip)) &&
                 (isIPPortValid(bs_tcp_port)) && (is_valid_tox_public_key(bs_tcp_keyhex)))
             {
-                Log.i(TAG, "bootstap_from_custom_nodes:add_tcp_relay_single:ip=" + bs_tcp_ip + " port=" +
+                HelperGeneric.logI(TAG, "bootstap_from_custom_nodes:add_tcp_relay_single:ip=" + bs_tcp_ip + " port=" +
                            Integer.parseInt(bs_tcp_port) + " key=" + bs_tcp_keyhex.toUpperCase());
                 int bootstrap_result = HelperGeneric.add_tcp_relay_single_wrapper(bs_tcp_ip,
                                                                                   Integer.parseInt(bs_tcp_port),
                                                                                   bs_tcp_keyhex.toUpperCase());
-                Log.i(TAG, "bootstap_from_custom_nodes:add_tcp_relay_single:res=" + bootstrap_result);
+                HelperGeneric.logI(TAG, "bootstap_from_custom_nodes:add_tcp_relay_single:res=" + bootstrap_result);
             }
         }
         catch (Exception e)
         {
-            Log.i(TAG, "bootstap_from_custom_nodes:EE01:" + e.getMessage());
+            HelperGeneric.logI(TAG, "bootstap_from_custom_nodes:EE01:" + e.getMessage());
         }
     }
 
     static void on_network_changed()
     {
         ReconnectBackoffCoordinator.get().scheduleReconnect(ReconnectBackoffCoordinator.Reason.NETWORK_CHANGE, true);
+    }
+
+    /** User-initiated or UI-triggered reconnect (bootstrap burst + pending flush). */
+    static void requestManualReconnect()
+    {
+        NetworkDiagnosticsLog.log("reconnect_manual", "requested");
+        ReconnectBackoffCoordinator.get().scheduleReconnect(ReconnectBackoffCoordinator.Reason.MANUAL, true);
     }
 
     static void on_network_reconnect_attempt(final ReconnectBackoffCoordinator.Reason reason, final int attempt)
@@ -1854,31 +1908,11 @@ public class TrifaToxService extends Service
 
     static void perform_khandaq_bootstrap_burst()
     {
-        final String[][] khandaqNodes = new String[][]{
-                {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
-                {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
-                {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
-        };
-        final int[] tcpPorts = new int[]{33445, 3389};
-
-        for (final String[] node : khandaqNodes)
-        {
-            try
-            {
-                bootstrap_single_wrapper(node[0], 33445, node[1]);
-                if (!PREF__force_udp_only)
-                {
-                    for (final int tcpPort : tcpPorts)
-                    {
-                        HelperGeneric.add_tcp_relay_single_wrapper(node[0], tcpPort, node[1]);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Log.i(TAG, "perform_khandaq_bootstrap_burst:EE:" + e.getMessage());
-            }
-        }
+        // Disabled: we no longer bootstrap to our own bootstrap*.khandaq.org nodes. The app relies
+        // on the proven, well-connected public Tox DHT nodes (tox.initramfs.io, tox.abilinski.com,
+        // mf-net.eu, ...) seeded in BootstrapNodeEntryDB. Over-relying on 3 self-hosted nodes gave a
+        // weaker DHT presence, which can hurt NGC public-group peer discovery. Kept as a no-op so the
+        // existing callers don't need to change.
     }
 
     static void bootstrap_me(boolean force)
@@ -1912,68 +1946,58 @@ public class TrifaToxService extends Service
 
     static void bootstrap_me__real()
     {
-        Log.i(TAG, "bootstrap_me");
+        synchronized (bootstrapListsLock)
+        {
+            bootstrap_me__real_locked();
+        }
+    }
+
+    static void bootstrap_me__real_locked()
+    {
+        HelperGeneric.logI(TAG, "bootstrap_me");
 
         bootstap_from_custom_nodes();
         perform_khandaq_bootstrap_burst();
 
-        // ----- UDP ------
-        get_udp_nodelist_from_db();
-        Log.i(TAG, "bootstrap_node_list[sort]=" + bootstrap_node_list.toString());
+        final ArrayList<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> nodesSnapshot;
+        synchronized (bootstrap_node_list)
+        {
+            get_udp_nodelist_from_db();
+            nodesSnapshot = new ArrayList<>(bootstrap_node_list);
+        }
+
+        HelperGeneric.logI(TAG, "bootstrap_node_list[sort]=" + nodesSnapshot.size());
         try
         {
-            Collections.shuffle(bootstrap_node_list);
-            Collections.shuffle(bootstrap_node_list);
+            Collections.shuffle(nodesSnapshot);
+            Collections.shuffle(nodesSnapshot);
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
-        Log.i(TAG, "bootstrap_node_list[rand]=" + bootstrap_node_list.toString());
+        HelperGeneric.logI(TAG, "bootstrap_node_list[rand]=" + nodesSnapshot.size());
 
-        try
-        {
-            Iterator i2 = bootstrap_node_list.iterator();
-            com.zoffcc.applications.sorm.BootstrapNodeEntryDB ee;
-            int used = 0;
-            while (i2.hasNext())
-            {
-                ee = (com.zoffcc.applications.sorm.BootstrapNodeEntryDB) i2.next();
-                int bootstrap_result = bootstrap_single_wrapper(ee.ip, ee.port, ee.key_hex);
-                Log.i(TAG, "bootstrap_single:res=" + bootstrap_result);
+        bootstrap_udp_nodes_parallel(nodesSnapshot);
 
-                if (bootstrap_result == 0)
-                {
-                    used++;
-                    // Log.i(TAG, "bootstrap_single:++:used=" + used);
-                }
-
-                if (used >= USE_MAX_NUMBER_OF_BOOTSTRAP_NODES)
-                {
-                    Log.i(TAG, "bootstrap_single:break:used=" + used);
-                    break;
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-        // ----- UDP ------
-        //
         // ----- TCP ------
-        get_tcprelay_nodelist_from_db();
-        Log.i(TAG, "tcprelay_node_list[sort]=" + tcprelay_node_list.toString());
+        final ArrayList<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> tcpSnapshot;
+        synchronized (tcprelay_node_list)
+        {
+            get_tcprelay_nodelist_from_db();
+            tcpSnapshot = new ArrayList<>(tcprelay_node_list);
+        }
+        HelperGeneric.logI(TAG, "tcprelay_node_list[sort]=" + tcpSnapshot.size());
         try
         {
-            Collections.shuffle(tcprelay_node_list);
-            Collections.shuffle(tcprelay_node_list);
+            Collections.shuffle(tcpSnapshot);
+            Collections.shuffle(tcpSnapshot);
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
-        Log.i(TAG, "tcprelay_node_list[rand]=" + tcprelay_node_list.toString());
+        HelperGeneric.logI(TAG, "tcprelay_node_list[rand]=" + tcpSnapshot.size());
 
         try
         {
@@ -1981,31 +2005,7 @@ public class TrifaToxService extends Service
             {
                 if (!PREF__force_udp_only)
                 {
-                    Iterator i2 = tcprelay_node_list.iterator();
-                    com.zoffcc.applications.sorm.BootstrapNodeEntryDB ee;
-                    int used = 0;
-                    while (i2.hasNext())
-                    {
-                        ee = (com.zoffcc.applications.sorm.BootstrapNodeEntryDB) i2.next();
-                        int bootstrap_result = 1;
-                        if ((ee.ip != null) && (ee.key_hex != null))
-                        {
-                            bootstrap_result = HelperGeneric.add_tcp_relay_single_wrapper(ee.ip, ee.port, ee.key_hex);
-                        }
-                        Log.i(TAG, "add_tcp_relay_single:res=" + bootstrap_result);
-
-                        if (bootstrap_result == 0)
-                        {
-                            used++;
-                            // Log.i(TAG, "add_tcp_relay_single:++:used=" + used);
-                        }
-
-                        if (used >= USE_MAX_NUMBER_OF_BOOTSTRAP_TCP_RELAYS)
-                        {
-                            Log.i(TAG, "add_tcp_relay_single:break:used=" + used);
-                            break;
-                        }
-                    }
+                    bootstrap_tcp_relays_parallel(tcpSnapshot);
                 }
             }
         }
@@ -2016,8 +2016,109 @@ public class TrifaToxService extends Service
         // ----- TCP ------
 
         // ----- TCP mobile ------
-        // Log.i(TAG, "add_tcp_relay_single:res=" + MainActivity.add_tcp_relay_single_wrapper("127.0.0.1", 33447, "252E6D7F8168682363BC473C3951357FB2E28BC9A7B7E1F4CB3B302DC331BDAA".substring(0, (TOX_PUBLIC_KEY_SIZE * 2) - 0)));
+        // HelperGeneric.logI(TAG, "add_tcp_relay_single:res=" + MainActivity.add_tcp_relay_single_wrapper("127.0.0.1", 33447, "252E6D7F8168682363BC473C3951357FB2E28BC9A7B7E1F4CB3B302DC331BDAA".substring(0, (TOX_PUBLIC_KEY_SIZE * 2) - 0)));
         // ----- TCP mobile ------
+    }
+
+    private static final int BOOTSTRAP_PARALLEL_WORKERS = 4;
+
+    private static void bootstrap_udp_nodes_parallel(final List<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> nodes)
+    {
+        if (nodes == null || nodes.isEmpty())
+        {
+            return;
+        }
+
+        final int limit = Math.min(nodes.size(), USE_MAX_NUMBER_OF_BOOTSTRAP_NODES);
+        final AtomicInteger successCount = new AtomicInteger(0);
+        final ExecutorService pool = Executors.newFixedThreadPool(BOOTSTRAP_PARALLEL_WORKERS);
+        final CountDownLatch latch = new CountDownLatch(limit);
+
+        for (int i = 0; i < limit; i++)
+        {
+            final com.zoffcc.applications.sorm.BootstrapNodeEntryDB ee = nodes.get(i);
+            pool.execute(() ->
+            {
+                try
+                {
+                    final int res = bootstrap_single_wrapper(ee.ip, ee.port, ee.key_hex);
+                    if (res == 0)
+                    {
+                        successCount.incrementAndGet();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+                finally
+                {
+                    latch.countDown();
+                }
+            });
+        }
+
+        try
+        {
+            latch.await(8, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
+
+        pool.shutdownNow();
+        HelperGeneric.logI(TAG, "bootstrap_udp_parallel:ok=" + successCount.get() + " tried=" + limit);
+    }
+
+    private static void bootstrap_tcp_relays_parallel(final List<com.zoffcc.applications.sorm.BootstrapNodeEntryDB> nodes)
+    {
+        if (nodes == null || nodes.isEmpty())
+        {
+            return;
+        }
+
+        final int limit = Math.min(nodes.size(), USE_MAX_NUMBER_OF_BOOTSTRAP_TCP_RELAYS);
+        final AtomicInteger successCount = new AtomicInteger(0);
+        final ExecutorService pool = Executors.newFixedThreadPool(BOOTSTRAP_PARALLEL_WORKERS);
+        final CountDownLatch latch = new CountDownLatch(limit);
+
+        for (int i = 0; i < limit; i++)
+        {
+            final com.zoffcc.applications.sorm.BootstrapNodeEntryDB ee = nodes.get(i);
+            pool.execute(() ->
+            {
+                try
+                {
+                    if (ee.ip != null && ee.key_hex != null)
+                    {
+                        final int res = HelperGeneric.add_tcp_relay_single_wrapper(ee.ip, ee.port, ee.key_hex);
+                        if (res == 0)
+                        {
+                            successCount.incrementAndGet();
+                        }
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+                finally
+                {
+                    latch.countDown();
+                }
+            });
+        }
+
+        try
+        {
+            latch.await(8, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
+        }
+
+        pool.shutdownNow();
+        HelperGeneric.logI(TAG, "bootstrap_tcp_parallel:ok=" + successCount.get() + " tried=" + limit);
     }
 
     static void resend_push_for_v3_messages()
@@ -2059,7 +2160,7 @@ public class TrifaToxService extends Service
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "resend_push_for_v3_messages:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "resend_push_for_v3_messages:EE:" + e.getMessage());
         }
     }
 
@@ -2133,7 +2234,7 @@ public class TrifaToxService extends Service
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "resend_v3_messages:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "resend_v3_messages:EE:" + e.getMessage());
         }
         // loop through all pending outgoing 1-on-1 text messages --------------
     }
@@ -2195,7 +2296,7 @@ public class TrifaToxService extends Service
                     {
                         if (is_friend_online_real(tox_friend_by_public_key__wrapper(m_resend_v0.tox_friendpubkey)) == 0)
                         {
-                            // Log.i(TAG, "resend_old_messages:RET:01:" +
+                            // HelperGeneric.logI(TAG, "resend_old_messages:RET:01:" +
                             //            get_friend_name_from_pubkey(m_resend_v0.tox_friendpubkey));
                             continue;
                         }
@@ -2203,12 +2304,12 @@ public class TrifaToxService extends Service
 
                     if (get_friend_msgv3_capability(m_resend_v0.tox_friendpubkey) == 1)
                     {
-                        // Log.i(TAG, "resend_old_messages:RET:02:" +
+                        // HelperGeneric.logI(TAG, "resend_old_messages:RET:02:" +
                         //            get_friend_name_from_pubkey(m_resend_v0.tox_friendpubkey));
                         continue;
                     }
 
-                    // Log.i(TAG, "resend_old_messages:tox_friend_resend_msgv3_wrapper:" + m_resend_v0.text + " : m=" +
+                    // HelperGeneric.logI(TAG, "resend_old_messages:tox_friend_resend_msgv3_wrapper:" + m_resend_v0.text + " : m=" +
                     //            m_resend_v0 + " : " + get_friend_name_from_pubkey(m_resend_v0.tox_friendpubkey));
                     tox_friend_resend_msgv3_wrapper(m_resend_v0);
 
@@ -2261,7 +2362,7 @@ public class TrifaToxService extends Service
                     if ((m_resend_v2.msg_id_hash == null) ||
                         (m_resend_v2.msg_id_hash.equalsIgnoreCase(""))) // resend msgV2 WITHOUT hash
                     {
-                        // Log.i(TAG, "resend_msgV2_WITHOUT_hash:f=" +
+                        // HelperGeneric.logI(TAG, "resend_msgV2_WITHOUT_hash:f=" +
                         //           get_friend_name_from_pubkey(m_resend_v2.tox_friendpubkey) + " m=" + m_resend_v2);
                         MainActivity.send_message_result result = tox_friend_send_message_wrapper(
                                 m_resend_v2.tox_friendpubkey, 0, m_resend_v2.text, (m_resend_v2.sent_timestamp / 1000));
@@ -2270,7 +2371,7 @@ public class TrifaToxService extends Service
                         {
                             long res = result.msg_num;
 
-                            if (res > -1)
+                            if (HelperFriend.is_dm_message_send_success(res))
                             {
                                 m_resend_v2.resend_count = 1; // we sent the message successfully
                                 m_resend_v2.message_id = res;
@@ -2400,7 +2501,7 @@ public class TrifaToxService extends Service
                 }
 
                 long res = result.msg_num;
-                if (res > -1)
+                if (HelperFriend.is_dm_message_send_success(res))
                 {
                     m_unsent.resend_count = 1;
                     m_unsent.message_id = res;
@@ -2444,13 +2545,24 @@ public class TrifaToxService extends Service
         }
         catch (Exception e)
         {
-            Log.i(TAG, "resend_unsent_text_messages:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "resend_unsent_text_messages:EE:" + e.getMessage());
         }
     }
 
+    private static volatile long last_wakeup_ms = 0L;
+
     static void wakeup_tox_thread()
     {
-        append_logger_msg(TAG + "::wakeup_tox_thread");
+        // Coalesce rapid wakeups. Group maintenance / resend paths call this many times per second
+        // (one per group per pass), which floods logs, burns CPU and churns the tox iterate thread.
+        // A wakeup only needs to nudge the thread to iterate sooner, so collapsing bursts to at most
+        // one per 150ms is safe and keeps iteration at a healthy, steady cadence.
+        final long now = System.currentTimeMillis();
+        if (now - last_wakeup_ms < 150L)
+        {
+            return;
+        }
+        last_wakeup_ms = now;
         // This will wakeup the tox_iterate() thread and go online as quick as possible
         // only useful if in Batterysavings-Mode
         try
@@ -2469,28 +2581,28 @@ public class TrifaToxService extends Service
     @Override
     public boolean onUnbind(Intent intent)
     {
-        Log.i(TAG, "onUnbind");
+        HelperGeneric.logI(TAG, "onUnbind");
         return super.onUnbind(intent);
     }
 
     @Override
     public void unbindService(ServiceConnection conn)
     {
-        Log.i(TAG, "unbindService");
+        HelperGeneric.logI(TAG, "unbindService");
         super.unbindService(conn);
     }
 
     @Override
     public void onDestroy()
     {
-        Log.i(TAG, "onDestroy");
+        HelperGeneric.logI(TAG, "onDestroy");
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent)
     {
-        Log.i(TAG, "onBind");
+        HelperGeneric.logI(TAG, "onBind");
         return null;
     }
 
@@ -2555,7 +2667,7 @@ public class TrifaToxService extends Service
     // --------------- JNI ---------------
     static void logger(int level, String text)
     {
-        Log.i(TAG, text);
+        HelperGeneric.logI(TAG, text);
     }
 
     /*
@@ -2563,7 +2675,7 @@ public class TrifaToxService extends Service
      */
     static String safe_string(byte[] in)
     {
-        // Log.i(TAG, "safe_string:in=" + in);
+        // HelperGeneric.logI(TAG, "safe_string:in=" + in);
         String out = "";
 
         try
@@ -2573,7 +2685,7 @@ public class TrifaToxService extends Service
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "safe_string:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "safe_string:EE:" + e.getMessage());
             try
             {
                 out = new String(in);
@@ -2581,11 +2693,11 @@ public class TrifaToxService extends Service
             catch (Exception e2)
             {
                 e2.printStackTrace();
-                Log.i(TAG, "safe_string:EE2:" + e2.getMessage());
+                HelperGeneric.logI(TAG, "safe_string:EE2:" + e2.getMessage());
             }
         }
 
-        // Log.i(TAG, "safe_string:out=" + out);
+        // HelperGeneric.logI(TAG, "safe_string:out=" + out);
         return out;
     }
     // --------------- JNI ---------------

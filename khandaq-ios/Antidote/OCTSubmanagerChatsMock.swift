@@ -5,6 +5,10 @@
 import Foundation
     
 class OCTSubmanagerChatsMock: NSObject, OCTSubmanagerChats {
+    func tickDeliveryWatchdog() {
+        // nop
+    }
+
     func getOrCreateChat(with friend: OCTFriend!) -> OCTChat! {
         return OCTChat()
     }

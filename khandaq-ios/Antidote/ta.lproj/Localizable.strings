@@ -188,3 +188,31 @@
 "accessibility_edit_value_hint" = "திருத்தங்கள் மதிப்பு.";
 "accessibility_incoming_message_label" = "செய்தி";
 "accessibility_outgoing_message_label" = "உங்கள் செய்தி";
+"group_live_audio_toggle" = "நேரடி ஆடியோ";
+"group_live_video_toggle" = "நேரடி வீடியோ";
+"group_live_video_quality_toggle" = "வீடியோ தரம்";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "குரல் செய்தியை பதிவு செய்ய மைக்ரofón பொத்தானை அழுத்திப் பிடிக்கவும்";
+"group_live_video_toggle_active" = "நேரடி வீடியோ செயலில்";
+"group_live_video_toggle_incoming" = "உள்வரும் நேரடி வீடியோ";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "குழு வீடியோவில் சேரவா?";
+"group_video_join_message" = "இந்த குழுவில் அனைவருக்கும் உங்கள் வீடியோ மற்றும் ஆடியோவை அனுப்ப?";
+"group_video_join_confirm" = "ஆம், வீடியோ தொடங்கு";
+"group_video_join_decline" = "இல்லை";
+"group_send_voice_confirm_title" = "குரல் செய்தி அனுப்பவா?";
+"group_send_voice_confirm_message" = "இந்த குரல் செய்தியை குழுவில் அனுப்பவா?";
+"group_incoming_message_error" = "உள்வரும் குழு செய்தியை செயலாக்க முடியவில்லை.";
+"group_image_shrink_failed" = "அனுப்புவதற்கு படத்தை தயார் செய்ய முடியவில்லை.";
+"group_incoming_file_error" = "உள்வரும் குழு கோப்பை செயலாக்க முடியவில்லை.";
+"chat_file_too_large" = "கோப்பு மிகப் பெரியது.";
+"chat_incoming_file_too_large" = "உள்வரும் கோப்பு மிகப் பெரியது.";
+"chat_opening_file_failed" = "கோப்பை திறக்க முடியவில்லை.";
+"group_file_prepare_failed" = "அனுப்புவதற்கு கோப்பை தயார் செய்ய முடியவில்லை.";
+"group_peer_unknown" = "அறியப்படாத";
+"group_live_video_stream_unknown_peer" = "தெரியாது";
+
+"microphone_access_denied_message" = "மைக்ரோஃபோன் அணுகல் முடக்கப்பட்டுள்ளது. இந்த அம்சத்தைப் பயன்படுத்த அமைப்புகளில் மைக்ரோஃபோனை அனுமதிக்கவும்.";

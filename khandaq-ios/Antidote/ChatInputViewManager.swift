@@ -32,6 +32,8 @@ class ChatInputViewManager: NSObject {
     fileprivate var inactivityTimer: Timer?
     fileprivate var isVideoSendInProgress = false
 
+    var outgoingTextComposer: ((String) -> String)?
+
     init(inputView: ChatInputView,
          chat: OCTChat,
          submanagerChats: OCTSubmanagerChats,
@@ -96,8 +98,10 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             return
         }
 
+        let outgoing = outgoingTextComposer?(text) ?? text
+
         // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
-        submanagerChats.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in
+        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
             DispatchQueue.main.async {
                 view.text = ""
                 self.endUserInteraction()
@@ -263,7 +267,12 @@ fileprivate extension ChatInputViewManager {
 
         isVideoSendInProgress = true
         VideoSendProgressOverlay.shared.show(on: presentingViewController,
-                                             message: String(localized: "video_send_preparing"))
+                                             message: String(localized: "video_send_preparing"),
+                                             onCancel: { [weak self] in
+            VideoSendPreprocessor.shared.cancelActivePreparation()
+            VideoSendProgressOverlay.shared.hide()
+            self?.isVideoSendInProgress = false
+        })
 
         VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
             VideoSendProgressOverlay.shared.update(progress: progress)
@@ -309,13 +318,16 @@ fileprivate extension ChatInputViewManager {
     }
 
     func sendPreparedVideo(at url: URL) {
-        DispatchQueue.main.async { [weak self] in
+        let path = url.path
+        videoSendQueue.async { [weak self] in
             guard let self = self else {
                 return
             }
 
-            self.submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: self.chat) { error in
-                handleErrorWithType(.sendFileToFriend, error: error as NSError)
+            DispatchQueue.main.async {
+                self.submanagerFiles.sendFile(atPath: path, moveToUploads: true, to: self.chat) { error in
+                    handleErrorWithType(.sendFileToFriend, error: error as NSError)
+                }
             }
         }
     }
@@ -466,6 +478,9 @@ fileprivate extension ChatInputViewManager {
     }
 
     func presentMediaPreview(items: [MediaSendPreviewItem]) {
+        // KHANDAQ: dismiss the chat input keyboard before showing the media-send preview. Otherwise the
+        // still-active keyboard overlapped the preview / caption editor when sending video with a caption.
+        presentingViewController.view.endEditing(true)
         let controller = MediaSendPreviewController(items: items)
         controller.delegate = self
         presentingViewController.present(controller, animated: true, completion: nil)
@@ -624,7 +639,8 @@ fileprivate extension ChatInputViewManager {
     }
 
     func sendCaptionMessage(_ text: String) {
-        submanagerChats.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in
+        let outgoing = outgoingTextComposer?(text) ?? text
+        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
         }, failureBlock: { error in
             DispatchQueue.main.async {
                 if let error = error as NSError? {

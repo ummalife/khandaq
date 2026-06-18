@@ -7,6 +7,7 @@ import SnapKit
 
 class ChatGenericFileCell: ChatMovableDateCell {
     var loadingView: LoadingImageView!
+    var voiceMessageView: ChatVoiceMessageView!
     var cancelButton: UIButton!
     var retryButton: UIButton!
 
@@ -24,6 +25,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
     }
 
     var state: ChatGenericFileCellModel.State = .waitingConfirmation
+    private var transferBytesTotal: Int64 = 0
 
     var startLoadingHandle: (() -> Void)?
     var cancelHandle: (() -> Void)?
@@ -35,23 +37,18 @@ class ChatGenericFileCell: ChatMovableDateCell {
         This method should be called after setupWithTheme:model:
      */
     func setButtonImage(_ image: UIImage) {
-        let square: UIImage
-
         canBeCopied = true
 
-        if image.size.width == image.size.height {
-            square = image
-        }
-        else {
-            let side = min(image.size.width, image.size.height)
-            let x = (image.size.width - side) / 2
-            let y = (image.size.height - side) / 2
-            let rect = CGRect(x: x, y: y, width: side, height: side)
-
-            square = image.cropWithRect(rect)
-        }
-
-        loadingView.imageButton.setBackgroundImage(square, for: UIControlState())
+        // KHANDAQ (#15): show the photo preview aspect-FILLED in the square preview box. The old code
+        // center-cropped the source to a square and set it as a button BACKGROUND image, which UIKit
+        // then STRETCHED to the button bounds — producing a distorted wide/short strip. Using the
+        // button's imageView with scaleAspectFill keeps the aspect ratio (cropped, not squished).
+        loadingView.imageButton.setBackgroundImage(nil, for: UIControlState())
+        loadingView.imageButton.imageView?.contentMode = .scaleAspectFill
+        loadingView.imageButton.imageView?.clipsToBounds = true
+        loadingView.imageButton.contentHorizontalAlignment = .fill
+        loadingView.imageButton.contentVerticalAlignment = .fill
+        loadingView.imageButton.setImage(image, for: UIControlState())
 
         if state == .waitingConfirmation || state == .done {
             loadingView.centerImageView.image = nil
@@ -67,11 +64,14 @@ class ChatGenericFileCell: ChatMovableDateCell {
         }
 
         state = fileModel.state
+        transferBytesTotal = fileModel.fileSizeBytes
         startLoadingHandle = fileModel.startLoadingHandle
         cancelHandle = fileModel.cancelHandle
         retryHandle = fileModel.retryHandle
         pauseOrResumeHandle = fileModel.pauseOrResumeHandle
         openHandle = fileModel.openHandle
+
+        configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
 
         canBeCopied = false
 
@@ -120,6 +120,12 @@ class ChatGenericFileCell: ChatMovableDateCell {
         loadingView = LoadingImageView()
         loadingView.pressedHandle = loadingViewPressed
 
+        voiceMessageView = ChatVoiceMessageView()
+        voiceMessageView.isHidden = true
+        voiceMessageView.onPlayTapped = { [weak self] in
+            self?.voicePlayTogglePressed()
+        }
+
         let cancelImage = UIImage.templateNamed("chat-file-cancel")
 
         cancelButton = UIButton()
@@ -143,13 +149,39 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
     func updateProgress(_ progress: CGFloat) {
         loadingView.progressView.progress = progress
+
+        guard state == .loading, progress > 0.001 else {
+            return
+        }
+
+        loadingView.bottomLabel.isHidden = false
+        let pct = Int(progress * 100)
+
+        if transferBytesTotal > 0 {
+            let done = Int64(Double(transferBytesTotal) * Double(progress))
+            let doneStr = ByteCountFormatter.string(fromByteCount: done, countStyle: .file)
+            let totalStr = ByteCountFormatter.string(fromByteCount: transferBytesTotal, countStyle: .file)
+            loadingView.bottomLabel.text = "\(doneStr) / \(totalStr) · \(pct)%"
+        }
+        else {
+            loadingView.bottomLabel.text = "\(pct)%"
+        }
     }
 
     func updateEta(_ eta: String) {
-        loadingView.bottomLabel.text = eta
+        loadingView.topLabel.isHidden = false
+        loadingView.topLabel.text = eta
     }
 
-    func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {}
+    func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {
+        guard state == .loading, bytesPerSecond > 0 else {
+            return
+        }
+
+        let speed = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
+        loadingView.topLabel.isHidden = false
+        loadingView.topLabel.text = speed
+    }
 
     @objc func cancelButtonPressed() {
         cancelHandle?()
@@ -164,6 +196,52 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
     /// Override in subclass
     func loadingViewPressed() {}
+
+    func voicePlayTogglePressed() {
+        // Subclasses wire model.voicePlayToggleHandle
+    }
+
+    func configureVoiceMessagePresentation(fileModel: ChatGenericFileCellModel, theme: Theme) {
+        let showVoice = fileModel.isVoiceMessage
+        voiceMessageView.isHidden = !showVoice
+        loadingView.isHidden = showVoice
+
+        guard showVoice else {
+            return
+        }
+
+        let enabled = fileModel.state == .done
+        voiceMessageView.apply(theme: theme, enabled: enabled)
+        voiceMessageView.onPlayTapped = fileModel.voicePlayToggleHandle
+
+        if let messageId = fileModel.voiceMessageId,
+           let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
+            voiceMessageView.update(
+                isPlaying: state.isPlaying,
+                progress: state.progress,
+                currentTime: state.currentTime,
+                duration: state.duration,
+                enabled: enabled
+            )
+        }
+        else {
+            voiceMessageView.update(
+                isPlaying: false,
+                progress: fileModel.state == .loading ? fileModel.voiceTransferProgress : 0,
+                currentTime: 0,
+                duration: fileModel.voiceDuration,
+                enabled: enabled
+            )
+        }
+    }
+
+    func refreshVoiceMessagePresentation(theme: Theme, fileModel: ChatGenericFileCellModel) {
+        guard fileModel.isVoiceMessage else {
+            return
+        }
+
+        configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+    }
 }
 
 // ChatEditable

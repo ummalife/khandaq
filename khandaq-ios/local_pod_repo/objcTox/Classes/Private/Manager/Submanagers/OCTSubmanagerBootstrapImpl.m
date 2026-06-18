@@ -87,10 +87,28 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     NSString *file = [[self objcToxBundle] pathForResource:@"nodes" ofType:@"json"];
     NSData *data = [NSData dataWithContentsOfFile:file];
 
-    NSDictionary *dictionary = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    NSAssert(dictionary, @"Nodes json file is corrupted.");
+    if (data.length == 0) {
+        OCTLogWarn(@"Bootstrap: nodes.json missing or empty at %@", file ?: @"(nil)");
+        return;
+    }
 
-    for (NSDictionary *node in dictionary[@"nodes"]) {
+    NSError *jsonError = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    if (! [parsed isKindOfClass:[NSDictionary class]]) {
+        OCTLogWarn(@"Bootstrap: nodes.json parse failed: %@", jsonError.localizedDescription ?: @"invalid root");
+        return;
+    }
+    NSDictionary *dictionary = (NSDictionary *)parsed;
+    NSArray *nodes = dictionary[@"nodes"];
+    if (! [nodes isKindOfClass:[NSArray class]]) {
+        OCTLogWarn(@"Bootstrap: nodes.json missing \"nodes\" array");
+        return;
+    }
+
+    for (NSDictionary *node in nodes) {
+        if (! [node isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
         NSUInteger lastPing = [node[@"last_ping"] unsignedIntegerValue];
 
         if (lastPing == 0) {
@@ -112,9 +130,12 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
             ipv6 = nil;
         }
 
-        NSAssert(ipv4, @"Nodes json file is corrupted");
-        NSAssert(udpPort > 0, @"Nodes json file is corrupted");
-        NSAssert(publicKey, @"Nodes json file is corrupted");
+        if (ipv4.length <= 2 && ipv6.length <= 2) {
+            continue;
+        }
+        if (udpPort == 0 || publicKey.length == 0) {
+            continue;
+        }
 
         [self addNodeWithIpv4Host:ipv4 ipv6Host:ipv6 udpPort:udpPort tcpPorts:tcpPorts publicKey:publicKey];
     }

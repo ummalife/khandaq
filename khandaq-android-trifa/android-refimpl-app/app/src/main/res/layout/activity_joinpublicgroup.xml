@@ -1,122 +1,147 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res-auto"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tg_chat_bg"
+    android:orientation="vertical">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
+        style="@style/Khandaq.Toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/colorPrimary"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"/>
-
+        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_weight="100">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls"
+        android:paddingBottom="16dp">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingLeft="20dp"
+            android:paddingTop="20dp"
+            android:paddingRight="20dp">
 
-            <LinearLayout
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/join_group_inputlayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_marginBottom="16dp"
+                android:hint="@string/layout___group_id"
+                app:boxBackgroundMode="outline">
 
-                <com.google.android.material.textfield.TextInputLayout
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/group_join_group_id"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:id="@+id/join_group_inputlayout"
-                    android:layout_marginBottom="10dp"
-                    android:layout_marginTop="10dp">
+                    android:fontFamily="monospace"
+                    android:imeOptions="flagNoPersonalizedLearning"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:singleLine="true" />
 
-                    <EditText
-                        android:id="@+id/group_join_group_id"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="20dp"
-                        android:layout_marginRight="20dp"
-                        android:hint="@string/layout___group_id"
-                        android:imeOptions="flagNoPersonalizedLearning"
-                        android:inputType="text"
-                        android:maxLines="1"
-                        android:singleLine="true"/>
+            </com.google.android.material.textfield.TextInputLayout>
 
-                </com.google.android.material.textfield.TextInputLayout>
-            </LinearLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/join_group_password_inputlayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:hint="@string/group_password_placeholder"
+                app:boxBackgroundMode="outline"
+                app:endIconMode="password_toggle">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/group_join_password"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="flagNoPersonalizedLearning"
+                    android:inputType="textPassword"
+                    android:maxLines="1"
+                    android:singleLine="true" />
+
+            </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
                 android:id="@+id/info_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="15dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginTop="25dp"
-                android:gravity="center_vertical"
-                android:paddingBottom="15dp"
-                android:paddingTop="12dp"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="3dp"
                 android:text="@string/join_public_group_activity_help"
-                android:textColor="@color/md_black_1000"
-                android:textSize="20sp"/>
+                android:textAppearance="@style/TextAppearance.Khandaq.Body"
+                android:textColor="@color/tg_chat_preview" />
 
             <TextView
                 android:id="@+id/warning_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="15dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginTop="25dp"
-                android:gravity="center_vertical"
-                android:paddingBottom="15dp"
-                android:paddingTop="12dp"
+                android:layout_marginTop="12dp"
+                android:lineSpacingExtra="3dp"
                 android:text="@string/join_public_group_activity_warning"
-                android:textColor="@color/md_black_1000"
-                android:textSize="25sp"/>
+                android:textAppearance="@style/TextAppearance.Khandaq.Caption"
+                android:textColor="@color/tg_chat_preview" />
 
         </LinearLayout>
 
     </ScrollView>
 
+    <ProgressBar
+        android:id="@+id/join_group_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/button_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true">
+        android:background="@drawable/bg_add_friend_bottom_bar"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="12dp"
+        android:paddingTop="8dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="8dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/cancel_button"
-            style="?android:attr/borderlessButtonStyle"
+            style="@style/Widget.Khandaq.FormTextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
             android:onClick="cancel_clicked"
-            android:textColor="@color/md_black_1000"
-            android:text="@string/cancel"/>
+            android:text="@string/cancel" />
 
-        <View
-            android:layout_width="1dp"
-            android:layout_height="match_parent"
-            android:layout_marginBottom="7dp"
-            android:layout_marginTop="7dp"
-            android:background="#1f000000"/>
-
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/friend_joingroup"
-            style="?android:attr/borderlessButtonStyle"
+            style="@style/Widget.Khandaq.FormPrimaryButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:enabled="false"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
             android:onClick="join_group_public_clicked"
-            android:textColor="@color/md_black_1000"
-            android:text="@string/join_group_activity_join"/>
-    </LinearLayout>
+            android:text="@string/join_group_activity_join" />
 
+    </LinearLayout>
 
 </LinearLayout>

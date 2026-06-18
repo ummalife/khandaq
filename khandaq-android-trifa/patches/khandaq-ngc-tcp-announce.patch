@@ -1,0 +1,25 @@
+diff --git a/toxcore/Messenger.c b/toxcore/Messenger.c
+index 552096c..6d78e77 100644
+--- a/toxcore/Messenger.c
++++ b/toxcore/Messenger.c
+@@ -3044,9 +3044,19 @@ static bool self_announce_group(const Messenger *m, GC_Chat *chat, Onion_Friend
+     GC_Public_Announce announce = {{{{{0}}}}};
+ 
+     const bool ip_port_is_set = chat->self_udp_status != SELF_UDP_STATUS_NONE;
+-    const int tcp_num = tcp_copy_connected_relays(chat->tcp_conn, announce.base_announce.tcp_relays,
++    int tcp_num = tcp_copy_connected_relays(chat->tcp_conn, announce.base_announce.tcp_relays,
+                         GCA_MAX_ANNOUNCED_TCP_RELAYS);
+ 
++    // Khandaq fix: a node whose group connection is still riding UDP (or just lacks group-local TCP
++    // links) often has 0 connected relays on chat->tcp_conn, so the announce would be published with
++    // tcp_relays=0. A UDP-blocked / TCP-only joiner can then never reach this peer (it has no UDP
++    // ip_port either). Fall back to the global net_crypto TCP relay pool so the announce always
++    // carries at least one reachable TCP relay. Same accessor pattern already used in group_chats.c.
++    if (tcp_num == 0) {
++        tcp_num = tcp_copy_connected_relays(nc_get_tcp_c(m->net_crypto), announce.base_announce.tcp_relays,
++                        GCA_MAX_ANNOUNCED_TCP_RELAYS);
++    }
++
+     if (tcp_num == 0 && !ip_port_is_set) {
+         onion_friend_set_gc_data(onion_friend, nullptr, 0);
+         return false;

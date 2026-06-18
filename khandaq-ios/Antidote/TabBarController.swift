@@ -23,7 +23,36 @@ class TabBarController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        configureNativeTabBarAppearance()
+        if #available(iOS 18.0, *) {
+            mode = .tabBar
+        }
+
+        applyTheme(theme)
+    }
+
+    /// iOS 18+ defers tab child layout; preload avoids a blank content area on first paint.
+    func preloadChildTabViews() {
+        viewControllers?.forEach { controller in
+            controller.loadViewIfNeeded()
+            if let navigation = controller as? UINavigationController {
+                navigation.viewControllers.forEach { $0.loadViewIfNeeded() }
+            }
+        }
+    }
+
+    /// Select tab after all child navigation stacks are populated (required on iOS 26).
+    func selectTab(at index: Int) {
+        guard let viewControllers = viewControllers, index >= 0, index < viewControllers.count else {
+            return
+        }
+
+        let target = viewControllers[index]
+        selectedViewController = target
+        selectedIndex = index
+    }
+
+    func applyTheme(_ theme: Theme) {
+        configureNativeTabBarAppearance(theme: theme)
     }
 
     static func makeProfileTabBarImage(
@@ -75,7 +104,7 @@ extension TabBarController: UITabBarControllerDelegate {
 }
 
 private extension TabBarController {
-    func configureNativeTabBarAppearance() {
+    func configureNativeTabBarAppearance(theme: Theme) {
         tabBar.tintColor = theme.colorForType(.TabItemActive)
         tabBar.unselectedItemTintColor = theme.colorForType(.TabItemInactive)
         tabBar.barTintColor = theme.colorForType(.NormalBackground)
@@ -85,6 +114,7 @@ private extension TabBarController {
             let appearance = UITabBarAppearance()
             appearance.configureWithOpaqueBackground()
             appearance.backgroundColor = theme.colorForType(.NormalBackground)
+            appearance.backgroundEffect = nil
             appearance.shadowColor = theme.colorForType(.SeparatorsAndBorders)
 
             let normalAttributes: [NSAttributedString.Key: Any] = [

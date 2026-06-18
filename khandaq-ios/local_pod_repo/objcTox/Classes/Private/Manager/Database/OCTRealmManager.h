@@ -12,8 +12,10 @@
 @class OCTChat;
 @class OCTCall;
 @class OCTMessageAbstract;
+@class OCTGroupPeer;
 @class OCTSettingsStorageObject;
 @class RLMResults;
+@class RLMRealm;
 
 @interface OCTRealmManager : NSObject
 
@@ -21,6 +23,13 @@
  * Storage with all objcTox settings.
  */
 @property (strong, nonatomic, readonly) OCTSettingsStorageObject *settingsStorage;
+
+/**
+ * The backing Realm. Exposed read-only so submanagers (e.g. groups/chats) can run
+ * RLMObject class queries (objectsInRealm:) against it. The private class extension in
+ * OCTRealmManager.m redeclares it readwrite. Access on the Realm's own thread only.
+ */
+@property (strong, nonatomic, readonly) RLMRealm *realm;
 
 /**
  * Migrate unencrypted database to encrypted one.
@@ -69,6 +78,14 @@
 
 - (OCTFriend *)friendWithPublicKey:(NSString *)publicKey;
 - (OCTChat *)getOrCreateChatWithFriend:(OCTFriend *)friend;
+- (nullable OCTChat *)chatWithGroupNumber:(uint32_t)groupNumber;
+- (nullable OCTChat *)chatWithGroupChatIdHex:(NSString *)chatIdHex;
+- (RLMResults *)groupChats;
+- (NSArray<OCTChat *> *)groupChatsSnapshot;
+- (OCTChat *)getOrCreateGroupChatWithGroupNumber:(uint32_t)groupNumber
+                                      chatIdHex:(NSString *)chatIdHex
+                                      groupName:(nullable NSString *)groupName
+                                   privacyState:(OCTToxGroupPrivacyState)privacyState;
 - (OCTCall *)createCallWithChat:(OCTChat *)chat status:(OCTCallStatus)status;
 
 /**
@@ -97,6 +114,123 @@
                                   sentPush:(BOOL)sentPush
                                     tssent:(UInt32)tssent
                                     tsrcvd:(UInt32)tsrcvd;
+
+- (OCTMessageAbstract *)addGroupMessageWithText:(NSString *)text
+                                           type:(OCTToxMessageType)type
+                                           chat:(OCTChat *)chat
+                                         peerId:(uint32_t)peerId
+                                       peerName:(nullable NSString *)peerName
+                                      messageId:(OCTToxMessageId)messageId;
+
+- (OCTMessageAbstract *)addGroupPendingMessageWithText:(NSString *)text
+                                                  type:(OCTToxMessageType)type
+                                                  chat:(OCTChat *)chat;
+
+- (RLMResults *)pendingGroupMessagesForChat:(OCTChat *)chat;
+
+- (void)markGroupPendingMessageSent:(OCTMessageAbstract *)message messageId:(uint32_t)messageId;
+
+- (OCTMessageAbstract *)addGroupSystemMessageWithText:(NSString *)text inChat:(OCTChat *)chat;
+
+- (OCTMessageAbstract *)addGroupMessageWithFileName:(NSString *)fileName
+                                           fileSize:(uint64_t)fileSize
+                                           filePath:(NSString *)filePath
+                                           fileType:(OCTMessageFileType)fileType
+                                               chat:(OCTChat *)chat
+                                             peerId:(uint32_t)peerId
+                                            fileUTI:(nullable NSString *)fileUTI
+                                 groupMsgIdHashHex:(nullable NSString *)groupMsgIdHashHex
+                              groupTransferProgress:(float)groupTransferProgress;
+
+- (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                                              chat:(OCTChat *)chat;
+
+- (nullable OCTMessageAbstract *)groupIncompleteFileMessageForChat:(OCTChat *)chat
+                                                            peerId:(uint32_t)peerId
+                                                          fileName:(NSString *)fileName;
+
+- (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
+                               msgIdHash:(NSString *)msgIdHash
+                                  peerId:(uint32_t)peerId
+                                fileName:(NSString *)fileName
+                                filePath:(NSString *)filePath
+                                fileSize:(uint64_t)fileSize;
+
+- (NSArray<OCTMessageAbstract *> *)groupMessagesForHistorySyncInChat:(OCTChat *)chat;
+
+- (NSArray<NSData *> *)groupHistorySyncPacketsForGroupNumber:(uint32_t)groupNumber
+                                         packetFromMessage:(NSData *(^)(OCTMessageAbstract *message))packetBlock;
+
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                           messageId:(uint32_t)messageId
+                              peerId:(uint32_t)peerId
+                                text:(NSString *)text;
+
+- (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
+                                                 type:(OCTToxMessageType)type
+                                                 chat:(OCTChat *)chat
+                                               peerId:(uint32_t)peerId
+                                             peerName:(nullable NSString *)peerName
+                                            messageId:(OCTToxMessageId)messageId
+                                         dateInterval:(NSTimeInterval)dateInterval;
+
+- (OCTMessageAbstract *)addGroupSyncedMessageWithFileName:(NSString *)fileName
+                                                 fileSize:(uint64_t)fileSize
+                                                 filePath:(NSString *)filePath
+                                                 fileType:(OCTMessageFileType)fileType
+                                                     chat:(OCTChat *)chat
+                                                   peerId:(uint32_t)peerId
+                                                 peerName:(nullable NSString *)peerName
+                                                  fileUTI:(nullable NSString *)fileUTI
+                                       groupMsgIdHashHex:(nullable NSString *)groupMsgIdHashHex
+                                             dateInterval:(NSTimeInterval)dateInterval;
+
+- (RLMResults *)groupPeersForChatUniqueIdentifier:(NSString *)chatUniqueIdentifier;
+- (void)upsertGroupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId peerName:(nullable NSString *)peerName;
+- (void)upsertGroupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId peerName:(nullable NSString *)peerName peerRole:(OCTToxGroupRole)peerRole;
+- (void)upsertGroupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId peerName:(nullable NSString *)peerName peerRole:(OCTToxGroupRole)peerRole peerPublicKeyHex:(nullable NSString *)peerPublicKeyHex;
+
+- (void)updateGroupPeerLastSeenDateInterval:(NSTimeInterval)dateInterval forChat:(OCTChat *)chat peerId:(uint32_t)peerId;
+
+- (NSTimeInterval)groupPeerLastSeenDateIntervalForChat:(OCTChat *)chat peerId:(uint32_t)peerId;
+
+- (NSSet<NSString *> *)knownGroupMemberPublicKeyHexesForChat:(OCTChat *)chat;
+
+- (NSUInteger)removeGroupSystemMessagesInChat:(OCTChat *)chat;
+
+- (NSUInteger)groupSystemMessageCountForChat:(OCTChat *)chat;
+- (void)setGroupPeerRole:(OCTToxGroupRole)peerRole peerId:(uint32_t)peerId chat:(OCTChat *)chat;
+- (void)setGroupNotificationsSilent:(BOOL)silent forChat:(OCTChat *)chat;
+- (void)setGroupPeerNotificationsSilent:(BOOL)silent peerId:(uint32_t)peerId chat:(OCTChat *)chat;
+- (void)setGroupPeerPrivateLastReadDateInterval:(NSTimeInterval)interval peerId:(uint32_t)peerId chat:(OCTChat *)chat;
+- (int32_t)unreadPrivateMessageCountForPeerId:(uint32_t)peerId chat:(OCTChat *)chat;
+- (nullable OCTGroupPeer *)groupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId;
+- (void)removeGroupPeersForChat:(OCTChat *)chat notInPeerIds:(NSSet<NSNumber *> *)peerIds;
+- (void)updateGroupPeerCount:(int32_t)peerCount forChat:(OCTChat *)chat;
+- (void)updateGroupTopic:(nullable NSString *)topic forChat:(OCTChat *)chat;
+- (void)updateGroupName:(nullable NSString *)groupName forChat:(OCTChat *)chat;
+- (void)updateGroupPassword:(nullable NSString *)password forChat:(OCTChat *)chat;
+- (void)updateGroupTopicLockEnabled:(BOOL)enabled forChat:(OCTChat *)chat;
+- (void)updateGroupPeerLimit:(int32_t)peerLimit forChat:(OCTChat *)chat;
+- (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
+- (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
+
+- (OCTMessageAbstract *)addGroupPrivateMessageWithText:(NSString *)text
+                                                  type:(OCTToxMessageType)type
+                                                  chat:(OCTChat *)chat
+                                                peerId:(uint32_t)peerId
+                                              peerName:(nullable NSString *)peerName
+                                         counterpartyId:(uint32_t)counterpartyId
+                                             messageId:(OCTToxMessageId)messageId
+                                              isOutgoing:(BOOL)isOutgoing;
+
+- (void)recordGroupSyncConfirmationForOutgoingTextMessageId:(uint32_t)messageId
+                                           ackerPubkeyHex:(NSString *)ackerPubkeyHex
+                                                   inChat:(OCTChat *)chat;
+
+- (void)recordGroupSyncConfirmationForOutgoingFileWithHashHex:(NSString *)msgIdHashHex
+                                               ackerPubkeyHex:(NSString *)ackerPubkeyHex
+                                                       inChat:(OCTChat *)chat;
 
 - (OCTMessageAbstract *)addMessageWithFileNumber:(OCTToxFileNumber)fileNumber
                                         fileType:(OCTMessageFileType)fileType

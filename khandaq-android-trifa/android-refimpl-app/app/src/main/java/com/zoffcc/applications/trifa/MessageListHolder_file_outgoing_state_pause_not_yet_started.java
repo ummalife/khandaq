@@ -55,8 +55,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_filetransfer_filenum_from_id;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactAudioUi;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactMediaUi;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.isAudioMessage;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.kick_stalled_outgoing_send;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFileDisplayLabel;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.queue_and_try_send_outgoing_file;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.resetOutgoingFtAudioPlayer;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.set_filetransfer_state_from_id;
@@ -151,36 +154,7 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_started extends
 
         final Message message2 = message;
 
-        int drawable_id = R.drawable.rounded_blue_bg_with_border;
-        try
-        {
-            if (m.filetransfer_kind == TOX_FILE_KIND_FTV2.value)
-            {
-                drawable_id = R.drawable.rounded_blue_bg;
-            }
-
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
-        catch (Exception e)
-        {
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
+        ChatBubbleUiHelper.apply_file_message_bubble(rounded_bg_container, true, false);
 
         // --------- message date header (show only if different from previous message) ---------
         // --------- message date header (show only if different from previous message) ---------
@@ -236,6 +210,7 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_started extends
         resetOutgoingFtAudioPlayer(ft_audio_player);
 
         final String label = outgoingFileDisplayLabel(context, message);
+        final boolean transferUiActive = message.ft_outgoing_queued;
 
         if (isAudioMessage(context, message))
         {
@@ -243,6 +218,57 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_started extends
                                        ft_buttons_container, ft_progressbar, ft_audio_player, button_ok, button_cancel,
                                        false, 0, true);
             button_ok.setVisibility(View.GONE);
+            setup_cancel_button(message);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            return;
+        }
+
+        if (bindOutgoingCompactMediaUi(context, itemView, message, textView, imageView, ft_preview_container,
+                                       ft_preview_image, ft_buttons_container, ft_progressbar, ft_audio_player,
+                                       button_ok, button_cancel, transferUiActive))
+        {
+            if (transferUiActive)
+            {
+                kick_stalled_outgoing_send(message);
+                ChatTransferProgressHelper.applyDirect(context, itemView, message, true);
+            }
+            else
+            {
+                textView.setVisibility(View.VISIBLE);
+                textView.setAutoLinkText(context.getString(R.string.chat_ft_status_confirm_send));
+            }
+
+            if (transferUiActive)
+            {
+                button_ok.setVisibility(View.GONE);
+            }
+            else
+            {
+                button_ok.setVisibility(View.VISIBLE);
+            }
+
+            button_ok.setOnTouchListener(new View.OnTouchListener()
+            {
+                @Override
+                public boolean onTouch(View v, MotionEvent event)
+                {
+                    if (event.getAction() == MotionEvent.ACTION_DOWN)
+                    {
+                        try
+                        {
+                            queue_and_try_send_outgoing_file(message.id, true);
+                            button_ok.setVisibility(View.GONE);
+                        }
+                        catch (Exception e)
+                        {
+                            e.printStackTrace();
+                            Log.i(TAG, "button_ok:media:EE:" + e.getMessage());
+                        }
+                    }
+                    return true;
+                }
+            });
+
             setup_cancel_button(message);
             HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
             return;
@@ -271,31 +297,6 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_started extends
                     context.getString(R.string.chat_ft_status_confirm_send));
         }
 
-        boolean is_image = false;
-        try
-        {
-            String mimeType = null;
-            if (message.storage_frame_work)
-            {
-                Uri uri = Uri.parse(message.filename_fullpath);
-                DocumentFile documentFile = DocumentFile.fromSingleUri(context, uri);
-                String fileName = documentFile.getName();
-                mimeType = URLConnection.guessContentTypeFromName(fileName.toLowerCase());
-            }
-            else
-            {
-                mimeType = URLConnection.guessContentTypeFromName(message.filename_fullpath.toLowerCase());
-            }
-            if (mimeType.startsWith("image/"))
-            {
-                is_image = true;
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
         if (message.ft_outgoing_queued)
         {
             button_ok.setVisibility(View.GONE);
@@ -314,138 +315,28 @@ public class MessageListHolder_file_outgoing_state_pause_not_yet_started extends
                 {
                     try
                     {
-                        Log.i(TAG, "MM2MM:7:mid=" + message.id + " ftid:" + message.filetransfer_id);
-
-                        // queue FT
-                        set_message_queueing_from_id(message.id, true);
+                        queue_and_try_send_outgoing_file(message.id, true);
                         button_ok.setVisibility(View.GONE);
-
-                        // update message view
-                        update_single_message_from_messge_id(message.id, true);
-
-                        Log.i(TAG, "button_ok:OnTouch:009");
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "MM2MM:EE1:" + e.getMessage());
+                        Log.i(TAG, "button_ok:generic:EE:" + e.getMessage());
                     }
-                }
-                else
-                {
                 }
                 return true;
             }
         });
 
-
         setup_cancel_button(message);
 
-        if (is_image)
+        ft_preview_container.setVisibility(View.GONE);
+        ft_preview_image.setVisibility(View.GONE);
+
+        if (message.ft_outgoing_queued)
         {
-            ft_preview_image.setImageResource(R.drawable.round_loading_animation);
-
-            ft_preview_image.setOnTouchListener(new View.OnTouchListener()
-            {
-                @Override
-                public boolean onTouch(View v, MotionEvent event)
-                {
-                    if (event.getAction() == MotionEvent.ACTION_UP)
-                    {
-                        try
-                        {
-                            if (message.storage_frame_work)
-                            {
-                                Uri uri = Uri.parse(message.filename_fullpath);
-                                DocumentFile documentFile = DocumentFile.fromSingleUri(context, uri);
-                                String fileName = documentFile.getName();
-
-                                Intent intent = new Intent(v.getContext(), ImageviewerActivity_SD.class);
-                                intent.putExtra("image_filename", uri.toString());
-                                intent.putExtra("storage_frame_work", "1");
-                                v.getContext().startActivity(intent);
-                            }
-                            else
-                            {
-                                Intent intent = new Intent(v.getContext(), ImageviewerActivity_SD.class);
-                                intent.putExtra("image_filename", message2.filename_fullpath);
-                                v.getContext().startActivity(intent);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                            Log.i(TAG, "open_attachment_intent:EE:" + e.getMessage());
-                        }
-                    }
-                    else
-                    {
-                    }
-                    return true;
-                }
-            });
-
-
-            if (message.storage_frame_work)
-            {
-                try
-                {
-                    final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                            new RoundedCorners((int) dp2px(20)));
-
-                    GlideApp.
-                            with(context).
-                            load(Uri.parse(message.filename_fullpath)).
-                            diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                            skipMemoryCache(false).
-                            priority(Priority.LOW).
-                            placeholder(R.drawable.round_loading_animation).
-                            into(ft_preview_image);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-            else
-            {
-                java.io.File f2 = new java.io.File(message2.filename_fullpath);
-                try
-                {
-                    final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                            new RoundedCorners((int) dp2px(20)));
-
-                    GlideApp.
-                            with(context).
-                            load(f2).
-                            diskCacheStrategy(DiskCacheStrategy.RESOURCE).
-                            skipMemoryCache(false).
-                            priority(Priority.LOW).
-                            placeholder(R.drawable.round_loading_animation).
-                            into(ft_preview_image);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-        }
-        else
-        {
-            final Drawable d3 = new IconicsDrawable(this.context).
-                    icon(GoogleMaterial.Icon.gmd_attachment).
-                    backgroundColor(Color.TRANSPARENT).
-                    color(Color.parseColor("#AA000000")).sizeDp(50);
-
-            // ft_preview_image.setImageDrawable(d3);
-            GlideApp.
-                    with(context).
-                    load(d3).
-                    diskCacheStrategy(DiskCacheStrategy.NONE).
-                    skipMemoryCache(false).
-                    priority(Priority.LOW).
-                    placeholder(R.drawable.round_loading_animation).
-                    into(ft_preview_image);
+            kick_stalled_outgoing_send(message);
+            ChatTransferProgressHelper.applyDirect(context, itemView, message, true);
         }
 
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);

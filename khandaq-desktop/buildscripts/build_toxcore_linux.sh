@@ -28,6 +28,8 @@ build_toxcore() {
     cmake . \
         -DBOOTSTRAP_DAEMON=OFF \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DMUST_BUILD_TOXAV=ON \
         .
 
     cmake --build . -- -j$(nproc)
@@ -42,7 +44,7 @@ build_toxext() {
 
     "${SCRIPT_DIR}/download/download_toxext.sh"
 
-    cmake . -DCMAKE_BUILD_TYPE=Release
+    cmake . -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     cmake --build . -- -j$(nproc)
     cmake --build . --target install
 
@@ -55,7 +57,7 @@ build_toxext_messages() {
 
     "${SCRIPT_DIR}/download/download_toxext_messages.sh"
 
-    cmake .  -DCMAKE_BUILD_TYPE=Release
+    cmake . -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     cmake --build . -- -j$(nproc)
     cmake --build . --target install
 

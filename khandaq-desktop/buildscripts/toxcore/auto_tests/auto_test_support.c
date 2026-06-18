@@ -13,7 +13,7 @@
 #define ABORT_ON_LOG_ERROR true
 #endif
 
-Run_Auto_Options default_run_auto_options()
+Run_Auto_Options default_run_auto_options(void)
 {
     return (Run_Auto_Options) {
         .graph = GRAPH_COMPLETE,
@@ -64,6 +64,13 @@ static const struct BootstrapNodes {
         0x28, 0x6F, 0x02, 0x5C, 0xD5, 0xFF, 0xDF, 0x3E,
         0x65, 0x4A, 0x37, 0x58, 0xC5, 0x3E, 0x02, 0x73,
         0xEC, 0xFC, 0x4D, 0x12, 0xC2, 0x1D, 0xCA, 0x48,
+    },
+    {
+        "tox.plastiras.org", 38445,
+        0x5E, 0x47, 0xBA, 0x1D, 0xC3, 0x91, 0x3E, 0xB2,
+        0xCB, 0xF2, 0xD6, 0x4C, 0xE4, 0xF2, 0x3D, 0x8B,
+        0xFE, 0x53, 0x91, 0xBF, 0xAB, 0xE5, 0xC4, 0x3C,
+        0x5B, 0xAD, 0x13, 0xF0, 0xA4, 0x14, 0xCD, 0x77,
     },
 #endif  // USE_TEST_NETWORK
     { nullptr, 0, 0 },
@@ -226,17 +233,24 @@ static void initialise_autotox(struct Tox_Options *options, AutoTox *autotox, ui
             options = default_opts;
         }
 
-        // Try a few ports for the TCP relay.
-        for (uint16_t tcp_port = autotest_opts->tcp_port; tcp_port < autotest_opts->tcp_port + 200; ++tcp_port) {
-            tox_options_set_tcp_port(options, tcp_port);
+        if (tox_options_get_udp_enabled(options)) {
+            tox_options_set_tcp_port(options, 0);
+            autotest_opts->tcp_port = 0;
             autotox->tox = tox_new_log(options, &err, &autotox->index);
+            ck_assert_msg(err == TOX_ERR_NEW_OK, "unexpected tox_new error: %d", err);
+        } else {
+            // Try a few ports for the TCP relay.
+            for (uint16_t tcp_port = autotest_opts->tcp_port; tcp_port < autotest_opts->tcp_port + 200; ++tcp_port) {
+                tox_options_set_tcp_port(options, tcp_port);
+                autotox->tox = tox_new_log(options, &err, &autotox->index);
 
-            if (autotox->tox != nullptr) {
-                autotest_opts->tcp_port = tcp_port;
-                break;
+                if (autotox->tox != nullptr) {
+                    autotest_opts->tcp_port = tcp_port;
+                    break;
+                }
+
+                ck_assert_msg(err == TOX_ERR_NEW_PORT_ALLOC, "unexpected tox_new error (expected PORT_ALLOC): %d", err);
             }
-
-            ck_assert_msg(err == TOX_ERR_NEW_PORT_ALLOC, "unexpected tox_new error (expected PORT_ALLOC): %d", err);
         }
 
         tox_options_free(default_opts);
@@ -322,6 +336,7 @@ static void bootstrap_autotoxes(struct Tox_Options *options, uint32_t tox_count,
     }
 
     if (!udp_enabled) {
+        ck_assert(autotest_opts->tcp_port != 0);
         printf("bootstrapping all toxes to local TCP relay running on port %d\n", autotest_opts->tcp_port);
 
         for (uint32_t i = 0; i < tox_count; ++i) {
@@ -410,6 +425,12 @@ void print_debug_log(Tox *m, Tox_Log_Level level, const char *file, uint32_t lin
     }
 }
 
+
+void print_debug_logger(void *context, Logger_Level level, const char *file, int line, const char *func, const char *message, void *userdata)
+{
+    print_debug_log(nullptr, (Tox_Log_Level) level, file, (uint32_t) line, func, message, userdata);
+}
+
 Tox *tox_new_log_lan(struct Tox_Options *options, Tox_Err_New *err, void *log_user_data, bool lan_discovery)
 {
     struct Tox_Options *log_options = options;
@@ -441,3 +462,4 @@ Tox *tox_new_log(struct Tox_Options *options, Tox_Err_New *err, void *log_user_d
 {
     return tox_new_log_lan(options, err, log_user_data, false);
 }
+

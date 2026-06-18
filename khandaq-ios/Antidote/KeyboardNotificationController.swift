@@ -5,6 +5,9 @@
 import UIKit
 
 class KeyboardNotificationController: UIViewController {
+    /// Skip keyboard-matched animation for the next layout pass (e.g. first-responder on appear).
+    var suppressNextKeyboardAnimation = false
+
     init() {
         super.init(nibName: nil, bundle: nil)
 
@@ -63,8 +66,20 @@ private extension KeyboardNotificationController {
             
         }
 
-        UIView.animate(withDuration: duration, delay: 0.0, options: options, animations: { [unowned self] in
-            willShow ? self.keyboardWillShowAnimated(keyboardFrame: frame) : self.keyboardWillHideAnimated(keyboardFrame: frame)
+        if willShow {
+            keyboardWillShowAnimated(keyboardFrame: frame)
+        } else {
+            keyboardWillHideAnimated(keyboardFrame: frame)
+        }
+
+        if suppressNextKeyboardAnimation {
+            suppressNextKeyboardAnimation = false
+            view.layoutIfNeeded()
+            return
+        }
+
+        UIView.animate(withDuration: duration, delay: 0.0, options: options, animations: { [weak self] in
+            self?.view.layoutIfNeeded()
         }, completion: nil)
     }
 }

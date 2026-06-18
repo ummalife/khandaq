@@ -86,9 +86,9 @@ class CallManager {
     private func requestTransaction(_ transaction: CXTransaction) {
         callController.request(transaction) { error in
             if let error = error {
-                print("Error requesting transaction: \(error)")
+                log("Error requesting transaction: \(error)")
             } else {
-                print("Requested transaction successfully")
+                log("Requested transaction successfully")
             }
         }
     }

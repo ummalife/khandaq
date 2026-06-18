@@ -7,10 +7,26 @@
 #import "OCTManagerConstants.h"
 #import "OCTRealmManager.h"
 #import "OCTSettingsStorageObject.h"
+#import "OCTSubmanagerDataSource.h"
+
+@interface OCTSubmanagerUserImpl ()
+@property (nonatomic, assign) BOOL wasOffline;
+@end
 
 @implementation OCTSubmanagerUserImpl
 @synthesize delegate = _delegate;
 @synthesize dataSource = _dataSource;
+
+- (instancetype)init
+{
+    self = [super init];
+
+    if (self) {
+        _wasOffline = YES;
+    }
+
+    return self;
+}
 
 #pragma mark -  Properties
 
@@ -122,7 +138,16 @@
 
 - (void)tox:(OCTTox *)tox connectionStatus:(OCTToxConnectionStatus)connectionStatus
 {
-    if (connectionStatus != OCTToxConnectionStatusNone) {
+    const BOOL isOnline = (connectionStatus != OCTToxConnectionStatusNone);
+
+    if (isOnline && self.wasOffline) {
+        [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTSelfConnectionBecameOnlineNotification
+                                                                        object:nil];
+    }
+
+    self.wasOffline = ! isOnline;
+
+    if (isOnline) {
         [self.dataSource managerSaveTox];
     }
 

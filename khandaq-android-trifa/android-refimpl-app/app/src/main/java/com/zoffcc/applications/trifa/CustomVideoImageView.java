@@ -157,10 +157,6 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
                                 mBitmapMiddlePoint.x = (mViewWidth / 2) - ((int) scaled_mBitmapWidth / 2);
                                 mBitmapMiddlePoint.y = (mViewHeight / 2) - ((int) scaled_mBitmapHeight / 2);
 
-                                System.out.println("__onTouch__:" + "001:" + scale + ":" + mBitmapMiddlePoint.x + "," +
-                                                   mBitmapMiddlePoint.y + ":bm=" + mBitmapWidth + "," + mBitmapHeight +
-                                                   ":view=" + mViewWidth + "," + mViewHeight);
-
                                 matrix.postTranslate(mBitmapMiddlePoint.x, mBitmapMiddlePoint.y);
                                 matrix_was_reset = false;
                             }

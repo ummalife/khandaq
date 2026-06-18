@@ -20,11 +20,19 @@ import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.request.RequestOptions;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
+import com.zoffcc.applications.sorm.GroupMessage;
 import com.zoffcc.applications.sorm.Message;
 
 import java.io.File;
 
+import static com.zoffcc.applications.trifa.HelperFiletransfer.guess_group_message_file_mime_type;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.guess_message_file_mime_type;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isIocipherVirtualPath;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isGroupMessageMediaOpenable;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isGroupMessageMediaReady;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isGroupVoiceMessage;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isMediaFileReadyToView;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.isMessageMediaReady;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.isVoiceMessage;
 import static com.zoffcc.applications.trifa.HelperGeneric.copy_vfs_file_to_real_file;
 import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
@@ -56,6 +64,11 @@ public final class ChatMediaHelper
             return;
         }
 
+        if (!ensureMessageMediaOpenable(context, message, exportPath))
+        {
+            return;
+        }
+
         final String mimeType = guess_message_file_mime_type(context, message);
 
         if ((mimeType != null) && mimeType.startsWith("image/"))
@@ -66,7 +79,8 @@ public final class ChatMediaHelper
 
         if ((mimeType != null) && mimeType.startsWith("video/"))
         {
-            openVideoViewer(context, message, exportPath, mimeType);
+            openVideoViewer(context, message.filename_fullpath, message.id, message.storage_frame_work, exportPath,
+                            mimeType);
             return;
         }
 
@@ -87,13 +101,24 @@ public final class ChatMediaHelper
             catch (Exception e)
             {
                 Log.i(TAG, "openMessageMedia:fallback:EE:" + e.getMessage());
-                HelperGeneric.display_toast("opening file failed", false, 0);
+                HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
             }
         }
     }
 
     public static void openImageViewer(Context context, Message message, String exportPath, String mimeType)
     {
+        if ((context == null) || (message == null))
+        {
+            return;
+        }
+
+        if (!isMediaFileReadyToView(message.filename_fullpath, message.storage_frame_work, exportPath))
+        {
+            showMediaNotReady(context, message, null, exportPath);
+            return;
+        }
+
         try
         {
             if ((message.storage_frame_work) && (exportPath == null))
@@ -115,6 +140,43 @@ public final class ChatMediaHelper
                 return;
             }
 
+            final String localPath = message.filename_fullpath;
+            if ((localPath != null) && (!localPath.isEmpty()) && (!localPath.startsWith("content://"))
+                    && (!isIocipherVirtualPath(localPath)))
+            {
+                final java.io.File directLocal = new java.io.File(localPath);
+                if (directLocal.isFile() && directLocal.length() > 0L)
+                {
+                    final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                    intent.putExtra("image_filename", directLocal.getAbsolutePath());
+                    intent.putExtra("image_cache_key", directLocal.getAbsolutePath() + "#" + message.id);
+                    context.startActivity(intent);
+                    return;
+                }
+            }
+
+            if (VFS_ENCRYPT && isIocipherVirtualPath(localPath))
+            {
+                try
+                {
+                    final String cachedPath = resolveVfsToCachedPath(localPath, "_dmview");
+                    final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                    intent.putExtra("image_filename", cachedPath);
+                    intent.putExtra("image_cache_key", cachedPath + "#" + message.id);
+                    context.startActivity(intent);
+                    return;
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "openImageViewer:vfs_cache:EE:" + e.getMessage());
+                    final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                    intent.putExtra("image_filename", localPath);
+                    intent.putExtra("image_cache_key", localPath + "#" + message.id);
+                    context.startActivity(intent);
+                    return;
+                }
+            }
+
             final java.io.File direct = new java.io.File(message.filename_fullpath);
             if (direct.exists() && direct.isFile())
             {
@@ -125,47 +187,184 @@ public final class ChatMediaHelper
                 return;
             }
 
-            final Intent intent = new Intent(context, MediaViewerActivity.class);
-            intent.putExtra(EXTRA_MODE, MODE_IMAGE);
-            intent.putExtra(EXTRA_VFS_PATH, message.filename_fullpath);
-            if (exportPath != null)
-            {
-                intent.putExtra(EXTRA_EXPORT_PATH, exportPath);
-            }
-            intent.putExtra(EXTRA_MESSAGE_ID, message.id);
-            intent.putExtra(EXTRA_MIME_TYPE, mimeType);
-            context.startActivity(intent);
+            showMediaNotReady(context, message, null, exportPath);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            HelperGeneric.display_toast("opening file failed", false, 0);
+            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
         }
+    }
+
+    public static void openGroupMessageMedia(final Context context, final GroupMessage message,
+                                             final String exportPath)
+    {
+        if ((context == null) || (message == null))
+        {
+            return;
+        }
+
+        final GroupMessage fresh = HelperFiletransfer.reloadGroupMessageFromDb(message);
+
+        if (!ensureGroupMessageMediaOpenable(context, fresh, exportPath))
+        {
+            return;
+        }
+
+        final String mimeType = guess_group_message_file_mime_type(context, fresh);
+
+        if ((mimeType != null) && mimeType.startsWith("image/"))
+        {
+            openGroupImageViewer(context, fresh, exportPath, mimeType);
+            return;
+        }
+
+        if ((mimeType != null) && mimeType.startsWith("video/"))
+        {
+            final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(fresh);
+            openVideoViewer(context, mediaPath, fresh.id, fresh.storage_frame_work, exportPath,
+                            mimeType);
+            return;
+        }
+
+        if (exportPath != null)
+        {
+            HelperFiletransfer.open_local_file(exportPath, context);
+            return;
+        }
+
+        final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(fresh);
+        if (VFS_ENCRYPT && (mediaPath != null) && !mediaPath.isEmpty())
+        {
+            try
+            {
+                final Uri uri = Uri.parse(IOCipherContentProvider.FILES_URI + mediaPath);
+                final Intent sendIntent = new Intent(Intent.ACTION_VIEW, uri);
+                context.startActivity(sendIntent);
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "openGroupMessageMedia:fallback:EE:" + e.getMessage());
+                HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            }
+        }
+    }
+
+    private static void openGroupImageViewer(final Context context, final GroupMessage message,
+                                             final String exportPath, final String mimeType)
+    {
+        if ((context == null) || (message == null))
+        {
+            return;
+        }
+
+        final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(message);
+        if ((mediaPath == null) || mediaPath.isEmpty())
+        {
+            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+            return;
+        }
+
+        try
+        {
+            if ((message.storage_frame_work) && (exportPath == null))
+            {
+                launchGroupImageViewerSd(context, mediaPath, message.id, true);
+                return;
+            }
+
+            if (exportPath != null)
+            {
+                launchGroupImageViewerSd(context, exportPath, message.id, false);
+                return;
+            }
+
+            if ((!mediaPath.startsWith("content://")) && (!isIocipherVirtualPath(mediaPath)))
+            {
+                final java.io.File directLocal = new java.io.File(mediaPath);
+                if (directLocal.isFile() && directLocal.length() > 0L)
+                {
+                    launchGroupImageViewerSd(context, directLocal.getAbsolutePath(), message.id, false);
+                    return;
+                }
+            }
+
+            if (VFS_ENCRYPT && isIocipherVirtualPath(mediaPath))
+            {
+                // Same VFS path + Glide settings as group chat thumbnails (iocipher File + RESOURCE cache).
+                launchGroupImageViewerSd(context, mediaPath, message.id, false);
+                return;
+            }
+
+            final java.io.File direct = new java.io.File(mediaPath);
+            if (direct.isFile() && direct.length() > 0L)
+            {
+                launchGroupImageViewerSd(context, direct.getAbsolutePath(), message.id, false);
+                return;
+            }
+
+            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
+        }
+    }
+
+    private static void launchGroupImageViewerSd(final Context context, final String imagePath,
+                                                 final long messageId, final boolean storageFramework)
+    {
+        final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+        intent.putExtra("image_filename", imagePath);
+        intent.putExtra("image_cache_key", imagePath + "#" + messageId);
+        if (storageFramework)
+        {
+            intent.putExtra("storage_frame_work", "1");
+        }
+        context.startActivity(intent);
     }
 
     public static void openVideoViewer(Context context, Message message, String exportPath, String mimeType)
     {
+        openVideoViewer(context, message.filename_fullpath, message.id, message.storage_frame_work, exportPath,
+                        mimeType);
+    }
+
+    static void openVideoViewer(final Context context, final String vfsPath, final long messageId,
+                                final boolean storageFramework, final String exportPath, final String mimeType)
+    {
+        if (context == null)
+        {
+            return;
+        }
+
+        if (!isMediaFileReadyToView(vfsPath, storageFramework, exportPath))
+        {
+            return;
+        }
+
         try
         {
             final Intent intent = new Intent(context, MediaViewerActivity.class);
             intent.putExtra(EXTRA_MODE, MODE_VIDEO);
-            intent.putExtra(EXTRA_VFS_PATH, message.filename_fullpath);
+            intent.putExtra(EXTRA_VFS_PATH, vfsPath);
             if (exportPath != null)
             {
                 intent.putExtra(EXTRA_EXPORT_PATH, exportPath);
             }
-            if (message.storage_frame_work)
+            if (storageFramework)
             {
                 intent.putExtra(EXTRA_STORAGE_FRAMEWORK, "1");
             }
-            intent.putExtra(EXTRA_MESSAGE_ID, message.id);
+            intent.putExtra(EXTRA_MESSAGE_ID, messageId);
             intent.putExtra(EXTRA_MIME_TYPE, mimeType);
             context.startActivity(intent);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            HelperGeneric.display_toast("opening file failed", false, 0);
+            HelperGeneric.display_toast(context.getString(R.string.chat_opening_file_failed), false, 0);
         }
     }
 
@@ -196,8 +395,41 @@ public final class ChatMediaHelper
         return HelperFiletransfer.outgoingFileDisplayLabel(context, message);
     }
 
+    public static String groupMessageMediaDisplayLabel(final Context context, final GroupMessage message)
+    {
+        if (HelperFiletransfer.isGroupVoiceMessage(message))
+        {
+            return context.getString(R.string.voice_message_label);
+        }
+
+        final String mimeType = guess_group_message_file_mime_type(context, message);
+        if (mimeType != null)
+        {
+            if (mimeType.startsWith("image/"))
+            {
+                return context.getString(R.string.media_label_photo);
+            }
+            if (mimeType.startsWith("video/"))
+            {
+                return context.getString(R.string.media_label_video);
+            }
+            if (mimeType.startsWith("audio/"))
+            {
+                return context.getString(R.string.media_label_audio);
+            }
+        }
+
+        return HelperFiletransfer.groupFileDisplayLabel(context, message);
+    }
+
     public static void bindVideoPreview(final Context context, final Message message, final String exportPath,
                                         final ImageView previewImage)
+    {
+        bindVideoPreview(context, message.filename_fullpath, message.id, exportPath, previewImage);
+    }
+
+    static void bindVideoPreview(final Context context, final String vfsPath, final long messageId,
+                                 final String exportPath, final ImageView previewImage)
     {
         previewImage.setImageResource(R.drawable.round_loading_animation);
 
@@ -207,8 +439,8 @@ public final class ChatMediaHelper
                 color(android.graphics.Color.parseColor("#CCFFFFFF")).sizeDp(48);
 
         final RequestOptions glideOptions = new RequestOptions().
-                fitCenter().
-                optionalTransform(new RoundedCorners((int) dp2px(20)));
+                centerCrop().
+                optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
 
         new Thread()
         {
@@ -221,14 +453,14 @@ public final class ChatMediaHelper
                 {
                     if ((localPath == null) || localPath.isEmpty())
                     {
-                        final java.io.File direct = new java.io.File(message.filename_fullpath);
+                        final java.io.File direct = new java.io.File(vfsPath);
                         if (direct.exists() && (direct.length() > 0))
                         {
                             localPath = direct.getAbsolutePath();
                         }
                         else if (VFS_ENCRYPT)
                         {
-                            localPath = resolveVfsToCachedPath(message.filename_fullpath, "_vthumb");
+                            localPath = resolveVfsToCachedPath(vfsPath, "_vthumb");
                         }
                     }
 
@@ -273,6 +505,70 @@ public final class ChatMediaHelper
                 });
             }
         }.start();
+    }
+
+    public static void bindOutgoingImagePreview(final Context context, final Message message,
+                                                final ImageView previewImage)
+    {
+        if ((context == null) || (message == null) || (previewImage == null))
+        {
+            return;
+        }
+
+        previewImage.setImageResource(R.drawable.round_loading_animation);
+
+        final RequestOptions glideOptions = new RequestOptions().
+                centerCrop().
+                optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
+
+        try
+        {
+            if (message.storage_frame_work)
+            {
+                GlideApp.
+                        with(context).
+                        load(Uri.parse(message.filename_fullpath)).
+                        diskCacheStrategy(DiskCacheStrategy.RESOURCE).
+                        skipMemoryCache(false).
+                        priority(Priority.LOW).
+                        apply(glideOptions).
+                        placeholder(R.drawable.round_loading_animation).
+                        into(previewImage);
+            }
+            else
+            {
+                GlideApp.
+                        with(context).
+                        load(new File(message.filename_fullpath)).
+                        diskCacheStrategy(DiskCacheStrategy.RESOURCE).
+                        skipMemoryCache(false).
+                        priority(Priority.LOW).
+                        apply(glideOptions).
+                        placeholder(R.drawable.round_loading_animation).
+                        into(previewImage);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "bindOutgoingImagePreview:EE:" + e.getMessage());
+        }
+    }
+
+    public static View.OnTouchListener groupMediaOpenTouchListener(final Context context, final GroupMessage message,
+                                                                   final String exportPath)
+    {
+        return new View.OnTouchListener()
+        {
+            @Override
+            public boolean onTouch(View v, MotionEvent event)
+            {
+                if (event.getAction() == MotionEvent.ACTION_UP)
+                {
+                    openGroupMessageMedia(context, message, exportPath);
+                }
+                return true;
+            }
+        };
     }
 
     public static View.OnTouchListener mediaOpenTouchListener(final Context context, final Message message,
@@ -414,5 +710,35 @@ public final class ChatMediaHelper
             {
             }
         }
+    }
+
+    private static boolean ensureMessageMediaOpenable(final Context context, final Message message,
+                                                      final String exportPath)
+    {
+        if (isMessageMediaReady(message, exportPath))
+        {
+            return true;
+        }
+
+        showMediaNotReady(context, message, null, exportPath);
+        return false;
+    }
+
+    private static boolean ensureGroupMessageMediaOpenable(final Context context, final GroupMessage message,
+                                                           final String exportPath)
+    {
+        if (isGroupMessageMediaOpenable(message, exportPath))
+        {
+            return true;
+        }
+
+        showMediaNotReady(context, null, message, exportPath);
+        return false;
+    }
+
+    private static void showMediaNotReady(final Context context, final Message directMessage,
+                                          final GroupMessage groupMessage, final String exportPath)
+    {
+        // Transfer state is shown inline on the file bubble — no blocking dialog.
     }
 }

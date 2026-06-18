@@ -16,6 +16,7 @@ typedef NS_ENUM(NSInteger, OCTFetchRequestType) {
     OCTFetchRequestTypeChat,
     OCTFetchRequestTypeCall,
     OCTFetchRequestTypeMessageAbstract,
+    OCTFetchRequestTypeGroupPeer,
 };
 
 typedef NS_ENUM(NSInteger, OCTMessageFileType) {

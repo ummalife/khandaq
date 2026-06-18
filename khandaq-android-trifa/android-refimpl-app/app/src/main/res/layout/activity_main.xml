@@ -11,6 +11,7 @@
         android:id="@+id/main_header_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
         android:background="@color/tg_chat_bg"
         android:orientation="vertical">
 
@@ -22,20 +23,7 @@
             android:minHeight="?attr/actionBarSize"
             app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
             app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar"
-            app:title="@string/app_name"
-            app:titleTextColor="@color/tg_chat_title">
-
-            <de.hdodenhof.circleimageview.CircleImageView
-                android:id="@+id/main_profile_avatar"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_gravity="end|center_vertical"
-                android:layout_marginEnd="8dp"
-                android:contentDescription="@string/MainActivity_profile"
-                android:src="@drawable/circle_green"
-                app:civ_border_width="0dp" />
-
-        </androidx.appcompat.widget.Toolbar>
+            app:titleTextColor="@color/tg_chat_title" />
 
         <LinearLayout
             android:id="@+id/main_profile_bar"
@@ -79,7 +67,21 @@
             android:textColorHint="@color/tg_chat_preview"
             android:textSize="15sp" />
 
+        <include layout="@layout/chat_list_filter_tabs" />
+
     </LinearLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="@color/tg_chat_bg"
+        app:elevation="8dp"
+        app:itemIconTint="@color/bottom_nav_item_color"
+        app:itemTextColor="@color/bottom_nav_item_color"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/bottom_nav_main" />
 
     <Spinner
         android:id="@+id/spinner_own_status"
@@ -91,6 +93,7 @@
         android:id="@+id/drawer_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_above="@id/bottom_navigation"
         android:layout_below="@id/main_header_container">
 
         <FrameLayout
@@ -131,12 +134,10 @@
                 android:visibility="visible"
                 tools:context="com.zoffcc.applications.trifa.MainActivity">
 
-                <fragment
-                    android:id="@+id/fl_fragment"
-                    android:name="com.zoffcc.applications.trifa.FriendListFragment"
+                <FrameLayout
+                    android:id="@+id/main_fragment_container"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    tools:layout="@layout/friend_list_layout" />
+                    android:layout_height="match_parent" />
 
             </LinearLayout>
 

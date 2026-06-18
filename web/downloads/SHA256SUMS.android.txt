@@ -1,0 +1,1 @@
+67a19ccba3ed44fc7b0fc43bf9d22bfdc3c22873d9ae38e497a61ef51543bbba  /Users/lucyok/Khandaq/dist/android/khandaq-release.apk

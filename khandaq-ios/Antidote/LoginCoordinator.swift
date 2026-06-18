@@ -227,7 +227,13 @@ private extension LoginCoordinator {
         }
 
         let path = ProfileManager().pathForProfileWithName(profile)
-        let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(path)!
+        guard let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(path) else {
+            let error = NSError(domain: "LoginCoordinator", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Invalid profile configuration",
+            ])
+            errorClosure?(error)
+            return
+        }
 
         let hud = JGProgressHUD(style: .dark)!
         hud.show(in: self.navigationController.view)
@@ -235,12 +241,23 @@ private extension LoginCoordinator {
         ToxFactory.createToxWithConfiguration(configuration, encryptPassword: password, successBlock: { [weak self] manager -> Void in
             hud.dismiss()
 
+            guard let self = self else {
+                return
+            }
+
             configurationClosure?(manager)
 
             let userDefaults = UserDefaultsManager()
             userDefaults.lastActiveProfile = profile
 
-            self?.delegate?.loginCoordinatorDidLogin(self!, manager: manager, password: password)
+            // KHANDAQ (#15): ensure the Tox self-name is set. Profiles created without an explicit
+            // username had an empty self-name, so NGC groups published the "Khandaq" default as our
+            // peer name and friends/invites showed "(null)". Seed it from the profile name once.
+            if (manager.user.userName() ?? "").isEmpty {
+                _ = try? manager.user.setUserName(profile)
+            }
+
+            self.delegate?.loginCoordinatorDidLogin(self, manager: manager, password: password)
 
         }, failureBlock: { error -> Void in
             hud.dismiss()
@@ -303,14 +320,17 @@ private extension LoginCoordinator {
     func isProfileEncrypted(_ profile: String) -> Bool {
         let profilePath = ProfileManager().pathForProfileWithName(profile)
 
-        let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(profilePath)!
+        guard let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(profilePath) else {
+            return false
+        }
         let dataPath = configuration.fileStorage.pathForToxSaveFile
 
         guard FileManager.default.fileExists(atPath: dataPath) else {
             return false
         }
 
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: dataPath)) else {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: dataPath)),
+              data.count >= 8 else {
             return false
         }
 

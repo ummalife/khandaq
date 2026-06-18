@@ -82,12 +82,16 @@ public final class PushUrlValidator
                 return topic.matches("^[A-Za-z0-9_\\-]{1,64}$");
             }
 
-            if (MainActivity.PREF__allow_push_server_sunup && host.endsWith(".mozilla.com"))
+            if (MainActivity.PREF__allow_push_server_sunup && host.endsWith(".push.services.mozilla.com"))
             {
                 return path.length() > 1;
             }
 
-            if (MainActivity.PREF__allow_push_server_ntfy && host.endsWith("unifiedpush.org"))
+            // KHANDAQ (security): anchor the host. "endsWith("unifiedpush.org")" (no leading dot) let an
+            // attacker domain like "evilunifiedpush.org" pass the whitelist → SSRF + IP leak to a foreign
+            // server. Require the exact host or a real "*.unifiedpush.org" subdomain.
+            if (MainActivity.PREF__allow_push_server_ntfy
+                && (host.equalsIgnoreCase("gotify1.unifiedpush.org") || host.endsWith(".unifiedpush.org")))
             {
                 return path.startsWith("/UP");
             }

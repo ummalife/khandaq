@@ -50,6 +50,15 @@ public:
         return 2;
     }
 
+    QVector<uint32_t> getGroupPeerList(int groupId) const override
+    {
+        std::ignore = groupId;
+        if (emptyGroup) {
+            return {0};
+        }
+        return {0, 1};
+    }
+
     QString getGroupPeerName(int groupId, int peerId) const override
     {
         std::ignore = groupId;

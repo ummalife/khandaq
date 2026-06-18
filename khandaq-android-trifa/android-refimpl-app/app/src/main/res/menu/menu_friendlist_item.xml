@@ -7,22 +7,30 @@
         android:title="@string/layout___info"
         android:visible="true"
         app:showAsAction="ifRoom|withText"/>
+    <!-- Legacy Tox conferences (text/AV) are hidden: the app now has a single group concept
+         (NGC private/public groups created via the toolbar menu). Keep the items/handlers so
+         nothing else breaks, but never show them. -->
     <item
         android:id="@+id/item_create_conference"
         android:icon="@drawable/ic_content_copy_white_24dp"
         android:title="@string/layout___create_text_group"
-        android:visible="true"
+        android:visible="false"
         app:showAsAction="ifRoom|withText"/>
     <item
         android:id="@+id/item_create_av_conference"
         android:icon="@drawable/ic_content_copy_white_24dp"
         android:title="@string/layout___create_audio_group"
-        android:visible="true"
+        android:visible="false"
         app:showAsAction="ifRoom|withText"/>
     <item
         android:id="@+id/item_add_toxproxy"
         android:icon="@drawable/ic_content_copy_white_24dp"
         android:title="@string/layout___add_as_toxproxy"
+        android:visible="true"
+        app:showAsAction="ifRoom|withText"/>
+    <item
+        android:id="@+id/item_toggle_favorite"
+        android:title="@string/chat_filter_add_favorite"
         android:visible="true"
         app:showAsAction="ifRoom|withText"/>
     <item

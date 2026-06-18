@@ -19,8 +19,11 @@
 
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.BuildConfig;
 import org.khandaq.messenger.R;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
@@ -46,6 +49,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.AppCompatSpinner;
+import androidx.appcompat.widget.SwitchCompat;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -59,21 +63,27 @@ import static com.zoffcc.applications.trifa.HelperGroup.collect_group_members_fo
 import static com.zoffcc.applications.trifa.HelperGroup.format_group_list_status_subtitle;
 import static com.zoffcc.applications.trifa.HelperGroup.get_display_peer_limit;
 import static com.zoffcc.applications.trifa.HelperGroup.get_effective_group_title;
-import static com.zoffcc.applications.trifa.HelperGroup.group_identifier_short;
 import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_connection_status;
 import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_privacy;
 import static com.zoffcc.applications.trifa.HelperGroup.humanize_group_role;
+import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_peer_name;
 import static com.zoffcc.applications.trifa.HelperGroup.save_group_title_if_changed;
-import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_title;
+import static com.zoffcc.applications.trifa.HelperGroup.sanitize_group_topic;
+import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_privacy_state;
 import static com.zoffcc.applications.trifa.HelperGroup.get_group_peernum_from_peer_pubkey;
 import static com.zoffcc.applications.trifa.HelperGroup.is_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.set_group_group_we_left;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupnum__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_groupmessagelist;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_peer_in_db;
 import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_ENC_FILES_EXPORT_DIR;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_founder_set_password__wrapper;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_founder_set_privacy_state__wrapper;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_founder_set_topic_lock__wrapper;
+import static com.zoffcc.applications.trifa.HelperGroup.tox_group_get_topic_lock__wrapper;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_founder_set_peer_limit;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_founder_set_voice_state;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_get_name;
@@ -86,7 +96,6 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_name
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_reconnect;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_savedpeer_get_public_key;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_peer_id;
-import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_public_key;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_get_role;
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_self_set_name;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.NGC_NEW_PEERS_TIMEDELTA_IN_MS;
@@ -104,7 +113,7 @@ public class GroupInfoActivity extends AppCompatActivity
     TextView this_privacy_status_text = null;
     TextView group_connection_status_text = null;
     TextView group_myrole_text = null;
-    TextView group_mypubkey_text = null;
+    AppCompatButton group_copy_id_button = null;
     static TextView group_num_msgs_text = null;
     static TextView group_num_system_msgs_text = null;
     Button group_reconnect_button = null;
@@ -112,14 +121,28 @@ public class GroupInfoActivity extends AppCompatActivity
     Button group_del_sysmsgs_button = null;
     AppCompatSpinner group_voicestate_select = null;
     private AppCompatButton group_voicestate_set_button = null;
+    EditText group_password_text = null;
+    Button group_password_set_button = null;
+    SwitchCompat group_topic_lock_switch = null;
+    AppCompatSpinner group_privacy_select = null;
+    private AppCompatButton group_privacy_set_button = null;
     private String[] tox_ngc_group_voicestate_items;
+    private String[] tox_ngc_group_privacy_items;
+    private boolean group_topic_lock_switch_programmatic = false;
     String group_id = "-1";
     TextView group_info_summary_text = null;
+    TextView group_info_header_title = null;
+    TextView group_info_header_subtitle = null;
+    TextView group_info_header_status = null;
     TextView group_info_members_header = null;
+    TextView group_info_members_empty = null;
+    View group_info_settings_section = null;
+    View group_info_founder_section = null;
+    View group_info_full_id_section = null;
+    View group_info_peer_limit_section = null;
     RecyclerView group_info_members_list = null;
-    View group_info_debug_section = null;
-    View group_info_message_stats_section = null;
     GroupInfoMembersAdapter group_info_members_adapter = null;
+    private String group_chat_id_for_copy = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -131,25 +154,38 @@ public class GroupInfoActivity extends AppCompatActivity
         group_id = intent.getStringExtra("group_id");
 
         this_group_id = (TextView) findViewById(R.id.group_id_text);
-        group_mypubkey_text = (TextView) findViewById(R.id.group_mypubkey_text);
+        group_copy_id_button = findViewById(R.id.group_copy_id_button);
         this_title = (EditText) findViewById(R.id.group_name_text);
         group_myname_text = (EditText) findViewById(R.id.group_myname_text);
         peer_limit_text = (EditText) findViewById(R.id.peer_limit_text);
         this_privacy_status_text = (TextView) findViewById(R.id.group_privacy_status_text);
         group_connection_status_text = (TextView) findViewById(R.id.group_connection_status_text);
         group_myrole_text = (TextView) findViewById(R.id.group_myrole_text);
-        group_num_msgs_text = (TextView) findViewById(R.id.group_num_msgs_text);
-        group_num_system_msgs_text = (TextView) findViewById(R.id.group_num_system_msgs_text);
-        group_reconnect_button = (Button) findViewById(R.id.group_reconnect_button);
-        group_dumpofflinepeers_button = (Button) findViewById(R.id.group_dumpofflinepeers_button);
-        group_del_sysmsgs_button = (Button) findViewById(R.id.group_del_sysmsgs_button);
         group_voicestate_select = findViewById(R.id.group_voicestate_select);
         group_voicestate_set_button = findViewById(R.id.group_voicestate_set_button);
+        group_password_text = findViewById(R.id.group_password_text);
+        group_password_set_button = findViewById(R.id.group_password_set_button);
+        group_topic_lock_switch = findViewById(R.id.group_topic_lock_switch);
+        group_privacy_select = findViewById(R.id.group_privacy_select);
+        group_privacy_set_button = findViewById(R.id.group_privacy_set_button);
         group_info_summary_text = findViewById(R.id.group_info_summary_text);
+        group_info_header_title = findViewById(R.id.group_info_header_title);
+        group_info_header_subtitle = findViewById(R.id.group_info_header_subtitle);
+        group_info_header_status = findViewById(R.id.group_info_header_status);
         group_info_members_header = findViewById(R.id.group_info_members_header);
+        group_info_members_empty = findViewById(R.id.group_info_members_empty);
+        group_info_settings_section = findViewById(R.id.group_info_settings_section);
+        group_info_founder_section = findViewById(R.id.group_info_founder_section);
+        group_info_full_id_section = findViewById(R.id.group_info_full_id_section);
+        // KHANDAQ: hide the group ID / chat-id section. Joining a group by this ID needs UDP peer
+        // discovery, which is blocked on the target networks, so members are only ever added manually
+        // via friend-invite. Showing a non-functional ID just confuses users.
+        if (group_info_full_id_section != null)
+        {
+            group_info_full_id_section.setVisibility(View.GONE);
+        }
+        group_info_peer_limit_section = findViewById(R.id.group_info_peer_limit_section);
         group_info_members_list = findViewById(R.id.group_info_members_list);
-        group_info_debug_section = findViewById(R.id.group_info_debug_section);
-        group_info_message_stats_section = findViewById(R.id.group_info_message_stats_section);
 
         if (group_info_members_list != null)
         {
@@ -157,6 +193,8 @@ public class GroupInfoActivity extends AppCompatActivity
             group_info_members_adapter = new GroupInfoMembersAdapter(this, group_id);
             group_info_members_list.setAdapter(group_info_members_adapter);
         }
+
+        configure_release_ui();
 
         this.tox_ngc_group_voicestate_items = new String[]{"---", "FOUNDER", "MODERATOR", "ALL"};
         ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
@@ -168,7 +206,7 @@ public class GroupInfoActivity extends AppCompatActivity
         try
         {
             current_voicestate = tox_group_get_voice_state(tox_group_by_groupid__wrapper(group_id));
-            Log.i(TAG, "current_voicestate:" + current_voicestate);
+            HelperGeneric.logI(TAG, "current_voicestate:" + current_voicestate);
             if (current_voicestate == ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_FOUNDER.value)
             {
                 group_voicestate_select.setSelection(1);
@@ -196,7 +234,7 @@ public class GroupInfoActivity extends AppCompatActivity
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id)
             {
-                Log.i(TAG, "selected_new_voicestate:" + parent.getItemAtPosition(position));
+                HelperGeneric.logI(TAG, "selected_new_voicestate:" + parent.getItemAtPosition(position));
             }
 
             @Override
@@ -234,7 +272,7 @@ public class GroupInfoActivity extends AppCompatActivity
                     }
 
                     int result = tox_group_founder_set_voice_state(tox_group_by_groupid__wrapper(group_id), new_role);
-                    Log.i(TAG, "setting new voicestate to: " + new_role + " result=" + result);
+                    HelperGeneric.logI(TAG, "setting new voicestate to: " + new_role + " result=" + result);
                     update_savedata_file_wrapper();
                 }
                 catch (Exception ignored)
@@ -243,9 +281,131 @@ public class GroupInfoActivity extends AppCompatActivity
             }
         });
 
+        this.tox_ngc_group_privacy_items = new String[]{"---", "PUBLIC", "PRIVATE"};
+        if (group_privacy_select != null)
+        {
+            final ArrayAdapter<CharSequence> privacyAdapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item, tox_ngc_group_privacy_items);
+            privacyAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            group_privacy_select.setAdapter(privacyAdapter);
+        }
+
+        if (group_privacy_set_button != null)
+        {
+            group_privacy_set_button.setOnClickListener(new View.OnClickListener()
+            {
+                @Override
+                public void onClick(View view)
+                {
+                    try
+                    {
+                        final String privacy_str = (String) group_privacy_select.getSelectedItem();
+                        int new_privacy = -1;
+                        if ("PUBLIC".equals(privacy_str))
+                        {
+                            new_privacy = ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value;
+                        }
+                        else if ("PRIVATE".equals(privacy_str))
+                        {
+                            new_privacy = ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value;
+                        }
+                        else
+                        {
+                            return;
+                        }
+
+                        final long group_num = tox_group_by_groupid__wrapper(group_id);
+                        final int result = tox_group_founder_set_privacy_state__wrapper(group_num, new_privacy);
+                        if (result >= 0)
+                        {
+                            update_group_in_db_privacy_state(group_id, new_privacy);
+                            this_privacy_status_text.setText(humanize_group_privacy(GroupInfoActivity.this, new_privacy));
+                            update_savedata_file_wrapper();
+                            apply_user_facing_group_info(group_num);
+                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_privacy_set), Toast.LENGTH_SHORT).show();
+                        }
+                        else
+                        {
+                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                }
+            });
+        }
+
+        if (group_password_set_button != null)
+        {
+            group_password_set_button.setOnClickListener(new View.OnClickListener()
+            {
+                @Override
+                public void onClick(View view)
+                {
+                    try
+                    {
+                        final long group_num = tox_group_by_groupid__wrapper(group_id);
+                        String password = null;
+                        if (group_password_text != null && group_password_text.getText() != null)
+                        {
+                            password = group_password_text.getText().toString();
+                        }
+                        final int result = tox_group_founder_set_password__wrapper(group_num,
+                                (password == null || password.isEmpty()) ? null : password);
+                        if (result >= 0)
+                        {
+                            update_savedata_file_wrapper();
+                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_password_set), Toast.LENGTH_SHORT).show();
+                        }
+                        else
+                        {
+                            Toast.makeText(GroupInfoActivity.this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                }
+            });
+        }
+
+        if (group_topic_lock_switch != null)
+        {
+            group_topic_lock_switch.setOnCheckedChangeListener((buttonView, isChecked) ->
+            {
+                if (group_topic_lock_switch_programmatic)
+                {
+                    return;
+                }
+                try
+                {
+                    final long group_num = tox_group_by_groupid__wrapper(group_id);
+                    final int lock_state = isChecked
+                            ? ToxVars.Tox_Group_Topic_Lock.TOX_GROUP_TOPIC_LOCK_ENABLED.value
+                            : ToxVars.Tox_Group_Topic_Lock.TOX_GROUP_TOPIC_LOCK_DISABLED.value;
+                    final int result = tox_group_founder_set_topic_lock__wrapper(group_num, lock_state);
+                    if (result >= 0)
+                    {
+                        update_savedata_file_wrapper();
+                    }
+                    else
+                    {
+                        group_topic_lock_switch_programmatic = true;
+                        group_topic_lock_switch.setChecked(!isChecked);
+                        group_topic_lock_switch_programmatic = false;
+                        Toast.makeText(GroupInfoActivity.this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+            });
+        }
+
         try
         {
-            group_reconnect_button.setVisibility(View.GONE);
+            update_reconnect_button_visibility(false);
         }
         catch(Exception ignored)
         {
@@ -259,14 +419,6 @@ public class GroupInfoActivity extends AppCompatActivity
             getSupportActionBar().setTitle(getString(R.string.title_activity_groupinfo));
         }
 
-        if ((group_id == null) || (group_id.equals("-1")))
-        {
-            this_group_id.setText("*error*");
-        }
-        else
-        {
-            this_group_id.setText(group_id.toLowerCase());
-        }
         this_title.setText("*error*");
 
         long group_num = -1;
@@ -283,6 +435,8 @@ public class GroupInfoActivity extends AppCompatActivity
         {
             e.printStackTrace();
         }
+
+        populate_group_chat_id_text(group_num);
 
         try
         {
@@ -304,20 +458,34 @@ public class GroupInfoActivity extends AppCompatActivity
 
         try
         {
-            group_mypubkey_text.setText(tox_group_self_get_public_key(group_num));
+            this_title.setText(get_effective_group_title(group_num, group_id));
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
 
-        try
+        if (group_copy_id_button != null)
         {
-            this_title.setText(get_effective_group_title(group_num, group_id));
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
+            group_copy_id_button.setOnClickListener(new View.OnClickListener()
+            {
+                @Override
+                public void onClick(final View v)
+                {
+                    copy_group_chat_id_to_clipboard(v);
+                }
+            });
+            // Long-press shares a richer invite (group id + my Tox ID + how-to) so that a joiner on a
+            // UDP-blocked network can add me as a contact and be invited in via the friend path.
+            group_copy_id_button.setOnLongClickListener(new View.OnLongClickListener()
+            {
+                @Override
+                public boolean onLongClick(final View v)
+                {
+                    share_group_invite(v);
+                    return true;
+                }
+            });
         }
 
         int privacy_state = -1;
@@ -334,44 +502,88 @@ public class GroupInfoActivity extends AppCompatActivity
 
         this_privacy_status_text.setText(humanize_group_privacy(this, privacy_state));
 
+        if (group_privacy_select != null)
+        {
+            if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
+            {
+                group_privacy_select.setSelection(1);
+            }
+            else if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value)
+            {
+                group_privacy_select.setSelection(2);
+            }
+            else
+            {
+                group_privacy_select.setSelection(0);
+            }
+        }
+
+        if (group_topic_lock_switch != null && group_num >= 0)
+        {
+            try
+            {
+                final int topic_lock = tox_group_get_topic_lock__wrapper(group_num);
+                if (topic_lock >= 0)
+                {
+                    group_topic_lock_switch_programmatic = true;
+                    group_topic_lock_switch.setChecked(
+                            topic_lock == ToxVars.Tox_Group_Topic_Lock.TOX_GROUP_TOPIC_LOCK_ENABLED.value);
+                    group_topic_lock_switch_programmatic = false;
+                }
+                else
+                {
+                    group_topic_lock_switch.setVisibility(View.GONE);
+                }
+            }
+            catch (Exception ignored)
+            {
+                group_topic_lock_switch.setVisibility(View.GONE);
+            }
+        }
+
         group_update_connected_status_on_groupinfo(group_num);
 
         final long group_num_ = group_num;
-        group_reconnect_button.setOnClickListener(new View.OnClickListener()
+        if (group_reconnect_button != null)
         {
-            @Override
-            public void onClick(View v)
+            group_reconnect_button.setOnClickListener(new View.OnClickListener()
             {
-                try
+                @Override
+                public void onClick(View v)
                 {
-                    long active_group_num = group_num_;
-                    if (active_group_num < 0)
+                    try
                     {
-                        active_group_num = ensure_group_in_tox(group_id);
+                        long active_group_num = group_num_;
+                        if (active_group_num < 0)
+                        {
+                            active_group_num = ensure_group_in_tox(group_id);
+                        }
+                        if (active_group_num >= 0)
+                        {
+                            tox_group_reconnect(active_group_num);
+                            update_savedata_file_wrapper();
+                            clear_group_group_we_left(group_id);
+                            group_update_connected_status_on_groupinfo(active_group_num);
+                            peer_limit_text.setText("" + get_display_peer_limit(active_group_num));
+                        }
+                        else
+                        {
+                            Toast.makeText(GroupInfoActivity.this,
+                                           getString(R.string.group_send_group_not_found), Toast.LENGTH_LONG).show();
+                        }
                     }
-                    if (active_group_num >= 0)
+                    catch (Exception e)
                     {
-                        tox_group_reconnect(active_group_num);
-                        update_savedata_file_wrapper();
-                        clear_group_group_we_left(group_id);
-                        group_update_connected_status_on_groupinfo(active_group_num);
-                        peer_limit_text.setText("" + get_display_peer_limit(active_group_num));
-                    }
-                    else
-                    {
-                        Toast.makeText(GroupInfoActivity.this,
-                                       getString(R.string.group_send_group_not_found), Toast.LENGTH_LONG).show();
+                        e.printStackTrace();
                     }
                 }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-        });
+            });
+        }
 
 
-        group_dumpofflinepeers_button.setOnClickListener(new View.OnClickListener()
+        if (group_dumpofflinepeers_button != null)
+        {
+            group_dumpofflinepeers_button.setOnClickListener(new View.OnClickListener()
         {
             @Override
             public void onClick(View v)
@@ -417,7 +629,7 @@ public class GroupInfoActivity extends AppCompatActivity
                                     peerrole = ToxVars.Tox_Group_Role.value_char(peer_from_db.Tox_Group_Role) + " ";
                                 }
 
-                                // Log.i(TAG, "groupnum=" + conference_num + " peernum=" + offline_peers[(int) i] + " peer_name=" +
+                                // HelperGeneric.logI(TAG, "groupnum=" + conference_num + " peernum=" + offline_peers[(int) i] + " peer_name=" +
                                 //           peer_name);
                                 String peer_name_temp =  peerrole + peer_name + " :" + i + ": " + peer_pubkey_temp.substring(0, 6);
 
@@ -455,7 +667,7 @@ public class GroupInfoActivity extends AppCompatActivity
                         {
                             logstr.append(peerloffline.peer_pubkey).append(":").append(peerloffline.peer_num).append("\n");
                         }
-                        Log.i(TAG, "\n\nNGC_GROUP_OFFLINE_PEERLIST:\n" + logstr + "\n\n");
+                        HelperGeneric.logI(TAG, "\n\nNGC_GROUP_OFFLINE_PEERLIST:\n" + logstr + "\n\n");
 
                     }
                 }
@@ -465,8 +677,11 @@ public class GroupInfoActivity extends AppCompatActivity
                 }
             }
         });
+        }
 
-        group_del_sysmsgs_button.setOnClickListener(new View.OnClickListener()
+        if (group_del_sysmsgs_button != null)
+        {
+            group_del_sysmsgs_button.setOnClickListener(new View.OnClickListener()
         {
             @Override
             public void onClick(View v)
@@ -490,20 +705,20 @@ public class GroupInfoActivity extends AppCompatActivity
                                     {
                                         try
                                         {
-                                            Log.i(TAG, "del_group_system_messages:START:");
+                                            HelperGeneric.logI(TAG, "del_group_system_messages:START:");
                                             display_toast(getString(R.string.group_delete_system_msgs_progress), true, 0);
                                             orma.deleteFromGroupMessage().
                                                     group_identifierEq(group_id).
                                                     tox_group_peer_pubkeyEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
                                                     execute();
-                                            Log.i(TAG, "del_group_system_messages:DONE:");
+                                            HelperGeneric.logI(TAG, "del_group_system_messages:DONE:");
                                             display_toast(getString(R.string.group_delete_system_msgs_done), true, 0);
                                             reload_message_counts(group_id);
                                         }
                                         catch (Exception e2)
                                         {
                                             e2.printStackTrace();
-                                            Log.i(TAG, "del_group_system_messages:EE:" + e2.getMessage());
+                                            HelperGeneric.logI(TAG, "del_group_system_messages:EE:" + e2.getMessage());
                                         }
                                     }
                                 };
@@ -526,11 +741,15 @@ public class GroupInfoActivity extends AppCompatActivity
                 }
             }
         });
+        }
 
         try
         {
             final int myrole = tox_group_self_get_role(group_num);
-            group_myrole_text.setText(humanize_group_role(this, myrole));
+            if (group_myrole_text != null)
+            {
+                group_myrole_text.setText(humanize_group_role(this, myrole));
+            }
         }
         catch (Exception e)
         {
@@ -547,33 +766,52 @@ public class GroupInfoActivity extends AppCompatActivity
         {
             if (group_num < 0)
             {
-                group_connection_status_text.setText("STATUS_UNKNOWN");
-                group_reconnect_button.setVisibility(View.VISIBLE);
+                if (group_connection_status_text != null)
+                {
+                    group_connection_status_text.setText(getString(R.string.group_info_connection_disconnected));
+                }
+                update_reconnect_button_visibility(true);
+                apply_user_facing_group_info(group_num);
                 return;
             }
 
             final int is_connected = tox_group_is_connected(group_num);
             if (is_group_we_left(group_id))
             {
-                group_connection_status_text.setText("You left the group, but can rejoin it");
-                group_reconnect_button.setVisibility(View.VISIBLE);
+                if (group_connection_status_text != null)
+                {
+                    group_connection_status_text.setText(getString(R.string.group_info_connection_disconnected));
+                }
+                update_reconnect_button_visibility(true);
             }
             else
             {
-                group_connection_status_text.setText(humanize_group_connection_status(this, is_connected));
-                if (is_connected == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+                if (group_connection_status_text != null)
                 {
-                    group_reconnect_button.setVisibility(View.GONE);
+                    group_connection_status_text.setText(humanize_group_connection_status(this, is_connected, group_id));
                 }
-                else
-                {
-                    group_reconnect_button.setVisibility(View.VISIBLE);
-                }
+                update_reconnect_button_visibility(
+                        is_connected != TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value);
             }
+            apply_user_facing_group_info(group_num);
         }
         catch(Exception ignored)
         {
         }
+    }
+
+    private void update_reconnect_button_visibility(final boolean show)
+    {
+        if (group_reconnect_button == null)
+        {
+            return;
+        }
+        if (!BuildConfig.DEBUG)
+        {
+            group_reconnect_button.setVisibility(View.GONE);
+            return;
+        }
+        group_reconnect_button.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     static void reload_message_counts(final String group_id)
@@ -616,24 +854,40 @@ public class GroupInfoActivity extends AppCompatActivity
                         {
                             try
                             {
-                                try
+                                if (group_num_msgs_text == null && group_num_system_msgs_text == null)
                                 {
-                                    group_num_msgs_text.setText(context_s.getString(R.string.group_info_message_count_user,
-                                            Integer.parseInt(num_str_1)));
-                                }
-                                catch (Exception ignored)
-                                {
-                                    group_num_msgs_text.setText(num_str_1);
+                                    return;
                                 }
                                 try
                                 {
-                                    group_num_system_msgs_text.setText(
-                                            context_s.getString(R.string.group_info_system_message_count,
-                                                    Integer.parseInt(num_str_2)));
+                                    if (group_num_msgs_text != null)
+                                    {
+                                        group_num_msgs_text.setText(context_s.getString(R.string.group_info_message_count_user,
+                                                Integer.parseInt(num_str_1)));
+                                    }
                                 }
                                 catch (Exception ignored)
                                 {
-                                    group_num_system_msgs_text.setText(num_str_2);
+                                    if (group_num_msgs_text != null)
+                                    {
+                                        group_num_msgs_text.setText(num_str_1);
+                                    }
+                                }
+                                try
+                                {
+                                    if (group_num_system_msgs_text != null)
+                                    {
+                                        group_num_system_msgs_text.setText(
+                                                context_s.getString(R.string.group_info_system_message_count,
+                                                        Integer.parseInt(num_str_2)));
+                                    }
+                                }
+                                catch (Exception ignored)
+                                {
+                                    if (group_num_system_msgs_text != null)
+                                    {
+                                        group_num_system_msgs_text.setText(num_str_2);
+                                    }
                                 }
                             }
                             catch (Exception e)
@@ -667,31 +921,213 @@ public class GroupInfoActivity extends AppCompatActivity
             group_update_connected_status_on_groupinfo(group_num);
             peer_limit_text.setText("" + get_display_peer_limit(group_num));
             this_title.setText(get_effective_group_title(group_num, group_id));
+            populate_group_chat_id_text(group_num);
         }
         reload_message_counts(group_id);
         apply_user_facing_group_info(group_num);
         reload_group_members_list();
     }
 
+    private void populate_group_chat_id_text(final long group_num)
+    {
+        if (this_group_id == null)
+        {
+            return;
+        }
+
+        String chat_id = null;
+        if (group_num >= 0)
+        {
+            try
+            {
+                chat_id = tox_group_by_groupnum__wrapper(group_num);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        if ((chat_id == null || chat_id.length() == 0) && group_id != null && !group_id.equals("-1"))
+        {
+            chat_id = group_id;
+        }
+
+        if (chat_id == null || chat_id.length() == 0)
+        {
+            group_chat_id_for_copy = "";
+            this_group_id.setText("*error*");
+            if (group_copy_id_button != null)
+            {
+                group_copy_id_button.setEnabled(false);
+            }
+            return;
+        }
+
+        group_chat_id_for_copy = chat_id.toUpperCase();
+        this_group_id.setText(group_chat_id_for_copy.toLowerCase());
+        if (group_copy_id_button != null)
+        {
+            group_copy_id_button.setEnabled(true);
+        }
+    }
+
+    private void copy_group_chat_id_to_clipboard(final View v)
+    {
+        if (group_chat_id_for_copy == null || group_chat_id_for_copy.length() == 0)
+        {
+            return;
+        }
+        try
+        {
+            final ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard != null)
+            {
+                clipboard.setPrimaryClip(ClipData.newPlainText("", group_chat_id_for_copy));
+                Toast.makeText(v.getContext(), getString(R.string.id_copied_to_clipboard), Toast.LENGTH_SHORT).show();
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Build and share a rich group invite: the public chat-id plus my own Tox ID and a short how-to.
+     * This operationalizes the friend-assisted-join workaround at scale — a joiner whose network
+     * blocks UDP peer discovery (so a plain chat-id join can never complete) can add the inviter as
+     * a contact, after which the existing friend-invite path pulls them into the group over TCP.
+     */
+    private void share_group_invite(final View v)
+    {
+        if (group_chat_id_for_copy == null || group_chat_id_for_copy.length() == 0)
+        {
+            return;
+        }
+        try
+        {
+            String my_toxid = "";
+            try
+            {
+                my_toxid = MainActivity.get_my_toxid();
+            }
+            catch (Exception ignored)
+            {
+            }
+            if (my_toxid == null)
+            {
+                my_toxid = "";
+            }
+            final String invite_text = getString(R.string.group_share_invite_template,
+                    group_chat_id_for_copy.toLowerCase(), my_toxid.toUpperCase());
+            final android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(android.content.Intent.EXTRA_TEXT, invite_text);
+            startActivity(android.content.Intent.createChooser(send,
+                    getString(R.string.group_share_invite_chooser)));
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void configure_release_ui()
+    {
+        boolean founder = false;
+        try
+        {
+            final long group_num = tox_group_by_groupid__wrapper(group_id);
+            founder = tox_group_self_get_role(group_num) == ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_FOUNDER.value;
+        }
+        catch (Exception ignored)
+        {
+        }
+        final int founder_visibility = founder ? View.VISIBLE : View.GONE;
+        final int extended_founder_visibility = (founder && HelperGroup.is_tox_group_extended_state_jni_supported())
+                ? View.VISIBLE : View.GONE;
+
+        if (group_info_founder_section != null)
+        {
+            group_info_founder_section.setVisibility(founder_visibility);
+        }
+        if (group_voicestate_select != null)
+        {
+            group_voicestate_select.setVisibility(founder_visibility);
+        }
+        if (group_voicestate_set_button != null)
+        {
+            group_voicestate_set_button.setVisibility(founder_visibility);
+        }
+        if (group_info_peer_limit_section != null)
+        {
+            group_info_peer_limit_section.setVisibility(founder_visibility);
+        }
+        if (group_password_text != null)
+        {
+            final View passwordField = (View) group_password_text.getParent();
+            if (passwordField != null)
+            {
+                passwordField.setVisibility(extended_founder_visibility);
+            }
+        }
+        if (group_password_set_button != null)
+        {
+            group_password_set_button.setVisibility(extended_founder_visibility);
+        }
+        if (group_topic_lock_switch != null)
+        {
+            group_topic_lock_switch.setVisibility(extended_founder_visibility);
+        }
+        if (group_privacy_select != null)
+        {
+            final View privacyRow = (View) group_privacy_select.getParent();
+            if (privacyRow != null)
+            {
+                privacyRow.setVisibility(extended_founder_visibility);
+            }
+        }
+    }
+
     private void apply_user_facing_group_info(final long group_num)
     {
         try
         {
-            final View group_info_debug_scroll = findViewById(R.id.group_info_debug_scroll);
-            if (group_info_debug_scroll != null)
+            configure_release_ui();
+
+            int privacy_state = -1;
+            try
             {
-                group_info_debug_scroll.setVisibility(View.VISIBLE);
+                privacy_state = orma.selectFromGroupDB().
+                        group_identifierEq(group_id.toLowerCase()).
+                        toList().get(0).privacy_state;
+            }
+            catch (Exception ignored)
+            {
             }
 
-            if (group_info_summary_text != null)
+            final String title = get_effective_group_title(group_num, group_id);
+            final String members = format_group_list_status_subtitle(this, group_id);
+            final String privacy = humanize_group_privacy(this, privacy_state);
+            final String connection = (group_connection_status_text != null)
+                    ? group_connection_status_text.getText().toString()
+                    : humanize_group_connection_status(this,
+                    group_num >= 0 ? tox_group_is_connected(group_num) : -1, group_id);
+
+            if (this_privacy_status_text != null)
             {
-                final String title = get_effective_group_title(group_num, group_id);
-                final String members = format_group_list_status_subtitle(this, group_id);
-                final String privacy = this_privacy_status_text.getText().toString();
-                final String connection = group_connection_status_text.getText().toString();
-                final String short_id = group_identifier_short(group_id, true);
-                group_info_summary_text.setText(title + "\n" + members + "\n" + privacy + " · " + connection
-                                                + "\nID: " + short_id);
+                this_privacy_status_text.setText(privacy);
+            }
+            if (group_info_header_title != null)
+            {
+                group_info_header_title.setText(title);
+            }
+            if (group_info_header_subtitle != null)
+            {
+                group_info_header_subtitle.setText(members);
+            }
+            if (group_info_header_status != null)
+            {
+                group_info_header_status.setText(privacy + " · " + connection);
             }
         }
         catch (Exception e)
@@ -714,7 +1150,9 @@ public class GroupInfoActivity extends AppCompatActivity
             {
                 try
                 {
-                    final List<HelperGroup.GroupMemberDisplay> members = collect_group_members_for_display(group_id);
+                    final List<HelperGroup.GroupMemberDisplay> members =
+                            HelperGroup.dedupe_group_members_for_display(
+                                    HelperGroup.collect_group_members_for_display(group_id));
                     if (main_handler_s == null)
                     {
                         return;
@@ -731,6 +1169,16 @@ public class GroupInfoActivity extends AppCompatActivity
                                 {
                                     group_info_members_header.setText(
                                             getString(R.string.group_info_members_header, members.size()));
+                                }
+                                if (group_info_members_empty != null)
+                                {
+                                    group_info_members_empty.setVisibility(
+                                            members.isEmpty() ? View.VISIBLE : View.GONE);
+                                }
+                                if (group_info_members_list != null)
+                                {
+                                    group_info_members_list.setVisibility(
+                                            members.isEmpty() ? View.GONE : View.VISIBLE);
                                 }
                             }
                             catch (Exception e)
@@ -770,19 +1218,21 @@ public class GroupInfoActivity extends AppCompatActivity
 
         try
         {
-            final String new_title = sanitize_group_title(this_title.getText().toString());
-            if (new_title.length() > 0)
+            if (this_title != null)
             {
-                final String current_title = get_effective_group_title(group_num, group_id);
-                if (!new_title.equals(current_title))
+                TrifaToxService.wakeup_tox_thread();
+                final String new_title = sanitize_group_topic(this_title.getText().toString());
+                if (new_title.length() > 0)
                 {
-                    if (save_group_title_if_changed(group_id, new_title))
+                    final String current_title = get_effective_group_title(group_num, group_id);
+                    if (!new_title.equals(current_title))
                     {
-                        Toast.makeText(this, getString(R.string.group_title_saved_toast), Toast.LENGTH_SHORT).show();
-                    }
-                    else
-                    {
-                        Toast.makeText(this, getString(R.string.group_title_save_failed_toast), Toast.LENGTH_SHORT).show();
+                        final boolean saved = save_group_title_if_changed(group_id, new_title);
+                        final int toastRes = saved
+                                ? R.string.group_title_saved_toast
+                                : R.string.group_title_save_failed_toast;
+                        // Application context: activity may already be finishing in onPause.
+                        display_toast(getString(toastRes), false, 0);
                     }
                 }
             }
@@ -794,11 +1244,14 @@ public class GroupInfoActivity extends AppCompatActivity
 
         try
         {
-            String my_new_name = group_myname_text.getText().toString();
-            if ((my_new_name != null) && (my_new_name.length() > 0))
+            if (group_myname_text != null)
             {
-                tox_group_self_set_name(group_num, my_new_name);
-                update_savedata_file_wrapper();
+                String my_new_name = sanitize_group_peer_name(group_myname_text.getText().toString());
+                if (my_new_name.length() > 0)
+                {
+                    tox_group_self_set_name(group_num, my_new_name);
+                    update_savedata_file_wrapper();
+                }
             }
         }
         catch (Exception ignored)

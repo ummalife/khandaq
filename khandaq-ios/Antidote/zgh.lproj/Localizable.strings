@@ -402,3 +402,31 @@
 "accessibility_outgoing_message_label" = "ⵜⴰⴱⵔⴰⵜ ⵏⵏⴽ";
 /* Tap to edit value hint */
 "accessibility_edit_value_hint" = "ⵉⵙⴳⴳⴷⵏ ⵏ ⵡⴰⵜⵉⴳ.";
+"group_live_audio_toggle" = "Live audio";
+"group_live_video_toggle" = "Live video";
+"group_live_video_quality_toggle" = "Video quality";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "Hold the microphone button to record a voice message";
+"group_live_video_toggle_active" = "Live video active";
+"group_live_video_toggle_incoming" = "Incoming live video";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Join group video?";
+"group_video_join_message" = "Send your video and audio to everyone in this group?";
+"group_video_join_confirm" = "Yes, start video";
+"group_video_join_decline" = "No";
+"group_send_voice_confirm_title" = "Send voice message?";
+"group_send_voice_confirm_message" = "Send this voice message to the group?";
+"group_incoming_message_error" = "Could not process incoming group message.";
+"group_image_shrink_failed" = "Could not prepare image for sending.";
+"group_incoming_file_error" = "Could not process incoming group file.";
+"chat_file_too_large" = "File is too large.";
+"chat_incoming_file_too_large" = "Incoming file is too large.";
+"chat_opening_file_failed" = "Could not open file.";
+"group_file_prepare_failed" = "Could not prepare file for sending.";
+"group_peer_unknown" = "Unknown";
+"group_live_video_stream_unknown_peer" = "Unknown";
+
+"microphone_access_denied_message" = "Microphone access is disabled. Allow microphone access in Settings to use this feature.";

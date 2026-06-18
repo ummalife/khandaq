@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <receiver
+            android:name="com.zoffcc.applications.trifa.QaGroupBroadcastReceiver"
+            android:enabled="true"
+            android:exported="true"
+            tools:replace="android:enabled,android:exported" />
+    </application>
+</manifest>

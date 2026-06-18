@@ -9,6 +9,7 @@
 #include "TCP_connection.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -258,7 +259,7 @@ static int wipe_tcp_connection(TCP_Connections *tcp_c, int tcp_connections_numbe
 }
 
 non_null()
-static TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int connections_number)
+TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int connections_number)
 {
     if (!connections_number_is_valid(tcp_c, connections_number)) {
         return nullptr;
@@ -268,7 +269,7 @@ static TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int conne
 }
 
 non_null()
-static TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connections_number)
+TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connections_number)
 {
     if (!tcp_connections_number_is_valid(tcp_c, tcp_connections_number)) {
         return nullptr;
@@ -277,7 +278,6 @@ static TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connect
     return &tcp_c->tcp_connections[tcp_connections_number];
 }
 
-/** Returns the number of connected TCP relays */
 uint32_t tcp_connected_relays_count(const TCP_Connections *tcp_c)
 {
     uint32_t count = 0;
@@ -633,6 +633,11 @@ static int find_tcp_connection_relay(const TCP_Connections *tcp_c, const uint8_t
     }
 
     return -1;
+}
+
+bool tcp_relay_is_valid(const TCP_Connections *tcp_c, const uint8_t *relay_pk)
+{
+    return find_tcp_connection_relay(tcp_c, relay_pk) != -1;
 }
 
 /** @brief Create a new TCP connection to public_key.
@@ -1480,6 +1485,50 @@ uint32_t tcp_copy_connected_relays(const TCP_Connections *tcp_c, Node_format *tc
     }
 
     return copied;
+}
+
+non_null()
+char *tcp_copy_all_connected_relays(const TCP_Connections *tcp_c, char* relays_report_string, uint16_t max_num, uint32_t* num)
+{
+    char *p = relays_report_string;
+    uint32_t copied = 0;
+    for (uint32_t i = 0; (i < tcp_c->tcp_connections_length) && (copied < max_num); ++i) {
+        const TCP_con *tcp_con = get_tcp_connection(tcp_c, i);
+
+        if (tcp_con == nullptr) {
+            continue;
+        }
+
+        if (tcp_con->status != TCP_CONN_CONNECTED) {
+            continue;
+        }
+
+        const IP_Port conn_ip_port = tcp_con_ip_port(tcp_con->connection);
+        if (net_family_is_ipv4(conn_ip_port.ip.family)) {
+            char ipv4[20];
+            memset(ipv4, 0, 20);
+            snprintf(ipv4, 16, "%d.%d.%d.%d",
+                conn_ip_port.ip.ip.v4.uint8[0],
+                conn_ip_port.ip.ip.v4.uint8[1],
+                conn_ip_port.ip.ip.v4.uint8[2],
+                conn_ip_port.ip.ip.v4.uint8[3]
+            );
+            p += snprintf(p, 60, "port=%5d ip=%s\n", net_ntohs(conn_ip_port.port), ipv4);
+        } else if (net_family_is_ipv6(conn_ip_port.ip.family)) {
+            char ipv6[401];
+            memset(ipv6, 0, 401);
+            bool res = ip_parse_addr(&conn_ip_port.ip, ipv6, 400);
+            if (!res) {
+                snprintf(ipv6, 16, "<error in ipv6>");
+            }
+            p += snprintf(p, 60, "port=%5d ip=%s\n", net_ntohs(conn_ip_port.port), ipv6);
+        }
+
+        ++copied;
+    }
+
+    *num = *num + copied;
+    return p;
 }
 
 uint32_t tcp_copy_connected_relays_index(const TCP_Connections *tcp_c, Node_format *tcp_relays, uint16_t max_num,

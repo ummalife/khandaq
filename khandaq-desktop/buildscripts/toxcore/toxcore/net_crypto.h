@@ -55,10 +55,12 @@
 #define PACKET_ID_TYPING 51
 #define PACKET_ID_MESSAGE 64
 #define PACKET_ID_ACTION 65 // PACKET_ID_MESSAGE + MESSAGE_ACTION
+#define PACKET_ID_HIGH_LEVEL_ACK 66 // MSG V3
 #define PACKET_ID_MSI 69    // Used by AV to setup calls and etc
 #define PACKET_ID_FILE_SENDREQUEST 80
 #define PACKET_ID_FILE_CONTROL 81
 #define PACKET_ID_FILE_DATA 82
+#define PACKET_ID_INVITE_GROUPCHAT 95
 #define PACKET_ID_INVITE_CONFERENCE 96
 #define PACKET_ID_ONLINE_PACKET 97
 #define PACKET_ID_DIRECT_CONFERENCE 98
@@ -409,5 +411,16 @@ void do_net_crypto(Net_Crypto *c, void *userdata);
 
 nullable(1)
 void kill_net_crypto(Net_Crypto *c);
+
+non_null()
+char *copy_all_connected_relays(Net_Crypto *c, char* relays_report_string, uint16_t max_num, uint32_t* num);
+
+non_null()
+char *copy_all_udp_connections(Net_Crypto *c, char *connections_report_string, uint16_t max_num, uint32_t* num);
+
+void copy_friend_ip_port(Net_Crypto *c, const int crypt_conn_id, char *report_string, bool direct_connected);
+
+non_null()
+char *udp_copy_all_connected(IP_Port conn_ip_port, char *connections_report_string, uint16_t max_num, uint32_t* num);
 
 #endif

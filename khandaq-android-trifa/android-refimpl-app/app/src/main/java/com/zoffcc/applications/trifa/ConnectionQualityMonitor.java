@@ -67,6 +67,20 @@ public final class ConnectionQualityMonitor
         level = Level.OFFLINE;
     }
 
+    /** Tox core reports a live connection — clear stale OFFLINE until RTT samples say otherwise. */
+    public void onToxConnected()
+    {
+        if (level == Level.OFFLINE)
+        {
+            level = Level.STRONG;
+        }
+    }
+
+    public void onToxDisconnected()
+    {
+        level = Level.OFFLINE;
+    }
+
     public Level getLevel()
     {
         return level;

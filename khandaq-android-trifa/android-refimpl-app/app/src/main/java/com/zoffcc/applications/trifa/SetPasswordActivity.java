@@ -1,22 +1,3 @@
-/**
- * [TRIfA], Java part of Tox Reference Implementation for Android
- * Copyright (C) 2017 Zoff <zoff@zoff.cc>
- * <p>
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- * <p>
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * <p>
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA  02110-1301, USA.
- */
-
 package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.BuildConfig;
@@ -28,6 +9,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -41,12 +23,15 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import static com.zoffcc.applications.trifa.MainActivity.getRandomString;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LEN_TRIFA_AUTOGEN_PASSWORD;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.LEN_TRIFA_MANUAL_PASSWORD_MIN_LEN;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PREF__DB_secrect_key__user_hash;
+import static com.zoffcc.applications.trifa.ToxProfileImportHelper.ImportMode;
 
 public class SetPasswordActivity extends AppCompatActivity
 {
@@ -62,6 +47,9 @@ public class SetPasswordActivity extends AppCompatActivity
     private View mLoginFormView;
 
     private SharedPreferences settings;
+
+    private final ActivityResultLauncher<String[]> importProfileLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::onImportProfilePicked);
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -129,6 +117,23 @@ public class SetPasswordActivity extends AppCompatActivity
             }
         });
 
+        Button importProfileButton = (Button) findViewById(R.id.import_profile_button);
+        importProfileButton.setOnClickListener(new OnClickListener()
+        {
+            @Override
+            public void onClick(View view)
+            {
+                ToxProfileImportHelper.showFirstLaunchImportInfo(SetPasswordActivity.this, new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        importProfileLauncher.launch(ToxProfileImportHelper.TOX_IMPORT_MIME_TYPES);
+                    }
+                });
+            }
+        });
+
 
         mLoginFormView = findViewById(R.id.login_form);
         mProgressView = findViewById(R.id.login_progress);
@@ -166,6 +171,35 @@ public class SetPasswordActivity extends AppCompatActivity
         catch(Exception ignored)
         {
         }
+    }
+
+    private void onImportProfilePicked(final Uri uri)
+    {
+        if (uri == null)
+        {
+            return;
+        }
+
+        showProgress(true);
+        ToxProfileImportHelper.handlePickedUri(this, uri, ImportMode.FIRST_LAUNCH, new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                completeFirstLaunchImport();
+            }
+        });
+        showProgress(false);
+    }
+
+    private void completeFirstLaunchImport()
+    {
+        auto_create_password();
+        settings.edit().putBoolean("PW_SET_SCREEN_DONE", true).commit();
+
+        Intent main_act = new Intent(SetPasswordActivity.this, MainActivity.class);
+        startActivity(main_act);
+        finish();
     }
 
     void auto_create_password()
@@ -382,7 +416,7 @@ public class SetPasswordActivity extends AppCompatActivity
             }
             else
             {
-                mPasswordView1.setError("* Error *");
+                mPasswordView1.setError(getString(R.string.set_password_setup_failed));
                 mPasswordView1.requestFocus();
             }
         }
@@ -402,4 +436,3 @@ public class SetPasswordActivity extends AppCompatActivity
         // do nothing!!
     }
 }
-

@@ -9,18 +9,21 @@ protocol ChatMovableDateCellDelegate: class {
     func chatMovableDateCellCopyPressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellDeletePressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell)
+    func chatMovableDateCellReplyPressed(_ cell: ChatMovableDateCell)
 }
 
 class ChatMovableDateCell: BaseCell {
     private static var __once: () = {
             var items = UIMenuController.shared.menuItems ?? [UIMenuItem]()
             items += [
+                UIMenuItem(title: String(localized: "chat_reply_action"), action: #selector(replyAction)),
                 UIMenuItem(title: String(localized: "chat_more_menu_item"), action: #selector(moreAction))
             ]
 
             UIMenuController.shared.menuItems = items
         }()
     weak var delegate: ChatMovableDateCellDelegate?
+    weak var replySwipeDelegate: ChatReplySwipeDelegate?
 
     var canBeCopied = false
 
@@ -89,6 +92,10 @@ class ChatMovableDateCell: BaseCell {
         dateLabel = UILabel()
         dateLabel.font = UIFont.khandaqFontWithSize(11.0, weight: .medium)
         movableContentView.addSubview(dateLabel)
+
+        let swipeReply = UISwipeGestureRecognizer(target: self, action: #selector(handleReplySwipe))
+        swipeReply.direction = .right
+        movableContentView.addGestureRecognizer(swipeReply)
 
         // Using empty view for multiple selection background.
         multipleSelectionBackgroundView = UIView()
@@ -168,6 +175,8 @@ extension ChatMovableDateCell {
                 return canBeCopied
             case #selector(delete(_:)):
                 return true
+            case #selector(replyAction):
+                return true
             case #selector(moreAction):
                 return true
             default:
@@ -185,5 +194,13 @@ extension ChatMovableDateCell {
 
     @objc func moreAction() {
         delegate?.chatMovableDateCellMorePressed(self)
+    }
+
+    @objc func replyAction() {
+        delegate?.chatMovableDateCellReplyPressed(self)
+    }
+
+    @objc func handleReplySwipe() {
+        replySwipeDelegate?.chatCellDidRequestReply(self)
     }
 }

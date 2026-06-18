@@ -21,6 +21,7 @@
 
 #include "ui_mainwindow.h"
 
+#include <QDir>
 #include <QFileInfo>
 #include <QMainWindow>
 #include <QPointer>
@@ -194,7 +195,14 @@ public slots:
     void onGroupJoined(int groupNum, const GroupId& groupId);
     void onGroupInviteReceived(const GroupInvite& inviteInfo);
     void onGroupInviteAccepted(const GroupInvite& inviteInfo);
+    void onGroupJoinFailed(const QString& reason);
+    void onGroupJoinSucceeded();
+    void onGroupJoinByIdPrompt();
     void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
+    void onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
+                             const QByteArray& fileData, const QDateTime& timestamp);
+    void onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
+                         qint64 fileSize);
     void onGroupPeerlistChanged(uint32_t groupnumber);
     void onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName);
     void onGroupTitleChanged(uint32_t groupnumber, const QString& author, const QString& title);
@@ -276,6 +284,8 @@ private:
     Group* createGroup(uint32_t groupnumber, const GroupId& groupId);
     void removeFriend(Friend* f, bool fake = false);
     void removeGroup(Group* g, bool fake = false);
+    QDir groupDownloadDir(const Group* g) const;
+    void dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender, ToxFile file);
     void saveWindowGeometry();
     void saveSplitterGeometry();
     void cycleChats(bool forward);

@@ -63,10 +63,16 @@ class FriendListController: UIViewController {
         dataSource = FriendListDataSource(theme: theme, friends: friends, requests: requests)
         dataSource.delegate = self
 
-        // removing separators on empty lines
-        tableView.tableFooterView = UIView()
+        ThemeChrome.installZeroHeightTableFooter(in: tableView, theme: theme)
 
         updateViewsVisibility()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        view.backgroundColor = theme.colorForType(.NormalBackground)
+        tableView.backgroundColor = theme.colorForType(.NormalBackground)
+        ThemeChrome.installZeroHeightTableFooter(in: tableView, theme: theme)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -279,6 +285,7 @@ private extension FriendListController {
         placeholderView.isEditable = false
         placeholderView.isScrollEnabled = false
         placeholderView.textAlignment = .center
+        placeholderView.backgroundColor = theme.colorForType(.NormalBackground)
         placeholderView.linkTextAttributes = [NSAttributedStringKey.foregroundColor.rawValue : theme.colorForType(.LinkText)]
         view.addSubview(placeholderView)
     }

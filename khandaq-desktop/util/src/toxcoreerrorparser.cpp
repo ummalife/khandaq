@@ -643,3 +643,102 @@ bool ToxcoreErrorParser::parseErr(Tox_Err_Options_New error, int line)
     qCritical() << line << "Unknown Tox_Err_Options_New error code:" << error;
     return false;
 }
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Send_Message error, int line)
+{
+    if (error == TOX_ERR_GROUP_SEND_MESSAGE_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Send_Message error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Topic_Set error, int line)
+{
+    if (error == TOX_ERR_GROUP_TOPIC_SET_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Topic_Set error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Leave error, int line)
+{
+    if (error == TOX_ERR_GROUP_LEAVE_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Leave error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Peer_Query error, int line)
+{
+    if (error == TOX_ERR_GROUP_PEER_QUERY_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Peer_Query error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Join error, int line)
+{
+    if (error == TOX_ERR_GROUP_JOIN_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Join error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Invite_Friend error, int line)
+{
+    if (error == TOX_ERR_GROUP_INVITE_FRIEND_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Invite_Friend error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_New error, int line)
+{
+    if (error == TOX_ERR_GROUP_NEW_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_New error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Invite_Accept error, int line)
+{
+    if (error == TOX_ERR_GROUP_INVITE_ACCEPT_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Invite_Accept error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_State_Queries error, int line)
+{
+    if (error == TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_State_Queries error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Is_Connected error, int line)
+{
+    if (error == TOX_ERR_GROUP_IS_CONNECTED_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Is_Connected error:" << static_cast<int>(error);
+    return false;
+}
+
+bool ToxcoreErrorParser::parseErr(Tox_Err_Group_Reconnect error, int line)
+{
+    if (error == TOX_ERR_GROUP_RECONNECT_OK) {
+        return true;
+    }
+    qCritical() << line << "Tox_Err_Group_Reconnect error:" << static_cast<int>(error);
+    return false;
+}

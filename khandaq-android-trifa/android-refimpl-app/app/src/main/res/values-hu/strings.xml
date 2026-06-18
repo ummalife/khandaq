@@ -348,4 +348,51 @@
     <string name="layout___export">Export</string>
     
     
+    <string name="group_password_placeholder">Group password (private groups only)</string>
+    <string name="group_password_set">Set group password</string>
+    <string name="group_topic_lock">Topic lock (founder only)</string>
+    <string name="group_privacy_set">Set privacy</string>
+    <string name="group_create_private_password">Optional group password</string>
+
+    <string name="group_video_join_title">Csatlakozás a csoportvideóhoz?</string>
+    <string name="group_video_join_message">Videó és hang küldése mindenkinek a csoportban?</string>
+    <string name="group_video_join_confirm">Igen, videó indítása</string>
+    <string name="group_video_join_decline">Nem</string>
+    <string name="group_send_voice_confirm_title">Send voice message?</string>
+    <string name="group_send_voice_confirm_message">Send this voice message to the group?</string>
+    <string name="group_peer_unknown">Unknown</string>
+    <string name="group_incoming_message_error">Could not process incoming group message.</string>
+    <string name="group_file_send_failed">Group file send failed.</string>
+    <string name="group_image_shrink_failed">Could not prepare image for sending.</string>
+    <string name="group_incoming_file_error">Could not process incoming group file.</string>
+    <string name="chat_file_too_large">File is too large.</string>
+    <string name="chat_incoming_file_too_large">Incoming file is too large.</string>
+    <string name="chat_opening_file_failed">Could not open file.</string>
+    <string name="group_file_too_large">File is too large for this group.</string>
+    <string name="group_file_prepare_failed">Could not prepare file for sending.</string>
+    <string name="add_group_failed_empty_name">Adja meg a csoport nevét.</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

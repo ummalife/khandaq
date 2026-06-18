@@ -32,6 +32,7 @@ set_source_files_properties(
   toxcore/network.c
   toxcore/tox.c
   toxcore/util.c
+  toxutil/toxutil.c
   PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
 
 ################################################################################
@@ -44,7 +45,7 @@ set_source_files_properties(
 # versions in a synchronised way.
 set(PROJECT_VERSION_MAJOR "0")
 set(PROJECT_VERSION_MINOR "2")
-set(PROJECT_VERSION_PATCH "18")
+set(PROJECT_VERSION_PATCH "19")
 set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 
 # set .so library version / following libtool scheme
@@ -113,6 +114,11 @@ if(NOT USE_IPV6)
   add_definitions(-DUSE_IPV6=0)
 endif()
 
+option(USE_TEST_NETWORK "Use a separate test network with different packet IDs" OFF)
+if(USE_TEST_NETWORK)
+  add_definitions(-DUSE_TEST_NETWORK=1)
+endif()
+
 option(BUILD_MISC_TESTS "Build additional tests and utilities" OFF)
 option(BUILD_FUN_UTILS "Build additional just for fun utilities" OFF)
 
@@ -124,6 +130,8 @@ endif()
 
 option(BUILD_TOXAV "Whether to build the tox AV library" ON)
 option(MUST_BUILD_TOXAV "Fail the build if toxav cannot be built" OFF)
+
+option(BUILD_H265 "Whether to build the tox AV library with H265 encoder support" OFF)
 
 option(DHT_BOOTSTRAP "Enable building of DHT_bootstrap" ON)
 option(BOOTSTRAP_DAEMON "Enable building of tox-bootstrapd" ON)
@@ -143,6 +151,7 @@ if(BUILD_FUZZ_TESTS)
     set(ENABLE_SHARED OFF)
     set(MUST_BUILD_TOXAV OFF)
     set(BUILD_TOXAV OFF)
+    set(BUILD_H265 OFF)
     set(BOOTSTRAP_DAEMON OFF)
     set(DHT_BOOTSTRAP OFF)
 endif()
@@ -170,6 +179,22 @@ if(BUILD_TOXAV)
   endif()
   if(NOT VPX_FOUND)
     message(${NO_TOXAV_ERROR_TYPE} "Option BUILD_TOXAV is enabled but required library VPX was not found.")
+    set(BUILD_TOXAV OFF)
+  endif()
+  if(NOT X264_FOUND)
+    message(${NO_TOXAV_ERROR_TYPE} "Option BUILD_TOXAV is enabled but required library X264 was not found.")
+    set(BUILD_TOXAV OFF)
+  endif()
+  if(NOT X265_FOUND)
+    message(WARNING "Option BUILD_TOXAV is enabled but H265 encoder support will be disabled.")
+    set(BUILD_H265 OFF)
+  endif()
+  if(NOT LIBAVCODEC_FOUND)
+    message(${NO_TOXAV_ERROR_TYPE} "Option BUILD_TOXAV is enabled but required library LIBAVCODEC was not found.")
+    set(BUILD_TOXAV OFF)
+  endif()
+  if(NOT LIBAVUTIL_FOUND)
+    message(${NO_TOXAV_ERROR_TYPE} "Option BUILD_TOXAV is enabled but required library LIBAVUTIL was not found.")
     set(BUILD_TOXAV OFF)
   endif()
 endif()
@@ -241,11 +266,20 @@ set(toxcore_SOURCES
   toxcore/friend_requests.c
   toxcore/friend_requests.h
   toxcore/group.c
+  toxcore/group_chats.c
+  toxcore/group_chats.h
+  toxcore/group_common.h
+  toxcore/group_connection.c
+  toxcore/group_connection.h
   toxcore/group.h
   toxcore/group_announce.c
   toxcore/group_announce.h
   toxcore/group_moderation.c
   toxcore/group_moderation.h
+  toxcore/group_onion_announce.c
+  toxcore/group_onion_announce.h
+  toxcore/group_pack.c
+  toxcore/group_pack.h
   toxcore/LAN_discovery.c
   toxcore/LAN_discovery.h
   toxcore/list.c
@@ -270,6 +304,8 @@ set(toxcore_SOURCES
   toxcore/ping_array.h
   toxcore/ping.c
   toxcore/ping.h
+  toxcore/shared_key_cache.c
+  toxcore/shared_key_cache.h
   toxcore/state.c
   toxcore/state.h
   toxcore/TCP_client.c
@@ -294,11 +330,14 @@ set(toxcore_SOURCES
   toxcore/tox_unpack.c
   toxcore/tox_unpack.h
   toxcore/util.c
-  toxcore/util.h)
+  toxcore/util.h
+  toxutil/toxutil.c
+  toxutil/toxutil.h)
 set(toxcore_LINK_MODULES ${toxcore_LINK_MODULES} ${LIBSODIUM_LIBRARIES})
 set(toxcore_PKGCONFIG_REQUIRES ${toxcore_PKGCONFIG_REQUIRES} libsodium)
 set(toxcore_API_HEADERS
   ${toxcore_SOURCE_DIR}/toxcore/tox.h^tox
+  ${toxcore_SOURCE_DIR}/toxutil/toxutil.h^tox
   ${toxcore_SOURCE_DIR}/toxcore/tox_events.h^tox
   ${toxcore_SOURCE_DIR}/toxcore/tox_dispatch.h^tox)
 
@@ -310,10 +349,14 @@ set(toxcore_API_HEADERS
 
 if(BUILD_TOXAV)
   set(toxcore_SOURCES ${toxcore_SOURCES}
+    toxav/codecs/h264/codec.c
+    toxav/codecs/vpx/codec.c
     toxav/audio.c
     toxav/audio.h
     toxav/bwcontroller.c
     toxav/bwcontroller.h
+    toxav/dummy_ntp.c
+    toxav/dummy_ntp.h
     toxav/groupav.c
     toxav/groupav.h
     toxav/msi.c
@@ -324,14 +367,23 @@ if(BUILD_TOXAV)
     toxav/rtp.h
     toxav/toxav.c
     toxav/toxav.h
+    toxav/toxav_hacks.h
     toxav/toxav_old.c
+    toxav/ts_buffer.c
+    toxav/ts_buffer.h
     toxav/video.c
     toxav/video.h)
   set(toxcore_API_HEADERS ${toxcore_API_HEADERS}
     ${toxcore_SOURCE_DIR}/toxav/toxav.h^toxav)
 
-  set(toxcore_LINK_MODULES ${toxcore_LINK_MODULES} ${OPUS_LIBRARIES} ${VPX_LIBRARIES})
-  set(toxcore_PKGCONFIG_REQUIRES ${toxcore_PKGCONFIG_REQUIRES} opus vpx)
+  if(BUILD_H265)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DHAVE_H265_ENCODER")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_H265_ENCODER")
+    set(toxcore_LINK_MODULES ${toxcore_LINK_MODULES} ${OPUS_LIBRARIES} ${VPX_LIBRARIES} ${X264_LIBRARIES} ${X265_LIBRARIES} ${LIBAVCODEC_LIBRARIES} ${LIBAVUTIL_LIBRARIES})
+  else()
+    set(toxcore_LINK_MODULES ${toxcore_LINK_MODULES} ${OPUS_LIBRARIES} ${VPX_LIBRARIES} ${X264_LIBRARIES} ${LIBAVCODEC_LIBRARIES} ${LIBAVUTIL_LIBRARIES})
+  endif()
+  set(toxcore_PKGCONFIG_REQUIRES ${toxcore_PKGCONFIG_REQUIRES} opus vpx x264 libavcodec libavutil)
 endif()
 
 ################################################################################
@@ -412,7 +464,7 @@ include(CompileGTest)
 # The actual unit tests follow.
 #
 unit_test(toxav ring_buffer)
-unit_test(toxav rtp)
+# unit_test(toxav rtp) # Zoff:disabled for now
 unit_test(toxcore DHT)
 unit_test(toxcore bin_pack)
 unit_test(toxcore crypto_core)

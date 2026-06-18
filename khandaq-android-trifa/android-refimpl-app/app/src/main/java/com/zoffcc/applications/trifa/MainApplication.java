@@ -106,6 +106,9 @@ public class MainApplication extends Application
         randnum = (int) (Math.random() * 1000d);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
+
+        // KHANDAQ: media-codec warm-up is kicked off from attachBaseContext() (earliest entry point)
+        // to maximise its head start before any chat with media is opened. See warmUpMediaCodecsAsync().
         DbSecretKeyStorage.onApplicationStart(this);
         ensureFcmNotificationChannel();
         HelperToxNotification.ensureChannel(this);
@@ -118,7 +121,9 @@ public class MainApplication extends Application
 
         try
         {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            // legacy fallback only where NetworkCallback is unavailable;
+            // on API>=N both would fire and storm DHT re-bootstraps
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N)
             {
                 IntentFilter intentFilter = new IntentFilter();
                 intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -166,6 +171,57 @@ public class MainApplication extends Application
         applyDarkModeFromPref(PreferenceManager.getDefaultSharedPreferences(base).getString("dark_mode_pref", "0"));
         super.attachBaseContext(base);
         MultiDex.install(this);
+        warmUpMediaCodecsAsync();
+    }
+
+    /**
+     * KHANDAQ: warm up the media codec caches on a low-priority background thread.
+     * Opening a chat with media made the UI thread run ExoPlayer/media3 track selection
+     * (PreloadMediaSource → MappingTrackSelector → MediaCodecUtil.getDecoderInfos) and block for >8s
+     * on the MediaCodecUtil class lock held by the ExoPlayer:Playback thread → ANR ("Khandaq не
+     * отвечает", and the crash-recovery screen if force-killed). The slow part is the per-codec
+     * capability queries media3 does INSIDE that synchronized lock, very slow on some devices (Xiaomi).
+     * Pre-populating the system codec list AND media3's own decoderInfosCache means both the playback
+     * thread and the UI thread later hit the cache (brief lock, no enumeration). Started from
+     * attachBaseContext() (after MultiDex.install) so it has the largest possible head start before the
+     * user can navigate into a media chat.
+     */
+    private static void warmUpMediaCodecsAsync()
+    {
+        new Thread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+                    // initialise the system codec list (parsed once, cached process-wide)
+                    new android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS).getCodecInfos();
+                }
+                catch (Throwable ignored)
+                {
+                }
+
+                // populate media3's internal decoder cache for the formats ExoPlayer probes
+                final String[] mimes = {
+                        "audio/mp4a-latm", "audio/mpeg", "audio/opus", "audio/vorbis", "audio/raw",
+                        "audio/3gpp", "audio/amr-wb", "audio/flac", "audio/ac3", "audio/eac3",
+                        "video/avc", "video/hevc", "video/x-vnd.on2.vp8", "video/x-vnd.on2.vp9",
+                        "video/av01", "video/mp4v-es", "video/3gpp"
+                };
+                for (final String mime : mimes)
+                {
+                    try
+                    {
+                        androidx.media3.exoplayer.mediacodec.MediaCodecUtil.getDecoderInfos(mime, false, false);
+                    }
+                    catch (Throwable ignored)
+                    {
+                    }
+                }
+            }
+        }, "khq-codec-warmup").start();
     }
 
     public static String run_adb_command()
@@ -406,7 +462,6 @@ public class MainApplication extends Application
         android.os.Process.killProcess(android.os.Process.myPid());
         Log.i(TAG, "MainApplication:" + randnum + ":" + "xx3");
         System.exit(2);
-        System.out.println("MainApplication:" + randnum + ":" + "xx4");
 
     }
 

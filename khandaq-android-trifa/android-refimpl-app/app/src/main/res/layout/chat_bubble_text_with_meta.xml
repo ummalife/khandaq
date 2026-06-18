@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.zoffcc.applications.trifa.ChatBubbleMetaLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/chat_bubble_text_meta_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:maxWidth="280dp">
+
+    <com.luseen.autolinklibrary.EmojiTextViewLinks
+        android:id="@+id/m_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:maxWidth="280dp"
+        android:text="..."
+        android:textColor="@color/tg_bubble_text"
+        android:textColorLink="@color/tg_bubble_link"
+        android:textSize="@dimen/tg_bubble_text_size"
+        app:emojiSize="@dimen/emoji_size_in_textview" />
+
+    <android.widget.LinearLayout
+        android:id="@+id/bubble_meta_row"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="bottom|end"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/bubble_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:includeFontPadding="false"
+            android:minWidth="32dp"
+            android:singleLine="true"
+            android:text="02:09"
+            android:textColor="@color/tg_bubble_time_incoming"
+            android:textSize="@dimen/tg_bubble_time_size" />
+
+        <ImageView
+            android:id="@+id/m_icon"
+            android:layout_width="@dimen/msg_status_icon_size"
+            android:layout_height="@dimen/msg_status_icon_size"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="2dp"
+            android:layout_marginBottom="1dp"
+            android:contentDescription="@null"
+            android:padding="0dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/msg_status_check_one" />
+
+    </android.widget.LinearLayout>
+
+</com.zoffcc.applications.trifa.ChatBubbleMetaLayout>

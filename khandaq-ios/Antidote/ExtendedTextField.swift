@@ -104,7 +104,8 @@ extension ExtendedTextField: UITextFieldDelegate {
     }
 
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-        let resultText = (textField.text! as NSString).replacingCharacters(in: range, with: string)
+        let currentText = textField.text ?? ""
+        let resultText = (currentText as NSString).replacingCharacters(in: range, with: string)
 
         if resultText.lengthOfBytes(using: String.Encoding.utf8) <= maxTextUTF8Length {
             return true
@@ -172,7 +173,6 @@ private extension ExtendedTextField {
         textField = UITextField()
         textField.delegate = self
         textField.borderStyle = .roundedRect
-        textField.autocapitalizationType = .sentences
         textField.enablesReturnKeyAutomatically = true
         addSubview(textField)
 
@@ -182,12 +182,20 @@ private extension ExtendedTextField {
             case .login:
                 textColor = theme.colorForType(.NormalText)
 
+                textField.autocapitalizationType = .none
+                textField.autocorrectionType = .no
+                textField.spellCheckingType = .no
+                if #available(iOS 11.0, *) {
+                    textField.smartInsertDeleteType = .no
+                }
+
                 textField.layer.borderColor = theme.colorForType(.LoginButtonBackground).cgColor
                 textField.layer.borderWidth = 0.5
                 textField.layer.masksToBounds = true
                 textField.layer.cornerRadius = 6.0
             case .normal:
                 textColor = theme.colorForType(.NormalText)
+                textField.autocapitalizationType = .sentences
         }
 
         titleLabel = UILabel()

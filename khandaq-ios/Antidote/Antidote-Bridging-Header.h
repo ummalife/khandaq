@@ -4,6 +4,7 @@
 
 #import <objcTox/OCTCall.h>
 #import <objcTox/OCTChat.h>
+#import <objcTox/OCTGroupPeer.h>
 #import <objcTox/OCTDefaultFileStorage.h>
 #import <objcTox/OCTFriend.h>
 #import <objcTox/OCTFriendRequest.h>
@@ -22,6 +23,7 @@
 #import <objcTox/OCTSubmanagerFiles.h>
 #import <objcTox/OCTSubmanagerFilesProgressSubscriber.h>
 #import <objcTox/OCTSubmanagerFriends.h>
+#import <objcTox/OCTSubmanagerGroups.h>
 #import <objcTox/OCTSubmanagerObjects.h>
 #import <objcTox/OCTSubmanagerUser.h>
 #import <objcTox/OCTTox.h>

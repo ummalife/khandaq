@@ -108,7 +108,7 @@
                         android:layout_width="@dimen/tg_chat_avatar_in_bubble"
                         android:layout_height="@dimen/tg_chat_avatar_in_bubble"
                         android:layout_gravity="bottom"
-                        android:layout_marginEnd="6dp"
+                        android:layout_marginEnd="@dimen/tg_avatar_bubble_gap"
                         android:src="@drawable/user_pratikshya"
                         app:civ_border_color="#30000000"
                         app:civ_border_width="0dp"
@@ -134,58 +134,20 @@
                         android:minHeight="0dp"
                         android:orientation="vertical">
 
+                        <include layout="@layout/chat_message_reply_quote" />
+
                         <TextView
                             android:id="@+id/peer_name_text"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="2dp"
+                            android:layout_marginBottom="@dimen/tg_peer_name_bubble_bottom"
                             android:ellipsize="end"
                             android:maxLines="1"
                             android:text="@string/layout___peer_name"
                             android:textSize="@dimen/tg_bubble_peer_name_size"
                             android:visibility="gone" />
 
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="bottom"
-                            android:orientation="horizontal">
-
-                            <ImageView
-                                android:id="@+id/m_icon"
-                                android:layout_width="25dp"
-                                android:layout_height="25dp"
-                                android:layout_alignParentTop="true"
-                                android:layout_marginRight="0dip"
-                                android:padding="2dp"
-                                android:scaleType="centerInside"
-                                android:src="@drawable/circle_red"
-                                android:visibility="gone" />
-
-                            <com.luseen.autolinklibrary.EmojiTextViewLinks
-                                android:id="@+id/m_text"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:includeFontPadding="false"
-                                android:paddingBottom="1dp"
-                                android:text="..."
-                                android:textColor="@color/tg_bubble_text"
-                                android:textColorLink="@color/tg_bubble_link"
-                                android:textSize="@dimen/tg_bubble_text_size"
-                                app:emojiSize="@dimen/emoji_size_in_textview" />
-
-                            <TextView
-                                android:id="@+id/bubble_time"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="bottom"
-                                android:includeFontPadding="false"
-                                android:text="02:09"
-                                android:textColor="@color/tg_bubble_time_incoming"
-                                android:textSize="@dimen/tg_bubble_time_size" />
-
-                        </LinearLayout>
+                        <include layout="@layout/chat_bubble_text_with_meta" />
 
                     </LinearLayout>
 

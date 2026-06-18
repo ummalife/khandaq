@@ -42,6 +42,30 @@
 @property (nullable) NSString *fileUTI;
 
 /**
+ * NGC group file message id (32-byte hash as hex). Used for dedup and progress tracking.
+ */
+@property (nullable) NSString *groupMsgIdHashHex;
+
+/**
+ * Transfer progress for NGC group files (0.0 – 1.0). Meaningful while fileType is Loading.
+ */
+@property float groupTransferProgress;
+
+/**
+ * Indicate if message is delivered. Actual only for outgoing group files (after send completes).
+ */
+@property BOOL isDelivered;
+
+/**
+ * Count of hist-sync confirmations for outgoing group files.
+ */
+@property int32_t groupSyncConfirmations;
+
+@property (nullable) NSString *groupSyncPeerKey1;
+@property (nullable) NSString *groupSyncPeerKey2;
+@property (nullable) NSString *groupSyncPeerKey3;
+
+/**
  * Path of file on disk. If you need fileName to show to user please use
  * `fileName` property. filePath has it's own random fileName.
  *

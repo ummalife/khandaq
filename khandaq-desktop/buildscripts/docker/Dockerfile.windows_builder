@@ -189,6 +189,7 @@ RUN mkdir /export && \
   cp /windows/bin/swscale-*.dll /export && \
   cp /windows/bin/libcrypto-*.dll /export && \
   cp /windows/bin/libtoxcore.dll /export && \
+  cp /windows/bin/libx264-*.dll /export 2>/dev/null || true && \
   cp /windows/bin/libopus-*.dll /export && \
   cp /windows/lib/libvpx.dll /export && \
   cp /windows/bin/OpenAL32.dll /export && \

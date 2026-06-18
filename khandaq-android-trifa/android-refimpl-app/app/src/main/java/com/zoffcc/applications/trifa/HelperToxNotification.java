@@ -27,24 +27,19 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Build;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
 import static android.content.Context.NOTIFICATION_SERVICE;
-import static com.zoffcc.applications.trifa.MainActivity.PREF__orbot_enabled;
-import static com.zoffcc.applications.trifa.MainActivity.context_s;
-import static com.zoffcc.applications.trifa.MainActivity.nmn3;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.CONNECTION_STATUS_MANUAL_LOGOUT;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.bootstrapping;
-import static com.zoffcc.applications.trifa.TrifaToxService.manually_logged_out;
 
 public class HelperToxNotification
 {
     private static final String TAG = "trifa.Hlp.ToxNoti";
-    static final String CHANNEL_ID_TOX_SERVICE = "khandaq_online_service";
+    /** New channel id so existing installs pick up IMPORTANCE_MIN without the old "online" label. */
+    static final String CHANNEL_ID_TOX_SERVICE = "khandaq_background_service";
+    private static final String LEGACY_CHANNEL_ID_TOX_SERVICE = "khandaq_online_service";
     static int ONGOING_NOTIFICATION_ID = 1030;
 
     static void ensureChannel(final Context c)
@@ -58,147 +53,77 @@ public class HelperToxNotification
         {
             return;
         }
-        final NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID_TOX_SERVICE,
-                c.getString(R.string.notification_channel_toxservice),
-                NotificationManager.IMPORTANCE_MIN);
-        channel.setDescription(CHANNEL_ID_TOX_SERVICE);
-        channel.setSound(null, null);
-        channel.enableVibration(false);
-        nm.createNotificationChannel(channel);
-        MainActivity.channelId_toxservice = CHANNEL_ID_TOX_SERVICE;
-    }
-
-    private static class StatusAppearance
-    {
-        final int smallIcon;
-        final int accentColor;
-
-        StatusAppearance(int smallIcon, int accentColor)
-        {
-            this.smallIcon = smallIcon;
-            this.accentColor = accentColor;
-        }
-    }
-
-    private static StatusAppearance resolve_status_appearance(int connection, boolean is_bootstrapping, boolean is_manual_logout)
-    {
-        if (is_manual_logout)
-        {
-            return new StatusAppearance(R.drawable.circle_manuallyoffline_notification, Color.parseColor("#ff0000"));
-        }
-        if (is_bootstrapping)
-        {
-            return new StatusAppearance(R.drawable.circle_orange_notification, Color.parseColor("#ffce00"));
-        }
-        if (connection == 0)
-        {
-            return new StatusAppearance(R.drawable.circle_red_notification, Color.parseColor("#ff0000"));
-        }
-        if (PREF__orbot_enabled)
-        {
-            return new StatusAppearance(R.drawable.circle_torproxy_notification, Color.parseColor("#7c16ae"));
-        }
-        return new StatusAppearance(R.drawable.circle_green_notification, Color.parseColor("#04b431"));
-    }
-
-    private static String resolve_status_text(Context c, int connection, boolean is_bootstrapping, boolean is_manual_logout,
-                                              String message)
-    {
-        if (is_manual_logout)
-        {
-            return c.getString(R.string.notification_status_offline_manual);
-        }
-        if (is_bootstrapping)
-        {
-            String status = c.getString(R.string.notification_status_connecting);
-            if ((message != null) && (!message.isEmpty()))
-            {
-                return status + " · " + message.trim();
-            }
-            return status;
-        }
-        if (connection == 0)
-        {
-            if (PREF__orbot_enabled)
-            {
-                return c.getString(R.string.notification_status_offline_tor);
-            }
-            String status = c.getString(R.string.notification_status_offline);
-            if ((message != null) && (!message.isEmpty()))
-            {
-                return status + " · " + message.trim();
-            }
-            return status;
-        }
-        if (PREF__orbot_enabled)
-        {
-            return c.getString(R.string.notification_status_online_tor);
-        }
-        final String quality = ConnectionQualityMonitor.get().getLabel();
-        if ("strong".equals(quality))
-        {
-            return c.getString(R.string.notification_status_online);
-        }
-        return c.getString(R.string.notification_status_online) + " · " + quality;
-    }
-
-    private static Notification build_foreground_notification(Context c, int connection, String message)
-    {
-        ensureChannel(c);
-        Intent notificationIntent = new Intent(c, MainActivity.class);
-        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent pendingIntent = PendingIntent.getActivity(c, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
-
-        final boolean is_manual_logout = manually_logged_out || (connection == CONNECTION_STATUS_MANUAL_LOGOUT);
-        final StatusAppearance appearance = resolve_status_appearance(connection, bootstrapping, is_manual_logout);
-        final String statusText = resolve_status_text(c, connection, bootstrapping, is_manual_logout, message);
-
-        NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID_TOX_SERVICE);
-        b.setContentTitle(c.getString(R.string.notification_app_title));
-        b.setContentText(statusText);
-        b.setSmallIcon(appearance.smallIcon);
-        b.setContentIntent(pendingIntent);
-        b.setOngoing(true);
-        b.setOnlyAlertOnce(true);
-        b.setShowWhen(false);
-        b.setSilent(true);
-        b.setCategory(Notification.CATEGORY_SERVICE);
-        b.setPriority(NotificationCompat.PRIORITY_MIN);
-        b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-        {
-            b.setColor(appearance.accentColor);
-        }
-
         try
         {
-            b.setSound(null);
+            nm.deleteNotificationChannel(LEGACY_CHANNEL_ID_TOX_SERVICE);
         }
         catch (Exception ignored)
         {
         }
 
+        final NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID_TOX_SERVICE,
+                c.getString(R.string.notification_channel_toxservice),
+                NotificationManager.IMPORTANCE_MIN);
+        channel.setDescription(c.getString(R.string.notification_channel_toxservice_desc));
+        channel.setSound(null, null);
+        channel.enableVibration(false);
+        channel.enableLights(false);
+        channel.setShowBadge(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        {
+            channel.setAllowBubbles(false);
+        }
+        nm.createNotificationChannel(channel);
+        MainActivity.channelId_toxservice = CHANNEL_ID_TOX_SERVICE;
+    }
+
+    /** Minimal silent notification required for the foreground Tox service. No connection status. */
+    private static Notification build_foreground_notification(final Context c)
+    {
+        ensureChannel(c);
+        final Intent notificationIntent = new Intent(c, MainActivity.class);
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        final PendingIntent pendingIntent = PendingIntent.getActivity(c, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
+
+        final NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID_TOX_SERVICE);
+        b.setContentTitle(c.getString(R.string.notification_fgs_title));
+        b.setContentText(c.getString(R.string.notification_fgs_text));
+        b.setSmallIcon(R.mipmap.ic_launcher);
+        b.setContentIntent(pendingIntent);
+        b.setOngoing(true);
+        b.setOnlyAlertOnce(true);
+        b.setShowWhen(false);
+        b.setSilent(true);
+        b.setLocalOnly(true);
+        b.setCategory(Notification.CATEGORY_SERVICE);
+        b.setPriority(NotificationCompat.PRIORITY_MIN);
+        b.setVisibility(NotificationCompat.VISIBILITY_SECRET);
+        b.setSound(null);
+        b.setVibrate(null);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        {
+            b.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+        }
+
         return b.build();
     }
 
-    static Notification tox_notification_setup(Context c, NotificationManager nmn2)
+    static Notification tox_notification_setup(final Context c, final NotificationManager nmn2)
     {
         Log.i(TAG, "tox_notification_setup:start");
-        nmn2 = (NotificationManager) c.getSystemService(NOTIFICATION_SERVICE);
-        Notification notification2 = build_foreground_notification(c, 0, "");
         Log.i(TAG, "tox_notification_setup:end");
-        return notification2;
+        return build_foreground_notification(c);
     }
 
-    static void tox_notification_cancel(Context c)
+    static void tox_notification_cancel(final Context c)
     {
         Log.i(TAG, "tox_notification_cancel:start");
 
         try
         {
-            NotificationManager nmn2 = (NotificationManager) c.getSystemService(NOTIFICATION_SERVICE);
+            final NotificationManager nmn2 = (NotificationManager) c.getSystemService(NOTIFICATION_SERVICE);
             nmn2.cancel(ONGOING_NOTIFICATION_ID);
             Log.i(TAG, "tox_notification_cancel:OK");
         }
@@ -210,72 +135,17 @@ public class HelperToxNotification
         Log.i(TAG, "tox_notification_cancel:end");
     }
 
-    static void tox_notification_change(Context c, NotificationManager nmn2, int a_TOXCONNECTION, String message)
+    /** Connection status updates the in-app profile indicator only — not the notification shade. */
+    static void tox_notification_change(final Context c, final NotificationManager nmn2, final int a_TOXCONNECTION,
+                                        final String message)
     {
-        Log.i(TAG, "tox_notification_change:start");
-        Notification notification2 = build_foreground_notification(c, a_TOXCONNECTION, message);
-        try
-        {
-            nmn2.notify(ONGOING_NOTIFICATION_ID, notification2);
-        }
-        catch (Exception ignored)
-        {
-        }
-        Log.i(TAG, "tox_notification_change:end");
+        Log.i(TAG, "tox_notification_change:profile_only connection=" + a_TOXCONNECTION);
+        ProfileTabConnectionIndicator.updateAsync();
     }
 
-    static void tox_notification_change_wrapper(int a_TOXCONNECTION, final String message)
+    static void tox_notification_change_wrapper(final int a_TOXCONNECTION, final String message)
     {
-        Log.i(TAG, "tox_notification_change_wrapper:start");
-        final int a_TOXCONNECTION_f = a_TOXCONNECTION;
-        final Context static_context = context_s;
-
-        try
-        {
-            Thread t = new Thread()
-            {
-                @Override
-                public void run()
-                {
-                    long counter = 0;
-
-                    while (MainActivity.tox_service_fg == null)
-                    {
-                        counter++;
-
-                        if (counter > 10)
-                        {
-                            break;
-                        }
-
-                        try
-                        {
-                            Thread.sleep(100);
-                        }
-                        catch (Exception e)
-                        {
-                        }
-                    }
-
-                    try
-                    {
-                        tox_notification_change(static_context, nmn3, a_TOXCONNECTION_f, message);
-                        Log.i(TAG, "tox_notification_change_wrapper:DONE");
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-                }
-            };
-            t.start();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i(TAG, "tox_notification_change_wrapper:EE01:" + e.getMessage());
-        }
-
-        Log.i(TAG, "tox_notification_change_wrapper:end");
+        Log.i(TAG, "tox_notification_change_wrapper:profile_only");
+        ProfileTabConnectionIndicator.updateAsync();
     }
 }

@@ -137,6 +137,7 @@ public class ConferenceMessageListFragment extends Fragment
         scrollDateHeader = (TextView) view.findViewById(R.id.scroll_date_header);
         scrollDateHeader.setText("");
         scrollDateHeader.setVisibility(View.INVISIBLE);
+        ChatDateSeparatorHelper.applyTheme(scrollDateHeader);
         conversationDateHeader = new ConversationDateHeader(view.getContext(), scrollDateHeader);
 
         final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getActivity());

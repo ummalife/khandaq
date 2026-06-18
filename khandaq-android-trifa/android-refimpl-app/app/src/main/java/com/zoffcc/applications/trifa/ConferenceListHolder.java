@@ -289,14 +289,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
             }
             else
             {
-                try
-                {
-                    fl_loading_progressbar.setVisibility(View.VISIBLE);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+                // KHANDAQ: don't flash the "Please wait ..." card on the list when opening a conference.
 
                 if (this.conference.kind == TOX_CONFERENCE_TYPE_AV.value)
                 {
@@ -347,6 +340,10 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
                         show_confirm_conference_leave_dialog(v, f2);
                         // leave conference -----------------
                         break;
+                    case R.id.item_toggle_favorite:
+                        ChatFavoritesHelper.toggleFavoriteConference(v.getContext(), f2);
+                        FriendListHolder.notifyFavoriteChanged(v);
+                        break;
                     case R.id.item_dummy01:
                         break;
                     case R.id.item_delete:
@@ -370,6 +367,14 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+
+        final MenuItem favoriteItem = menu.getMenu().findItem(R.id.item_toggle_favorite);
+        if (favoriteItem != null)
+        {
+            final boolean isFavorite = ChatFavoritesHelper.isFavorite(v.getContext(),
+                    ChatFavoritesHelper.conferenceKey(f2.conference_identifier));
+            favoriteItem.setTitle(isFavorite ? R.string.chat_filter_remove_favorite : R.string.chat_filter_add_favorite);
         }
 
         menu.show();

@@ -122,36 +122,7 @@ public class MessageListHolder_file_incoming_state_resume extends RecyclerView.V
 
         final Message message = m;
 
-        int drawable_id = R.drawable.rounded_orange_bg_with_border;
-        try
-        {
-            if (m.filetransfer_kind == TOX_FILE_KIND_FTV2.value)
-            {
-                drawable_id = R.drawable.rounded_orange_bg;
-            }
-
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
-        catch (Exception e)
-        {
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
+        ChatBubbleUiHelper.apply_file_message_bubble(rounded_bg_container, false, false);
 
         // --------- message date header (show only if different from previous message) ---------
         // --------- message date header (show only if different from previous message) ---------
@@ -279,6 +250,7 @@ public class MessageListHolder_file_incoming_state_resume extends RecyclerView.V
 
         HelperGeneric.fill_friend_avatar_icon(m, context, img_avatar);
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+        ChatTransferProgressHelper.applyDirect(context, itemView, message, false);
     }
 
     private void cancel_incoming_filetransfer(final Message message)

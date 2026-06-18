@@ -37,6 +37,7 @@ public:
         const QString& name, bool isAvGroupchat, const QString& selfName, FriendList& friendList);
     Group* findGroup(const GroupId& groupId);
     const GroupId& id2Key(uint32_t groupNum);
+    void updateGroupNumber(uint32_t groupNum, const GroupId& groupId);
     void removeGroup(const GroupId& groupId, bool fake = false);
     QList<Group*> getAllGroups();
     void clear();

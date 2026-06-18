@@ -19,6 +19,8 @@ class BubbleView: UIView {
     fileprivate var textView: UITextView!
     fileprivate var mapImageView: UIImageView?
     fileprivate var locationTapRecognizer: UITapGestureRecognizer?
+    let replyQuoteView = ChatReplyQuoteView()
+    var onReplyQuoteTap: (() -> Void)?
     var onLocationTap: (() -> Void)?
 
     var text: String? {
@@ -93,6 +95,12 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: image != nil)
     }
 
+    func bindReplyQuote(_ meta: MessageReplyHelper.ReplyMeta?, theme: Theme) {
+        replyQuoteView.bind(meta: meta, theme: theme)
+        replyQuoteView.onTap = onReplyQuoteTap
+        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
+    }
+
     fileprivate func ensureMapImageView() {
         guard mapImageView == nil else {
             return
@@ -115,12 +123,23 @@ class BubbleView: UIView {
     }
 
     fileprivate func updateTextConstraints(hasMap: Bool) {
+        replyQuoteView.snp.remakeConstraints {
+            $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
+            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
+            $0.trailing.equalTo(self).offset(-Constants.TextViewHorizontalOffset)
+        }
+
         textView.snp.remakeConstraints {
-            if hasMap, let mapImageView = mapImageView {
-                $0.top.equalTo(mapImageView.snp.bottom).offset(Constants.TextViewVerticalOffset)
+            if replyQuoteView.isHidden {
+                if hasMap, let mapImageView = mapImageView {
+                    $0.top.equalTo(mapImageView.snp.bottom).offset(Constants.TextViewVerticalOffset)
+                }
+                else {
+                    $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
+                }
             }
             else {
-                $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
+                $0.top.equalTo(replyQuoteView.snp.bottom).offset(Constants.TextViewVerticalOffset)
             }
 
             $0.bottom.equalTo(self).offset(-Constants.TextViewVerticalOffset)
@@ -167,6 +186,7 @@ class BubbleView: UIView {
         textView.dataDetectorTypes = .all
         textView.font = UIFont.systemFont(ofSize: 16.0)
 
+        addSubview(replyQuoteView)
         addSubview(textView)
 
         textView.snp.makeConstraints {

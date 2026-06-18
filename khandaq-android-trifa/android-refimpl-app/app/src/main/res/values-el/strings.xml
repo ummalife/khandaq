@@ -260,6 +260,12 @@
     <string name="pref_title_use_camera_x">Αφαίρεση φόντου</string>
     <string name="add_group_activity_help">Δημιουργήστε μια νέα ιδιωτική (μόνο με πρόσκληση) ομάδα με ένα δεδομένο όνομα ομάδας.</string>
     <string name="add_private_group_failed">Η δημιουργία ιδιωτικής ομάδας απέτυχε</string>
+    <string name="group_password_placeholder">Κωδικός ομάδας (μόνο ιδιωτικές ομάδες)</string>
+    <string name="group_password_set">Ορισμός κωδικού ομάδας</string>
+    <string name="group_topic_lock">Κλείδωμα θέματος (μόνο ιδρυτής)</string>
+    <string name="group_privacy_set">Ορισμός απορρήτου</string>
+    <string name="group_create_private_password">Προαιρετικός κωδικός ομάδας</string>
+
     <string name="ProfileActivity_delete_avatar_dialog_title">Αφαίρεση εικόνας προφίλ</string>
     <string name="ProfileActivity_delete_avatar_dialog_text">Θέλετε να καταργήσετε την εικόνα του προφίλ σας;</string>
     <string name="layout___create_new_private_group">Δημιουργήστε νέα ιδιωτική ομάδα</string>
@@ -272,6 +278,14 @@
     <string name="join_group_activity_join">Συμμετοχή σε ομάδα</string>
     <string name="join_public_group_joined">Έχετε συμμετάσχει στη δημόσια ομάδα</string>
     <string name="join_public_group_failed">Η συμμετοχή στη δημόσια ομάδα απέτυχε</string>
+    <string name="join_public_group_failed_not_ready">Ο αγγελιοφόρος εξακολουθεί να συνδέεται. Περιμένετε λίγα δευτερόλεπτα και δοκιμάστε ξανά.</string>
+    <string name="join_public_group_failed_bad_id">Μη έγκυρο ID ομάδας. Αντιγράψτε και τους 64 δεκαεξαδικούς χαρακτήρες.</string>
+    <string name="join_public_group_failed_network">Δεν ήταν δυνατή η εύρεση της ομάδας στο δίκτυο. Ελέγξτε το διαδίκτυο και δοκιμάστε ξανά.</string>
+    <string name="join_public_group_failed_password">Αυτή η ομάδα απαιτεί κωδικό πρόσβασης.</string>
+    <string name="join_public_group_error_no_id">Εισαγάγετε ID ομάδας</string>
+    <string name="join_public_group_error_illegal_chars">Το ID ομάδας περιέχει μη έγκυρους χαρακτήρες. Επιτρέπονται μόνο A–F και 0–9.</string>
+    <string name="join_public_group_error_length">Το ID ομάδας πρέπει να έχει 64 δεκαεξαδικούς χαρακτήρες.</string>
+
     <string name="add_public_group_failed">Η δημιουργία δημόσιας ομάδας απέτυχε</string>
     <string name="add_public_group_success">Δημιουργήσατε μια δημόσια ομάδα</string>
     <string name="add_private_group_success">Δημιουργήσατε μια ιδιωτική ομάδα</string>
@@ -289,4 +303,51 @@
     <string name="pref_description_speakerphone_tweak">Εάν η εφαρμογή δεν μεταβεί στο ηχείο σε μια κλήση, τότε προσπαθήστε να ενεργοποιήσετε αυτή την διόρθωση.</string>
     <string name="MainActivity_setup_push_tip_title">Ρύθμιση Ειδοποιήσεων Push</string>
     <string name="layout___capabilities">Δυνατότητες:</string>
+    <string name="group_video_join_title">Συμμετοχή σε ομαδικό βίντεο;</string>
+    <string name="group_video_join_message">Αποστολή βίντεο και ήχου σε όλους στην ομάδα;</string>
+    <string name="group_video_join_confirm">Ναι, έναρξη βίντεο</string>
+    <string name="group_video_join_decline">Όχι</string>
+    <string name="group_send_voice_confirm_title">Αποστολή φωνητικού μηνύματος;</string>
+    <string name="group_send_voice_confirm_message">Αποστολή αυτού του φωνητικού μηνύματος στην ομάδα;</string>
+    <string name="group_peer_unknown">Άγνωστος</string>
+    <string name="group_incoming_message_error">Δεν ήταν δυνατή η επεξεργασία του εισερχόμενου μηνύματος ομάδας.</string>
+    <string name="group_file_send_failed">Αποτυχία αποστολής αρχείου στην ομάδα.</string>
+    <string name="group_image_shrink_failed">Δεν ήταν δυνατή η προετοιμασία της εικόνας για αποστολή.</string>
+    <string name="group_incoming_file_error">Δεν ήταν δυνατή η επεξεργασία του εισερχόμενου αρχείου ομάδας.</string>
+    <string name="chat_file_too_large">Το αρχείο είναι πολύ μεγάλο.</string>
+    <string name="chat_incoming_file_too_large">Το εισερχόμενο αρχείο είναι πολύ μεγάλο.</string>
+    <string name="chat_opening_file_failed">Δεν ήταν δυνατό το άνοιγμα του αρχείου.</string>
+    <string name="group_file_too_large">Το αρχείο είναι πολύ μεγάλο για αυτή την ομάδα.</string>
+    <string name="group_file_prepare_failed">Δεν ήταν δυνατή η προετοιμασία του αρχείου για αποστολή.</string>
+    <string name="add_group_failed_empty_name">Εισαγάγετε όνομα ομάδας.</string>
+    <string name="maintenance_exporting">Εξαγωγή…</string>
+    <string name="maintenance_export_ready">Η εξαγωγή ολοκληρώθηκε</string>
+    <string name="maintenance_export_failed">Η εξαγωγή απέτυχε</string>
+    <string name="set_password_setup_failed">Αποτυχία ορισμού κωδικού. Δοκιμάστε ξανά.</string>
+    <string name="power_charging_connected">Ο φορτιστής συνδέθηκε</string>
+    <string name="power_charging_disconnected">Ο φορτιστής αποσυνδέθηκε</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

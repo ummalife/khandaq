@@ -5,23 +5,15 @@ workflows:
   version: 2
   program-analysis:
     jobs:
-      # Dynamic analysis
       - asan
       - tsan
-      - msan
-      - ubsan
-      # Static analysis
-      - clang-analyze
-      - clang-tidy
-      - cpplint
-      - infer
-      - static-analysis
+      - alpine-normal
 
 jobs:
   asan:
     working_directory: ~/work
     docker:
-      - image: ubuntu
+      - image: ubuntu:bionic
 
     steps:
       - run: &apt_install
@@ -40,6 +32,12 @@ jobs:
             llvm-dev
             ninja-build
             pkg-config
+            libavutil-dev
+            libavcodec-dev
+            libavformat-dev
+            libavfilter-dev
+            libx264-dev
+            libx265-dev
       - checkout
       - run: git submodule update --init --recursive
       - run: CC=clang .circleci/cmake-asan
@@ -47,7 +45,7 @@ jobs:
   tsan:
     working_directory: ~/work
     docker:
-      - image: ubuntu
+      - image: ubuntu:bionic
 
     steps:
       - run: *apt_install
@@ -55,117 +53,54 @@ jobs:
       - run: git submodule update --init --recursive
       - run: CC=clang .circleci/cmake-tsan
 
-  ubsan:
-    working_directory: ~/work
+  alpine-normal:
     docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: CC=clang .circleci/cmake-ubsan
-
-  msan:
-    working_directory: ~/work
-    docker:
-      - image: toxchat/toktok-stack:latest-msan
+      - image: alpine
 
     steps:
       - checkout
+      - run: id;pwd;echo $0
+      - run: |
+          apk update && \
+          apk add bash
+      - run: |
+          apk add \
+          wget \
+          git \
+          cmake \
+          automake \
+          autoconf \
+          check \
+          libtool \
+          rsync \
+          nano \
+          gcc \
+          g++ \
+          clang \
+          clang-extra-tools \
+          clang-analyzer \
+          libconfig-dev \
+          libsodium-dev \
+          opus-dev \
+          libvpx-dev \
+          x264-dev \
+          x265-dev \
+          ffmpeg4-dev \
+          ninja \
+          pkgconf-dev \
+          make \
+          yasm \
+          file \
+          linux-headers \
+          binutils \
+          gtest-dev \
+          llvm-dev
+      - run: |
+          rm -f /usr/bin/c++;
+          rm -f /usr/bin/g++;
+          cd /usr/bin/;
+          ln -f /usr/bin/clang++ c++;
+          ln -f /usr/bin/clang++ g++
       - run: git submodule update --init --recursive
-      - run: rm -rf /src/workspace/c-toxcore/* && mv * /src/workspace/c-toxcore/
-      - run:
-          cd /src/workspace && bazel test
-            //c-toxcore/auto_tests:lossless_packet_test
-            //c-toxcore/toxav/...
-            //c-toxcore/toxcore/...
+      - run: CC=clang .circleci/cmake-normal
 
-  infer:
-    working_directory: ~/work
-    docker:
-      - image: toxchat/infer
-
-    steps:
-      - run: *apt_install
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: infer --no-progress-bar -- cc
-          auto_tests/auto_test_support.c
-          auto_tests/lossless_packet_test.c
-          testing/misc_tools.c
-          toxav/*.c
-          toxcore/*.c
-          toxcore/*/*.c
-          toxencryptsave/*.c
-          third_party/cmp/*.c
-          -lpthread
-          $(pkg-config --cflags --libs libsodium opus vpx)
-
-  static-analysis:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - run:
-          apt-get install -y --no-install-recommends
-            ca-certificates
-            cppcheck
-            g++
-            llvm-dev
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: other/analysis/check_includes
-      - run: other/analysis/check_logger_levels
-      - run: other/analysis/run-check-recursion
-      - run: other/analysis/run-clang
-      - run: other/analysis/run-cppcheck
-      - run: other/analysis/run-gcc
-
-  clang-analyze:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: other/analysis/run-clang-analyze
-
-  clang-tidy:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - run:
-          apt-get install -y --no-install-recommends
-            ca-certificates
-            clang-tidy-12
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: cmake . -B_build -GNinja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-      - run:
-          other/analysis/run-clang-tidy ||
-          other/analysis/run-clang-tidy ||
-          other/analysis/run-clang-tidy
-
-  cpplint:
-    working_directory: ~/work
-    docker:
-      - image: ubuntu
-
-    steps:
-      - run: *apt_install
-      - run:
-          apt-get install -y --no-install-recommends
-            ca-certificates
-            python3-pip
-      - checkout
-      - run: git submodule update --init --recursive
-      - run: pip install cpplint
-      - run: other/analysis/run-cpplint

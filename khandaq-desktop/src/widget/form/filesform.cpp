@@ -117,6 +117,13 @@ namespace {
             // Avatar sharing should be seamless, the user does not need to see
             // these in their file transfer list.
             case TOX_FILE_KIND_AVATAR: return false;
+            // zoff/c-toxcore extensions — not shown in the file transfer list.
+            case TOX_FILE_KIND_MESSAGEV2_SEND:
+            case TOX_FILE_KIND_MESSAGEV2_ANSWER:
+            case TOX_FILE_KIND_MESSAGEV2_ALTER:
+            case TOX_FILE_KIND_MESSAGEV2_SYNC:
+            case TOX_FILE_KIND_FTV2:
+                return false;
         }
 
         qWarning("Unexpected file kind %d", kind);

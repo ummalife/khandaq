@@ -51,10 +51,20 @@ cmake "$SRC" \
   -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt@5;${DEPS}"
 
 echo "==> Building + bundling (macdeployqt)..."
-make install -j"$(sysctl -n hw.ncpu)"
+make khandaq install -j"$(sysctl -n hw.ncpu)"
 
 APP="$BUILD/khandaq.app"
 BIN="$APP/Contents/MacOS/khandaq"
+FW="$APP/Contents/Frameworks"
+
+echo "==> Bundling NGC libtoxcore..."
+TOXCORE_DYLIB="$DEPS/lib/libtoxcore.2.19.0.dylib"
+if [ ! -f "$TOXCORE_DYLIB" ]; then
+    TOXCORE_DYLIB="$(readlink -f "$DEPS/lib/libtoxcore.2.dylib" 2>/dev/null || realpath "$DEPS/lib/libtoxcore.2.dylib")"
+fi
+cp -f "$TOXCORE_DYLIB" "$FW/libtoxcore.2.dylib"
+install_name_tool -id "@executable_path/../Frameworks/libtoxcore.2.dylib" "$FW/libtoxcore.2.dylib"
+install_name_tool -change @rpath/libtoxcore.2.dylib "@executable_path/../Frameworks/libtoxcore.2.dylib" "$BIN" 2>/dev/null || true
 
 echo "==> Fixing @rpath references..."
 if otool -L "$BIN" | grep -q '@rpath/libtoxcore'; then
@@ -73,5 +83,9 @@ fi
 
 echo "==> Copying artifact..."
 rm -rf "$DIST/khandaq.app"
+rm -f "$DIST/khandaq-macos.dmg"
 cp -R "$APP" "$DIST/"
+( cd "$DIST" && rm -f khandaq-macos.zip && zip -qr khandaq-macos.zip khandaq.app )
+( cd "$DIST" && shasum -a 256 khandaq.app/Contents/MacOS/khandaq khandaq-macos.zip 2>/dev/null | tee sha256sums.txt || true )
 echo "Done: $DIST/khandaq.app ($(du -sh "$DIST/khandaq.app" | cut -f1))"
+echo "      $DIST/khandaq-macos.zip"

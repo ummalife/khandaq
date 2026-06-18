@@ -68,6 +68,11 @@ class LoginFormController: LoginLogoController {
         updateFormAnimated(false)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        LaunchRecovery.markLaunchCompleted()
+    }
+
     override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
         guard navigationController?.topViewController == self else {
             return
@@ -77,15 +82,14 @@ class LoginFormController: LoginLogoController {
             contentContainerView.frame.origin.y -
             loginButton.frame.maxY
 
-        let offset = min(0.0, underLoginHeight - frame.height)
+        let keyboardFrameInView = view.convert(frame, from: nil)
+        let offset = min(0.0, underLoginHeight - keyboardFrameInView.height)
 
         mainContainerViewTopConstraint?.update(offset: offset)
-        view.layoutIfNeeded()
     }
 
     override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
         mainContainerViewTopConstraint?.update(offset: 0.0)
-        view.layoutIfNeeded()
     }
 }
 
@@ -165,6 +169,12 @@ private extension LoginFormController {
         profileFakeTextField.layer.cornerRadius = 6.0
         profileFakeTextField.isAccessibilityElement = false
         profileFakeTextField.accessibilityElementsHidden = true
+        // KHANDAQ (#4): expose the selected profile name as the "username" half of a login form.
+        // iOS / the password manager only reliably offers and fills the saved password when it can
+        // pair a username field (textContentType = .username) with the password field — a lone
+        // password field falls back to fragile heuristics and often won't autofill via Face ID.
+        profileFakeTextField.textContentType = .username
+        profileFakeTextField.text = profileNames.indices.contains(selectedIndex) ? profileNames[selectedIndex] : nil
         formView.addSubview(profileFakeTextField)
 
         profileButton = UIButton()
@@ -176,6 +186,9 @@ private extension LoginFormController {
         passwordField.delegate = self
         passwordField.placeholder = String(localized:"password")
         passwordField.isSecureTextEntry = true
+        // KHANDAQ (#4): mark as a password field so iOS / the password manager reliably offers and
+        // fills the saved credential via Face ID (without this, autofill relied on heuristics).
+        passwordField.textContentType = .password
         passwordField.returnKeyType = .go
         passwordField.borderStyle = .roundedRect
         passwordField.leftViewMode = .always

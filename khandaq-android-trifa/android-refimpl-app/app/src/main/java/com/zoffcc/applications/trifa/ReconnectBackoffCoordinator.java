@@ -8,6 +8,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.zoffcc.applications.trifa.NetworkDiagnosticsLog.log;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_connection_status;
 import static com.zoffcc.applications.trifa.TrifaToxService.on_network_reconnect_attempt;
 
 /**
@@ -55,6 +56,7 @@ final class ReconnectBackoffCoordinator
             attempt.set(0);
             lastSuccessMs = SystemClock.elapsedRealtime();
             cancelPending();
+            DeliveryRestoreCoordinator.onConnectionRestored();
         });
     }
 
@@ -102,6 +104,19 @@ final class ReconnectBackoffCoordinator
         {
             log("reconnect_error", e.getMessage());
         }
+
+        schedulePostReconnectCheck(reason);
+    }
+
+    private void schedulePostReconnectCheck(final Reason reason)
+    {
+        handler.postDelayed(() -> {
+            if (TRIFAGlobals.global_self_connection_status == ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value)
+            {
+                log("reconnect_still_offline", "reason=" + reason);
+                scheduleRetryIfStillOffline(reason);
+            }
+        }, 4_000L);
     }
 
     void scheduleRetryIfStillOffline(final Reason reason)

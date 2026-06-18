@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chat_list_filter_tabs"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/tg_chat_bg"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="4dp"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:id="@+id/chat_filter_tabs_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <include
+            android:id="@+id/chat_filter_tab_direct"
+            layout="@layout/chat_list_filter_tab_item"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/chat_filter_tab_groups"
+            layout="@layout/chat_list_filter_tab_item"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+        <include
+            android:id="@+id/chat_filter_tab_favorites"
+            layout="@layout/chat_list_filter_tab_item"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+    <View
+        android:id="@+id/chat_filter_tab_indicator_sliding"
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:layout_gravity="bottom"
+        android:background="@color/khandaq_primary"
+        android:visibility="invisible" />
+
+</FrameLayout>

@@ -249,6 +249,7 @@ public class MessageListFragment extends Fragment
         scrollDateHeader = (TextView) view.findViewById(R.id.scroll_date_header);
         scrollDateHeader.setText("");
         scrollDateHeader.setVisibility(View.INVISIBLE);
+        ChatDateSeparatorHelper.applyTheme(scrollDateHeader);
         conversationDateHeader = new ConversationDateHeader(view.getContext(), scrollDateHeader);
 
         final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getActivity());
@@ -491,39 +492,45 @@ public class MessageListFragment extends Fragment
         Log.i(TAG, "onPause");
         super.onPause();
 
-        // HINT: super ugly hack to find all audioplay recylerviews and stop any audio playing
-        // you have a better solution? let me hear it.
+        stopVisibleVoicePlayback();
+
+        global_showing_messageview = false;
+        MainActivity.message_list_fragment = null;
+    }
+
+    void stopVisibleVoicePlayback()
+    {
+        if (listingsView == null)
+        {
+            return;
+        }
+
         try
         {
-            View child;
             for (int i = 0; i < listingsView.getChildCount(); i++)
             {
-                child = listingsView.getChildAt(i);
+                final View child = listingsView.getChildAt(i);
                 try
                 {
-                    RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
+                    final RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
                     ((MessageListHolder_file_outgoing_state_cancel) vh).DetachedFromWindow(true);
                 }
-                catch(Exception e1)
+                catch (Exception ignored)
                 {
                 }
                 try
                 {
-                    RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
+                    final RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
                     ((MessageListHolder_file_incoming_state_cancel) vh).DetachedFromWindow(true);
                 }
-                catch(Exception e1)
+                catch (Exception ignored)
                 {
                 }
             }
         }
-        catch(Exception e2)
+        catch (Exception ignored)
         {
         }
-        // HINT: super ugly hack to find all audioplay recylerviews and stop any audio playing
-
-        global_showing_messageview = false;
-        MainActivity.message_list_fragment = null;
     }
 
     void reset_paging()
@@ -782,6 +789,20 @@ public class MessageListFragment extends Fragment
         if (main_handler_s != null)
         {
             main_handler_s.post(myRunnable);
+        }
+    }
+
+    public void scrollToReplyTarget(final MessageReplyHelper.ReplyMeta replyMeta)
+    {
+        if (adapter == null || listingsView == null || replyMeta == null)
+        {
+            return;
+        }
+
+        final int position = adapter.findPositionForReply(replyMeta);
+        if (position >= 0)
+        {
+            listingsView.smoothScrollToPosition(position);
         }
     }
 }

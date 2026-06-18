@@ -23,7 +23,6 @@ import org.khandaq.messenger.R;
 
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
 
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.request.RequestOptions;
@@ -44,40 +43,26 @@ public class ImageviewerActivity_SD extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_imageviewer);
 
-        // TODO: bad!
-        String image_filename = "/xx/xyz.png";
-        String storage_frame_work = "0";
-
-        try
-        {
-            storage_frame_work = getIntent().getStringExtra("storage_frame_work");
-        }
-        catch (Exception e)
-        {
-            e.getMessage();
-        }
-
+        String image_filename = getIntent().getStringExtra("image_filename");
+        String storage_frame_work = getIntent().getStringExtra("storage_frame_work");
         if (storage_frame_work == null)
         {
             storage_frame_work = "0";
         }
 
-        Uri uri = null;
-        if (storage_frame_work.equals("1"))
+        if (image_filename == null || image_filename.isEmpty())
         {
-            uri = Uri.parse(getIntent().getStringExtra("image_filename"));
+            HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+            finish();
+            return;
         }
-        else
+
+        if (!storage_frame_work.equals("1")
+                && !HelperFiletransfer.isMediaFileReadyToView(image_filename, false, null))
         {
-            try
-            {
-                image_filename = getIntent().getStringExtra("image_filename");
-                // Log.i(TAG, "onCreate:image_filename=" + image_filename);
-            }
-            catch (Exception e)
-            {
-                e.getMessage();
-            }
+            HelperGeneric.display_toast(getString(R.string.chat_media_still_downloading), false, 0);
+            finish();
+            return;
         }
 
         final PhotoView photoView = (PhotoView) findViewById(R.id.big_image);
@@ -86,42 +71,99 @@ public class ImageviewerActivity_SD extends AppCompatActivity
         String image_cache_key = getIntent().getStringExtra("image_cache_key");
         if ((image_cache_key == null) || (image_cache_key.isEmpty()))
         {
-            image_cache_key = getIntent().getStringExtra("image_filename");
+            image_cache_key = image_filename;
         }
         final ObjectKey glide_signature = new ObjectKey(image_cache_key);
-
-        final Handler imageviewer_handler = new Handler(getMainLooper());
 
         if (VFS_ENCRYPT)
         {
             if (storage_frame_work.equals("0"))
             {
                 final String image_filename_ = image_filename;
-                java.io.File f2 = new java.io.File(image_filename_);
-
                 try
                 {
+                    if (!HelperFiletransfer.isIocipherVirtualPath(image_filename_))
+                    {
+                        final java.io.File plainFile = new java.io.File(image_filename_);
+                        if (!plainFile.isFile() || plainFile.length() <= 0L)
+                        {
+                            HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                            finish();
+                            return;
+                        }
+
+                        final RequestOptions plainOptions = new RequestOptions().
+                                signature(glide_signature).
+                                diskCacheStrategy(DiskCacheStrategy.RESOURCE).
+                                skipMemoryCache(false);
+
+                        GlideApp.
+                                with(this).
+                                load(plainFile).
+                                apply(plainOptions).
+                                placeholder(R.drawable.round_loading_animation).
+                                error(R.drawable.round_loading_animation).
+                                listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>()
+                                {
+                                    @Override
+                                    public boolean onLoadFailed(com.bumptech.glide.load.engine.GlideException e,
+                                                                Object model,
+                                                                com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                                                boolean isFirstResource)
+                                    {
+                                        HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                                        finish();
+                                        return false;
+                                    }
+
+                                    @Override
+                                    public boolean onResourceReady(android.graphics.drawable.Drawable resource,
+                                                                   Object model,
+                                                                   com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                                                   com.bumptech.glide.load.DataSource dataSource,
+                                                                   boolean isFirstResource)
+                                    {
+                                        return false;
+                                    }
+                                }).
+                                into(photoView);
+                        return;
+                    }
+
+                    final info.guardianproject.iocipher.File vfsFile =
+                            new info.guardianproject.iocipher.File(image_filename_);
+                    if (!vfsFile.exists() || vfsFile.length() <= 0L)
+                    {
+                        HelperGeneric.display_toast(getString(R.string.chat_media_still_downloading), false, 0);
+                        finish();
+                        return;
+                    }
+
                     RequestOptions req_options = new RequestOptions().
                             signature(glide_signature).
-                            diskCacheStrategy(DiskCacheStrategy.NONE).
-                            skipMemoryCache(true);
+                            diskCacheStrategy(DiskCacheStrategy.RESOURCE).
+                            skipMemoryCache(false);
 
                     GlideApp.
                             with(this).
-                            load(f2).
+                            load(vfsFile).
                             apply(req_options).
                             placeholder(R.drawable.round_loading_animation).
+                            listener(imageLoadListener()).
                             into(photoView);
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
+                    HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                    finish();
                 }
             }
             else
             {
                 try
                 {
+                    final Uri uri = Uri.parse(image_filename);
                     RequestOptions req_options = new RequestOptions().
                             signature(glide_signature).
                             diskCacheStrategy(DiskCacheStrategy.NONE).
@@ -132,13 +174,75 @@ public class ImageviewerActivity_SD extends AppCompatActivity
                             load(uri).
                             apply(req_options).
                             placeholder(R.drawable.round_loading_animation).
+                            listener(imageLoadListener()).
                             into(photoView);
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
+                    HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                    finish();
                 }
             }
         }
+        else
+        {
+            final java.io.File f2 = new java.io.File(image_filename);
+            if (!f2.exists() || f2.length() <= 0L)
+            {
+                HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                finish();
+                return;
+            }
+
+            try
+            {
+                RequestOptions req_options = new RequestOptions().
+                        signature(glide_signature).
+                        diskCacheStrategy(DiskCacheStrategy.NONE).
+                        skipMemoryCache(true);
+
+                GlideApp.
+                        with(this).
+                        load(f2).
+                        apply(req_options).
+                        placeholder(R.drawable.round_loading_animation).
+                        listener(imageLoadListener()).
+                        into(photoView);
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+                HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                finish();
+            }
+        }
+    }
+
+    private com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> imageLoadListener()
+    {
+        return new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>()
+        {
+            @Override
+            public boolean onLoadFailed(com.bumptech.glide.load.engine.GlideException e,
+                                        Object model,
+                                        com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                        boolean isFirstResource)
+            {
+                HelperGeneric.display_toast(getString(R.string.chat_opening_file_failed), false, 0);
+                finish();
+                return false;
+            }
+
+            @Override
+            public boolean onResourceReady(android.graphics.drawable.Drawable resource,
+                                           Object model,
+                                           com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target,
+                                           com.bumptech.glide.load.DataSource dataSource,
+                                           boolean isFirstResource)
+            {
+                return false;
+            }
+        };
     }
 }

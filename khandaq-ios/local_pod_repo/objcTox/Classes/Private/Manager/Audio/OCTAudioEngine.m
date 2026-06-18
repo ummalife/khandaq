@@ -79,7 +79,16 @@
         ? AVAudioSessionPortOverrideSpeaker
         : AVAudioSessionPortOverrideNone;
 
-    return [session overrideOutputAudioPort:override error:error];
+    if (! [session overrideOutputAudioPort:override error:error]) {
+        return NO;
+    }
+
+    // Route changes can reset processing; keep the active call mode.
+    NSString *mode = [session mode];
+    if (mode.length == 0) {
+        mode = AVAudioSessionModeVoiceChat;
+    }
+    return [session setMode:mode error:error];
 }
 
 #endif
@@ -119,36 +128,27 @@
         ? AVAudioSessionPortOverrideSpeaker
         : AVAudioSessionPortOverrideNone;
 
-    if (reconfigure) {
-        if (! [session setCategory:AVAudioSessionCategoryPlayAndRecord
-                       withOptions:options
-                             error:error]) {
-            return NO;
-        }
-        if (! [session setPreferredSampleRate:kDefaultSampleRate error:error]) {
-            return NO;
-        }
-        if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
-            return NO;
-        }
-        if (! [session setMode:mode error:error]) {
-            return NO;
-        }
-        if (! [session overrideOutputAudioPort:portOverride error:error]) {
-            return NO;
-        }
-        if (! [session setActive:YES error:error]) {
-            return NO;
-        }
+    // Always apply category/mode/route — even when CallKit already activated the session.
+    if (! [session setCategory:AVAudioSessionCategoryPlayAndRecord
+                   withOptions:options
+                         error:error]) {
+        return NO;
     }
-    else {
-        if (! [session setPreferredSampleRate:kDefaultSampleRate error:error]) {
-            return NO;
-        }
-        if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
-            return NO;
-        }
-        if (! [session overrideOutputAudioPort:portOverride error:error]) {
+    if (! [session setPreferredSampleRate:kDefaultSampleRate error:error]) {
+        return NO;
+    }
+    if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
+        return NO;
+    }
+    if (! [session setMode:mode error:error]) {
+        return NO;
+    }
+    if (! [session overrideOutputAudioPort:portOverride error:error]) {
+        return NO;
+    }
+
+    if (reconfigure) {
+        if (! [session setActive:YES error:error]) {
             return NO;
         }
     }

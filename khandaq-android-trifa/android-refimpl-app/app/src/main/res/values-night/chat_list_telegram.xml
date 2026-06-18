@@ -9,4 +9,5 @@
     <color name="tg_chat_time">#8A9A92</color>
     <color name="tg_chat_unread_bg">@color/khandaq_emerald</color>
     <color name="tg_chat_ripple">#33FFFFFF</color>
+    <color name="list_empty_state_icon">#8A9A92</color>
 </resources>

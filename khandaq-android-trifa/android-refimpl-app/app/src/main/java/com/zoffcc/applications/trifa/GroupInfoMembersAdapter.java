@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperGroup.GroupMemberDisplay;
@@ -57,13 +58,19 @@ class GroupInfoMembersAdapter extends RecyclerView.Adapter<GroupInfoMembersAdapt
         final GroupMemberDisplay member = members.get(position);
         holder.nameView.setText(member.name);
         holder.statusView.setText(format_group_member_status_line(context, member.online, member.last_seen_ms));
+        if (holder.onlineDot != null)
+        {
+            holder.onlineDot.setBackgroundResource(member.online
+                    ? R.drawable.group_info_online_dot
+                    : R.drawable.group_info_offline_dot);
+        }
         if (member.online)
         {
             holder.statusView.setTextColor(Color.parseColor("#64B5F6"));
         }
         else
         {
-            holder.statusView.setTextColor(context.getResources().getColor(R.color.md_grey_600));
+            holder.statusView.setTextColor(ContextCompat.getColor(context, R.color.tg_chat_preview));
         }
 
         if (member.self)
@@ -72,7 +79,7 @@ class GroupInfoMembersAdapter extends RecyclerView.Adapter<GroupInfoMembersAdapt
         }
         else
         {
-            holder.nameView.setTextColor(context.getResources().getColor(R.color.md_black_1000));
+            holder.nameView.setTextColor(ContextCompat.getColor(context, R.color.tg_chat_title));
         }
 
         holder.itemView.setOnClickListener(v -> open_group_peer_info_activity(v.getContext(), member.pubkey, group_id));
@@ -91,12 +98,14 @@ class GroupInfoMembersAdapter extends RecyclerView.Adapter<GroupInfoMembersAdapt
 
     static final class MemberHolder extends RecyclerView.ViewHolder
     {
+        final View onlineDot;
         final TextView nameView;
         final TextView statusView;
 
         MemberHolder(View itemView)
         {
             super(itemView);
+            onlineDot = itemView.findViewById(R.id.group_member_online_dot);
             nameView = itemView.findViewById(R.id.group_member_name);
             statusView = itemView.findViewById(R.id.group_member_status);
         }

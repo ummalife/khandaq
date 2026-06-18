@@ -40,6 +40,8 @@ import static com.zoffcc.applications.trifa.HelperMessage.save_selected_messages
 import static com.zoffcc.applications.trifa.HelperMessage.show_select_conference_message_info;
 import static com.zoffcc.applications.trifa.HelperMessage.show_select_group_message_info;
 import static com.zoffcc.applications.trifa.HelperMessage.show_select_message_info;
+import static com.zoffcc.applications.trifa.HelperReply.replyToSelectedDirectMessage;
+import static com.zoffcc.applications.trifa.HelperReply.replyToSelectedGroupMessage;
 import static com.zoffcc.applications.trifa.MainActivity.selected_conference_messages;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages;
 import static com.zoffcc.applications.trifa.MainActivity.selected_group_messages_incoming_file;
@@ -88,6 +90,18 @@ public class ToolbarActionMode implements ActionMode.Callback
         {
             menu.findItem(R.id.action_delete).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
             menu.findItem(R.id.action_copy).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+            menu.findItem(R.id.action_reply).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+            final MenuItem forwardItem = menu.findItem(R.id.action_forward);
+            if (forwardItem != null)
+            {
+                forwardItem.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            }
+        }
+
+        final MenuItem replyItem = menu.findItem(R.id.action_reply);
+        if (replyItem != null)
+        {
+            replyItem.setVisible(HelperReply.canReplyToCurrentSelection());
         }
 
         action_active = false;
@@ -122,6 +136,48 @@ public class ToolbarActionMode implements ActionMode.Callback
                     delete_selected_conference_messages(context, true, "deleting Messages ...");
                 }
                 mode.finish(); // Finish action mode
+                break;
+
+            case R.id.action_forward:
+                action_active = true;
+                if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
+                {
+                    FavoritesChatHelper.forwardSelectedDirectMessages(context);
+                }
+                else if ((selected_conference_messages.isEmpty())
+                        && (MainActivity.conference_message_list_activity == null))
+                {
+                    FavoritesChatHelper.forwardSelectedGroupMessages(context);
+                }
+                try
+                {
+                    if (MainActivity.message_list_fragment != null)
+                    {
+                        MainActivity.message_list_fragment.adapter.redraw_all_items();
+                    }
+                    if (MainActivity.group_message_list_fragment != null)
+                    {
+                        MainActivity.group_message_list_fragment.adapter.redraw_all_items();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+                mode.finish();
+                break;
+
+            case R.id.action_reply:
+                action_active = true;
+                if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
+                {
+                    replyToSelectedDirectMessage(context);
+                }
+                else if ((selected_conference_messages.isEmpty())
+                        && (MainActivity.conference_message_list_activity == null))
+                {
+                    replyToSelectedGroupMessage(context);
+                }
+                mode.finish();
                 break;
 
             case R.id.action_copy:

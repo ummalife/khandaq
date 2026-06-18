@@ -36,7 +36,7 @@ protocol ChatPrivateControllerDelegate: class {
             selectedIndex: Int)
 }
 
-class ChatPrivateController: KeyboardNotificationController {
+class ChatPrivateController: PortraitChatController {
     let chat: OCTChat
 
     fileprivate weak var delegate: ChatPrivateControllerDelegate?
@@ -78,6 +78,7 @@ class ChatPrivateController: KeyboardNotificationController {
     fileprivate var editMessagesToolbar: UIToolbar!
 
     fileprivate var chatInputViewManager: ChatInputViewManager!
+    fileprivate let replyController = ChatReplyController()
 
     fileprivate var tableViewTapGestureRecognizer: UITapGestureRecognizer!
 
@@ -168,9 +169,6 @@ class ChatPrivateController: KeyboardNotificationController {
         createNavigationViews()
         addFriendNotification()
 
-        // HINT: request Location updates here
-        LocationManager.shared.requestAccess()
-
         self.configureLinearProgressBar()
     }
 
@@ -187,6 +185,17 @@ class ChatPrivateController: KeyboardNotificationController {
             return
         }
 
+        guard LocationManager.shared.hasUsableAuthorization() else {
+            LocationManager.shared.requestAccessForUserInitiatedSharing { [weak self] granted in
+                guard granted, let self = self else {
+                    return
+                }
+
+                LocationSharingCoordinator.shared.start(for: self, sendImmediately: sendImmediately)
+            }
+            return
+        }
+
         LocationSharingCoordinator.shared.start(for: self, sendImmediately: sendImmediately)
     }
 
@@ -195,7 +204,11 @@ class ChatPrivateController: KeyboardNotificationController {
     }
 
     fileprivate func populateTextModel(_ model: ChatBaseTextCellModel, text: String) {
-        if let location = LocationMessage.parse(text) {
+        let parsed = MessageReplyHelper.parse(text)
+        model.replyMeta = parsed.reply
+        let body = parsed.bodyText
+
+        if let location = LocationMessage.parse(body) {
             model.locationLatitude = location.latitude
             model.locationLongitude = location.longitude
             model.message = String(format: "%.5f, %.5f", location.latitude, location.longitude)
@@ -203,7 +216,23 @@ class ChatPrivateController: KeyboardNotificationController {
         else {
             model.locationLatitude = nil
             model.locationLongitude = nil
-            model.message = text
+            model.message = body
+        }
+    }
+
+    fileprivate func attachReplyQuoteHandler(to model: ChatBaseTextCellModel) {
+        guard let meta = model.replyMeta else {
+            model.onReplyQuoteTap = nil
+            return
+        }
+        model.onReplyQuoteTap = { [weak self] in
+            guard let self = self, let tableView = self.tableView else {
+                return
+            }
+            self.replyController.scrollToReplyTarget(meta,
+                                                     messages: self.messages,
+                                                     tableView: tableView,
+                                                     submanagerObjects: self.submanagerObjects)
         }
     }
 
@@ -251,13 +280,7 @@ class ChatPrivateController: KeyboardNotificationController {
 
         if disableNextInputViewAnimation {
             disableNextInputViewAnimation = false
-
-            UIView.setAnimationsEnabled(false)
-            view.layoutIfNeeded()
-            UIView.setAnimationsEnabled(true)
-        }
-        else {
-            view.layoutIfNeeded()
+            suppressNextKeyboardAnimation = true
         }
     }
 
@@ -275,17 +298,6 @@ class ChatPrivateController: KeyboardNotificationController {
             let keyWindow = UIApplication.shared.keyWindow
             let b = keyWindow?.safeAreaInsets.bottom
             constraint.update(offset: -(b ?? 20))
-        }
-
-        if disableNextInputViewAnimation {
-            disableNextInputViewAnimation = false
-
-            UIView.setAnimationsEnabled(false)
-            view.layoutIfNeeded()
-            UIView.setAnimationsEnabled(true)
-        }
-        else {
-            view.layoutIfNeeded()
         }
     }
 
@@ -472,7 +484,7 @@ extension ChatPrivateController {
 
                 DispatchQueue.global(qos: .userInitiated).async {
 
-                    print("cc:call_waiting_bg_queue")
+                    log("cc:call_waiting_bg_queue")
                     if self.friend != nil {
 
                         DispatchQueue.main.async {
@@ -496,11 +508,11 @@ extension ChatPrivateController {
                                 connection_status2 = ConnectionStatus(connectionStatus: friend.connectionStatus)
                             }
 
-                            print("cc:while_friend_not_online, %@", connection_status2)
+                            log("cc:while_friend_not_online, \(connection_status2)")
                             if (connection_status2 != .none)
                             {
                                 DispatchQueue.main.async {
-                                    print("cc:main_queue")
+                                    log("cc:main_queue")
                                     if (self.callwaiting_running)
                                     {
                                         self.callwaiting_running = false
@@ -526,13 +538,13 @@ extension ChatPrivateController {
                                 break
                             }
                         }
-                        print("cc:while_loop_end")
+                        log("cc:while_loop_end")
                     }
                 }
 
             }
         } else {
-            print("Call_ERROR:no friend?")
+            log("Call_ERROR:no friend?")
         }
     }
     
@@ -700,6 +712,7 @@ extension ChatPrivateController: UITableViewDataSource {
 
                 outgoingModel.delivered = messageText.isDelivered
                 outgoingModel.sentpush = messageText.sentPush
+                attachReplyQuoteHandler(to: outgoingModel)
 
                 model = outgoingModel
 
@@ -742,6 +755,7 @@ extension ChatPrivateController: UITableViewDataSource {
                                                + "dateInterval:\n" + s8 + "\n"
                 }
 
+                attachReplyQuoteHandler(to: incomingModel)
                 model = incomingModel
 
                 cell = tableView.dequeueReusableCell(withIdentifier: ChatIncomingTextCell.staticReuseIdentifier) as! ChatIncomingTextCell
@@ -779,6 +793,7 @@ extension ChatPrivateController: UITableViewDataSource {
         }
 
         cell.delegate = self
+        cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)
         cell.transform = tableView.transform;
 
@@ -906,6 +921,21 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
 
         // tableView?.selectRowAtIndexPath(indexPath, animated: false, scrollPosition: .None)
     }
+
+    func chatMovableDateCellReplyPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView?.indexPath(for: cell) else {
+            return
+        }
+        let message = messages[indexPath.row]
+        replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
+        _ = chatInputView.becomeFirstResponder()
+    }
+}
+
+extension ChatPrivateController: ChatReplySwipeDelegate {
+    func chatCellDidRequestReply(_ cell: ChatMovableDateCell) {
+        chatMovableDateCellReplyPressed(cell)
+    }
 }
 
 extension ChatPrivateController: UIGestureRecognizerDelegate {
@@ -1011,6 +1041,13 @@ private extension ChatPrivateController {
                                                     submanagerFiles: submanagerFiles,
                                                     submanagerObjects: submanagerObjects,
                                                     presentingViewController: self)
+        chatInputViewManager.outgoingTextComposer = { [weak self] text in
+            guard let self = self else {
+                return text
+            }
+            return self.replyController.composeOutgoingText(text)
+        }
+        replyController.install(in: view, above: chatInputView, theme: theme)
     }
 
     func createEditMessageToolbar() {
@@ -1027,13 +1064,13 @@ private extension ChatPrivateController {
         tableView!.snp.makeConstraints {
             $0.top.leading.trailing.equalTo(view)
 
-            tableViewToChatInputConstraint = $0.bottom.equalTo(chatInputView.snp.top).constraint
+            tableViewToChatInputConstraint = $0.bottom.equalTo(replyController.previewView.snp.top).constraint
         }
 
         typingHeaderView.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)
             $0.top.equalTo(tableView!.snp.bottom)
-            typingViewToChatInputConstraint = $0.bottom.equalTo(chatInputView.snp.top).constraint
+            typingViewToChatInputConstraint = $0.bottom.equalTo(replyController.previewView.snp.top).constraint
         }
 
         typingViewToChatInputConstraint.deactivate()
@@ -1062,28 +1099,30 @@ private extension ChatPrivateController {
     }
 
     func addMessagesNotification() {
-        self.messagesToken = messages.addNotificationBlock { [unowned self] change in
-            guard let tableView = self.tableView else {
+        self.messagesToken = messages.addNotificationBlock { [weak self] change in
+            guard let self = self, let tableView = self.tableView else {
                 return
             }
             switch change {
                 case .initial:
                     break
                 case .update(_, let deletions, let insertions, let modifications):
-
-                    // TODO: this is a very bad workaround. when more than 1 message is incoming
-                    //       those would crash.
-                    /*
-                    tableView.beginUpdates()
-                    self.updateTableViewWithDeletions(deletions)
-                    self.updateTableViewWithInsertions(insertions)
-                    self.updateTableViewWithModifications(modifications)
-
-                    self.visibleMessages = self.visibleMessages + insertions.count - deletions.count
-                    tableView.endUpdates()
-                    */
-                    // now just reload the whole table to avoid the crash, until there is a fix
-                    tableView.reloadData()
+                    if deletions.isEmpty && insertions.isEmpty {
+                        self.updateTableViewWithModifications(modifications)
+                    }
+                    else if deletions.count + insertions.count <= 5 {
+                        tableView.beginUpdates()
+                        self.updateTableViewWithDeletions(deletions)
+                        self.updateTableViewWithInsertions(insertions)
+                        tableView.endUpdates()
+                        if !modifications.isEmpty {
+                            self.updateTableViewWithModifications(modifications)
+                        }
+                        self.visibleMessages = self.visibleMessages + insertions.count - deletions.count
+                    }
+                    else {
+                        tableView.reloadData()
+                    }
 
                     self.updateTableHeaderView()
 
@@ -1091,7 +1130,7 @@ private extension ChatPrivateController {
                         self.handleNewMessage()
                     }
                 case .error(let error):
-                    fatalError("\(error)")
+                    log("ChatPrivateController messages notification error: \(error)")
             }
         }
     }
@@ -1171,8 +1210,8 @@ private extension ChatPrivateController {
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)
         let results = submanagerObjects.friends(predicate: predicate)
 
-        friendToken = results.addNotificationBlock { [unowned self] change in
-            guard let friend = self.friend else {
+        friendToken = results.addNotificationBlock { [weak self] change in
+            guard let self = self, let friend = self.friend else {
                 return
             }
 
@@ -1192,7 +1231,7 @@ private extension ChatPrivateController {
 
                     self.updateTableHeaderView()
                 case .error(let error):
-                    fatalError("\(error)")
+                    log("ChatPrivateController friend notification error: \(error)")
             }
         }
     }
@@ -1345,6 +1384,7 @@ private extension ChatPrivateController {
         cell.progressObject = nil
 
         model.fileName = message.messageFile!.fileName
+        model.fileSizeBytes = message.messageFile!.fileSize
         model.fileSize = ByteCountFormatter.string(fromByteCount: message.messageFile!.fileSize, countStyle: .file)
         model.fileUTI = message.messageFile!.fileUTI
 
@@ -1357,12 +1397,42 @@ private extension ChatPrivateController {
                 let bridge = ChatProgressBridge()
                 cell.progressObject = bridge
                 _ = try? self.submanagerFiles.add(bridge, forFileTransfer: message)
+                self.trackFileTransferStall(for: message)
             case .paused:
                 model.state = .paused
+                if let messageId = message.uniqueIdentifier {
+                    FileTransferStallWatcher.shared.stop(messageId: messageId)
+                }
             case .canceled:
                 model.state = .cancelled
+                if let messageId = message.uniqueIdentifier {
+                    FileTransferStallWatcher.shared.stop(messageId: messageId)
+                }
             case .ready:
                 model.state = .done
+                if let messageId = message.uniqueIdentifier {
+                    FileTransferStallWatcher.shared.stop(messageId: messageId)
+                }
+        }
+
+        model.cancelHandle = { [weak self] in
+            do {
+                try self?.submanagerFiles.cancelFileTransfer(message)
+            }
+            catch let error as NSError {
+                handleErrorWithType(.cancelFileTransfer, error: error)
+            }
+        }
+
+        model.pauseOrResumeHandle = { [weak self] in
+            let isPaused = (message.messageFile!.pausedBy.rawValue & OCTMessageFilePausedBy.user.rawValue) != 0
+
+            do {
+                try self?.submanagerFiles.pauseFileTransfer(!isPaused, message: message)
+            }
+            catch let error as NSError {
+                handleErrorWithType(.cancelFileTransfer, error: error)
+            }
         }
 
         if !message.isOutgoing() {
@@ -1378,30 +1448,11 @@ private extension ChatPrivateController {
                 }
             }
         }
-
-        model.cancelHandle = { [weak self] in
-            do {
-                try self?.submanagerFiles.cancelFileTransfer(message)
-            }
-            catch let error as NSError {
-                handleErrorWithType(.cancelFileTransfer, error: error)
-            }
-        }
-
-        model.retryHandle = { [weak self] in
-            self?.submanagerFiles.retrySendingFile(message) { (error: Error) in
-                handleErrorWithType(.sendFileToFriend, error: error as NSError)
-            }
-        }
-
-        model.pauseOrResumeHandle = { [weak self] in
-            let isPaused = (message.messageFile!.pausedBy.rawValue & OCTMessageFilePausedBy.user.rawValue) != 0
-
-            do {
-                try self?.submanagerFiles.pauseFileTransfer(!isPaused, message: message)
-            }
-            catch let error as NSError {
-                handleErrorWithType(.cancelFileTransfer, error: error)
+        else {
+            model.retryHandle = { [weak self] in
+                self?.submanagerFiles.retrySendingFile(message) { (error: Error) in
+                    handleErrorWithType(.sendFileToFriend, error: error as NSError)
+                }
             }
         }
 
@@ -1425,10 +1476,6 @@ private extension ChatPrivateController {
             return
         }
 
-        guard UTTypeConformsTo(messageFile.fileUTI as CFString? ?? "" as CFString, kUTTypeImage) else {
-            return
-        }
-
         guard let file = messageFile.filePath() else {
             return
         }
@@ -1437,13 +1484,52 @@ private extension ChatPrivateController {
             return
         }
 
-        if let image = imageCache.object(forKey: file as AnyObject) as? UIImage {
-            let cell = (cell as? ChatIncomingFileCell) ?? (cell as? ChatOutgoingFileCell)
+        let uti = messageFile.fileUTI
+        let fileName = messageFile.fileName
 
-            cell?.setButtonImage(image)
+        if UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage) {
+            if let image = imageCache.object(forKey: file as AnyObject) as? UIImage {
+                applyInlinePreview(image, durationText: nil, to: cell)
+            }
+            else {
+                loadImageForCellAtIndexPath(indexPath, fromFile: file)
+            }
+            return
         }
-        else {
-            loadImageForCellAtIndexPath(indexPath, fromFile: file)
+
+        if ChatFileMediaLoader.isVideoFile(uti: uti, fileName: fileName) {
+            if let preview = ChatFileMediaLoader.cachedPreview(for: file) {
+                applyInlinePreview(preview.image, durationText: preview.durationText, to: cell)
+            }
+            else {
+                loadVideoPreviewForCellAtIndexPath(indexPath, fromFile: file)
+            }
+        }
+    }
+
+    func applyInlinePreview(_ image: UIImage, durationText: String?, to cell: UITableViewCell) {
+        let fileCell = (cell as? ChatIncomingFileCell) ?? (cell as? ChatOutgoingFileCell)
+        fileCell?.setButtonImage(image)
+        if let durationText = durationText, let outgoing = fileCell as? ChatOutgoingFileCell {
+            outgoing.setVideoDurationLabel(durationText)
+        }
+    }
+
+    func loadVideoPreviewForCellAtIndexPath(_ indexPath: IndexPath, fromFile: String) {
+        ChatFileMediaLoader.loadPreview(at: fromFile) { [weak self] preview in
+            guard let preview = preview else {
+                return
+            }
+
+            self?.imageCache.setObject(preview.image, forKey: fromFile as AnyObject)
+
+            DispatchQueue.main.async {
+                let optionalCell = self?.tableView?.cellForRow(at: indexPath)
+                guard let cell = optionalCell else {
+                    return
+                }
+                self?.applyInlinePreview(preview.image, durationText: preview.durationText, to: cell)
+            }
         }
     }
 
@@ -1468,12 +1554,23 @@ private extension ChatPrivateController {
 
             DispatchQueue.main.async {
                 let optionalCell = self?.tableView?.cellForRow(at: indexPath)
-                guard let cell = (optionalCell as? ChatIncomingFileCell) ?? (optionalCell as? ChatOutgoingFileCell) else {
+                guard let cell = optionalCell else {
                     return
                 }
 
-                cell.setButtonImage(image)
+                self?.applyInlinePreview(image, durationText: nil, to: cell)
             }
+        }
+    }
+
+    func trackFileTransferStall(for message: OCTMessageAbstract) {
+        guard let messageId = message.uniqueIdentifier else {
+            return
+        }
+
+        FileTransferStallWatcher.shared.track(messageId: messageId) { [weak self] in
+            UIAlertController.showErrorWithMessage(String(localized: "file_transfer_stalled"), retryBlock: nil)
+            _ = try? self?.submanagerFiles.cancelFileTransfer(message)
         }
     }
 

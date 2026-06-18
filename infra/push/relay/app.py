@@ -24,6 +24,12 @@ RATE_LIMIT_PER_MIN = int(os.environ.get("PUSH_RATE_LIMIT_PER_MIN", "120"))
 PUSH_RELAY_AUTH_SECRET = os.environ.get("PUSH_RELAY_AUTH_SECRET", "")
 # Max allowed clock skew (seconds) for the request timestamp. Bounds the replay window.
 AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
+# Rollout gate. With a secret set but ENFORCE off (default), the relay runs in SOFT/MONITOR
+# mode: it still serves unsigned/invalid requests (so already-installed clients that lack the
+# secret keep working) but LOGS each one, so you can watch adoption. Flip to 1 (hard enforce,
+# 401 on bad auth) only once the logs show field clients are signing. This avoids a hard cutover
+# that would break every client that hasn't yet shipped + been updated with the secret.
+PUSH_AUTH_ENFORCE = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower() in ("1", "true", "yes", "on")
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
@@ -62,6 +68,20 @@ def _auth_ok() -> bool:
     if not PUSH_RELAY_AUTH_SECRET:
         return True
 
+    if _auth_signature_valid():
+        return True
+
+    # Secret set, but the request is unsigned/invalid.
+    if PUSH_AUTH_ENFORCE:
+        return False  # hard enforce -> caller returns 401
+
+    # Soft/monitor mode: allow it through but record it, so adoption can be measured
+    # before flipping PUSH_AUTH_ENFORCE=1. client_ip is best-effort here.
+    log.warning("push auth SOFT: unsigned/invalid request allowed from %s (set PUSH_AUTH_ENFORCE=1 after client adoption)", _client_ip())
+    return True
+
+
+def _auth_signature_valid() -> bool:
     # KHANDAQ (security NEW-2): replay-resistant, request-bound auth.
     # The old scheme signed a CONSTANT (HMAC(secret, "khandaq-push-relay")) → the same value
     # forever, baked into every build, replayable without limit. Instead the sender signs the
@@ -220,6 +240,9 @@ def health():
         "fcm_configured": _fcm_configured(),
         "fcm_mode": mode,
         "auth_required": bool(PUSH_RELAY_AUTH_SECRET),
+        "auth_mode": (
+            "off" if not PUSH_RELAY_AUTH_SECRET else ("enforce" if PUSH_AUTH_ENFORCE else "soft")
+        ),
     })
 
 

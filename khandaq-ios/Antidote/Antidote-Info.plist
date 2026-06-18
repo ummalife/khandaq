@@ -3,6 +3,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>KhandaqPushRelayAuthSecret</key>
+	<string>$(KHANDAQ_PUSH_AUTH_SECRET)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Used to share your location with your contacts</string>
 	<key>CFBundleDevelopmentRegion</key>

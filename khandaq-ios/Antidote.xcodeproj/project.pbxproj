@@ -3280,6 +3280,7 @@
 				GCC_PREFIX_HEADER = "Antidote/Antidote-Prefix.pch";
 				GCC_WARN_SIGN_COMPARE = YES;
 				INFOPLIST_FILE = "Antidote/Antidote-Info.plist";
+				KHANDAQ_PUSH_AUTH_SECRET = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.4.28;
@@ -3314,6 +3315,7 @@
 				GCC_PREFIX_HEADER = "Antidote/Antidote-Prefix.pch";
 				GCC_WARN_SIGN_COMPARE = YES;
 				INFOPLIST_FILE = "Antidote/Antidote-Info.plist";
+				KHANDAQ_PUSH_AUTH_SECRET = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.4.28;

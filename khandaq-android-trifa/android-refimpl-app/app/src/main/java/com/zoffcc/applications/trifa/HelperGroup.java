@@ -1075,7 +1075,12 @@ public class HelperGroup
             return true;
         }
 
-        display_toast(group_invite_failure_message(res), false, 300);
+        // KHANDAQ: friend and group both existed (checked above), so this is a transient send failure —
+        // typically the friend flapped offline for an instant (INVITE_FAIL). Queue the invite and retry
+        // on friend-online + timers instead of dropping it, mirroring how text messages get delivered
+        // on reconnect.
+        queue_manual_group_invite(group_identifier, friend_public_key);
+        display_toast(context_s.getString(R.string.group_invite_friend_queued), false, 300);
         return false;
     }
 
@@ -7321,6 +7326,117 @@ public class HelperGroup
                     catch (Throwable t)
                     {
                         Log.w(TAG, "schedule_friend_online_invite_resends:EE:" + t.getMessage());
+                    }
+                }, delay_ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    // KHANDAQ: pending queue for the MANUAL "invite friend to group" action. tox_group_invite_friend
+    // is a one-shot synchronous send that fails (INVITE_FAIL) whenever the friend is not FRIEND_ONLINE
+    // at that exact instant. On UDP-restricted networks the friend connection flaps, so a single attempt
+    // often races a momentary disconnect and the invite is silently lost — unlike text messages, which
+    // are queued and retried on reconnect. We mirror that: queue (friend_pubkey -> set of group ids) and
+    // re-fire on friend-online + a few timed retries until tox_group_invite_friend returns success.
+    private static final ConcurrentHashMap<String, java.util.Set<String>> pending_manual_group_invites =
+            new ConcurrentHashMap<>();
+
+    private static void queue_manual_group_invite(final String group_identifier, final String friend_public_key)
+    {
+        final String fk = friend_public_key.toLowerCase(Locale.ENGLISH);
+        pending_manual_group_invites
+                .computeIfAbsent(fk, k -> java.util.Collections.newSetFromMap(new ConcurrentHashMap<>()))
+                .add(group_identifier);
+        HelperGeneric.logI(TAG, "queue_manual_group_invite:group=" + group_identifier + " friend=" + friend_public_key);
+        // re-fire a few times in case the friend flaps back without a fresh connection-status callback
+        for (final long delay_ms : new long[]{3_000L, 10_000L, 30_000L})
+        {
+            try
+            {
+                group_invite_resend_exec.schedule(() -> retry_pending_manual_group_invites(friend_public_key),
+                        delay_ms, java.util.concurrent.TimeUnit.MILLISECONDS);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    /** Re-attempt any queued manual group invites for this friend; called on friend-online + timers. */
+    static void retry_pending_manual_group_invites(final String friend_public_key)
+    {
+        if (friend_public_key == null)
+        {
+            return;
+        }
+        final String fk = friend_public_key.toLowerCase(Locale.ENGLISH);
+        final java.util.Set<String> groups = pending_manual_group_invites.get(fk);
+        if (groups == null || groups.isEmpty())
+        {
+            return;
+        }
+        final long friend_num = tox_friend_by_public_key__wrapper(friend_public_key);
+        if ((friend_num < 0) || (friend_num >= UINT32_MAX_JAVA))
+        {
+            return; // friend not in tox right now — keep queued, try again later
+        }
+        for (final String group_identifier : new java.util.ArrayList<>(groups))
+        {
+            final long group_num = ensure_group_in_tox(group_identifier);
+            if (group_num < 0)
+            {
+                groups.remove(group_identifier); // group is gone — stop trying
+                continue;
+            }
+            final int res = tox_group_invite_friend(group_num, friend_num);
+            HelperGeneric.logI(TAG, "retry_pending_manual_group_invites:group=" + group_identifier +
+                                    " friend=" + friend_public_key + " res=" + res);
+            if (res == 1)
+            {
+                groups.remove(group_identifier);
+                update_savedata_file_wrapper();
+            }
+        }
+        if (groups.isEmpty())
+        {
+            pending_manual_group_invites.remove(fk);
+        }
+    }
+
+    /**
+     * A friend just came online — re-fire queued manual invites for them. We try immediately AND a
+     * couple of times over the next seconds because at the exact connection-status instant the crypto
+     * channel may not be ready yet (write_cryptpacket can still fail), so a single attempt can race the
+     * transition. No-op when nothing is queued for this friend.
+     */
+    static void schedule_manual_invite_resends(final String friend_public_key)
+    {
+        if (friend_public_key == null)
+        {
+            return;
+        }
+        final java.util.Set<String> groups =
+                pending_manual_group_invites.get(friend_public_key.toLowerCase(Locale.ENGLISH));
+        if (groups == null || groups.isEmpty())
+        {
+            return;
+        }
+        retry_pending_manual_group_invites(friend_public_key); // immediate (caller is the tox callback thread)
+        for (final long delay_ms : new long[]{3_000L, 10_000L})
+        {
+            try
+            {
+                group_invite_resend_exec.schedule(() -> {
+                    try
+                    {
+                        retry_pending_manual_group_invites(friend_public_key);
+                        TrifaToxService.wakeup_tox_thread();
+                    }
+                    catch (Throwable ignored)
+                    {
                     }
                 }, delay_ms, java.util.concurrent.TimeUnit.MILLISECONDS);
             }

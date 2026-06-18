@@ -464,6 +464,7 @@
     <string name="dm_send_failed_pending_request">Waiting for friend request to be accepted.</string>
     <string name="dm_send_failed_friend_offline">Contact is offline. The message will be delivered later.</string>
     <string name="group_invite_friend_success">Group invitation sent.</string>
+    <string name="group_invite_friend_queued">Contact is offline — invitation queued, will be sent when they reconnect.</string>
     <string name="group_invite_friend_failed">Failed to invite contact to group.</string>
     <string name="group_invite_friend_not_found">Contact is not available in Tox.</string>
     <string name="group_invite_friend_disconnected">Group is disconnected.</string>

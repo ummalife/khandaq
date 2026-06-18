@@ -728,6 +728,7 @@
     <string name="dm_send_failed_pending_request">Ожидание принятия запроса в друзья.</string>
     <string name="dm_send_failed_friend_offline">Собеседник не в сети, сообщение будет доставлено позже.</string>
     <string name="group_invite_friend_success">Приглашение в группу отправлено.</string>
+    <string name="group_invite_friend_queued">Контакт офлайн — приглашение поставлено в очередь и уйдёт, когда он снова появится в сети.</string>
     <string name="group_invite_friend_failed">Не удалось пригласить контакт в группу.</string>
     <string name="group_invite_friend_not_found">Контакт недоступен в Tox.</string>
     <string name="group_invite_friend_disconnected">Группа отключена.</string>

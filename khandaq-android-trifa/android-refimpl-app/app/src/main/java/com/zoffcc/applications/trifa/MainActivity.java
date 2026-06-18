@@ -5926,6 +5926,10 @@ public class MainActivity extends AppCompatActivity
                     // the next seconds: at this exact instant the lossless channel may not be ready,
                     // so a single attempt can race the transition (sent=0) and stall the join.
                     HelperGroup.schedule_friend_online_invite_resends();
+                    // KHANDAQ: also flush any manual "invite to group" that failed earlier because this
+                    // friend was momentarily offline (flapping connection) — re-fire now that it is online
+                    // (immediate + a couple of delayed retries to ride out the channel-ready race).
+                    HelperGroup.schedule_manual_invite_resends(f.tox_public_key_string);
                     MessageDeliveryWatchdog.tick();
                 }
             }

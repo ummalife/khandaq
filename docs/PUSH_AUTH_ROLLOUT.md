@@ -44,10 +44,21 @@ The soft warning line is: `push auth SOFT: unsigned/invalid request allowed from
 ## Steps
 1. **Generate one secret** (shared by all three): `openssl rand -hex 32`. Store it in your secret
    manager. This single value goes to: the relay `.env`, the Android build env, the iOS build.
-2. **Server → SOFT.** In `/opt/khandaq-push/.env`: set `PUSH_RELAY_AUTH_SECRET=<secret>`,
-   `PUSH_AUTH_ENFORCE=0` (and optionally `PUSH_AUTH_MAX_SKEW_SEC=300`). Redeploy:
-   `docker compose -f infra/push/docker-compose.yml up -d --build`. Verify
-   `curl -s https://push.khandaq.org/health` shows `"auth_mode":"soft"`. Existing clients keep working.
+2. **Server → SOFT.** The live relay is **push.khandaq.org** (a VPS running this repo's
+   `infra/push/` via Docker Compose). SSH in as the deploy user, then:
+   ```sh
+   cd <khandaq checkout> && git pull            # get the soft-mode app.py (live one is older)
+   # put the secret in /opt/khandaq-push/.env (chmod 600), OUTSIDE the git tree:
+   #   PUSH_RELAY_AUTH_SECRET=<secret>
+   #   PUSH_AUTH_ENFORCE=0
+   #   PUSH_AUTH_MAX_SKEW_SEC=300
+   set -a; . /opt/khandaq-push/.env; set +a      # load into shell so compose can interpolate it
+   docker compose -f infra/push/docker-compose.yml up -d --build
+   ```
+   Verify: `curl -s https://push.khandaq.org/health` shows `"auth_mode":"soft"`. Existing clients
+   keep working (unsigned requests pass + get logged). NB: the compose file reads these vars from the
+   shell env via `${...}` interpolation, so they must be exported (the `set -a; . ...` line) before
+   `up` — a plain file at `/opt/khandaq-push/.env` alone is not auto-loaded for interpolation.
 3. **Build + ship signed clients.**
    - Android: `KHANDAQ_PUSH_AUTH_SECRET=<secret> ./gradlew :app:assembleRelease` → release.
    - iOS: `xcodebuild ... KHANDAQ_PUSH_AUTH_SECRET=<secret>` (or set it in the CI build step that

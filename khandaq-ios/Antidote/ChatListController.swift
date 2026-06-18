@@ -95,6 +95,10 @@ class ChatListController: UIViewController {
         filterBar.setSelectedTab(tableManager.filterTab, animated: false)
         refreshFilterBadges()
         scheduleGroupPeersRefreshIfNeeded()
+        // KHANDAQ: reload the list whenever it reappears. Realm list updates are deferred while a
+        // modal is presented (shouldDeferListUpdates), so a group created via the name dialog could be
+        // missing from the list afterwards until something else triggered a reload.
+        tableManager.tableView.reloadData()
     }
 
     override func viewDidLayoutSubviews() {

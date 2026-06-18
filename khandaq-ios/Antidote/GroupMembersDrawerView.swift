@@ -113,13 +113,13 @@ final class GroupMembersDrawerView: UIView {
     private func drawerTitle() -> String {
         let count = max(Int(submanagerGroups.peerCount(for: chat)), peers.count)
         if count > 0 {
-            return String(format: String(localized: "group_members_header_format"), count)
+            return String(localized: "group_members_header_format", count)
         }
         return String(localized: "group_member_list_title")
     }
 
     private func configureCell(_ cell: UITableViewCell, peer: OCTGroupPeer) {
-        let peerName = peer.peerName ?? String(format: String(localized: "group_peer_fallback_format"), peer.peerId)
+        let peerName = peer.peerName ?? String(localized: "group_peer_fallback_format", peer.peerId)
         cell.textLabel?.text = peerName
         cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
         cell.textLabel?.numberOfLines = 1
@@ -146,6 +146,14 @@ final class GroupMembersDrawerView: UIView {
             cell.detailTextLabel?.textColor = theme.colorForType(.FriendCellStatus)
         }
 
+        // KHANDAQ (#15): the peer cell had no explicit background, so it rendered as a too-dark
+        // default block that clashed with the themed drawer. Match the drawer background and give a
+        // subtle themed selection highlight instead of the harsh default.
+        cell.backgroundColor = theme.colorForType(.NormalBackground)
+        cell.contentView.backgroundColor = theme.colorForType(.NormalBackground)
+        let selectedBackground = UIView()
+        selectedBackground.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+        cell.selectedBackgroundView = selectedBackground
         cell.selectionStyle = .default
         cell.accessoryType = .disclosureIndicator
     }

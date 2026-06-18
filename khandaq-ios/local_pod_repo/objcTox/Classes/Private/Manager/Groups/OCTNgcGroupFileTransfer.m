@@ -11,6 +11,12 @@
 static const uint8_t kOCTNgcPktFileSingle = 0x11;
 static const uint8_t kOCTNgcPktFileBegin = 0x12;
 static const uint8_t kOCTNgcPktFileChunk = 0x13;
+// KHANDAQ (#15): selective NACK so chunked transfers recover from dropped chunks (NGC custom packets
+// can be lossy/rate-limited). The receiver asks for the chunk indices it is still missing; the
+// original sender re-sends just those. Without this a single lost chunk left the file stuck loading.
+static const uint8_t kOCTNgcPktFileRequest = 0x14;
+static const int kOCTNgcNackMaxRounds = 24;          // stop asking after this many stalled rounds
+static const int kOCTNgcNackMaxIndicesPerPacket = 256;
 
 static const size_t kOCTNgcMaxFileSize = 36701;
 static const size_t kOCTNgcMaxPacketSize = 37000;
@@ -41,9 +47,26 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) NSMutableData *msgId;
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *received;
 @property (nonatomic, assign) int receivedCount;
+// KHANDAQ (#15): NACK retransmit state.
+@property (nonatomic, assign) uint32_t groupNumber;
+@property (nonatomic, strong) dispatch_source_t nackTimer;
+@property (nonatomic, assign) int lastReceivedCount;
+@property (nonatomic, assign) int nackRounds;
 @end
 
 @implementation OCTNgcIncomingAssembly
+@end
+
+// KHANDAQ (#15): kept by the sender so it can re-send chunks the receiver asks for via NACK.
+@interface OCTNgcSentChunkedFile : NSObject
+@property (nonatomic, copy) NSString *filePath;
+@property (nonatomic, strong) NSData *msgId;
+@property (nonatomic, assign) uint64_t fileSize;
+@property (nonatomic, assign) int totalChunks;
+@property (nonatomic, assign) uint32_t groupNumber;
+@end
+
+@implementation OCTNgcSentChunkedFile
 @end
 
 @interface OCTNgcOrphanChunk : NSObject
@@ -62,6 +85,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcIncomingAssembly *> *assemblies;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray<OCTNgcOrphanChunk *> *> *orphanChunks;
 @property (nonatomic, strong) NSMutableSet<NSString *> *cancelledMsgIdHexes;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcSentChunkedFile *> *sentChunkedFiles;
 @property (nonatomic, strong) dispatch_queue_t sendQueue;
 @end
 
@@ -91,6 +115,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _assemblies = [NSMutableDictionary new];
     _orphanChunks = [NSMutableDictionary new];
     _cancelledMsgIdHexes = [NSMutableSet set];
+    _sentChunkedFiles = [NSMutableDictionary new];
     _sendQueue = dispatch_queue_create("ngc-group-file-send", DISPATCH_QUEUE_SERIAL);
 
     return self;
@@ -157,6 +182,9 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
             break;
         case kOCTNgcPktFileChunk:
             [self handleIncomingChunkWithGroupNumber:groupNumber peerId:peerId data:data];
+            break;
+        case kOCTNgcPktFileRequest:
+            [self handleIncomingRequestWithGroupNumber:groupNumber peerId:peerId data:data];
             break;
         default:
             break;
@@ -291,6 +319,21 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 {
     int totalChunks = (int)((fileSize + kOCTNgcChunkPayloadMax - 1) / kOCTNgcChunkPayloadMax);
     NSString *msgIdHex = [OCTTox binToHexString:msgId.bytes length:msgId.length];
+
+    // KHANDAQ (#15): remember this send so we can re-serve chunks a receiver NACKs for.
+    OCTNgcSentChunkedFile *sentContext = [OCTNgcSentChunkedFile new];
+    sentContext.filePath = filePath;
+    sentContext.msgId = msgId;
+    sentContext.fileSize = fileSize;
+    sentContext.totalChunks = totalChunks;
+    sentContext.groupNumber = groupNumber;
+    @synchronized (self.sentChunkedFiles) {
+        self.sentChunkedFiles[msgIdHex.lowercaseString] = sentContext;
+        while (self.sentChunkedFiles.count > 24) {
+            [self.sentChunkedFiles removeObjectForKey:self.sentChunkedFiles.allKeys.firstObject];
+        }
+    }
+
     NSMutableData *beginPacket = [NSMutableData dataWithCapacity:kOCTNgcFileBeginHeader];
     [self appendMagicToData:beginPacket];
     [beginPacket appendBytes:&(uint8_t){kOCTNgcPktFileBegin} length:1];
@@ -489,6 +532,17 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
     [self flushOrphanChunksForAssemblyKey:assemblyKey groupNumber:groupNumber peerId:peerId];
 
+    // KHANDAQ (#15): start the NACK retransmit timer if the file is still incomplete after applying
+    // any orphan chunks. The receiver periodically asks the sender to re-send missing chunks.
+    BOOL stillIncomplete = NO;
+    @synchronized (self.assemblies) {
+        stillIncomplete = (self.assemblies[assemblyKey] == assembly) && (assembly.receivedCount < assembly.totalChunks);
+    }
+    if (stillIncomplete) {
+        assembly.groupNumber = groupNumber;
+        [self startNackTimerForAssembly:assembly assemblyKey:assemblyKey];
+    }
+
     if (self.incomingBeginBlock) {
         NSString *displayName = assembly.displayFilename.length > 0 ? assembly.displayFilename : assembly.filename;
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -560,8 +614,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     [handle writeData:payload];
     [handle closeFile];
 
-    assembly.received[chunkIndex] = @YES;
-    assembly.receivedCount++;
+    @synchronized (assembly) {
+        assembly.received[chunkIndex] = @YES;
+        assembly.receivedCount++;
+    }
 
     if (self.transferProgressBlock) {
         NSString *msgIdHex = [OCTTox binToHexString:assembly.msgId.bytes length:assembly.msgId.length];
@@ -575,6 +631,8 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 
     if (assembly.receivedCount >= assembly.totalChunks) {
+        [self stopNackTimerForAssembly:assembly];
+
         @synchronized (self.assemblies) {
             [self.assemblies removeObjectForKey:assemblyKey];
         }
@@ -592,6 +650,170 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
                                    assembly.totalSize,
                                    msgIdHex);
     }
+}
+
+#pragma mark - NACK (selective retransmit)
+
+- (void)startNackTimerForAssembly:(OCTNgcIncomingAssembly *)assembly assemblyKey:(NSString *)assemblyKey
+{
+    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, self.sendQueue);
+    uint64_t interval = 2500ull * NSEC_PER_MSEC;
+    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)interval), interval, 500ull * NSEC_PER_MSEC);
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_source_set_event_handler(timer, ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (! self) {
+            return;
+        }
+        [self nackTickForAssembly:assembly assemblyKey:assemblyKey];
+    });
+
+    assembly.lastReceivedCount = -1;
+    assembly.nackTimer = timer;
+    dispatch_resume(timer);
+}
+
+- (void)stopNackTimerForAssembly:(OCTNgcIncomingAssembly *)assembly
+{
+    dispatch_source_t timer = assembly.nackTimer;
+    if (timer) {
+        assembly.nackTimer = nil;
+        dispatch_source_cancel(timer);
+    }
+}
+
+- (void)nackTickForAssembly:(OCTNgcIncomingAssembly *)assembly assemblyKey:(NSString *)assemblyKey
+{
+    BOOL active = NO;
+    @synchronized (self.assemblies) {
+        active = (self.assemblies[assemblyKey] == assembly);
+    }
+
+    if (! active || assembly.receivedCount >= assembly.totalChunks) {
+        [self stopNackTimerForAssembly:assembly];
+        return;
+    }
+
+    // Only ask for re-sends when the transfer has stalled (no new chunk since the last tick), so a
+    // normally-progressing transfer is never disturbed.
+    BOOL stalled = (assembly.receivedCount == assembly.lastReceivedCount);
+    assembly.lastReceivedCount = assembly.receivedCount;
+
+    if (! stalled) {
+        return;
+    }
+
+    assembly.nackRounds++;
+    if (assembly.nackRounds > kOCTNgcNackMaxRounds) {
+        [self stopNackTimerForAssembly:assembly];
+        return;
+    }
+
+    [self sendNackForAssembly:assembly];
+}
+
+- (void)sendNackForAssembly:(OCTNgcIncomingAssembly *)assembly
+{
+    NSMutableData *indexData = [NSMutableData data];
+    uint32_t count = 0;
+
+    @synchronized (assembly) {
+        for (int i = 0; i < assembly.totalChunks && count < kOCTNgcNackMaxIndicesPerPacket; i++) {
+            if (! [assembly.received[i] boolValue]) {
+                [self appendU32BE:(uint32_t)i toData:indexData];
+                count++;
+            }
+        }
+    }
+
+    if (count == 0) {
+        return;
+    }
+
+    NSMutableData *packet = [NSMutableData data];
+    [self appendMagicToData:packet];
+    [packet appendBytes:&(uint8_t){kOCTNgcPktFileRequest} length:1];
+    [self appendMsgId:assembly.msgId toData:packet];
+    [self appendU32BE:count toData:packet];
+    [packet appendData:indexData];
+
+    [self sendPacket:packet groupNumber:assembly.groupNumber error:nil];
+}
+
+- (void)handleIncomingRequestWithGroupNumber:(uint32_t)groupNumber
+                                      peerId:(uint32_t)peerId
+                                        data:(NSData *)data
+{
+    if (data.length < 8 + 32 + 4) {
+        return;
+    }
+
+    NSData *msgId = [data subdataWithRange:NSMakeRange(8, 32)];
+    NSString *msgIdHex = [[OCTTox binToHexString:msgId.bytes length:msgId.length] lowercaseString];
+    uint32_t count = [self readU32BEFromData:data offset:40];
+
+    if (count == 0 || count > kOCTNgcNackMaxIndicesPerPacket || data.length < 44 + (NSUInteger)count * 4) {
+        return;
+    }
+
+    OCTNgcSentChunkedFile *context = nil;
+    @synchronized (self.sentChunkedFiles) {
+        context = self.sentChunkedFiles[msgIdHex];
+    }
+
+    if (! context) {
+        return;  // not the original sender of this file (or it has been forgotten)
+    }
+
+    NSMutableArray<NSNumber *> *indices = [NSMutableArray arrayWithCapacity:count];
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t idx = [self readU32BEFromData:data offset:(44 + i * 4)];
+        if (idx < (uint32_t)context.totalChunks) {
+            [indices addObject:@(idx)];
+        }
+    }
+
+    dispatch_async(self.sendQueue, ^{
+        [self resendChunks:indices forContext:context];
+    });
+}
+
+- (void)resendChunks:(NSArray<NSNumber *> *)indices forContext:(OCTNgcSentChunkedFile *)context
+{
+    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:context.filePath];
+    if (! handle) {
+        return;
+    }
+
+    for (NSNumber *indexNum in indices) {
+        int chunkIndex = indexNum.intValue;
+        uint64_t offset = (uint64_t)chunkIndex * (uint64_t)kOCTNgcChunkPayloadMax;
+        if (offset >= context.fileSize) {
+            continue;
+        }
+
+        NSUInteger toRead = (NSUInteger)MIN((uint64_t)kOCTNgcChunkPayloadMax, context.fileSize - offset);
+        [handle seekToFileOffset:offset];
+        NSData *payload = [handle readDataOfLength:toRead];
+
+        if (payload.length != toRead) {
+            continue;
+        }
+
+        NSMutableData *chunkPacket = [NSMutableData dataWithCapacity:kOCTNgcFileChunkHeader + payload.length];
+        [self appendMagicToData:chunkPacket];
+        [chunkPacket appendBytes:&(uint8_t){kOCTNgcPktFileChunk} length:1];
+        [self appendMsgId:context.msgId toData:chunkPacket];
+        [self appendU32BE:(uint32_t)chunkIndex toData:chunkPacket];
+        [self appendU32BE:(uint32_t)payload.length toData:chunkPacket];
+        [chunkPacket appendData:payload];
+        [self sendPacket:chunkPacket groupNumber:context.groupNumber error:nil];
+
+        usleep(1500);
+    }
+
+    [handle closeFile];
 }
 
 - (void)queueOrphanChunkWithAssemblyKey:(NSString *)assemblyKey data:(NSData *)data

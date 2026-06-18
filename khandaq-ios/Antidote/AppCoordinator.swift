@@ -244,6 +244,13 @@ private extension AppCoordinator {
                     onToxOptionsRestartComplete?(false)
                     return
                 }
+                // KHANDAQ (#15): seed the Tox self-name from the profile name on auto-login too
+                // (mirrors the manual-login heal), so existing profiles with an empty self-name stop
+                // publishing "Khandaq" as their NGC peer name / showing "(null)" in invites.
+                if (manager.user.userName() ?? "").isEmpty,
+                   let profileName = UserDefaultsManager().lastActiveProfile, !profileName.isEmpty {
+                    _ = try? manager.user.setUserName(profileName)
+                }
                 self.activeCoordinator = self.createRunningCoordinatorWithManager(manager,
                                                                                   options: options,
                                                                                   skipAuthorizationChallenge: skipAuthorizationChallenge)

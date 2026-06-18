@@ -158,6 +158,13 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     // OCTLogInfo(@"updateObject %@", object);
 
     dispatch_sync(self.queue, ^{
+        // KHANDAQ: skip if the object was deleted/invalidated — e.g. its group/chat was left or
+        // removed while a file transfer was still updating its progress. Modifying an invalidated
+        // Realm object throws and crashed the app ("выход/удалить группу во время отправки фото").
+        if (object.isInvalidated) {
+            return;
+        }
+
         [self.realm beginWriteTransaction];
 
         updateBlock(object);
@@ -1434,6 +1441,82 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
                               chat.uniqueIdentifier, groupMsgIdHashHex];
 
     return [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
+}
+
+- (nullable OCTMessageAbstract *)groupIncompleteFileMessageForChat:(OCTChat *)chat
+                                                            peerId:(uint32_t)peerId
+                                                          fileName:(NSString *)fileName
+{
+    // KHANDAQ (#15): most recent NOT-ready incoming file message from this peer with this name. The
+    // sender's retries change the file's msgIdHex between BEGIN and COMPLETE, so a hash lookup misses
+    // the loading bubble and a duplicate "ready" copy gets created. Match by content instead to
+    // update the existing loading bubble.
+    if (chat.uniqueIdentifier.length == 0 || fileName.length == 0) {
+        return nil;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+        @"chatUniqueIdentifier == %@ AND groupSenderPeerId == %u AND messageFile != nil AND messageFile.fileName ==[c] %@ AND messageFile.fileType != %d",
+        chat.uniqueIdentifier, peerId, fileName, (int)OCTMessageFileTypeReady];
+
+    return [[OCTMessageAbstract objectsWithPredicate:predicate] sortedResultsUsingKeyPath:@"dateInterval" ascending:NO].firstObject;
+}
+
+- (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
+                               msgIdHash:(NSString *)msgIdHash
+                                  peerId:(uint32_t)peerId
+                                fileName:(NSString *)fileName
+                                filePath:(NSString *)filePath
+                                fileSize:(uint64_t)fileSize
+{
+    // KHANDAQ (#15): find the loading bubble AND update it to ready ATOMICALLY on the manager's own
+    // realm/queue. The previous approach looked up via the calling thread's default realm (which can
+    // be a stale/separate instance) and then updated via this realm — so the lookup missed the
+    // BEGIN's message (byHash=0/byContent=0) and a duplicate "ready" copy was created. Matching by
+    // groupMsgIdHashHex first, then by sender+filename, both within this chat.
+    if (chat.uniqueIdentifier.length == 0) {
+        return NO;
+    }
+
+    __block BOOL handled = NO;
+
+    dispatch_sync(self.queue, ^{
+        OCTMessageAbstract *existing = nil;
+
+        if (msgIdHash.length > 0) {
+            existing = [[OCTMessageAbstract objectsInRealm:self.realm
+                                                     where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
+                         chat.uniqueIdentifier, msgIdHash] firstObject];
+        }
+
+        if (! existing && fileName.length > 0) {
+            existing = [[[OCTMessageAbstract objectsInRealm:self.realm
+                                                      where:@"chatUniqueIdentifier == %@ AND groupSenderPeerId == %u AND messageFile != nil AND messageFile.fileName ==[c] %@ AND messageFile.fileType != %d",
+                          chat.uniqueIdentifier, peerId, fileName, (int)OCTMessageFileTypeReady]
+                         sortedResultsUsingKeyPath:@"dateInterval" ascending:NO] firstObject];
+        }
+
+        if (! existing || ! existing.messageFile || existing.isInvalidated) {
+            return;
+        }
+
+        handled = YES;
+
+        if (existing.messageFile.fileType == OCTMessageFileTypeReady) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        existing.messageFile.fileType = OCTMessageFileTypeReady;
+        existing.messageFile.fileSize = fileSize;
+        existing.messageFile.fileName = fileName;
+        [existing.messageFile internalSetFilePath:filePath];
+        existing.messageFile.groupTransferProgress = 1.0f;
+        existing.groupSenderPeerId = peerId;
+        [self.realm commitWriteTransaction];
+    });
+
+    return handled;
 }
 
 - (OCTMessageAbstract *)addMessageWithFileNumber:(OCTToxFileNumber)fileNumber

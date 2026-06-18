@@ -897,9 +897,17 @@ private extension ActiveSessionCoordinator {
 
     func showGroupInviteAlert(friendNumber: OCTToxFriendNumber, inviteData: Data, groupName: String?) {
         let friendDisplayName = friendDisplayName(for: friendNumber)
-        let resolvedGroupName = (groupName?.isEmpty == false) ? groupName! : String(localized: "group_chat_default_title")
+        // KHANDAQ (#15): the invited group name can arrive nil or as the literal "(null)" — fall
+        // back to the default title instead of showing "(null)" in the alert.
+        let cleanGroupName = (groupName?.isEmpty == false && groupName != "(null)") ? groupName : nil
+        let resolvedGroupName = cleanGroupName ?? String(localized: "group_chat_default_title")
         let title = String(localized: "group_invite_alert_title")
-        let message = String(format: String(localized: "group_invite_alert_message_format"), friendDisplayName, resolvedGroupName)
+        // KHANDAQ (#15): String(localized:) is a custom initializer that ALREADY runs String(format:)
+        // on the localized string with the given arguments. The old code called String(localized:)
+        // with NO arguments, so its internal format ran "%@ … %@" with zero args → "(null) … (null)",
+        // and the outer String(format:) then had nothing left to fill. Pass the args straight to
+        // String(localized:) instead.
+        let message = String(localized: "group_invite_alert_message_format", friendDisplayName as NSString, resolvedGroupName as NSString)
 
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: String(localized: "group_invite_accept"), style: .default) { [unowned self] _ in
@@ -918,12 +926,21 @@ private extension ActiveSessionCoordinator {
         })
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
+        // KHANDAQ (#15): present on the TOP-MOST controller. Presenting directly on the tab bar /
+        // split controller silently fails when something is already presented (e.g. an open chat or
+        // another sheet), which made invites arrive but show no alert ("просто тишина").
+        let base: UIViewController
         switch InterfaceIdiom.current() {
             case .iPhone:
-                iPhone.tabBarController.present(alert, animated: true, completion: nil)
+                base = iPhone.tabBarController
             case .iPad:
-                iPad.splitController.present(alert, animated: true, completion: nil)
+                base = iPad.splitController
         }
+        var presenter = base
+        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+            presenter = presented
+        }
+        presenter.present(alert, animated: true, completion: nil)
     }
 
     func friendDisplayName(for friendNumber: OCTToxFriendNumber) -> String {
@@ -933,7 +950,7 @@ private extension ActiveSessionCoordinator {
                 continue
             }
             if friend.friendNumber == friendNumber {
-                if let name = friend.name, !name.isEmpty {
+                if let name = friend.name, !name.isEmpty, name != "(null)" {
                     return name
                 }
                 return friend.publicKey

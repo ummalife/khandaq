@@ -250,6 +250,13 @@ private extension LoginCoordinator {
             let userDefaults = UserDefaultsManager()
             userDefaults.lastActiveProfile = profile
 
+            // KHANDAQ (#15): ensure the Tox self-name is set. Profiles created without an explicit
+            // username had an empty self-name, so NGC groups published the "Khandaq" default as our
+            // peer name and friends/invites showed "(null)". Seed it from the profile name once.
+            if (manager.user.userName() ?? "").isEmpty {
+                _ = try? manager.user.setUserName(profile)
+            }
+
             self.delegate?.loginCoordinatorDidLogin(self, manager: manager, password: password)
 
         }, failureBlock: { error -> Void in

@@ -70,6 +70,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastInviteReplyMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupLastInviteRequestMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupPeerReconnectSuppressUntil;
+// KHANDAQ (#15): recent incoming group-message keys (group:peer:text -> last-seen timestamp) used to
+// drop sender-retry re-deliveries. In-memory so it does not depend on cross-thread Realm reads.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *recentGroupMessageSeenAt;
 @property (nonatomic) dispatch_source_t groupsMaintenanceTimer;
 @end
 
@@ -373,6 +376,12 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                     partMessage:partMessage
                                           error:&localError];
     }];
+
+    if (result) {
+        // KHANDAQ: persist immediately so a left/deleted group does not reappear after a crash or
+        // relaunch (toxcore otherwise keeps it in the in-memory save until the next periodic write).
+        [self.dataSource managerSaveTox];
+    }
 
     if (error) {
         *error = localError;
@@ -1987,6 +1996,43 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     [self resendPendingGroupInviteRequests];
 }
 
+// KHANDAQ (#15): shared content-based dedup for incoming group messages. Records (chat:peer:text)
+// with a timestamp and returns YES if the same was already seen within a short window. Covers both
+// the live groupMessage path and the history-sync insert path, which otherwise duplicate because the
+// sender's retry loop re-sends the same text with different messageIds. In-memory (no cross-thread
+// Realm reads). Tradeoff: a genuinely identical re-send by the same peer within the window is merged.
+- (BOOL)isRecentDuplicateGroupMessageInChat:(OCTChat *)chat peerId:(uint32_t)peerId text:(NSString *)text windowSeconds:(NSTimeInterval)windowSeconds
+{
+    if (chat.uniqueIdentifier.length == 0 || text.length == 0) {
+        return NO;
+    }
+
+    NSString *dedupKey = [NSString stringWithFormat:@"%@:%u:%@", chat.uniqueIdentifier, peerId, text];
+    NSTimeInterval nowTs = [[NSDate date] timeIntervalSince1970];
+
+    @synchronized(self) {
+        if (! self.recentGroupMessageSeenAt) {
+            self.recentGroupMessageSeenAt = [NSMutableDictionary dictionary];
+        }
+
+        NSNumber *seenAt = self.recentGroupMessageSeenAt[dedupKey];
+        BOOL duplicate = (seenAt != nil && (nowTs - seenAt.doubleValue) < windowSeconds);
+        self.recentGroupMessageSeenAt[dedupKey] = @(nowTs);
+
+        if (self.recentGroupMessageSeenAt.count > 256) {
+            NSMutableArray<NSString *> *stale = [NSMutableArray array];
+            [self.recentGroupMessageSeenAt enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSNumber *ts, BOOL *stop) {
+                if (nowTs - ts.doubleValue > 300.0) {
+                    [stale addObject:key];
+                }
+            }];
+            [self.recentGroupMessageSeenAt removeObjectsForKeys:stale];
+        }
+
+        return duplicate;
+    }
+}
+
 - (void)tox:(OCTTox *)tox groupMessage:(NSString *)message
        type:(OCTToxMessageType)type
 groupNumber:(OCTToxGroupNumber)groupNumber
@@ -2014,26 +2060,34 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                     privacyState:OCTToxGroupPrivacyStatePublic];
     }
 
-    RLMResults *peers = [realmManager groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
-    NSString *peerName = nil;
+    // KHANDAQ (#15): incoming group messages arrived duplicated (up to 4x) because the sender's
+    // send-retry loop re-transmits the same text — each copy with a DIFFERENT messageId — AND the
+    // same message also arrives via the history-sync path. messageId-based dedup misses these. Use a
+    // shared in-memory content dedup (group+peer+text within a short window) covering BOTH paths.
+    BOOL alreadyStored = [self isRecentDuplicateGroupMessageInChat:chat peerId:peerId text:message windowSeconds:15.0];
 
-    for (OCTGroupPeer *peer in peers) {
-        if ((uint32_t)peer.peerId == peerId) {
-            peerName = peer.peerName;
-            break;
+    if (! alreadyStored) {
+        RLMResults *peers = [realmManager groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
+        NSString *peerName = nil;
+
+        for (OCTGroupPeer *peer in peers) {
+            if ((uint32_t)peer.peerId == peerId) {
+                peerName = peer.peerName;
+                break;
+            }
         }
-    }
 
-    if (peerName.length == 0) {
-        peerName = [NSString stringWithFormat:@"Peer %u", peerId];
-    }
+        if (peerName.length == 0) {
+            peerName = [NSString stringWithFormat:@"Peer %u", peerId];
+        }
 
-    [realmManager addGroupMessageWithText:message
-                                     type:type
-                                     chat:chat
-                                   peerId:peerId
-                                 peerName:peerName
-                                messageId:messageId];
+        [realmManager addGroupMessageWithText:message
+                                         type:type
+                                         chat:chat
+                                       peerId:peerId
+                                     peerName:peerName
+                                    messageId:messageId];
+    }
 
     if (messageId > 0) {
         [self setupHistSyncIfNeeded];
@@ -2580,6 +2634,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                               error:&toxError];
     }];
 
+    if (groupNumber != kOCTToxGroupNumberFailure) {
+        // KHANDAQ: persist immediately so a newly created group survives a crash/relaunch (toxcore
+        // otherwise keeps it only in the in-memory save until the next periodic write).
+        [self.dataSource managerSaveTox];
+    }
+
     if (error) {
         *error = toxError;
     }
@@ -2602,6 +2662,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
 - (NSString *)defaultGroupPeerName
 {
+    // KHANDAQ (#15): publish the real Tox self-name as our NGC peer name (used when accepting an
+    // invite / preparing group activity). Previously this returned the hard-coded "Khandaq", so
+    // everyone who joined via an invite appeared — and had their messages attributed — as "Khandaq".
+    NSString *selfName = [[self.dataSource managerGetTox] userName];
+    if (selfName.length > 0) {
+        return selfName;
+    }
     return kOCTDefaultGroupPeerName;
 }
 
@@ -3090,6 +3157,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return NO;
             }
 
+            // KHANDAQ (#15): share the live path's content dedup so a message that arrived live (with
+            // a different messageId due to the sender's retries) is recognised here and not inserted
+            // again by history-sync.
+            if ([self isRecentDuplicateGroupMessageInChat:chat peerId:peerId text:text windowSeconds:15.0]) {
+                return YES;
+            }
+
             return [[self.dataSource managerGetRealmManager] groupTextMessageExistsInChat:chat
                                                                               messageId:messageId
                                                                                  peerId:peerId
@@ -3147,6 +3221,16 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             }
 
             OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+            // KHANDAQ (#15): cross-path file dedup — the same file also arrives via the live BEGIN
+            // path (with a different msgIdHashHex from the sender's retries), so the msgIdHashHex
+            // check can miss it. Drop the history-sync copy if we already have it (peer + name + size).
+            if ([self isRecentDuplicateGroupMessageInChat:chat
+                                                    peerId:peerId
+                                                      text:[NSString stringWithFormat:@"file:%@:%llu", fileName ?: @"", fileSize]
+                                             windowSeconds:120.0]) {
+                return nil;
+            }
 
             if (peerId > 0 && peerName.length > 0) {
                 [realmManager upsertGroupPeerForChat:chat peerId:peerId peerName:peerName];
@@ -3288,6 +3372,17 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
+    // KHANDAQ (#15): dedup re-delivered file BEGINs whose msgIdHex differs (the sender's retries hash
+    // a changing messageId), matched by peer + file name + size within a short window — same approach
+    // as incoming text. Placed after the msgIdHex match so a legitimate resume (same hash) still
+    // updates the existing transfer above.
+    if ([self isRecentDuplicateGroupMessageInChat:chat
+                                            peerId:peerId
+                                              text:[NSString stringWithFormat:@"file:%@:%llu", fileName ?: @"", fileSize]
+                                     windowSeconds:120.0]) {
+        return;
+    }
+
     NSString *fileUTI = [self fileUTIFromFileName:fileName];
 
     [realmManager addGroupMessageWithFileName:fileName
@@ -3335,24 +3430,17 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
-    OCTMessageAbstract *existing = [realmManager groupMessageWithGroupMsgIdHashHex:msgIdHex chat:chat];
+    // KHANDAQ (#15): find the loading bubble AND mark it ready atomically on the realm's own queue
+    // (the old split lookup-then-update used a stale default realm, so byHash/byContent missed the
+    // BEGIN message and a duplicate "ready" copy was created — the stuck grey image + a loaded one).
+    BOOL handled = [realmManager markGroupIncomingFileReadyInChat:chat
+                                                        msgIdHash:msgIdHex
+                                                           peerId:peerId
+                                                         fileName:fileName
+                                                         filePath:filePath
+                                                         fileSize:fileSize];
 
-    if (existing) {
-        if (existing.messageFile.fileType == OCTMessageFileTypeReady) {
-            return;
-        }
-
-        [realmManager updateObject:existing.messageFile withBlock:^(OCTMessageFile *file) {
-            file.fileType = OCTMessageFileTypeReady;
-            file.fileSize = fileSize;
-            file.fileName = fileName;
-            [file internalSetFilePath:filePath];
-            file.groupTransferProgress = 1.0f;
-        }];
-        [realmManager updateObject:existing withBlock:^(OCTMessageAbstract *abstract) {
-            abstract.groupSenderPeerId = peerId;
-            abstract.dateInterval = abstract.dateInterval;
-        }];
+    if (handled) {
         return;
     }
 

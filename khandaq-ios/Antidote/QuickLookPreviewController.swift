@@ -15,15 +15,8 @@ class QuickLookPreviewController: QLPreviewController, QLPreviewControllerDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         delegate = self
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done,
-            target: self,
-            action: #selector(dismissPreview)
-        )
-    }
-
-    @objc private func dismissPreview() {
-        dismiss(animated: true, completion: nil)
+        // KHANDAQ (#10): do NOT add a custom "Done" button. A modally-presented QLPreviewController
+        // already provides its own working Done button — adding another produced two "Готово" buttons.
     }
 
     func previewController(_ controller: QLPreviewController, shouldOpen url: URL, for item: QLPreviewItem) -> Bool {

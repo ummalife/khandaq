@@ -163,7 +163,7 @@ extension GroupInfoController: UITableViewDataSource {
             case .members:
                 let count = displayMemberCount()
                 if count > 0 {
-                    return String(format: String(localized: "group_members_header_format"), count)
+                    return String(localized: "group_members_header_format", count)
                 }
                 return String(localized: "group_members_header")
             case .danger:
@@ -201,7 +201,7 @@ extension GroupInfoController: UITableViewDataSource {
                 return String(localized: "group_chat_id_footer")
             case .danger:
                 if systemMessageCount > 0 {
-                    return String(format: String(localized: "group_danger_footer_with_system_format"), systemMessageCount)
+                    return String(localized: "group_danger_footer_with_system_format", systemMessageCount)
                 }
                 return String(localized: "group_danger_footer")
             default:
@@ -264,7 +264,7 @@ extension GroupInfoController: UITableViewDataSource {
                 cell.accessoryType = .disclosureIndicator
             case .peerLimit:
                 cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
-                cell.textLabel?.text = String(format: String(localized: "group_peer_limit_value_format"), Int(peerLimitValue))
+                cell.textLabel?.text = String(localized: "group_peer_limit_value_format", Int(peerLimitValue))
                 cell.accessoryType = .disclosureIndicator
             case .chatId:
                 cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .footnote)
@@ -302,7 +302,7 @@ extension GroupInfoController: UITableViewDataSource {
                 }
                 else {
                     let peer = peers[indexPath.row]
-                    cell.textLabel?.text = peer.peerName ?? String(format: String(localized: "group_peer_fallback_format"), peer.peerId)
+                    cell.textLabel?.text = peer.peerName ?? String(localized: "group_peer_fallback_format", peer.peerId)
                     cell.detailTextLabel?.text = peerDetailSubtitle(for: peer)
                     cell.accessoryType = .disclosureIndicator
                 }
@@ -315,7 +315,7 @@ extension GroupInfoController: UITableViewDataSource {
                     case 1:
                         cell.textLabel?.text = String(localized: "group_delete_system_msgs_action")
                         if systemMessageCount > 0 {
-                            cell.detailTextLabel?.text = String(format: String(localized: "group_delete_system_msgs_count_format"), systemMessageCount)
+                            cell.detailTextLabel?.text = String(localized: "group_delete_system_msgs_count_format", systemMessageCount)
                             cell.textLabel?.textColor = theme.colorForType(.NormalText)
                         }
                         else {

@@ -145,6 +145,17 @@
 - (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
                                                               chat:(OCTChat *)chat;
 
+- (nullable OCTMessageAbstract *)groupIncompleteFileMessageForChat:(OCTChat *)chat
+                                                            peerId:(uint32_t)peerId
+                                                          fileName:(NSString *)fileName;
+
+- (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
+                               msgIdHash:(NSString *)msgIdHash
+                                  peerId:(uint32_t)peerId
+                                fileName:(NSString *)fileName
+                                filePath:(NSString *)filePath
+                                fileSize:(uint64_t)fileSize;
+
 - (NSArray<OCTMessageAbstract *> *)groupMessagesForHistorySyncInChat:(OCTChat *)chat;
 
 - (NSArray<NSData *> *)groupHistorySyncPacketsForGroupNumber:(uint32_t)groupNumber

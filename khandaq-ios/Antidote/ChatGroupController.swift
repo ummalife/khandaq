@@ -112,6 +112,10 @@ class ChatGroupController: PortraitChatController {
         tableView.separatorStyle = .none
         tableView.delegate = self
         tableView.dataSource = self
+        // KHANDAQ (#15): show newest messages at the BOTTOM (standard messenger order). Messages are
+        // sorted newest-first; flip the table vertically (like ChatPrivateController) so row 0 sits at
+        // the bottom and new messages grow upward from there. Cells are flipped back in willDisplay.
+        tableView.transform = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0)
         tableView.register(ChatIncomingTextCell.self, forCellReuseIdentifier: ChatIncomingTextCell.staticReuseIdentifier)
         tableView.register(ChatOutgoingTextCell.self, forCellReuseIdentifier: ChatOutgoingTextCell.staticReuseIdentifier)
         tableView.register(ChatIncomingFileCell.self, forCellReuseIdentifier: ChatIncomingFileCell.staticReuseIdentifier)
@@ -739,6 +743,9 @@ extension ChatGroupController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        // KHANDAQ (#15): the table is vertically flipped to put newest at the bottom; flip each cell
+        // back so its content is upright.
+        cell.transform = tableView.transform
         maybeLoadImageForCellAtPath(cell, indexPath: indexPath)
     }
 
@@ -1005,7 +1012,7 @@ private extension ChatGroupController {
             return nil
         }
 
-        let name = peerName(for: message) ?? String(format: String(localized: "group_peer_fallback_format"), message.groupSenderPeerId)
+        let name = peerName(for: message) ?? String(localized: "group_peer_fallback_format", message.groupSenderPeerId)
         let role = submanagerGroups.peerRole(withId: UInt32(message.groupSenderPeerId), in: chat)
         return "\(name) · \(role.localizedName)"
     }
@@ -1030,7 +1037,7 @@ private extension ChatGroupController {
             }
         }
 
-        return String(format: String(localized: "group_peer_fallback_format"), message.groupSenderPeerId)
+        return String(localized: "group_peer_fallback_format", message.groupSenderPeerId)
     }
 
     func updateLastReadDate() {
@@ -1076,7 +1083,7 @@ private extension ChatGroupController {
         let attempt = submanagerGroups.groupJoinAttempt(for: chat)
         if attempt > 0 || submanagerGroups.isGroupJoinRetryRunning(for: chat) {
             let displayAttempt = max(attempt, 1)
-            label.text = String(format: String(localized: "group_connecting_banner_format"), displayAttempt)
+            label.text = String(localized: "group_connecting_banner_format", displayAttempt)
         }
         else {
             label.text = String(localized: "group_disconnected_banner")
@@ -1089,6 +1096,8 @@ private extension ChatGroupController {
         container.layoutIfNeeded()
         let height = label.systemLayoutSizeFitting(UILayoutFittingCompressedSize).height + 16
         container.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: max(height, 36))
+        // KHANDAQ (#15): the table is vertically flipped, so flip the header back to keep it upright.
+        container.transform = tableView.transform
         tableView.tableHeaderView = container
     }
 

@@ -40,7 +40,7 @@ class GroupPeerPrivateController: PortraitChatController {
 
         super.init()
 
-        title = peer.peerName ?? String(format: String(localized: "group_peer_fallback_format"), peer.peerId)
+        title = peer.peerName ?? String(localized: "group_peer_fallback_format", peer.peerId)
         edgesForExtendedLayout = UIRectEdge()
         hidesBottomBarWhenPushed = true
     }

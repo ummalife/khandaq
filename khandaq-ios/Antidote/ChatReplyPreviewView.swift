@@ -80,7 +80,7 @@ final class ChatReplyPreviewView: UIView {
 
     func show(meta: MessageReplyHelper.ReplyMeta, theme: Theme) {
         apply(theme: theme)
-        headerLabel.text = String(format: String(localized: "chat_reply_header"), meta.senderName)
+        headerLabel.text = String(localized: "chat_reply_header", meta.senderName)
         previewLabel.text = MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 120)
         isHidden = false
     }

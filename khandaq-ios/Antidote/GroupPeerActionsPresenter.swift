@@ -24,7 +24,7 @@ enum GroupMemberStatusFormatter {
 
         let unread = submanagerGroups.unreadPrivateMessageCount(forPeerId: UInt32(peer.peerId), in: chat)
         if unread > 0 {
-            parts.append(String(format: String(localized: "group_peer_private_unread_format"), unread))
+            parts.append(String(localized: "group_peer_private_unread_format", unread))
         }
 
         if peer.peerNotificationsSilent {
@@ -42,11 +42,11 @@ enum GroupMemberStatusFormatter {
         }
         if delta < 3600 {
             let minutes = max(1, Int(delta / 60))
-            return String(format: String(localized: "group_member_last_seen_minutes_format"), minutes)
+            return String(localized: "group_member_last_seen_minutes_format", minutes)
         }
         if delta < 86400 {
             let hours = max(1, Int(delta / 3600))
-            return String(format: String(localized: "group_member_last_seen_hours_format"), hours)
+            return String(localized: "group_member_last_seen_hours_format", hours)
         }
         return String(localized: "group_member_last_seen_long_ago")
     }
@@ -69,12 +69,12 @@ enum GroupPeerActionsPresenter {
             return
         }
 
-        let peerName = peer.peerName ?? String(format: String(localized: "group_peer_fallback_format"), peer.peerId)
+        let peerName = peer.peerName ?? String(localized: "group_peer_fallback_format", peer.peerId)
         let alert = UIAlertController(title: peerName, message: nil, preferredStyle: .actionSheet)
 
         let unread = submanagerGroups.unreadPrivateMessageCount(forPeerId: UInt32(peer.peerId), in: chat)
         let privateTitle = unread > 0
-            ? String(format: String(localized: "group_private_message_unread_action_format"), unread)
+            ? String(localized: "group_private_message_unread_action_format", unread)
             : String(localized: "group_private_message_action")
         alert.addAction(UIAlertAction(title: privateTitle, style: .default) { _ in
             let controller = GroupPeerPrivateController(theme: theme,
@@ -215,7 +215,7 @@ enum GroupPeerActionsPresenter {
                                     chat: OCTChat,
                                     submanagerGroups: OCTSubmanagerGroups,
                                     onPeersChanged: (() -> Void)?) {
-        let message = String(format: String(localized: "group_peer_kick_confirm_format"), displayName)
+        let message = String(localized: "group_peer_kick_confirm_format", displayName)
         let alert = UIAlertController(title: String(localized: "group_peer_kick"), message: message, preferredStyle: .alert)
 
         alert.addAction(UIAlertAction(title: String(localized: "group_peer_kick"), style: .destructive) { _ in

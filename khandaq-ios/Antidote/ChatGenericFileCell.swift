@@ -37,23 +37,18 @@ class ChatGenericFileCell: ChatMovableDateCell {
         This method should be called after setupWithTheme:model:
      */
     func setButtonImage(_ image: UIImage) {
-        let square: UIImage
-
         canBeCopied = true
 
-        if image.size.width == image.size.height {
-            square = image
-        }
-        else {
-            let side = min(image.size.width, image.size.height)
-            let x = (image.size.width - side) / 2
-            let y = (image.size.height - side) / 2
-            let rect = CGRect(x: x, y: y, width: side, height: side)
-
-            square = image.cropWithRect(rect)
-        }
-
-        loadingView.imageButton.setBackgroundImage(square, for: UIControlState())
+        // KHANDAQ (#15): show the photo preview aspect-FILLED in the square preview box. The old code
+        // center-cropped the source to a square and set it as a button BACKGROUND image, which UIKit
+        // then STRETCHED to the button bounds — producing a distorted wide/short strip. Using the
+        // button's imageView with scaleAspectFill keeps the aspect ratio (cropped, not squished).
+        loadingView.imageButton.setBackgroundImage(nil, for: UIControlState())
+        loadingView.imageButton.imageView?.contentMode = .scaleAspectFill
+        loadingView.imageButton.imageView?.clipsToBounds = true
+        loadingView.imageButton.contentHorizontalAlignment = .fill
+        loadingView.imageButton.contentVerticalAlignment = .fill
+        loadingView.imageButton.setImage(image, for: UIControlState())
 
         if state == .waitingConfirmation || state == .done {
             loadingView.centerImageView.image = nil

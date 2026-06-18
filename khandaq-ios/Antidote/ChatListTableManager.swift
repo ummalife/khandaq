@@ -173,11 +173,11 @@ extension ChatListTableManager: UITableViewDataSource {
             if memberCount > 0 {
                 let onlineCount = Int(submanagerGroups.onlineGroupPeerCount(for: chat))
                 if submanagerGroups.isGroupConnected(for: chat) {
-                    presenceParts.append(String(format: String(localized: "group_member_online_count_format"), memberCount, onlineCount))
+                    presenceParts.append(String(localized: "group_member_online_count_format", memberCount, onlineCount))
                     model.presenceIsOnline = onlineCount > 0
                 }
                 else {
-                    presenceParts.append(String(format: String(localized: "group_member_count_format"), memberCount))
+                    presenceParts.append(String(localized: "group_member_count_format", memberCount))
                     model.presenceIsOnline = false
                 }
             }
@@ -190,7 +190,7 @@ extension ChatListTableManager: UITableViewDataSource {
             }
             let privateUnread = submanagerGroups.totalUnreadPrivateMessageCount(for: chat)
             if privateUnread > 0 {
-                let privateHint = String(format: String(localized: "group_chat_list_private_unread_format"), privateUnread)
+                let privateHint = String(localized: "group_chat_list_private_unread_format", privateUnread)
                 if model.presenceText.isEmpty {
                     model.presenceText = privateHint
                 }
@@ -569,7 +569,7 @@ private extension ChatListTableManager {
                 let endIndex = body.index(body.startIndex, offsetBy: 117)
                 body = String(body[..<endIndex]) + "..."
             }
-            return (String(format: String(localized: "chat_draft_prefix"), body), true)
+            return (String(localized: "chat_draft_prefix", body), true)
         }
 
         guard let message = chat.lastMessage else {

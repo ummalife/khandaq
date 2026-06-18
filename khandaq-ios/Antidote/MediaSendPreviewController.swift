@@ -257,7 +257,7 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         let requestToken = UUID()
         previewRequestToken = requestToken
 
-        counterLabel.text = String(format: String(localized: "media_send_counter_format"),
+        counterLabel.text = String(localized: "media_send_counter_format",
                                    index + 1,
                                    items.count)
         counterLabel.isHidden = items.count <= 1

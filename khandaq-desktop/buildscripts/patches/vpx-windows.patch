@@ -1,10 +1,31 @@
 Fix VPX not supporting creation of dll
 Modified version of https://aur.archlinux.org/cgit/aur.git/tree/configure.patch?h=mingw-w64-libvpx&id=6d658aa0f4d8409fcbd0f20be2c0adcf1e81a297
+KHANDAQ: regenerated for libvpx 1.14.0 (security: 1.11.0 had CVE-2023-5217).
 
-diff -ruN libvpx/build/make/configure.sh patched/build/make/configure.sh
---- libvpx/build/make/configure.sh	2019-02-13 16:56:48.972857636 +0100
-+++ patched/build/make/configure.sh	2019-02-13 16:50:37.995967583 +0100
-@@ -1426,11 +1426,13 @@
+diff --color -ruN pristine/build/make/Makefile patched/build/make/Makefile
+--- pristine/build/make/Makefile	2024-01-10 00:12:22.000000000 +0300
++++ patched/build/make/Makefile	2026-06-19 00:15:02.328404715 +0300
+@@ -336,6 +336,7 @@
+ 	$(qexec)$$(LD) -shared $$(LDFLAGS) \
+             $(NO_UNDEFINED) \
+             -Wl,-soname,$$(SONAME) \
++            -Wl,-out-implib,libvpx.dll.a \
+             -Wl,--version-script,$$(EXPORTS_FILE) -o $$@ \
+             $$(filter %.o,$$^) $$(extralibs)
+ endef
+@@ -420,7 +421,7 @@
+ .libs: $(LIBS)
+ 	@touch $@
+ $(foreach lib,$(filter %_g.a,$(LIBS)),$(eval $(call archive_template,$(lib))))
+-$(foreach lib,$(filter %so.$(SO_VERSION_MAJOR).$(SO_VERSION_MINOR).$(SO_VERSION_PATCH),$(LIBS)),$(eval $(call so_template,$(lib))))
++$(foreach lib,$(filter %dll,$(LIBS)),$(eval $(call so_template,$(lib))))
+ $(foreach lib,$(filter %$(SO_VERSION_MAJOR).dylib,$(LIBS)),$(eval $(call dl_template,$(lib))))
+ $(foreach lib,$(filter %$(SO_VERSION_MAJOR).dll,$(LIBS)),$(eval $(call dll_template,$(lib))))
+ 
+diff --color -ruN pristine/build/make/configure.sh patched/build/make/configure.sh
+--- pristine/build/make/configure.sh	2024-01-10 00:12:22.000000000 +0300
++++ patched/build/make/configure.sh	2026-06-19 00:15:02.305131165 +0300
+@@ -1420,11 +1420,13 @@
          win32)
            add_asflags -f win32
            enabled debug && add_asflags -g cv8
@@ -18,30 +39,10 @@ diff -ruN libvpx/build/make/configure.sh patched/build/make/configure.sh
            EXE_SFX=.exe
            ;;
          linux*|solaris*|android*)
-diff -ruN libvpx/build/make/Makefile patched/build/make/Makefile
---- libvpx/build/make/Makefile	2019-02-13 16:56:48.972857636 +0100
-+++ patched/build/make/Makefile	2019-02-13 16:50:37.995967583 +0100
-@@ -304,6 +304,7 @@
- 	$(if $(quiet),@echo "    [LD] $$@")
- 	$(qexec)$$(LD) -shared $$(LDFLAGS) \
-             -Wl,--no-undefined -Wl,-soname,$$(SONAME) \
-+            -Wl,-out-implib,libvpx.dll.a \
-             -Wl,--version-script,$$(EXPORTS_FILE) -o $$@ \
-             $$(filter %.o,$$^) $$(extralibs)
- endef
-@@ -388,7 +389,7 @@
- .libs: $(LIBS)
- 	@touch $@
- $(foreach lib,$(filter %_g.a,$(LIBS)),$(eval $(call archive_template,$(lib))))
--$(foreach lib,$(filter %so.$(SO_VERSION_MAJOR).$(SO_VERSION_MINOR).$(SO_VERSION_PATCH),$(LIBS)),$(eval $(call so_template,$(lib))))
-+$(foreach lib,$(filter %dll,$(LIBS)),$(eval $(call so_template,$(lib))))
- $(foreach lib,$(filter %$(SO_VERSION_MAJOR).dylib,$(LIBS)),$(eval $(call dl_template,$(lib))))
- $(foreach lib,$(filter %$(SO_VERSION_MAJOR).dll,$(LIBS)),$(eval $(call dll_template,$(lib))))
- 
-diff -ruN libvpx/configure patched/configure
---- libvpx/configure	2019-02-13 16:56:49.162860897 +0100
-+++ patched/configure	2019-02-13 16:53:03.328719607 +0100
-@@ -513,23 +513,23 @@
+diff --color -ruN pristine/configure patched/configure
+--- pristine/configure	2024-01-10 00:12:22.000000000 +0300
++++ patched/configure	2026-06-19 00:15:02.309100659 +0300
+@@ -555,23 +555,23 @@
  }
  
  process_detect() {
@@ -78,10 +79,10 @@ diff -ruN libvpx/configure patched/configure
      if [ -z "$CC" ] || enabled external_build; then
          echo "Bypassing toolchain for environment detection."
          enable_feature external_build
-diff -ruN libvpx/examples.mk patched/examples.mk
---- libvpx/examples.mk	2019-02-13 16:56:49.162860897 +0100
-+++ patched/examples.mk	2019-02-13 16:50:37.995967583 +0100
-@@ -315,7 +315,7 @@
+diff --color -ruN pristine/examples.mk patched/examples.mk
+--- pristine/examples.mk	2024-01-10 00:12:22.000000000 +0300
++++ patched/examples.mk	2026-06-19 00:15:02.311004407 +0300
+@@ -330,7 +330,7 @@
  ifneq ($(filter os2%,$(TGT_OS)),)
  SHARED_LIB_SUF=_dll.a
  else
@@ -90,10 +91,10 @@ diff -ruN libvpx/examples.mk patched/examples.mk
  endif
  endif
  CODEC_LIB_SUF=$(if $(CONFIG_SHARED),$(SHARED_LIB_SUF),.a)
-diff -ruN libvpx/libs.mk patched/libs.mk
---- libvpx/libs.mk	2019-02-13 16:56:48.972857636 +0100
-+++ patched/libs.mk	2019-02-13 16:50:37.995967583 +0100
-@@ -256,12 +256,12 @@
+diff --color -ruN pristine/libs.mk patched/libs.mk
+--- pristine/libs.mk	2024-01-10 00:12:22.000000000 +0300
++++ patched/libs.mk	2026-06-19 00:15:02.312327946 +0300
+@@ -336,12 +336,12 @@
  LIBVPX_SO_SYMLINKS      :=
  LIBVPX_SO_IMPLIB        := libvpx_dll.a
  else
@@ -111,7 +112,7 @@ diff -ruN libvpx/libs.mk patched/libs.mk
  endif
  endif
  endif
-@@ -271,7 +271,7 @@
+@@ -351,7 +351,7 @@
                             $(if $(LIBVPX_SO_IMPLIB), $(BUILD_PFX)$(LIBVPX_SO_IMPLIB))
  $(BUILD_PFX)$(LIBVPX_SO): $(LIBVPX_OBJS) $(EXPORT_FILE)
  $(BUILD_PFX)$(LIBVPX_SO): extralibs += -lm

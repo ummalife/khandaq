@@ -4,6 +4,7 @@
 
 import Foundation
 import MobileCoreServices
+import SnapKit
 
 class LoadingImageView: UIView {
     struct Constants {
@@ -12,6 +13,9 @@ class LoadingImageView: UIView {
         static let LabelBottomOffset = -6.0
         static let CenterImageSize = 50.0
         static let ProgressViewSize = 70.0
+        // KHANDAQ (#15): bounds for the aspect-ratio media preview bubble.
+        static let PreviewMaxWidth: CGFloat = 240.0
+        static let PreviewMaxHeight: CGFloat = 300.0
     }
 
     var imageButton: UIButton!
@@ -20,7 +24,38 @@ class LoadingImageView: UIView {
     var topLabel: UILabel!
     var bottomLabel: UILabel!
 
+    private var widthConstraint: Constraint?
+    private var heightConstraint: Constraint?
+
     var pressedHandle: (() -> Void)?
+
+    /// KHANDAQ (#15): size the preview box to the media's aspect ratio (bounded), so photos/videos
+    /// render at their real shape instead of a square crop. Falls back to the square file box.
+    func setPreviewSize(_ imageSize: CGSize) {
+        let box = LoadingImageView.previewBox(for: imageSize)
+        widthConstraint?.update(offset: box.width)
+        heightConstraint?.update(offset: box.height)
+    }
+
+    /// Revert to the square box (non-image files, loading/placeholder, reused cells).
+    func resetPreviewSize() {
+        widthConstraint?.update(offset: Constants.ImageButtonSize)
+        heightConstraint?.update(offset: Constants.ImageButtonSize)
+    }
+
+    static func previewBox(for imageSize: CGSize) -> CGSize {
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            return CGSize(width: Constants.ImageButtonSize, height: Constants.ImageButtonSize)
+        }
+        let aspect = imageSize.width / imageSize.height
+        var w = Constants.PreviewMaxWidth
+        var h = w / aspect
+        if h > Constants.PreviewMaxHeight {
+            h = Constants.PreviewMaxHeight
+            w = h * aspect
+        }
+        return CGSize(width: w.rounded(), height: h.rounded())
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -77,7 +112,8 @@ private extension LoadingImageView {
 
     func installConstraints() {
         snp.makeConstraints {
-            $0.size.equalTo(Constants.ImageButtonSize)
+            self.widthConstraint = $0.width.equalTo(Constants.ImageButtonSize).constraint
+            self.heightConstraint = $0.height.equalTo(Constants.ImageButtonSize).constraint
         }
 
         imageButton.snp.makeConstraints {

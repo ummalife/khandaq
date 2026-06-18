@@ -87,7 +87,7 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
             $0.trailing.equalTo(movableContentView).offset(-Constants.BigOffset)
             $0.top.equalTo(movableContentView).offset(Constants.SmallOffset)
             $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
-            $0.size.equalTo(Constants.ImageButtonSize)
+            // KHANDAQ (#15): size comes from LoadingImageView (square by default, aspect for media).
         }
 
         voiceMessageView.snp.makeConstraints {

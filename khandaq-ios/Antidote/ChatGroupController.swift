@@ -6,6 +6,8 @@ import UIKit
 import SnapKit
 import MobileCoreServices
 import QuickLook
+import ImageIO
+import AVFoundation
 
 private struct Constants {
     static let MessagesPortionSize = 50
@@ -48,6 +50,10 @@ class ChatGroupController: PortraitChatController {
     fileprivate var tableViewToChatInputConstraint: Constraint!
     fileprivate var chatInputViewBottomConstraint: Constraint?
     fileprivate let imageCache = NSCache<AnyObject, AnyObject>()
+    // KHANDAQ (#15): cached pixel dimensions (cheap header read) so the preview bubble is sized to the
+    // media's aspect ratio synchronously at display time — avoids a height "jump" when the heavy
+    // preview finishes loading async.
+    fileprivate let mediaPixelSizeCache = NSCache<NSString, NSValue>()
     fileprivate var connectionStatusObserver: NSObjectProtocol?
     fileprivate var voicePlayerObserver: NSObjectProtocol?
     fileprivate var membersDrawerView: GroupMembersDrawerView?
@@ -742,6 +748,31 @@ extension ChatGroupController: UITableViewDelegate {
         }
     }
 
+    // KHANDAQ (#15): file/media cells don't self-size in height (the movable-content cell hierarchy
+    // breaks automatic-dimension for them — the row stays at the estimate and the square preview box
+    // is squashed to a strip). Give inline image/video bubbles an explicit aspect-ratio height; let
+    // everything else keep automatic sizing.
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard let messageFile = message.messageFile,
+              let file = messageFile.filePath(),
+              messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
+            return UITableViewAutomaticDimension
+        }
+
+        let uti = inferredFileUTI(for: messageFile)
+        let isImage = UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage)
+        let isVideo = ChatFileMediaLoader.isVideoFile(uti: uti, fileName: messageFile.fileName)
+        guard isImage || isVideo else {
+            return UITableViewAutomaticDimension
+        }
+
+        // Use real pixel dimensions when readable; otherwise a 4:3 fallback so an image/video bubble
+        // is never squashed into a strip even if the header can't be read yet.
+        let size = mediaPixelSize(forFileAt: file, isVideo: isVideo) ?? CGSize(width: 4, height: 3)
+        return LoadingImageView.previewBox(for: size).height + 16.0
+    }
+
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         // KHANDAQ (#15): the table is vertically flipped to put newest at the bottom; flip each cell
         // back so its content is upright.
@@ -1118,8 +1149,15 @@ private extension ChatGroupController {
 
         let uti = inferredFileUTI(for: messageFile)
         let fileName = messageFile.fileName
+        let fileCell = (cell as? ChatIncomingFileCell) ?? (cell as? ChatOutgoingFileCell)
 
         if UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage) {
+            // KHANDAQ (#15): size the bubble synchronously from a cheap header read, so the heavy
+            // decode (async) just fills the already-correct box instead of resizing the row later.
+            if let pixelSize = mediaPixelSize(forFileAt: file, isVideo: false) {
+                fileCell?.loadingView.setPreviewSize(pixelSize)
+            }
+
             if let image = imageCache.object(forKey: file as AnyObject) as? UIImage {
                 applyInlinePreview(image, durationText: nil, isVideo: false, to: cell)
             }
@@ -1130,6 +1168,10 @@ private extension ChatGroupController {
         }
 
         if ChatFileMediaLoader.isVideoFile(uti: uti, fileName: fileName) {
+            if let pixelSize = mediaPixelSize(forFileAt: file, isVideo: true) {
+                fileCell?.loadingView.setPreviewSize(pixelSize)
+            }
+
             if let preview = ChatFileMediaLoader.cachedPreview(for: file) {
                 applyInlinePreview(preview.image, durationText: preview.durationText, isVideo: true, to: cell)
             }
@@ -1137,6 +1179,40 @@ private extension ChatGroupController {
                 loadVideoPreviewForCellAtIndexPath(indexPath, fromFile: file)
             }
         }
+    }
+
+    /// KHANDAQ (#15): cheap pixel-dimensions read (image header / video track) for aspect sizing.
+    /// Cached per file path. Returns nil if it cannot be determined (cell keeps the square box).
+    func mediaPixelSize(forFileAt path: String, isVideo: Bool) -> CGSize? {
+        if let cached = mediaPixelSizeCache.object(forKey: path as NSString) {
+            let size = cached.cgSizeValue
+            return size.width > 0 && size.height > 0 ? size : nil
+        }
+
+        var result: CGSize = .zero
+        let url = URL(fileURLWithPath: path)
+
+        if isVideo {
+            let asset = AVURLAsset(url: url)
+            if let track = asset.tracks(withMediaType: .video).first {
+                let transformed = track.naturalSize.applying(track.preferredTransform)
+                result = CGSize(width: abs(transformed.width), height: abs(transformed.height))
+            }
+        }
+        else if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                let width = props[kCGImagePropertyPixelWidth] as? CGFloat,
+                let height = props[kCGImagePropertyPixelHeight] as? CGFloat {
+            result = CGSize(width: width, height: height)
+        }
+
+        // Only cache a real measurement; a transient failure (e.g. file still downloading) must not
+        // poison the cache permanently.
+        guard result.width > 0, result.height > 0 else {
+            return nil
+        }
+        mediaPixelSizeCache.setObject(NSValue(cgSize: result), forKey: path as NSString)
+        return result
     }
 
     func applyInlinePreview(_ image: UIImage, durationText: String?, isVideo: Bool, to cell: UITableViewCell) {

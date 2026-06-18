@@ -50,6 +50,10 @@ class ChatGenericFileCell: ChatMovableDateCell {
         loadingView.imageButton.contentVerticalAlignment = .fill
         loadingView.imageButton.setImage(image, for: UIControlState())
 
+        // KHANDAQ (#15): shape the bubble to the photo/video aspect ratio (the box now matches the
+        // image, so scaleAspectFill neither crops nor stretches).
+        loadingView.setPreviewSize(image.size)
+
         if state == .waitingConfirmation || state == .done {
             loadingView.centerImageView.image = nil
         }
@@ -62,6 +66,9 @@ class ChatGenericFileCell: ChatMovableDateCell {
             assert(false, "Wrong model \(model) passed to cell \(self)")
             return
         }
+
+        // KHANDAQ (#15): reset to the square box; setButtonImage() re-sizes to aspect for media.
+        loadingView.resetPreviewSize()
 
         state = fileModel.state
         transferBytesTotal = fileModel.fileSizeBytes

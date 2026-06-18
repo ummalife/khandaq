@@ -128,7 +128,10 @@ extension GroupInfoController: UITableViewDataSource {
             case .peerLimit:
                 return isFounder ? 1 : 0
             case .chatId:
-                return chatIdHex.isEmpty ? 1 : 2
+                // KHANDAQ: hide the group chat-id section. Joining by chat-id needs UDP peer
+                // discovery (blocked on target networks); members are only added manually via
+                // friend-invite, so a non-functional ID just confuses users.
+                return 0
             case .notifications:
                 return 1
             case .invite:
@@ -155,7 +158,7 @@ extension GroupInfoController: UITableViewDataSource {
             case .peerLimit:
                 return isFounder ? String(localized: "group_peer_limit_header") : nil
             case .chatId:
-                return String(localized: "group_chat_id_header")
+                return nil // KHANDAQ: chat-id section hidden (see numberOfRows)
             case .notifications:
                 return String(localized: "group_notifications_header")
             case .invite:
@@ -198,7 +201,7 @@ extension GroupInfoController: UITableViewDataSource {
                 }
                 return String(localized: "group_peer_limit_footer")
             case .chatId:
-                return String(localized: "group_chat_id_footer")
+                return nil // KHANDAQ: chat-id section hidden (see numberOfRows)
             case .danger:
                 if systemMessageCount > 0 {
                     return String(localized: "group_danger_footer_with_system_format", systemMessageCount)

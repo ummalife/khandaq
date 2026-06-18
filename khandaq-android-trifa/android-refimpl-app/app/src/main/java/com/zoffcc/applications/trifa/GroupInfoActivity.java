@@ -177,6 +177,13 @@ public class GroupInfoActivity extends AppCompatActivity
         group_info_settings_section = findViewById(R.id.group_info_settings_section);
         group_info_founder_section = findViewById(R.id.group_info_founder_section);
         group_info_full_id_section = findViewById(R.id.group_info_full_id_section);
+        // KHANDAQ: hide the group ID / chat-id section. Joining a group by this ID needs UDP peer
+        // discovery, which is blocked on the target networks, so members are only ever added manually
+        // via friend-invite. Showing a non-functional ID just confuses users.
+        if (group_info_full_id_section != null)
+        {
+            group_info_full_id_section.setVisibility(View.GONE);
+        }
         group_info_peer_limit_section = findViewById(R.id.group_info_peer_limit_section);
         group_info_members_list = findViewById(R.id.group_info_members_list);
 

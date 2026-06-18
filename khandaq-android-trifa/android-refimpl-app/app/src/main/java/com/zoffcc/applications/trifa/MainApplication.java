@@ -106,6 +106,50 @@ public class MainApplication extends Application
         randnum = (int) (Math.random() * 1000d);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
+
+        // KHANDAQ: warm up the media codec caches on a low-priority background thread.
+        // Opening a chat with media made the UI thread run ExoPlayer/media3 track selection
+        // (PreloadMediaSource → MappingTrackSelector → MediaCodecUtil.getDecoderInfos) and block for
+        // >8s on the MediaCodecUtil class lock held by the ExoPlayer:Playback thread → ANR. The slow
+        // part is per-codec capability queries that media3 does INSIDE that synchronized lock; they
+        // are very slow on some devices (Xiaomi). Pre-populating media3's own decoderInfosCache here
+        // means both the playback thread and the UI thread later hit the cache (brief lock, no
+        // enumeration) instead of contending on a long first-time enumeration.
+        new Thread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try
+                {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+                    // initialise the system codec list (parsed once, cached process-wide)
+                    new android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS).getCodecInfos();
+                }
+                catch (Throwable ignored)
+                {
+                }
+
+                // populate media3's internal decoder cache for the formats ExoPlayer probes
+                final String[] mimes = {
+                        "audio/mp4a-latm", "audio/mpeg", "audio/opus", "audio/vorbis", "audio/raw",
+                        "audio/3gpp", "audio/amr-wb", "audio/flac", "audio/ac3", "audio/eac3",
+                        "video/avc", "video/hevc", "video/x-vnd.on2.vp8", "video/x-vnd.on2.vp9",
+                        "video/av01", "video/mp4v-es", "video/3gpp"
+                };
+                for (final String mime : mimes)
+                {
+                    try
+                    {
+                        androidx.media3.exoplayer.mediacodec.MediaCodecUtil.getDecoderInfos(mime, false, false);
+                    }
+                    catch (Throwable ignored)
+                    {
+                    }
+                }
+            }
+        }, "khq-codec-warmup").start();
+
         DbSecretKeyStorage.onApplicationStart(this);
         ensureFcmNotificationChannel();
         HelperToxNotification.ensureChannel(this);

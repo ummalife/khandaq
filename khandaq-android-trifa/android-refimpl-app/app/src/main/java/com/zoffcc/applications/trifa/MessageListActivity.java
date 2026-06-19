@@ -173,6 +173,10 @@ public class MessageListActivity extends AppCompatActivity
     long friendnum_prev = -1;
     String friend_pubkey = null;
     static final int MEDIAPICK_ID_001 = 8002;
+    // KHANDAQ (#17): camera capture (photo/video) result codes + the URI we hand the camera app.
+    static final int CAMERA_PHOTO_ID = 8021;
+    static final int CAMERA_VIDEO_ID = 8022;
+    private Uri pending_camera_capture_uri = null;
 
     private boolean mediaPreviewResultHandled = false;
     /** True while document picker or {@link MediaSendPreviewActivity} owns the foreground. */
@@ -1677,28 +1681,39 @@ public class MessageListActivity extends AppCompatActivity
     public void send_attatchment(View view)
     {
         HelperGeneric.logI(TAG, "send_attatchment:---start");
-
-        String msg = "";
-        // add attachement ------------
-        // add attachement ------------
-
         stop_self_typing_indicator_s();
-        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file
-        // browser.
+
+        // KHANDAQ (#17): offer the camera (photo/video) alongside the gallery so the user can shoot
+        // and send media right away, instead of only picking an existing file.
+        final CharSequence[] options = {
+                getString(R.string.attach_option_camera_photo),
+                getString(R.string.attach_option_camera_video),
+                getString(R.string.attach_option_gallery)
+        };
+
+        new android.app.AlertDialog.Builder(this).setTitle(R.string.attach_option_title).setItems(options, (dialog, which) ->
+        {
+            switch (which)
+            {
+                case 0:
+                    open_camera_capture(false);
+                    break;
+                case 1:
+                    open_camera_capture(true);
+                    break;
+                default:
+                    open_gallery_picker();
+                    break;
+            }
+        }).show();
+    }
+
+    private void open_gallery_picker()
+    {
+        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-
-        // Filter to only show results that can be "opened", such as a
-        // file (as opposed to a list of contacts or timezones)
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-
-        // Filter to show only images, using the image MIME data type.
-        // If one wanted to search for ogg vorbis files, the type would be "audio/ogg".
-        // To search for all documents available via installed storage providers,
-        // it would be "*/*".
-        // intent.setType("image/*");
         intent.setType("*/*");
-
-        // HINT: rework this to not use FLAG_GRANT_PERSISTABLE_URI_PERMISSION anymore
         intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
@@ -1712,9 +1727,43 @@ public class MessageListActivity extends AppCompatActivity
         outgoingMediaPickerActive = true;
         sync_outgoing_attachment_friend_pubkey();
         startActivityForResult(intent, MEDIAPICK_ID_001);
+    }
 
-        // add attachement ------------
-        // add attachement ------------
+    private void open_camera_capture(final boolean video)
+    {
+        try
+        {
+            final java.io.File dir = new java.io.File(getExternalFilesDir(null), "tmpdir");
+            if (!dir.exists())
+            {
+                dir.mkdirs();
+            }
+
+            final String name = (video ? "VID_" : "IMG_") + System.currentTimeMillis() + (video ? ".mp4" : ".jpg");
+            final java.io.File outFile = new java.io.File(dir, name);
+            final Uri outUri = androidx.core.content.FileProvider.getUriForFile(
+                    this, KhandaqProviders.STD_FILE_PROVIDER, outFile);
+            pending_camera_capture_uri = outUri;
+
+            final Intent intent = new Intent(video ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, outUri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
+            if (intent.resolveActivity(getPackageManager()) == null)
+            {
+                Toast.makeText(this, R.string.attach_no_camera, Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            sync_outgoing_attachment_friend_pubkey();
+            outgoingMediaPickerActive = true;
+            startActivityForResult(intent, video ? CAMERA_VIDEO_ID : CAMERA_PHOTO_ID);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "open_camera_capture:EE:" + e.getMessage());
+            Toast.makeText(this, R.string.attach_no_camera, Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -2195,10 +2244,25 @@ public class MessageListActivity extends AppCompatActivity
 
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == MEDIAPICK_ID_001 || requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW)
+        if (requestCode == MEDIAPICK_ID_001 || requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW
+                || requestCode == CAMERA_PHOTO_ID || requestCode == CAMERA_VIDEO_ID)
         {
             outgoingMediaPickerActive = false;
             prepareFriendMediaSendContext();
+        }
+
+        // KHANDAQ (#17): a captured photo/video lands at the URI we passed to the camera (data is null
+        // for capture intents) — send it through the same media path as a gallery pick.
+        if ((requestCode == CAMERA_PHOTO_ID || requestCode == CAMERA_VIDEO_ID) && resultCode == Activity.RESULT_OK)
+        {
+            final Uri captured = pending_camera_capture_uri;
+            pending_camera_capture_uri = null;
+            if (captured != null)
+            {
+                MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(captured),
+                        MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true);
+            }
+            return;
         }
 
         if (requestCode == CallingWaitingActivity_ID)

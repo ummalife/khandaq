@@ -256,7 +256,7 @@
                 android:textAlignment="gravity"
                 android:textColor="#EFEFEF"
                 android:textSize="8sp"
-                android:visibility="gone" />
+                android:visibility="visible" />
 
 
             <TextView

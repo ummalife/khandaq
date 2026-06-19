@@ -454,6 +454,11 @@
     <string name="GroupActivityActive">Активный:</string>
     <string name="GroupActivityOffline">Не в сети:</string>
     <string name="layout___toxid">Вставьте ID</string>
+    <string name="attach_option_title">Прикрепить</string>
+    <string name="attach_option_camera_photo">Камера (фото)</string>
+    <string name="attach_option_camera_video">Снять видео</string>
+    <string name="attach_option_gallery">Галерея</string>
+    <string name="attach_no_camera">Камера недоступна</string>
     <string name="friend_display_name_fallback">Контакт</string>
     <string name="layout___scan_qr_code">сканировать QR-код</string>
     <string name="layout___scan_qr_code_gallery">сканировать QR-код из галереи</string>

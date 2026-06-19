@@ -845,6 +845,11 @@
     <!-- Layout texts -->
     <!-- Layout texts -->
     <string name="layout___toxid">Paste ID</string>
+    <string name="attach_option_title">Attach</string>
+    <string name="attach_option_camera_photo">Camera (photo)</string>
+    <string name="attach_option_camera_video">Record video</string>
+    <string name="attach_option_gallery">Gallery</string>
+    <string name="attach_no_camera">No camera available</string>
     <string name="friend_display_name_fallback">Contact</string>
     <string name="layout___group_name">Group Name</string>
     <string name="layout___group_id">Group ID</string>

@@ -698,3 +698,4 @@
 "group_peer_limit_invalid" = "Введите число больше нуля.";
 "group_private_message_action" = "Личное сообщение";
 "group_private_message_failed" = "Не удалось отправить личное сообщение.";
+"group_private_message_notification_title_format" = "🔒 %@ (личное)";

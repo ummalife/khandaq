@@ -232,7 +232,10 @@ private extension NotificationCoordinator {
     }
 
     func playSoundForMessageIfNeeded(_ message: OCTMessageAbstract) {
-        if message.isOutgoing() || message.groupHistorySync || message.groupPrivateMessage || message.groupSystemMessage || areNotificationsMuted(for: message) {
+        // KHANDAQ: incoming private (in-group direct) messages DO alert now — they are addressed
+        // personally to the recipient, so they should be surfaced, not silently filed in the per-peer
+        // thread. isOutgoing() still suppresses our own sent private messages.
+        if message.isOutgoing() || message.groupHistorySync || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return
         }
 
@@ -242,7 +245,9 @@ private extension NotificationCoordinator {
     }
 
     func shouldEnqueueMessage(_ message: OCTMessageAbstract) -> Bool {
-        if message.isOutgoing() || message.groupHistorySync || message.groupPrivateMessage || message.groupSystemMessage || areNotificationsMuted(for: message) {
+        // KHANDAQ: private (in-group direct) messages are notified like any incoming message so the
+        // recipient sees they were addressed personally (Android parity). Own sends stay filtered.
+        if message.isOutgoing() || message.groupHistorySync || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return false
         }
 
@@ -329,8 +334,29 @@ private extension NotificationCoordinator {
         var icon: UIImage?
         let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
         let isGroup = chat?.isGroup ?? false
+        let isGroupPrivate = isGroup && message.groupPrivateMessage
 
-        if isGroup {
+        // Sender display name for a group peer (used both for the private-message title and the
+        // regular in-group peer prefix).
+        let groupPeerName: String = {
+            if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
+                return peerName
+            }
+            if message.groupSenderPeerId > 0 {
+                return "Peer \(message.groupSenderPeerId)"
+            }
+            return ""
+        }()
+
+        if isGroupPrivate {
+            // A direct (private) message sent to you inside a group — title it so it's unmistakably
+            // addressed to you personally, not a normal group post (Android parity).
+            let sender = groupPeerName.isEmpty
+                ? (chat?.groupName ?? String(localized: "group_chat_default_title"))
+                : groupPeerName
+            title = String(localized: "group_private_message_notification_title_format", sender)
+        }
+        else if isGroup {
             title = chat?.groupName ?? String(localized: "group_chat_default_title")
         }
         else if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {
@@ -344,19 +370,12 @@ private extension NotificationCoordinator {
         var body: String = ""
         let action = NotificationAction.openChat(chatUniqueIdentifier: message.chatUniqueIdentifier)
         let peerPrefix: String = {
-            guard isGroup else {
+            // Private messages already name the sender in the title, so no in-body peer prefix.
+            guard isGroup, !isGroupPrivate, !groupPeerName.isEmpty else {
                 return ""
             }
 
-            if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
-                return "\(peerName): "
-            }
-
-            if message.groupSenderPeerId > 0 {
-                return "Peer \(message.groupSenderPeerId): "
-            }
-
-            return ""
+            return "\(groupPeerName): "
         }()
 
         if let messageText = message.messageText {

@@ -534,6 +534,7 @@
 "group_chat_id_loading" = "Загрузка…";
 "group_members_header" = "Участники";
 "group_members_header_format" = "Участники (%d)";
+"group_members_header_online_format" = "Участников: %1$d · %2$d онлайн";
 "group_members_empty" = "Пока нет участников";
 "group_member_list_title" = "Участники";
 "group_member_status_offline" = "Не в сети";

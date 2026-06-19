@@ -79,6 +79,9 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
 
 - (int32_t)peerCountForChat:(OCTChat *)chat;
 
+// KHANDAQ (#9): saved members currently offline. Total real members = peerCountForChat + this.
+- (int32_t)offlinePeerCountForChat:(OCTChat *)chat;
+
 - (RLMResults *)peersForChat:(OCTChat *)chat;
 
 - (void)refreshPeersForChat:(OCTChat *)chat;

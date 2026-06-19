@@ -530,6 +530,7 @@
 "group_chat_id_loading" = "Loading…";
 "group_members_header" = "Members";
 "group_members_header_format" = "Members (%d)";
+"group_members_header_online_format" = "Members: %1$d · %2$d online";
 "group_members_empty" = "No members yet";
 "group_member_list_title" = "Members";
 "group_member_status_offline" = "Offline";

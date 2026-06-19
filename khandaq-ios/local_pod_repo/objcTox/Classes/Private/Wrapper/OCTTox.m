@@ -1771,6 +1771,23 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return count;
 }
 
+- (uint32_t)groupOfflinePeerCountForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    Tox_Err_Group_Peer_Query cError;
+    uint32_t count = tox_group_offline_peer_count(self.tox, groupNumber, &cError);
+
+    if (cError != TOX_ERR_GROUP_PEER_QUERY_OK) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                     description:@"Cannot query group offline peer count"
+                                   failureReason:@"Group not found"];
+        }
+        return 0;
+    }
+
+    return count;
+}
+
 - (NSArray<NSDictionary *> *)groupPeersForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
 {
     Tox_Err_Group_Peer_Query cError;

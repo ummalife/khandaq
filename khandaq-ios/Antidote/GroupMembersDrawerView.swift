@@ -111,9 +111,15 @@ final class GroupMembersDrawerView: UIView {
     }
 
     private func drawerTitle() -> String {
-        let count = max(Int(submanagerGroups.peerCount(for: chat)), peers.count)
-        if count > 0 {
-            return String(localized: "group_members_header_format", count)
+        // KHANDAQ (#9): total · online from toxcore's NGC-synced counts (peer count = online incl.
+        // self, offline count = saved disconnected members) so the figure matches across clients.
+        let online = Int(submanagerGroups.peerCount(for: chat))
+        let total = max(online + Int(submanagerGroups.offlinePeerCount(for: chat)), peers.count)
+        if total > online && online > 0 {
+            return String(localized: "group_members_header_online_format", total, online)
+        }
+        if total > 0 {
+            return String(localized: "group_members_header_format", total)
         }
         return String(localized: "group_member_list_title")
     }

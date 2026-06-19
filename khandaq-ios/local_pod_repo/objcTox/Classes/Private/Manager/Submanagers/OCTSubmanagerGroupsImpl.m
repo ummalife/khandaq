@@ -467,6 +467,27 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     return [[self.dataSource managerGetRealmManager] groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
 }
 
+// KHANDAQ (#9): saved members currently offline, straight from toxcore's NGC-synced state. Total real
+// members = peerCountForChat + this — the same on every client (parity with Android), instead of
+// each device guessing from its own peer DB.
+- (int32_t)offlinePeerCountForChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    if (chat.groupNumber < 0) {
+        return 0;
+    }
+
+    __block uint32_t count = 0;
+    OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        count = [tox groupOfflinePeerCountForGroupNumber:groupNumber error:nil];
+    }];
+
+    return (int32_t)count;
+}
+
 - (void)refreshPeersForChat:(OCTChat *)chat
 {
     NSParameterAssert(chat);

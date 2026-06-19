@@ -55,6 +55,10 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         return chat?.groupPeerCount ?? 0
     }
 
+    func offlinePeerCount(for chat: OCTChat!) -> Int32 {
+        return 0
+    }
+
     func peers(for chat: OCTChat!) -> RLMResults<AnyObject>! {
         let predicate = NSPredicate(format: "chatUniqueIdentifier == %@", chat?.uniqueIdentifier ?? "")
         return OCTGroupPeer.objects(with: predicate).sortedResults(usingKeyPath: "peerName", ascending: true)

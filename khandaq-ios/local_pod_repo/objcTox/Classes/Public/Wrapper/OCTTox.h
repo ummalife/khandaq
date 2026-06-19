@@ -677,6 +677,10 @@
 
 - (uint32_t)groupPeerCountForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
 
+// KHANDAQ (#9): saved members currently offline. Total real members = peer count + this. Both come
+// from NGC-synced group state, so every client agrees on the count.
+- (uint32_t)groupOfflinePeerCountForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error;
+
 /**
  * Returns array of dictionaries with keys @"peerId" (NSNumber), @"name" (NSString), @"role" (NSNumber/OCTToxGroupRole).
  */

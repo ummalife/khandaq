@@ -1730,8 +1730,36 @@ public class HelperGroup
      * seen-peer DB (which is what made the counts disagree across clients). Cheaper than walking the
      * full peer list too. Falls back to the DB-derived roster when toxcore has no live handle yet.
      */
+    // KHANDAQ (#22): this runs in the group-list row bind (UI thread, under the tox lock), so on the
+    // chat/group list it was called for every visible row on every rebind/scroll — 3 JNI calls each,
+    // which froze older phones. Cache the result per group for a short window: a list count does not
+    // need sub-second freshness, and a scroll/tab-switch burst now reuses one computation per group.
+    private static final java.util.concurrent.ConcurrentHashMap<String, long[]> ngc_member_count_cache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> ngc_member_count_cache_ts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long NGC_MEMBER_COUNT_CACHE_TTL_MS = 1500L;
+
     static long[] count_authoritative_group_members(final String group_identifier)
     {
+        if (group_identifier == null)
+        {
+            return new long[]{0L, 0L};
+        }
+
+        final String key = group_identifier.toLowerCase(Locale.ROOT);
+        final long now = System.currentTimeMillis();
+        final Long ts = ngc_member_count_cache_ts.get(key);
+        if (ts != null && (now - ts) < NGC_MEMBER_COUNT_CACHE_TTL_MS)
+        {
+            final long[] cached = ngc_member_count_cache.get(key);
+            if (cached != null)
+            {
+                return cached;
+            }
+        }
+
+        long[] result = null;
         try
         {
             final long group_num = tox_group_by_groupid__wrapper(group_identifier);
@@ -1741,14 +1769,22 @@ public class HelperGroup
                 final long offline = Math.max(0L, tox_group_offline_peer_count(group_num));
                 if (online > 0 || offline > 0)
                 {
-                    return new long[]{online, offline};
+                    result = new long[]{online, offline};
                 }
             }
         }
         catch (Throwable ignored)
         {
         }
-        return count_visible_group_members(group_identifier);
+
+        if (result == null)
+        {
+            result = count_visible_group_members(group_identifier);
+        }
+
+        ngc_member_count_cache.put(key, result);
+        ngc_member_count_cache_ts.put(key, now);
+        return result;
     }
 
     static String format_group_connecting_status_subtitle(final Context context, final String group_identifier)

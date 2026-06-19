@@ -192,7 +192,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
             {
                 if (fl.group_active)
                 {
-                    if (tox_group_is_connected(tox_group_by_groupid__wrapper(fl.group_identifier)) == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+                    // KHANDAQ (#22): reuse group_number resolved above instead of a second JNI lookup per row.
+                    if (tox_group_is_connected(group_number) == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
                     {
                         imageView.setImageResource(R.drawable.circle_green);
                     }

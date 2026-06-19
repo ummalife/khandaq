@@ -252,7 +252,9 @@ public class GroupMessageListActivity extends AppCompatActivity
     static Thread NGC_Group_audio_record_thread = null;
     private static boolean NGC_Group_video_play_thread_running = false;
     private static boolean NGC_Group_audio_record_thread_running = false;
-    static Map<String, Long> lookup_ngc_incoming_video_peer_list = new HashMap<String, Long>();
+    // KHANDAQ (security D-6): touched from the NGC video callback thread and the UI thread — a plain
+    // HashMap here threw ConcurrentModificationException (DoS) during an active group video session.
+    static Map<String, Long> lookup_ngc_incoming_video_peer_list = new java.util.concurrent.ConcurrentHashMap<String, Long>();
     static int ngc_incoming_video_peer_toggle_current_index = 0;
     static int flush_decoder = 0;
     static long last_video_seq_num = -1;
@@ -297,6 +299,10 @@ public class GroupMessageListActivity extends AppCompatActivity
     static boolean sending_video_to_group = false;
     static String ngc_video_showing_video_from_peer_pubkey = "-1";
     static long ngc_video_frame_last_incoming_ts = -1L;
+    // KHANDAQ (security D-5): cap incoming NGC video processing to ~30 fps. A flooding peer otherwise
+    // forces ~0.5 MB of allocations + a UI-thread Runnable per frame → ANR/jank.
+    static long ngc_video_frame_last_processed_ts = 0L;
+    static final long NGC_VIDEO_MIN_FRAME_INTERVAL_MS = 33L;
     static long ngc_video_packet_last_incoming_ts = -1L;
     static long ngc_audio_packet_last_incoming_ts = -1L;
     static Bitmap ngc_video_frame_image = null;
@@ -3919,6 +3925,14 @@ public class GroupMessageListActivity extends AppCompatActivity
             return;
         }
 
+        // KHANDAQ (security D-5): drop frames that arrive faster than our ~30 fps cap (anti-flood).
+        final long now_av_frame = System.currentTimeMillis();
+        if ((now_av_frame - ngc_video_frame_last_processed_ts) < NGC_VIDEO_MIN_FRAME_INTERVAL_MS)
+        {
+            return;
+        }
+        ngc_video_frame_last_processed_ts = now_av_frame;
+
         ngc_video_packet_last_incoming_ts = System.currentTimeMillis();
 
         if ((ngc_video_frame_image != null) && (!ngc_video_frame_image.isRecycled()))
@@ -3995,6 +4009,17 @@ public class GroupMessageListActivity extends AppCompatActivity
                                     final int u_bytes2_decoder = (h2_decoder_uv * w2_decoder_uv);
                                     final int v_bytes2_decoder = (h2_decoder_uv * w2_decoder_uv);
 
+                                    // KHANDAQ (security D-4): w2_decoder is the stride the (untrusted) remote
+                                    // frame made the decoder report. If it overflows the fixed y/u/v buffers,
+                                    // the put() below throws IndexOutOfBounds → DoS. Drop the bad frame.
+                                    if (w2_decoder < 2 || y_bytes2_decoder > y_buf2.length
+                                            || u_bytes2_decoder > u_buf2.length
+                                            || v_bytes2_decoder > v_buf2.length)
+                                    {
+                                        ngc_video_view.setImageResource(R.drawable.round_loading_animation);
+                                        return;
+                                    }
+
                                     ByteBuffer yuv_frame_data_buf = ByteBuffer.allocateDirect(
                                             y_bytes2_decoder + u_bytes2_decoder + v_bytes2_decoder);
                                     yuv_frame_data_buf.rewind();
@@ -4042,6 +4067,14 @@ public class GroupMessageListActivity extends AppCompatActivity
             // wrong NGC group
             return;
         }
+
+        // KHANDAQ (security D-5): drop frames that arrive faster than our ~30 fps cap (anti-flood).
+        final long now_av_frame = System.currentTimeMillis();
+        if ((now_av_frame - ngc_video_frame_last_processed_ts) < NGC_VIDEO_MIN_FRAME_INTERVAL_MS)
+        {
+            return;
+        }
+        ngc_video_frame_last_processed_ts = now_av_frame;
 
         ngc_video_packet_last_incoming_ts = System.currentTimeMillis();
 
@@ -4138,6 +4171,17 @@ public class GroupMessageListActivity extends AppCompatActivity
                                     final int y_bytes2_decoder = h2_decoder * w2_decoder;
                                     final int u_bytes2_decoder = (h2_decoder_uv * w2_decoder_uv);
                                     final int v_bytes2_decoder = (h2_decoder_uv * w2_decoder_uv);
+
+                                    // KHANDAQ (security D-4): w2_decoder is the stride the (untrusted) remote
+                                    // frame made the decoder report. If it overflows the fixed y/u/v buffers,
+                                    // the put() below throws IndexOutOfBounds → DoS. Drop the bad frame.
+                                    if (w2_decoder < 2 || y_bytes2_decoder > y_buf2.length
+                                            || u_bytes2_decoder > u_buf2.length
+                                            || v_bytes2_decoder > v_buf2.length)
+                                    {
+                                        ngc_video_view.setImageResource(R.drawable.round_loading_animation);
+                                        return;
+                                    }
 
                                     ByteBuffer yuv_frame_data_buf = ByteBuffer.allocateDirect(
                                             y_bytes2_decoder + u_bytes2_decoder + v_bytes2_decoder);

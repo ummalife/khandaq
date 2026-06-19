@@ -321,6 +321,8 @@
     <string name="tab_contacts">Контакты</string>
     <string name="tab_chats">Чаты</string>
     <string name="main_header_connecting">Соединение…</string>
+    <string name="connection_warn_weak">Слабое соединение</string>
+    <string name="connection_good">Связь стабильна</string>
     <string name="chat_filter_groups">Группы</string>
     <string name="chat_filter_favorites">Избранные</string>
     <string name="favorites_chat_title">Избранное</string>

@@ -21,6 +21,34 @@ public final class ConnectionQualityMonitor
     private volatile long estimatedRttMs = 80L;
     private long lastBootstrapStartMs = 0L;
 
+    /** Notified (possibly off the UI thread) on every level transition, so the UI can warn the user. */
+    public interface LevelListener
+    {
+        void onLevelChanged(Level oldLevel, Level newLevel);
+    }
+
+    private volatile LevelListener levelListener;
+
+    public void setLevelListener(final LevelListener listener)
+    {
+        this.levelListener = listener;
+    }
+
+    private void setLevel(final Level newLevel)
+    {
+        final Level old = this.level;
+        if (old == newLevel)
+        {
+            return;
+        }
+        this.level = newLevel;
+        final LevelListener l = this.levelListener;
+        if (l != null)
+        {
+            l.onLevelChanged(old, newLevel);
+        }
+    }
+
     public static ConnectionQualityMonitor get()
     {
         return INSTANCE;
@@ -42,21 +70,21 @@ public final class ConnectionQualityMonitor
 
         if (!connected)
         {
-            level = Level.OFFLINE;
+            setLevel(Level.OFFLINE);
             return;
         }
 
         if (estimatedRttMs < 300L)
         {
-            level = Level.STRONG;
+            setLevel(Level.STRONG);
         }
         else if (estimatedRttMs < 1500L)
         {
-            level = Level.MEDIUM;
+            setLevel(Level.MEDIUM);
         }
         else
         {
-            level = Level.WEAK;
+            setLevel(Level.WEAK);
         }
 
         NetworkDiagnosticsLog.log("connection_quality", level.name() + " rtt_ms=" + estimatedRttMs);
@@ -64,7 +92,7 @@ public final class ConnectionQualityMonitor
 
     public void onInternetLost()
     {
-        level = Level.OFFLINE;
+        setLevel(Level.OFFLINE);
     }
 
     /** Tox core reports a live connection — clear stale OFFLINE until RTT samples say otherwise. */
@@ -72,13 +100,13 @@ public final class ConnectionQualityMonitor
     {
         if (level == Level.OFFLINE)
         {
-            level = Level.STRONG;
+            setLevel(Level.STRONG);
         }
     }
 
     public void onToxDisconnected()
     {
-        level = Level.OFFLINE;
+        setLevel(Level.OFFLINE);
     }
 
     public Level getLevel()

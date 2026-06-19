@@ -1,6 +1,8 @@
 <resources>
     <string name="app_name" translatable="false">Khandaq</string>
     <string name="main_header_connecting">Connecting…</string>
+    <string name="connection_warn_weak">Weak connection</string>
+    <string name="connection_good">Connection stable</string>
     <string name="connection_quality_strong">Connection: good</string>
     <string name="connection_quality_medium">Connection: stable</string>
     <string name="connection_quality_weak">Connection: weak</string>

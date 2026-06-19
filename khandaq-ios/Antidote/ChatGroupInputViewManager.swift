@@ -9,8 +9,6 @@ import Photos
 import PhotosUI
 import UIKit
 
-private let groupVideoSendQueue = DispatchQueue(label: "khandaq.group.video.send", qos: .userInitiated)
-
 class ChatGroupInputViewManager: NSObject {
     fileprivate var chat: OCTChat!
     fileprivate weak var inputView: ChatInputView?
@@ -205,19 +203,24 @@ extension ChatGroupInputViewManager: PHPickerViewControllerDelegate {
                     return
                 }
 
-                groupVideoSendQueue.async {
-                    autoreleasepool {
-                        do {
-                            let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
-                            DispatchQueue.main.async {
-                                self.presentMediaPreview(items: [.video(staged)])
-                            }
-                        }
-                        catch {
-                            DispatchQueue.main.async {
-                                self.showVideoSendError(error, retryURL: nil)
-                            }
-                        }
+                // KHANDAQ: the picker's temporary URL is only valid until THIS completion returns.
+                // Copy it into app storage synchronously here — doing the copy on another queue (as
+                // before) raced the system deleting the temp file, so the video silently never sent
+                // (photos go through loadObject(UIImage), which keeps data in memory, so they worked).
+                let stagedResult: Result<URL, Error>
+                do {
+                    stagedResult = .success(try VideoSendPreprocessor.shared.stagePickerVideo(at: url))
+                }
+                catch {
+                    stagedResult = .failure(error)
+                }
+
+                DispatchQueue.main.async {
+                    switch stagedResult {
+                    case .success(let staged):
+                        self.presentMediaPreview(items: [.video(staged)])
+                    case .failure(let error):
+                        self.showVideoSendError(error, retryURL: nil)
                     }
                 }
             }

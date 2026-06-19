@@ -36,7 +36,7 @@ import info.guardianproject.iocipher.File;
 import info.guardianproject.iocipher.RandomAccessFile;
 
 
-    public class vVoicePlayerView extends LinearLayout {
+    public class vVoicePlayerView extends LinearLayout implements ChatVoiceSessionHelper.ActiveVoicePlayer {
 
     private int playPaueseBackgroundColor, shareBackgroundColor, viewBackgroundColor,
             seekBarProgressColor, seekBarThumbColor, progressTimeColor, timingBackgroundColor,
@@ -55,6 +55,28 @@ import info.guardianproject.iocipher.RandomAccessFile;
     private TextView txtProcess;
     private MediaPlayer mediaPlayer;
     private ProgressBar pb_play;
+
+    // KHANDAQ (#20): Telegram-style single voice playback — registered with the shared coordinator
+    // (ChatVoiceSessionHelper) so a newly started voice pauses whichever one was playing before.
+    @Override
+    public void pauseForHandoff() {
+        try {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                mediaPlayer.pause();
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            ((Activity) context).runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    imgPause.setVisibility(View.GONE);
+                    imgPlay.setVisibility(View.VISIBLE);
+                }
+            });
+        } catch (Exception ignored) {
+        }
+    }
 
     private PlayerVisualizerSeekbar seekbarV;
     private Uri contentUri = null;
@@ -238,6 +260,7 @@ import info.guardianproject.iocipher.RandomAccessFile;
 
             try{
                 ChatVoiceSessionHelper.onVoicePlaybackStarting();
+                ChatVoiceSessionHelper.becomeActiveVoicePlayer(vVoicePlayerView.this);
                 if (mediaPlayer != null){
                     mediaPlayer.start();
                 }
@@ -296,6 +319,7 @@ import info.guardianproject.iocipher.RandomAccessFile;
                     imgPause.setVisibility(View.VISIBLE);
                     try{
                         ChatVoiceSessionHelper.onVoicePlaybackStarting();
+                        ChatVoiceSessionHelper.becomeActiveVoicePlayer(vVoicePlayerView.this);
                         mediaPlayer.start();
                     }catch (Exception e){
                         e.printStackTrace();

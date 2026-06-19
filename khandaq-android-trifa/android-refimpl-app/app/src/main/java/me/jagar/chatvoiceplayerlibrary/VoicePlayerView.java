@@ -36,7 +36,7 @@ import java.io.IOException;
 import java.net.URLConnection;
 
 
-public class VoicePlayerView extends LinearLayout {
+public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHelper.ActiveVoicePlayer {
 
     private int playPaueseBackgroundColor, shareBackgroundColor, viewBackgroundColor,
             seekBarProgressColor, seekBarThumbColor, progressTimeColor, timingBackgroundColor,
@@ -55,6 +55,29 @@ public class VoicePlayerView extends LinearLayout {
     private TextView txtProcess;
     private MediaPlayer mediaPlayer;
     private ProgressBar pb_play;
+
+    // KHANDAQ (#20): Telegram-style single voice playback — registered with the shared coordinator
+    // (ChatVoiceSessionHelper) so a newly started voice pauses whichever one was playing before.
+    // Each bubble has its own MediaPlayer, so without this they would all play on top of each other.
+    @Override
+    public void pauseForHandoff() {
+        try {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                mediaPlayer.pause();
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            ((Activity) context).runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    imgPause.setVisibility(View.GONE);
+                    imgPlay.setVisibility(View.VISIBLE);
+                }
+            });
+        } catch (Exception ignored) {
+        }
+    }
 
     private PlayerVisualizerSeekbar seekbarV;
     private Uri contentUri = null;
@@ -234,6 +257,7 @@ public class VoicePlayerView extends LinearLayout {
 
             try{
                 ChatVoiceSessionHelper.onVoicePlaybackStarting();
+                ChatVoiceSessionHelper.becomeActiveVoicePlayer(VoicePlayerView.this);
                 if (mediaPlayer != null){
                     mediaPlayer.start();
                 }
@@ -292,6 +316,7 @@ public class VoicePlayerView extends LinearLayout {
                     imgPause.setVisibility(View.VISIBLE);
                     try{
                         ChatVoiceSessionHelper.onVoicePlaybackStarting();
+                        ChatVoiceSessionHelper.becomeActiveVoicePlayer(VoicePlayerView.this);
                         mediaPlayer.start();
                     }catch (Exception e){
                         e.printStackTrace();

@@ -9,6 +9,32 @@ public final class ChatVoiceSessionHelper
     {
     }
 
+    // KHANDAQ (#20): Telegram-style single voice playback across BOTH player implementations
+    // (incoming bubbles use vVoicePlayerView, outgoing use VoicePlayerView) — they share this one
+    // registry so starting any voice pauses whichever one was playing before.
+    public interface ActiveVoicePlayer
+    {
+        void pauseForHandoff();
+    }
+
+    private static java.lang.ref.WeakReference<ActiveVoicePlayer> sActiveVoicePlayer = null;
+
+    public static void becomeActiveVoicePlayer(final ActiveVoicePlayer player)
+    {
+        final ActiveVoicePlayer prev = (sActiveVoicePlayer != null) ? sActiveVoicePlayer.get() : null;
+        if (prev != null && prev != player)
+        {
+            try
+            {
+                prev.pauseForHandoff();
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        sActiveVoicePlayer = new java.lang.ref.WeakReference<>(player);
+    }
+
     /** Call before starting microphone capture. */
     public static void onVoiceRecordingStarting()
     {

@@ -463,7 +463,8 @@ public class MessageListFragment extends Fragment
             e.printStackTrace();
         }
 
-        update_all_messages(true, false, PREF__messageview_paging);
+        // KHANDAQ (#22): load off the UI thread so opening a busy chat doesn't freeze older phones.
+        update_all_messages_async(true);
 
         if (!is_data_loaded)
         {
@@ -612,6 +613,92 @@ public class MessageListFragment extends Fragment
             Log.i(TAG, "data_values:005:EE1:" + e.getMessage());
         }
 
+    }
+
+    // KHANDAQ (#22): opening a chat read+sorted ALL its messages on the UI thread (onResume), which
+    // froze older phones on a busy chat. Do the heavy DB read off the UI thread and only touch the
+    // adapter on the main thread. A generation counter drops a stale load if the user re-enters or
+    // switches chats before it finishes. Used only for the open-chat path; other callers stay sync.
+    private static volatile int message_load_generation = 0;
+    private static final java.util.concurrent.ExecutorService message_load_executor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    void update_all_messages_async(final boolean from_resume_fragment)
+    {
+        final int loadGen = ++message_load_generation;
+        message_load_executor.execute(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                final List<com.zoffcc.applications.sorm.Message> ml;
+                try
+                {
+                    ml = get_messages();
+                }
+                catch (Exception e)
+                {
+                    return;
+                }
+
+                final Activity act = getActivity();
+                if (act == null)
+                {
+                    return;
+                }
+
+                act.runOnUiThread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        if (loadGen != message_load_generation)
+                        {
+                            return; // a newer load superseded this one
+                        }
+                        try
+                        {
+                            final int number_of_items_old = data_values.size();
+                            data_values.clear();
+                            adapter.add_list_clear(ml);
+
+                            if (from_resume_fragment && (number_of_items_old > 0) &&
+                                (data_values.size() > number_of_items_old))
+                            {
+                                if (is_at_bottom)
+                                {
+                                    is_at_bottom = false;
+                                }
+                                if (!faded_in)
+                                {
+                                    try
+                                    {
+                                        do_fade_anim_on_fab(unread_messages_notice_button, true, getClass().getName());
+                                        unread_messages_notice_button.setVisibility(View.VISIBLE);
+                                    }
+                                    catch (Exception ignored)
+                                    {
+                                    }
+                                }
+                                try
+                                {
+                                    unread_messages_notice_button.setSupportBackgroundTintList(
+                                            ContextCompat.getColorStateList(context_s,
+                                                    R.color.message_list_scroll_to_bottom_fab_bg_new_message));
+                                }
+                                catch (Exception ignored)
+                                {
+                                }
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+        });
     }
 
     private List<com.zoffcc.applications.sorm.Message> get_messages()

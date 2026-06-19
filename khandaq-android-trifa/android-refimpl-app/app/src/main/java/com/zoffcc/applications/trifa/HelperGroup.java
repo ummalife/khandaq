@@ -1717,8 +1717,38 @@ public class HelperGroup
         {
             return context.getString(R.string.group_header_reconnecting_peers);
         }
-        final long[] counts = count_visible_group_members(group_identifier);
+        final long[] counts = count_authoritative_group_members(group_identifier);
         return format_group_member_count_subtitle(context, counts[0], counts[1]);
+    }
+
+    /**
+     * KHANDAQ (#9): member counts taken straight from toxcore's own NGC group state —
+     * tox_group_peer_count() = confirmed peers currently online (includes self) and
+     * tox_group_offline_peer_count() = saved members that are currently disconnected. Both are part
+     * of the group state that NGC synchronises between peers, so every client converges on the SAME
+     * "N members · M online" instead of each device deriving a different total from its own local
+     * seen-peer DB (which is what made the counts disagree across clients). Cheaper than walking the
+     * full peer list too. Falls back to the DB-derived roster when toxcore has no live handle yet.
+     */
+    static long[] count_authoritative_group_members(final String group_identifier)
+    {
+        try
+        {
+            final long group_num = tox_group_by_groupid__wrapper(group_identifier);
+            if (group_num >= 0)
+            {
+                final long online = Math.max(0L, tox_group_peer_count(group_num));
+                final long offline = Math.max(0L, tox_group_offline_peer_count(group_num));
+                if (online > 0 || offline > 0)
+                {
+                    return new long[]{online, offline};
+                }
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+        return count_visible_group_members(group_identifier);
     }
 
     static String format_group_connecting_status_subtitle(final Context context, final String group_identifier)

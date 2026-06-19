@@ -262,7 +262,7 @@
                 android:fontFamily="monospace"
                 android:paddingLeft="4dp"
                 android:paddingBottom="15dp"
-                android:text="[DEBUG] send private message:"
+                android:text="@string/group_private_msg_label"
                 android:textIsSelectable="true"
                 android:textSize="16sp"
                 android:typeface="monospace" />
@@ -273,10 +273,18 @@
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="20dp"
                 android:layout_marginRight="20dp"
-                android:hint="Private Message"
+                android:hint="@string/group_private_msg_hint"
                 android:imeOptions="flagNoPersonalizedLearning"
-                android:inputType="text"
+                android:inputType="textMultiLine"
                 android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/group_send_private_message_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/group_private_msg_send" />
 
             <TextView
                 android:layout_width="match_parent"

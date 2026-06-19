@@ -459,6 +459,11 @@
     <string name="attach_option_camera_video">Снять видео</string>
     <string name="attach_option_gallery">Галерея</string>
     <string name="attach_no_camera">Камера недоступна</string>
+    <string name="group_private_msg_label">Личное сообщение:</string>
+    <string name="group_private_msg_hint">Написать личное сообщение…</string>
+    <string name="group_private_msg_send">Отправить личное сообщение</string>
+    <string name="group_private_msg_sent">Личное сообщение отправлено</string>
+    <string name="group_private_msg_failed">Не удалось отправить личное сообщение</string>
     <string name="friend_display_name_fallback">Контакт</string>
     <string name="layout___scan_qr_code">сканировать QR-код</string>
     <string name="layout___scan_qr_code_gallery">сканировать QR-код из галереи</string>

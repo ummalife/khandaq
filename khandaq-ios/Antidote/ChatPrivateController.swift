@@ -946,6 +946,14 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
         _ = chatInputView.becomeFirstResponder()
     }
+
+    func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView?.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: cell)
+    }
 }
 
 extension ChatPrivateController: ChatReplySwipeDelegate {

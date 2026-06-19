@@ -157,6 +157,11 @@ extension ChatGroupController {
             })
         }
 
+        alert.addAction(UIAlertAction(title: String(localized: "chat_forward_action"), style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: sourceView)
+        })
+
         alert.addAction(UIAlertAction(title: String(localized: "group_messages_select_action"), style: .default) { [weak self] _ in
             self?.toggleTableViewEditing(true, animated: true)
         })
@@ -216,5 +221,13 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         startReply(to: message)
+    }
+
+    func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: cell)
     }
 }

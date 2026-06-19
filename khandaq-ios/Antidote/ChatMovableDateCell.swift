@@ -10,6 +10,11 @@ protocol ChatMovableDateCellDelegate: class {
     func chatMovableDateCellDeletePressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellReplyPressed(_ cell: ChatMovableDateCell)
+    func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell)
+}
+
+extension ChatMovableDateCellDelegate {
+    func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell) {}
 }
 
 class ChatMovableDateCell: BaseCell {
@@ -17,6 +22,7 @@ class ChatMovableDateCell: BaseCell {
             var items = UIMenuController.shared.menuItems ?? [UIMenuItem]()
             items += [
                 UIMenuItem(title: String(localized: "chat_reply_action"), action: #selector(replyAction)),
+                UIMenuItem(title: String(localized: "chat_forward_action"), action: #selector(forwardAction)),
                 UIMenuItem(title: String(localized: "chat_more_menu_item"), action: #selector(moreAction))
             ]
 
@@ -177,6 +183,8 @@ extension ChatMovableDateCell {
                 return true
             case #selector(replyAction):
                 return true
+            case #selector(forwardAction):
+                return true
             case #selector(moreAction):
                 return true
             default:
@@ -200,7 +208,88 @@ extension ChatMovableDateCell {
         delegate?.chatMovableDateCellReplyPressed(self)
     }
 
+    @objc func forwardAction() {
+        delegate?.chatMovableDateCellForwardPressed(self)
+    }
+
     @objc func handleReplySwipe() {
         replySwipeDelegate?.chatCellDidRequestReply(self)
+    }
+}
+
+// KHANDAQ: forward a message to any chat (friend or group). Resolves the full OCTManager via the app
+// coordinator so it works from both 1:1 and group controllers (which each hold only a subset of
+// submanagers). Wire format unchanged, so forwarded content stays cross-platform.
+enum MessageForwarder {
+    private static var toxManager: OCTManager? {
+        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+              let running = appDelegate.coordinator?.activeCoordinator as? RunningCoordinator else {
+            return nil
+        }
+        return running.activeSessionCoordinator?.toxManager
+    }
+
+    static func displayName(for chat: OCTChat) -> String {
+        if chat.isGroup {
+            let name = chat.groupName ?? ""
+            return name.isEmpty ? "—" : name
+        }
+        if let friend = chat.friends.lastObject() as? OCTFriend {
+            return friend.nickname.isEmpty ? friend.publicKey : friend.nickname
+        }
+        return "?"
+    }
+
+    static func presentForwardPicker(for message: OCTMessageAbstract, from controller: UIViewController, sourceView: UIView) {
+        guard let manager = toxManager else {
+            return
+        }
+
+        let chats = manager.objects.chats().sortedResultsUsingProperty("lastActivityDateInterval", ascending: false)
+        let alert = UIAlertController(title: String(localized: "chat_forward_action"), message: nil, preferredStyle: .actionSheet)
+        alert.popoverPresentationController?.sourceView = sourceView
+        alert.popoverPresentationController?.sourceRect = sourceView.bounds
+
+        let limit = min(chats.count, 25)
+        for index in 0..<limit {
+            let chat = chats[index]
+            alert.addAction(UIAlertAction(title: displayName(for: chat), style: .default) { _ in
+                forward(message, to: chat, manager: manager)
+            })
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        controller.present(alert, animated: true, completion: nil)
+    }
+
+    private static func forward(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
+        if let text = message.messageText?.text, !text.isEmpty {
+            if chat.isGroup {
+                manager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in }, failureBlock: { _ in })
+            }
+            else {
+                manager.chats.sendMessage(to: chat, text: text, type: .normal, successBlock: nil, failureBlock: nil)
+            }
+            return
+        }
+
+        guard let file = message.messageFile,
+              let path = file.filePath(),
+              FileManager.default.fileExists(atPath: path) else {
+            return
+        }
+
+        // Copy to a temp path so sendFile(moveToUploads:) doesn't move the source message's file away.
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent((path as NSString).lastPathComponent)
+        try? FileManager.default.removeItem(at: tempURL)
+        guard (try? FileManager.default.copyItem(atPath: path, toPath: tempURL.path)) != nil else {
+            return
+        }
+
+        if chat.isGroup {
+            manager.groups.sendFile(atPath: tempURL.path, to: chat, moveToUploads: true, successBlock: { _ in }, failureBlock: { _ in })
+        }
+        else {
+            manager.files.sendFile(atPath: tempURL.path, moveToUploads: true, to: chat) { _ in }
+        }
     }
 }

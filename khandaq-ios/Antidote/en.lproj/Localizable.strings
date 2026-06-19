@@ -534,6 +534,7 @@
 "group_messages_search_placeholder" = "Search messages";
 "group_messages_quote_action" = "Quote";
 "chat_reply_action" = "Reply";
+"chat_forward_action" = "Forward";
 "chat_reply_cancel" = "Cancel reply";
 "chat_reply_header" = "In reply to %@";
 "chat_reply_self_name" = "You";

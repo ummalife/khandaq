@@ -839,7 +839,7 @@ extension ChatGroupController: UITableViewDelegate {
         }
 
         let message = messageEntry(atDisplayIndex: indexPath.row).message
-        guard quoteText(for: message) != nil else {
+        guard !message.groupSystemMessage else {
             return nil
         }
 
@@ -848,13 +848,20 @@ extension ChatGroupController: UITableViewDelegate {
                 return nil
             }
 
-            let reply = UIAction(title: String(localized: "chat_reply_action")) { _ in
-                self.startReply(to: message)
+            var actions: [UIAction] = []
+            if self.quoteText(for: message) != nil {
+                actions.append(UIAction(title: String(localized: "chat_reply_action")) { _ in
+                    self.startReply(to: message)
+                })
             }
-            let select = UIAction(title: String(localized: "group_messages_select_action")) { _ in
+            actions.append(UIAction(title: String(localized: "chat_forward_action")) { _ in
+                let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
+                MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
+            })
+            actions.append(UIAction(title: String(localized: "group_messages_select_action")) { _ in
                 self.toggleTableViewEditing(true, animated: true)
-            }
-            return UIMenu(children: [reply, select])
+            })
+            return UIMenu(children: actions)
         }
     }
 }

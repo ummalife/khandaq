@@ -703,6 +703,12 @@ extension ChatGroupController: UITableViewDataSource {
             let model = ChatOutgoingTextCellModel()
             let parsed = GroupMentionHelper.parse(message.messageText?.text)
             model.message = parsed.bodyText
+            // KHANDAQ: render shared location as a map bubble in groups too (parity with 1:1 +
+            // Android — both use the "khandaq-location:lat,lon" wire format).
+            if let location = LocationMessage.parse(parsed.bodyText) {
+                model.locationLatitude = location.latitude
+                model.locationLongitude = location.longitude
+            }
             model.mentionHandles = parsed.mentions.map { $0.handle }
             model.replyMeta = parsed.reply
             attachReplyQuoteHandler(to: model, messages: messages)
@@ -720,7 +726,13 @@ extension ChatGroupController: UITableViewDataSource {
         let parsed = GroupMentionHelper.parse(message.messageText?.text)
         let body = parsed.bodyText
         model.mentionHandles = parsed.mentions.map { $0.handle }
-        if let header = peerHeader(for: message) {
+        if let location = LocationMessage.parse(body) {
+            // Map bubble (the cell shows the map + coords; the per-peer header isn't shown inline for
+            // location, same as 1:1). Cross-platform: matches the Android "khandaq-location:" format.
+            model.locationLatitude = location.latitude
+            model.locationLongitude = location.longitude
+        }
+        else if let header = peerHeader(for: message) {
             model.message = "\(header)\n\(body)"
         }
         else {

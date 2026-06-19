@@ -52,7 +52,10 @@ class ChatPrivateController: PortraitChatController {
     fileprivate let messages: Results<OCTMessageAbstract>
     fileprivate var messagesToken: RLMNotificationToken?
     fileprivate var visibleMessages: Int
-    
+    // KHANDAQ: message search in 1:1 chats (parity with groups) — filters the list to matches.
+    fileprivate var messageSearchQuery = ""
+    fileprivate var messageSearchController: UISearchController?
+
     fileprivate let friend: OCTFriend?
     fileprivate var friendToken: RLMNotificationToken?
 
@@ -168,8 +171,20 @@ class ChatPrivateController: PortraitChatController {
 
         createNavigationViews()
         addFriendNotification()
+        setupMessageSearch()
 
         self.configureLinearProgressBar()
+    }
+
+    fileprivate func setupMessageSearch() {
+        let searchController = UISearchController(searchResultsController: nil)
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchResultsUpdater = self
+        searchController.searchBar.placeholder = String(localized: "group_messages_search_placeholder")
+        navigationItem.searchController = searchController
+        navigationItem.hidesSearchBarWhenScrolling = true
+        definesPresentationContext = true
+        messageSearchController = searchController
     }
 
     func sendLocationMessage(_ payload: String) {
@@ -206,6 +221,7 @@ class ChatPrivateController: PortraitChatController {
     fileprivate func populateTextModel(_ model: ChatBaseTextCellModel, text: String) {
         let parsed = MessageReplyHelper.parse(text)
         model.replyMeta = parsed.reply
+        model.searchHighlight = messageSearchQuery.isEmpty ? nil : messageSearchQuery
         let body = parsed.bodyText
 
         if let location = LocationMessage.parse(body) {
@@ -677,7 +693,7 @@ extension ChatPrivateController {
 
 extension ChatPrivateController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let message = messages[indexPath.row]
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         // setting default values to avoid crash
         var model: ChatMovableDateCellModel  = ChatMovableDateCellModel()
@@ -801,7 +817,7 @@ extension ChatPrivateController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return min(visibleMessages, messages.count)
+        return displayableRowCount()
     }
 }
 
@@ -876,7 +892,7 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             return
         }
 
-        let message = messages[indexPath.row]
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         if let messageText = message.messageText {
             UIPasteboard.general.string = messageText.text
@@ -906,7 +922,7 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             return
         }
 
-        let message = messages[indexPath.row]
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         submanagerChats.removeMessages([message])
     }
@@ -926,7 +942,7 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         guard let indexPath = tableView?.indexPath(for: cell) else {
             return
         }
-        let message = messages[indexPath.row]
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
         replyController.startReply(to: message, submanagerObjects: submanagerObjects, theme: theme)
         _ = chatInputView.becomeFirstResponder()
     }
@@ -1107,6 +1123,14 @@ private extension ChatPrivateController {
                 case .initial:
                     break
                 case .update(_, let deletions, let insertions, let modifications):
+                    // While searching the table shows a filtered subset, so storage-index granular
+                    // updates don't line up — keep the storage window in sync and reload.
+                    if !self.messageSearchQuery.isEmpty {
+                        self.visibleMessages = max(0, self.visibleMessages + insertions.count - deletions.count)
+                        tableView.reloadData()
+                        self.updateTableHeaderView()
+                        return
+                    }
                     if deletions.isEmpty && insertions.isEmpty {
                         self.updateTableViewWithModifications(modifications)
                     }
@@ -1493,7 +1517,7 @@ private extension ChatPrivateController {
     }
 
     func maybeLoadImageForCellAtPath(_ cell: UITableViewCell, indexPath: IndexPath) {
-        let message = messages[indexPath.row]
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         guard let messageFile = message.messageFile else {
             return
@@ -1656,5 +1680,48 @@ private extension ChatPrivateController {
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
         present(alert, animated: true, completion: nil)
+    }
+}
+
+// KHANDAQ: 1:1 message search (mirrors the group implementation — filter the list to matches).
+extension ChatPrivateController: UISearchResultsUpdating {
+    func updateSearchResults(for searchController: UISearchController) {
+        let newQuery = searchController.searchBar.text ?? ""
+        guard newQuery != messageSearchQuery else {
+            return
+        }
+        messageSearchQuery = newQuery
+        tableView?.reloadData()
+    }
+
+    func displayableRowCount() -> Int {
+        let loadedCount = min(visibleMessages, messages.count)
+        guard !messageSearchQuery.isEmpty else {
+            return loadedCount
+        }
+
+        var count = 0
+        for index in 0..<loadedCount where MessageSearchHighlighter.messageMatches(messages[index], query: messageSearchQuery) {
+            count += 1
+        }
+        return count
+    }
+
+    func messageEntry(atDisplayIndex index: Int) -> (message: OCTMessageAbstract, storageIndex: Int) {
+        let loadedCount = min(visibleMessages, messages.count)
+        guard !messageSearchQuery.isEmpty else {
+            return (messages[index], index)
+        }
+
+        var seen = 0
+        for storageIndex in 0..<loadedCount where MessageSearchHighlighter.messageMatches(messages[storageIndex], query: messageSearchQuery) {
+            if seen == index {
+                return (messages[storageIndex], storageIndex)
+            }
+            seen += 1
+        }
+
+        let safeIndex = min(max(0, index), max(0, messages.count - 1))
+        return (messages[safeIndex], safeIndex)
     }
 }

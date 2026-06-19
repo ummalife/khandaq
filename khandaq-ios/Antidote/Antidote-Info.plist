@@ -1,18 +1,11 @@
-
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>KhandaqPushRelayAuthSecret</key>
-	<string>$(KHANDAQ_PUSH_AUTH_SECRET)</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Used to share your location with your contacts</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Khandaq</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -30,6 +23,8 @@
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>${EXECUTABLE_NAME}</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -54,9 +49,11 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>142841</string>
+	<string>142843</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>KhandaqPushRelayAuthSecret</key>
+	<string>$(KHANDAQ_PUSH_AUTH_SECRET)</string>
 	<key>LSApplicationCategoryType</key>
 	<string></string>
 	<key>LSRequiresIPhoneOS</key>
@@ -67,6 +64,8 @@
 	<string>You can use video calls, send photos and videos, scan QR codes.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Khandaq uses Face ID or Touch ID to unlock the app instead of entering your PIN.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Used to share your location with your contacts</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>You can use audio and video calls.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

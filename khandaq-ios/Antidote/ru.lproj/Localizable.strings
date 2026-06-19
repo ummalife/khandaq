@@ -566,6 +566,7 @@
 "group_invite_friend_not_found" = "Друг не найден.";
 "group_invite_friends_empty" = "Нет подключённых друзей для приглашения.";
 "group_file_attach" = "Файл";
+"group_share_location" = "Поделиться геопозицией";
 "group_live_audio_toggle" = "Живое аудио";
 "group_live_video_toggle" = "Живое видео";
 "group_live_video_quality_toggle" = "Качество видео";

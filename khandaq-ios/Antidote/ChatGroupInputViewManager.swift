@@ -106,6 +106,10 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
             self.presentDocumentPicker()
         })
 
+        alert.addAction(UIAlertAction(title: String(localized: "group_share_location"), style: .default) { [unowned self] _ in
+            LocationSharingCoordinator.shared.shareCurrentLocationOnce(to: self)
+        })
+
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
         presentingViewController.present(alert, animated: true, completion: nil)
     }
@@ -447,5 +451,18 @@ private extension ChatGroupInputViewManager {
     func saveEnteredText() {
         let text = inputView?.text ?? ""
         submanagerObjects.change(chat, enteredText: text.isEmpty ? nil : text)
+    }
+}
+
+// KHANDAQ: send a one-shot location into the group (parity with 1:1 + Android).
+extension ChatGroupInputViewManager: LocationSharingChat {
+    func sendLocationMessage(_ payload: String) {
+        submanagerGroups.sendMessage(to: chat, text: payload, type: .normal, successBlock: { _ in }, failureBlock: { error in
+            DispatchQueue.main.async {
+                if let error = error as NSError? {
+                    handleErrorWithType(.sendMessageToFriend, error: error)
+                }
+            }
+        })
     }
 }

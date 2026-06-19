@@ -562,6 +562,7 @@
 "group_invite_friends_empty" = "No connected friends to invite.";
 "group_error_password" = "Invalid group password.";
 "group_file_attach" = "File";
+"group_share_location" = "Share location";
 "group_live_audio_toggle" = "Live audio";
 "group_live_video_toggle" = "Live video";
 "group_live_video_quality_toggle" = "Video quality";

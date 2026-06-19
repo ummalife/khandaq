@@ -5,6 +5,12 @@
 import CoreLocation
 import Foundation
 
+/// KHANDAQ: anything that can receive a one-shot "share my location" message (currently group chats;
+/// 1:1 uses the continuous activeChatController path).
+protocol LocationSharingChat: AnyObject {
+    func sendLocationMessage(_ payload: String)
+}
+
 final class LocationSharingCoordinator: NSObject, CLLocationManagerDelegate {
     static let shared = LocationSharingCoordinator()
 
@@ -15,6 +21,8 @@ final class LocationSharingCoordinator: NSObject, CLLocationManagerDelegate {
     private var sendPending = false
     private var lastSentAt: Date?
     private weak var activeChatController: ChatPrivateController?
+    /// One-shot target (e.g. a group): send the current location once, no continuous toggle.
+    private weak var oneShotChat: LocationSharingChat?
 
     private override init() {
         super.init()
@@ -37,6 +45,25 @@ final class LocationSharingCoordinator: NSObject, CLLocationManagerDelegate {
     /// Re-attach UI after returning to an already-enabled sharing chat (no automatic resend).
     func resume(for controller: ChatPrivateController) {
         activeChatController = controller
+    }
+
+    /// KHANDAQ: send the current location ONCE to `chat` (used by group chats). Requests permission
+    /// if needed; no continuous sharing/toggle.
+    func shareCurrentLocationOnce(to chat: LocationSharingChat) {
+        oneShotChat = chat
+
+        if LocationManager.shared.hasUsableAuthorization() {
+            locationManager.requestLocation()
+            return
+        }
+
+        LocationManager.shared.requestAccessForUserInitiatedSharing { [weak self] granted in
+            guard granted, let self = self, self.oneShotChat != nil else {
+                self?.oneShotChat = nil
+                return
+            }
+            self.locationManager.requestLocation()
+        }
     }
 
     func stop() {
@@ -73,6 +100,15 @@ final class LocationSharingCoordinator: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // One-shot (group) send takes priority and is independent of the continuous 1:1 toggle.
+        if let chat = oneShotChat, let location = locations.last {
+            oneShotChat = nil
+            chat.sendLocationMessage(LocationMessage.payload(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude))
+            return
+        }
+
         guard sendPending,
               let location = locations.last,
               AppDelegate.location_sharing_contact_pubkey != "-1" else {

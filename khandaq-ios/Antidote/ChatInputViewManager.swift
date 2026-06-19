@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import AVFoundation
 import Foundation
 import MobileCoreServices
 import Photos
@@ -31,6 +32,7 @@ class ChatInputViewManager: NSObject {
 
     fileprivate var inactivityTimer: Timer?
     fileprivate var isVideoSendInProgress = false
+    fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
 
     var outgoingTextComposer: ((String) -> String)?
 
@@ -52,6 +54,9 @@ class ChatInputViewManager: NSObject {
 
         inputView.delegate = self
         inputView.text = chat.enteredText ?? ""
+        // KHANDAQ (#15): 1:1 chats get the same input bar as groups (attach + hold-to-record voice).
+        inputView.cameraButtonEnabled = true
+        inputView.voiceButtonEnabled = true
     }
 
     deinit {
@@ -128,6 +133,59 @@ extension ChatInputViewManager: ChatInputViewDelegate {
         inactivityTimer = Timer.scheduledTimer(timeInterval: Constants.inactivityTimeout, closure: {[weak self] _ -> Void in
             self?.endUserInteraction()
         }, repeats: false)
+    }
+
+    // KHANDAQ (#15): hold-to-record voice for 1:1 chats (mirrors the group input bar).
+    func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {
+        requestMicrophoneAccess { [weak self] granted in
+            guard granted, let self = self else {
+                return
+            }
+
+            do {
+                try self.voiceRecorder.startRecording()
+            }
+            catch {
+                handleErrorWithType(.sendFileToFriend, error: error as NSError)
+            }
+        }
+    }
+
+    func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
+        guard let url = voiceRecorder.stopRecording(discard: cancelled) else {
+            return
+        }
+
+        submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
+            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        }
+    }
+
+    func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {
+        UIAlertController.showWithTitle("",
+                                        message: String(localized: "group_voice_hold_to_record"),
+                                        retryBlock: nil)
+    }
+
+    func requestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
+        let session = AVAudioSession.sharedInstance()
+        let permission = session.recordPermission()
+
+        if permission == .granted {
+            completion(true)
+            return
+        }
+
+        if permission == .denied {
+            completion(false)
+            return
+        }
+
+        session.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                completion(granted)
+            }
+        }
     }
 }
 

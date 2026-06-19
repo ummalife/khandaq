@@ -1388,6 +1388,18 @@ private extension ChatPrivateController {
         model.fileSize = ByteCountFormatter.string(fromByteCount: message.messageFile!.fileSize, countStyle: .file)
         model.fileUTI = message.messageFile!.fileUTI
 
+        // KHANDAQ (#15): render 1:1 voice notes as a player (parity with groups).
+        let isVoice = VoiceMessageHelper.isVoiceMessage(fileName: message.messageFile?.fileName,
+                                                        filePath: message.messageFile?.filePath())
+        model.isVoiceMessage = isVoice
+        model.voiceMessageId = message.uniqueIdentifier
+        if isVoice {
+            model.fileName = VoiceMessageHelper.displayFileName(for: message.messageFile?.fileName)
+            if message.messageFile?.fileType == .ready, let path = message.messageFile?.filePath() {
+                model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
+            }
+        }
+
         switch message.messageFile!.fileType {
             case .waitingConfirmation:
                 model.state = .waitingConfirmation
@@ -1466,6 +1478,17 @@ private extension ChatPrivateController {
             }
 
             sself.delegate?.chatPrivateControllerShowQuickLookController(sself, dataSource: qlDataSource, selectedIndex: index)
+        }
+
+        if isVoice {
+            model.voicePlayToggleHandle = {
+                guard let path = message.messageFile?.filePath(),
+                      message.messageFile?.fileType == .ready,
+                      let messageId = message.uniqueIdentifier else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.togglePlayback(messageId: messageId, filePath: path)
+            }
         }
     }
 

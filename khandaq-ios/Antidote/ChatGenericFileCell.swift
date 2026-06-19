@@ -212,6 +212,12 @@ class ChatGenericFileCell: ChatMovableDateCell {
         let showVoice = fileModel.isVoiceMessage
         voiceMessageView.isHidden = !showVoice
         loadingView.isHidden = showVoice
+        // KHANDAQ (#15): the cancel/retry (⊗) buttons belong to the file box; hide them for voice
+        // notes so they don't overlap the player's timer.
+        if showVoice {
+            cancelButton.isHidden = true
+            retryButton.isHidden = true
+        }
 
         guard showVoice else {
             return

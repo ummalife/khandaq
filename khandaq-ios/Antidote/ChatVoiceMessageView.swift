@@ -28,7 +28,7 @@ final class ChatVoiceMessageView: UIView {
         elapsedLabel.textColor = theme.colorForType(.NormalText)
         durationLabel.textColor = theme.colorForType(.FriendCellStatus)
         progressSlider.minimumTrackTintColor = theme.colorForType(.LinkText)
-        progressSlider.maximumTrackTintColor = theme.colorForType(.FriendCellStatus).withAlphaComponent(0.35)
+        progressSlider.maximumTrackTintColor = theme.colorForType(.NormalText).withAlphaComponent(0.25)
         progressSlider.isUserInteractionEnabled = false
         progressSlider.isEnabled = enabled
         playButton.isEnabled = enabled

@@ -64,6 +64,7 @@ class ChatInputView: UIView {
     }
 
     fileprivate var topBorder: UIView!
+    fileprivate var emojiButton: UIButton!
     fileprivate var cameraButton: UIButton!
     fileprivate var voiceButton: UIButton!
     fileprivate var textView: UITextView!
@@ -80,6 +81,24 @@ class ChatInputView: UIView {
     fileprivate var recordingEndedByControl = false
     fileprivate var myHeight: Constraint!
     fileprivate var didconstraint = 0
+    fileprivate var isEmojiActive = false
+    fileprivate lazy var emojiKeyboard: EmojiKeyboardView = {
+        let keyboard = EmojiKeyboardView(theme: theme)
+        keyboard.onPick = { [weak self] emoji in
+            guard let self = self else { return }
+            self.textView.insertText(emoji)
+            self.textViewDidChange(self.textView)
+        }
+        keyboard.onBackspace = { [weak self] in
+            guard let self = self else { return }
+            self.textView.deleteBackward()
+            self.textViewDidChange(self.textView)
+        }
+        keyboard.onSwitchToKeyboard = { [weak self] in
+            self?.showSystemKeyboard()
+        }
+        return keyboard
+    }()
 
     init(theme: Theme) {
         self.maxHeight = 0.0
@@ -103,7 +122,13 @@ class ChatInputView: UIView {
     }
 
     override func resignFirstResponder() -> Bool {
-        return textView.resignFirstResponder()
+        let result = textView.resignFirstResponder()
+        if isEmojiActive {
+            isEmojiActive = false
+            textView.inputView = nil
+            updateEmojiButtonIcon()
+        }
+        return result
     }
 }
 
@@ -111,6 +136,35 @@ class ChatInputView: UIView {
 extension ChatInputView {
     @objc func cameraButtonPressed() {
         delegate?.chatInputViewCameraButtonPressed(self, cameraView: cameraButton)
+    }
+
+    @objc func emojiButtonPressed() {
+        if isEmojiActive {
+            showSystemKeyboard()
+        }
+        else {
+            isEmojiActive = true
+            textView.inputView = emojiKeyboard
+            textView.reloadInputViews()
+            _ = textView.becomeFirstResponder()
+            updateEmojiButtonIcon()
+        }
+    }
+
+    func showSystemKeyboard() {
+        isEmojiActive = false
+        textView.inputView = nil
+        textView.reloadInputViews()
+        _ = textView.becomeFirstResponder()
+        updateEmojiButtonIcon()
+    }
+
+    func updateEmojiButtonIcon() {
+        guard #available(iOS 13.0, *) else {
+            return
+        }
+        let name = isEmojiActive ? "keyboard" : "face.smiling"
+        emojiButton.setImage(UIImage(systemName: name), for: .normal)
     }
 
     @objc func sendButtonPressed() {
@@ -185,10 +239,26 @@ private extension ChatInputView {
         topBorder.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
         addSubview(topBorder)
 
-        let cameraImage = UIImage.templateNamed("chat-camera")
+        // KHANDAQ (#15): input bar laid out like the Android/Telegram build:
+        // [emoji] [text…] [attach 📎] [mic 🎤 ⇄ send ➤]. Emoji just focuses the field (the system
+        // keyboard provides the emoji panel); attach opens the camera/library/file menu.
+        emojiButton = UIButton(type: .system)
+        if #available(iOS 13.0, *) {
+            emojiButton.setImage(UIImage(systemName: "face.smiling"), for: .normal)
+        } else {
+            emojiButton.setTitle("☺", for: .normal)
+        }
+        emojiButton.tintColor = theme.colorForType(.LinkText)
+        emojiButton.addTarget(self, action: #selector(ChatInputView.emojiButtonPressed), for: .touchUpInside)
+        emojiButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
+        addSubview(emojiButton)
 
         cameraButton = UIButton()
-        cameraButton.setImage(cameraImage, for: UIControlState())
+        if #available(iOS 13.0, *) {
+            cameraButton.setImage(UIImage(systemName: "paperclip"), for: .normal)
+        } else {
+            cameraButton.setImage(UIImage.templateNamed("chat-camera"), for: UIControlState())
+        }
         cameraButton.tintColor = theme.colorForType(.LinkText)
         cameraButton.addTarget(self, action: #selector(ChatInputView.cameraButtonPressed), for: .touchUpInside)
         cameraButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
@@ -227,8 +297,15 @@ private extension ChatInputView {
         addSubview(textView)
 
         sendButton = UIButton(type: .system)
-        sendButton.setTitle(String(localized: "chat_send_button"), for: UIControlState())
-        sendButton.titleLabel?.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 30.0, weight: .regular)
+            sendButton.setImage(UIImage(systemName: "arrow.up.circle.fill", withConfiguration: config), for: .normal)
+        } else {
+            sendButton.setTitle(String(localized: "chat_send_button"), for: UIControlState())
+            sendButton.titleLabel?.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
+        }
+        sendButton.tintColor = theme.colorForType(.LinkText)
+        sendButton.accessibilityLabel = String(localized: "chat_send_button")
         sendButton.addTarget(self, action: #selector(ChatInputView.sendButtonPressed), for: .touchUpInside)
         sendButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         addSubview(sendButton)
@@ -276,27 +353,35 @@ private extension ChatInputView {
             $0.height.equalTo(Constants.TopBorderHeight)
         }
 
-        cameraButton.snp.makeConstraints {
+        // [emoji] [text…] [attach] [mic ⇄ send]
+        emojiButton.snp.makeConstraints {
             $0.leading.equalTo(self).offset(Constants.CameraHorizontalOffset)
             $0.bottom.equalTo(self).offset(Constants.CameraBottomOffset)
         }
 
         voiceButton.snp.makeConstraints {
-            $0.leading.equalTo(cameraButton.snp.trailing).offset(Constants.Offset)
+            $0.trailing.equalTo(self).offset(-Constants.CameraHorizontalOffset)
+            $0.bottom.equalTo(self).offset(Constants.CameraBottomOffset)
+            $0.width.height.equalTo(34.0)
+        }
+
+        // Send shares the mic's slot; only one is visible at a time (toggled by text emptiness).
+        sendButton.snp.makeConstraints {
+            $0.center.equalTo(voiceButton)
+            $0.width.height.equalTo(voiceButton)
+        }
+
+        cameraButton.snp.makeConstraints {
+            $0.trailing.equalTo(voiceButton.snp.leading).offset(-Constants.Offset)
             $0.bottom.equalTo(self).offset(Constants.CameraBottomOffset)
         }
 
         textView.snp.makeConstraints {
-            $0.leading.equalTo(voiceButton.snp.trailing).offset(Constants.CameraHorizontalOffset)
+            $0.leading.equalTo(emojiButton.snp.trailing).offset(Constants.Offset)
+            $0.trailing.equalTo(cameraButton.snp.leading).offset(-Constants.Offset)
             $0.top.equalTo(self).offset(Constants.Offset)
             $0.bottom.equalTo(self).offset(-Constants.Offset)
             $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)
-        }
-
-        sendButton.snp.makeConstraints {
-            $0.leading.equalTo(textView.snp.trailing).offset(Constants.Offset)
-            $0.trailing.equalTo(self).offset(-Constants.Offset)
-            $0.bottom.equalTo(self).offset(-Constants.Offset)
         }
 
         recordingBar.snp.makeConstraints {
@@ -360,13 +445,30 @@ private extension ChatInputView {
     func updateViews() {
         textView.isScrollEnabled = true
         textView.autocapitalizationType = .sentences
+
+        // While recording, the recording bar owns the layout — don't let a stray updateViews() re-show
+        // the input buttons over it (that caused emoji/attach to overlap the timer).
+        guard !isVoiceRecording else {
+            return
+        }
+
+        // Always visible outside the recording state (showRecordingBar hides them, this restores them).
+        textView.isHidden = false
+        emojiButton.isHidden = false
+
+        let hasText = !textView.text.isEmpty
+        cameraButton.isHidden = !cameraButtonEnabled
         cameraButton.isEnabled = cameraButtonEnabled
-        voiceButton.isHidden = !voiceButtonEnabled
-        voiceButton.isEnabled = voiceButtonEnabled
-        sendButton.isEnabled = !textView.text.isEmpty
+        // Typing turns the mic into the send button (Telegram/Android behaviour); empty text shows
+        // the mic (when voice is available for this chat).
+        sendButton.isHidden = !hasText
+        sendButton.isEnabled = hasText
+        voiceButton.isHidden = hasText || !voiceButtonEnabled
+        voiceButton.isEnabled = voiceButtonEnabled && !hasText
     }
 
     func showRecordingBar() {
+        emojiButton.isHidden = true
         cameraButton.isHidden = true
         voiceButton.isHidden = true
         textView.isHidden = true
@@ -398,10 +500,137 @@ private extension ChatInputView {
     func updateRecordingTimerLabel() {
         guard let startedAt = recordingStartedAt else { return }
         let elapsed = max(0.0, Date().timeIntervalSince(startedAt))
-        let totalCentiseconds = Int(elapsed * 100.0)
-        let minutes = totalCentiseconds / 6000
-        let seconds = (totalCentiseconds / 100) % 60
-        let centiseconds = totalCentiseconds % 100
-        recordingTimerLabel.text = String(format: "%d:%02d,%02d", minutes, seconds, centiseconds)
+        let total = Int(elapsed)
+        recordingTimerLabel.text = String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// KHANDAQ (#15): emoji panel used as the text field's inputView. iOS has no public API to switch the
+/// system keyboard to its emoji plane, so the 😀 button toggles this instead. Kept in this file so it
+/// doesn't need a separate pbxproj entry.
+final class EmojiKeyboardView: UIView {
+    var onPick: ((String) -> Void)?
+    var onBackspace: (() -> Void)?
+    var onSwitchToKeyboard: (() -> Void)?
+
+    private let collectionView: UICollectionView
+    private let bottomBar = UIView()
+    private let abcButton = UIButton(type: .system)
+    private let backspaceButton = UIButton(type: .system)
+
+    fileprivate static let emojis: [String] = {
+        let groups = [
+            "😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥳🤩",
+            "😏😒😞😔😟😕🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫",
+            "😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠😈👿👹👺🤡💩👻💀",
+            "👍👎👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️✋🤚🖐️🖖👋🤝🙏✊👊🤛🤜👏🙌👐🤲💪",
+            "❤️🧡💛💚💙💜🤎🖤🤍💔❣️💕💞💓💗💖💘💝☮️✝️☪️🕉️☸️✡️🔯🕎",
+            "🔥✨🎉🎊🎈🎁🏆🥇🥈🥉⚽️🏀🏈⚾️🎾🏐🎱🎮🎯🎲🎸🎹🎺🎻🥁🎬🎤🎧",
+            "🌹🌷🌸🌼🌻🌺🍀🌿🍃🌱🌳🌲🌴🌵🍎🍊🍋🍌🍉🍇🍓🍒🍑🥭🍍🥥🌍🌎🌟",
+            "☕️🍵🍺🍻🥂🍷🍕🍔🍟🌭🍿🍩🍪🎂🍰🧁🍫🍬🍭🚗✈️🚀⛵️🏠⭐️💫⚡️☀️🌈",
+        ]
+        return groups.flatMap { $0.map(String.init) }
+    }()
+
+    init(theme: Theme) {
+        let layout = UICollectionViewFlowLayout()
+        layout.scrollDirection = .vertical
+        layout.minimumInteritemSpacing = 2
+        layout.minimumLineSpacing = 6
+        layout.itemSize = CGSize(width: 38, height: 38)
+        layout.sectionInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+
+        super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 260))
+
+        autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        backgroundColor = theme.colorForType(.ChatInputBackground)
+
+        collectionView.backgroundColor = .clear
+        collectionView.alwaysBounceVertical = true
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiCell.reuseId)
+        addSubview(collectionView)
+
+        bottomBar.backgroundColor = theme.colorForType(.NormalBackground)
+        addSubview(bottomBar)
+
+        abcButton.setTitle("ABC", for: .normal)
+        abcButton.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        abcButton.tintColor = theme.colorForType(.LinkText)
+        abcButton.addTarget(self, action: #selector(abcTapped), for: .touchUpInside)
+        bottomBar.addSubview(abcButton)
+
+        if #available(iOS 13.0, *) {
+            backspaceButton.setImage(UIImage(systemName: "delete.left"), for: .normal)
+        } else {
+            backspaceButton.setTitle("⌫", for: .normal)
+        }
+        backspaceButton.tintColor = theme.colorForType(.LinkText)
+        backspaceButton.addTarget(self, action: #selector(backspaceTapped), for: .touchUpInside)
+        bottomBar.addSubview(backspaceButton)
+
+        bottomBar.snp.makeConstraints {
+            $0.leading.trailing.bottom.equalToSuperview()
+            $0.height.equalTo(44)
+        }
+        collectionView.snp.makeConstraints {
+            $0.top.leading.trailing.equalToSuperview()
+            $0.bottom.equalTo(bottomBar.snp.top)
+        }
+        abcButton.snp.makeConstraints {
+            $0.leading.equalToSuperview().offset(16)
+            $0.centerY.equalToSuperview()
+        }
+        backspaceButton.snp.makeConstraints {
+            $0.trailing.equalToSuperview().offset(-16)
+            $0.centerY.equalToSuperview()
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func abcTapped() {
+        onSwitchToKeyboard?()
+    }
+
+    @objc private func backspaceTapped() {
+        onBackspace?()
+    }
+}
+
+extension EmojiKeyboardView: UICollectionViewDataSource, UICollectionViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return EmojiKeyboardView.emojis.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiCell.reuseId, for: indexPath) as! EmojiCell
+        cell.label.text = EmojiKeyboardView.emojis[indexPath.item]
+        return cell
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        onPick?(EmojiKeyboardView.emojis[indexPath.item])
+    }
+}
+
+private final class EmojiCell: UICollectionViewCell {
+    static let reuseId = "EmojiCell"
+    let label = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        label.font = UIFont.systemFont(ofSize: 30)
+        label.textAlignment = .center
+        contentView.addSubview(label)
+        label.snp.makeConstraints { $0.edges.equalToSuperview() }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }

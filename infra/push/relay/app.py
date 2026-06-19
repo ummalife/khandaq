@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import logging
 import os
 import time
@@ -30,6 +31,26 @@ AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 # 401 on bad auth) only once the logs show field clients are signing. This avoids a hard cutover
 # that would break every client that hasn't yet shipped + been updated with the secret.
 PUSH_AUTH_ENFORCE = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower() in ("1", "true", "yes", "on")
+# KHANDAQ (security NEW-4): only honour X-Real-IP when the direct connection comes from a trusted
+# reverse proxy. The relay binds to 127.0.0.1 behind nginx (and reaches it via the Docker bridge), so
+# by default we trust loopback + private/link-local source addresses; an externally-exposed port would
+# see public client IPs, which are NOT trusted (so X-Real-IP can't be spoofed to dodge rate limiting).
+# PUSH_TRUSTED_PROXIES (CSV of exact IPs) adds explicit entries on top.
+TRUSTED_PROXIES = {
+    p.strip() for p in os.environ.get("PUSH_TRUSTED_PROXIES", "").split(",") if p.strip()
+}
+
+
+def _is_trusted_proxy(addr: str) -> bool:
+    if not addr:
+        return False
+    if addr in TRUSTED_PROXIES:
+        return True
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
@@ -40,11 +61,16 @@ def _fcm_configured() -> bool:
 
 
 def _client_ip() -> str:
-    # Trust X-Real-IP only when set by nginx; never use spoofable X-Forwarded-For alone.
-    real_ip = request.headers.get("X-Real-IP", "").strip()
-    if real_ip:
-        return real_ip.split(",")[0].strip()
-    return (request.remote_addr or "?").strip()
+    # KHANDAQ (security NEW-4): X-Real-IP is only trustworthy when it comes FROM the trusted reverse
+    # proxy. Honour it only if the direct peer (remote_addr) is a trusted proxy; otherwise a client
+    # talking to the relay directly (if the port is ever exposed) could spoof X-Real-IP to dodge the
+    # per-IP rate limit. Trusted proxies default to loopback; override via PUSH_TRUSTED_PROXIES (CSV).
+    remote = (request.remote_addr or "").strip()
+    if _is_trusted_proxy(remote):
+        real_ip = request.headers.get("X-Real-IP", "").strip()
+        if real_ip:
+            return real_ip.split(",")[0].strip()
+    return remote or "?"
 
 
 def _rate_ok(client_ip: str) -> bool:

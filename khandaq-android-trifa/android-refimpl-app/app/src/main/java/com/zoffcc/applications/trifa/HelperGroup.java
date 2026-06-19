@@ -5229,6 +5229,13 @@ public class HelperGroup
 
     private static final long NGC_INCOMING_FILE_TIMEOUT_MS = 30_000L;
     private static final long NGC_TRANSFER_STALL_MS = 30_000L;
+    // KHANDAQ: how often the receiver re-checks an in-flight chunked transfer and (if it has stalled)
+    // re-asks the sender for the still-missing chunks via selective NACK. iOS NACKs every ~2.5s;
+    // Android used to only re-ask once per 30s timeout, so a single dropped chunk left the file stuck
+    // until the user manually tapped "retry". Tick fast, but only actually NACK when no new chunk has
+    // arrived for NGC_NACK_STALL_MS — a normally-progressing transfer is never disturbed.
+    private static final long NGC_NACK_RETRY_MS = 3_500L;
+    private static final long NGC_NACK_STALL_MS = 4_000L;
 
     static float ngc_file_transfer_speed_bps(final String groupId, final String msgIdHash, final long bytesDone)
     {
@@ -5347,16 +5354,46 @@ public class HelperGroup
                     && is_group_message_sender_online(m))
             {
                 clear_ngc_file_transfer_failed(groupId, msgIdHash);
-                NgcGroupFileTransfer.sendFileResendRequest(m);
+                // Only re-ask when the transfer has actually stalled (no new chunk for a few seconds),
+                // so an in-progress download isn't flooded with redundant requests. Re-arm fast so a
+                // dropped chunk recovers in seconds (parity with iOS) instead of one NACK per 30s.
+                if (ngc_progress_idle_for(groupId, msgIdHash, NGC_NACK_STALL_MS))
+                {
+                    NgcGroupFileTransfer.sendFileResendRequest(m);
+                    TrifaToxService.wakeup_tox_thread();
+                }
                 arm_ngc_incoming_file_timeout(groupId, msgIdHash);
-                TrifaToxService.wakeup_tox_thread();
                 return;
             }
-            mark_ngc_file_transfer_failed(groupId, msgIdHash);
+
+            // Sender offline / not a chunked transfer: keep polling cheaply and only give up (show the
+            // manual "retry" affordance) once there's been no progress for the full stall window.
+            if (is_ngc_transfer_stalled(groupId, msgIdHash))
+            {
+                mark_ngc_file_transfer_failed(groupId, msgIdHash);
+            }
+            else
+            {
+                arm_ngc_incoming_file_timeout(groupId, msgIdHash);
+            }
         };
 
         ngc_incoming_file_timeout_tasks.put(key, timeoutTask);
-        main_handler_s.postDelayed(timeoutTask, NGC_INCOMING_FILE_TIMEOUT_MS);
+        main_handler_s.postDelayed(timeoutTask, NGC_NACK_RETRY_MS);
+    }
+
+    // True when no chunk has advanced this transfer's progress for at least windowMs.
+    private static boolean ngc_progress_idle_for(final String groupId, final String msgIdHash, final long windowMs)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return true;
+        }
+        final String key = ngc_file_progress_key(groupId, msgIdHash);
+        final Long last = ngc_transfer_last_progress_ts.get(key);
+        final Long started = ngc_transfer_start_ts.get(key);
+        final long ref = last != null ? last : (started != null ? started : System.currentTimeMillis());
+        return (System.currentTimeMillis() - ref) >= windowMs;
     }
 
     static void disarm_ngc_incoming_file_timeout(final String groupId, final String msgIdHash)

@@ -65,7 +65,12 @@ public final class NgcGroupFileTransfer
     private static final int MAX_ORPHAN_CHUNKS = 512;
 
     private static final long GROUP_SEND_CONN_WAIT_MS = 45_000L;
-    private static final long FILE_RESEND_REQUEST_COOLDOWN_MS = 12_000L;
+    // KHANDAQ: minimum gap between selective NACKs for the same file. Lowered from 12s so a stalled
+    // chunked download recovers in a few seconds (parity with iOS' ~2.5s NACK timer) instead of
+    // forcing the user to tap "retry". Flooding is still prevented: the receiver only NACKs once the
+    // flow has been idle for NGC_NACK_STALL_MS and hasIncomingAssemblyInProgress() suppresses requests
+    // while chunks are actively arriving.
+    private static final long FILE_RESEND_REQUEST_COOLDOWN_MS = 4_000L;
     private static final Map<String, Long> fileResendRequestTs = new ConcurrentHashMap<>();
     /** BEGIN sent on broadcast before unicast upgrade — must be re-sent privately once a peer is picked. */
     private static final Map<String, byte[]> pendingPrivateBeginResend = new ConcurrentHashMap<>();

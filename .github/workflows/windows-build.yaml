@@ -19,17 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prep runtime mounts referenced by docker-compose
-        run: touch "$HOME/.Xauthority"
-
+      # NB: build with plain `docker build` (not docker compose / bake) — docker compose v2 trips a
+      # false "cycle detected" on the dotted service name `windows_builder.i686` in docker-compose.yml.
+      # Context is ./buildscripts (matches the compose `context: ./buildscripts`).
       - name: Build windows_builder image (cross-toolchain + patched deps)
-        run: docker compose build windows_builder
+        run: >
+          docker build -f buildscripts/docker/Dockerfile.windows_builder
+          --build-arg ARCH=x86_64 --build-arg WINEARCH=win64
+          -t qtox_windows_builder:latest buildscripts
 
       - name: Cross-compile Khandaq desktop for Windows
-        env:
-          USER_ID: "0"
-          GROUP_ID: "0"
-        run: docker compose run --rm windows_builder ./windows/cross-compile/build.sh --arch x86_64 --build-type Release --src-dir /qtox
+        run: >
+          docker run --rm -v "$PWD:/qtox" -w /qtox qtox_windows_builder:latest
+          ./windows/cross-compile/build.sh --arch x86_64 --build-type Release --src-dir /qtox
 
       - name: Checksums
         if: always()

@@ -2732,9 +2732,11 @@ public class HelperFiletransfer
                 return true;
             }
 
+            // KHANDAQ (#19): 1:1 (DM) chats auto-accept ALL incoming files with no accept/decline
+            // prompt — this method is only reached on the friend path. Accept anything up to the
+            // protocol's max transfer size (group files use a separate NGC path and are unaffected).
             final long filesize = get_filetransfer_filesize_from_id(message.filetransfer_id);
-            return (filesize > 0) &&
-                   (filesize <= (long) AUTO_ACCEPT_FT_SMALL_FILE_MAX_SIZE_IN_MB * 1024L * 1024L);
+            return (filesize > 0) && (filesize <= KHANDAQ_MAX_FILE_TRANSFER_BYTES);
         }
         catch (Exception e)
         {

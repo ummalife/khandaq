@@ -5449,23 +5449,38 @@ public class HelperGeneric
 
     public static String trim_to_utf8_length_bytes(String input_string, final int max_length_in_bytes)
     {
+        if (input_string == null)
+        {
+            return null;
+        }
         try
         {
-            do
+            // KHANDAQ: the old version shaved one char at a time, re-encoding the whole string each
+            // pass — O(n^2), so pasting a long message (tens of KB) froze the UI for seconds. Fast
+            // path when it already fits; otherwise binary-search the longest char prefix that fits.
+            if (input_string.getBytes(StandardCharsets.UTF_8).length <= max_length_in_bytes)
             {
-                byte[] valueInBytes = null;
-                valueInBytes = input_string.getBytes(StandardCharsets.UTF_8);
+                return input_string;
+            }
 
-                if (valueInBytes.length > max_length_in_bytes)
+            int lo = 0;
+            int hi = input_string.length();
+            int best = 0;
+            while (lo <= hi)
+            {
+                final int mid = (lo + hi) >>> 1;
+                final int bytes = input_string.substring(0, mid).getBytes(StandardCharsets.UTF_8).length;
+                if (bytes <= max_length_in_bytes)
                 {
-                    input_string = input_string.substring(0, input_string.length() - 1);
+                    best = mid;
+                    lo = mid + 1;
                 }
                 else
                 {
-                    return input_string;
+                    hi = mid - 1;
                 }
             }
-            while (input_string.length() > 0);
+            return input_string.substring(0, best);
         }
         catch (Exception e)
         {

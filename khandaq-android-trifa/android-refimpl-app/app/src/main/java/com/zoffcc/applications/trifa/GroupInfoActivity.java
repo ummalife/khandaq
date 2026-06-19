@@ -1167,8 +1167,14 @@ public class GroupInfoActivity extends AppCompatActivity
                                 group_info_members_adapter.setMembers(members);
                                 if (group_info_members_header != null)
                                 {
+                                    // KHANDAQ (#21): use the same authoritative toxcore count as the
+                                    // in-group header (peer_count + offline_peer_count) so the info
+                                    // screen and the chat header never disagree. Falls back to the
+                                    // rendered list size if toxcore has no count yet.
+                                    final long[] auth = HelperGroup.count_authoritative_group_members(group_id);
+                                    final long total = Math.max(auth[0] + auth[1], members.size());
                                     group_info_members_header.setText(
-                                            getString(R.string.group_info_members_header, members.size()));
+                                            getString(R.string.group_info_members_header, (int) total));
                                 }
                                 if (group_info_members_empty != null)
                                 {

@@ -844,7 +844,7 @@
     <!-- Layout texts -->
     <!-- Layout texts -->
     <!-- Layout texts -->
-    <string name="layout___toxid">ID</string>
+    <string name="layout___toxid">Paste ID</string>
     <string name="friend_display_name_fallback">Contact</string>
     <string name="layout___group_name">Group Name</string>
     <string name="layout___group_id">Group ID</string>

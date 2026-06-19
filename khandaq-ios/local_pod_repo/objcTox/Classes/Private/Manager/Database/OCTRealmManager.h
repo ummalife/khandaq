@@ -79,6 +79,17 @@
 - (OCTFriend *)friendWithPublicKey:(NSString *)publicKey;
 - (OCTChat *)getOrCreateChatWithFriend:(OCTFriend *)friend;
 - (nullable OCTChat *)chatWithGroupNumber:(uint32_t)groupNumber;
+
+// KHANDAQ: built-in local-only "Saved Messages" chat (friend-less, non-group). Messages are stored
+// locally only — never sent over Tox.
+- (OCTChat *)getOrCreateSavedMessagesChat;
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat;
+- (OCTMessageAbstract *)addSavedFileMessageWithPath:(NSString *)filePath
+                                           fileName:(NSString *)fileName
+                                           fileSize:(OCTToxFileSize)fileSize
+                                            fileUTI:(nullable NSString *)fileUTI
+                                               toChat:(OCTChat *)chat;
+- (void)markMessageAsCaption:(OCTMessageAbstract *)message;
 - (nullable OCTChat *)chatWithGroupChatIdHex:(NSString *)chatIdHex;
 - (RLMResults *)groupChats;
 - (NSArray<OCTChat *> *)groupChatsSnapshot;

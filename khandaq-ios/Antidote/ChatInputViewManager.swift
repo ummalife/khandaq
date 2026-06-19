@@ -105,6 +105,14 @@ extension ChatInputViewManager: ChatInputViewDelegate {
 
         let outgoing = outgoingTextComposer?(text) ?? text
 
+        // KHANDAQ: Saved Messages is a friend-less local chat — store, don't transfer over Tox.
+        if chat.isSavedMessages {
+            submanagerObjects.addSavedTextMessage(outgoing, to: chat)
+            view.text = ""
+            endUserInteraction()
+            return
+        }
+
         // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
         submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
             DispatchQueue.main.async {
@@ -153,6 +161,12 @@ extension ChatInputViewManager: ChatInputViewDelegate {
 
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
         guard let url = voiceRecorder.stopRecording(discard: cancelled) else {
+            return
+        }
+
+        if chat.isSavedMessages {
+            storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
+            try? FileManager.default.removeItem(at: url)
             return
         }
 
@@ -316,7 +330,7 @@ fileprivate extension ChatInputViewManager {
         showMediaPickFailed()
     }
 
-    func enqueueVideoSend(from sourceURL: URL, completion: (() -> Void)? = nil) {
+    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: (() -> Void)? = nil) {
         guard !isVideoSendInProgress else {
             showVideoSendError(VideoSendError.busy, retryURL: sourceURL)
             completion?()
@@ -347,7 +361,7 @@ fileprivate extension ChatInputViewManager {
 
                 switch result {
                 case .success(let preparedURL):
-                    self.sendPreparedVideo(at: preparedURL)
+                    self.sendPreparedVideo(at: preparedURL, caption: caption)
                 case .failure(let error):
                     self.showVideoSendError(error, retryURL: sourceURL)
                 }
@@ -357,8 +371,11 @@ fileprivate extension ChatInputViewManager {
         })
     }
 
-    func enqueueVideoSendSequence(_ urls: [URL]) {
+    func enqueueVideoSendSequence(_ urls: [URL], caption: String = "") {
         guard !urls.isEmpty else {
+            if !caption.isEmpty {
+                sendCaptionMessage(caption)
+            }
             return
         }
 
@@ -368,14 +385,16 @@ fileprivate extension ChatInputViewManager {
                 return
             }
             let url = remaining.removeFirst()
-            enqueueVideoSend(from: url) {
+            // The last video carries the caption so it lands right after that video's file message.
+            let itemCaption = remaining.isEmpty ? caption : ""
+            enqueueVideoSend(from: url, caption: itemCaption) {
                 sendNext()
             }
         }
         sendNext()
     }
 
-    func sendPreparedVideo(at url: URL) {
+    func sendPreparedVideo(at url: URL, caption: String = "") {
         let path = url.path
         videoSendQueue.async { [weak self] in
             guard let self = self else {
@@ -383,8 +402,20 @@ fileprivate extension ChatInputViewManager {
             }
 
             DispatchQueue.main.async {
+                let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                if self.chat.isSavedMessages {
+                    self.storeSavedFileByCopying(atPath: path, fileName: url.lastPathComponent)
+                    if !trimmed.isEmpty, let message = self.submanagerObjects.addSavedTextMessage(trimmed, to: self.chat) {
+                        self.submanagerObjects.markMessage(asCaption: message)
+                    }
+                    return
+                }
+                // sendFile creates the file message synchronously, so the caption sent right after pairs.
                 self.submanagerFiles.sendFile(atPath: path, moveToUploads: true, to: self.chat) { error in
                     handleErrorWithType(.sendFileToFriend, error: error as NSError)
+                }
+                if !trimmed.isEmpty {
+                    self.sendCaptionMessage(trimmed)
                 }
             }
         }
@@ -415,9 +446,45 @@ fileprivate extension ChatInputViewManager {
     }
 
     func sendFileData(_ data: Data, fileName: String) {
+        if chat.isSavedMessages {
+            guard let dir = Self.savedFilesDirectory() else { return }
+            let dest = dir.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+            guard (try? data.write(to: dest)) != nil else { return }
+            storeSavedFile(atPath: dest.path, fileName: fileName)
+            return
+        }
+
         submanagerFiles.send(data, withFileName: fileName, to: chat) { (error: Error) in
             handleErrorWithType(.sendFileToFriend, error: error as NSError)
         }
+    }
+
+    /// Persistent dir for files kept only in Saved Messages (no Tox transfer).
+    static func savedFilesDirectory() -> URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let dir = base.appendingPathComponent("KhandaqSaved", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        return dir
+    }
+
+    /// Copy `path` into the persistent saved dir and record a local file message. Returns true if stored.
+    @discardableResult
+    func storeSavedFileByCopying(atPath path: String, fileName: String) -> Bool {
+        guard let dir = Self.savedFilesDirectory() else { return false }
+        let dest = dir.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+        guard (try? FileManager.default.copyItem(atPath: path, toPath: dest.path)) != nil else { return false }
+        storeSavedFile(atPath: dest.path, fileName: fileName)
+        return true
+    }
+
+    private func storeSavedFile(atPath path: String, fileName: String) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)??.int64Value ?? 0
+        let uti = (fileName as NSString).pathExtension.isEmpty ? nil :
+            UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
+                                                  (fileName as NSString).pathExtension as CFString, nil)?.takeRetainedValue() as String?
+        submanagerObjects.addSavedFileMessage(withPath: path, fileName: fileName, fileSize: size, fileUTI: uti, to: chat)
     }
 
     func sendImageFromPHAsset(_ asset: PHAsset, fallbackFileName: String?) {
@@ -677,8 +744,9 @@ fileprivate extension ChatInputViewManager {
     }
 
     func sendConfirmedPreviewItems(_ items: [MediaSendPreviewItem], caption: String) {
-        var videoURLs: [URL] = []
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        var videoURLs: [URL] = []
         for item in items {
             switch item {
             case .image(let image, let fileName):
@@ -688,17 +756,34 @@ fileprivate extension ChatInputViewManager {
             }
         }
 
-        enqueueVideoSendSequence(videoURLs)
-
-        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedCaption.isEmpty {
-            sendCaptionMessage(trimmedCaption)
+        if videoURLs.isEmpty {
+            // Photos create their file message synchronously, so the caption now pairs with the last one.
+            if !trimmedCaption.isEmpty {
+                sendCaptionMessage(trimmedCaption)
+            }
+            return
         }
+
+        // Video prep is async — let the LAST video carry the caption so it follows the video's file message.
+        enqueueVideoSendSequence(videoURLs, caption: trimmedCaption)
     }
 
     func sendCaptionMessage(_ text: String) {
         let outgoing = outgoingTextComposer?(text) ?? text
-        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
+
+        // Saved Messages: friend-less local chat — store + flag locally, no Tox send.
+        if chat.isSavedMessages {
+            if let message = submanagerObjects.addSavedTextMessage(outgoing, to: chat) {
+                submanagerObjects.markMessage(asCaption: message)
+            }
+            return
+        }
+
+        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { [weak self] message in
+            // Mark as caption so it renders merged into the preceding media bubble (Telegram-style).
+            if let message = message {
+                self?.submanagerObjects.markMessage(asCaption: message)
+            }
         }, failureBlock: { error in
             DispatchQueue.main.async {
                 if let error = error as NSError? {

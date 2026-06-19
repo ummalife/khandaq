@@ -81,6 +81,14 @@
 
 /* Label shown when connecting to Tox network */
 "connecting_label" = "Connecting...";
+"conn_state_offline" = "No connection";
+"conn_state_connected" = "Online";
+"conn_state_weak" = "Weak connection";
+"conn_state_stable" = "Connection stable";
+"conn_quality_strong" = "strong";
+"conn_quality_medium" = "medium";
+"conn_quality_weak" = "weak";
+"conn_quality_offline" = "offline";
 
 /* Tab name and screen name */
 "contacts_title" = "Contacts";
@@ -535,6 +543,7 @@
 "group_messages_quote_action" = "Quote";
 "chat_reply_action" = "Reply";
 "chat_forward_action" = "Forward";
+"saved_messages_title" = "Saved Messages";
 "chat_reply_cancel" = "Cancel reply";
 "chat_reply_header" = "In reply to %@";
 "chat_reply_self_name" = "You";

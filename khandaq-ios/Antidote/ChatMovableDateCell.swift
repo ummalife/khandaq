@@ -230,6 +230,9 @@ enum MessageForwarder {
     }
 
     static func displayName(for chat: OCTChat) -> String {
+        if chat.isSavedMessages {
+            return String(localized: "saved_messages_title")
+        }
         if chat.isGroup {
             let name = chat.groupName ?? ""
             return name.isEmpty ? "—" : name
@@ -250,9 +253,18 @@ enum MessageForwarder {
         alert.popoverPresentationController?.sourceView = sourceView
         alert.popoverPresentationController?.sourceRect = sourceView.bounds
 
+        // Saved Messages always available as first option (created on demand).
+        alert.addAction(UIAlertAction(title: String(localized: "saved_messages_title"), style: .default) { _ in
+            guard let saved = manager.objects.getOrCreateSavedMessagesChat() else { return }
+            forward(message, to: saved, manager: manager)
+        })
+
         let limit = min(chats.count, 25)
         for index in 0..<limit {
             let chat = chats[index]
+            if chat.isSavedMessages {
+                continue
+            }
             alert.addAction(UIAlertAction(title: displayName(for: chat), style: .default) { _ in
                 forward(message, to: chat, manager: manager)
             })
@@ -262,6 +274,11 @@ enum MessageForwarder {
     }
 
     private static func forward(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
+        if chat.isSavedMessages {
+            saveLocally(message, to: chat, manager: manager)
+            return
+        }
+
         if let text = message.messageText?.text, !text.isEmpty {
             if chat.isGroup {
                 manager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in }, failureBlock: { _ in })
@@ -291,5 +308,41 @@ enum MessageForwarder {
         else {
             manager.files.sendFile(atPath: tempURL.path, moveToUploads: true, to: chat) { _ in }
         }
+    }
+
+    /// Persistent directory for files stored in Saved Messages (Tox never transfers these).
+    private static func savedFilesDirectory() -> URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let dir = base.appendingPathComponent("KhandaqSaved", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        return dir
+    }
+
+    private static func saveLocally(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
+        if let text = message.messageText?.text, !text.isEmpty {
+            manager.objects.addSavedTextMessage(text, to: chat)
+            return
+        }
+
+        guard let file = message.messageFile,
+              let path = file.filePath(),
+              FileManager.default.fileExists(atPath: path),
+              let dir = savedFilesDirectory() else {
+            return
+        }
+
+        let originalName = (file.fileName?.isEmpty == false) ? file.fileName! : (path as NSString).lastPathComponent
+        let dest = dir.appendingPathComponent("\(UUID().uuidString)_\(originalName)")
+        guard (try? FileManager.default.copyItem(atPath: path, toPath: dest.path)) != nil else {
+            return
+        }
+
+        manager.objects.addSavedFileMessage(withPath: dest.path,
+                                            fileName: originalName,
+                                            fileSize: file.fileSize,
+                                            fileUTI: file.fileUTI,
+                                            to: chat)
     }
 }

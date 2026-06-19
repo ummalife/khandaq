@@ -204,6 +204,27 @@ extension ChatListTableManager: UITableViewDataSource {
             return cell
         }
 
+        if chat.isSavedMessages {
+            let model = ChatListCellModel()
+            let title = String(localized: "saved_messages_title")
+            var icon: UIImage?
+            if #available(iOS 13.0, *) {
+                icon = UIImage(systemName: "bookmark.fill")?.withTintColor(theme.colorForType(.LinkText), renderingMode: .alwaysOriginal)
+            }
+            model.avatar = icon ?? avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+            model.nickname = title
+            let preview = lastMessagePreview(in: chat, friend: nil)
+            model.message = preview.text
+            model.isDraft = preview.isDraft
+            if let date = chat.lastActivityDate() {
+                model.dateText = dateTextFromDate(date)
+            }
+            model.isUnread = chat.hasUnreadMessages()
+            let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
+            cell.setupWithTheme(theme, model: model)
+            return cell
+        }
+
         let friend = chat.friends.lastObject() as? OCTFriend
 
         if let friend = friend {
@@ -635,7 +656,37 @@ private extension ChatListTableManager {
     }
 
     func chatAtFilteredRow(_ row: Int) -> OCTChat {
+        // Saved Messages is always pinned to the top (within whatever filter tab it qualifies for).
+        var saved: OCTChat?
         var visible = 0
+
+        for index in 0..<chats.count {
+            let chat = chats[index]
+            guard chatMatchesFilter(chat) else {
+                continue
+            }
+            if chat.isSavedMessages {
+                saved = chat
+            }
+        }
+
+        if saved != nil {
+            if row == 0 {
+                return saved!
+            }
+            for index in 0..<chats.count {
+                let chat = chats[index]
+                guard chatMatchesFilter(chat), !chat.isSavedMessages else {
+                    continue
+                }
+                visible += 1
+                if visible == row {
+                    return chat
+                }
+            }
+            return saved!
+        }
+
         for index in 0..<chats.count {
             let chat = chats[index]
             if chatMatchesFilter(chat) {

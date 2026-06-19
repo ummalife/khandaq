@@ -18,7 +18,7 @@
 #import "OCTToxConstants.h"
 #import "OCTLogging.h"
 
-static const uint64_t kCurrentSchemeVersion = 31;
+static const uint64_t kCurrentSchemeVersion = 33;
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -108,6 +108,20 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
         [strongSelf createSettingsStorage];
     });
+
+    // KHANDAQ (crash fix): a few legacy group-file helpers query via RLMObject CLASS methods
+    // (`+objectsWithPredicate:`) which hit the DEFAULT Realm — not our encrypted `self.realm`. They run
+    // on background (Tox file-transfer) threads, where `self.realm` (confined to the init thread) isn't
+    // reachable, so they were always no-ops against an empty default realm. After bumping the schema
+    // (isSavedMessages/isCaption), the stale on-disk `default.realm` from an older build needed a
+    // migration the default config didn't provide → `+[RLMRealm defaultRealm]` THREW → the app crashed
+    // on ANY group file transfer (send photo/voice, retry) on a real device (fresh sims have no stale
+    // default.realm, hence no repro). Make the default config self-healing (it holds no real data) so
+    // `defaultRealm` always opens cleanly; the helpers keep their prior harmless no-op behaviour.
+    RLMRealmConfiguration *defaultConfig = [RLMRealmConfiguration defaultConfiguration];
+    defaultConfig.schemaVersion = kCurrentSchemeVersion;
+    defaultConfig.deleteRealmIfMigrationNeeded = YES;
+    [RLMRealmConfiguration setDefaultConfiguration:defaultConfig];
 
     [self convertAllCallsToMessages];
 
@@ -297,6 +311,88 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     });
 
     return chat;
+}
+
+- (OCTChat *)getOrCreateSavedMessagesChat
+{
+    __block OCTChat *chat = nil;
+
+    dispatch_sync(self.queue, ^{
+        // The saved-messages chat is flagged explicitly so it can't be confused with a 1:1 chat
+        // whose friend was deleted (that one is also friend-less).
+        RLMResults *flagged = [OCTChat objectsInRealm:self.realm where:@"isSavedMessages == YES"];
+        if (flagged.count > 0) {
+            chat = [flagged firstObject];
+            return;
+        }
+
+        chat = [OCTChat new];
+        chat.isSavedMessages = YES;
+        chat.lastActivityDateInterval = [[NSDate date] timeIntervalSince1970];
+
+        [self.realm beginWriteTransaction];
+        [self.realm addObject:chat];
+        [self.realm commitWriteTransaction];
+    });
+
+    return chat;
+}
+
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    OCTMessageText *messageText = [OCTMessageText new];
+    messageText.text = text ?: @"";
+    messageText.isDelivered = YES;
+    messageText.type = OCTToxMessageTypeNormal;
+
+    OCTMessageAbstract *message = [self addMessageAbstractWithChat:chat sender:nil messageText:messageText messageFile:nil messageCall:nil tssent:0 tsrcvd:0];
+    [self markSavedChatRead:chat upTo:message];
+    return message;
+}
+
+- (void)markMessageAsCaption:(OCTMessageAbstract *)message
+{
+    if (! message) {
+        return;
+    }
+    [self updateObject:message withBlock:^(OCTMessageAbstract *theMessage) {
+        theMessage.isCaption = YES;
+    }];
+}
+
+// Saved Messages are always your own — never let them count as "unread" in the chats badge.
+- (void)markSavedChatRead:(OCTChat *)chat upTo:(OCTMessageAbstract *)message
+{
+    if (! message) {
+        return;
+    }
+    [self updateObject:chat withBlock:^(OCTChat *theChat) {
+        theChat.lastReadDateInterval = message.dateInterval;
+    }];
+}
+
+- (OCTMessageAbstract *)addSavedFileMessageWithPath:(NSString *)filePath
+                                           fileName:(NSString *)fileName
+                                           fileSize:(OCTToxFileSize)fileSize
+                                            fileUTI:(nullable NSString *)fileUTI
+                                               toChat:(OCTChat *)chat
+{
+    NSParameterAssert(filePath);
+    NSParameterAssert(chat);
+
+    OCTMessageFile *messageFile = [OCTMessageFile new];
+    messageFile.internalFileNumber = kOCTToxFileNumberFailure;
+    messageFile.fileType = OCTMessageFileTypeReady;
+    messageFile.fileSize = fileSize;
+    messageFile.fileName = fileName;
+    [messageFile internalSetFilePath:filePath];
+    messageFile.fileUTI = fileUTI;
+
+    OCTMessageAbstract *message = [self addMessageAbstractWithChat:chat sender:nil messageText:nil messageFile:messageFile messageCall:nil tssent:0 tsrcvd:0];
+    [self markSavedChatRead:chat upTo:message];
+    return message;
 }
 
 - (OCTChat *)chatWithGroupNumber:(uint32_t)groupNumber

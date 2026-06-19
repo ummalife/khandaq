@@ -75,6 +75,12 @@
 @property (nonnull) NSString *chatUniqueIdentifier;
 
 /**
+ * KHANDAQ: YES for a text message that is the caption of the immediately-preceding file message.
+ * Local-only display hint (Telegram-style merged media+caption); not transmitted over Tox.
+ */
+@property BOOL isCaption;
+
+/**
  * Message has one of the following properties.
  */
 @property (nullable) OCTMessageText *messageText;

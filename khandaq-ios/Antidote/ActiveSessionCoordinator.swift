@@ -81,6 +81,8 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate var pendingOpenInFilePath: String?
 
     fileprivate let networkReachabilityMonitor = ToxNetworkReachabilityMonitor()
+    fileprivate var qualityObserver: NSObjectProtocol?
+    fileprivate var degradedNagTimer: Timer?
 
     init(theme: Theme, window: UIWindow, toxManager: OCTManager) {
         self.theme = theme
@@ -109,6 +111,9 @@ class ActiveSessionCoordinator: NSObject {
 
         toxManager.objects.setGroupShowSystemMessages(UserDefaultsManager().groupShowSystemMessages)
 
+        // KHANDAQ: ensure the local-only "Saved Messages" chat exists so it's always reachable.
+        _ = toxManager.objects.getOrCreateSavedMessagesChat()
+
         friendsCoordinator.delegate = self
         settingsCoordinator.delegate = self
         profileCoordinator.delegate = self
@@ -125,13 +130,70 @@ class ActiveSessionCoordinator: NSObject {
         MessageDeliveryWatchdog.shared.bind(toxManager: toxManager)
         MessageDeliveryWatchdog.shared.start()
         registerForReconnectBackoff()
+
+        // Surface connection-quality changes so the user can watch their link stability: yellow nag while
+        // weak, a one-shot green "stable" when it recovers.
+        qualityObserver = NotificationCenter.default.addObserver(
+            forName: .connectionQualityDidChange, object: nil, queue: .main) { [weak self] note in
+            self?.handleConnectionQualityChange(note)
+        }
     }
 
     deinit {
         MessageDeliveryWatchdog.shared.stop()
         NotificationCenter.default.removeObserver(self, name: .khandaqManualReconnectRequested, object: nil)
         networkReachabilityMonitor.stop()
+        degradedNagTimer?.invalidate()
+        if let qualityObserver = qualityObserver {
+            NotificationCenter.default.removeObserver(qualityObserver)
+        }
         NotificationCenter.default.removeObserver(self)
+    }
+
+    fileprivate func handleConnectionQualityChange(_ note: Notification) {
+        guard let newRaw = note.userInfo?["level"] as? String,
+              let new = ConnectionQualityLevel(rawValue: newRaw) else {
+            return
+        }
+        let old = (note.userInfo?["old"] as? String).flatMap(ConnectionQualityLevel.init)
+
+        switch new {
+            case .weak, .medium:
+                // Show the yellow warning now and keep nagging periodically while it stays weak.
+                notificationCoordinator.setConnectionState(.degraded, animated: true)
+                startDegradedNag()
+
+            case .strong:
+                stopDegradedNag()
+                // Only announce recovery if we were actually degraded/offline before.
+                if let old = old, old != .strong {
+                    notificationCoordinator.setConnectionState(.stable, animated: true)
+                }
+
+            case .offline:
+                // Red offline pill is driven by the tox connection-status path; just stop nagging.
+                stopDegradedNag()
+        }
+    }
+
+    fileprivate func startDegradedNag() {
+        degradedNagTimer?.invalidate()
+        degradedNagTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            let level = ConnectionQualityMonitor.shared.level
+            if level == .weak || level == .medium {
+                self.notificationCoordinator.setConnectionState(.degraded, animated: true)
+            } else {
+                self.stopDegradedNag()
+            }
+        }
+    }
+
+    fileprivate func stopDegradedNag() {
+        degradedNagTimer?.invalidate()
+        degradedNagTimer = nil
     }
 
     fileprivate func handleNetworkPathChange() {
@@ -215,6 +277,13 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
         notificationCoordinator.startWithOptions(nil)
         automationCoordinator.startWithOptions(nil)
         callCoordinator.startWithOptions(nil)
+
+        // Show the connecting pill immediately on launch — connectionStatusUpdate only fires on a
+        // *change*, so the initial offline→connecting period would otherwise have no indicator.
+        if toxManager.user.connectionStatus == .none {
+            notificationCoordinator.setConnectionState(
+                networkReachabilityMonitor.isReachable ? .connecting : .offline, animated: false)
+        }
 
         if case .iPhone = InterfaceIdiom.current() {
             iPhone.tabBarController.selectTab(at: IphoneObjects.TabCoordinator.chats.rawValue)
@@ -383,14 +452,18 @@ extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
     func submanagerUser(_ submanager: OCTSubmanagerUser, connectionStatusUpdate connectionStatus: OCTToxConnectionStatus) {
         updateUserStatusView()
 
-        let show = (connectionStatus == .none)
-        notificationCoordinator.toggleConnectingView(show: show, animated: true)
-
         if connectionStatus == .none {
+            // Distinguish "no network" (red) from "still connecting" (blue).
+            let state: NotificationWindow.ConnectionPillState =
+                networkReachabilityMonitor.isReachable ? .connecting : .offline
+            notificationCoordinator.setConnectionState(state, animated: true)
+
             NetworkDiagnosticsLog.log("self_offline", detail: "rebootstrap")
             ConnectionQualityMonitor.shared.onBootstrapStarted()
             toxManager.bootstrap.rebootstrapOnNetworkChange()
         } else {
+            // Connected → flash green "Online", then auto-hide.
+            notificationCoordinator.setConnectionState(.connected, animated: true)
             ConnectionQualityMonitor.shared.onBootstrapFinished(connected: true)
         }
     }

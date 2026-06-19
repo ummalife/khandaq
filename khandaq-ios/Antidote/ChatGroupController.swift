@@ -680,6 +680,16 @@ extension ChatGroupController: UITableViewDataSource {
         let dateText = timeFormatter.string(from: message.date() as Date)
         let highlight = messageSearchQuery.isEmpty ? nil : messageSearchQuery
 
+        // Telegram-style: a caption text merged into its file bubble has no row of its own.
+        if messageSearchQuery.isEmpty, isMergedCaptionRow(storageIndex: entry.storageIndex) {
+            let blank = UITableViewCell()
+            blank.backgroundColor = .clear
+            blank.contentView.backgroundColor = .clear
+            blank.selectionStyle = .none
+            blank.isUserInteractionEnabled = false
+            return blank
+        }
+
         if message.groupSystemMessage {
             let cell = tableView.dequeueReusableCell(withIdentifier: "groupSystemCell", for: indexPath)
             cell.backgroundColor = theme.colorForType(.NormalBackground)
@@ -765,7 +775,13 @@ extension ChatGroupController: UITableViewDelegate {
     // is squashed to a strip). Give inline image/video bubbles an explicit aspect-ratio height; let
     // everything else keep automatic sizing.
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        let entry = messageEntry(atDisplayIndex: indexPath.row)
+        let message = entry.message
+
+        if messageSearchQuery.isEmpty, isMergedCaptionRow(storageIndex: entry.storageIndex) {
+            return 0.0
+        }
+
         guard let messageFile = message.messageFile,
               message.isOutgoing() || messageFile.fileType == .ready,
               let file = messageFile.filePath(),
@@ -773,17 +789,91 @@ extension ChatGroupController: UITableViewDelegate {
             return UITableViewAutomaticDimension
         }
 
-        let uti = inferredFileUTI(for: messageFile)
-        let isImage = UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage)
-        let isVideo = ChatFileMediaLoader.isVideoFile(uti: uti, fileName: messageFile.fileName)
-        guard isImage || isVideo else {
+        guard let size = inlineMediaSize(forFileAt: file, messageFile: messageFile) else {
             return UITableViewAutomaticDimension
         }
+        let box = LoadingImageView.previewBox(for: size)
+        var height = box.height + 16.0
+        if messageSearchQuery.isEmpty,
+           let caption = captionMessage(forFileAtStorageIndex: entry.storageIndex)?.messageText?.text {
+            height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
+        }
+        return height
+    }
 
-        // Use real pixel dimensions when readable; otherwise a 4:3 fallback so an image/video bubble
-        // is never squashed into a strip even if the header can't be read yet.
-        let size = mediaPixelSize(forFileAt: file, isVideo: isVideo) ?? CGSize(width: 4, height: 3)
-        return LoadingImageView.previewBox(for: size).height + 16.0
+    /// Pixel size of an inline photo/video, or nil if the file isn't displayable media. Falls back to a
+    /// direct header read when the UTI/extension is missing (e.g. a received file with no extension), so a
+    /// downloaded video on the RECEIVER side gets the same aspect-ratio bubble as the sender's.
+    func inlineMediaSize(forFileAt file: String, messageFile: OCTMessageFile) -> CGSize? {
+        let uti = inferredFileUTI(for: messageFile)
+
+        // CRITICAL (real-device crash): voice/audio is never inline pixel media — bail before any probe.
+        // heightForRowAt runs on the MAIN thread; the old fallback ran AVURLAsset.tracks per voice (.m4a)
+        // cell, which blocks/hangs on iOS 26 → watchdog kill in any chat with voice notes.
+        if UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeAudio)
+            || VoiceMessageHelper.isVoiceMessage(fileName: messageFile.fileName, filePath: file) {
+            return nil
+        }
+
+        let isImage = UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage)
+        let isVideo = ChatFileMediaLoader.isVideoFile(uti: uti, fileName: messageFile.fileName)
+
+        if isImage {
+            return mediaPixelSize(forFileAt: file, isVideo: false) ?? CGSize(width: 4, height: 3)
+        }
+        if isVideo {
+            return mediaPixelSize(forFileAt: file, isVideo: true) ?? CGSize(width: 4, height: 3)
+        }
+        // Cheap, safe header read (CGImageSource on a non-image just returns nil).
+        if let imageSize = mediaPixelSize(forFileAt: file, isVideo: false) {
+            return imageSize
+        }
+        // Video probe only for a genuinely unknown type (received video with no extension).
+        if uti == nil, let videoSize = mediaPixelSize(forFileAt: file, isVideo: true) {
+            return videoSize
+        }
+        return nil
+    }
+
+    // MARK: - Telegram-style media captions
+
+    /// The caption text paired with the file at `storageIndex` (the message sent right after it).
+    func captionMessage(forFileAtStorageIndex storageIndex: Int) -> OCTMessageAbstract? {
+        guard storageIndex >= 0, storageIndex < messages.count else {
+            return nil
+        }
+        let file = messages[storageIndex]
+        guard file.messageFile != nil else {
+            return nil
+        }
+        let captionIndex = storageIndex - 1
+        guard captionIndex >= 0 else {
+            return nil
+        }
+        let caption = messages[captionIndex]
+        guard caption.isCaption,
+              let text = caption.messageText?.text, !text.isEmpty,
+              caption.isOutgoing() == file.isOutgoing() else {
+            return nil
+        }
+        return caption
+    }
+
+    /// True if the message at `storageIndex` is a caption merged into its file (no own row).
+    func isMergedCaptionRow(storageIndex: Int) -> Bool {
+        guard storageIndex >= 0, storageIndex < messages.count else {
+            return false
+        }
+        let message = messages[storageIndex]
+        guard message.isCaption, message.messageText?.text?.isEmpty == false else {
+            return false
+        }
+        let fileIndex = storageIndex + 1
+        guard fileIndex < messages.count else {
+            return false
+        }
+        let file = messages[fileIndex]
+        return file.messageFile != nil && file.isOutgoing() == message.isOutgoing()
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
@@ -927,6 +1017,17 @@ private extension ChatGroupController {
         model.fileSizeBytes = messageFile.fileSize
         model.fileSize = ByteCountFormatter.string(fromByteCount: messageFile.fileSize, countStyle: .file)
         model.fileUTI = inferredFileUTI(for: messageFile)
+
+        // Telegram-style merged caption (the text message sent right after this file).
+        if messageSearchQuery.isEmpty {
+            let idx = messages.indexOfObject(message)
+            model.caption = (idx >= 0 && idx < messages.count)
+                ? captionMessage(forFileAtStorageIndex: idx)?.messageText?.text
+                : nil
+        }
+        else {
+            model.caption = nil
+        }
 
         let isVoice = VoiceMessageHelper.isVoiceMessage(fileName: messageFile.fileName,
                                                         filePath: messageFile.filePath())

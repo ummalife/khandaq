@@ -86,6 +86,14 @@
 
 /* Label shown when connecting to Tox network */
 "connecting_label" = "Соединение...";
+"conn_state_offline" = "Нет соединения";
+"conn_state_connected" = "В сети";
+"conn_state_weak" = "Слабое соединение";
+"conn_state_stable" = "Связь стабильна";
+"conn_quality_strong" = "сильное";
+"conn_quality_medium" = "среднее";
+"conn_quality_weak" = "слабое";
+"conn_quality_offline" = "нет сети";
 
 /* Tab name and screen name */
 "contacts_title" = "Контакты";
@@ -539,6 +547,7 @@
 "group_messages_quote_action" = "Цитировать";
 "chat_reply_action" = "Ответить";
 "chat_forward_action" = "Переслать";
+"saved_messages_title" = "Избранное";
 "chat_reply_cancel" = "Отменить ответ";
 "chat_reply_header" = "В ответ %@";
 "chat_reply_self_name" = "Вы";

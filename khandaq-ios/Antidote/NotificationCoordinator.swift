@@ -79,6 +79,10 @@ class NotificationCoordinator: NSObject {
         notificationWindow.showConnectingView(show, animated: animated)
     }
 
+    func setConnectionState(_ state: NotificationWindow.ConnectionPillState, animated: Bool) {
+        notificationWindow.setConnectionState(state, animated: animated)
+    }
+
     /**
         Stops showing notifications for given chat.
         Also removes all related to that chat notifications from queue.
@@ -283,23 +287,12 @@ private extension NotificationCoordinator {
     }
 
     func showInAppNotificationObject(_ object: NotificationObject, chatUniqueIdentifier: String?) {
-        var appId:String
-        
-        if chatUniqueIdentifier != nil {
-            appId = chatUniqueIdentifier!
-        } else {
-            appId = Bundle.main.bundleIdentifier!
+        // KHANDAQ: custom safe-area banner instead of LNNotificationsUI (which rendered under the
+        // Dynamic Island / notch and got clipped). Presented in the existing NotificationWindow.
+        notificationWindow.showBanner(title: object.title, body: object.body, icon: object.icon) { [weak self] in
+            self?.performAction(object.action)
         }
 
-        registerInAppNotificationAppId(appId, icon: object.icon)
-
-        let notification = LNNotification.init(message: object.body, title: object.title)
-        notification?.defaultAction = LNNotificationAction.init(title: nil, handler: { [weak self] _ in
-            self?.performAction(object.action)
-        })
-        
-        LNNotificationCenter.default().present(notification, forApplicationIdentifier: appId)
-        
         showNextNotification()
     }
 

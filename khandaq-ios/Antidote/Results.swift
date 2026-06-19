@@ -34,7 +34,15 @@ class Results<T: OCTObject> {
     }
 
     func indexOfObject(_ object: T) -> Int {
-        return Int(results.index(of: object))
+        // RLMResults.index(of:) returns NSNotFound (== UInt.max) when the object isn't in the
+        // collection. `Int(UInt.max)` TRAPS in Swift (overflow) — a hard crash, in Release too — which
+        // happened on real devices when a just-rendered cell's message wasn't in the live Results (mid
+        // update / filtered). Return -1 instead so callers can guard.
+        let idx = results.index(of: object)
+        if idx == UInt(bitPattern: NSNotFound) {
+            return -1
+        }
+        return Int(idx)
     }
 
     func sortedResultsUsingProperty(_ property: String, ascending: Bool) -> Results<T> {

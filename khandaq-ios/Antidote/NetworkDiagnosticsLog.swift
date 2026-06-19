@@ -7,12 +7,41 @@ enum ConnectionQualityLevel: String {
     case medium
     case weak
     case offline
+
+    /// Localized short name for the connecting indicator (falls back to the raw key per language).
+    var localizedName: String {
+        switch self {
+            case .strong: return String(localized: "conn_quality_strong")
+            case .medium: return String(localized: "conn_quality_medium")
+            case .weak: return String(localized: "conn_quality_weak")
+            case .offline: return String(localized: "conn_quality_offline")
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Posted (on main) whenever the connection-quality level transitions. userInfo: "level", "old".
+    static let connectionQualityDidChange = Notification.Name("ConnectionQualityDidChange")
 }
 
 final class ConnectionQualityMonitor {
     static let shared = ConnectionQualityMonitor()
 
-    private(set) var level: ConnectionQualityLevel = .strong
+    private(set) var level: ConnectionQualityLevel = .strong {
+        didSet {
+            guard oldValue != level else {
+                return
+            }
+            let old = oldValue
+            let new = level
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .connectionQualityDidChange,
+                    object: ConnectionQualityMonitor.shared,
+                    userInfo: ["level": new.rawValue, "old": old.rawValue])
+            }
+        }
+    }
     private(set) var estimatedRttMs: Int = 80
     private var bootstrapStart: Date?
 

@@ -31,6 +31,7 @@ class ChatIncomingFileCell: ChatGenericFileCell {
         super.createViews()
 
         contentView.addSubview(loadingView)
+        contentView.addSubview(captionLabel)
         contentView.addSubview(voiceMessageView)
         contentView.addSubview(cancelButton)
         contentView.addSubview(retryButton)
@@ -42,8 +43,14 @@ class ChatIncomingFileCell: ChatGenericFileCell {
         loadingView.snp.makeConstraints {
             $0.leading.equalTo(contentView).offset(Constants.BigOffset)
             $0.top.equalTo(contentView).offset(Constants.SmallOffset)
-            $0.bottom.equalTo(contentView).offset(-Constants.SmallOffset)
             // KHANDAQ (#15): size comes from LoadingImageView (square by default, aspect for media).
+        }
+
+        captionLabel.snp.makeConstraints {
+            captionTopConstraint = $0.top.equalTo(loadingView.snp.bottom).constraint
+            $0.leading.equalTo(loadingView)
+            $0.trailing.equalTo(loadingView)
+            $0.bottom.equalTo(contentView).offset(-Constants.SmallOffset)
         }
 
         voiceMessageView.snp.makeConstraints {

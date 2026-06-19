@@ -64,9 +64,17 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
             return
         }
 
+        // NB: `.defaultToSpeaker` is only valid for `.playAndRecord`; combining it with `.playback`
+        // makes setCategory throw, leaving the session in the recorder's category → silent playback.
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(AVAudioSessionCategoryPlayback, with: [.defaultToSpeaker, .allowBluetooth])
-        try? session.setActive(true)
+        do {
+            try session.setCategory(AVAudioSessionCategoryPlayback, with: [.allowBluetoothA2DP])
+            try session.setActive(true)
+        }
+        catch {
+            try? session.setCategory(AVAudioSessionCategoryPlayback)
+            try? session.setActive(true)
+        }
 
         guard let audioPlayer = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: filePath)) else {
             return

@@ -10,6 +10,24 @@ class ChatGenericFileCell: ChatMovableDateCell {
     var voiceMessageView: ChatVoiceMessageView!
     var cancelButton: UIButton!
     var retryButton: UIButton!
+    // KHANDAQ: Telegram-style caption shown directly under the media, inside the same cell.
+    var captionLabel: UILabel!
+    var captionTopConstraint: Constraint?
+
+    static let captionFont = UIFont.systemFont(ofSize: 15)
+    static let captionTopSpacing: CGFloat = 5.0
+
+    static func captionHeight(for text: String, width: CGFloat) -> CGFloat {
+        guard !text.isEmpty, width > 0 else {
+            return 0
+        }
+        let bounding = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: captionFont],
+            context: nil)
+        return ceil(bounding.height) + captionTopSpacing
+    }
 
     var progressObject: ChatProgressProtocol? {
         didSet {
@@ -80,6 +98,20 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
         configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
 
+        // Merged caption (Telegram-style). Hidden for voice notes and when there is no caption.
+        let captionText = fileModel.isVoiceMessage ? nil : fileModel.caption
+        if let captionText = captionText, !captionText.isEmpty {
+            captionLabel.text = captionText
+            captionLabel.textColor = theme.colorForType(.NormalText)
+            captionLabel.isHidden = false
+            captionTopConstraint?.update(offset: ChatGenericFileCell.captionTopSpacing)
+        }
+        else {
+            captionLabel.text = nil
+            captionLabel.isHidden = true
+            captionTopConstraint?.update(offset: 0)
+        }
+
         canBeCopied = false
 
         switch state {
@@ -126,6 +158,11 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
         loadingView = LoadingImageView()
         loadingView.pressedHandle = loadingViewPressed
+
+        captionLabel = UILabel()
+        captionLabel.font = ChatGenericFileCell.captionFont
+        captionLabel.numberOfLines = 0
+        captionLabel.isHidden = true
 
         voiceMessageView = ChatVoiceMessageView()
         voiceMessageView.isHidden = true

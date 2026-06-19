@@ -76,6 +76,12 @@
 @property (nonnull) RLMArray<OCTFriend> *friends;
 
 /**
+ * KHANDAQ: YES only for the built-in local-only "Saved Messages" chat. Persisted so it cannot be
+ * confused with a 1:1 chat whose friend was deleted (which also ends up friend-less).
+ */
+@property BOOL isSavedMessages;
+
+/**
  * The latest message that was send or received.
  */
 @property (nullable) OCTMessageAbstract *lastMessage;
@@ -125,6 +131,11 @@
  * @return YES if there are unread messages, NO otherwise.
  */
 - (BOOL)hasUnreadMessages;
+
+/**
+ * KHANDAQ: YES for the built-in local-only "Saved Messages" chat.
+ */
+- (BOOL)isSavedMessagesChat;
 
 @end
 

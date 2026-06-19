@@ -18,6 +18,8 @@ class ChatGenericFileCellModel: ChatMovableDateCellModel {
     var fileSize: String?
     var fileSizeBytes: Int64 = 0
     var fileUTI: String?
+    /// KHANDAQ: Telegram-style caption rendered under the media in the same cell.
+    var caption: String?
 
     var startLoadingHandle: (() -> Void)?
     var cancelHandle: (() -> Void)?

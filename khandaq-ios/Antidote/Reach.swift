@@ -125,6 +125,19 @@ final class ToxNetworkReachabilityMonitor {
     private var debounceWorkItem: DispatchWorkItem?
     private var onNetworkChange: (() -> Void)?
 
+    /// Current reachability (best-effort). Defaults to true when it can't be determined, so we never
+    /// show a false "offline" indicator.
+    var isReachable: Bool {
+        guard let ref = reachability else {
+            return true
+        }
+        var flags = SCNetworkReachabilityFlags()
+        guard SCNetworkReachabilityGetFlags(ref, &flags) else {
+            return true
+        }
+        return flags.contains(.reachable) && !flags.contains(.connectionRequired)
+    }
+
     func start(onNetworkChange: @escaping () -> Void) {
         stop()
         self.onNetworkChange = onNetworkChange

@@ -112,4 +112,34 @@
     }
 }
 
+#pragma mark -  Saved Messages (KHANDAQ)
+
+- (OCTChat *)getOrCreateSavedMessagesChat
+{
+    return [[self.dataSource managerGetRealmManager] getOrCreateSavedMessagesChat];
+}
+
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat
+{
+    return [[self.dataSource managerGetRealmManager] addSavedTextMessage:text toChat:chat];
+}
+
+- (OCTMessageAbstract *)addSavedFileMessageWithPath:(NSString *)filePath
+                                           fileName:(NSString *)fileName
+                                           fileSize:(OCTToxFileSize)fileSize
+                                            fileUTI:(nullable NSString *)fileUTI
+                                               toChat:(OCTChat *)chat
+{
+    return [[self.dataSource managerGetRealmManager] addSavedFileMessageWithPath:filePath
+                                                                        fileName:fileName
+                                                                        fileSize:fileSize
+                                                                         fileUTI:fileUTI
+                                                                          toChat:chat];
+}
+
+- (void)markMessageAsCaption:(OCTMessageAbstract *)message
+{
+    [[self.dataSource managerGetRealmManager] markMessageAsCaption:message];
+}
+
 @end

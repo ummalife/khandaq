@@ -5,10 +5,12 @@
 #import <Foundation/Foundation.h>
 
 #import "OCTManagerConstants.h"
+#import "OCTToxConstants.h"
 
 @class OCTObject;
 @class OCTFriend;
 @class OCTChat;
+@class OCTMessageAbstract;
 @class RLMResults;
 
 @protocol OCTSubmanagerObjects <NSObject>
@@ -70,5 +72,31 @@
 - (void)changeChat:(OCTChat *)chat lastReadDateInterval:(NSTimeInterval)lastReadDateInterval;
 
 - (void)setGroupShowSystemMessages:(BOOL)enabled;
+
+#pragma mark -  Saved Messages (KHANDAQ)
+
+/**
+ * Find or create the built-in local-only "Saved Messages" chat (friend-less, non-group).
+ */
+- (OCTChat *)getOrCreateSavedMessagesChat;
+
+/**
+ * Store a text message locally in a chat (no Tox transfer). Used for Saved Messages.
+ */
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat;
+
+/**
+ * Store a (ready) file message locally in a chat (no Tox transfer). Used for Saved Messages.
+ */
+- (OCTMessageAbstract *)addSavedFileMessageWithPath:(NSString *)filePath
+                                           fileName:(NSString *)fileName
+                                           fileSize:(OCTToxFileSize)fileSize
+                                            fileUTI:(nullable NSString *)fileUTI
+                                               toChat:(OCTChat *)chat;
+
+/**
+ * Flag a text message as the caption of the immediately-preceding file message (merged display).
+ */
+- (void)markMessageAsCaption:(OCTMessageAbstract *)message;
 
 @end

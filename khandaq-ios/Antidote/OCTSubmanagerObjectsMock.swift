@@ -63,4 +63,20 @@ class OCTSubmanagerObjectsMock: NSObject, OCTSubmanagerObjects {
     func setGroupShowSystemMessages(_ enabled: Bool) {
         // nop
     }
+
+    func getOrCreateSavedMessagesChat() -> OCTChat! {
+        return nil
+    }
+
+    func addSavedTextMessage(_ text: String!, to chat: OCTChat!) -> OCTMessageAbstract! {
+        return nil
+    }
+
+    func addSavedFileMessage(withPath filePath: String!, fileName: String!, fileSize: OCTToxFileSize, fileUTI: String?, to chat: OCTChat!) -> OCTMessageAbstract! {
+        return nil
+    }
+
+    func markMessage(asCaption message: OCTMessageAbstract!) {
+        // nop
+    }
 }

@@ -156,7 +156,7 @@ extension ChatGroupInputViewManager: UIImagePickerControllerDelegate, UINavigati
         }
 
         if let image = (info[UIImagePickerControllerEditedImage] ?? info[UIImagePickerControllerOriginalImage]) as? UIImage {
-            sendImageData(image)
+            presentMediaPreview(items: [.image(image, fileName: nil)])
         }
     }
 
@@ -210,7 +210,7 @@ extension ChatGroupInputViewManager: PHPickerViewControllerDelegate {
                         do {
                             let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
                             DispatchQueue.main.async {
-                                self.enqueueVideoSend(from: staged)
+                                self.presentMediaPreview(items: [.video(staged)])
                             }
                         }
                         catch {
@@ -235,9 +235,62 @@ extension ChatGroupInputViewManager: PHPickerViewControllerDelegate {
             }
 
             DispatchQueue.main.async {
-                self.sendImageData(image)
+                self.presentMediaPreview(items: [.image(image, fileName: nil)])
             }
         }
+    }
+}
+
+extension ChatGroupInputViewManager: MediaSendPreviewControllerDelegate {
+    func mediaSendPreviewControllerDidCancel(_ controller: MediaSendPreviewController) {
+        controller.dismiss(animated: true, completion: nil)
+    }
+
+    func mediaSendPreviewController(_ controller: MediaSendPreviewController,
+                                    didConfirm items: [MediaSendPreviewItem],
+                                    caption: String) {
+        controller.dismiss(animated: true) { [weak self] in
+            self?.sendConfirmedPreviewItems(items, caption: caption)
+        }
+    }
+
+    func presentMediaPreview(items: [MediaSendPreviewItem]) {
+        presentingViewController.view.endEditing(true)
+        let controller = MediaSendPreviewController(items: items)
+        controller.delegate = self
+        presentingViewController.present(controller, animated: true, completion: nil)
+    }
+
+    func sendConfirmedPreviewItems(_ items: [MediaSendPreviewItem], caption: String) {
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // The caption rides along with the LAST media item and is sent from that file's send-success
+        // callback (so it always lands right after the file message — reliable even for async video).
+        for (index, item) in items.enumerated() {
+            let itemCaption = (index == items.count - 1) ? trimmedCaption : ""
+            switch item {
+            case .image(let image, _):
+                sendImageData(image, caption: itemCaption)
+            case .video(let url):
+                enqueueVideoSend(from: url, caption: itemCaption)
+            }
+        }
+    }
+
+    // Sends the caption text right after the media and flags it so it renders merged into the bubble.
+    func sendCaptionMessage(_ text: String) {
+        let outgoing = outgoingTextComposer?(text) ?? text
+        submanagerGroups.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { [weak self] message in
+            if let message = message {
+                self?.submanagerObjects.markMessage(asCaption: message)
+            }
+        }, failureBlock: { error in
+            DispatchQueue.main.async {
+                if let error = error as NSError? {
+                    handleErrorWithType(.sendMessageToFriend, error: error)
+                }
+            }
+        })
     }
 }
 
@@ -269,30 +322,30 @@ private extension ChatGroupInputViewManager {
         presentingViewController.present(controller, animated: true, completion: nil)
     }
 
-    func sendFileData(_ data: Data, fileName: String) {
+    func sendFileData(_ data: Data, fileName: String, caption: String = "") {
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
         do {
             try data.write(to: tempURL)
-            sendFileAtPath(tempURL.path)
+            sendFileAtPath(tempURL.path, caption: caption)
         }
         catch {
             handleErrorWithType(.sendFileToFriend, error: error as NSError)
         }
     }
 
-    func sendImageData(_ image: UIImage) {
+    func sendImageData(_ image: UIImage, caption: String = "") {
         guard let data = GroupImagePreparer.jpegDataForGroupUpload(from: image) else {
             UIAlertController.showErrorWithMessage(String(localized: "group_file_send_failed"), retryBlock: nil)
             return
         }
 
-        sendFileData(data, fileName: "photo.jpg")
+        sendFileData(data, fileName: "photo.jpg", caption: caption)
     }
 
     func sendMovie(imagePickerInfo: [String: Any]) {
         if let url = imagePickerInfo[UIImagePickerControllerMediaURL] as? URL {
-            enqueueVideoSend(from: url)
+            presentMediaPreview(items: [.video(url)])
             return
         }
 
@@ -323,12 +376,12 @@ private extension ChatGroupInputViewManager {
                     return
                 }
 
-                self.enqueueVideoSend(from: tempURL)
+                self.presentMediaPreview(items: [.video(tempURL)])
             }
         }
     }
 
-    func enqueueVideoSend(from sourceURL: URL, completion: (() -> Void)? = nil) {
+    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: (() -> Void)? = nil) {
         guard !isVideoSendInProgress else {
             showVideoSendError(VideoSendError.busy, retryURL: sourceURL)
             completion?()
@@ -359,7 +412,7 @@ private extension ChatGroupInputViewManager {
 
                 switch result {
                 case .success(let preparedURL):
-                    self.sendPreparedVideo(at: preparedURL)
+                    self.sendPreparedVideo(at: preparedURL, caption: caption)
                 case .failure(let error):
                     self.showVideoSendError(error, retryURL: sourceURL)
                 }
@@ -369,8 +422,8 @@ private extension ChatGroupInputViewManager {
         })
     }
 
-    func sendPreparedVideo(at url: URL) {
-        sendFileAtPath(url.path)
+    func sendPreparedVideo(at url: URL, caption: String = "") {
+        sendFileAtPath(url.path, caption: caption)
     }
 
     func showVideoSendError(_ error: Error, retryURL: URL?) {
@@ -384,9 +437,16 @@ private extension ChatGroupInputViewManager {
         UIAlertController.showErrorWithMessage(message, retryBlock: retryBlock)
     }
 
-    func sendFileAtPath(_ filePath: String) {
-        submanagerGroups.sendFile(atPath: filePath, to: chat, moveToUploads: true, successBlock: { _ in
-            // message persisted by submanager
+    func sendFileAtPath(_ filePath: String, caption: String = "") {
+        submanagerGroups.sendFile(atPath: filePath, to: chat, moveToUploads: true, successBlock: { [weak self] _ in
+            // The file message now exists, so the caption sent here lands right after it and merges
+            // into its bubble (reliable for async video, not just synchronous photos).
+            let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                DispatchQueue.main.async {
+                    self?.sendCaptionMessage(trimmed)
+                }
+            }
         }, failureBlock: { error in
             DispatchQueue.main.async {
                 guard let error = error as NSError? else {

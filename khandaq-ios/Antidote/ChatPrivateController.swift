@@ -4,7 +4,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import UIKit
+import AVFoundation
 import CoreLocation
+import ImageIO
 import SnapKit
 import MobileCoreServices
 import os
@@ -60,6 +62,8 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var friendToken: RLMNotificationToken?
 
     fileprivate let imageCache = NSCache<AnyObject, AnyObject>()
+    fileprivate let mediaPixelSizeCache = NSCache<NSString, NSValue>()
+    fileprivate var voicePlayerObserver: NSObjectProtocol?
 
     fileprivate let timeFormatter: DateFormatter
     fileprivate let dateFormatter: DateFormatter
@@ -139,10 +143,22 @@ class ChatPrivateController: PortraitChatController {
                 selector: #selector(ChatPrivateController.willHideMenuNotification),
                 name: NSNotification.Name.UIMenuControllerWillHideMenu,
                 object: nil)
+
+        // KHANDAQ: keep the voice player UI (play/pause icon + progress) in sync — without this the
+        // 1:1 / Saved Messages voice cells never refreshed, so tapping play looked like it did nothing.
+        voicePlayerObserver = NotificationCenter.default.addObserver(
+                forName: .chatVoiceMessagePlayerStateDidChange,
+                object: nil,
+                queue: .main) { [weak self] notification in
+            self?.handleVoicePlayerStateChange(notification)
+        }
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        if let voicePlayerObserver = voicePlayerObserver {
+            NotificationCenter.default.removeObserver(voicePlayerObserver)
+        }
         LocationSharingCoordinator.shared.detach(controller: self)
 
         messagesToken?.invalidate()
@@ -182,7 +198,9 @@ class ChatPrivateController: PortraitChatController {
         searchController.searchResultsUpdater = self
         searchController.searchBar.placeholder = String(localized: "group_messages_search_placeholder")
         navigationItem.searchController = searchController
-        navigationItem.hidesSearchBarWhenScrolling = true
+        // The message table is vertically flipped, which inverts the pull-to-reveal gesture. Keep the
+        // search bar always visible so reaching search no longer depends on scroll direction.
+        navigationItem.hidesSearchBarWhenScrolling = false
         definesPresentationContext = true
         messageSearchController = searchController
     }
@@ -693,7 +711,18 @@ extension ChatPrivateController {
 
 extension ChatPrivateController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        let entry = messageEntry(atDisplayIndex: indexPath.row)
+        let message = entry.message
+
+        // Telegram-style: a caption text merged into its file bubble has no row of its own.
+        if messageSearchQuery.isEmpty, isMergedCaptionRow(storageIndex: entry.storageIndex) {
+            let blank = UITableViewCell()
+            blank.backgroundColor = .clear
+            blank.contentView.backgroundColor = .clear
+            blank.selectionStyle = .none
+            blank.isUserInteractionEnabled = false
+            return blank
+        }
 
         // setting default values to avoid crash
         var model: ChatMovableDateCellModel  = ChatMovableDateCellModel()
@@ -822,6 +851,209 @@ extension ChatPrivateController: UITableViewDataSource {
 }
 
 extension ChatPrivateController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        let entry = messageEntry(atDisplayIndex: indexPath.row)
+        let message = entry.message
+
+        // Merged caption rows are not shown on their own.
+        if messageSearchQuery.isEmpty, isMergedCaptionRow(storageIndex: entry.storageIndex) {
+            return 0.0
+        }
+
+        guard let messageFile = message.messageFile,
+              message.isOutgoing() || messageFile.fileType == .ready,
+              let file = messageFile.filePath(),
+              messageFile.fileSize < Constants.MaxImageSizeToShowInline else {
+            return UITableViewAutomaticDimension
+        }
+
+        guard let size = inlineMediaSize(forFileAt: file, messageFile: messageFile) else {
+            return UITableViewAutomaticDimension
+        }
+        let box = LoadingImageView.previewBox(for: size)
+        var height = box.height + 16.0
+
+        // Add room for a merged caption rendered inside the media bubble.
+        if messageSearchQuery.isEmpty,
+           let caption = captionMessage(forFileAtStorageIndex: entry.storageIndex)?.messageText?.text {
+            height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
+        }
+        return height
+    }
+
+    @objc func handleVoicePlayerStateChange(_ notification: Notification) {
+        guard let state = notification.userInfo?["state"] as? ChatVoiceMessagePlayerState else {
+            return
+        }
+        refreshVisibleVoiceCells(for: state.messageId)
+    }
+
+    func refreshVisibleVoiceCells(for messageId: String) {
+        guard let tableView = tableView else {
+            return
+        }
+
+        for cell in tableView.visibleCells {
+            guard let fileCell = cell as? ChatGenericFileCell,
+                  let indexPath = tableView.indexPath(for: cell) else {
+                continue
+            }
+
+            let message = messageEntry(atDisplayIndex: indexPath.row).message
+            guard message.uniqueIdentifier == messageId,
+                  let messageFile = message.messageFile else {
+                continue
+            }
+
+            let model = ChatGenericFileCellModel()
+            model.isVoiceMessage = true
+            model.voiceMessageId = messageId
+            model.state = messageFile.fileType == .ready ? .done : .loading
+            if messageFile.fileType == .ready, let path = messageFile.filePath() {
+                model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
+            }
+            fileCell.refreshVoiceMessagePresentation(theme: theme, fileModel: model)
+        }
+    }
+
+    /// Pixel size of an inline photo/video, or nil if not displayable media. Probes the file directly
+    /// when the UTI/extension is missing so a downloaded video on the receiver gets the right aspect.
+    func inlineMediaSize(forFileAt file: String, messageFile: OCTMessageFile) -> CGSize? {
+        let uti = inferredFileUTI(for: messageFile)
+
+        // CRITICAL (real-device crash): voice/audio is never inline pixel media. Bail BEFORE any probe.
+        // This runs in heightForRowAt on the MAIN thread; the old fallback ran the deprecated synchronous
+        // AVURLAsset.tracks for every voice (.m4a) cell, which blocks (and on iOS 26 hangs → watchdog
+        // kill) — so any chat containing voice notes crashed on a real device (sims rarely have voice).
+        if UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeAudio)
+            || VoiceMessageHelper.isVoiceMessage(fileName: messageFile.fileName, filePath: file) {
+            return nil
+        }
+
+        let isImage = UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage)
+        let isVideo = ChatFileMediaLoader.isVideoFile(uti: uti, fileName: messageFile.fileName)
+
+        if isImage {
+            return mediaPixelSize(forFileAt: file, isVideo: false) ?? CGSize(width: 4, height: 3)
+        }
+        if isVideo {
+            return mediaPixelSize(forFileAt: file, isVideo: true) ?? CGSize(width: 4, height: 3)
+        }
+        // Cheap, safe header read (CGImageSource on a non-image just returns nil).
+        if let imageSize = mediaPixelSize(forFileAt: file, isVideo: false) {
+            return imageSize
+        }
+        // Video probe only for a genuinely unknown type (received video with no extension).
+        if uti == nil, let videoSize = mediaPixelSize(forFileAt: file, isVideo: true) {
+            return videoSize
+        }
+        return nil
+    }
+
+    // MARK: - Telegram-style media captions
+
+    /// The caption text paired with the file at `storageIndex` (the message sent right after it).
+    func captionMessage(forFileAtStorageIndex storageIndex: Int) -> OCTMessageAbstract? {
+        guard storageIndex >= 0, storageIndex < messages.count else {
+            return nil
+        }
+        let file = messages[storageIndex]
+        guard file.messageFile != nil else {
+            return nil
+        }
+        let captionIndex = storageIndex - 1   // newer message (DESC order) = sent just after the file
+        guard captionIndex >= 0 else {
+            return nil
+        }
+        let caption = messages[captionIndex]
+        guard caption.isCaption,
+              let text = caption.messageText?.text, !text.isEmpty,
+              caption.isOutgoing() == file.isOutgoing() else {
+            return nil
+        }
+        return caption
+    }
+
+    /// True if an incremental change touches a media caption (file row whose height depends on a
+    /// separate caption message), so the table should reload rather than animate.
+    func changeInvolvesCaption(insertions: [Int], modifications: [Int]) -> Bool {
+        for index in insertions + modifications {
+            guard index >= 0, index < messages.count else {
+                continue
+            }
+            let message = messages[index]
+            if message.isCaption {
+                return true
+            }
+            if message.messageFile != nil, captionMessage(forFileAtStorageIndex: index) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// True if the message at `storageIndex` is a caption that is merged into its file (no own row).
+    func isMergedCaptionRow(storageIndex: Int) -> Bool {
+        guard storageIndex >= 0, storageIndex < messages.count else {
+            return false
+        }
+        let message = messages[storageIndex]
+        guard message.isCaption, message.messageText?.text?.isEmpty == false else {
+            return false
+        }
+        let fileIndex = storageIndex + 1   // older message (DESC order) = the file it captions
+        guard fileIndex < messages.count else {
+            return false
+        }
+        let file = messages[fileIndex]
+        return file.messageFile != nil && file.isOutgoing() == message.isOutgoing()
+    }
+
+    func inferredFileUTI(for messageFile: OCTMessageFile) -> String? {
+        if let uti = messageFile.fileUTI, !uti.isEmpty {
+            return uti
+        }
+        guard let fileName = messageFile.fileName else {
+            return nil
+        }
+        let ext = (fileName as NSString).pathExtension
+        guard !ext.isEmpty,
+              let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, ext as CFString, nil)?.takeRetainedValue() as String? else {
+            return nil
+        }
+        return uti
+    }
+
+    func mediaPixelSize(forFileAt path: String, isVideo: Bool) -> CGSize? {
+        if let cached = mediaPixelSizeCache.object(forKey: path as NSString) {
+            let size = cached.cgSizeValue
+            return size.width > 0 && size.height > 0 ? size : nil
+        }
+
+        var result: CGSize = .zero
+        let url = URL(fileURLWithPath: path)
+
+        if isVideo {
+            let asset = AVURLAsset(url: url)
+            if let track = asset.tracks(withMediaType: .video).first {
+                let transformed = track.naturalSize.applying(track.preferredTransform)
+                result = CGSize(width: abs(transformed.width), height: abs(transformed.height))
+            }
+        }
+        else if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                let width = props[kCGImagePropertyPixelWidth] as? CGFloat,
+                let height = props[kCGImagePropertyPixelHeight] as? CGFloat {
+            result = CGSize(width: width, height: height)
+        }
+
+        guard result.width > 0, result.height > 0 else {
+            return nil
+        }
+        mediaPixelSizeCache.setObject(NSValue(cgSize: result), forKey: path as NSString)
+        return result
+    }
+
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         if indexPath.row == 0 {
             toggleNewMessageView(show: false)
@@ -1017,6 +1249,9 @@ private extension ChatPrivateController {
     func createTableHeaderViews() {
         typingHeaderView = ChatTypingHeaderView(theme: theme)
         typingHeaderView.transform = tableView!.transform
+        // Hidden until someone is actually typing. Otherwise it lingers as a stray grey pill — notably
+        // in friend-less chats (Saved Messages), where updateTableHeaderView() bails out early.
+        typingHeaderView.isHidden = true
         view.addSubview(typingHeaderView)
 
         fauxOfflineHeaderView = ChatFauxOfflineHeaderView(theme: theme)
@@ -1139,6 +1374,19 @@ private extension ChatPrivateController {
                         self.updateTableHeaderView()
                         return
                     }
+                    // A Telegram-style caption changes the height of a *separate* (file) row, which an
+                    // animated incremental update can't express — and sending photo+caption inserts two
+                    // rows in quick succession. Fall back to a full reload whenever a caption is involved
+                    // to avoid the "invalid number of rows" batch-update assertion.
+                    if self.changeInvolvesCaption(insertions: insertions, modifications: modifications) {
+                        self.visibleMessages = max(0, self.visibleMessages + insertions.count - deletions.count)
+                        tableView.reloadData()
+                        self.updateTableHeaderView()
+                        if insertions.contains(0) {
+                            self.handleNewMessage()
+                        }
+                        return
+                    }
                     if deletions.isEmpty && insertions.isEmpty {
                         self.updateTableViewWithModifications(modifications)
                     }
@@ -1226,6 +1474,16 @@ private extension ChatPrivateController {
 
     func addFriendNotification() {
         guard let friend = self.friend else {
+            if chat.isSavedMessages {
+                titleView.name = String(localized: "saved_messages_title")
+                titleView.userStatus = UserStatus(connectionStatus: .none, userStatus: .none)
+                titleView.connectionStatus = ConnectionStatus(connectionStatus: .none)
+                audioButton.isEnabled = false
+                videoButton.isEnabled = false
+                locationButton.isEnabled = false
+                chatInputView.cameraButtonEnabled = true
+                return
+            }
             titleView.name = String(localized: "contact_deleted")
             titleView.userStatus = UserStatus(connectionStatus: .none, userStatus: .none)
             titleView.connectionStatus = ConnectionStatus(connectionStatus: .none)
@@ -1419,6 +1677,17 @@ private extension ChatPrivateController {
         model.fileSizeBytes = message.messageFile!.fileSize
         model.fileSize = ByteCountFormatter.string(fromByteCount: message.messageFile!.fileSize, countStyle: .file)
         model.fileUTI = message.messageFile!.fileUTI
+
+        // Telegram-style merged caption (the text message sent right after this file).
+        if messageSearchQuery.isEmpty {
+            let idx = messages.indexOfObject(message)
+            model.caption = (idx >= 0 && idx < messages.count)
+                ? captionMessage(forFileAtStorageIndex: idx)?.messageText?.text
+                : nil
+        }
+        else {
+            model.caption = nil
+        }
 
         // KHANDAQ (#15): render 1:1 voice notes as a player (parity with groups).
         let isVoice = VoiceMessageHelper.isVoiceMessage(fileName: message.messageFile?.fileName,

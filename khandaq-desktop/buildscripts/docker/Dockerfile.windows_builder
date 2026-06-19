@@ -144,6 +144,17 @@ RUN mkdir -p /src/vpx && \
   /build/build_vpx.sh --arch ${SCRIPT_ARCH} && \
   rm -fr /src/vpx
 
+# KHANDAQ (security D-7/8/9): build x264 before toxcore. The NGC toxcore fork
+# (zoff99/c-toxcore) forces MUST_BUILD_TOXAV=ON, and its toxav requires x264 for
+# H.264 — without it CMake aborts ("required library X264 was not found"). The
+# x264 build script existed but was never wired into the image.
+COPY download/download_x264.sh /build/download/download_x264.sh
+COPY build_x264.sh /build/build_x264.sh
+RUN mkdir -p /src/x264 && \
+  cd /src/x264 && \
+  /build/build_x264.sh --arch ${SCRIPT_ARCH} && \
+  rm -fr /src/x264
+
 COPY download/download_mingw_ldd.sh /build/download/download_mingw_ldd.sh
 COPY build_mingw_ldd_windows.sh /build/build_mingw_ldd_windows.sh
 RUN mkdir -p /src/mingw_ldd && \

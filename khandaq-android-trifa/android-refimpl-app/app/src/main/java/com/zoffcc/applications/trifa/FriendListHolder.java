@@ -333,15 +333,8 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             f_user_status_icon.setImageResource(R.drawable.circle_red);
         }
 
-        int new_messages_count = 0;
-        try
-        {
-            new_messages_count = orma.selectFromMessage().tox_friendpubkeyEq(
-                    fl.tox_public_key_string).is_newEq(true).count();
-        }
-        catch (Exception ignored)
-        {
-        }
+        // KHANDAQ (#22): short-TTL cached so this DB COUNT isn't re-run for every row on every scroll.
+        final int new_messages_count = ChatListUiHelper.cached_friend_unread_count(fl.tox_public_key_string);
         ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
         apply_telegram_chat_row(fl);
         ChatBubbleUiHelper.fill_friend_list_avatar(context, fl.tox_public_key_string, display_name, avatar);

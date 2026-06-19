@@ -32,6 +32,97 @@ final class ChatListUiHelper
     {
     }
 
+    // KHANDAQ (#22): the unread badge was a DB COUNT query per chat row on every bind, re-run on
+    // every scroll/refresh — a freeze source on older phones. Cache the count per chat for a short
+    // window: a badge doesn't need sub-second freshness and the list re-queries within ~1s anyway.
+    // invalidate_*() lets the read/new-message paths force an immediate refresh when needed.
+    private static final java.util.concurrent.ConcurrentHashMap<String, Integer> unread_count_cache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> unread_count_cache_ts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long UNREAD_COUNT_CACHE_TTL_MS = 1000L;
+
+    static int cached_friend_unread_count(final String friendPubkey)
+    {
+        if (friendPubkey == null)
+        {
+            return 0;
+        }
+        final String key = "f:" + friendPubkey;
+        final Integer cached = peek_unread_cache(key);
+        if (cached != null)
+        {
+            return cached;
+        }
+        int count = 0;
+        try
+        {
+            count = TrifaToxService.orma.selectFromMessage().tox_friendpubkeyEq(friendPubkey).is_newEq(true).count();
+        }
+        catch (Exception ignored)
+        {
+        }
+        put_unread_cache(key, count);
+        return count;
+    }
+
+    static int cached_group_unread_count(final String groupIdentifier)
+    {
+        if (groupIdentifier == null)
+        {
+            return 0;
+        }
+        final String lower = groupIdentifier.toLowerCase(java.util.Locale.ROOT);
+        final String key = "g:" + lower;
+        final Integer cached = peek_unread_cache(key);
+        if (cached != null)
+        {
+            return cached;
+        }
+        int count = 0;
+        try
+        {
+            count = TrifaToxService.orma.selectFromGroupMessage().group_identifierEq(lower).is_newEq(true).count();
+        }
+        catch (Exception ignored)
+        {
+        }
+        put_unread_cache(key, count);
+        return count;
+    }
+
+    static void invalidate_unread_count_friend(final String friendPubkey)
+    {
+        if (friendPubkey != null)
+        {
+            unread_count_cache_ts.remove("f:" + friendPubkey);
+        }
+    }
+
+    static void invalidate_unread_count_group(final String groupIdentifier)
+    {
+        if (groupIdentifier != null)
+        {
+            unread_count_cache_ts.remove("g:" + groupIdentifier.toLowerCase(java.util.Locale.ROOT));
+        }
+    }
+
+    private static Integer peek_unread_cache(final String key)
+    {
+        final Long ts = unread_count_cache_ts.get(key);
+        if (ts != null && (System.currentTimeMillis() - ts) < UNREAD_COUNT_CACHE_TTL_MS)
+        {
+            return unread_count_cache.get(key);
+        }
+        return null;
+    }
+
+    private static void put_unread_cache(final String key, final int count)
+    {
+        unread_count_cache.put(key, count);
+        unread_count_cache_ts.put(key, System.currentTimeMillis());
+    }
+
     static void bind_preview_text_color(final TextView previewView, final boolean is_draft)
     {
         if (previewView == null)

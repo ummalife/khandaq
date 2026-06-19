@@ -217,15 +217,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
 
         imageView2.setVisibility(View.INVISIBLE);
 
-        int new_messages_count = 0;
-        try
-        {
-            new_messages_count = orma.selectFromGroupMessage().
-                    group_identifierEq(fl.group_identifier.toLowerCase()).is_newEq(true).count();
-        }
-        catch (Exception ignored)
-        {
-        }
+        // KHANDAQ (#22): short-TTL cached so this DB COUNT isn't re-run for every row on every scroll.
+        final int new_messages_count = ChatListUiHelper.cached_group_unread_count(fl.group_identifier);
         ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
         apply_telegram_chat_row(fl);
     }

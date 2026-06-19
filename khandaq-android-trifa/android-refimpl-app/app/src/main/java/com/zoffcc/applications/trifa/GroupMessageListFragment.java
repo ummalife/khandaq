@@ -408,7 +408,8 @@ public class GroupMessageListFragment extends Fragment
             e.printStackTrace();
         }
 
-        update_all_messages(true, PREF__messageview_paging);
+        // KHANDAQ (#22): load off the UI thread so opening a busy group doesn't freeze older phones.
+        update_all_messages_async();
 
         if (!is_data_loaded)
         {
@@ -652,6 +653,121 @@ public class GroupMessageListFragment extends Fragment
             HelperGeneric.logI(TAG, "data_values:005:EE1:" + e.getMessage());
         }
 
+    }
+
+    // KHANDAQ (#22): opening a group read+sorted ALL its messages on the UI thread (onResume), which
+    // froze older phones on a busy group. Run the heavy DB read + GroupMessageLayoutHelper sort off
+    // the UI thread; only the adapter update touches the main thread. A generation counter drops a
+    // stale load if the user re-enters/switches before it finishes. Used only for the open-chat path.
+    private static volatile int group_message_load_generation = 0;
+    private static final java.util.concurrent.ExecutorService group_message_load_executor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    private java.util.List<GroupMessage> load_group_messages_for_display()
+    {
+        if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
+        {
+            if (should_show_group_system_messages(current_group_id))
+            {
+                final java.util.List<GroupMessage> loaded = orma.selectFromGroupMessage().
+                        group_identifierEq(current_group_id.toLowerCase()).
+                        orderBySent_timestampAsc().
+                        toList();
+                GroupMessageLayoutHelper.sortMessagesForChatDisplay(loaded);
+                return loaded;
+            }
+            final java.util.List<GroupMessage> loaded = orma.selectFromGroupMessage().
+                    group_identifierEq(current_group_id.toLowerCase()).
+                    tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
+                    orderBySent_timestampAsc().
+                    toList();
+            GroupMessageLayoutHelper.sortMessagesForChatDisplay(loaded);
+            return loaded;
+        }
+
+        if (should_show_group_system_messages(current_group_id))
+        {
+            return orma.selectFromGroupMessage().
+                    group_identifierEq(current_group_id.toLowerCase()).
+                    orderBySent_timestampAsc().
+                    textLike(get_sqlite_search_string(group_search_messages_text)).
+                    toList();
+        }
+        return orma.selectFromGroupMessage().
+                group_identifierEq(current_group_id.toLowerCase()).
+                tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
+                orderBySent_timestampAsc().
+                textLike(get_sqlite_search_string(group_search_messages_text)).
+                toList();
+    }
+
+    void update_all_messages_async()
+    {
+        final int loadGen = ++group_message_load_generation;
+        group_message_load_executor.execute(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                // reset "new" flags (DB write) off the UI thread
+                try
+                {
+                    if (orma != null && current_group_id != null)
+                    {
+                        orma.updateGroupMessage().
+                                group_identifierEq(current_group_id.toLowerCase()).
+                                is_new(false).execute();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+
+                final java.util.List<GroupMessage> loaded;
+                try
+                {
+                    loaded = load_group_messages_for_display();
+                }
+                catch (Exception e)
+                {
+                    return;
+                }
+                if (loaded == null)
+                {
+                    return;
+                }
+
+                final Activity act = getActivity();
+                if (act == null)
+                {
+                    return;
+                }
+
+                act.runOnUiThread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        if (loadGen != group_message_load_generation)
+                        {
+                            return; // a newer load superseded this one
+                        }
+                        try
+                        {
+                            if (data_values != null)
+                            {
+                                data_values.clear();
+                            }
+                            adapter.add_list_clear(loaded);
+                        }
+                        catch (Exception e)
+                        {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+        });
     }
 
     public void scrollToReplyTarget(final MessageReplyHelper.ReplyMeta replyMeta)

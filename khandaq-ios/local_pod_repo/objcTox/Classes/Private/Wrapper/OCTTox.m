@@ -31,13 +31,17 @@ static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
 
 static void perform_khandaq_offline_rebootstrap(Tox *tox)
 {
+    // KHANDAQ: offline re-bootstrap against PROVEN PUBLIC Tox DHT nodes (parity with Android; the
+    // self-hosted bootstrap*.khandaq.org nodes were dropped — we don't depend on our own bootstrap
+    // infra to rejoin the network). push.khandaq.org (FCM wake relay) is a separate, untouched service.
     static const struct {
         const char *host;
         const char *key_hex;
     } nodes[] = {
-        {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
-        {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
-        {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
+        {"tox.abilinski.com", "10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E"},
+        {"tox1.mf-net.eu",    "B3E5FA80DC8EBD1149AD2AB35ED8B85BD546DEDE261CA593234C619249419506"},
+        {"tox2.mf-net.eu",    "70EA214FDE161E7432530605213F18F7427DC773E276B3E317A07531F548545F"},
+        {"tox.initramfs.io",  "3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25"},
     };
     static const uint16_t tcp_ports[] = {33445, 3389};
 

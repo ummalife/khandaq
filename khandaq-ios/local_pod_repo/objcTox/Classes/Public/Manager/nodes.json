@@ -3,57 +3,6 @@
   "last_refresh": 1780962465,
   "nodes": [
     {
-      "ipv4": "bootstrap1.khandaq.org",
-      "ipv6": "-",
-      "port": 33445,
-      "tcp_ports": [
-        3389,
-        33445
-      ],
-      "public_key": "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D",
-      "maintainer": "Khandaq",
-      "location": "NL",
-      "status_udp": true,
-      "status_tcp": true,
-      "version": "1000002024",
-      "motd": "Khandaq khandaq-bootstrap-eu-1 \u2014 https://khandaq.org",
-      "last_ping": 1780962465
-    },
-    {
-      "ipv4": "bootstrap2.khandaq.org",
-      "ipv6": "-",
-      "port": 33445,
-      "tcp_ports": [
-        3389,
-        33445
-      ],
-      "public_key": "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B",
-      "maintainer": "Khandaq",
-      "location": "US",
-      "status_udp": true,
-      "status_tcp": true,
-      "version": "1000002024",
-      "motd": "Khandaq khandaq-bootstrap-us-1 \u2014 https://khandaq.org",
-      "last_ping": 1780962465
-    },
-    {
-      "ipv4": "bootstrap3.khandaq.org",
-      "ipv6": "-",
-      "port": 33445,
-      "tcp_ports": [
-        3389,
-        33445
-      ],
-      "public_key": "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665",
-      "maintainer": "Khandaq",
-      "location": "DE",
-      "status_udp": true,
-      "status_tcp": true,
-      "version": "1000002024",
-      "motd": "Khandaq khandaq-bootstrap-de-1 \u2014 https://khandaq.org",
-      "last_ping": 1780962465
-    },
-    {
       "ipv4": "139.162.110.188",
       "ipv6": "2400:8902::f03c:93ff:fe69:bf77",
       "port": 33445,

@@ -82,6 +82,7 @@ public class GroupPeerInfoActivity extends AppCompatActivity
     String peer_pubkey = null;
     TextView group_peerrole_text = null;
     TextView peer_first_join_text = null;
+    TextView peer_connection_type_text = null;
     AppCompatButton group_kickpeer_button = null;
     TextView group_kickpeer_hint = null;
     AppCompatButton group_notification_silent_button = null;
@@ -116,6 +117,7 @@ public class GroupPeerInfoActivity extends AppCompatActivity
         group_peerrole_select = findViewById(R.id.group_peerrole_select);
         group_peerrole_set_button = findViewById(R.id.group_peerrole_set_button);
         peer_first_join_text = findViewById(R.id.peer_first_join_text);
+        peer_connection_type_text = findViewById(R.id.peer_connection_type_text);
 
         // KHANDAQ (#15): explicit Send button for the private (in-group direct) message, instead of the
         // old behaviour of only firing on onPause (which the user couldn't discover).
@@ -284,6 +286,37 @@ public class GroupPeerInfoActivity extends AppCompatActivity
         }
         catch (Exception e)
         {
+        }
+
+        // KHANDAQ (#18A): show whether this peer is reached directly (UDP) or via a TCP relay server.
+        // Group file transfers run over these per-peer NGC connections, so this tells you why a
+        // transfer with this peer is fast (direct) or slow (relayed).
+        if (peer_connection_type_text != null)
+        {
+            try
+            {
+                final long pid = MainActivity.tox_group_peer_by_public_key(group_num, peer_pubkey);
+                final int conn = (pid >= 0) ? MainActivity.tox_group_peer_get_connection_status(group_num, pid)
+                                            : ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+                final int key;
+                if (conn == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
+                {
+                    key = R.string.peer_conn_direct_udp;
+                }
+                else if (conn == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
+                {
+                    key = R.string.peer_conn_relay_tcp;
+                }
+                else
+                {
+                    key = R.string.peer_conn_offline;
+                }
+                peer_connection_type_text.setText(getString(key));
+            }
+            catch (Exception e)
+            {
+                peer_connection_type_text.setText("");
+            }
         }
 
         try

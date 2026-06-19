@@ -855,6 +855,9 @@
     <string name="group_private_msg_send">Send private message</string>
     <string name="group_private_msg_sent">Private message sent</string>
     <string name="group_private_msg_failed">Could not send private message</string>
+    <string name="peer_conn_direct_udp">Connection: direct (UDP) ⚡ fast</string>
+    <string name="peer_conn_relay_tcp">Connection: via relay (TCP) — slower</string>
+    <string name="peer_conn_offline">Connection: offline</string>
     <string name="friend_display_name_fallback">Contact</string>
     <string name="layout___group_name">Group Name</string>
     <string name="layout___group_id">Group ID</string>

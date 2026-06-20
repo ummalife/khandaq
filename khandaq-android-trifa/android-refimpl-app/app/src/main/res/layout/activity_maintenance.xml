@@ -310,6 +310,19 @@
                 android:textSize="16sp"/>
 
             <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/button_backup_password"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="20dp"
+                android:background="@drawable/rounded_red_dark_bg"
+                android:layout_marginRight="20dp"
+                android:layout_marginTop="10dp"
+                android:textColor="@android:color/white"
+                android:textAllCaps="false"
+                android:text="@string/backup_password_button"
+                android:textSize="14sp"/>
+
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/button_import_savedata"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

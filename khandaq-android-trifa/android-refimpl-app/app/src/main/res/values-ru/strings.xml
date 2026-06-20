@@ -444,6 +444,16 @@
     <string name="import_toxsave_ok_title">Профиль импортирован</string>
     <string name="import_toxsave_ok_message">Импорт завершён. Приложение сейчас перезапустится.</string>
     <string name="import_toxsave_in_progress">Импорт профиля…</string>
+    <string name="backup_password_button">Зашифрованный бэкап (пароль)</string>
+    <string name="backup_password_title">Зашифрованный бэкап</string>
+    <string name="backup_password_enter">Пароль бэкапа</string>
+    <string name="backup_password_confirm">Повторите пароль</string>
+    <string name="backup_password_warning">Этот пароль защищает весь профиль — сообщения, медиа и идентичность. Если потеряете его, бэкап открыть нельзя; восстановления нет.</string>
+    <string name="backup_password_too_short">Пароль не короче 8 символов</string>
+    <string name="backup_password_mismatch">Пароли не совпадают</string>
+    <string name="backup_in_progress">Создание зашифрованного бэкапа…</string>
+    <string name="backup_done">Бэкап создан.</string>
+    <string name="backup_failed">Ошибка бэкапа:</string>
     <string name="files_exported_to">Файлы экспортированы в:\n%1$s</string>
 
     <string name="share_id_label">ID:</string>

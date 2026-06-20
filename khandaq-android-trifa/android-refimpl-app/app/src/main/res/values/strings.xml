@@ -806,6 +806,16 @@
     <string name="import_toxsave_ok_title">Profile imported</string>
     <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
     <string name="import_toxsave_in_progress">Importing profile…</string>
+    <string name="backup_password_button">Encrypted backup (password)</string>
+    <string name="backup_password_title">Encrypted backup</string>
+    <string name="backup_password_enter">Backup password</string>
+    <string name="backup_password_confirm">Repeat password</string>
+    <string name="backup_password_warning">This password protects your whole profile — messages, media and identity. If you lose it the backup cannot be opened; there is no recovery.</string>
+    <string name="backup_password_too_short">Password must be at least 8 characters</string>
+    <string name="backup_password_mismatch">Passwords do not match</string>
+    <string name="backup_in_progress">Creating encrypted backup…</string>
+    <string name="backup_done">Backup created.</string>
+    <string name="backup_failed">Backup failed:</string>
     <string name="files_exported_to">Files exported to:\n%1$s</string>
 
     <string name="share_id_label">ID:</string>

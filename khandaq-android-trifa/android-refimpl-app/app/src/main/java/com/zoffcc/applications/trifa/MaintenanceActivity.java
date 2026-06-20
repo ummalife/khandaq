@@ -127,6 +127,8 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
 
     private ActivityResultLauncher<String[]> importProfileLauncher;
     private ActivityResultLauncher<String> exportProfileLauncher;
+    private ActivityResultLauncher<String> backupCreateLauncher;
+    private char[] pendingBackupPassphrase;
 
     Button button_clear_glide_cache;
     Button button_set_app_language;
@@ -144,6 +146,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
     Button button_export_encrypted_files;
     Button button_export_encrypted_chats;
     Button button_import_savedata;
+    Button button_backup_password;
     Button button_report_issue;
     Button reveal_passwords;
 
@@ -189,6 +192,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         button_export_encrypted_files = (Button) findViewById(R.id.button_export_encrypted_files);
         button_export_encrypted_chats = (Button) findViewById(R.id.button_export_encrypted_chats);
         button_import_savedata = (Button) findViewById(R.id.button_import_savedata);
+        button_backup_password = (Button) findViewById(R.id.button_backup_password);
         button_report_issue = (Button) findViewById(R.id.button_report_issue);
         reveal_passwords = (Button) findViewById(R.id.reveal_passwords);
         text_sqlstats = (TextView) findViewById(R.id.text_sqlstats);
@@ -623,6 +627,20 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
             }
         });
 
+        // KHANDAQ (#28): create an encrypted, password-protected backup of the whole profile.
+        button_backup_password.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                PasswordBackupHelper.promptForBackupPassphrase(MaintenanceActivity.this, passphrase ->
+                {
+                    pendingBackupPassphrase = passphrase;
+                    backupCreateLauncher.launch(PasswordBackupHelper.SUGGESTED_FILENAME);
+                });
+            }
+        });
+
         reveal_passwords.setOnClickListener(new View.OnClickListener()
         {
             @Override
@@ -945,6 +963,23 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         exportProfileLauncher = registerForActivityResult(
                 new ActivityResultContracts.CreateDocument("application/octet-stream"),
                 uri -> ToxProfileImportHelper.handleExportDestination(MaintenanceActivity.this, uri));
+
+        // KHANDAQ (#28): encrypted backup destination picker.
+        backupCreateLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument(PasswordBackupHelper.MIME_TYPE),
+                uri ->
+                {
+                    final char[] pp = pendingBackupPassphrase;
+                    pendingBackupPassphrase = null;
+                    if (uri != null && pp != null)
+                    {
+                        PasswordBackupHelper.performBackup(MaintenanceActivity.this, uri, pp);
+                    }
+                    else if (pp != null)
+                    {
+                        java.util.Arrays.fill(pp, '\0');   // picker cancelled
+                    }
+                });
 
         if (getIntent().getBooleanExtra(ToxProfileImportHelper.EXTRA_OPEN_IMPORT_PICKER, false))
         {

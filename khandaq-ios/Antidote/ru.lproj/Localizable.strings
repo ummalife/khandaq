@@ -143,11 +143,13 @@
 /* Add contat button */
 "add_contact_send" = "Отправить";
 /* Add contat placeholder text */
-"add_contact_tox_id_placeholder" = "Введите MyID";
+"add_contact_tox_id_placeholder" = "Вставьте ID";
 /* Add contat placeholder text */
 "add_contact_or_label" = "или";
 /* Add contat button */
 "add_contact_use_qr" = "Сканировать QR-код";
+"add_contact_use_qr_gallery" = "Сканировать QR-код из галереи";
+"add_contact_help_text" = "Вставьте ID друга в поле выше или нажмите кнопку QR-кода для сканирования камерой.";
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Сообщение";
 /* Add contat default text sended to contact */

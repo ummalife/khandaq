@@ -4,6 +4,8 @@
 
 import UIKit
 import SnapKit
+import CoreImage
+import MobileCoreServices
 
 private struct Constants {
     static let TextViewTopOffset = 5.0
@@ -29,11 +31,9 @@ class AddFriendController: UIViewController {
 
     fileprivate var idTextField: UITextField!
 
-    fileprivate var orTopSpacer: UIView!
-    fileprivate var qrCodeBottomSpacer: UIView!
-
-    fileprivate var orLabel: UILabel!
     fileprivate var qrCodeButton: UIButton!
+    fileprivate var qrGalleryButton: UIButton!
+    fileprivate var helpLabel: UILabel!
 
     fileprivate var cachedMessage: String?
 
@@ -74,6 +74,16 @@ extension AddFriendController {
             let value = self.normalizedIdFieldText(from: $0)
             self.applyIdFieldText(value, cursorOffset: (value as NSString).length)
         })
+    }
+
+    @objc func qrGalleryButtonPressed() {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            return
+        }
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.delegate = self
+        present(picker, animated: true, completion: nil)
     }
 
     @objc func sendButtonPressed() {
@@ -296,56 +306,62 @@ private extension AddFriendController {
         idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
         view.addSubview(idTextField)
 
-        orTopSpacer = createSpacer()
-        qrCodeBottomSpacer = createSpacer()
+        // KHANDAQ (#13): match the Android layout — a bordered "scan QR" button, a "scan QR from
+        // gallery" button, then a help line. Scanning from the camera already existed; gallery is new.
+        qrCodeButton = makeBorderedButton(title: String(localized: "add_contact_use_qr"),
+                                          action: #selector(AddFriendController.qrCodeButtonPressed))
+        qrGalleryButton = makeBorderedButton(title: String(localized: "add_contact_use_qr_gallery"),
+                                             action: #selector(AddFriendController.qrGalleryButtonPressed))
 
-        orLabel = UILabel()
-        orLabel.text = String(localized: "add_contact_or_label")
-        orLabel.textColor = theme.colorForType(.NormalText)
-        orLabel.backgroundColor = .clear
-        view.addSubview(orLabel)
-
-        qrCodeButton = UIButton(type: .system)
-        qrCodeButton.setTitle(String(localized: "add_contact_use_qr"), for: UIControlState())
-        qrCodeButton.titleLabel!.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
-        qrCodeButton.addTarget(self, action: #selector(AddFriendController.qrCodeButtonPressed), for: .touchUpInside)
-        view.addSubview(qrCodeButton)
+        helpLabel = UILabel()
+        helpLabel.text = String(localized: "add_contact_help_text")
+        helpLabel.numberOfLines = 0
+        helpLabel.font = UIFont.systemFont(ofSize: 14)
+        helpLabel.textColor = theme.colorForType(.NormalText)
+        helpLabel.backgroundColor = .clear
+        view.addSubview(helpLabel)
     }
 
-    func createSpacer() -> UIView {
-        let spacer = UIView()
-        spacer.backgroundColor = .clear
-        view.addSubview(spacer)
-
-        return spacer
+    func makeBorderedButton(title: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: UIControlState())
+        button.titleLabel?.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
+        button.setTitleColor(theme.colorForType(.NormalText), for: UIControlState())
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.textAlignment = .center
+        button.layer.cornerRadius = 8.0
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
+        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        view.addSubview(button)
+        return button
     }
 
     func installConstraints() {
         idTextField.snp.makeConstraints {
-            $0.top.equalTo(view).offset(Constants.TextViewTopOffset)
-            $0.leading.equalTo(view).offset(Constants.TextViewXOffset)
-            $0.trailing.equalTo(view).offset(-Constants.TextViewXOffset)
+            $0.top.equalTo(view).offset(Constants.TextViewTopOffset + 8)
+            $0.leading.equalTo(view).offset(Constants.TextViewXOffset + 11)
+            $0.trailing.equalTo(view).offset(-(Constants.TextViewXOffset + 11))
             $0.height.equalTo(52)
         }
 
-        orTopSpacer.snp.makeConstraints {
-            $0.top.equalTo(idTextField.snp.bottom)
-        }
-
-        orLabel.snp.makeConstraints {
-            $0.top.equalTo(orTopSpacer.snp.bottom)
-            $0.centerX.equalTo(view)
-        }
-
         qrCodeButton.snp.makeConstraints {
-            $0.top.equalTo(orLabel.snp.bottom)
-            $0.centerX.equalTo(view)
+            $0.top.equalTo(idTextField.snp.bottom).offset(16)
+            $0.leading.equalTo(idTextField)
+            $0.trailing.equalTo(idTextField)
         }
 
-        qrCodeBottomSpacer.snp.makeConstraints {
-            $0.top.equalTo(qrCodeButton.snp.bottom)
-            $0.bottom.equalTo(view)
-            $0.height.equalTo(orTopSpacer)
+        qrGalleryButton.snp.makeConstraints {
+            $0.top.equalTo(qrCodeButton.snp.bottom).offset(12)
+            $0.leading.equalTo(idTextField)
+            $0.trailing.equalTo(idTextField)
+        }
+
+        helpLabel.snp.makeConstraints {
+            $0.top.equalTo(qrGalleryButton.snp.bottom).offset(16)
+            $0.leading.equalTo(idTextField)
+            $0.trailing.equalTo(idTextField)
         }
     }
 
@@ -442,6 +458,62 @@ private extension AddFriendController {
         UIAlertController.showWithTitle(
             String(localized: "error_title"),
             message: String(localized: "add_contact_invalid_id_format"),
+            retryBlock: nil
+        )
+    }
+}
+
+// KHANDAQ (#13): scan a friend's QR code from a saved photo (parity with Android). Reuses the same
+// validation/normalisation as the camera scanner.
+extension AddFriendController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String: Any]) {
+        picker.dismiss(animated: true) { [weak self] in
+            guard let self = self else {
+                return
+            }
+
+            guard let image = info[UIImagePickerControllerOriginalImage] as? UIImage,
+                  let decoded = self.decodeQRCode(from: image) else {
+                self.showWrongQRError()
+                return
+            }
+
+            let value = self.normalizedIdFieldText(from: decoded)
+            guard isAddressString(value) else {
+                self.showWrongQRError()
+                return
+            }
+
+            self.applyIdFieldText(value, cursorOffset: (value as NSString).length)
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true, completion: nil)
+    }
+
+    func decodeQRCode(from image: UIImage) -> String? {
+        guard let ciImage = CIImage(image: image) else {
+            return nil
+        }
+
+        let detector = CIDetector(ofType: CIDetectorTypeQRCode,
+                                  context: nil,
+                                  options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+        let features = detector?.features(in: ciImage) ?? []
+
+        for feature in features {
+            if let qr = feature as? CIQRCodeFeature, let message = qr.messageString, !message.isEmpty {
+                return message
+            }
+        }
+        return nil
+    }
+
+    func showWrongQRError() {
+        UIAlertController.showWithTitle(
+            String(localized: "error_title"),
+            message: String(localized: "add_contact_wrong_qr"),
             retryBlock: nil
         )
     }

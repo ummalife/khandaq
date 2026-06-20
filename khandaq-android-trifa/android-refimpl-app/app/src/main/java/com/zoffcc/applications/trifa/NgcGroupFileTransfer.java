@@ -879,6 +879,18 @@ public final class NgcGroupFileTransfer
         asm.groupId = groupId;
         asm.groupNumber = groupNumber;
         asm.peerId = peerId;
+        // KHANDAQ: lock in the sender's pubkey now (peerId is valid for the actual sender at this
+        // moment); later peer_id reassignment must not re-attribute the transfer to someone else.
+        if (peerId >= 0)
+        {
+            try
+            {
+                asm.senderPubkey = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
         // Restore partial progress persisted in a previous session so we resume instead of re-downloading.
         loadReceivedBitmap(asm);
         return asm;
@@ -2113,6 +2125,10 @@ public final class NgcGroupFileTransfer
         String groupId;
         long groupNumber;
         long peerId;
+        /** KHANDAQ: sender pubkey captured when the transfer is first seen, while peerId is still
+         *  valid. NGC reuses peer_ids on leave/rejoin, so resolving the sender from peerId LATER (at
+         *  completion) can attribute the file/voice to the WRONG person — use this stable pubkey. */
+        String senderPubkey;
         /** Set on each freshly stored chunk — used to detect a stalled (vs actively progressing) transfer. */
         volatile long lastChunkTs;
     }

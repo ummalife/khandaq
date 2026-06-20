@@ -5904,7 +5904,11 @@ public class HelperGroup
 
         try
         {
-            final String peer_pubkey = tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            // KHANDAQ: prefer the sender pubkey captured at transfer start. peerId is volatile and may
+            // have been reassigned to another peer (or self) by completion time → wrong attribution.
+            final String peer_pubkey = (asm.senderPubkey != null && !asm.senderPubkey.isEmpty())
+                    ? asm.senderPubkey
+                    : tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
             final GroupMessage m = new GroupMessage();
             m.is_new = true;
             m.tox_group_peer_pubkey = peer_pubkey;
@@ -6045,7 +6049,11 @@ public class HelperGroup
                 return;
             }
 
-            final String peer_pubkey = tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            // KHANDAQ: prefer the sender pubkey captured at transfer start. peerId is volatile and may
+            // have been reassigned to another peer (or self) by completion time → wrong attribution.
+            final String peer_pubkey = (asm.senderPubkey != null && !asm.senderPubkey.isEmpty())
+                    ? asm.senderPubkey
+                    : tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
             final GroupMessage m = new GroupMessage();
             m.is_new = true;
             m.tox_group_peer_pubkey = peer_pubkey;

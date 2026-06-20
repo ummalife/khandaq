@@ -3573,10 +3573,11 @@ public class HelperGroup
     {
         try
         {
-            String new_name = tox_group_peer_get_name(group_number, peer_id);
+            // KHANDAQ: resolve by pubkey first (stable); raw peer_id only as a last resort.
+            String new_name = tox_group_peer_get_name__wrapper(group_identifier, new_pubkey, peer_id);
             if (TextUtils.isEmpty(new_name))
             {
-                new_name = tox_group_peer_get_name__wrapper(group_identifier, new_pubkey);
+                new_name = tox_group_peer_get_name(group_number, peer_id);
             }
             final String name_key = normalize_group_peer_name_key(new_name);
             if (TextUtils.isEmpty(name_key))
@@ -3800,16 +3801,17 @@ public class HelperGroup
             }
 
             String peer_name = null;
-            if (peerid >= 0)
+            // KHANDAQ: resolve the name by PUBKEY (the wrapper maps it to the peer's CURRENT peer_id
+            // internally). NEVER resolve by the raw peer_id here — NGC reuses peer_ids on rejoin, so a
+            // stale id would attach another peer's name to this pubkey and relabel their messages.
+            try
             {
-                try
-                {
-                    peer_name = pick_non_hex_group_peer_name(
-                            tox_group_peer_get_name(group_number, peerid), group_peer_pubkey);
-                }
-                catch (Exception ignored)
-                {
-                }
+                peer_name = pick_non_hex_group_peer_name(
+                        tox_group_peer_get_name__wrapper(group_identifier, group_peer_pubkey, peerid),
+                        group_peer_pubkey);
+            }
+            catch (Exception ignored)
+            {
             }
 
             if (peer_name == null)
@@ -4123,7 +4125,9 @@ public class HelperGroup
             String peer_name = null;
             try
             {
-                peer_name = pick_non_hex_group_peer_name(tox_group_peer_get_name(group_number, peer_id), peer_pubkey);
+                // KHANDAQ: resolve by pubkey (stable), not the volatile peer_id.
+                peer_name = pick_non_hex_group_peer_name(
+                        tox_group_peer_get_name__wrapper(group_identifier, peer_pubkey, peer_id), peer_pubkey);
             }
             catch (Exception ignored)
             {
@@ -4310,6 +4314,25 @@ public class HelperGroup
 
     private static String resolveGroupPeerLabel(final long group_number, final long peer_id)
     {
+        // KHANDAQ: resolve via PUBKEY (captured from the still-valid peer_id at the callback instant),
+        // so a later peer_id reuse can't put the wrong name in a "joined/left/renamed" notice.
+        try
+        {
+            final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+            final String peer_pubkey = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+            if (group_identifier != null && peer_pubkey != null && !peer_pubkey.isEmpty())
+            {
+                final String by_pubkey = tox_group_peer_get_name__wrapper(group_identifier, peer_pubkey, peer_id);
+                if (by_pubkey != null && !by_pubkey.isEmpty() && !by_pubkey.equals("-1"))
+                {
+                    return by_pubkey;
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         try
         {
             final String peer_name = tox_group_peer_get_name(group_number, peer_id);

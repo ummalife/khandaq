@@ -78,6 +78,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // drop sender-retry re-deliveries. In-memory so it does not depend on cross-thread Realm reads.
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *recentGroupMessageSeenAt;
 @property (nonatomic) dispatch_source_t groupsMaintenanceTimer;
+// KHANDAQ: stable pubkey-based group peer name resolver (declared so the receive callbacks above can
+// call it before its definition further down).
+- (nullable NSString *)groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                    peerId:(uint32_t)peerId
+                                                      chat:(OCTChat *)chat;
 @end
 
 @implementation OCTSubmanagerGroupsImpl
@@ -988,6 +993,21 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                         groupMsgIdHashHex:msgIdHex
                                                      groupTransferProgress:0.0f];
 
+    // KHANDAQ: don't push media into a group that isn't actually ready to carry it (connected with at
+    // least one ONLINE peer). Otherwise the chunk send goes nowhere, the file sticks at 0% and ends as
+    // "Upload Failed". Queue it as pending and let flushPendingGroupFileMessage retry once the group
+    // reconnects / a peer comes online — the same queue used for sends that fail mid-flight.
+    if (! [self isGroupConnectedForChat:chat] || [self onlineGroupPeerCountForChat:chat] < 1) {
+        [realmManager updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
+            abstract.groupPendingSend = YES;
+        }];
+        OCTLogInfo(@"NGC group file queued — group not ready, will retry chat=%@", chat.uniqueIdentifier);
+        if (successBlock) {
+            successBlock(message);
+        }
+        return;
+    }
+
     [self setupFileTransferIfNeeded];
 
     __weak typeof(self) weakSelf = self;
@@ -1040,7 +1060,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                    return;
                                }
 
-                               if (! [self isGroupConnectedForChat:chat]) {
+                               // KHANDAQ: also re-queue (not fail) when the group is technically
+                               // "connected" but has no ONLINE peer to receive the chunks — that's the
+                               // common 0% -> Upload Failed case. Retry via the pending queue instead.
+                               if (! [self isGroupConnectedForChat:chat] || [self onlineGroupPeerCountForChat:chat] < 1) {
                                    [realm updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
                                        abstract.groupPendingSend = YES;
                                    }];
@@ -1048,7 +1071,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                        file.fileType = OCTMessageFileTypeLoading;
                                        file.groupTransferProgress = 0.0f;
                                    }];
-                                   OCTLogInfo(@"NGC group file queued while disconnected chat=%@", chat.uniqueIdentifier);
+                                   OCTLogInfo(@"NGC group file queued (not ready) chat=%@", chat.uniqueIdentifier);
 
                                    if (successBlock) {
                                        successBlock(message);
@@ -2093,15 +2116,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     BOOL alreadyStored = [self isRecentDuplicateGroupMessageInChat:chat peerId:peerId text:message windowSeconds:15.0];
 
     if (! alreadyStored) {
-        RLMResults *peers = [realmManager groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
-        NSString *peerName = nil;
-
-        for (OCTGroupPeer *peer in peers) {
-            if ((uint32_t)peer.peerId == peerId) {
-                peerName = peer.peerName;
-                break;
-            }
-        }
+        // KHANDAQ: freeze the sender name resolved by STABLE pubkey (not the volatile peerId), so it
+        // stays correct on the stored message even after this peer_id is later reused by someone else.
+        NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
 
         if (peerName.length == 0) {
             peerName = [NSString stringWithFormat:@"Peer %u", peerId];
@@ -2460,13 +2477,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                     privacyState:OCTToxGroupPrivacyStatePublic];
     }
 
-    NSString *peerName = nil;
-    OCTGroupPeer *peer = [realmManager groupPeerForChat:chat peerId:peerId];
-
-    if (peer.peerName.length > 0) {
-        peerName = peer.peerName;
-    }
-    else {
+    // KHANDAQ: resolve the sender name by STABLE pubkey, not the volatile peerId.
+    NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+    if (peerName.length == 0) {
         peerName = [NSString stringWithFormat:@"Peer %u", peerId];
     }
 
@@ -4314,33 +4327,51 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     [[self.dataSource managerGetRealmManager] addGroupSystemMessageWithText:text inChat:chat];
 }
 
-- (NSString *)peerDisplayNameForGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId
+// KHANDAQ: resolve a group peer's display name by STABLE pubkey, not the volatile peerId (which NGC
+// reuses on leave/rejoin). The pubkey is captured from the still-valid peerId at the callback instant,
+// then matched against the roster by pubkey, so a later peer_id reuse can't attach the wrong name.
+// Returns nil if no name resolves (caller supplies a "Peer N" fallback).
+- (nullable NSString *)groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                    peerId:(uint32_t)peerId
+                                                      chat:(OCTChat *)chat
 {
-    OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
+    OCTTox *tox = [self.dataSource managerGetTox];
+    NSString *pubkeyHex = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
 
-    if (chat) {
-        OCTGroupPeer *peer = [[self.dataSource managerGetRealmManager] groupPeerForChat:chat peerId:peerId];
-
-        if (peer.peerName.length > 0) {
-            return peer.peerName;
+    if (chat && pubkeyHex.length > 0) {
+        RLMResults *peers = [[self.dataSource managerGetRealmManager] groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
+        for (OCTGroupPeer *peer in peers) {
+            if (peer.peerPublicKeyHex.length > 0 &&
+                [peer.peerPublicKeyHex caseInsensitiveCompare:pubkeyHex] == NSOrderedSame) {
+                if (peer.peerName.length > 0) {
+                    return peer.peerName;
+                }
+                break;
+            }
         }
     }
 
-    OCTTox *tox = [self.dataSource managerGetTox];
-    NSArray<NSDictionary *> *peers = [tox groupPeersForGroupNumber:groupNumber error:nil];
-
-    for (NSDictionary *entry in peers) {
+    // toxcore direct lookup (peerId valid at this instant) as a last resort before the fallback
+    NSArray<NSDictionary *> *tpeers = [tox groupPeersForGroupNumber:groupNumber error:nil];
+    for (NSDictionary *entry in tpeers) {
         if ([entry[@"peerId"] unsignedIntValue] == peerId) {
             NSString *name = entry[@"name"];
-
             if (name.length > 0) {
                 return name;
             }
-
             break;
         }
     }
+    return nil;
+}
 
+- (NSString *)peerDisplayNameForGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId
+{
+    OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
+    NSString *name = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+    if (name.length > 0) {
+        return name;
+    }
     return [NSString stringWithFormat:@"Peer %u", peerId];
 }
 

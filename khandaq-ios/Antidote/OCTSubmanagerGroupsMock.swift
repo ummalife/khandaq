@@ -68,6 +68,10 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         // nop
     }
 
+    func foregroundReconnect(for chat: OCTChat!) {
+        // nop
+    }
+
     func prepareGroupLiveMediaMonitoring(for chat: OCTChat!) {
         // nop
     }

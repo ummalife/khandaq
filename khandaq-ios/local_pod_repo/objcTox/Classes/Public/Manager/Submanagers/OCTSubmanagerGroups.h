@@ -86,6 +86,9 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
 
 - (void)refreshPeersForChat:(OCTChat *)chat;
 
+// KHANDAQ (#25): force an immediate reconnect of a stalled group when its chat is opened.
+- (void)foregroundReconnectForChat:(OCTChat *)chat;
+
 - (void)prepareGroupLiveMediaMonitoringForChat:(OCTChat *)chat;
 
 - (void)syncGroupsWithTox;

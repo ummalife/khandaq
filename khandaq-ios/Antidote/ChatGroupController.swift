@@ -226,6 +226,9 @@ class ChatGroupController: PortraitChatController {
         updateGroupInfoBarButton()
         startIncomingVideoMonitoring()
         prepareGroupLiveMediaMonitoringIfNeeded()
+        // KHANDAQ (#25): force an immediate reconnect of a stalled group on open instead of waiting
+        // up to 90s for the maintenance tick.
+        submanagerGroups.foregroundReconnect(for: chat)
         submanagerGroups.refreshPeers(for: chat)
         updateLastReadDate()
         updateConnectionBanner()

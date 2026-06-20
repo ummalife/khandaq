@@ -37,6 +37,9 @@ static const NSTimeInterval kOCTGroupInviteReplyMinIntervalSec = 60.0;
 static const NSTimeInterval kOCTGroupInviteRequestTTLSec = 600.0;
 static const NSTimeInterval kOCTGroupMaintenanceInviteIntervalSec = 15.0;
 static const NSTimeInterval kOCTGroupReconnectSuppressSec = 300.0;
+// KHANDAQ (#25): opening a group chat forces an immediate reconnect of a stalled group instead of
+// waiting up to 90s for the maintenance tick. Rate-limited so rapid open/close can't hammer.
+static const NSTimeInterval kOCTGroupForegroundReconnectMinIntervalSec = 5.0;
 
 NSString *const kOCTSubmanagerGroupsErrorDomain = @"OCTSubmanagerGroupsErrorDomain";
 
@@ -70,6 +73,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastInviteReplyMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupLastInviteRequestMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupPeerReconnectSuppressUntil;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupLastForegroundReconnectMs;
 // KHANDAQ (#15): recent incoming group-message keys (group:peer:text -> last-seen timestamp) used to
 // drop sender-retry re-deliveries. In-memory so it does not depend on cross-thread Realm reads.
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *recentGroupMessageSeenAt;
@@ -157,6 +161,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     self.lastInviteReplyMs = [NSMutableDictionary dictionary];
     self.groupLastInviteRequestMs = [NSMutableDictionary dictionary];
     self.groupPeerReconnectSuppressUntil = [NSMutableDictionary dictionary];
+    self.groupLastForegroundReconnectMs = [NSMutableDictionary dictionary];
 
     NSNotificationCenter *center = [self.dataSource managerGetNotificationCenter];
 
@@ -3971,6 +3976,36 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     if (connectionStatus < 0) {
         [[self.dataSource managerGetTox] groupReconnectWithGroupNumber:groupNumber error:nil];
     }
+}
+
+// KHANDAQ (#25): the user opened the chat — force an immediate reconnect of a stalled group instead
+// of waiting up to 90s for the maintenance tick. Rate-limited (5s) and guarded the same way the tick
+// is: status 0 = connecting (announce in progress) and reconnect would restart it from zero, so we
+// only revive a genuinely disconnected group (status < 0).
+- (void)foregroundReconnectForChat:(OCTChat *)chat
+{
+    if (! chat || ! chat.isGroup || chat.groupNumber < 0) {
+        return;
+    }
+    if (! [self.dataSource managerIsToxConnected]) {
+        return;
+    }
+
+    NSString *chatIdHex = chat.groupChatIdHex.lowercaseString;
+    if (chatIdHex.length == 64 &&
+        ! [self shouldRunGroupMaintenanceForKey:chatIdHex
+                                     lastRunMap:self.groupLastForegroundReconnectMs
+                                       interval:kOCTGroupForegroundReconnectMinIntervalSec]) {
+        return;
+    }
+
+    OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        if ([tox groupConnectionStatusForGroupNumber:groupNumber error:nil] < 0) {
+            [tox groupReconnectWithGroupNumber:groupNumber error:nil];
+        }
+    }];
+    [self refreshPeersForChat:chat];
 }
 
 - (BOOL)shouldRunGroupMaintenanceForKey:(NSString *)key

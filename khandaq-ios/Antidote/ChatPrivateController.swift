@@ -1663,7 +1663,11 @@ private extension ChatPrivateController {
         else {
             cell = tableView!.dequeueReusableCell(withIdentifier: ChatOutgoingFileCell.staticReuseIdentifier) as! ChatOutgoingFileCell
         }
-        let model = ChatIncomingFileCellModel()
+        // KHANDAQ (#23): outgoing files must use the outgoing model so the delivery checkmark
+        // renders — previously even outgoing file cells got a ChatIncomingFileCellModel, so the
+        // status indicator was always hidden (ChatOutgoingFileCell's `as? ChatOutgoingFileCellModel`
+        // cast silently failed).
+        let model: ChatGenericFileCellModel = incoming ? ChatIncomingFileCellModel() : ChatOutgoingFileCellModel()
 
         prepareFileCell(cell, andModel: model, withMessage: message)
 
@@ -1694,6 +1698,13 @@ private extension ChatPrivateController {
                                                         filePath: message.messageFile?.filePath())
         model.isVoiceMessage = isVoice
         model.voiceMessageId = message.uniqueIdentifier
+
+        // KHANDAQ (#23): outgoing delivery checkmark (parity with text + group files). A finished
+        // outgoing transfer means the peer pulled the whole file, so treat it as delivered.
+        if let outgoingModel = model as? ChatOutgoingFileCellModel {
+            outgoingModel.delivered = (message.messageFile?.isDelivered ?? false)
+                || (message.messageFile?.fileType == .ready)
+        }
         if isVoice {
             model.fileName = VoiceMessageHelper.displayFileName(for: message.messageFile?.fileName)
             if message.messageFile?.fileType == .ready, let path = message.messageFile?.filePath() {

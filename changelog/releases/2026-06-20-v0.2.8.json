@@ -162,6 +162,14 @@
       "platforms": [
         "android"
       ]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — profile import no longer freezes and fully replaces old data",
+      "description": "Importing a .tox profile used to block the UI thread while waiting for the network to stop (it felt frozen / \"very slow\") and, worse, only partly wiped the previous profile — old messages, files, transfers and relays were left behind and mixed into the imported account. Import now runs in the background behind a progress dialog and clears every table, so the imported profile comes in clean. Combined with the earlier fix, contacts keep their real names instead of becoming \"friend #N\".",
+      "platforms": [
+        "android"
+      ]
     }
   ]
 }

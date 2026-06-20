@@ -443,6 +443,7 @@
     <string name="profile_nospam_regenerated">Сгенерировано новое случайное anti-spam значение</string>
     <string name="import_toxsave_ok_title">Профиль импортирован</string>
     <string name="import_toxsave_ok_message">Импорт завершён. Приложение сейчас перезапустится.</string>
+    <string name="import_toxsave_in_progress">Импорт профиля…</string>
     <string name="files_exported_to">Файлы экспортированы в:\n%1$s</string>
 
     <string name="share_id_label">ID:</string>

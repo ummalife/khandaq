@@ -805,6 +805,7 @@
     <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
     <string name="import_toxsave_ok_title">Profile imported</string>
     <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="import_toxsave_in_progress">Importing profile…</string>
     <string name="files_exported_to">Files exported to:\n%1$s</string>
 
     <string name="share_id_label">ID:</string>

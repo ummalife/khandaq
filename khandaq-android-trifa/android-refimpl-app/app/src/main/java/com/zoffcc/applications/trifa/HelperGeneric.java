@@ -4802,8 +4802,8 @@ public class HelperGeneric
 
     static void import_toxsave_file_unsecure(final Context context, @NonNull final File f_src)
     {
-        MainActivity.global_stop_tox();
-
+        // KHANDAQ #24: validate the file BEFORE stopping tox, so a bad file can't leave the
+        // tox thread stopped (the old order stopped tox first, then bailed out).
         if (f_src == null || !f_src.exists() || f_src.length() < 64L)
         {
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -4814,104 +4814,129 @@ public class HelperGeneric
             return;
         }
 
-        Log.i(TAG, "Waiting for ToxThread to stop ...");
-        try
+        // KHANDAQ #24: the stop-tox wait + DB wipe + savedata copy used to run on the UI thread
+        // (a busy-wait loop), freezing the app for the whole import ("очень долго"). Run it on a
+        // background thread behind a progress dialog; only touch the UI from the main handler.
+        final android.app.ProgressDialog progress = new android.app.ProgressDialog(context);
+        progress.setMessage(context.getString(R.string.import_toxsave_in_progress));
+        progress.setCancelable(false);
+        progress.setIndeterminate(true);
+        try { progress.show(); } catch (Exception ignored) {}
+
+        MainActivity.global_stop_tox();
+
+        new Thread(() ->
         {
-            while(true)
-            {
-                // HINT: wait for tox thread to stop ...
-                //noinspection BusyWait
-                Thread.sleep(50);
-                if ((stop_tox_fg_done) && (!is_tox_started))
-                {
-                    Log.i(TAG, "ToxThread has ended");
-                    break;
-                }
-            }
-        }
-        catch (Exception ignored)
-        {
-        }
-
-        //
-        orma.deleteFromFriendList().execute();
-        orma.deleteFromConferenceDB().execute();
-        orma.deleteFromGroupDB().execute();
-        //
-        orma.deleteFromMessage();
-        orma.deleteFromConferenceMessage();
-        orma.deleteFromGroupMessage();
-        //
-        orma.deleteFromConferencePeerCacheDB();
-        orma.deleteFromFileDB();
-        orma.deleteFromFiletransfer();
-        orma.deleteFromRelayListDB();
-        //
-
-        File f_dst = new File(MainActivity.app_files_directory + "/" + "savedata.tox");
-        try
-        {
-            ls_file(f_src);
-            ls_file(f_dst);
-
-            // write toxsave data
-            io_file_copy(f_src, f_dst);
-
-            ls_file(f_dst);
-
+            Log.i(TAG, "Waiting for ToxThread to stop ...");
             try
             {
-                // delete unencrypted import file
-                f_src.delete();
+                int guard = 0;
+                while (guard < 200) // ~10s safety cap so we never hang forever
+                {
+                    // HINT: wait for tox thread to stop ...
+                    //noinspection BusyWait
+                    Thread.sleep(50);
+                    if ((stop_tox_fg_done) && (!is_tox_started))
+                    {
+                        Log.i(TAG, "ToxThread has ended");
+                        break;
+                    }
+                    guard++;
+                }
             }
             catch (Exception ignored)
             {
             }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
 
-        final AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle(context.getString(R.string.import_toxsave_ok_title));
-        builder.setMessage(context.getString(R.string.import_toxsave_ok_message));
-
-        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
-        {
-            public void onClick(DialogInterface dialog, int id)
+            // KHANDAQ #24: every table must be wiped on a profile REPLACE. Previously these deletes
+            // were built but never .execute()'d, so old messages / files / filetransfers / relays /
+            // peer caches survived the import and bled into the freshly imported profile.
+            try
             {
+                orma.deleteFromFriendList().execute();
+                orma.deleteFromConferenceDB().execute();
+                orma.deleteFromGroupDB().execute();
+                orma.deleteFromMessage().execute();
+                orma.deleteFromConferenceMessage().execute();
+                orma.deleteFromGroupMessage().execute();
+                orma.deleteFromConferencePeerCacheDB().execute();
+                orma.deleteFromFileDB().execute();
+                orma.deleteFromFiletransfer().execute();
+                orma.deleteFromRelayListDB().execute();
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            File f_dst = new File(MainActivity.app_files_directory + "/" + "savedata.tox");
+            try
+            {
+                ls_file(f_src);
+                ls_file(f_dst);
+
+                // write toxsave data
+                io_file_copy(f_src, f_dst);
+
+                ls_file(f_dst);
+
                 try
                 {
-                    Log.i(TAG, "Import ToxSaveFile complete, now exiting the application.");
-                    System.exit(0);
+                    // delete unencrypted import file
+                    f_src.delete();
                 }
                 catch (Exception ignored)
                 {
                 }
-                return;
-            }
-        });
-
-        // create and show the alert dialog
-        Runnable myRunnable = () -> {
-            try
-            {
-                final AlertDialog dialog = builder.create();
-                Log.i(TAG, "Import ToxSaveFile: show final Dialog.");
-                dialog.show();
             }
             catch (Exception e)
             {
-                Log.i(TAG, "Import ToxSaveFile with ERRORs, still exiting the application.");
+                e.printStackTrace();
+            }
+
+            // back on the UI thread: dismiss progress and show the final restart dialog
+            final Runnable finalUi = () ->
+            {
+                try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
+                try
+                {
+                    final AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                    builder.setTitle(context.getString(R.string.import_toxsave_ok_title));
+                    builder.setMessage(context.getString(R.string.import_toxsave_ok_message));
+                    builder.setCancelable(false);
+                    builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
+                    {
+                        public void onClick(DialogInterface dialog, int id)
+                        {
+                            try
+                            {
+                                Log.i(TAG, "Import ToxSaveFile complete, now exiting the application.");
+                                System.exit(0);
+                            }
+                            catch (Exception ignored)
+                            {
+                            }
+                        }
+                    });
+                    Log.i(TAG, "Import ToxSaveFile: show final Dialog.");
+                    builder.create().show();
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "Import ToxSaveFile with ERRORs, still exiting the application.");
+                    System.exit(0);
+                }
+            };
+
+            if (MainActivity.main_handler_s != null)
+            {
+                MainActivity.main_handler_s.post(finalUi);
+            }
+            else
+            {
                 System.exit(0);
             }
-        };
-
-        if (main_handler_s != null)
-        {
-            main_handler_s.post(myRunnable);
-        }
+        }, "import_toxsave").start();
     }
 
     static void ls_file(File f)

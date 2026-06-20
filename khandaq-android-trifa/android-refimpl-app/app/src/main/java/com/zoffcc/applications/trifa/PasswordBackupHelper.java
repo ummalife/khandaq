@@ -198,6 +198,115 @@ final class PasswordBackupHelper
         }, "kbk-backup").start();
     }
 
+    /** Single-field passphrase prompt for restore. */
+    static void promptPassphraseForRestore(final Activity activity, final PassphraseConsumer consumer)
+    {
+        final LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        final int pad = (int) (activity.getResources().getDisplayMetrics().density * 20);
+        box.setPadding(pad, pad / 2, pad, 0);
+        final EditText pass = passwordField(activity, activity.getString(R.string.restore_password_enter));
+        box.addView(pass);
+        new AlertDialog.Builder(activity)
+                .setTitle(R.string.restore_password_title)
+                .setView(box)
+                .setPositiveButton(android.R.string.ok, (d, w) ->
+                        consumer.onPassphrase(pass.getText().toString().toCharArray()))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /**
+     * Background decrypt + integrity-verify of a {@code .kbk} into staging, then hand off to the
+     * destructive apply. The live profile is only touched after the backup fully verifies.
+     */
+    static void performRestore(final Activity activity, final android.net.Uri uri, final char[] passphrase)
+    {
+        if (uri == null)
+        {
+            scrub(passphrase);
+            return;
+        }
+
+        final ProgressDialog progress = new ProgressDialog(activity);
+        progress.setTitle(R.string.restore_password_title);
+        progress.setMessage(activity.getString(R.string.restore_in_progress));
+        progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        progress.setCancelable(false);
+        progress.setMax(100);
+        try { progress.show(); } catch (Exception ignored) {}
+
+        new Thread(() ->
+        {
+            final File stagedDb = new File(activity.getCacheDir(), "restore_db.tmp");
+            final File stagedVfs = new File(activity.getCacheDir(), "restore_vfs.tmp");
+            String error = null;
+            BackupHelper.Manifest manifest = null;
+            try (InputStream in = activity.getContentResolver().openInputStream(uri))
+            {
+                if (in == null)
+                {
+                    throw new BackupHelper.BackupException("cannot open backup file");
+                }
+                manifest = BackupHelper.readHeader(in, passphrase);
+
+                int versionCode = 0;
+                try
+                {
+                    versionCode = activity.getPackageManager()
+                            .getPackageInfo(activity.getPackageName(), 0).versionCode;
+                }
+                catch (Exception ignored)
+                {
+                }
+                if (manifest.appVersionCode > versionCode)
+                {
+                    throw new BackupHelper.BackupException(activity.getString(R.string.restore_too_new));
+                }
+
+                final ProgressDialog p = progress;
+                final BackupHelper.ProgressListener listener = (done, total) ->
+                {
+                    final int pct = total > 0 ? (int) (done * 100L / total) : 0;
+                    activity.runOnUiThread(() ->
+                    {
+                        try { p.setProgress(pct); } catch (Exception ignored) {}
+                    });
+                    return true;
+                };
+                BackupHelper.extractBlobs(in, manifest, stagedDb, stagedVfs, listener);
+            }
+            catch (Exception e)
+            {
+                error = e.getMessage();
+                Log.w(TAG, "performRestore decrypt/verify failed: " + error);
+            }
+
+            final String finalError = error;
+            final BackupHelper.Manifest finalManifest = manifest;
+            activity.runOnUiThread(() ->
+            {
+                try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
+                if (finalError != null || finalManifest == null)
+                {
+                    try { stagedDb.delete(); stagedVfs.delete(); } catch (Exception ignored) {}
+                    scrub(passphrase);
+                    new AlertDialog.Builder(activity)
+                            .setTitle(R.string.restore_password_title)
+                            .setMessage(activity.getString(R.string.restore_failed) + "\n"
+                                    + (finalError != null ? finalError : ""))
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
+                    return;
+                }
+                scrub(passphrase);
+                // staging is verified — hand off to the destructive apply (stop tox, wipe, copy, restart)
+                HelperGeneric.applyRestoredProfileFromBackup(activity, stagedDb, stagedVfs,
+                        finalManifest.toxSavedata, finalManifest.dbKey);
+            });
+        }, "kbk-restore-decrypt").start();
+    }
+
     private static byte[] readAll(final File f) throws java.io.IOException
     {
         final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();

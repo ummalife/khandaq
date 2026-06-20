@@ -816,6 +816,13 @@
     <string name="backup_in_progress">Creating encrypted backup…</string>
     <string name="backup_done">Backup created.</string>
     <string name="backup_failed">Backup failed:</string>
+    <string name="restore_password_button">Restore from backup (password)</string>
+    <string name="restore_password_title">Restore backup</string>
+    <string name="restore_password_enter">Backup password</string>
+    <string name="restore_confirm">This replaces your current profile — messages, media and identity — with the backup. Continue?</string>
+    <string name="restore_in_progress">Restoring backup…</string>
+    <string name="restore_failed">Restore failed:</string>
+    <string name="restore_too_new">This backup was made by a newer app version. Update the app first.</string>
     <string name="files_exported_to">Files exported to:\n%1$s</string>
 
     <string name="share_id_label">ID:</string>

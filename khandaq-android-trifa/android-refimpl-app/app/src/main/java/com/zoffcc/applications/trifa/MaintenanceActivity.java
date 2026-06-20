@@ -129,6 +129,8 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
     private ActivityResultLauncher<String> exportProfileLauncher;
     private ActivityResultLauncher<String> backupCreateLauncher;
     private char[] pendingBackupPassphrase;
+    private ActivityResultLauncher<String[]> backupRestoreLauncher;
+    private char[] pendingRestorePassphrase;
 
     Button button_clear_glide_cache;
     Button button_set_app_language;
@@ -147,6 +149,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
     Button button_export_encrypted_chats;
     Button button_import_savedata;
     Button button_backup_password;
+    Button button_restore_password;
     Button button_report_issue;
     Button reveal_passwords;
 
@@ -193,6 +196,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         button_export_encrypted_chats = (Button) findViewById(R.id.button_export_encrypted_chats);
         button_import_savedata = (Button) findViewById(R.id.button_import_savedata);
         button_backup_password = (Button) findViewById(R.id.button_backup_password);
+        button_restore_password = (Button) findViewById(R.id.button_restore_password);
         button_report_issue = (Button) findViewById(R.id.button_report_issue);
         reveal_passwords = (Button) findViewById(R.id.reveal_passwords);
         text_sqlstats = (TextView) findViewById(R.id.text_sqlstats);
@@ -641,6 +645,27 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
             }
         });
 
+        // KHANDAQ (#28): restore the whole profile from an encrypted backup (destructive — confirm first).
+        button_restore_password.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                new androidx.appcompat.app.AlertDialog.Builder(MaintenanceActivity.this)
+                        .setTitle(R.string.restore_password_title)
+                        .setMessage(R.string.restore_confirm)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(android.R.string.ok, (d, w) ->
+                                PasswordBackupHelper.promptPassphraseForRestore(MaintenanceActivity.this, passphrase ->
+                                {
+                                    pendingRestorePassphrase = passphrase;
+                                    backupRestoreLauncher.launch(new String[]{
+                                            PasswordBackupHelper.MIME_TYPE, "*/*"});
+                                }))
+                        .show();
+            }
+        });
+
         reveal_passwords.setOnClickListener(new View.OnClickListener()
         {
             @Override
@@ -978,6 +1003,23 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                     else if (pp != null)
                     {
                         java.util.Arrays.fill(pp, '\0');   // picker cancelled
+                    }
+                });
+
+        // KHANDAQ (#28): restore-from-encrypted-backup picker.
+        backupRestoreLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri ->
+                {
+                    final char[] pp = pendingRestorePassphrase;
+                    pendingRestorePassphrase = null;
+                    if (uri != null && pp != null)
+                    {
+                        PasswordBackupHelper.performRestore(MaintenanceActivity.this, uri, pp);
+                    }
+                    else if (pp != null)
+                    {
+                        java.util.Arrays.fill(pp, '\0');
                     }
                 });
 

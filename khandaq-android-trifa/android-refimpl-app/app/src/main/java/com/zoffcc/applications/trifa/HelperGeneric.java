@@ -4939,6 +4939,126 @@ public class HelperGeneric
         }, "import_toxsave").start();
     }
 
+    /**
+     * KHANDAQ (#28): apply a decrypted + integrity-verified password backup. Mirrors the .tox
+     * import background apply (stop tox, wipe every table, restart) but ALSO restores the encrypted
+     * SQLCipher DB + IOCipher VFS and installs the backup's DB key BEFORE the restart, so the
+     * restored history/media open on next launch. Staged files are already SHA-verified by the
+     * caller; this method consumes (and deletes) them.
+     */
+    static void applyRestoredProfileFromBackup(final Context context, final File stagedDb,
+                                               final File stagedVfs, final byte[] toxBytes,
+                                               final String dbKey)
+    {
+        final android.app.ProgressDialog progress = new android.app.ProgressDialog(context);
+        progress.setMessage(context.getString(R.string.import_toxsave_in_progress));
+        progress.setCancelable(false);
+        progress.setIndeterminate(true);
+        try { progress.show(); } catch (Exception ignored) {}
+
+        MainActivity.global_stop_tox();
+
+        new Thread(() ->
+        {
+            Log.i(TAG, "restore: waiting for ToxThread to stop ...");
+            try
+            {
+                int guard = 0;
+                while (guard < 200) // ~10s safety cap
+                {
+                    //noinspection BusyWait
+                    Thread.sleep(50);
+                    if ((stop_tox_fg_done) && (!is_tox_started)) { break; }
+                    guard++;
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+
+            try
+            {
+                orma.deleteFromFriendList().execute();
+                orma.deleteFromConferenceDB().execute();
+                orma.deleteFromGroupDB().execute();
+                orma.deleteFromMessage().execute();
+                orma.deleteFromConferenceMessage().execute();
+                orma.deleteFromGroupMessage().execute();
+                orma.deleteFromConferencePeerCacheDB().execute();
+                orma.deleteFromFileDB().execute();
+                orma.deleteFromFiletransfer().execute();
+                orma.deleteFromRelayListDB().execute();
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            try
+            {
+                // identity
+                final File toxDst = new File(MainActivity.app_files_directory + "/" + "savedata.tox");
+                try (java.io.OutputStream os = new java.io.FileOutputStream(toxDst))
+                {
+                    os.write(toxBytes);
+                }
+                // restored encrypted DB + VFS (drop stale journal siblings first)
+                final File dbDst = new File(context.getDir("dbs", Context.MODE_PRIVATE), MainActivity.MAIN_DB_NAME);
+                final File vfsDst = new File(context.getDir("vfs", Context.MODE_PRIVATE), MainActivity.MAIN_VFS_NAME);
+                delete_db_siblings(dbDst);
+                delete_db_siblings(vfsDst);
+                io_file_copy(stagedDb, dbDst);
+                io_file_copy(stagedVfs, vfsDst);
+                // install the backup's key BEFORE the DB/VFS are opened on the next launch
+                DbSecretKeyStorage.persistRestoredDbSecretKey(context, dbKey);
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+            finally
+            {
+                try { stagedDb.delete(); } catch (Exception ignored) {}
+                try { stagedVfs.delete(); } catch (Exception ignored) {}
+            }
+
+            final Runnable finalUi = () ->
+            {
+                try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
+                try
+                {
+                    final AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                    builder.setTitle(context.getString(R.string.import_toxsave_ok_title));
+                    builder.setMessage(context.getString(R.string.import_toxsave_ok_message));
+                    builder.setCancelable(false);
+                    builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
+                    {
+                        public void onClick(DialogInterface dialog, int id)
+                        {
+                            try { Log.i(TAG, "restore complete, exiting."); System.exit(0); }
+                            catch (Exception ignored) {}
+                        }
+                    });
+                    builder.create().show();
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "restore with ERRORs, still exiting."); System.exit(0);
+                }
+            };
+            if (MainActivity.main_handler_s != null) { MainActivity.main_handler_s.post(finalUi); }
+            else { System.exit(0); }
+        }, "kbk-restore").start();
+    }
+
+    private static void delete_db_siblings(final File base)
+    {
+        for (final String ext : new String[]{"-journal", "-wal", "-shm"})
+        {
+            try { new File(base.getAbsolutePath() + ext).delete(); } catch (Exception ignored) {}
+        }
+    }
+
     static void ls_file(File f)
     {
         try

@@ -78,6 +78,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // drop sender-retry re-deliveries. In-memory so it does not depend on cross-thread Realm reads.
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *recentGroupMessageSeenAt;
 @property (nonatomic) dispatch_source_t groupsMaintenanceTimer;
+// KHANDAQ: pubkeys we've already announced as "joined" (group:pubkey), so a peer that merely
+// reconnects / re-appears on our own reconnect doesn't spam another "X joined" notice every time.
+@property (nonatomic, strong) NSMutableSet<NSString *> *groupAnnouncedJoinPubkeys;
 // KHANDAQ: stable pubkey-based group peer name resolver (declared so the receive callbacks above can
 // call it before its definition further down).
 - (nullable NSString *)groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)groupNumber
@@ -167,6 +170,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     self.groupLastInviteRequestMs = [NSMutableDictionary dictionary];
     self.groupPeerReconnectSuppressUntil = [NSMutableDictionary dictionary];
     self.groupLastForegroundReconnectMs = [NSMutableDictionary dictionary];
+    self.groupAnnouncedJoinPubkeys = [NSMutableSet set];
 
     NSNotificationCenter *center = [self.dataSource managerGetNotificationCenter];
 
@@ -993,11 +997,13 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                         groupMsgIdHashHex:msgIdHex
                                                      groupTransferProgress:0.0f];
 
-    // KHANDAQ: don't push media into a group that isn't actually ready to carry it (connected with at
-    // least one ONLINE peer). Otherwise the chunk send goes nowhere, the file sticks at 0% and ends as
-    // "Upload Failed". Queue it as pending and let flushPendingGroupFileMessage retry once the group
-    // reconnects / a peer comes online — the same queue used for sends that fail mid-flight.
-    if (! [self isGroupConnectedForChat:chat] || [self onlineGroupPeerCountForChat:chat] < 1) {
+    // KHANDAQ: don't push media into a group that is still CONNECTING (it would sit at 0% then
+    // "Upload Failed"). Gate ONLY on the group being connected — the chunk send broadcasts via the
+    // group mesh (tox_group_send_custom_packet), which does NOT require a peer with a direct online
+    // status; requiring an "online peer" here wrongly blocked media when peers were reachable but
+    // their per-peer status read None. If still connecting, queue as pending and let
+    // flushPendingGroupFileMessage retry on reconnect.
+    if ([[self.dataSource managerGetTox] groupConnectionStatusForGroupNumber:groupNumber error:nil] <= 0) {
         [realmManager updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
             abstract.groupPendingSend = YES;
         }];
@@ -1060,10 +1066,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                    return;
                                }
 
-                               // KHANDAQ: also re-queue (not fail) when the group is technically
-                               // "connected" but has no ONLINE peer to receive the chunks — that's the
-                               // common 0% -> Upload Failed case. Retry via the pending queue instead.
-                               if (! [self isGroupConnectedForChat:chat] || [self onlineGroupPeerCountForChat:chat] < 1) {
+                               // KHANDAQ: re-queue (not fail) when the group isn't connected — the
+                               // pending queue retries on reconnect. (Connected sends that still fail
+                               // fall through to the genuine-failure path below.)
+                               if (! [self isGroupConnectedForChat:chat]) {
                                    [realm updateObject:message withBlock:^(OCTMessageAbstract *abstract) {
                                        abstract.groupPendingSend = YES;
                                    }];
@@ -2197,7 +2203,21 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }
 
         if (selfPeerId == 0 || peerId != selfPeerId) {
-            if (! [self shouldSuppressGroupPeerEventForChat:chat peerId:peerId]) {
+            // KHANDAQ: only announce a peer's FIRST join (by stable pubkey). NGC fires a join callback
+            // for every peer each time the local client reconnects / re-syncs the roster, which used to
+            // spam "X вошёл в группу" repeatedly. Track announced pubkeys and skip repeats; fall back to
+            // the timed exit-suppression when the pubkey can't be resolved.
+            NSString *joinPubkey = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
+            BOOL firstAnnounce;
+            if (joinPubkey.length > 0) {
+                NSString *announceKey = [NSString stringWithFormat:@"%@:%@", chat.uniqueIdentifier, joinPubkey.lowercaseString];
+                firstAnnounce = ! [self.groupAnnouncedJoinPubkeys containsObject:announceKey];
+                [self.groupAnnouncedJoinPubkeys addObject:announceKey];
+            }
+            else {
+                firstAnnounce = ! [self shouldSuppressGroupPeerEventForChat:chat peerId:peerId];
+            }
+            if (firstAnnounce) {
                 NSString *displayName = [self peerDisplayNameForGroupNumber:groupNumber peerId:peerId];
                 [self addGroupSystemMessageWithFormatKey:@"group_system_peer_joined" argument:displayName toChat:chat];
             }

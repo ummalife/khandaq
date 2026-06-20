@@ -3657,6 +3657,15 @@ public class HelperGeneric
             return result;
         }
 
+        // KHANDAQ (#14): not chunked → a single Tox message must fit the protocol limit, so trim as a
+        // safety net (the chunked path above already sent the full text to an online friend). Short
+        // messages are unchanged; this only prevents an over-length message from being rejected.
+        message = trim_to_utf8_length_bytes(message, ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        if (message == null)
+        {
+            message = "";
+        }
+
         if (live_conn == TOX_CONNECTION_NONE.value && relay_pubkey == null)
         {
             final MainActivity.send_message_result result = new MainActivity.send_message_result();

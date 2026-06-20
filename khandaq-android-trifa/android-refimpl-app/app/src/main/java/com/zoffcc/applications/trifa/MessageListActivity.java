@@ -1816,17 +1816,17 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_text_message(final String friend_pubkey, final String message)
     {
-        String msg = trim_to_utf8_length_bytes(
-                ChatReplyPreviewController.composeOutgoingText(HelperGeneric.normalize_chat_input_text(message)),
-                TOX_MSGV3_MAX_MESSAGE_LENGTH);
-        if ((msg == null) || msg.isEmpty())
+        final String fullText = ChatReplyPreviewController.composeOutgoingText(
+                HelperGeneric.normalize_chat_input_text(message));
+        if ((fullText == null) || fullText.isEmpty())
         {
             return;
         }
 
         if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
         {
-            final long rowId = FavoritesChatHelper.sendTextMessage(msg, true);
+            // KHANDAQ (#14): Saved Messages are stored locally — no Tox per-message length limit, keep full text.
+            final long rowId = FavoritesChatHelper.sendTextMessage(fullText, true);
             if (rowId <= 0)
             {
                 display_toast(getString(R.string.dm_send_failed_friend), true, 400);
@@ -1840,6 +1840,23 @@ public class MessageListActivity extends AppCompatActivity
                 emojiPopup.dismiss();
             }
             stop_self_typing_indicator_s();
+            return;
+        }
+
+        // KHANDAQ (#14): only truncate when the message can't be chunked. A long message to an ONLINE
+        // friend is sent in FULL and split into lossless-packet chunks by MessageChunker (reassembled
+        // on the other side, same gate as the send path); otherwise fall back to one length-capped Tox
+        // message. Long messages used to arrive truncated because they were trimmed here before the
+        // chunker ever saw them.
+        final long chunkFriendNum = tox_friend_by_public_key__wrapper(friend_pubkey);
+        final boolean friendOnline = (chunkFriendNum >= 0) &&
+                (MainActivity.tox_friend_get_connection_status(chunkFriendNum)
+                        != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
+        final String msg = (MessageChunker.shouldChunk(fullText) && friendOnline)
+                ? fullText
+                : trim_to_utf8_length_bytes(fullText, TOX_MSGV3_MAX_MESSAGE_LENGTH);
+        if ((msg == null) || msg.isEmpty())
+        {
             return;
         }
 

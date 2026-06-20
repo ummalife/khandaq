@@ -201,7 +201,18 @@ public final class DbSecretKeyStorage
             cipher.init(Cipher.DECRYPT_MODE, secretKey,
                     new GCMParameterSpec(128, Base64.decode(ivB64, Base64.NO_WRAP)));
             final byte[] plain = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
-            return new String(plain, StandardCharsets.UTF_8);
+            final String key = new String(plain, StandardCharsets.UTF_8);
+            // KHANDAQ (#12): keep a keystore-INDEPENDENT recovery backup fresh on every successful load.
+            // Some OEMs (notably MIUI/Xiaomi) drop AndroidKeyStore keys on reboot/OS update; without a
+            // backup written on a normal launch (this path) such a device can no longer decrypt the
+            // keystore blob and the user is permanently locked out at the password screen.
+            // storeDeviceBackup() encrypts with a device-bound key (ANDROID_ID), never plaintext.
+            // Write-once (only if missing) so we don't pay PBKDF2 on every launch.
+            if (prefs.getString(PREFS_DEVICE_BACKUP_ENC, null) == null)
+            {
+                storeDeviceBackup(context, key);
+            }
+            return key;
         }
         catch (Exception e)
         {

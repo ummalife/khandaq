@@ -31,11 +31,12 @@ if [[ -d "$ROOT/dist/macos/khandaq.app" ]]; then
   ditto -c -k --keepParent "$ROOT/dist/macos/khandaq.app" "$DL/khandaq-macos.zip"
 fi
 if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "$ROOT/dist/linux/lib" ]]; then
+  # Only ship the -portable name; the bare khandaq-linux-x86_64.tar.gz was an
+  # unreferenced byte-identical duplicate (removed from the mirror).
   rm -f "$DL/khandaq-linux-x86_64.tar.gz" "$DL/khandaq-linux-x86_64-portable.tar.gz"
   tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" \
     khandaq khandaq.bin lib plugins khandaq.desktop org.khandaq.messenger.appdata.xml INSTALL.txt 2>/dev/null \
     || tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" khandaq khandaq.bin lib INSTALL.txt
-  cp -f "$DL/khandaq-linux-x86_64-portable.tar.gz" "$DL/khandaq-linux-x86_64.tar.gz"
 fi
 DEB="$(ls -1t "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | head -1)"
 if [[ -n "$DEB" && -f "$DEB" ]]; then

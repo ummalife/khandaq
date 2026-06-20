@@ -66,7 +66,6 @@ khandaq-desktop/buildscripts/toxcore/DHT_bootstrap
 # Distribution binaries (published via GitHub Releases, not git history)
 dist/
 .release-staging/
-web/messenger/downloads/
 web/downloads/*.apk
 web/downloads/*.exe
 web/downloads/*.zip

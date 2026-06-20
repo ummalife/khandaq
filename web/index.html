@@ -309,7 +309,7 @@
 
   <script>
     (function () {
-      var release = 'v0.2.7';
+      var release = 'v0.2.8';
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
       var mirror = '/downloads/';
 
@@ -318,10 +318,10 @@
 
       var links = {
         '.dl-android': ['khandaq-android.apk', gh, mirror],
-        '.dl-windows': ['khandaq-windows-installer.exe', gh, mirror],
+        '.dl-windows': ['khandaq-windows-x86_64.zip', gh, mirror],
         '.dl-macos': ['khandaq-macos.zip', gh, mirror],
         '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror],
-        '.dl-linux-deb': ['khandaq-messenger_0.2.6_amd64.deb', gh, mirror]
+        '.dl-linux-deb': ['khandaq-messenger_amd64.deb', gh, mirror]
       };
 
       var debMirror = document.querySelector('.dl-linux-deb');

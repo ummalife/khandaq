@@ -562,7 +562,28 @@ public class TrifaToxService extends Service
                 {
                     e.printStackTrace();
                 }
-                f.name = "friend #" + fc;
+                // KHANDAQ (#24): this friend is in toxcore but not yet in our DB (typically right after
+                // importing a .tox profile). Use the name toxcore restored from the savedata instead of
+                // a "friend #N" placeholder, so imported contacts keep their real names immediately —
+                // previously the placeholder stuck until each friend happened to reconnect and re-send
+                // their name.
+                String live_name = null;
+                try
+                {
+                    live_name = MainActivity.tox_friend_get_name(friends[fc]);
+                }
+                catch (Exception ignored)
+                {
+                }
+                if ((live_name != null) &&
+                    !HelperFriend.is_placeholder_friend_name(live_name, f.tox_public_key_string))
+                {
+                    f.name = live_name;
+                }
+                else
+                {
+                    f.name = "friend #" + fc;
+                }
                 exists_in_db = false;
                 // HelperGeneric.logI(TAG, "loading_friend:c is null fnew=" + f);
             }

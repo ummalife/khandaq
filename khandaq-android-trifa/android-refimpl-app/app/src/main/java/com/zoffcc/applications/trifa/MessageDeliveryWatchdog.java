@@ -126,14 +126,19 @@ final class MessageDeliveryWatchdog
                 final long fn = tox_friend_by_public_key__wrapper(m.tox_friendpubkey);
                 final boolean friend_online = (fn >= 0) && (is_friend_online_real(fn) != 0);
 
-                m.send_retries++;
-                orma.updateMessage().idEq(m.id).send_retries(m.send_retries).execute();
-                update_single_message(m, true);
-
+                // KHANDAQ: only burn a retry when the friend is actually reachable. Previously the
+                // counter was bumped every tick even while the friend was OFFLINE (no real send
+                // happened — we just continue below), so a message to an offline contact hit
+                // MAX_SEND_RETRIES and showed a red "failed" indicator after ~15s without a single real
+                // delivery attempt. Offline messages must simply wait for the friend to come online.
                 if (!friend_online)
                 {
                     continue;
                 }
+
+                m.send_retries++;
+                orma.updateMessage().idEq(m.id).send_retries(m.send_retries).execute();
+                update_single_message(m, true);
 
                 boolean did_retry = false;
                 if ((m.msg_idv3_hash != null) && (m.msg_idv3_hash.length() >= ToxVars.TOX_HASH_LENGTH))

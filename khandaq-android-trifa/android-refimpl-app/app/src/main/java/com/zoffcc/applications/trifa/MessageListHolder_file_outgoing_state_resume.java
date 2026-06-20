@@ -88,6 +88,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
     ImageButton ft_preview_image;
     EmojiTextViewLinks textView;
     ImageView imageView;
+    ImageView m_status;
     de.hdodenhof.circleimageview.CircleImageView img_avatar;
     TextView date_time;
     TextView message_text_date_string;
@@ -112,6 +113,7 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         rounded_bg_container = (ViewGroup) itemView.findViewById(R.id.ft_outgoing_rounded_bg);
         textView = (EmojiTextViewLinks) itemView.findViewById(R.id.m_text);
         imageView = (ImageView) itemView.findViewById(R.id.m_icon);
+        m_status = (ImageView) itemView.findViewById(R.id.m_status);
         img_avatar = (de.hdodenhof.circleimageview.CircleImageView) itemView.findViewById(R.id.img_avatar);
         date_time = (TextView) itemView.findViewById(R.id.date_time);
         message_text_date_string = (TextView) itemView.findViewById(R.id.message_text_date_string);
@@ -131,6 +133,9 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
         }
 
         date_time.setText(long_date_time_format(m.sent_timestamp));
+
+        // KHANDAQ #23: actively transferring -> single check (sent, bytes in flight).
+        ChatBubbleUiHelper.bind_outgoing_file_status(m_status, MessageStatusHelper.OutgoingStatus.SENT);
 
         final Message message = m;
 

@@ -128,6 +128,15 @@ final class MessageStatusHelper
         bindOutgoingIndicator(indicator, resolveGroupOutgoing(message), true);
     }
 
+    // KHANDAQ: bind an explicit status. File/media bubbles cannot reuse resolveDirectOutgoing()
+    // (it would flag any sent file older than the 10s timeout as NOT_DELIVERED forever, since
+    // files never set msg_at_relay/read). The outgoing-file holder class already encodes the real
+    // transfer state, so the holder passes the right status directly.
+    static void bindOutgoingIndicatorDirect(final ImageView indicator, final OutgoingStatus status)
+    {
+        bindOutgoingIndicator(indicator, status, false);
+    }
+
     private static void bindOutgoingIndicator(final ImageView indicator, final OutgoingStatus status,
                                             final boolean groupChat)
     {

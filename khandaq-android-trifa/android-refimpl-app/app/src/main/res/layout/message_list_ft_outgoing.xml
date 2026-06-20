@@ -250,6 +250,19 @@
                 android:textColor="#EFEFEF"
                 android:textSize="13sp"/>
 
+            <ImageView
+                android:id="@+id/m_status"
+                android:layout_width="@dimen/msg_status_icon_size"
+                android:layout_height="@dimen/msg_status_icon_size"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="4dp"
+                android:contentDescription="@null"
+                android:padding="0dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/msg_status_check_one"
+                android:visibility="gone"/>
+
 
             <TextView
                 android:layout_width="0dp"

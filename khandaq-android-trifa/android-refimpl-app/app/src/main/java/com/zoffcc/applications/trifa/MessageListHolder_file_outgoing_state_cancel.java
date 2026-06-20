@@ -84,6 +84,7 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
     ImageButton ft_preview_image;
     EmojiTextViewLinks textView;
     ImageView imageView;
+    ImageView m_status;
     de.hdodenhof.circleimageview.CircleImageView img_avatar;
     TextView date_time;
     ViewGroup layout_message_container;
@@ -110,6 +111,7 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
         rounded_bg_container = (ViewGroup) itemView.findViewById(R.id.ft_outgoing_rounded_bg);
         textView = (EmojiTextViewLinks) itemView.findViewById(R.id.m_text);
         imageView = (ImageView) itemView.findViewById(R.id.m_icon);
+        m_status = (ImageView) itemView.findViewById(R.id.m_status);
         img_avatar = (de.hdodenhof.circleimageview.CircleImageView) itemView.findViewById(R.id.img_avatar);
         date_time = (TextView) itemView.findViewById(R.id.date_time);
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
@@ -198,6 +200,18 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
         layout_message_container.setOnLongClickListener(onlongclick_listener);
 
         date_time.setText(long_date_time_format(m.sent_timestamp));
+
+        // KHANDAQ #23: terminal state. filedb_id>=0 => recipient pulled all chunks (delivered);
+        // filedb_id==-1 => the transfer was canceled, so no delivery indicator.
+        if (m.filedb_id == -1)
+        {
+            ChatBubbleUiHelper.hide_delivery_indicator(m_status);
+        }
+        else
+        {
+            ChatBubbleUiHelper.bind_outgoing_file_status(m_status,
+                    MessageStatusHelper.OutgoingStatus.DELIVERED);
+        }
 
         textView.setVisibility(View.VISIBLE);
         imageView.setVisibility(View.VISIBLE);

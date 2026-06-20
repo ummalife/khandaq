@@ -146,6 +146,14 @@
         "ios",
         "network"
       ]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — delivery status (checkmarks) on photos, videos, voice & files",
+      "description": "Outgoing media now shows the same status indicator as text: a clock while queued/awaiting the peer, a single check while transferring, and a double check once the recipient has pulled the whole file (real delivery for P2P transfers). Canceled transfers show no indicator.",
+      "platforms": [
+        "android"
+      ]
     }
   ]
 }

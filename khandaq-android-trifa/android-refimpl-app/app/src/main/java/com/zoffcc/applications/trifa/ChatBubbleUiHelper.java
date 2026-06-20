@@ -650,6 +650,20 @@ final class ChatBubbleUiHelper
         });
     }
 
+    // KHANDAQ: delivery indicator for outgoing file/media bubbles. The holder passes an explicit
+    // status (clock=queued/waiting, single check=transferring, double check=fully sent/delivered).
+    static void bind_outgoing_file_status(final ImageView indicator,
+                                          final MessageStatusHelper.OutgoingStatus status)
+    {
+        if (indicator == null)
+        {
+            return;
+        }
+        MessageStatusHelper.bindOutgoingIndicatorDirect(indicator, status);
+        indicator.setOnClickListener(null);
+        indicator.setClickable(false);
+    }
+
     static void hide_delivery_indicator(final ImageView indicator)
     {
         if (indicator != null)

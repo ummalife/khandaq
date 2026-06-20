@@ -1,5 +1,9 @@
 # Khandaq Bootstrap Infrastructure
 
+> **RETIRED (2026-06):** The self-hosted `bootstrap{1,2,3}.khandaq.org` nodes are no longer
+> operated. Both clients now bootstrap from the public Tox DHT (see `docs/NETWORK.md`). This
+> directory is kept for historical reference only — none of it is deployed or monitored.
+
 Minimal infrastructure for **Khandaq-owned** Tox bootstrap nodes.
 
 **Important:** The public Tox network is not replaced. Khandaq nodes are **added** on top of existing public bootstrap entries (see `config/khandaq_bootstrap_nodes.json`).

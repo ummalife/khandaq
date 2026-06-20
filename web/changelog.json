@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-20T00:58:15Z",
+  "generated_at": "2026-06-20T11:00:00Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,157 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.8",
+      "date": "2026-06-20",
+      "title": "Stability, security & UX — crash fixes, accurate group counts, faster on old phones",
+      "summary": "Big round across all platforms: fixed a real-device iOS crash on group media, hardened security (Windows deps bumped past CVE-2023-5217, DB key never stored in plaintext, several pentest findings closed), made group member/online counts accurate and consistent across clients, auto-recovering and faster group/1:1 file transfers, full-length messages via chunking, Telegram-style single voice playback, camera-from-attach, and a performance pass that removes freezes on older Android phones. iOS via TestFlight (build 142852); Android and Desktop on the mirrors and GitHub.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "critical",
+          "title": "iOS — crash on sending/receiving group media fixed",
+          "description": "Sending a group photo or voice message, or retrying a photo, crashed on real devices (iPhone 16/17 Pro Max, iOS 26.6). Root cause: legacy group-file helpers queried the default (unencrypted) Realm, which became unmigratable after a schema bump and threw on every group file transfer. The default Realm config now self-heals. Confirmed fixed.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "critical",
+          "title": "Desktop (Windows) — bundled media/crypto libraries updated past known CVEs",
+          "description": "libvpx 1.11.0 → 1.14.0 (fixes CVE-2023-5217, a VP8 heap overflow), OpenSSL → 1.1.1w, FFmpeg → 4.4.5. The Windows cross-build was repaired end-to-end (libvpx mingw link, x264 build step, WinRT api-set false-positive) so these patched libraries actually ship.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "severity": "critical",
+          "title": "Security audit fixes (pentest findings closed)",
+          "description": "DB encryption key is no longer written to disk in plaintext — recovery uses a device-bound encrypted backup (NEW-3). Push-relay trusted-proxy handling so a client can't spoof its source IP (NEW-4). UnifiedPush URL validation tightened (NEW-1). Desktop image preview rejects decode-bombs and drops SVG (D-2). Filename/path-traversal hardening (D-3). NGC incoming-video bounds checks, ~30fps rate-limit and thread-safe peer map (D-4/5/6). Windows credential store NUL-terminates the user name (buffer over-read).",
+          "platforms": [
+            "android",
+            "ios",
+            "desktop"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "iOS — sending video to a group fixed",
+          "description": "Videos picked for a group silently never sent: the file was copied on a background queue after the picker's temporary URL had already been deleted. The copy now happens synchronously while the URL is valid (photos were unaffected).",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Group member & online counts are now accurate and consistent",
+          "description": "Different clients showed different participant/online numbers for the same group. Both Android and iOS now read the counts straight from toxcore's NGC-synced group state (online peers incl. self + saved offline members), so clients converge on the same 'N members · M online'. The group-info screen and the in-group header also now agree.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Group file transfers auto-recover (no more manual retry)",
+          "description": "A single dropped chunk left a group file stuck until the user tapped a retry circle. The receiver now re-requests missing chunks every few seconds (parity with iOS) instead of once per 30s, so transfers self-heal.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Long messages send in full instead of being truncated",
+          "description": "Messages over ~1.3 KB were silently cut off. Long messages to an online friend are now split into chunks and reassembled on the other side; Saved Messages keep the full text. Pasting a very long message no longer freezes the input either.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "iOS — private (in-group direct) messages are surfaced",
+          "description": "A private message sent to you inside a group used to land silently with no alert. It now notifies like any message, titled '🔒 <sender> (private)', so you can tell it was addressed to you personally.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android — no more freezes on older phones",
+          "description": "Switching tabs/groups and opening busy chats could freeze the UI. Chat history now loads off the UI thread (1:1 and groups); per-row work in the chat/group lists (member counts, unread badges, icon drawables) is cached. Noticeably smoother on low-end devices.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "1:1 files are accepted automatically",
+          "description": "Incoming files in a direct chat no longer show an accept/decline prompt — they download immediately, in both directions.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Voice messages — only one plays at a time",
+          "description": "Starting a voice message now pauses whichever one was playing (Telegram-style), in both 1:1 and group chats.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Message a group member privately",
+          "description": "Tapping a member opens their info with a clear 'Send private message' field and button (previously a hidden debug field that only sent on exit).",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Camera straight from the attach button",
+          "description": "The attach (paperclip) action now offers Camera (photo) / Record video / Gallery, so you can shoot and send media without leaving the chat.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Send time shown for media in private/saved chats",
+          "description": "Voice messages, photos and videos in 1:1 and Saved Messages now show their send time, like text messages.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Add-contact screen — Android-style on iOS, 'Paste ID' hint",
+          "description": "The iOS add-contact page now matches Android: 'Paste ID' field, 'Scan QR code' and a new 'Scan QR code from gallery' (decode a saved photo), plus a help line. Android ID hint renamed to 'Вставьте ID'.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Connection-type diagnostic for group peers",
+          "description": "A peer's info now shows whether you reach them directly (UDP) or via a relay (TCP) — helpful for understanding transfer speed.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Bootstrap from public Tox DHT nodes",
+          "description": "Both Android and iOS now bootstrap from the proven public Tox DHT (tox.abilinski.com, mf-net.eu, tox.initramfs.io, …) instead of self-hosted bootstrap nodes, so joining no longer depends on our own infra being reachable. The push.khandaq.org wake relay (FCM/APNs) is a separate role and is unchanged.",
+          "platforms": [
+            "android",
+            "ios",
+            "network"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.7",
       "date": "2026-06-13",

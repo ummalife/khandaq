@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-20T17:26:03Z",
+  "generated_at": "2026-06-20T17:26:17Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -476,17 +476,17 @@
       "summary": "16 vulnerabilities from the external security audit fixed in code. v0.2.5 builds for Android, iOS, Desktop, and an updated push relay.",
       "commits": [
         {
-          "hash": "48cf5340",
+          "hash": "48cf534",
           "full": "48cf5340879cf8197b20ce5fd767452effc3bc45",
           "url": "https://github.com/ummalife/khandaq/commit/48cf5340879cf8197b20ce5fd767452effc3bc45"
         },
         {
-          "hash": "146bc561",
+          "hash": "146bc56",
           "full": "146bc5619f6c175c622d0d0d13d15bb3c66128b5",
           "url": "https://github.com/ummalife/khandaq/commit/146bc5619f6c175c622d0d0d13d15bb3c66128b5"
         },
         {
-          "hash": "d3b7c7d9",
+          "hash": "d3b7c7d",
           "full": "d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84",
           "url": "https://github.com/ummalife/khandaq/commit/d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84"
         }

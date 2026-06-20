@@ -18,5 +18,6 @@ class ChatListCellModel: BaseCellModel {
     var presenceIsOnline: Bool = false
 
     var isUnread: Bool = false
+    var unreadCount: Int = 0
     var isDraft: Bool = false
 }

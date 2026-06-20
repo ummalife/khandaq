@@ -162,6 +162,7 @@ extension ChatListTableManager: UITableViewDataSource {
             }
             model.isUnread = chatShowsUnreadIndicator(for: chat,
                                                       privateUnreadCount: Int(submanagerGroups.totalUnreadPrivateMessageCount(for: chat)))
+            model.unreadCount = unreadMessageCount(for: chat)   // KHANDAQ (#30): numeric badge
             var presenceParts: [String] = []
             if chat.groupPrivacyState == Int32(OCTToxGroupPrivacyState.private.rawValue) {
                 presenceParts.append(String(localized: "group_chat_list_private"))
@@ -220,6 +221,7 @@ extension ChatListTableManager: UITableViewDataSource {
                 model.dateText = dateTextFromDate(date)
             }
             model.isUnread = chat.hasUnreadMessages()
+            model.unreadCount = unreadMessageCount(for: chat)   // KHANDAQ (#30): numeric badge
             let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
             cell.setupWithTheme(theme, model: model)
             return cell
@@ -262,6 +264,7 @@ extension ChatListTableManager: UITableViewDataSource {
         }
 
         model.isUnread = chatShowsUnreadIndicator(for: chat)
+        model.unreadCount = unreadMessageCount(for: chat)   // KHANDAQ (#30): numeric badge
 
         let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
         cell.setupWithTheme(theme, model: model)

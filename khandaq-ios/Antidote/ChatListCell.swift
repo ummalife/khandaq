@@ -28,6 +28,8 @@ class ChatListCell: BaseCell {
     fileprivate var messageLabel: UILabel!
     fileprivate var dateLabel: UILabel!
     fileprivate var arrowImageView: UIImageView!
+    // KHANDAQ (#30): numeric unread-count badge (Telegram-style pill) on the message row.
+    fileprivate var unreadBadge: PaddedLabel!
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
         super.setupWithTheme(theme, model: model)
@@ -69,6 +71,17 @@ class ChatListCell: BaseCell {
 
         // HINT: make the arrow image view a nice circle shape
         arrowImageView.layer.cornerRadius = arrowImageView.frame.height / 2
+
+        // KHANDAQ (#30): numeric unread badge (caps at 99+).
+        let unread = chatModel.unreadCount
+        if unread > 0 {
+            unreadBadge.isHidden = false
+            unreadBadge.text = unread > 99 ? "99+" : "\(unread)"
+            unreadBadge.backgroundColor = theme.colorForType(.ChatListCellUnreadArrowBackground)
+        } else {
+            unreadBadge.isHidden = true
+            unreadBadge.text = nil
+        }
     }
 
     override func createViews() {
@@ -98,6 +111,16 @@ class ChatListCell: BaseCell {
         arrowImageView = UIImageView(image: image)
         arrowImageView.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         contentView.addSubview(arrowImageView)
+
+        unreadBadge = PaddedLabel()
+        unreadBadge.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        unreadBadge.textColor = .white
+        unreadBadge.textAlignment = .center
+        unreadBadge.layer.masksToBounds = true
+        unreadBadge.layer.cornerRadius = 9.0
+        unreadBadge.isHidden = true
+        unreadBadge.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
+        contentView.addSubview(unreadBadge)
     }
 
     override func installConstraints() {
@@ -140,6 +163,14 @@ class ChatListCell: BaseCell {
             $0.leading.greaterThanOrEqualTo(dateLabel.snp.trailing).offset(Constants.DateToArrowOffset)
             $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
         }
+
+        // KHANDAQ (#30): unread pill pinned to the trailing edge of the message row.
+        unreadBadge.snp.makeConstraints {
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
+            $0.centerY.equalTo(messageLabel)
+            $0.height.equalTo(18)
+            $0.width.greaterThanOrEqualTo(18)
+        }
     }
 }
 
@@ -176,5 +207,19 @@ extension ChatListCell {
                 return UIAccessibilityTraitSelected
         }
         set {}
+    }
+}
+
+/// KHANDAQ (#30): UILabel with horizontal padding so the unread pill looks right for 2+ digits / "99+".
+private class PaddedLabel: UILabel {
+    private let hPad: CGFloat = 6.0
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.insetBy(dx: hPad, dy: 0))
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: size.width + hPad * 2, height: size.height)
     }
 }

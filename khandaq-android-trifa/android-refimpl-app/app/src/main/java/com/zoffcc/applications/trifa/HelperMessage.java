@@ -208,6 +208,47 @@ public class HelperMessage
         }
     }
 
+    // KHANDAQ: when a friend comes back online, re-arm every outgoing text message that still has no
+    // read receipt (read==false) by zeroing its send_retries. The delivery watchdog then resends them
+    // to the now-reachable friend and the incoming msgV3 receipts flip their status to delivered/read
+    // — this re-syncs delivery status and clears "failed" indicators left over from while the contact
+    // was offline (the watchdog stops retrying once send_retries hits the max, so without this reset a
+    // message that maxed out while offline would stay red forever).
+    static void rearm_unacked_direct_messages_on_reconnect(final String friend_pubkey)
+    {
+        if (friend_pubkey == null)
+        {
+            return;
+        }
+        try
+        {
+            final java.util.List<Message> unacked = orma.selectFromMessage().
+                    tox_friendpubkeyEq(friend_pubkey).
+                    directionEq(1).
+                    TRIFA_MESSAGE_TYPEEq(TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value).
+                    readEq(false).
+                    message_idGt(-1L).
+                    toList();
+            if ((unacked == null) || unacked.isEmpty())
+            {
+                return;
+            }
+            for (final Message m : unacked)
+            {
+                if (m == null)
+                {
+                    continue;
+                }
+                m.send_retries = 0;
+                orma.updateMessage().idEq(m.id).send_retries(0).execute();
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "rearm_unacked_direct_messages_on_reconnect:EE:" + e.getMessage());
+        }
+    }
+
     static void update_message_in_db_resend_count(final Message m)
     {
         try

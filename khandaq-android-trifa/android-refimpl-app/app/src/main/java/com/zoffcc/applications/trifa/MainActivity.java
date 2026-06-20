@@ -6091,6 +6091,9 @@ public class MainActivity extends AppCompatActivity
                 if (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value)
                 {
                     HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
+                    // KHANDAQ: friend just came online — re-arm unacked outgoing messages so they are
+                    // resent and re-acknowledged (re-syncs delivery status, clears stale "failed").
+                    HelperMessage.rearm_unacked_direct_messages_on_reconnect(f.tox_public_key_string);
                 }
             }
 

@@ -436,12 +436,14 @@ public final class NgcGroupFileTransfer
             FileTransferDebug.logGroupConnection(groupNum);
 
             // KHANDAQ: large (chunked) media lacked the readiness gate that small files already have,
-            // so a video sent before the group was actually connected / had an online peer sat at 0%
-            // and then hit "Upload Failed". Block here until the group is connected with ≥1 online
-            // peer; if it isn't ready in time, re-queue an automatic retry instead of failing at 0%.
-            // (targetPeerId >= 0 is a unicast re-send to a specific known peer — that path waits on the
-            // peer separately below, so don't gate it on the broadcast roster.)
-            if (targetPeerId < 0L && !waitForGroupSendReady(groupNum, g, GROUP_SEND_CONN_WAIT_MS))
+            // so a video sent before the group was actually CONNECTED sat at 0% then hit "Upload
+            // Failed". Gate ONLY on the group being connected — the chunk send broadcasts via the group
+            // mesh (tox_group_send_custom_packet), which does NOT require a peer with a direct UDP/TCP
+            // status; requiring an "online peer" here wrongly blocked media when peers were reachable
+            // but their per-peer connection status still read NONE. If not connected in time, re-queue
+            // an auto-retry instead of failing. (targetPeerId >= 0 is a unicast re-send to a known peer
+            // — that path waits on the peer separately below.)
+            if (targetPeerId < 0L && !waitForGroupConnected(groupNum, g, GROUP_SEND_CONN_WAIT_MS))
             {
                 if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
                 {

@@ -69,6 +69,14 @@ final class MessageStatusHelper
             return OutgoingStatus.SENT;
         }
 
+        // KHANDAQ: NGC private (in-group direct) messages get NO delivery receipt and carry no
+        // message_id_tox, so the normal sync_confirmations path would leave them on a clock forever.
+        // They are only stored after the native send returns success, so show them as sent.
+        if (message.private_message != 0)
+        {
+            return OutgoingStatus.SENT;
+        }
+
         if ((message.message_id_tox == null) || message.message_id_tox.isEmpty())
         {
             return OutgoingStatus.SENDING;

@@ -59,8 +59,8 @@
       <article class="card">
         <div class="card-icon windows" aria-hidden="true"></div>
         <h3>Windows</h3>
-        <p>x64 installer. Windows 10/11.</p>
-        <a class="btn dl-windows" href="#">Download .exe</a>
+        <p>x64 portable build. Windows 10/11 — unzip and run.</p>
+        <a class="btn dl-windows" href="#">Download .zip</a>
         <span class="meta">Public beta · GPL-3.0</span>
       </article>
 
@@ -147,10 +147,10 @@
 
   <script>
     (function () {
-      var base = 'https://github.com/ummalife/khandaq/releases/download/v0.2.7/';
+      var base = 'https://github.com/ummalife/khandaq/releases/download/v0.2.8/';
       document.getElementById('sha-link').href = base + 'SHA256SUMS.txt';
       document.querySelector('.dl-android').href = base + 'khandaq-android.apk';
-      document.querySelector('.dl-windows').href = base + 'khandaq-windows-installer.exe';
+      document.querySelector('.dl-windows').href = base + 'khandaq-windows-x86_64.zip';
       document.querySelector('.dl-macos').href = base + 'khandaq-macos.zip';
       document.querySelector('.dl-linux').href = base + 'khandaq-linux-x86_64-portable.tar.gz';
     })();

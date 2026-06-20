@@ -1185,7 +1185,9 @@ public class HelperGroup
     static long group_connect_reconnect_backoff_ms(@NonNull final String group_identifier)
     {
         final int attempt = Math.max(1, get_group_connect_attempt(group_identifier));
-        return Math.min(120_000L, 15_000L * (1L << Math.min(attempt - 1, 3)));
+        // KHANDAQ #25: retry a stalled announce sooner (first retry at 6s instead of 15s) so
+        // joining/reconnecting feels faster, still backing off to 96s to spare the DHT.
+        return Math.min(120_000L, 6_000L * (1L << Math.min(attempt - 1, 4)));
     }
 
     static long count_group_sync_target_peers(final long group_num)
@@ -6512,6 +6514,10 @@ public class HelperGroup
     private static final long GROUP_KICKSTART_MIN_INTERVAL_MS = 20_000L;
     private static final ConcurrentHashMap<String, Long> group_last_kickstart_ms = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> group_last_reconnect_ms = new ConcurrentHashMap<>();
+    // KHANDAQ #25: when the user opens a chat we force one reconnect bypassing the backoff,
+    // rate-limited by this so rapid open/close cannot hammer the DHT announce.
+    private static final long GROUP_USER_RECONNECT_MIN_INTERVAL_MS = 5_000L;
+    private static final ConcurrentHashMap<String, Long> group_last_user_reconnect_ms = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> group_last_connecting_resync_ms = new ConcurrentHashMap<>();
     // groups stuck alone: toxcore onion announce search backs off exponentially (up to 1h),
     // tox_group_reconnect resets it to fast 3s lookups — escalate when alone too long
@@ -6611,6 +6617,47 @@ public class HelperGroup
         HelperGeneric.logI(TAG, "schedule_group_auto_reconnect:id=" + group_identifier_short(group_identifier, false)
                 + " gn=" + group_num + " conn=" + tox_group_is_connected(group_num)
                 + " peers=" + tox_group_peer_count(group_num));
+    }
+
+    /**
+     * KHANDAQ #25: the user is actively looking at the chat and it is not connected — force one
+     * reconnect now, bypassing the exponential backoff. Rate-limited (5s) so rapid open/close can't
+     * hammer the DHT, and still ERROR-only inside reconnect_group_if_disconnected so we never abort
+     * an in-progress CONNECTING announce.
+     */
+    static void force_group_reconnect_user_initiated(final long group_num, @NonNull final String group_identifier)
+    {
+        if (group_num < 0 || !is_tox_started || group_identifier == null)
+        {
+            return;
+        }
+        if (global_self_connection_status == TOX_CONNECTION_NONE.value)
+        {
+            return;
+        }
+        if (is_group_we_left(group_identifier) || !is_group_active(group_identifier))
+        {
+            return;
+        }
+        if (tox_group_is_connected(group_num) ==
+            TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+        {
+            return;
+        }
+        if (!should_run_group_maintenance(group_identifier, group_last_user_reconnect_ms,
+                GROUP_USER_RECONNECT_MIN_INTERVAL_MS))
+        {
+            return;
+        }
+        // keep the periodic backoff clock in sync so it doesn't immediately re-fire on top of us
+        group_last_reconnect_ms.put(group_identifier.toLowerCase(Locale.ENGLISH), System.currentTimeMillis());
+        if (reconnect_group_if_disconnected(group_num, group_identifier))
+        {
+            TrifaToxService.wakeup_tox_thread();
+            HelperGeneric.logI(TAG, "force_group_reconnect_user:id="
+                    + group_identifier_short(group_identifier, false) + " gn=" + group_num
+                    + " conn=" + tox_group_is_connected(group_num));
+        }
     }
 
     /** After self_join — start friend-assisted discovery for groups still alone. */
@@ -7038,6 +7085,9 @@ public class HelperGroup
             return;
         }
         schedule_group_auto_reconnect(group_num, group_identifier);
+        // KHANDAQ #25: opening the chat is a strong user-intent signal — don't wait out the backoff,
+        // force a disconnected group to re-announce immediately (rate-limited, CONNECTING-safe).
+        force_group_reconnect_user_initiated(group_num, group_identifier);
         sync_group_peers_from_tox_to_db(group_num);
         final long peers = Math.max(0L, tox_group_peer_count(group_num));
         final int conn = tox_group_is_connected(group_num);

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-20T17:08:24Z",
+  "generated_at": "2026-06-20T17:26:03Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -178,6 +178,14 @@
           "severity": "medium",
           "title": "Android — delivery status (checkmarks) on photos, videos, voice & files",
           "description": "Outgoing media now shows the same status indicator as text: a clock while queued/awaiting the peer, a single check while transferring, and a double check once the recipient has pulled the whole file (real delivery for P2P transfers). Canceled transfers show no indicator.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — faster group connect / reconnect",
+          "description": "Opening a group chat now forces an immediate reconnect of a stalled group instead of waiting out the back-off, and the automatic retry of a stuck announce starts at 6s instead of 15s. Rate-limited and connecting-safe, so it never interrupts an announce already in progress. Less time stuck on \"Connecting…\".",
           "platforms": [
             "android"
           ]
@@ -468,17 +476,17 @@
       "summary": "16 vulnerabilities from the external security audit fixed in code. v0.2.5 builds for Android, iOS, Desktop, and an updated push relay.",
       "commits": [
         {
-          "hash": "48cf534",
+          "hash": "48cf5340",
           "full": "48cf5340879cf8197b20ce5fd767452effc3bc45",
           "url": "https://github.com/ummalife/khandaq/commit/48cf5340879cf8197b20ce5fd767452effc3bc45"
         },
         {
-          "hash": "146bc56",
+          "hash": "146bc561",
           "full": "146bc5619f6c175c622d0d0d13d15bb3c66128b5",
           "url": "https://github.com/ummalife/khandaq/commit/146bc5619f6c175c622d0d0d13d15bb3c66128b5"
         },
         {
-          "hash": "d3b7c7d",
+          "hash": "d3b7c7d9",
           "full": "d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84",
           "url": "https://github.com/ummalife/khandaq/commit/d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84"
         }

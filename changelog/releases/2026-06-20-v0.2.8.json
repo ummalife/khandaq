@@ -154,6 +154,14 @@
       "platforms": [
         "android"
       ]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — faster group connect / reconnect",
+      "description": "Opening a group chat now forces an immediate reconnect of a stalled group instead of waiting out the back-off, and the automatic retry of a stuck announce starts at 6s instead of 15s. Rate-limited and connecting-safe, so it never interrupts an announce already in progress. Less time stuck on \"Connecting…\".",
+      "platforms": [
+        "android"
+      ]
     }
   ]
 }

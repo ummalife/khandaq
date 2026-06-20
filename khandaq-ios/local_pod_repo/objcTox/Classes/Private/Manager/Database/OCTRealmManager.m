@@ -1608,7 +1608,11 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         existing.messageFile.fileName = fileName;
         [existing.messageFile internalSetFilePath:filePath];
         existing.messageFile.groupTransferProgress = 1.0f;
-        existing.groupSenderPeerId = peerId;
+        // KHANDAQ: do NOT re-stamp the sender here. groupSenderPeerId was set at file BEGIN, when the
+        // peer_id was valid for the real sender. NGC reuses peer_ids on leave/rejoin, so the peer_id
+        // at COMPLETION time can belong to a different peer (or self) — overwriting it here made an
+        // incoming voice/file show as another person's, or your own. Keep the begin-time attribution.
+        (void)peerId;
         [self.realm commitWriteTransaction];
     });
 

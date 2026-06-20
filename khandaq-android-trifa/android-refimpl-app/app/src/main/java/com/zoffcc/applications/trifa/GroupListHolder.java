@@ -138,39 +138,15 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         itemView.setOnClickListener(this);
         itemView.setOnLongClickListener(this);
 
-        if (fl.notification_silent)
-        {
-            final Drawable d_notification = new IconicsDrawable(context).
-                    icon(GoogleMaterial.Icon.gmd_notifications_off).
-                    color(context.getResources().
-                            getColor(R.color.icon_colors)).
-                    alpha(FL_NOTIFICATION_ICON_ALPHA_NOT_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED);
-            f_notification.setImageDrawable(d_notification);
-            f_notification.setOnClickListener(this);
-        }
-        else
-        {
-            final Drawable d_notification = new IconicsDrawable(context).
-                    icon(GoogleMaterial.Icon.gmd_notifications_active).
-                    color(context.getResources().
-                            getColor(R.color.icon_colors)).
-                    alpha(FL_NOTIFICATION_ICON_ALPHA_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_SELECTED);
-            f_notification.setImageDrawable(d_notification);
-            f_notification.setOnClickListener(this);
-        }
+        // KHANDAQ (#22): these icon-font drawables were rebuilt from scratch on every row bind (3 per
+        // row) — expensive on older phones while scrolling. There are only 4 distinct variants, so
+        // build each once and reuse it.
+        f_notification.setImageDrawable(cachedNotificationIcon(context, fl.notification_silent));
+        f_notification.setOnClickListener(this);
 
-        final Drawable group_icon;
-        if (fl.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
-        {
-            group_icon = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_public).
-                    color(context.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
-        }
-        else
-        {
-            group_icon = new IconicsDrawable(context).icon(GoogleMaterial.Icon.gmd_security).
-                    color(context.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
-        }
-        avatar.setImageDrawable(group_icon);
+        final boolean groupIsPublic =
+                fl.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value;
+        avatar.setImageDrawable(cachedGroupIcon(context, groupIsPublic));
 
         try
         {
@@ -221,6 +197,58 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         final int new_messages_count = ChatListUiHelper.cached_group_unread_count(fl.group_identifier);
         ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
         apply_telegram_chat_row(fl);
+    }
+
+    // KHANDAQ (#22): the 4 distinct row icons, built once and reused across all rows/binds. Uses the
+    // application context so the cached drawables don't hold an activity. Same baked-in size/alpha for
+    // every row, so sharing one instance is safe (they are only displayed, never mutated per-view).
+    private static Drawable s_notification_silent_icon = null;
+    private static Drawable s_notification_active_icon = null;
+    private static Drawable s_group_public_icon = null;
+    private static Drawable s_group_private_icon = null;
+
+    private static Drawable cachedNotificationIcon(final Context context, final boolean silent)
+    {
+        final Context app = context.getApplicationContext();
+        if (silent)
+        {
+            if (s_notification_silent_icon == null)
+            {
+                s_notification_silent_icon = new IconicsDrawable(app).
+                        icon(GoogleMaterial.Icon.gmd_notifications_off).
+                        color(app.getResources().getColor(R.color.icon_colors)).
+                        alpha(FL_NOTIFICATION_ICON_ALPHA_NOT_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED);
+            }
+            return s_notification_silent_icon;
+        }
+        if (s_notification_active_icon == null)
+        {
+            s_notification_active_icon = new IconicsDrawable(app).
+                    icon(GoogleMaterial.Icon.gmd_notifications_active).
+                    color(app.getResources().getColor(R.color.icon_colors)).
+                    alpha(FL_NOTIFICATION_ICON_ALPHA_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_SELECTED);
+        }
+        return s_notification_active_icon;
+    }
+
+    private static Drawable cachedGroupIcon(final Context context, final boolean isPublic)
+    {
+        final Context app = context.getApplicationContext();
+        if (isPublic)
+        {
+            if (s_group_public_icon == null)
+            {
+                s_group_public_icon = new IconicsDrawable(app).icon(GoogleMaterial.Icon.gmd_public).
+                        color(app.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
+            }
+            return s_group_public_icon;
+        }
+        if (s_group_private_icon == null)
+        {
+            s_group_private_icon = new IconicsDrawable(app).icon(GoogleMaterial.Icon.gmd_security).
+                    color(app.getResources().getColor(R.color.tg_chat_preview)).sizeDp(28);
+        }
+        return s_group_private_icon;
     }
 
     private void apply_telegram_chat_row(final GroupDB fl)

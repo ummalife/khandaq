@@ -205,26 +205,10 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             f_last_online_timestamp.setText("");
         }
 
-        if (fl.notification_silent)
-        {
-            final Drawable d_notification = new IconicsDrawable(context).
-                    icon(GoogleMaterial.Icon.gmd_notifications_off).
-                    color(context.getResources().
-                            getColor(R.color.icon_colors)).
-                    alpha(FL_NOTIFICATION_ICON_ALPHA_NOT_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED);
-            f_notification.setImageDrawable(d_notification);
-            f_notification.setOnClickListener(this);
-        }
-        else
-        {
-            final Drawable d_notification = new IconicsDrawable(context).
-                    icon(GoogleMaterial.Icon.gmd_notifications_active).
-                    color(context.getResources().
-                            getColor(R.color.icon_colors)).
-                    alpha(FL_NOTIFICATION_ICON_ALPHA_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_SELECTED);
-            f_notification.setImageDrawable(d_notification);
-            f_notification.setOnClickListener(this);
-        }
+        // KHANDAQ (#22): reuse one cached icon-font drawable per state instead of rebuilding it on
+        // every row bind (expensive on older phones while scrolling).
+        f_notification.setImageDrawable(cachedNotificationIcon(context, fl.notification_silent));
+        f_notification.setOnClickListener(this);
 
         String name_prefix = "";
 
@@ -446,6 +430,36 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
                 e.printStackTrace();
             }
         }
+    }
+
+    // KHANDAQ (#22): the 2 notification icon-font drawables, built once and reused across all rows.
+    // Uses the application context so they don't hold an activity; same size/alpha everywhere, so a
+    // single shared instance is safe (only displayed, never mutated per-view).
+    private static Drawable s_notification_silent_icon = null;
+    private static Drawable s_notification_active_icon = null;
+
+    private static Drawable cachedNotificationIcon(final Context context, final boolean silent)
+    {
+        final Context app = context.getApplicationContext();
+        if (silent)
+        {
+            if (s_notification_silent_icon == null)
+            {
+                s_notification_silent_icon = new IconicsDrawable(app).
+                        icon(GoogleMaterial.Icon.gmd_notifications_off).
+                        color(app.getResources().getColor(R.color.icon_colors)).
+                        alpha(FL_NOTIFICATION_ICON_ALPHA_NOT_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_NOT_SELECTED);
+            }
+            return s_notification_silent_icon;
+        }
+        if (s_notification_active_icon == null)
+        {
+            s_notification_active_icon = new IconicsDrawable(app).
+                    icon(GoogleMaterial.Icon.gmd_notifications_active).
+                    color(app.getResources().getColor(R.color.icon_colors)).
+                    alpha(FL_NOTIFICATION_ICON_ALPHA_SELECTED).sizeDp(FL_NOTIFICATION_ICON_SIZE_DP_SELECTED);
+        }
+        return s_notification_active_icon;
     }
 
     @Override

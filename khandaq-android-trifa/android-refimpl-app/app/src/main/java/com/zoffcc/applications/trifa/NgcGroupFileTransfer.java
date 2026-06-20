@@ -406,7 +406,6 @@ public final class NgcGroupFileTransfer
         try
         {
             TrifaToxService.wakeup_tox_thread();
-            arm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
 
             final OutgoingFileSource src = openOutgoingFileSource(g);
             if (src == null || src.size < 1L)
@@ -435,6 +434,28 @@ public final class NgcGroupFileTransfer
             }
 
             FileTransferDebug.logGroupConnection(groupNum);
+
+            // KHANDAQ: large (chunked) media lacked the readiness gate that small files already have,
+            // so a video sent before the group was actually connected / had an online peer sat at 0%
+            // and then hit "Upload Failed". Block here until the group is connected with ≥1 online
+            // peer; if it isn't ready in time, re-queue an automatic retry instead of failing at 0%.
+            // (targetPeerId >= 0 is a unicast re-send to a specific known peer — that path waits on the
+            // peer separately below, so don't gate it on the broadcast roster.)
+            if (targetPeerId < 0L && !waitForGroupSendReady(groupNum, g, GROUP_SEND_CONN_WAIT_MS))
+            {
+                if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+                {
+                    return;
+                }
+                HelperGeneric.logI(TAG, "send:group not ready for chunked send — auto-retry queued");
+                HelperGroup.schedule_auto_retry_group_file_send(g);
+                return;
+            }
+
+            // Only now arm the stall watchdog — it must not count the time we spent waiting for the
+            // group to connect, otherwise it would fire at 0% before the first chunk ever goes out.
+            arm_ngc_outgoing_file_timeout(g.group_identifier, g.msg_id_hash);
+
             final PeerSendTargets sendTargets = resolveSendTargets(groupNum, g, targetPeerId);
             if (sendTargets.hasPrivatePeer())
             {
@@ -1321,6 +1342,59 @@ public final class NgcGroupFileTransfer
     private static String assemblyKey(final long groupNumber, final byte[] msgId)
     {
         return groupNumber + ":" + bytebuffer_to_hexstring(ByteBuffer.wrap(msgId), true);
+    }
+
+    /**
+     * KHANDAQ: a chunked group send needs BOTH the group CONNECTED and at least one ONLINE peer to
+     * receive the custom packets. Returns true once both hold (within timeout), nudging a reconnect
+     * while it waits. Used to gate large media so a video can't be pushed into a group that looks
+     * open in the UI but has no transport / no peers (which previously stalled at 0% → Upload Failed).
+     */
+    static boolean waitForGroupSendReady(final long groupNum, final GroupMessage g, final long timeoutMs)
+    {
+        final int connected = TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value;
+        final long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline)
+        {
+            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+            {
+                return false;
+            }
+            try
+            {
+                if (tox_group_is_connected(groupNum) == connected
+                        && HelperGroup.pickChunkedFileUnicastPeerIds(groupNum).length > 0)
+                {
+                    return true;
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            TrifaToxService.wakeup_tox_thread();
+            if (g != null && g.group_identifier != null)
+            {
+                maybeReconnectIfDisconnected(groupNum, g);
+            }
+            try
+            {
+                Thread.sleep(500L);
+            }
+            catch (InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        try
+        {
+            return tox_group_is_connected(groupNum) == connected
+                    && HelperGroup.pickChunkedFileUnicastPeerIds(groupNum).length > 0;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
     }
 
     static boolean waitForGroupConnected(final long groupNum, final GroupMessage g, final long timeoutMs)

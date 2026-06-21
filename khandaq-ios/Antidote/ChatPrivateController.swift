@@ -1454,16 +1454,39 @@ private extension ChatPrivateController {
                         self.updateTableViewWithModifications(modifications)
                     }
                     else if deletions.count + insertions.count <= 5 {
-                        tableView.beginUpdates()
-                        self.updateTableViewWithDeletions(deletions)
-                        self.updateTableViewWithInsertions(insertions)
-                        tableView.endUpdates()
-                        if !modifications.isEmpty {
-                            self.updateTableViewWithModifications(modifications)
+                        // KHANDAQ (#86/#90): an animated begin/endUpdates batch is only valid if its row
+                        // arithmetic exactly matches what the table reports afterwards. A Realm change can
+                        // be delivered against an already-advanced collection (coalesced/async delivery, or
+                        // an offline-message flood), and the insertion/deletion helpers clamp indices to the
+                        // visible window — so the indices in `changes` may not reconcile with the live count.
+                        // Applying them then trips UITableView's "invalid batch updates" abort. Reconcile up
+                        // front and fall back to a crash-proof reloadData on ANY inconsistency.
+                        let oldRows = tableView.numberOfRows(inSection: 0)
+                        let newVisible = max(0, self.visibleMessages + insertions.count - deletions.count)
+                        let projectedRows = min(newVisible, self.messages.count)
+                        let animatedDeletions = deletions.filter { $0 < self.visibleMessages }
+                        let animatedInsertions = insertions.filter { $0 < self.visibleMessages }
+                        let indicesInBounds = animatedDeletions.allSatisfy { $0 >= 0 && $0 < oldRows }
+                            && animatedInsertions.allSatisfy { $0 >= 0 && $0 <= projectedRows }
+                        let countReconciles = (oldRows + animatedInsertions.count - animatedDeletions.count) == projectedRows
+
+                        if indicesInBounds && countReconciles {
+                            tableView.beginUpdates()
+                            self.updateTableViewWithDeletions(deletions)
+                            self.updateTableViewWithInsertions(insertions)
+                            tableView.endUpdates()
+                            if !modifications.isEmpty {
+                                self.updateTableViewWithModifications(modifications)
+                            }
+                            self.visibleMessages = newVisible
                         }
-                        self.visibleMessages = self.visibleMessages + insertions.count - deletions.count
+                        else {
+                            self.visibleMessages = newVisible
+                            tableView.reloadData()
+                        }
                     }
                     else {
+                        self.visibleMessages = max(0, self.visibleMessages + insertions.count - deletions.count)
                         tableView.reloadData()
                     }
 

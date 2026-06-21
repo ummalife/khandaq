@@ -57,15 +57,14 @@ class Results<T: OCTObject> {
 
     func addNotificationBlock(_ block: @escaping (ResultsChange<T>) -> Void) -> RLMNotificationToken {
         return results.addNotificationBlock { rlmResults, changes, error in
-            // KHANDAQ (#86): deliver the change SYNCHRONOUSLY when Realm already calls back on the main
-            // thread (the case for every UI-confined Realm). Re-dispatching through DispatchQueue.main.async
-            // added an extra runloop hop: if a second write landed before the deferred block ran (a 1:1
-            // send's optimistic-insert-then-ack double write, or an offline-message flood after reconnect),
-            // the live collection a table reads from had already advanced past the stale insertions/deletions
-            // carried in `changes`, so UITableView.endUpdates asserted "invalid number of rows" and crashed —
-            // reliably on a brand-new friend's near-empty chat where rowCount == messages.count with no slack.
-            // Synchronous delivery is the canonical Realm + UITableView pattern (indices match the snapshot).
-            let deliver = {
+            // KHANDAQ (#90): always hop to a CLEAN main-runloop turn. An earlier attempt (#86) delivered
+            // synchronously "when on the main thread", but Thread.isMainThread is also TRUE while the main
+            // thread sits inside a dispatch_sync onto the OCTRealmManager queue (every message write does
+            // this). Delivering synchronously there ran a UITableView begin/endUpdates nested inside that
+            // write context and crashed with "invalid batch updates" (faulting queue: OCTRealmManager queue).
+            // The stale-index problem the sync delivery tried to solve is instead handled robustly on the
+            // CONSUMER side (ChatPrivateController reconciles indices vs the live count, else reloadData).
+            DispatchQueue.main.async {
                 if let error = error {
                     block(ResultsChange.error(error as NSError))
                     return
@@ -82,13 +81,6 @@ class Results<T: OCTObject> {
                 }
 
                 block(ResultsChange.initial(results))
-            }
-
-            if Thread.isMainThread {
-                deliver()
-            }
-            else {
-                DispatchQueue.main.async(execute: deliver)
             }
         }
     }

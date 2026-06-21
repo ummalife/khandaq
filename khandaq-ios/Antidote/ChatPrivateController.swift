@@ -286,6 +286,9 @@ class ChatPrivateController: PortraitChatController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
+        // KHANDAQ: mark read on EXIT too — viewWillAppear alone misses messages that arrived while the
+        // chat was open, leaving the unread badge stuck after the user has actually read everything.
+        updateLastReadDate()
         chatInputViewManager?.endUserInteraction()
         delegate?.chatPrivateControllerWillDisappear(self)
     }

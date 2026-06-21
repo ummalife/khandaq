@@ -2191,6 +2191,23 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:nil];
 
     if (chat) {
+        // KHANDAQ: capture whether this pubkey was ALREADY a known member (persisted from a prior
+        // session, peerLastSeenDateInterval > 0) BEFORE we stamp lastSeen below — so a long-time member
+        // who merely reconnects / flaps online does not re-announce "joined", even after an app restart
+        // (the in-memory set alone resets on restart and let the spam back in).
+        NSString *joinPubkey = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
+        BOOL peerKnownBefore = NO;
+        if (joinPubkey.length > 0) {
+            for (OCTGroupPeer *p in [[self.dataSource managerGetRealmManager] groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier]) {
+                if (p.peerPublicKeyHex.length > 0
+                        && [p.peerPublicKeyHex caseInsensitiveCompare:joinPubkey] == NSOrderedSame
+                        && p.peerLastSeenDateInterval > 0) {
+                    peerKnownBefore = YES;
+                    break;
+                }
+            }
+        }
+
         [[self.dataSource managerGetRealmManager] updateGroupPeerLastSeenDateInterval:[[NSDate date] timeIntervalSince1970]
                                                                               forChat:chat
                                                                                peerId:peerId];
@@ -2203,15 +2220,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }
 
         if (selfPeerId == 0 || peerId != selfPeerId) {
-            // KHANDAQ: only announce a peer's FIRST join (by stable pubkey). NGC fires a join callback
-            // for every peer each time the local client reconnects / re-syncs the roster, which used to
-            // spam "X вошёл в группу" repeatedly. Track announced pubkeys and skip repeats; fall back to
-            // the timed exit-suppression when the pubkey can't be resolved.
-            NSString *joinPubkey = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
+            // Announce a peer's FIRST-ever join only: not already known from a prior session (persistent),
+            // and not already announced this session (in-memory). Fall back to the timed exit-suppression
+            // when the pubkey can't be resolved.
             BOOL firstAnnounce;
             if (joinPubkey.length > 0) {
                 NSString *announceKey = [NSString stringWithFormat:@"%@:%@", chat.uniqueIdentifier, joinPubkey.lowercaseString];
-                firstAnnounce = ! [self.groupAnnouncedJoinPubkeys containsObject:announceKey];
+                firstAnnounce = ! peerKnownBefore && ! [self.groupAnnouncedJoinPubkeys containsObject:announceKey];
                 [self.groupAnnouncedJoinPubkeys addObject:announceKey];
             }
             else {

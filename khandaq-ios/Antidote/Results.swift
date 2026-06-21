@@ -57,7 +57,15 @@ class Results<T: OCTObject> {
 
     func addNotificationBlock(_ block: @escaping (ResultsChange<T>) -> Void) -> RLMNotificationToken {
         return results.addNotificationBlock { rlmResults, changes, error in
-            DispatchQueue.main.async {
+            // KHANDAQ (#86): deliver the change SYNCHRONOUSLY when Realm already calls back on the main
+            // thread (the case for every UI-confined Realm). Re-dispatching through DispatchQueue.main.async
+            // added an extra runloop hop: if a second write landed before the deferred block ran (a 1:1
+            // send's optimistic-insert-then-ack double write, or an offline-message flood after reconnect),
+            // the live collection a table reads from had already advanced past the stale insertions/deletions
+            // carried in `changes`, so UITableView.endUpdates asserted "invalid number of rows" and crashed —
+            // reliably on a brand-new friend's near-empty chat where rowCount == messages.count with no slack.
+            // Synchronous delivery is the canonical Realm + UITableView pattern (indices match the snapshot).
+            let deliver = {
                 if let error = error {
                     block(ResultsChange.error(error as NSError))
                     return
@@ -74,6 +82,13 @@ class Results<T: OCTObject> {
                 }
 
                 block(ResultsChange.initial(results))
+            }
+
+            if Thread.isMainThread {
+                deliver()
+            }
+            else {
+                DispatchQueue.main.async(execute: deliver)
             }
         }
     }

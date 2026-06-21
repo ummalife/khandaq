@@ -77,6 +77,14 @@
 @property (nullable) NSString *groupPrivatePeerPubkey;
 
 /**
+ * KHANDAQ (#60): the message's STABLE original timestamp, used ONLY for cross-path duplicate
+ * detection — kept independent of `dateInterval`, which is clamped to "not in the future" for
+ * display/unread so a clock-skewed sender's future-dated synced message can't keep a read chat
+ * marked unread. 0 = unset (legacy rows / live messages fall back to dateInterval for dedup).
+ */
+@property NSTimeInterval groupSyncDedupTimestamp;
+
+/**
  * The chat message message belongs to.
  */
 @property (nonnull) NSString *chatUniqueIdentifier;

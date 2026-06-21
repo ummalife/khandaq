@@ -18,9 +18,10 @@
 #import "OCTToxConstants.h"
 #import "OCTLogging.h"
 
-// KHANDAQ (#55): 34 adds OCTMessageAbstract.groupPrivatePeerPubkey (nullable string). Additive
-// nullable property → Realm auto-migrates (existing rows get nil); no enumerate block needed.
-static const uint64_t kCurrentSchemeVersion = 34;
+// KHANDAQ (#55): 34 adds OCTMessageAbstract.groupPrivatePeerPubkey (nullable string).
+// KHANDAQ (#60): 35 adds OCTMessageAbstract.groupSyncDedupTimestamp (double, defaults 0). Both are
+// additive auto-migrations (existing rows get nil/0); no enumerate block needed.
+static const uint64_t kCurrentSchemeVersion = 35;
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -991,6 +992,8 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    // KHANDAQ (#60): live messages dedup on their own arrival time (== dateInterval here).
+    messageAbstract.groupSyncDedupTimestamp = messageAbstract.dateInterval;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
@@ -1481,9 +1484,13 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
 
     NSTimeInterval lower = dateInterval - windowSeconds;
     NSTimeInterval upper = dateInterval + windowSeconds;
+    // KHANDAQ (#60): match on EITHER the (possibly future-clamped) display dateInterval OR the stable
+    // original groupSyncDedupTimestamp. This keeps the #42 cross-path dedup working for future-dated
+    // re-syncs (clamp moved dateInterval to "now", so only the original-timestamp branch matches) while
+    // legacy rows (groupSyncDedupTimestamp == 0) still match via dateInterval as before.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.text == %@ AND dateInterval >= %f AND dateInterval <= %f",
-                              chat.uniqueIdentifier, text, lower, upper];
+                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.text == %@ AND ((dateInterval >= %f AND dateInterval <= %f) OR (groupSyncDedupTimestamp > 0 AND groupSyncDedupTimestamp >= %f AND groupSyncDedupTimestamp <= %f))",
+                              chat.uniqueIdentifier, text, lower, upper, lower, upper];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
     return results.count > 0;
@@ -1511,7 +1518,13 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageText.groupPeerName = peerName.length > 0 ? peerName : nil;
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
-    messageAbstract.dateInterval = dateInterval > 0 ? dateInterval : [[NSDate date] timeIntervalSince1970];
+    // KHANDAQ (#60): keep the ORIGINAL sender timestamp for dedup (stable across re-syncs), but show /
+    // sort / compute-unread on a NON-FUTURE time. A clock-skewed sender's future-dated synced message
+    // would otherwise keep lastMessage.dateInterval > lastReadDateInterval and re-flip a read chat unread.
+    NSTimeInterval nowTimestamp = [[NSDate date] timeIntervalSince1970];
+    NSTimeInterval originalTimestamp = dateInterval > 0 ? dateInterval : nowTimestamp;
+    messageAbstract.dateInterval = MIN(originalTimestamp, nowTimestamp);
+    messageAbstract.groupSyncDedupTimestamp = originalTimestamp;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
@@ -1559,7 +1572,11 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageFile.groupTransferProgress = 1.0f;
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
-    messageAbstract.dateInterval = dateInterval > 0 ? dateInterval : [[NSDate date] timeIntervalSince1970];
+    // KHANDAQ (#60): same non-future clamp as the synced-text path (see addGroupSyncedMessageWithText).
+    NSTimeInterval nowTimestamp = [[NSDate date] timeIntervalSince1970];
+    NSTimeInterval originalTimestamp = dateInterval > 0 ? dateInterval : nowTimestamp;
+    messageAbstract.dateInterval = MIN(originalTimestamp, nowTimestamp);
+    messageAbstract.groupSyncDedupTimestamp = originalTimestamp;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;

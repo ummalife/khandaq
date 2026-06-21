@@ -306,15 +306,15 @@ extension GroupInfoController: UITableViewDataSource {
                 cell.textLabel?.textColor = theme.colorForType(.LinkText)
                 cell.accessoryType = .disclosureIndicator
             case .members:
-                if peers.count == 0 {
-                    cell.textLabel?.text = String(localized: "group_members_empty")
-                    cell.selectionStyle = .none
-                }
-                else {
-                    let peer = peers[indexPath.row]
+                // KHANDAQ (#40/#61): bounds-checked — the live peer list can shrink under the table.
+                if let peer = peers.object(at: indexPath.row) {
                     cell.textLabel?.text = peer.peerName ?? String(localized: "group_peer_fallback_format", peer.peerId)
                     cell.detailTextLabel?.text = peerDetailSubtitle(for: peer)
                     cell.accessoryType = .disclosureIndicator
+                }
+                else {
+                    cell.textLabel?.text = String(localized: "group_members_empty")
+                    cell.selectionStyle = .none
                 }
             case .danger:
                 cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
@@ -387,11 +387,12 @@ extension GroupInfoController: UITableViewDelegate {
             case .invite:
                 presentInviteFriendPicker()
             case .members:
-                guard peers.count > 0 else {
+                // KHANDAQ (#40/#61): bounds-checked — avoid trapping if the row index is stale.
+                guard let peer = peers.object(at: indexPath.row) else {
                     return
                 }
 
-                presentPeerActions(for: peers[indexPath.row], at: indexPath)
+                presentPeerActions(for: peer, at: indexPath)
             case .danger:
                 switch indexPath.row {
                     case 0:

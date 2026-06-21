@@ -128,6 +128,10 @@ class ChatGroupController: PortraitChatController {
         // sorted newest-first; flip the table vertically (like ChatPrivateController) so row 0 sits at
         // the bottom and new messages grow upward from there. Cells are flipped back in willDisplay.
         tableView.transform = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0)
+        // KHANDAQ (#37): y-flipped table → contentInset.top renders at the VISUAL bottom; a small gap
+        // so the newest message clears the input bar (parity with the 1:1 controller).
+        tableView.contentInset.top = 6.0
+        tableView.scrollIndicatorInsets.top = 6.0
         tableView.register(ChatIncomingTextCell.self, forCellReuseIdentifier: ChatIncomingTextCell.staticReuseIdentifier)
         tableView.register(ChatOutgoingTextCell.self, forCellReuseIdentifier: ChatOutgoingTextCell.staticReuseIdentifier)
         tableView.register(ChatIncomingFileCell.self, forCellReuseIdentifier: ChatIncomingFileCell.staticReuseIdentifier)

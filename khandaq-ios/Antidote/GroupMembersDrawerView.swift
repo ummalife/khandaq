@@ -175,7 +175,10 @@ extension GroupMembersDrawerView: UITableViewDataSource {
         let identifier = "peerCell"
         let cell = tableView.dequeueReusableCell(withIdentifier: identifier)
             ?? UITableViewCell(style: .subtitle, reuseIdentifier: identifier)
-        configureCell(cell, peer: peers[indexPath.row])
+        // KHANDAQ (#40/#61): bounds-checked — the live peer list can shrink between reloadData calls.
+        if let peer = peers.object(at: indexPath.row) {
+            configureCell(cell, peer: peer)
+        }
         return cell
     }
 }
@@ -189,7 +192,10 @@ extension GroupMembersDrawerView: UITableViewDelegate {
 
 extension GroupMembersDrawerView {
     func presentPeer(at indexPath: IndexPath, from tableView: UITableView) {
-        let peer = peers[indexPath.row]
+        // KHANDAQ (#40/#61): bounds-checked — avoid trapping if the tapped row index is stale.
+        guard let peer = peers.object(at: indexPath.row) else {
+            return
+        }
         let rect = tableView.rectForRow(at: indexPath)
         delegate?.groupMembersDrawerView(self, didSelectPeer: peer, sourceRect: rect)
     }

@@ -82,6 +82,16 @@ class Results<T: OCTObject> {
         return results[UInt(index)] as! T
     }
 
+    /// KHANDAQ (#40/#61): bounds-checked access. A live RLMResults (e.g. NGC group peers, refreshed
+    /// from several sources) can shrink between a table's row-count and a cellForRow/didSelect call,
+    /// and the force-subscript above traps on an out-of-range index. Returns nil instead of crashing.
+    func object(at index: Int) -> T? {
+        guard index >= 0, index < count else {
+            return nil
+        }
+        return results[UInt(index)] as? T
+    }
+
     func objects(with predicate: NSPredicate) -> Results<T> {
         let matching = results.objects(with: predicate)
         return Results<T>(results: matching)

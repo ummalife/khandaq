@@ -44,6 +44,17 @@
 
 - (BOOL)prepareToWrite
 {
+    // KHANDAQ (#48): the temp directory (NSTemporaryDirectory) is volatile and may have been purged
+    // since this path was reserved — its absence makes createFileAtPath fail and surfaces to the user
+    // as a generic "internal error" on (re)download. Recreate the parent directory first.
+    NSString *tempDir = [self.tempFilePath stringByDeletingLastPathComponent];
+    if (tempDir.length > 0) {
+        [[NSFileManager defaultManager] createDirectoryAtPath:tempDir
+                                  withIntermediateDirectories:YES
+                                                   attributes:nil
+                                                        error:nil];
+    }
+
     if (! [[NSFileManager defaultManager] createFileAtPath:self.tempFilePath contents:nil attributes:nil]) {
         return NO;
     }

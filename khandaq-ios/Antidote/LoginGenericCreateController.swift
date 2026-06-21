@@ -89,8 +89,11 @@ private extension LoginGenericCreateController {
 
     func createTitleLabel() {
         titleLabel = UILabel()
-        titleLabel.textColor = theme.colorForType(.LoginButtonBackground)
-        titleLabel.font = UIFont.khandaqFontWithSize(26.0, weight: .light)
+        // KHANDAQ design (Figma): screen title is primary-colour, bold and left-aligned (was a centered
+        // light green heading).
+        titleLabel.textColor = theme.colorForType(.NormalText)
+        titleLabel.font = UIFont.systemFont(ofSize: 28.0, weight: .bold)
+        titleLabel.textAlignment = .left
         titleLabel.backgroundColor = .clear
         containerView.addSubview(titleLabel)
     }
@@ -125,7 +128,7 @@ private extension LoginGenericCreateController {
 
         titleLabel.snp.makeConstraints {
             $0.top.equalTo(containerView).offset(PrivateConstants.VerticalOffset)
-            $0.centerX.equalTo(containerView)
+            $0.leading.trailing.equalTo(containerView)
         }
 
         firstTextField.snp.makeConstraints {

@@ -90,9 +90,6 @@
 		111782FD1DC6479E000C1721 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B2534E1C4AD2550068F47C /* AudioPlayer.swift */; };
 		111782FE1DC6479E000C1721 /* AvatarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1156A4881C15FB2B005AC8C6 /* AvatarManager.swift */; };
 		111782FF1DC6479E000C1721 /* ChatListTableManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2EF3791C4E2DDE006E7AB1 /* ChatListTableManager.swift */; };
-		DEADBEEF0000000000001302 /* ChatPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000001301 /* ChatPreviewController.swift */; };
-		DEADBEEF0000000000001303 /* ChatPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000001301 /* ChatPreviewController.swift */; };
-		DEADBEEF0000000000001304 /* ChatPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000001301 /* ChatPreviewController.swift */; };
 		111783001DC6479E000C1721 /* FilePreviewControllerDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11628E311CA2FBD1008C097E /* FilePreviewControllerDataSource.swift */; };
 		111783011DC6479E000C1721 /* FriendListDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDC091A1C34081900DC0D63 /* FriendListDataSource.swift */; };
 		111783021DC6479E000C1721 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B67D1D5F9993002DF75B /* KeychainManager.swift */; };
@@ -605,6 +602,7 @@
 		9CEE6B501C528AAA00A1ECB5 /* SettingsAboutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEE6B4E1C528AAA00A1ECB5 /* SettingsAboutController.swift */; };
 		9CEE6B521C528AB600A1ECB5 /* SettingsAdvancedController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEE6B511C528AB600A1ECB5 /* SettingsAdvancedController.swift */; };
 		9CEE6B531C528AB600A1ECB5 /* SettingsAdvancedController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEE6B511C528AB600A1ECB5 /* SettingsAdvancedController.swift */; };
+		A080C1D9EA0046BE83E59B9F /* ImportInstructionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */; };
 		A1NGCMOCK000002 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
 		A1NGCMOCK000003 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
 		A1NGCMOCK000004 /* OCTSubmanagerGroupsMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1NGCMOCK000001 /* OCTSubmanagerGroupsMock.swift */; };
@@ -621,7 +619,12 @@
 		B27VVD020608000000000001 /* GroupNgcVideoOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27VVD010608000000000001 /* GroupNgcVideoOverlayView.swift */; };
 		B28PRS020608000000000001 /* FriendPresenceFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28PRS010608000000000001 /* FriendPresenceFormatter.swift */; };
 		D4F896D05F7EAA7C321A2AA8 /* libPods-Antidote.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 034E57B3AE56E352BBAA0487 /* libPods-Antidote.a */; };
+		D781BAF842728768A8FDCDC2 /* ImportInstructionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */; };
 		DD1DE47B33F63A05E7492F1D /* MessageDeliveryWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7479C4F3A734F1604F7D3A0 /* MessageDeliveryWatchdog.swift */; };
+		DEADBEEF0000000000001302 /* ChatPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000001301 /* ChatPreviewController.swift */; };
+		DEADBEEF0000000000001303 /* ChatPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000001301 /* ChatPreviewController.swift */; };
+		DEADBEEF0000000000001304 /* ChatPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEADBEEF0000000000001301 /* ChatPreviewController.swift */; };
+		E6AD95EEACE9C1D99161F0F4 /* ImportInstructionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */; };
 		KHGRPCRT002A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */; };
 		KHGRPCRT003A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */; };
 		KHGRPCRT004A1B2C3D4E5F6 /* GroupCreateNameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */; };
@@ -1067,7 +1070,6 @@
 		9C1FEB281D8C10EB008C2ADE /* ProfileSettings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProfileSettings.swift; sourceTree = "<group>"; };
 		9C2EF3701C4D4D5C006E7AB1 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
 		9C2EF3791C4E2DDE006E7AB1 /* ChatListTableManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListTableManager.swift; sourceTree = "<group>"; };
-		DEADBEEF0000000000001301 /* ChatPreviewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatPreviewController.swift; sourceTree = "<group>"; };
 		9C3271861D79C19C00347490 /* PinAuthorizationCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PinAuthorizationCoordinator.swift; sourceTree = "<group>"; };
 		9C7475BF1BC698110098B1A4 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		9C7475C41BC698510098B1A4 /* StringExtension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StringExtension.swift; sourceTree = "<group>"; };
@@ -1125,8 +1127,10 @@
 		B27VVD010608000000000001 /* GroupNgcVideoOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupNgcVideoOverlayView.swift; sourceTree = "<group>"; };
 		B28PRS010608000000000001 /* FriendPresenceFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendPresenceFormatter.swift; sourceTree = "<group>"; };
 		B3C17AF8CE3B4AD1B68F2B5B /* Pods-Antidote.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Antidote.release.xcconfig"; path = "Pods/Target Support Files/Pods-Antidote/Pods-Antidote.release.xcconfig"; sourceTree = "<group>"; };
+		CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImportInstructionsController.swift; sourceTree = "<group>"; };
 		CEC32120B965BE40E0029DB1 /* Pods-AntidoteTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AntidoteTests.release.xcconfig"; path = "Pods/Target Support Files/Pods-AntidoteTests/Pods-AntidoteTests.release.xcconfig"; sourceTree = "<group>"; };
 		D7479C4F3A734F1604F7D3A0 /* MessageDeliveryWatchdog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDeliveryWatchdog.swift; sourceTree = "<group>"; };
+		DEADBEEF0000000000001301 /* ChatPreviewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatPreviewController.swift; sourceTree = "<group>"; };
 		KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupCreateNameController.swift; sourceTree = "<group>"; };
 		KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupJoinHelper.swift; sourceTree = "<group>"; };
 		KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelectController.swift; sourceTree = "<group>"; };
@@ -1456,6 +1460,7 @@
 				1117829E1DC53AB4000C1721 /* ToxFactory.swift */,
 				1164C8D71BC922EB00B91107 /* UserDefaultsManager.swift */,
 				4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */,
+				CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */,
 			);
 			name = Classes;
 			sourceTree = "<group>";
@@ -2448,6 +2453,7 @@
 				1117837F1DC64D75000C1721 /* SettingsAboutController.swift in Sources */,
 				111782D31DC64796000C1721 /* BaseCellModel.swift in Sources */,
 				1117833E1DC64810000C1721 /* ChatInputView.swift in Sources */,
+				D781BAF842728768A8FDCDC2 /* ImportInstructionsController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2674,6 +2680,7 @@
 				11628E781CA5819B008C097E /* LoadingImageView.swift in Sources */,
 				DD1DE47B33F63A05E7492F1D /* MessageDeliveryWatchdog.swift in Sources */,
 				358FC42D04E29FF433F9D596 /* ReconnectBackoffCoordinator.swift in Sources */,
+				A080C1D9EA0046BE83E59B9F /* ImportInstructionsController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2900,6 +2907,7 @@
 				11B253B81C503FA10068F47C /* NSTimerExtension.swift in Sources */,
 				9CEE6AD01C4E8FDC00A1ECB5 /* AudioPlayer.swift in Sources */,
 				9CB1F9521D58CA4000105858 /* RunningCoordinator.swift in Sources */,
+				E6AD95EEACE9C1D99161F0F4 /* ImportInstructionsController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3280,8 +3288,8 @@
 				GCC_PREFIX_HEADER = "Antidote/Antidote-Prefix.pch";
 				GCC_WARN_SIGN_COMPARE = YES;
 				INFOPLIST_FILE = "Antidote/Antidote-Info.plist";
-				KHANDAQ_PUSH_AUTH_SECRET = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				KHANDAQ_PUSH_AUTH_SECRET = "";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.4.28;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger;
@@ -3315,8 +3323,8 @@
 				GCC_PREFIX_HEADER = "Antidote/Antidote-Prefix.pch";
 				GCC_WARN_SIGN_COMPARE = YES;
 				INFOPLIST_FILE = "Antidote/Antidote-Info.plist";
-				KHANDAQ_PUSH_AUTH_SECRET = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				KHANDAQ_PUSH_AUTH_SECRET = "";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.4.28;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger;

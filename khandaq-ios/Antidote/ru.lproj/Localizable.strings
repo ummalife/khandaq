@@ -17,6 +17,10 @@
 "create_account" = "Создать аккаунт";
 /* Login screen text */
 "import_profile" = "Импорт профиля";
+"import_step_1" = "Отправьте файл .tox на ваше устройство (используя почту, Dropbox, или другой вариант)";
+"import_step_2" = "Нажмите «Открыть»";
+"import_step_3" = "Выберите Khandaq в списке доступных приложений";
+"import_step_4" = "Проверьте имя нового профиля и нажмите ОК";
 /* Password field */
 "password" = "Пароль";
 /* Login button */

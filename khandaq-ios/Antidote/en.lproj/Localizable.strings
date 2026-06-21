@@ -12,6 +12,11 @@
 "create_account" = "Create Account";
 /* Login screen text */
 "import_profile" = "Import Profile";
+/* Import profile instruction steps (Figma) */
+"import_step_1" = "Send the .tox file to your device (using email, Dropbox, or another method)";
+"import_step_2" = "Tap \"Open\"";
+"import_step_3" = "Choose Khandaq from the list of available apps";
+"import_step_4" = "Check the new profile name and tap OK";
 /* Password field */
 "password" = "Password";
 /* Login button */

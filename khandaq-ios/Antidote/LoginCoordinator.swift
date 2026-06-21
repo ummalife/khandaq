@@ -180,12 +180,8 @@ private extension LoginCoordinator {
     }
 
     func showImportProfileController() {
-        let controller = TextViewController(
-                resourceName: "import-profile",
-                backgroundColor: theme.colorForType(.LoginBackground),
-                titleColor: theme.colorForType(.NormalText),
-                textColor: theme.colorForType(.NormalText))
-
+        // KHANDAQ design (Figma): card-based instructions screen (was an HTML TextViewController).
+        let controller = ImportInstructionsController(theme: theme)
         navigationController.pushViewController(controller, animated: true)
     }
 

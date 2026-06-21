@@ -2140,21 +2140,37 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                     privacyState:OCTToxGroupPrivacyStatePublic];
     }
 
+    // KHANDAQ: freeze the sender name resolved by STABLE pubkey (not the volatile peerId), so it stays
+    // correct on the stored message even after this peer_id is later reused by someone else. Resolved
+    // up-front because the persistent dedup below scopes by this same (stable) name.
+    NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+
+    if (peerName.length == 0) {
+        peerName = [NSString stringWithFormat:@"Peer %u", peerId];
+    }
+
     // KHANDAQ (#15): incoming group messages arrived duplicated (up to 4x) because the sender's
     // send-retry loop re-transmits the same text — each copy with a DIFFERENT messageId — AND the
     // same message also arrives via the history-sync path. messageId-based dedup misses these. Use a
     // shared in-memory content dedup (group+peer+text within a short window) covering BOTH paths.
     BOOL alreadyStored = [self isRecentDuplicateGroupMessageInChat:chat peerId:peerId text:message windowSeconds:15.0];
 
+    // KHANDAQ (#88): the in-memory map above is EMPTY after an app restart and is keyed by the volatile
+    // peer_id, so an Android delivery-retry storm (it re-sends the same text up to ~30s apart, each with
+    // a different messageId) slipped past it and inserted ~9 copies. Also consult a PERSISTENT
+    // content dedup scoped by the STABLE sender name (frozen groupPeerName) so already-stored copies are
+    // caught regardless of restart / peer_id churn, WITHOUT eating an identical short message ("Да")
+    // legitimately sent by a DIFFERENT peer. Window 45s covers the sender's full resync spread.
     if (! alreadyStored) {
-        // KHANDAQ: freeze the sender name resolved by STABLE pubkey (not the volatile peerId), so it
-        // stays correct on the stored message even after this peer_id is later reused by someone else.
-        NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+        NSTimeInterval nowTs = [[NSDate date] timeIntervalSince1970];
+        alreadyStored = [realmManager groupTextMessageExistsInChat:chat
+                                                              text:message
+                                                        senderName:peerName
+                                                  nearDateInterval:nowTs
+                                                     windowSeconds:45.0];
+    }
 
-        if (peerName.length == 0) {
-            peerName = [NSString stringWithFormat:@"Peer %u", peerId];
-        }
-
+    if (! alreadyStored) {
         [realmManager addGroupMessageWithText:message
                                          type:type
                                          chat:chat
@@ -2250,9 +2266,19 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             // when the pubkey can't be resolved.
             BOOL firstAnnounce;
             if (joinPubkey.length > 0) {
-                NSString *announceKey = [NSString stringWithFormat:@"%@:%@", chat.uniqueIdentifier, joinPubkey.lowercaseString];
-                firstAnnounce = ! peerKnownBefore && ! [self.groupAnnouncedJoinPubkeys containsObject:announceKey];
+                NSString *pubkeyLower = joinPubkey.lowercaseString;
+                NSString *announceKey = [NSString stringWithFormat:@"%@:%@", chat.uniqueIdentifier, pubkeyLower];
+                // KHANDAQ (#87): announce a pubkey's join exactly ONCE per chat, ever. Suppress if it was
+                // a known member last session (peerKnownBefore), already announced this session
+                // (in-memory), OR ever announced before (persistent — survives peer-row pruning on flaps
+                // and app restarts). Without the persistent check, every reconnect of a volatile peer_id
+                // re-announced the same long-time members and spammed the chat.
+                BOOL knownAlready = peerKnownBefore
+                        || [self.groupAnnouncedJoinPubkeys containsObject:announceKey]
+                        || [self hasPersistentlyAnnouncedJoinForChat:chat pubkeyLower:pubkeyLower];
+                firstAnnounce = ! knownAlready;
                 [self.groupAnnouncedJoinPubkeys addObject:announceKey];
+                [self markPersistentlyAnnouncedJoinForChat:chat pubkeyLower:pubkeyLower];
             }
             else {
                 firstAnnounce = ! [self shouldSuppressGroupPeerEventForChat:chat peerId:peerId];
@@ -4519,6 +4545,44 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 {
     NSTimeInterval until = [[NSDate date] timeIntervalSince1970] + kOCTGroupReconnectSuppressSec;
     self.groupPeerReconnectSuppressUntil[[self groupPeerEventKeyForChat:chat peerId:peerId]] = @(until);
+}
+
+// KHANDAQ (#87): a PERSISTENT record of every pubkey we've already processed a join for in a chat.
+// The peer-row table (used by the peerKnownBefore check) is pruned by refreshPeersForChat whenever a
+// volatile NGC peer_id drops from toxcore's list on a flap, so a long-time member who merely
+// reconnects looked "new" again and re-announced "joined" — endlessly. This store is never pruned and
+// survives app restarts, so a join is announced exactly once per pubkey per chat.
+- (NSString *)persistentAnnouncedJoinsKeyForChat:(OCTChat *)chat
+{
+    return [@"KhandaqAnnouncedJoins:" stringByAppendingString:chat.uniqueIdentifier ?: @""];
+}
+
+- (BOOL)hasPersistentlyAnnouncedJoinForChat:(OCTChat *)chat pubkeyLower:(NSString *)pubkeyLower
+{
+    if (chat.uniqueIdentifier.length == 0 || pubkeyLower.length == 0) {
+        return NO;
+    }
+    NSArray *arr = [[NSUserDefaults standardUserDefaults] arrayForKey:[self persistentAnnouncedJoinsKeyForChat:chat]];
+    return arr != nil && [arr containsObject:pubkeyLower];
+}
+
+- (void)markPersistentlyAnnouncedJoinForChat:(OCTChat *)chat pubkeyLower:(NSString *)pubkeyLower
+{
+    if (chat.uniqueIdentifier.length == 0 || pubkeyLower.length == 0) {
+        return;
+    }
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *key = [self persistentAnnouncedJoinsKeyForChat:chat];
+    NSArray *existing = [defaults arrayForKey:key];
+    if ([existing containsObject:pubkeyLower]) {
+        return;
+    }
+    NSMutableArray *updated = existing ? [existing mutableCopy] : [NSMutableArray array];
+    [updated addObject:pubkeyLower];
+    if (updated.count > 512) {
+        [updated removeObjectsInRange:NSMakeRange(0, updated.count - 512)];
+    }
+    [defaults setObject:updated forKey:key];
 }
 
 - (BOOL)shouldSuppressGroupPeerEventForChat:(OCTChat *)chat peerId:(uint32_t)peerId

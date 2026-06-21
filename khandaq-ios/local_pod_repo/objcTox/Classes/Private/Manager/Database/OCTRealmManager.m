@@ -1497,6 +1497,37 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     return results.count > 0;
 }
 
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                                text:(NSString *)text
+                          senderName:(NSString *)senderName
+                    nearDateInterval:(NSTimeInterval)dateInterval
+                       windowSeconds:(NSTimeInterval)windowSeconds
+{
+    NSParameterAssert(chat);
+    NSParameterAssert(text);
+
+    if (chat.uniqueIdentifier.length == 0 || text.length == 0 || dateInterval <= 0) {
+        return NO;
+    }
+
+    NSTimeInterval lower = dateInterval - windowSeconds;
+    NSTimeInterval upper = dateInterval + windowSeconds;
+    // KHANDAQ (#88): same window match as the unscoped variant, but additionally scoped to the frozen
+    // sender name (resolved by stable pubkey), so a delivery-retry storm from ONE sender is collapsed
+    // while an identical short text from a DIFFERENT peer in the same window is preserved. When the
+    // name is unresolved (nil/empty), fall back to the unscoped check rather than match every sender.
+    if (senderName.length == 0) {
+        return [self groupTextMessageExistsInChat:chat text:text nearDateInterval:dateInterval windowSeconds:windowSeconds];
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.text == %@ AND messageText.groupPeerName == %@ AND ((dateInterval >= %f AND dateInterval <= %f) OR (groupSyncDedupTimestamp > 0 AND groupSyncDedupTimestamp >= %f AND groupSyncDedupTimestamp <= %f))",
+                              chat.uniqueIdentifier, text, senderName, lower, upper, lower, upper];
+    RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+
+    return results.count > 0;
+}
+
 - (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
                                                  type:(OCTToxMessageType)type
                                                  chat:(OCTChat *)chat

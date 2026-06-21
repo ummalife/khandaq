@@ -186,6 +186,14 @@
                     nearDateInterval:(NSTimeInterval)dateInterval
                        windowSeconds:(NSTimeInterval)windowSeconds;
 
+// KHANDAQ (#88): like the above but additionally scoped to the frozen sender name, so a single
+// sender's delivery-retry storm collapses while identical short text from another peer survives.
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                                text:(NSString *)text
+                          senderName:(NSString *)senderName
+                    nearDateInterval:(NSTimeInterval)dateInterval
+                       windowSeconds:(NSTimeInterval)windowSeconds;
+
 - (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
                                                  type:(OCTToxMessageType)type
                                                  chat:(OCTChat *)chat

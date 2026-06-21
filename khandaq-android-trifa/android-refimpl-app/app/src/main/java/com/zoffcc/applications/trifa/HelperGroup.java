@@ -4743,6 +4743,32 @@ public class HelperGroup
                 HelperGeneric.logI(TAG, "group_message_cb: skip duplicate incoming group message msg_id=" + m.message_id_tox);
                 return;
             }
+
+            // KHANDAQ (#89): also collapse a copy already stored under a DIFFERENT (mis-attributed) author —
+            // e.g. a sync/relay peer delivered this same message first under a wrong pubkey. This LIVE
+            // callback carries the authoritative real-time sender, so correct the existing row's attribution
+            // and do not insert a second bubble.
+            GroupMessage cross_author = find_group_message_by_msgid_and_text(m.group_identifier, m.message_id_tox, m.text);
+            if (cross_author != null)
+            {
+                if ((cross_author.tox_group_peer_pubkey == null)
+                        || !cross_author.tox_group_peer_pubkey.equalsIgnoreCase(m.tox_group_peer_pubkey))
+                {
+                    try
+                    {
+                        orma.updateGroupMessage().idEq(cross_author.id).
+                                tox_group_peer_pubkey(m.tox_group_peer_pubkey).
+                                tox_group_peername(m.tox_group_peername).
+                                execute();
+                        HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                }
+                HelperGeneric.logI(TAG, "group_message_cb: collapse cross-author duplicate msg_id=" + m.message_id_tox);
+                return;
+            }
         }
 
         if (group_message_list_activity != null)
@@ -4819,6 +4845,38 @@ public class HelperGroup
         }
     }
 
+    // KHANDAQ (#89): find ANY peer's copy of this exact message, regardless of which peer it is attributed
+    // to, keyed on the STABLE per-message id (a sender-generated random_u32 that is identical across every
+    // copy/relay/sync of one logical message) + exact text. The sender-keyed dedup above cannot collapse a
+    // copy whose author pubkey differs — which is exactly what happens when a relaying/sync peer re-broadcast
+    // someone's message under a stale/wrong pubkey (NGC peer-id churn), producing a second bubble shown as a
+    // DIFFERENT participant. message_id + exact text avoids merging two distinct people sending the same
+    // short text (their ids differ); a 32-bit-id AND identical-text collision between distinct messages is
+    // negligible.
+    static GroupMessage find_group_message_by_msgid_and_text(
+            String group_identifier, String message_id_tox, final String message_text)
+    {
+        try
+        {
+            if ((message_id_tox == null) || (message_id_tox.length() < 8) || (group_identifier == null))
+            {
+                return null;
+            }
+
+            return (GroupMessage) orma.selectFromGroupMessage().
+                    group_identifierEq(group_identifier.toLowerCase()).
+                    message_id_toxEq(message_id_tox.toLowerCase()).
+                    textEq(message_text).
+                    limit(1).
+                    toList().
+                    get(0);
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
     static void group_message_add_from_sync(final String group_identifier, final String syncer_pubkey,
                                             long peer_number2, String peer_pubkey, int a_TOX_MESSAGE_TYPE,
                                             String message, long length, long sent_timestamp_in_ms,
@@ -4830,6 +4888,16 @@ public class HelperGroup
         if (!GroupMessageLayoutHelper.hasNonBlankText(message))
         {
             HelperGeneric.logI(TAG, "group_message_add_from_sync: ignoring empty message");
+            return;
+        }
+
+        // KHANDAQ (#89): if we already have this exact message (stable msg id + text) from ANY peer — e.g.
+        // the live broadcast already delivered it from the real author — do NOT insert a synced copy. A
+        // relaying peer can embed a wrong/stale author pubkey (NGC peer-id churn), which the sender-keyed
+        // dedup below cannot collapse, producing a second bubble attributed to a DIFFERENT participant.
+        if (find_group_message_by_msgid_and_text(group_identifier, message_id, message) != null)
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: skip cross-peer duplicate msg_id=" + message_id);
             return;
         }
 

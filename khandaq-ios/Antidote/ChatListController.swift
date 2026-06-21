@@ -438,11 +438,27 @@ extension ChatListController: UISearchResultsUpdating {
     }
 }
 
+/// KHANDAQ (#64): single-shot target so tapping a global-search MESSAGE result scrolls to that
+/// message once the chat opens — without threading a parameter through the coordinators. The chat
+/// controller reads + clears it on appear.
+enum GlobalSearchScrollTarget {
+    static var pending: (chatId: String, messageId: String)?
+
+    /// Returns and clears the target if it belongs to `chatId`.
+    static func take(forChatId chatId: String) -> String? {
+        guard let p = pending, p.chatId == chatId else {
+            return nil
+        }
+        pending = nil
+        return p.messageId
+    }
+}
+
 /// Telegram-style global search: chats/groups by name + every message by text/file name. Pure logic,
 /// kept in this file so it needs no separate pbxproj entry (same convention as EmojiKeyboardView).
 enum GlobalChatSearch {
     struct ChatHit { let chat: OCTChat; let title: String }
-    struct MessageHit { let chat: OCTChat; let title: String; let snippet: String }
+    struct MessageHit { let chat: OCTChat; let title: String; let snippet: String; let messageId: String }
     struct Outcome { let chats: [ChatHit]; let messages: [MessageHit] }
 
     // Cap message results so a huge history can't stall the UI on every keystroke.
@@ -496,7 +512,16 @@ enum GlobalChatSearch {
             let snippet = (MessageReplyHelper.plainBody(for: message) ?? "")
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            messageHits.append(MessageHit(chat: chat, title: MessageForwarder.displayName(for: chat), snippet: snippet))
+            // KHANDAQ (#63): the Realm pre-filter matched the RAW text, which embeds a reply's hidden
+            // quote preview ([KQ|…|<quoted>…]). Drop hits whose VISIBLE body / file name doesn't
+            // actually contain the query, so e.g. a reply "Да" no longer matches "прове".
+            let fileName = message.messageFile?.fileName ?? ""
+            if snippet.range(of: trimmed, options: opts) == nil,
+               fileName.range(of: trimmed, options: opts) == nil {
+                continue
+            }
+            messageHits.append(MessageHit(chat: chat, title: MessageForwarder.displayName(for: chat),
+                                          snippet: snippet, messageId: message.uniqueIdentifier ?? ""))
         }
 
         return Outcome(chats: chatHits, messages: messageHits)
@@ -602,8 +627,15 @@ final class GlobalSearchResultsController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         let chat: OCTChat
         switch sections[indexPath.section] {
-            case .chats: chat = chatHits[indexPath.row].chat
-            case .messages: chat = messageHits[indexPath.row].chat
+            case .chats:
+                chat = chatHits[indexPath.row].chat
+            case .messages:
+                let hit = messageHits[indexPath.row]
+                chat = hit.chat
+                // KHANDAQ (#64): jump to the matched message once the chat opens.
+                if !hit.messageId.isEmpty {
+                    GlobalSearchScrollTarget.pending = (chat.uniqueIdentifier, hit.messageId)
+                }
         }
         onSelectChat?(chat)
     }

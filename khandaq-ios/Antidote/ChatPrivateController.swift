@@ -304,6 +304,37 @@ class ChatPrivateController: PortraitChatController {
             disableNextInputViewAnimation = true
             _ = chatInputView.becomeFirstResponder()
         }
+
+        scrollToGlobalSearchTargetIfNeeded()
+    }
+
+    /// KHANDAQ (#64): if this chat was opened from a global-search message hit, scroll to + briefly
+    /// highlight that message.
+    func scrollToGlobalSearchTargetIfNeeded() {
+        guard let messageId = GlobalSearchScrollTarget.take(forChatId: chat.uniqueIdentifier),
+              let tableView = tableView else {
+            return
+        }
+
+        let rows = tableView.numberOfRows(inSection: 0)
+        for row in 0..<rows {
+            guard messageEntry(atDisplayIndex: row).message.uniqueIdentifier == messageId else {
+                continue
+            }
+            let indexPath = IndexPath(row: row, section: 0)
+            tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                guard let cell = tableView.cellForRow(at: indexPath) else {
+                    return
+                }
+                UIView.animate(withDuration: 0.25, animations: {
+                    cell.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.25)
+                }, completion: { _ in
+                    UIView.animate(withDuration: 0.4) { cell.backgroundColor = .clear }
+                })
+            }
+            return
+        }
     }
 
     override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {

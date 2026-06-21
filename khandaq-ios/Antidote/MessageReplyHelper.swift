@@ -118,6 +118,21 @@ enum MessageReplyHelper {
         return nil
     }
 
+    /// KHANDAQ (#38): the user-visible body of a message for copy/forward — reply-quote markup
+    /// (`[KQ|…]…[KQ/end]`) AND mention markup (`[KQ|m|…][KQ/m]`) stripped. Mirrors what the bubble
+    /// renders, so copying never leaks the raw wire markup. Falls back to the file name for media.
+    static func plainBody(for message: OCTMessageAbstract) -> String? {
+        if let text = message.messageText?.text, !text.isEmpty {
+            let afterReply = parse(text).bodyText
+            let body = GroupMentionHelper.parse(afterReply).bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return body.isEmpty ? afterReply.trimmingCharacters(in: .whitespacesAndNewlines) : body
+        }
+        if let fileName = message.messageFile?.fileName, !fileName.isEmpty {
+            return fileName
+        }
+        return nil
+    }
+
     private static func parseHeader(_ headerBody: String) -> ReplyMeta? {
         let parts = headerBody.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
         guard parts.count >= 4,

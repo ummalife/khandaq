@@ -106,6 +106,12 @@
 "theme_toggle_accessibility" = "Переключить тёмную тему";
 "voice_recording_cancel" = "Отмена";
 "voice_recording_send" = "Отправить голосовое сообщение";
+"voice_recording_slide_to_cancel" = "‹ сдвиньте для отмены";
+"voice_recording_release_to_cancel" = "Отпустите для отмены";
+"global_search_placeholder" = "Поиск по всем чатам и сообщениям";
+"global_search_section_chats" = "Чаты и группы";
+"global_search_section_messages" = "Сообщения";
+"global_search_no_results" = "Ничего не найдено";
 /* Tab name and screen name */
 "settings_title" = "Настройки";
 /* Tab name and screen name */

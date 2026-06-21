@@ -79,6 +79,12 @@ class ChatInputView: UIView {
     fileprivate var recordingStartedAt: Date?
     fileprivate var isVoiceRecording = false
     fileprivate var recordingEndedByControl = false
+    // KHANDAQ (#35): Telegram-style slide-to-cancel. While holding the mic, drag left past the
+    // threshold to arm cancellation; releasing then discards instead of sending.
+    fileprivate var slideHintLabel: UILabel!
+    fileprivate var recordingTouchStartX: CGFloat = 0
+    fileprivate var recordingWillCancel = false
+    fileprivate static let slideCancelThreshold: CGFloat = 90.0
     fileprivate var myHeight: Constraint!
     fileprivate var didconstraint = 0
     fileprivate var isEmojiActive = false
@@ -182,16 +188,42 @@ extension ChatInputView {
                 guard !isVoiceRecording else { return }
                 isVoiceRecording = true
                 recordingEndedByControl = false
+                recordingWillCancel = false
+                recordingTouchStartX = gesture.location(in: self).x
                 showRecordingBar()
                 delegate?.chatInputViewVoiceRecordDidStart(self)
+            case .changed:
+                guard isVoiceRecording, !recordingEndedByControl else { return }
+                // Drag left from the press origin to arm cancellation (Telegram slide-to-cancel).
+                let dx = gesture.location(in: self).x - recordingTouchStartX
+                let willCancel = dx < -ChatInputView.slideCancelThreshold
+                if willCancel != recordingWillCancel {
+                    recordingWillCancel = willCancel
+                    updateSlideToCancelHint()
+                }
             case .ended:
                 guard isVoiceRecording, !recordingEndedByControl else { return }
-                finishVoiceRecording(cancelled: false)
+                finishVoiceRecording(cancelled: recordingWillCancel)
             case .cancelled, .failed:
                 guard isVoiceRecording, !recordingEndedByControl else { return }
                 finishVoiceRecording(cancelled: true)
             default:
                 break
+        }
+    }
+
+    /// KHANDAQ (#35): reflect the armed/disarmed slide-to-cancel state — red "release to cancel" plus a
+    /// dimmed timer once armed, the neutral "slide to cancel" hint otherwise.
+    func updateSlideToCancelHint() {
+        if recordingWillCancel {
+            slideHintLabel.text = String(localized: "voice_recording_release_to_cancel")
+            slideHintLabel.textColor = UIColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0)
+            recordingTimerLabel.alpha = 0.4
+        }
+        else {
+            slideHintLabel.text = String(localized: "voice_recording_slide_to_cancel")
+            slideHintLabel.textColor = theme.colorForType(.ChatInformationText)
+            recordingTimerLabel.alpha = 1.0
         }
     }
 
@@ -325,6 +357,14 @@ private extension ChatInputView {
         recordingTimerLabel.text = "0:00"
         recordingBar.addSubview(recordingTimerLabel)
 
+        // KHANDAQ (#35): slide-to-cancel hint, centered in the recording bar during a hold.
+        slideHintLabel = UILabel()
+        slideHintLabel.font = UIFont.systemFont(ofSize: 15.0)
+        slideHintLabel.textColor = theme.colorForType(.ChatInformationText)
+        slideHintLabel.textAlignment = .center
+        slideHintLabel.text = String(localized: "voice_recording_slide_to_cancel")
+        recordingBar.addSubview(slideHintLabel)
+
         recordingCancelButton = UIButton(type: .system)
         recordingCancelButton.setTitle(String(localized: "voice_recording_cancel"), for: .normal)
         recordingCancelButton.setTitleColor(UIColor(red: 0.165, green: 0.671, blue: 0.933, alpha: 1.0), for: .normal)
@@ -412,6 +452,12 @@ private extension ChatInputView {
             $0.trailing.equalTo(recordingSendButton.snp.leading).offset(-12.0)
             $0.centerY.equalTo(recordingBar)
         }
+
+        slideHintLabel.snp.makeConstraints {
+            $0.centerY.equalTo(recordingBar)
+            $0.trailing.equalTo(recordingBar).offset(-16.0)
+            $0.leading.greaterThanOrEqualTo(recordingTimerLabel.snp.trailing).offset(8.0)
+        }
     }
 
     func updateTextviewHeight(_ t : UITextView)
@@ -474,6 +520,13 @@ private extension ChatInputView {
         textView.isHidden = true
         sendButton.isHidden = true
         recordingBar.isHidden = false
+        // KHANDAQ (#35): hold-to-record uses slide-to-cancel; the tap cancel/send buttons are
+        // unreachable while the finger holds the mic, so show the slide hint instead.
+        recordingCancelButton.isHidden = true
+        recordingSendButton.isHidden = true
+        slideHintLabel.isHidden = false
+        recordingTimerLabel.alpha = 1.0
+        updateSlideToCancelHint()
         recordingStartedAt = Date()
         recordingTimerLabel.text = "0:00"
         recordingTimer?.invalidate()
@@ -487,6 +540,9 @@ private extension ChatInputView {
         recordingTimer = nil
         recordingStartedAt = nil
         recordingBar.isHidden = true
+        // KHANDAQ (#35): reset slide-to-cancel visuals for the next recording.
+        recordingWillCancel = false
+        recordingTimerLabel.alpha = 1.0
         updateViews()
     }
 

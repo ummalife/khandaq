@@ -116,6 +116,9 @@ class ChatGroupController: PortraitChatController {
         tableView.estimatedRowHeight = 44.0
         tableView.backgroundColor = theme.colorForType(.NormalBackground)
         tableView.separatorStyle = .none
+        // KHANDAQ (#37): Telegram-style — drag the message list toward the keyboard to dismiss it
+        // (works on the y-flipped table; the interactive dismiss tracks the finger in window coords).
+        tableView.keyboardDismissMode = .interactive
         tableView.delegate = self
         tableView.dataSource = self
         // KHANDAQ (#15): show newest messages at the BOTTOM (standard messenger order). Messages are
@@ -1152,16 +1155,12 @@ private extension ChatGroupController {
 
             let message = messageEntry(atDisplayIndex: indexPath.row).message
             guard message.uniqueIdentifier == messageId,
-                  let messageFile = message.messageFile else {
+                  message.messageFile != nil else {
                 continue
             }
 
-            let model = ChatGenericFileCellModel()
-            model.isVoiceMessage = true
-            model.voiceMessageId = messageId
-            model.state = messageFile.fileType == .ready ? .done : .loading
-            model.voiceTransferProgress = messageFile.groupTransferProgress
-            fileCell.refreshVoiceMessagePresentation(theme: theme, fileModel: model)
+            // KHANDAQ (#36): handle-preserving refresh (see refreshVoicePlaybackState).
+            fileCell.refreshVoicePlaybackState(theme: theme)
         }
     }
 

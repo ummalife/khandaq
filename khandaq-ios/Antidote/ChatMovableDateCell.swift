@@ -279,7 +279,11 @@ enum MessageForwarder {
             return
         }
 
-        if let text = message.messageText?.text, !text.isEmpty {
+        if let raw = message.messageText?.text, !raw.isEmpty {
+            // KHANDAQ (#39/#32): forward the clean visible body, NOT the original reply/mention wire
+            // markup. Re-sending the raw text made the forward masquerade as a reply (leaked quote) and
+            // left a tappable quote that could fuzzy-jump to an unrelated local message on the receiver.
+            let text = MessageReplyHelper.plainBody(for: message) ?? raw
             if chat.isGroup {
                 manager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in }, failureBlock: { _ in })
             }
@@ -321,8 +325,9 @@ enum MessageForwarder {
     }
 
     private static func saveLocally(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
-        if let text = message.messageText?.text, !text.isEmpty {
-            manager.objects.addSavedTextMessage(text, to: chat)
+        if let raw = message.messageText?.text, !raw.isEmpty {
+            // KHANDAQ (#39): store the clean body, not the reply/mention wire markup.
+            manager.objects.addSavedTextMessage(MessageReplyHelper.plainBody(for: message) ?? raw, to: chat)
             return
         }
 

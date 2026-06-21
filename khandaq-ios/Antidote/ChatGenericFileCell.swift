@@ -14,6 +14,13 @@ class ChatGenericFileCell: ChatMovableDateCell {
     var captionLabel: UILabel!
     var captionTopConstraint: Constraint?
 
+    // KHANDAQ (#36): remembered after a full voice configure so a lightweight player-state refresh
+    // (timer/notification driven) can update the play/pause icon + progress WITHOUT rebuilding the
+    // model — rebuilding would drop `onPlayTapped` and kill the button after the first tick.
+    private var voicePlaybackMessageId: String?
+    private var voicePlaybackDuration: TimeInterval = 0
+    private var voicePlaybackEnabled = false
+
     static let captionFont = UIFont.systemFont(ofSize: 15)
     static let captionTopSpacing: CGFloat = 5.0
 
@@ -264,6 +271,11 @@ class ChatGenericFileCell: ChatMovableDateCell {
         voiceMessageView.apply(theme: theme, enabled: enabled)
         voiceMessageView.onPlayTapped = fileModel.voicePlayToggleHandle
 
+        // KHANDAQ (#36): remember for the lightweight, handle-preserving state refresh.
+        voicePlaybackMessageId = fileModel.voiceMessageId
+        voicePlaybackDuration = fileModel.voiceDuration
+        voicePlaybackEnabled = enabled
+
         if let messageId = fileModel.voiceMessageId,
            let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
             voiceMessageView.update(
@@ -291,6 +303,35 @@ class ChatGenericFileCell: ChatMovableDateCell {
         }
 
         configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+    }
+
+    /// KHANDAQ (#36): update ONLY the play/pause icon + progress from the shared player, reusing the
+    /// already-configured `onPlayTapped`. Driven by the player's timer/notifications. Rebuilding the
+    /// model here (the old path) reset `onPlayTapped` to nil, so the button died after the first tick
+    /// and a finished/paused note could only be replayed by leaving and re-entering the chat.
+    func refreshVoicePlaybackState(theme: Theme) {
+        guard !voiceMessageView.isHidden, let messageId = voicePlaybackMessageId else {
+            return
+        }
+
+        if let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
+            voiceMessageView.update(
+                isPlaying: state.isPlaying,
+                progress: state.progress,
+                currentTime: state.currentTime,
+                duration: state.duration,
+                enabled: voicePlaybackEnabled
+            )
+        }
+        else {
+            voiceMessageView.update(
+                isPlaying: false,
+                progress: 0,
+                currentTime: 0,
+                duration: voicePlaybackDuration,
+                enabled: voicePlaybackEnabled
+            )
+        }
     }
 }
 

@@ -144,6 +144,13 @@
             android:launchMode="singleTop"
             android:label="@string/group_message_list_activity_name">
         </activity>
+        <!-- KHANDAQ (#34): global search across all chats/groups + messages -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.GlobalSearchActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
         <activity
             android:name="com.zoffcc.applications.trifa.ConferenceAudioActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"

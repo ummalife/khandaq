@@ -220,8 +220,10 @@ extension ChatListTableManager: UITableViewDataSource {
             if let date = chat.lastActivityDate() {
                 model.dateText = dateTextFromDate(date)
             }
-            model.isUnread = chat.hasUnreadMessages()
+            // KHANDAQ (#41): keep the row dot consistent with the numeric badge / tab badge — both
+            // ignore outgoing & system messages (the core hasUnreadMessages() is date-only).
             model.unreadCount = unreadMessageCount(for: chat)   // KHANDAQ (#30): numeric badge
+            model.isUnread = model.unreadCount > 0
             let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
             cell.setupWithTheme(theme, model: model)
             return cell
@@ -734,7 +736,9 @@ private extension ChatListTableManager {
             guard let message = results.object(at: index) as? OCTMessageAbstract else {
                 continue
             }
-            if !message.isOutgoing() {
+            // KHANDAQ (#41): only genuine incoming messages count — skip outgoing and "X joined"
+            // system notices (isOutgoing() returns NO for system messages, so guard explicitly).
+            if !message.isOutgoing() && !message.groupSystemMessage {
                 count += 1
             }
         }

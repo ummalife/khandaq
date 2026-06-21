@@ -9247,6 +9247,15 @@ public class MainActivity extends AppCompatActivity
     {
         bottomNavigationView = findViewById(R.id.bottom_navigation);
         mainChatSearch = findViewById(R.id.main_chat_search);
+        // KHANDAQ (#34): the chat-list search field acts as a button that opens the dedicated global
+        // search screen (Telegram-style: searches every chat/group + all messages at once).
+        if (mainChatSearch != null)
+        {
+            mainChatSearch.setFocusable(false);
+            mainChatSearch.setFocusableInTouchMode(false);
+            mainChatSearch.setOnClickListener(v ->
+                    startActivity(new android.content.Intent(MainActivity.this, GlobalSearchActivity.class)));
+        }
         setupChatFilterTabs();
 
         if (savedInstanceState == null)

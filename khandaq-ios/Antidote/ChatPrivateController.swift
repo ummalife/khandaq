@@ -904,18 +904,12 @@ extension ChatPrivateController: UITableViewDelegate {
 
             let message = messageEntry(atDisplayIndex: indexPath.row).message
             guard message.uniqueIdentifier == messageId,
-                  let messageFile = message.messageFile else {
+                  message.messageFile != nil else {
                 continue
             }
 
-            let model = ChatGenericFileCellModel()
-            model.isVoiceMessage = true
-            model.voiceMessageId = messageId
-            model.state = messageFile.fileType == .ready ? .done : .loading
-            if messageFile.fileType == .ready, let path = messageFile.filePath() {
-                model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
-            }
-            fileCell.refreshVoiceMessagePresentation(theme: theme, fileModel: model)
+            // KHANDAQ (#36): handle-preserving refresh (see refreshVoicePlaybackState).
+            fileCell.refreshVoicePlaybackState(theme: theme)
         }
     }
 
@@ -1130,7 +1124,8 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         if let messageText = message.messageText {
-            UIPasteboard.general.string = messageText.text
+            // KHANDAQ (#38): copy the visible body, not the raw reply/mention wire markup.
+            UIPasteboard.general.string = MessageReplyHelper.plainBody(for: message) ?? messageText.text
         }
         else if let _ = message.messageCall {
             fatalError("Message call cannot be copied")
@@ -1230,6 +1225,9 @@ private extension ChatPrivateController {
         tableView.backgroundColor = theme.colorForType(.NormalBackground)
         tableView.allowsMultipleSelectionDuringEditing = true
         tableView.separatorStyle = .none
+        // KHANDAQ (#37): Telegram-style — drag the message list toward the keyboard to dismiss it
+        // (works on the y-flipped table; the interactive dismiss tracks the finger in window coords).
+        tableView.keyboardDismissMode = .interactive
 
         view.addSubview(tableView)
 

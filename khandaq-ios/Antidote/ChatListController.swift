@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import Foundation
+import UIKit
 
 protocol ChatListControllerDelegate: class {
     func chatListController(_ controller: ChatListController, didSelectChat chat: OCTChat)
@@ -24,6 +25,9 @@ class ChatListController: UIViewController {
     fileprivate var placeholderLabel: UILabel!
     fileprivate var tableManager: ChatListTableManager!
     fileprivate var filterBar: ChatListFilterBar!
+    // KHANDAQ (#34): Telegram-style global search across every chat/group + all message text.
+    fileprivate var searchController: UISearchController!
+    fileprivate var searchResultsVC: GlobalSearchResultsController!
 
     init(theme: Theme, submanagerChats: OCTSubmanagerChats, submanagerGroups: OCTSubmanagerGroups, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
@@ -74,6 +78,28 @@ class ChatListController: UIViewController {
         }
         themeButton.accessibilityLabel = String(localized: "theme_toggle_accessibility")
         navigationItem.rightBarButtonItems = [addButton, themeButton]
+
+        setupGlobalSearch()
+    }
+
+    func setupGlobalSearch() {
+        searchResultsVC = GlobalSearchResultsController(theme: theme)
+        searchResultsVC.onSelectChat = { [weak self] chat in
+            guard let self = self else {
+                return
+            }
+            self.searchController.isActive = false
+            self.delegate?.chatListController(self, didSelectChat: chat)
+        }
+
+        searchController = UISearchController(searchResultsController: searchResultsVC)
+        searchController.searchResultsUpdater = self
+        searchController.obscuresBackgroundDuringPresentation = true
+        searchController.searchBar.placeholder = String(localized: "global_search_placeholder")
+        searchController.searchBar.autocapitalizationType = .none
+        navigationItem.searchController = searchController
+        navigationItem.hidesSearchBarWhenScrolling = false
+        definesPresentationContext = true
     }
 
     @objc func themeTogglePressed() {
@@ -389,5 +415,186 @@ private final class ChatListFilterBar: UIView {
             badge.isHidden = true
             badge.text = nil
         }
+    }
+}
+
+// MARK: - KHANDAQ (#34) global search
+
+extension ChatListController: UISearchResultsUpdating {
+    func updateSearchResults(for searchController: UISearchController) {
+        let query = searchController.searchBar.text ?? ""
+        let outcome = GlobalChatSearch.run(query: query, submanagerObjects: submanagerObjects)
+        searchResultsVC.apply(outcome: outcome, query: query)
+    }
+}
+
+/// Telegram-style global search: chats/groups by name + every message by text/file name. Pure logic,
+/// kept in this file so it needs no separate pbxproj entry (same convention as EmojiKeyboardView).
+enum GlobalChatSearch {
+    struct ChatHit { let chat: OCTChat; let title: String }
+    struct MessageHit { let chat: OCTChat; let title: String; let snippet: String }
+    struct Outcome { let chats: [ChatHit]; let messages: [MessageHit] }
+
+    // Cap message results so a huge history can't stall the UI on every keystroke.
+    private static let messageResultLimit = 80
+
+    static func run(query: String, submanagerObjects: OCTSubmanagerObjects) -> Outcome {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return Outcome(chats: [], messages: [])
+        }
+
+        let opts: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+
+        // 1) chats / groups by display name
+        var chatHits: [ChatHit] = []
+        let allChats = submanagerObjects.chats()
+        for index in 0..<allChats.count {
+            let chat = allChats[index]
+            let title = MessageForwarder.displayName(for: chat)
+            if title.range(of: trimmed, options: opts) != nil {
+                chatHits.append(ChatHit(chat: chat, title: title))
+            }
+        }
+
+        // 2) messages by text or file name (skip group system notices). Realm does the filtering;
+        //    we sort newest-first and take a bounded slice.
+        let predicate = NSPredicate(
+            format: "groupSystemMessage == NO AND ((messageText.text CONTAINS[cd] %@) OR (messageFile.fileName CONTAINS[cd] %@))",
+            trimmed, trimmed)
+        let msgs = submanagerObjects.messages(predicate: predicate)
+            .sortedResultsUsingProperty("dateInterval", ascending: false)
+
+        var messageHits: [MessageHit] = []
+        var chatCache: [String: OCTChat] = [:]
+        let cap = min(msgs.count, messageResultLimit)
+        for index in 0..<cap {
+            let message = msgs[index]
+            let chatId = message.chatUniqueIdentifier
+            let chat: OCTChat
+            if let cached = chatCache[chatId] {
+                chat = cached
+            }
+            else if let resolved = submanagerObjects.object(withUniqueIdentifier: chatId, for: .chat) as? OCTChat {
+                chatCache[chatId] = resolved
+                chat = resolved
+            }
+            else {
+                continue
+            }
+
+            let snippet = (MessageReplyHelper.plainBody(for: message) ?? "")
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            messageHits.append(MessageHit(chat: chat, title: MessageForwarder.displayName(for: chat), snippet: snippet))
+        }
+
+        return Outcome(chats: chatHits, messages: messageHits)
+    }
+}
+
+/// Grouped results table behind the search bar. Chat/group name matches first, then message matches
+/// (chat name as title, the matching message as subtitle). Selecting a row opens that conversation.
+final class GlobalSearchResultsController: UITableViewController {
+    var onSelectChat: ((OCTChat) -> Void)?
+
+    private let theme: Theme
+    private var chatHits: [GlobalChatSearch.ChatHit] = []
+    private var messageHits: [GlobalChatSearch.MessageHit] = []
+    private var query = ""
+
+    init(theme: Theme) {
+        self.theme = theme
+        super.init(style: .grouped)
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        tableView.backgroundColor = theme.colorForType(.NormalBackground)
+        tableView.keyboardDismissMode = .onDrag
+    }
+
+    func apply(outcome: GlobalChatSearch.Outcome, query: String) {
+        chatHits = outcome.chats
+        messageHits = outcome.messages
+        self.query = query
+        updateEmptyState()
+        tableView.reloadData()
+    }
+
+    private func updateEmptyState() {
+        let isEmpty = chatHits.isEmpty && messageHits.isEmpty
+        guard isEmpty, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            tableView.backgroundView = nil
+            return
+        }
+        let label = UILabel()
+        label.text = String(localized: "global_search_no_results")
+        label.textColor = theme.colorForType(.EmptyScreenPlaceholderText)
+        label.font = UIFont.systemFont(ofSize: 17.0)
+        label.textAlignment = .center
+        tableView.backgroundView = label
+    }
+
+    private enum SectionKind { case chats, messages }
+
+    private var sections: [SectionKind] {
+        var result: [SectionKind] = []
+        if !chatHits.isEmpty { result.append(.chats) }
+        if !messageHits.isEmpty { result.append(.messages) }
+        return result
+    }
+
+    override func numberOfSections(in tableView: UITableView) -> Int {
+        return sections.count
+    }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        switch sections[section] {
+            case .chats: return chatHits.count
+            case .messages: return messageHits.count
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        switch sections[section] {
+            case .chats: return String(localized: "global_search_section_chats")
+            case .messages: return String(localized: "global_search_section_messages")
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        // Fresh subtitle-style cells (bounded result count) so we always get the two-line layout.
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = theme.colorForType(.NormalBackground)
+        cell.textLabel?.textColor = theme.colorForType(.NormalText)
+        cell.textLabel?.numberOfLines = 1
+        cell.detailTextLabel?.textColor = theme.colorForType(.ChatInformationText)
+        cell.detailTextLabel?.numberOfLines = 1
+
+        switch sections[indexPath.section] {
+            case .chats:
+                cell.textLabel?.text = chatHits[indexPath.row].title
+                cell.detailTextLabel?.text = nil
+            case .messages:
+                let hit = messageHits[indexPath.row]
+                cell.textLabel?.text = hit.title
+                cell.detailTextLabel?.text = hit.snippet
+        }
+        return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let chat: OCTChat
+        switch sections[indexPath.section] {
+            case .chats: chat = chatHits[indexPath.row].chat
+            case .messages: chat = messageHits[indexPath.row].chat
+        }
+        onSelectChat?(chat)
     }
 }

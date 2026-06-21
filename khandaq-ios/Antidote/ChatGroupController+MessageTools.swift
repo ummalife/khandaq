@@ -197,7 +197,9 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         }
 
         let message = messageEntry(atDisplayIndex: indexPath.row).message
-        if let text = quoteText(for: message) {
+        // KHANDAQ (#38): copy the visible body, not the raw reply/mention wire markup. quoteText()
+        // only stripped mentions, so a reply's [KQ|…][KQ/end] header leaked into the clipboard.
+        if let text = MessageReplyHelper.plainBody(for: message) {
             UIPasteboard.general.string = text
         }
     }

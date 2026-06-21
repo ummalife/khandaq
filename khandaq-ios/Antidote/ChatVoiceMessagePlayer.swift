@@ -93,9 +93,22 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
     func stop() {
         progressTimer?.invalidate()
         progressTimer = nil
+        let previous = activeMessageId
         player?.stop()
         player = nil
         activeMessageId = nil
+
+        // KHANDAQ (#36): notify the previously-active cell so it resets to the play icon. Without this
+        // a cell whose playback we tore down (e.g. switching to another note) stayed frozen showing
+        // pause until the chat was re-entered. `state(for:)` now returns nil → the cell shows play/0%.
+        if let previous = previous {
+            NotificationCenter.default.post(
+                name: .chatVoiceMessagePlayerStateDidChange,
+                object: self,
+                userInfo: ["state": ChatVoiceMessagePlayerState(
+                    messageId: previous, isPlaying: false, progress: 0, currentTime: 0, duration: 0)]
+            )
+        }
     }
 
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

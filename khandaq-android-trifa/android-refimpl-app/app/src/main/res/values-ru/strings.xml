@@ -38,6 +38,10 @@
     <string name="friend_info_status_unknown">Статус не сохранён</string>
     <string name="friend_info_message_count">%1$d сообщений</string>
     <string name="chat_list_search_hint">Поиск</string>
+    <string name="global_search_hint">Поиск по всем чатам и сообщениям</string>
+    <string name="global_search_section_chats">Чаты и группы</string>
+    <string name="global_search_section_messages">Сообщения</string>
+    <string name="global_search_no_results">Ничего не найдено</string>
     <string name="chat_list_no_messages">Нет сообщений</string>
     <string name="chat_list_preview_you">Вы: %1$s</string>
     <string name="chat_list_preview_sender">%1$s: %2$s</string>

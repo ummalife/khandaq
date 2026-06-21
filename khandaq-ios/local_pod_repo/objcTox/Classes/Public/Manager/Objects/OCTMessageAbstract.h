@@ -70,6 +70,13 @@
 @property int32_t groupPrivatePeerId;
 
 /**
+ * KHANDAQ (#55): stable LOWERCASE pubkey hex of the counterparty (the OTHER peer in a private
+ * thread). The thread/identity is keyed by this so it survives volatile NGC peer-id reuse. nil for
+ * legacy rows or when unresolved (group offline) — callers then fall back to groupPrivatePeerId.
+ */
+@property (nullable) NSString *groupPrivatePeerPubkey;
+
+/**
  * The chat message message belongs to.
  */
 @property (nonnull) NSString *chatUniqueIdentifier;

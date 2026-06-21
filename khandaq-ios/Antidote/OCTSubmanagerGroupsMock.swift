@@ -224,6 +224,9 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         return 0
     }
 
+    func markAllPrivateThreadsRead(for chat: OCTChat!) {
+    }
+
     func isGroupAtPeerCapacity(for chat: OCTChat!) -> Bool {
         return false
     }

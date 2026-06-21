@@ -4567,6 +4567,18 @@ public class HelperGroup
             return;
         }
 
+        // KHANDAQ (#59): the volatile self-peer-id check above misses our OWN message when peer ids
+        // have churned (a rejoin reassigns ids) — it then lands as an INCOMING message attributed to
+        // "another" peer. Also drop it by the STABLE self pubkey (mirrors the iOS #51 fix).
+        final String self_pubkey_for_echo = resolve_group_self_pubkey(group_number);
+        final String sender_pubkey_for_echo = tox_group_peer_get_public_key__wrapper(group_number, peer_id);
+        if ((self_pubkey_for_echo != null) && (sender_pubkey_for_echo != null) &&
+            self_pubkey_for_echo.equalsIgnoreCase(sender_pubkey_for_echo))
+        {
+            HelperGeneric.logI(TAG, "group_message_cb:gn=" + group_number + " ignoring own message by pubkey");
+            return;
+        }
+
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
         TrifaToxService.wakeup_tox_thread();
 

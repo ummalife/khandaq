@@ -33,8 +33,19 @@ class GroupPeerPrivateController: PortraitChatController {
         self.submanagerGroups = submanagerGroups
         self.submanagerObjects = submanagerObjects
 
-        let predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND groupPrivateMessage == YES AND groupPrivatePeerId == %d",
+        // KHANDAQ (#55): thread by the peer's STABLE pubkey when known, so volatile peer-id reuse can
+        // never surface another person's private messages here. Exclusive fallback (pubkey OR peerId,
+        // never both): lowercase to match the stored value (Realm == is case-sensitive). Legacy rows
+        // with no stored pubkey resolve via the peerId branch.
+        let predicate: NSPredicate
+        if let pubkey = peer.peerPublicKeyHex, !pubkey.isEmpty {
+            predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND groupPrivateMessage == YES AND groupPrivatePeerPubkey == %@",
+                                    chat.uniqueIdentifier, pubkey.lowercased())
+        }
+        else {
+            predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND groupPrivateMessage == YES AND groupPrivatePeerId == %d",
                                     chat.uniqueIdentifier, peer.peerId)
+        }
         self.messages = submanagerObjects.messages(predicate: predicate)
             .sortedResultsUsingProperty("dateInterval", ascending: true)
 

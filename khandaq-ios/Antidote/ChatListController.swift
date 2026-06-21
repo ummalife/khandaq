@@ -97,6 +97,16 @@ class ChatListController: UIViewController {
         searchController.obscuresBackgroundDuringPresentation = true
         searchController.searchBar.placeholder = String(localized: "global_search_placeholder")
         searchController.searchBar.autocapitalizationType = .none
+        // KHANDAQ (#57): the default prominent search bar rendered a stray opaque box in dark mode.
+        // `.minimal` + theming the text field gives a clean full-width field on both themes.
+        searchController.searchBar.searchBarStyle = .minimal
+        searchController.searchBar.barStyle = ThemeAppearance.isDarkMode ? .black : .default
+        searchController.searchBar.tintColor = theme.colorForType(.LinkText)
+        if #available(iOS 13.0, *) {
+            let field = searchController.searchBar.searchTextField
+            field.textColor = theme.colorForType(.NormalText)
+            field.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+        }
         navigationItem.searchController = searchController
         navigationItem.hidesSearchBarWhenScrolling = false
         definesPresentationContext = true

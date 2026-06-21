@@ -1301,6 +1301,15 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     [[self.dataSource managerGetRealmManager] setGroupPeerPrivateLastReadDateInterval:interval peerId:peerId chat:chat];
 }
 
+- (void)markAllPrivateThreadsReadForChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    NSAssert(chat.isGroup, @"Chat must be a group chat.");
+
+    [[self.dataSource managerGetRealmManager] markAllGroupPrivateThreadsReadForChat:chat
+                                                                       dateInterval:[[NSDate date] timeIntervalSince1970]];
+}
+
 - (int32_t)unreadPrivateMessageCountForPeerId:(uint32_t)peerId inChat:(OCTChat *)chat
 {
     NSParameterAssert(chat);
@@ -2014,12 +2023,17 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         return;
     }
 
+    // KHANDAQ (#55): counterparty of an OUTGOING private message is the RECIPIENT — freeze its stable
+    // pubkey so the local copy threads under the right person across peer-id churn.
+    NSString *recipientPubkey = [[self.dataSource managerGetTox] groupPeerPublicKeyHexForGroupNumber:(OCTToxGroupNumber)chat.groupNumber peerId:peerId error:nil];
+
     OCTMessageAbstract *message = [[self.dataSource managerGetRealmManager] addGroupPrivateMessageWithText:text
                                                                                                       type:OCTToxMessageTypeNormal
                                                                                                       chat:chat
                                                                                                     peerId:peerId
                                                                                                   peerName:nil
                                                                                             counterpartyId:peerId
+                                                                                        counterpartyPubkey:recipientPubkey
                                                                                                  messageId:0
                                                                                                 isOutgoing:YES];
 
@@ -2554,12 +2568,17 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         peerName = [NSString stringWithFormat:@"Peer %u", peerId];
     }
 
+    // KHANDAQ (#55): freeze the COUNTERPARTY (sender) stable pubkey so the private thread stays bound
+    // to this person even after the peer id is reused — resolved now while the peer id is valid.
+    NSString *senderPubkey = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
+
     [realmManager addGroupPrivateMessageWithText:message
                                             type:type
                                             chat:chat
                                           peerId:peerId
                                         peerName:peerName
                                   counterpartyId:peerId
+                              counterpartyPubkey:senderPubkey
                                        messageId:0
                                       isOutgoing:NO];
 }

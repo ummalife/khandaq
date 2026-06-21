@@ -223,6 +223,8 @@
 - (void)setGroupNotificationsSilent:(BOOL)silent forChat:(OCTChat *)chat;
 - (void)setGroupPeerNotificationsSilent:(BOOL)silent peerId:(uint32_t)peerId chat:(OCTChat *)chat;
 - (void)setGroupPeerPrivateLastReadDateInterval:(NSTimeInterval)interval peerId:(uint32_t)peerId chat:(OCTChat *)chat;
+// KHANDAQ (#54): clear in-group private-message unread across the whole chat (all peer rows).
+- (void)markAllGroupPrivateThreadsReadForChat:(OCTChat *)chat dateInterval:(NSTimeInterval)interval;
 - (int32_t)unreadPrivateMessageCountForPeerId:(uint32_t)peerId chat:(OCTChat *)chat;
 - (nullable OCTGroupPeer *)groupPeerForChat:(OCTChat *)chat peerId:(uint32_t)peerId;
 - (void)removeGroupPeersForChat:(OCTChat *)chat notInPeerIds:(NSSet<NSNumber *> *)peerIds;
@@ -241,6 +243,7 @@
                                                 peerId:(uint32_t)peerId
                                               peerName:(nullable NSString *)peerName
                                          counterpartyId:(uint32_t)counterpartyId
+                                    counterpartyPubkey:(NSString *)counterpartyPubkey
                                              messageId:(OCTToxMessageId)messageId
                                               isOutgoing:(BOOL)isOutgoing;
 

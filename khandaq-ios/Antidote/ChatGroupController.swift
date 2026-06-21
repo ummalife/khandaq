@@ -1229,6 +1229,9 @@ private extension ChatGroupController {
 
     func updateLastReadDate() {
         submanagerObjects.change(chat, lastReadDateInterval: Date().timeIntervalSince1970)
+        // KHANDAQ (#54): opening the group also clears the separate in-group private-message unread
+        // badge ("N личных непрочит."), which a volatile peer id otherwise stranded under an old id.
+        submanagerGroups.markAllPrivateThreadsRead(for: chat)
     }
 
     func reloadMessagesIfNeeded() {

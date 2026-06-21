@@ -18,7 +18,9 @@
 #import "OCTToxConstants.h"
 #import "OCTLogging.h"
 
-static const uint64_t kCurrentSchemeVersion = 33;
+// KHANDAQ (#55): 34 adds OCTMessageAbstract.groupPrivatePeerPubkey (nullable string). Additive
+// nullable property → Realm auto-migrates (existing rows get nil); no enumerate block needed.
+static const uint64_t kCurrentSchemeVersion = 34;
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -740,6 +742,30 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     });
 }
 
+// KHANDAQ (#54): clear the in-group private-message unread count for the WHOLE chat by stamping every
+// stored peer row's read date. Robust to NGC peer-id churn — a private message kept under a peer's
+// OLD (volatile) peer id used to stay "unread" forever because reading marked only the peer's CURRENT
+// id. Sweeping all peer rows covers the historical ids too, so the count reliably reaches zero.
+- (void)markAllGroupPrivateThreadsReadForChat:(OCTChat *)chat dateInterval:(NSTimeInterval)interval
+{
+    NSParameterAssert(chat);
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *peers = [OCTGroupPeer objectsInRealm:self.realm
+                                                   where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+
+        if (peers.count == 0) {
+            return;
+        }
+
+        [self.realm beginWriteTransaction];
+        for (OCTGroupPeer *peer in peers) {
+            peer.privateLastReadDateInterval = interval;
+        }
+        [self.realm commitWriteTransaction];
+    });
+}
+
 - (int32_t)unreadPrivateMessageCountForPeerId:(uint32_t)peerId chat:(OCTChat *)chat
 {
     NSParameterAssert(chat);
@@ -1279,6 +1305,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
                                                 peerId:(uint32_t)peerId
                                               peerName:(NSString *)peerName
                                         counterpartyId:(uint32_t)counterpartyId
+                                    counterpartyPubkey:(NSString *)counterpartyPubkey
                                              messageId:(OCTToxMessageId)messageId
                                               isOutgoing:(BOOL)isOutgoing
 {
@@ -1299,6 +1326,9 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageAbstract.groupSenderPeerId = isOutgoing ? 0 : peerId;
     messageAbstract.groupPrivateMessage = YES;
     messageAbstract.groupPrivatePeerId = counterpartyId;
+    // KHANDAQ (#55): stable identity for the thread. Lowercase to match peerPublicKeyHex (Realm == is
+    // case-sensitive; the tox API returns uppercase). nil when unresolved → peer-id fallback on read.
+    messageAbstract.groupPrivatePeerPubkey = counterpartyPubkey.length > 0 ? counterpartyPubkey.lowercaseString : nil;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
     messageAbstract.messageText = messageText;
 

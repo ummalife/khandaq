@@ -175,6 +175,9 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
 
 - (void)setPrivateLastReadDateInterval:(NSTimeInterval)interval peerId:(uint32_t)peerId forChat:(OCTChat *)chat;
 
+// KHANDAQ (#54): clear the in-group private-message unread count for the whole chat (all peer rows).
+- (void)markAllPrivateThreadsReadForChat:(OCTChat *)chat;
+
 - (int32_t)unreadPrivateMessageCountForPeerId:(uint32_t)peerId inChat:(OCTChat *)chat;
 
 - (int32_t)totalUnreadPrivateMessageCountForChat:(OCTChat *)chat;

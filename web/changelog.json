@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-20T23:59:14Z",
+  "generated_at": "2026-06-21T00:17:35Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -59,6 +59,15 @@
           ]
         },
         {
+          "severity": "critical",
+          "title": "Groups — messages, voice and files no longer show the wrong sender/name",
+          "description": "In NGC group chats a peer's voice/file/message could appear under another person's name (or your own), and 'X joined' notices showed wrong names — because the sender was resolved from a volatile peer id that NGC reuses when members leave and rejoin. The sender pubkey is now captured at the moment of receipt and all names resolve by stable pubkey, on both Android and iOS.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
           "severity": "important",
           "title": "iOS — sending video to a group fixed",
           "description": "Videos picked for a group silently never sent: the file was copied on a background queue after the picker's temporary URL had already been deleted. The copy now happens synchronously while the URL is valid (photos were unaffected).",
@@ -111,6 +120,23 @@
           "severity": "important",
           "title": "1:1 files are accepted automatically",
           "description": "Incoming files in a direct chat no longer show an accept/decline prompt — they download immediately, in both directions.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Groups — photos and videos send and arrive reliably",
+          "description": "Group media could sit at 0% and end as 'Upload Failed', or (briefly) be blocked from sending. Sending now waits only for the group to be connected (the transfer broadcasts over the group mesh) and re-queues with auto-retry until the group is ready, instead of failing.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android — encrypted password-protected backup & restore",
+          "description": "New in Maintenance: create an encrypted .kbk backup of your whole profile (messages, media, contacts and identity) under a password (PBKDF2-SHA256 + AES-256-GCM), and restore it on a reinstall or a new device. The on-disk database/media stay encrypted; only the key and identity are wrapped under your password. Verified end-to-end on-device.",
           "platforms": [
             "android"
           ]
@@ -188,6 +214,22 @@
           "description": "Opening a group chat now forces an immediate reconnect of a stalled group instead of waiting out the back-off, and the automatic retry of a stuck announce starts at 6s instead of 15s. Rate-limited and connecting-safe, so it never interrupts an announce already in progress. Less time stuck on \"Connecting…\".",
           "platforms": [
             "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android — private (in-group direct) messages show as sent",
+          "description": "NGC private messages addressed to one group member used to sit on a clock forever (no delivery receipt exists for them). They now show as sent once delivered to the network.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "iOS — no more repeated 'joined the group' spam",
+          "description": "A peer reconnecting (or the app re-syncing the roster) no longer posts a fresh 'X joined the group' notice every time — only a genuine first join is announced.",
+          "platforms": [
+            "ios"
           ]
         },
         {
@@ -484,17 +526,17 @@
       "summary": "16 vulnerabilities from the external security audit fixed in code. v0.2.5 builds for Android, iOS, Desktop, and an updated push relay.",
       "commits": [
         {
-          "hash": "48cf534",
+          "hash": "48cf5340",
           "full": "48cf5340879cf8197b20ce5fd767452effc3bc45",
           "url": "https://github.com/ummalife/khandaq/commit/48cf5340879cf8197b20ce5fd767452effc3bc45"
         },
         {
-          "hash": "146bc56",
+          "hash": "146bc561",
           "full": "146bc5619f6c175c622d0d0d13d15bb3c66128b5",
           "url": "https://github.com/ummalife/khandaq/commit/146bc5619f6c175c622d0d0d13d15bb3c66128b5"
         },
         {
-          "hash": "d3b7c7d",
+          "hash": "d3b7c7d9",
           "full": "d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84",
           "url": "https://github.com/ummalife/khandaq/commit/d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84"
         }

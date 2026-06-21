@@ -28,36 +28,41 @@ colors:
   light_text: F2F2F7
   muted_text: 98989D
   dark_separator: 38383A
+  # KHANDAQ design system (Figma): brand accent (same green on dark) + neutral text
+  accent: "029B7D"
+  accent_pressed: "027A63"
+  text_secondary: "9A9A9F"
+  text_tertiary: "7C7C82"
 
 values:
   login-background: dark_bg
   login-gradient: lightblue
-  login-tox-logo: simpleblue
+  login-tox-logo: accent
   login-button-text: white
-  login-button-background: simpleblue
+  login-button-background: accent
   login-description-label: light_text
   login-form-background: dark_bg_elevated
   login-form-text: light_text
-  login-link-color: simpleblue
+  login-link-color: accent
 
   translucent-background: transparent_dark_gray
 
   normal-background: dark_bg
   normal-text: light_text
-  link-text: simpleblue
-  connecting-background: simpleblue
+  link-text: accent
+  connecting-background: accent
   connecting-text: white
   separators-and-borders: dark_separator
   rounded-button-text: white
-  rounded-positive-button-background: simpleblue
+  rounded-positive-button-background: accent
   rounded-negative-button-background: gray
   offline-status: color_offline_status
-  online-status: green_bright
+  online-status: accent
   away-status: yellow
   busy-status: palered
   status-background: dark_bg_elevated
-  friend-cell-status: muted_text
-  chat-list-cell-message: muted_text
+  friend-cell-status: text_secondary
+  chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: dark_bg_tertiary
   chat-input-background: dark_bg_elevated
   chat-incoming-bubble: dark_bg_tertiary
@@ -67,7 +72,7 @@ values:
   chat-information-text: muted_text
   tab-badge-background: palered
   tab-badge-text: white
-  tab-item-active: simpleblue
+  tab-item-active: accent
   tab-item-inactive: muted_text
   notification-background: transparent_dark_gray
   notification-text: white
@@ -87,4 +92,4 @@ values:
   file-image-cancel-button-tint: light_text
   lock-gradient-top: mediumblue
   lock-gradient-bottom: purple
-  chat-list-cell-arrow-unread-background: simpleblue
+  chat-list-cell-arrow-unread-background: accent

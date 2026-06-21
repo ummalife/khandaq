@@ -103,9 +103,13 @@ class ChatListController: UIViewController {
         searchController.searchBar.barStyle = ThemeAppearance.isDarkMode ? .black : .default
         searchController.searchBar.tintColor = theme.colorForType(.LinkText)
         if #available(iOS 13.0, *) {
-            let field = searchController.searchBar.searchTextField
-            field.textColor = theme.colorForType(.NormalText)
-            field.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+            // KHANDAQ (#57 follow-up): only theme the text color. Painting `field.backgroundColor`
+            // under the `.minimal` style draws an opaque rectangle BEHIND the field's own rounded
+            // background view; on first appearance (before that subview is laid out) it renders as a
+            // torn pill in dark mode and only self-corrects after a theme toggle forces a relayout.
+            // The window's overrideUserInterfaceStyle already makes the system field background match
+            // the active theme, so the default rounded pill is correct in both modes without a race.
+            searchController.searchBar.searchTextField.textColor = theme.colorForType(.NormalText)
         }
         navigationItem.searchController = searchController
         navigationItem.hidesSearchBarWhenScrolling = false

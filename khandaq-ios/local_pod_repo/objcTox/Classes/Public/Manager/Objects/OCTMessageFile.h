@@ -52,6 +52,20 @@
 @property float groupTransferProgress;
 
 /**
+ * KHANDAQ (#82): frozen sender display name for incoming NGC group FILE messages, resolved by
+ * STABLE pubkey at receipt (mirrors OCTMessageText.groupPeerName). Without it the sender label was
+ * resolved from the volatile groupSenderPeerId at render time and changed after peers reshuffled on
+ * reconnect/restart. nil for outgoing/legacy rows.
+ */
+@property (nullable) NSString *groupPeerName;
+
+/**
+ * KHANDAQ (#82): stable LOWERCASE pubkey hex of the file sender, frozen at receipt. Allows
+ * re-resolving the name later if the roster is known, and keys identity across volatile peer-id reuse.
+ */
+@property (nullable) NSString *groupSenderPubkey;
+
+/**
  * Indicate if message is delivered. Actual only for outgoing group files (after send completes).
  */
 @property BOOL isDelivered;

@@ -1245,6 +1245,10 @@ private extension ChatGroupController {
         if let stored = message.messageText?.groupPeerName, !stored.isEmpty {
             return stored
         }
+        // KHANDAQ (#82): FILE messages freeze their sender name separately (OCTMessageFile.groupPeerName).
+        if let storedFile = message.messageFile?.groupPeerName, !storedFile.isEmpty {
+            return storedFile
+        }
 
         guard message.groupSenderPeerId > 0 else {
             return nil

@@ -56,7 +56,10 @@ final class ChatReplyController {
             meta.senderPubkeyTail = MessageReplyHelper.pubkeyTail(friend.publicKey)
             meta.senderName = friendDisplayName(friend)
         }
-        else if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
+        else if let peerName = message.messageText?.groupPeerName ?? message.messageFile?.groupPeerName,
+                !peerName.isEmpty {
+            // KHANDAQ (#83): group FILE messages freeze the sender on messageFile, not messageText —
+            // without this branch replying to a received file showed the author as "Неизвестно".
             meta.senderName = peerName
         }
         else {

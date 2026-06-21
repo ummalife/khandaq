@@ -88,6 +88,25 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                               OCTMessageFileTypeWaitingConfirmation, OCTMessageFileTypeLoading, OCTMessageFileTypePaused];
 
     [realmManager updateObjectsWithClass:[OCTMessageFile class] predicate:predicate updateBlock:^(OCTMessageFile *file) {
+        // KHANDAQ (#81): a fully-downloaded NGC group file can be persisted as Loading (a lingering
+        // BEGIN bubble whose COMPLETE finalized a sibling row, or a progress row not yet flipped to
+        // Ready). The blanket cancel below then turned an already-downloaded & played group video into
+        // "Загрузка не удалась" after every restart. If the bytes are actually complete on disk,
+        // finalize it to Ready instead of cancelling. Only applies to group files (groupMsgIdHashHex);
+        // genuinely interrupted 1:1 transfers (and incomplete group temp files) still cancel.
+        if (file.groupMsgIdHashHex.length > 0 && file.fileSize > 0) {
+            NSString *onDiskPath = [file filePath];
+            if (onDiskPath.length > 0) {
+                NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:onDiskPath error:nil];
+                if (attrs && [attrs fileSize] >= file.fileSize) {
+                    file.fileType = OCTMessageFileTypeReady;
+                    file.groupTransferProgress = 1.0f;
+                    OCTLogInfo(@"salvaging completed group file %@", file);
+                    return;
+                }
+            }
+        }
+
         file.fileType = OCTMessageFileTypeCanceled;
         OCTLogInfo(@"cancelling file %@", file);
     }];

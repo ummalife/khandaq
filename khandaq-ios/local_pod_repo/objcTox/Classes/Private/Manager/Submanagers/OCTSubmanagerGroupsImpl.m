@@ -3508,6 +3508,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             abstract.groupSenderPeerId = peerId;
             abstract.dateInterval = abstract.dateInterval;
         }];
+        [self freezeGroupFileSenderOnMessage:existing groupNumber:groupNumber peerId:peerId chat:chat];
         return;
     }
 
@@ -3524,7 +3525,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     NSString *fileUTI = [self fileUTIFromFileName:fileName];
 
-    [realmManager addGroupMessageWithFileName:fileName
+    OCTMessageAbstract *beginMessage = [realmManager addGroupMessageWithFileName:fileName
                                      fileSize:fileSize
                                      filePath:filePath
                                      fileType:OCTMessageFileTypeLoading
@@ -3533,6 +3534,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                      fileUTI:fileUTI
                           groupMsgIdHashHex:msgIdHex
                        groupTransferProgress:0.0f];
+    [self freezeGroupFileSenderOnMessage:beginMessage groupNumber:groupNumber peerId:peerId chat:chat];
 }
 
 - (void)handleIncomingGroupFileProgressWithGroupNumber:(uint32_t)groupNumber
@@ -3585,7 +3587,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     NSString *fileUTI = [self fileUTIFromFileName:fileName];
 
-    [realmManager addGroupMessageWithFileName:fileName
+    OCTMessageAbstract *completeMessage = [realmManager addGroupMessageWithFileName:fileName
                                      fileSize:fileSize
                                      filePath:filePath
                                      fileType:OCTMessageFileTypeReady
@@ -3594,6 +3596,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                      fileUTI:fileUTI
                           groupMsgIdHashHex:msgIdHex
                        groupTransferProgress:1.0f];
+    [self freezeGroupFileSenderOnMessage:completeMessage groupNumber:groupNumber peerId:peerId chat:chat];
 }
 
 - (void)handleIncomingGroupFileWithGroupNumber:(uint32_t)groupNumber
@@ -4463,6 +4466,36 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }
     }
     return nil;
+}
+
+// KHANDAQ (#82/#83): freeze the FILE sender's display name + stable pubkey onto the message at
+// receipt, mirroring the text path (resolved by pubkey, not the volatile peerId). Only stamps when
+// empty, so a later BEGIN-resume / COMPLETE for the same transfer never overwrites the original
+// sender. Without this the file-cell label & reply-quote author were resolved from the volatile
+// groupSenderPeerId at render time and drifted to the wrong peer ("Неизвестно"/self) after a restart.
+- (void)freezeGroupFileSenderOnMessage:(OCTMessageAbstract *)message
+                           groupNumber:(OCTToxGroupNumber)groupNumber
+                                peerId:(uint32_t)peerId
+                                  chat:(OCTChat *)chat
+{
+    if (! message.messageFile) {
+        return;
+    }
+
+    NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+    if (peerName.length == 0) {
+        peerName = [NSString stringWithFormat:@"Peer %u", peerId];
+    }
+    NSString *pubkey = [[[self.dataSource managerGetTox] groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil] lowercaseString];
+
+    [[self.dataSource managerGetRealmManager] updateObject:message.messageFile withBlock:^(OCTMessageFile *file) {
+        if (file.groupPeerName.length == 0) {
+            file.groupPeerName = peerName;
+        }
+        if (pubkey.length > 0 && file.groupSenderPubkey.length == 0) {
+            file.groupSenderPubkey = pubkey;
+        }
+    }];
 }
 
 - (NSString *)peerDisplayNameForGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId

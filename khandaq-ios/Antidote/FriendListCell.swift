@@ -7,14 +7,16 @@ import SnapKit
 
 class FriendListCell: BaseCell {
     struct Constants {
-        static let AvatarSize = 30.0
-        static let AvatarLeftOffset = 10.0
-        static let AvatarRightOffset = 16.0
+        // KHANDAQ design (Figma): match the chat cell — 56pt avatar, 16pt side margin, 12pt gap.
+        static let AvatarSize = 56.0
+        static let AvatarLeftOffset = 16.0
+        static let AvatarRightOffset = 12.0
 
-        static let TopLabelHeight = 22.0
-        static let MinimumBottomLabelHeight = 15.0
+        static let TopLabelHeight = 20.0
+        static let MinimumBottomLabelHeight = 16.0
 
-        static let VerticalOffset = 3.0
+        static let VerticalOffset = 8.0
+        static let RightOffset = -16.0
     }
 
     fileprivate var avatarView: ImageViewWithStatus!
@@ -44,6 +46,9 @@ class FriendListCell: BaseCell {
             : theme.colorForType(.FriendCellStatus)
         bottomLabel.numberOfLines = friendModel.multilineBottomtext ? 0 : 1
 
+        // KHANDAQ design (Figma): contact rows have no trailing chevron — avatar + name + status only.
+        arrowImageView.isHidden = true
+
         accessibilityLabel = friendModel.accessibilityLabel
         accessibilityValue = friendModel.accessibilityValue
     }
@@ -55,11 +60,11 @@ class FriendListCell: BaseCell {
         contentView.addSubview(avatarView)
 
         topLabel = UILabel()
-        topLabel.font = UIFont.systemFont(ofSize: 18.0)
+        topLabel.font = UIFont.systemFont(ofSize: 16.0, weight: .semibold)
         contentView.addSubview(topLabel)
 
         bottomLabel = UILabel()
-        bottomLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
+        bottomLabel.font = UIFont.systemFont(ofSize: 14.0)
         contentView.addSubview(bottomLabel)
 
         let image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
@@ -79,21 +84,21 @@ class FriendListCell: BaseCell {
 
         topLabel.snp.makeConstraints {
             $0.leading.equalTo(avatarView.snp.trailing).offset(Constants.AvatarRightOffset)
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
             $0.top.equalTo(contentView).offset(Constants.VerticalOffset)
             $0.height.equalTo(Constants.TopLabelHeight)
         }
 
         bottomLabel.snp.makeConstraints {
             $0.leading.trailing.equalTo(topLabel)
-            $0.top.equalTo(topLabel.snp.bottom)
+            $0.top.equalTo(topLabel.snp.bottom).offset(4.0)
             $0.bottom.equalTo(contentView).offset(-Constants.VerticalOffset)
             $0.height.greaterThanOrEqualTo(Constants.MinimumBottomLabelHeight)
         }
 
         arrowImageView.snp.makeConstraints {
             $0.centerY.equalTo(contentView)
-            $0.leading.greaterThanOrEqualTo(topLabel.snp.trailing)
-            $0.trailing.equalTo(contentView)
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
         }
     }
 }

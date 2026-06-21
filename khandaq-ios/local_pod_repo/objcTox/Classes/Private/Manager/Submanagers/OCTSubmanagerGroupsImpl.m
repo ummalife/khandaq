@@ -2371,6 +2371,31 @@ partMessage:(NSString *)partMessage
         return;
     }
 
+    if ([self isBlockedIncomingPeerId:peerId groupNumber:groupNumber]) {
+        return;
+    }
+
+    // KHANDAQ: Android sends NGC file-transfer (BEGIN/CHUNK) — and may send live media — as PRIVATE
+    // (unicast) custom packets, so they arrive HERE, not in the broadcast callback. Previously this
+    // path only ran histSync, so Android->iOS group photos/videos were silently dropped (no progress,
+    // no media). Route private packets through the same media handlers as the broadcast callback
+    // first; each handler ignores packets that aren't its own (magic/type), so histSync still runs for
+    // genuine history-sync packets.
+    NSString *peerPublicKeyHex = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
+    [self setupLiveVideoIfNeeded];
+    if ([self.liveVideo handleIncomingPacketWithGroupNumber:groupNumber
+                                                     peerId:peerId
+                                           peerPublicKeyHex:peerPublicKeyHex
+                                                       data:data]) {
+        return;
+    }
+    [self setupLiveAudioIfNeeded];
+    if ([self.liveAudio handleIncomingPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
+    [self setupFileTransferIfNeeded];
+    [self.fileTransfer handleIncomingPacketWithGroupNumber:groupNumber peerId:peerId data:data];
+
     [self setupHistSyncIfNeeded];
     [self.histSync handleIncomingPrivatePacketWithGroupNumber:groupNumber peerId:peerId data:data];
 }

@@ -115,15 +115,18 @@ class ChatListTableManager: NSObject {
                 continue
             }
 
+            // KHANDAQ (#65): the filter-tab badge counts CHATS with unread (Telegram-style, consistent
+            // with the bottom Чаты tab), not the sum of unread messages — so one group with 7 unread
+            // shows "1", not "7".
             if !chat.isGroup {
-                counts.direct += unread
+                counts.direct += 1
             }
             else {
-                counts.groups += unread
+                counts.groups += 1
             }
 
             if ChatFavoritesStore.isFavorite(chat: chat) {
-                counts.favorites += unread
+                counts.favorites += 1
             }
         }
 
@@ -340,7 +343,21 @@ extension ChatListTableManager: UITableViewDelegate {
             return config
         }
 
-        let config = UISwipeActionsConfiguration(actions: [favoriteAction])
+        // KHANDAQ (#62): 1:1 chats can be deleted by swipe too (previously only "В избранное"). Removes
+        // the chat + its message history but keeps the contact. Confirmed first (irreversible) and no
+        // full-swipe, so it can't fire accidentally.
+        let deleteAction = UIContextualAction(style: .destructive, title: String(localized: "alert_delete")) { [unowned self] _, _, completion in
+            let alert = UIAlertController(title: String(localized: "alert_delete"), message: nil, preferredStyle: .actionSheet)
+            alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [unowned self] _ in
+                self.submanagerChats.removeAllMessages(in: chat, removeChat: true)
+                self.delegate?.chatListTableManagerWasUpdated(self)
+            })
+            alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+            self.delegate?.chatListTableManager(self, presentAlertController: alert)
+            completion(true)
+        }
+
+        let config = UISwipeActionsConfiguration(actions: [deleteAction, favoriteAction])
         config.performsFirstActionWithFullSwipe = false
         return config
     }

@@ -38,6 +38,21 @@
                 app:civ_border_color="#40000000"
                 app:civ_border_width="2dp" />
 
+            <!-- KHANDAQ (#56): open the 1:1 chat from the contact profile (parity with iOS). -->
+            <Button
+                android:id="@+id/fi_message_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginLeft="15dp"
+                android:layout_marginRight="15dp"
+                android:layout_marginBottom="15dp"
+                android:drawableStart="@android:drawable/ic_dialog_email"
+                android:drawablePadding="8dp"
+                android:paddingLeft="20dp"
+                android:paddingRight="20dp"
+                android:text="@string/friend_info_send_message" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

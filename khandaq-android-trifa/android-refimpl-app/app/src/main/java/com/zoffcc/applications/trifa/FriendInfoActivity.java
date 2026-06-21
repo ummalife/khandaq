@@ -105,6 +105,20 @@ public class FriendInfoActivity extends AppCompatActivity
         fi_relay_pubkey_textview = (TextView) findViewById(R.id.fi_relay_pubkey_textview);
         fi_relay_text = (TextView) findViewById(R.id.fi_relay_text);
         remove_friend_relay_button = (Button) findViewById(R.id.remove_friend_relay_button);
+
+        // KHANDAQ (#56): open the 1:1 chat from the contact profile (parity with iOS).
+        final Button fi_message_button = (Button) findViewById(R.id.fi_message_button);
+        if (fi_message_button != null)
+        {
+            fi_message_button.setOnClickListener(v ->
+            {
+                if (friend_pubkey != null)
+                {
+                    FriendListHolder.show_messagelist_acticvity_for_friend(FriendInfoActivity.this, friend_pubkey);
+                }
+            });
+        }
+
         fi_pushurl_textview = (TextView) findViewById(R.id.fi_pushurl_textview);
         fi_pushurl_text = (TextView) findViewById(R.id.fi_pushurl_text);
         remove_friend_pushurl_button = (Button) findViewById(R.id.remove_friend_pushurl_button);

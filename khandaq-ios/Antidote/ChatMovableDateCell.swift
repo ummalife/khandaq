@@ -273,6 +273,22 @@ enum MessageForwarder {
         controller.present(alert, animated: true, completion: nil)
     }
 
+    /// KHANDAQ (#39): the original author's display name for a "Forwarded from …" header — own
+    /// messages → "You"; group messages → the frozen group peer name; 1:1 → the friend's nickname.
+    private static func forwardSourceName(for message: OCTMessageAbstract, manager: OCTManager) -> String {
+        if message.isOutgoing() {
+            return String(localized: "chat_reply_self_name")
+        }
+        if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
+            return peerName
+        }
+        if let senderId = message.senderUniqueIdentifier,
+           let friend = manager.objects.object(withUniqueIdentifier: senderId, for: .friend) as? OCTFriend {
+            return friend.nickname.isEmpty ? friend.publicKey : friend.nickname
+        }
+        return String(localized: "chat_reply_unknown_sender")
+    }
+
     private static func forward(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
         if chat.isSavedMessages {
             saveLocally(message, to: chat, manager: manager)
@@ -283,7 +299,11 @@ enum MessageForwarder {
             // KHANDAQ (#39/#32): forward the clean visible body, NOT the original reply/mention wire
             // markup. Re-sending the raw text made the forward masquerade as a reply (leaked quote) and
             // left a tappable quote that could fuzzy-jump to an unrelated local message on the receiver.
-            let text = MessageReplyHelper.plainBody(for: message) ?? raw
+            let body = MessageReplyHelper.plainBody(for: message) ?? raw
+            // KHANDAQ (#39): Telegram-style "Forwarded from <name>" attribution line above the body.
+            let header = String(format: String(localized: "chat_forwarded_from_format"),
+                                forwardSourceName(for: message, manager: manager))
+            let text = header + "\n" + body
             if chat.isGroup {
                 manager.groups.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in }, failureBlock: { _ in })
             }

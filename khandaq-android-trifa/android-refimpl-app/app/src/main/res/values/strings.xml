@@ -661,6 +661,7 @@
     <string name="group_header_reconnecting_peers">Reconnecting to peers…</string>
     <string name="friend_info_status_unknown">No status saved</string>
     <string name="friend_info_message_count">%1$d messages</string>
+    <string name="friend_info_send_message">Send message</string>
     <string name="chat_list_search_hint">Search</string>
     <string name="global_search_hint">Search all chats and messages</string>
     <string name="global_search_section_chats">Chats and groups</string>

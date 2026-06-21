@@ -129,7 +129,13 @@ extension StaticTableController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-        guard let text = footerText(for: section), footerContainsLink(text) else {
+        // KHANDAQ (#58): a section with no footer text must have ZERO footer height. Returning
+        // UITableViewAutomaticDimension made a .plain table render a default (light-grey) section-footer
+        // strip below the last row — visible against the dark theme on the Profile screen.
+        guard let text = footerText(for: section) else {
+            return 0
+        }
+        guard footerContainsLink(text) else {
             return UITableViewAutomaticDimension
         }
         let width = tableView.bounds.width - 32

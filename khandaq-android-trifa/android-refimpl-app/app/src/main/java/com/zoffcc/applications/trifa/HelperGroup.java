@@ -1915,6 +1915,12 @@ public class HelperGroup
 
     private static final ConcurrentHashMap<String, Long> group_peer_last_online_ms = new ConcurrentHashMap<>();
 
+    // KHANDAQ (#50): group-peer presence is LEVEL-triggered (polled every render, no persistence),
+    // unlike the EDGE-triggered + persisted 1:1 status, so a peer flickers offline during the brief
+    // peer_id-rejoin / relay-flap gaps NGC churn produces. Treat a peer online if toxcore reports
+    // UDP/TCP now OR it was seen live within this grace window — bounded, driven only by real sightings.
+    private static final long GROUP_PEER_ONLINE_GRACE_MS = 25_000L;
+
     static String group_peer_seen_key(final String group_id, final String pubkey)
     {
         return group_id.toLowerCase(Locale.ENGLISH) + "|" + pubkey.toLowerCase(Locale.ENGLISH);
@@ -1995,7 +2001,14 @@ public class HelperGroup
         }
 
         final int conn = tox_group_peer_get_connection_status(group_num, peer_id);
-        return is_group_peer_online(conn);
+        if (is_group_peer_online(conn))
+        {
+            return true;
+        }
+        // KHANDAQ (#50): grace window so the message-sender dot matches the member-list presence.
+        final long last_seen = resolve_group_peer_last_seen_ms(message.group_identifier,
+                message.tox_group_peer_pubkey, null);
+        return last_seen > 0 && (System.currentTimeMillis() - last_seen) <= GROUP_PEER_ONLINE_GRACE_MS;
     }
 
     /**
@@ -2581,15 +2594,21 @@ public class HelperGroup
                             }
                             GroupPeerDB peer_from_db = lookup_group_peer_by_pubkey(group_identifier, pubkey);
                             final int conn = tox_group_peer_get_connection_status(group_num, peer);
+                            final boolean live_online = is_group_peer_online(conn);
                             final GroupMemberDisplay item = new GroupMemberDisplay();
                             item.pubkey = pubkey;
                             item.probable_bot = false;
                             item.connection_status = conn;
-                            item.online = is_group_peer_online(conn);
                             item.self = is_self;
                             item.last_seen_ms = resolve_group_peer_last_seen_ms(group_identifier, pubkey, peer_from_db);
+                            // KHANDAQ (#50): online = live UDP/TCP OR seen live within the grace window.
+                            final boolean within_grace = item.last_seen_ms > 0
+                                    && (System.currentTimeMillis() - item.last_seen_ms) <= GROUP_PEER_ONLINE_GRACE_MS;
+                            item.online = live_online || within_grace;
                             item.name = format_group_member_list_label(context_s, pubkey, raw_name, item.online, is_self);
-                            if (item.online)
+                            // CRITICAL: refresh the seen-cache ONLY on a real live sighting, never on the
+                            // grace-derived value, or item.online would latch on permanently.
+                            if (live_online)
                             {
                                 touch_group_peer_online(group_identifier, pubkey);
                             }

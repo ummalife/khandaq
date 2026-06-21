@@ -573,7 +573,7 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
         return;
     }
 
-    if (self.messageExistsBlock(chat, messageId, senderPeerId, text)) {
+    if (self.messageExistsBlock(chat, messageId, senderPeerId, text, (NSTimeInterval)timestamp)) {
         if (self.deliveryReceiptBlock) {
             self.deliveryReceiptBlock(chat, messageId, peerId);
         }

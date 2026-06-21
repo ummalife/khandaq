@@ -92,7 +92,10 @@ class ChatGroupController: PortraitChatController {
 
         edgesForExtendedLayout = UIRectEdge()
         hidesBottomBarWhenPushed = true
-        title = chat.groupName ?? String(localized: "group_chat_default_title")
+        // KHANDAQ (#46): prefer the owner-changeable TOPIC (NGC group name is immutable; a "rename"
+        // updates the topic), falling back to the immutable name.
+        title = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
+            ?? String(localized: "group_chat_default_title")
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
@@ -804,7 +807,9 @@ extension ChatGroupController: UITableViewDelegate {
         let box = LoadingImageView.previewBox(for: size)
         var height = box.height + 16.0
         if messageSearchQuery.isEmpty,
-           let caption = captionMessage(forFileAtStorageIndex: entry.storageIndex)?.messageText?.text {
+           let captionMsg = captionMessage(forFileAtStorageIndex: entry.storageIndex),
+           let caption = MessageReplyHelper.plainBody(for: captionMsg), !caption.isEmpty {
+            // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
         }
         return height
@@ -847,6 +852,26 @@ extension ChatGroupController: UITableViewDelegate {
     // MARK: - Telegram-style media captions
 
     /// The caption text paired with the file at `storageIndex` (the message sent right after it).
+    /// KHANDAQ (#45): a caption is either flagged by the sender (isCaption) OR — for a RECEIVED message,
+    /// where isCaption is never set, so the caption used to render as a standalone text bubble under the
+    /// media — inferred by adjacency: a plain text immediately newer than the file, same sender &
+    /// direction, within 5s, that is not a system or shared-location message.
+    func isCaption(_ caption: OCTMessageAbstract, forFile file: OCTMessageAbstract) -> Bool {
+        if caption.isCaption {
+            return true
+        }
+        guard caption.messageFile == nil,
+              !caption.groupSystemMessage,
+              let text = caption.messageText?.text, !text.isEmpty,
+              caption.isOutgoing() == file.isOutgoing(),
+              caption.groupSenderPeerId == file.groupSenderPeerId,
+              LocationMessage.parse(GroupMentionHelper.parse(text).bodyText) == nil else {
+            return false
+        }
+        let delta = caption.dateInterval - file.dateInterval
+        return delta >= 0 && delta <= 5.0
+    }
+
     func captionMessage(forFileAtStorageIndex storageIndex: Int) -> OCTMessageAbstract? {
         guard storageIndex >= 0, storageIndex < messages.count else {
             return nil
@@ -860,9 +885,8 @@ extension ChatGroupController: UITableViewDelegate {
             return nil
         }
         let caption = messages[captionIndex]
-        guard caption.isCaption,
-              let text = caption.messageText?.text, !text.isEmpty,
-              caption.isOutgoing() == file.isOutgoing() else {
+        guard let text = caption.messageText?.text, !text.isEmpty,
+              isCaption(caption, forFile: file) else {
             return nil
         }
         return caption
@@ -874,7 +898,7 @@ extension ChatGroupController: UITableViewDelegate {
             return false
         }
         let message = messages[storageIndex]
-        guard message.isCaption, message.messageText?.text?.isEmpty == false else {
+        guard message.messageText?.text?.isEmpty == false else {
             return false
         }
         let fileIndex = storageIndex + 1
@@ -882,7 +906,7 @@ extension ChatGroupController: UITableViewDelegate {
             return false
         }
         let file = messages[fileIndex]
-        return file.messageFile != nil && file.isOutgoing() == message.isOutgoing()
+        return file.messageFile != nil && isCaption(message, forFile: file)
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
@@ -1030,9 +1054,10 @@ private extension ChatGroupController {
         // Telegram-style merged caption (the text message sent right after this file).
         if messageSearchQuery.isEmpty {
             let idx = messages.indexOfObject(message)
-            model.caption = (idx >= 0 && idx < messages.count)
-                ? captionMessage(forFileAtStorageIndex: idx)?.messageText?.text
-                : nil
+            let captionMsg = (idx >= 0 && idx < messages.count) ? captionMessage(forFileAtStorageIndex: idx) : nil
+            // KHANDAQ (#52): strip reply/mention wire markup so a reply sent as a media caption shows
+            // its clean body, not the raw "[KQ|…][KQ/end]" header.
+            model.caption = captionMsg.flatMap { MessageReplyHelper.plainBody(for: $0) }
         }
         else {
             model.caption = nil
@@ -1175,10 +1200,15 @@ private extension ChatGroupController {
     }
 
     func peerName(for message: OCTMessageAbstract) -> String? {
+        // KHANDAQ (#42): prefer the name FROZEN on the message at receipt (resolved then by the STABLE
+        // sender pubkey). The live peerId lookup below is unreliable after an app restart (the group
+        // roster has not re-synced yet → generic "Участник N") and whenever the volatile peerId has
+        // since been reused by another peer. That made stored messages change sender/name on relaunch.
+        if let stored = message.messageText?.groupPeerName, !stored.isEmpty {
+            return stored
+        }
+
         guard message.groupSenderPeerId > 0 else {
-            if let name = message.messageText?.groupPeerName, !name.isEmpty {
-                return name
-            }
             return nil
         }
 

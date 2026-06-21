@@ -2100,6 +2100,17 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
+    // KHANDAQ (#51): also drop our OWN message echoed back by matching the STABLE self pubkey. The
+    // volatile selfPeerId lookup can momentarily return 0/wrong (just after (re)connect), which let an
+    // echo of our own send appear as an incoming message attributed to ourselves ("Isa iOS · …") and
+    // doubled the conversation. The pubkey comparison is reliable regardless of peer-id churn.
+    NSString *selfPubkeyHex = [[tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil] uppercaseString];
+    NSString *senderPubkeyHex = [[tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil] uppercaseString];
+
+    if (selfPubkeyHex.length > 0 && senderPubkeyHex.length > 0 && [selfPubkeyHex isEqualToString:senderPubkeyHex]) {
+        return;
+    }
+
     if ([self isBlockedIncomingPeerId:peerId groupNumber:groupNumber]) {
         return;
     }
@@ -3249,12 +3260,14 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             return [[self.dataSource managerGetRealmManager] groupMessagesForHistorySyncInChat:chat];
         }
-        messageExistsBlock:^BOOL(OCTChat *chat, uint32_t messageId, uint32_t peerId, NSString *text) {
+        messageExistsBlock:^BOOL(OCTChat *chat, uint32_t messageId, uint32_t peerId, NSString *text, NSTimeInterval dateInterval) {
             __strong typeof(weakSelf) self = weakSelf;
 
             if (! self) {
                 return NO;
             }
+
+            OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
             // KHANDAQ (#15): share the live path's content dedup so a message that arrived live (with
             // a different messageId due to the sender's retries) is recognised here and not inserted
@@ -3263,10 +3276,18 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return YES;
             }
 
-            return [[self.dataSource managerGetRealmManager] groupTextMessageExistsInChat:chat
-                                                                              messageId:messageId
-                                                                                 peerId:peerId
-                                                                                   text:text];
+            // KHANDAQ (#42): persistent check — survives an app restart. A re-synced copy carries the
+            // ORIGINAL timestamp, so chat + identical text + (near) the same dateInterval recognises it
+            // even though its volatile messageId no longer matches the stored one. This is what kills
+            // the post-restart duplicate flood (the in-memory map above is empty after a relaunch).
+            if ([realmManager groupTextMessageExistsInChat:chat text:text nearDateInterval:dateInterval windowSeconds:3.0]) {
+                return YES;
+            }
+
+            return [realmManager groupTextMessageExistsInChat:chat
+                                                    messageId:messageId
+                                                       peerId:peerId
+                                                         text:text];
         }
         fileExistsBlock:^BOOL(OCTChat *chat, NSString *msgIdHashHex) {
             __strong typeof(weakSelf) self = weakSelf;

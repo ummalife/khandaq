@@ -878,7 +878,9 @@ extension ChatPrivateController: UITableViewDelegate {
 
         // Add room for a merged caption rendered inside the media bubble.
         if messageSearchQuery.isEmpty,
-           let caption = captionMessage(forFileAtStorageIndex: entry.storageIndex)?.messageText?.text {
+           let captionMsg = captionMessage(forFileAtStorageIndex: entry.storageIndex),
+           let caption = MessageReplyHelper.plainBody(for: captionMsg), !caption.isEmpty {
+            // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
         }
         return height
@@ -950,6 +952,26 @@ extension ChatPrivateController: UITableViewDelegate {
     // MARK: - Telegram-style media captions
 
     /// The caption text paired with the file at `storageIndex` (the message sent right after it).
+    /// KHANDAQ (#45): a caption is either flagged by the sender (isCaption) OR — for a RECEIVED message,
+    /// where isCaption is never set, so the caption used to render as a standalone bubble under the
+    /// media — inferred by adjacency: a plain text immediately newer than the file, same direction,
+    /// within 5s, that is not a system or shared-location message. (Same chat is implicit: both rows
+    /// come from this chat's `messages`.)
+    func isCaption(_ caption: OCTMessageAbstract, forFile file: OCTMessageAbstract) -> Bool {
+        if caption.isCaption {
+            return true
+        }
+        guard caption.messageFile == nil,
+              !caption.groupSystemMessage,
+              let text = caption.messageText?.text, !text.isEmpty,
+              caption.isOutgoing() == file.isOutgoing(),
+              LocationMessage.parse(text) == nil else {
+            return false
+        }
+        let delta = caption.dateInterval - file.dateInterval
+        return delta >= 0 && delta <= 5.0
+    }
+
     func captionMessage(forFileAtStorageIndex storageIndex: Int) -> OCTMessageAbstract? {
         guard storageIndex >= 0, storageIndex < messages.count else {
             return nil
@@ -963,9 +985,8 @@ extension ChatPrivateController: UITableViewDelegate {
             return nil
         }
         let caption = messages[captionIndex]
-        guard caption.isCaption,
-              let text = caption.messageText?.text, !text.isEmpty,
-              caption.isOutgoing() == file.isOutgoing() else {
+        guard let text = caption.messageText?.text, !text.isEmpty,
+              isCaption(caption, forFile: file) else {
             return nil
         }
         return caption
@@ -982,6 +1003,12 @@ extension ChatPrivateController: UITableViewDelegate {
             if message.isCaption {
                 return true
             }
+            // KHANDAQ (#45): a receiver-inferred caption carries no isCaption flag — detect it so the
+            // table reloads (rather than animates) and the neighbouring file row's height updates to
+            // embed the caption instead of leaving it stale until the next scroll.
+            if isMergedCaptionRow(storageIndex: index) {
+                return true
+            }
             if message.messageFile != nil, captionMessage(forFileAtStorageIndex: index) != nil {
                 return true
             }
@@ -995,7 +1022,7 @@ extension ChatPrivateController: UITableViewDelegate {
             return false
         }
         let message = messages[storageIndex]
-        guard message.isCaption, message.messageText?.text?.isEmpty == false else {
+        guard message.messageText?.text?.isEmpty == false else {
             return false
         }
         let fileIndex = storageIndex + 1   // older message (DESC order) = the file it captions
@@ -1003,7 +1030,7 @@ extension ChatPrivateController: UITableViewDelegate {
             return false
         }
         let file = messages[fileIndex]
-        return file.messageFile != nil && file.isOutgoing() == message.isOutgoing()
+        return file.messageFile != nil && isCaption(message, forFile: file)
     }
 
     func inferredFileUTI(for messageFile: OCTMessageFile) -> String? {
@@ -1539,6 +1566,15 @@ private extension ChatPrivateController {
     }
 
     func updateTitlePresence(for friend: OCTFriend) {
+        // KHANDAQ (#43): Telegram-style typing — surface it in the nav subtitle instead of a bottom
+        // bubble that overlapped the last message. Resolved here (not just in the typing callback) so
+        // any presence refresh while the peer is typing keeps showing "typing…".
+        if friend.isConnected && friend.isTyping {
+            titleView.presenceText = String(localized: "chat_is_typing_text")
+            titleView.presenceIsOnline = true
+            return
+        }
+
         let presence = FriendPresenceFormatter.presence(for: friend)
         titleView.presenceText = presence.text
         titleView.presenceIsOnline = presence.isOnline
@@ -1561,18 +1597,13 @@ private extension ChatPrivateController {
                 tableView.tableHeaderView = nil
             }
 
-            if friend.isTyping {
-                self.tableViewToChatInputConstraint.deactivate()
-                self.typingViewToChatInputConstraint.activate()
-                self.typingHeaderView.isHidden = false
-                self.typingHeaderView.startAnimation()
-            }
-            else {
-                self.tableViewToChatInputConstraint.activate()
-                self.typingViewToChatInputConstraint.deactivate()
-                self.typingHeaderView.isHidden = true
-                self.typingHeaderView.stopAnimation()
-            }
+            // KHANDAQ (#43): typing now shows in the nav subtitle (updateTitlePresence). Keep the table
+            // anchored to the input bar and the old bottom typing bubble permanently hidden.
+            self.tableViewToChatInputConstraint.activate()
+            self.typingViewToChatInputConstraint.deactivate()
+            self.typingHeaderView.isHidden = true
+            self.typingHeaderView.stopAnimation()
+            self.updateTitlePresence(for: friend)
 
             self.view.layoutIfNeeded()
         }
@@ -1686,9 +1717,9 @@ private extension ChatPrivateController {
         // Telegram-style merged caption (the text message sent right after this file).
         if messageSearchQuery.isEmpty {
             let idx = messages.indexOfObject(message)
-            model.caption = (idx >= 0 && idx < messages.count)
-                ? captionMessage(forFileAtStorageIndex: idx)?.messageText?.text
-                : nil
+            let captionMsg = (idx >= 0 && idx < messages.count) ? captionMessage(forFileAtStorageIndex: idx) : nil
+            // KHANDAQ (#52): strip reply/mention wire markup from a media caption (parity with groups).
+            model.caption = captionMsg.flatMap { MessageReplyHelper.plainBody(for: $0) }
         }
         else {
             model.caption = nil

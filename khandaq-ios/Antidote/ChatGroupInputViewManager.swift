@@ -343,7 +343,10 @@ private extension ChatGroupInputViewManager {
             return
         }
 
-        sendFileData(data, fileName: "photo.jpg", caption: caption)
+        // KHANDAQ (#47): unique per-send name. A fixed "photo.jpg" collided across sends (the temp
+        // write path, and any name-keyed bookkeeping), which let a later photo appear in an earlier
+        // photo's message. Videos already use a unique name and never swapped — mirror that.
+        sendFileData(data, fileName: "photo_\(UUID().uuidString.prefix(8)).jpg", caption: caption)
     }
 
     func sendMovie(imagePickerInfo: [String: Any]) {

@@ -31,7 +31,8 @@ typedef NSArray<OCTMessageAbstract *> *(^OCTNgcGroupHistSyncMessagesToSyncBlock)
 typedef BOOL (^OCTNgcGroupHistSyncMessageExistsBlock)(OCTChat *chat,
                                                       uint32_t messageId,
                                                       uint32_t peerId,
-                                                      NSString *text);
+                                                      NSString *text,
+                                                      NSTimeInterval dateInterval);
 typedef BOOL (^OCTNgcGroupHistSyncFileExistsBlock)(OCTChat *chat, NSString *msgIdHashHex);
 typedef OCTMessageAbstract *(^OCTNgcGroupHistSyncInsertSyncedMessageBlock)(OCTChat *chat,
                                                                            NSString *text,

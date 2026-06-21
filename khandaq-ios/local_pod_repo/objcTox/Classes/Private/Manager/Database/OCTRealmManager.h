@@ -177,6 +177,15 @@
                               peerId:(uint32_t)peerId
                                 text:(NSString *)text;
 
+// KHANDAQ (#42): persistent dedup that survives an app restart. History-sync re-delivers a message
+// with its ORIGINAL timestamp; matching chat + identical text + (near) the same dateInterval catches
+// a re-synced copy whose volatile messageId no longer matches the stored one. The tight window keeps
+// it from merging two genuinely distinct identical texts (those would need the very same second).
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                                text:(NSString *)text
+                    nearDateInterval:(NSTimeInterval)dateInterval
+                       windowSeconds:(NSTimeInterval)windowSeconds;
+
 - (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
                                                  type:(OCTToxMessageType)type
                                                  chat:(OCTChat *)chat

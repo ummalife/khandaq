@@ -164,7 +164,8 @@ extension GroupInfoController: UITableViewDataSource {
             case .invite:
                 return nil
             case .members:
-                let online = Int(submanagerGroups.peerCount(for: chat))
+                // KHANDAQ (#49): online from onlineGroupPeerCount so it matches the drawer + list row.
+                let online = Int(submanagerGroups.onlineGroupPeerCount(for: chat))
                 let total = displayMemberCount()
                 if total > online && online > 0 {
                     // KHANDAQ (#9): show total · online from toxcore's NGC-synced counts so every
@@ -835,7 +836,9 @@ private extension GroupInfoController {
     func displayMemberCount() -> Int {
         // KHANDAQ (#9): total real members = online (peer count, incl. self) + saved offline members,
         // both from toxcore's NGC-synced state — consistent across clients.
-        let fromTox = Int(submanagerGroups.peerCount(for: chat)) + Int(submanagerGroups.offlinePeerCount(for: chat))
+        // KHANDAQ (#49): no offline term — keep the total equal to peerCount / listed rows so the info
+        // header, the drawer and the chat-list row all agree.
+        let fromTox = Int(submanagerGroups.peerCount(for: chat))
         let fromRealm = peers.count
         return max(fromTox, fromRealm, chat.groupNumber >= 0 ? 1 : 0)
     }

@@ -148,7 +148,10 @@ extension ChatListTableManager: UITableViewDataSource {
         let chat = chatAtFilteredRow(indexPath.row)
 
         if chat.isGroup {
-            let nickname = chat.groupName ?? String(localized: "group_chat_default_title")
+            // KHANDAQ (#46): prefer the owner-changeable TOPIC (NGC group name is immutable after
+            // creation, so a "rename" changes the topic); fall back to the immutable name.
+            let nickname = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
+                ?? String(localized: "group_chat_default_title")
             let model = ChatListCellModel()
             model.avatar = avatarManager.avatarFromString(
                     nickname,
@@ -391,7 +394,9 @@ extension ChatListTableManager: UITableViewDelegate {
         let avatar: UIImage?
 
         if chat.isGroup {
-            title = chat.groupName ?? String(localized: "group_chat_default_title")
+            // KHANDAQ (#46): prefer the owner-changeable TOPIC (see groupTopic note above).
+            title = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
+                ?? String(localized: "group_chat_default_title")
             avatar = avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
         }
         else {

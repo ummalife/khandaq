@@ -14,6 +14,7 @@ class LoginGenericCreateController: LoginBaseController {
     fileprivate var containerView: IncompressibleView!
     fileprivate var containerViewTopConstraint: Constraint!
 
+    var logoImageView: UIImageView!
     var titleLabel: UILabel!
     var firstTextField: ExtendedTextField!
     var secondTextField: ExtendedTextField!
@@ -24,6 +25,7 @@ class LoginGenericCreateController: LoginBaseController {
 
         createGestureRecognizers()
         createContainerView()
+        createLogoImageView()
         createTitleLabel()
         createExtendedTextFields()
         createGoButton()
@@ -87,6 +89,13 @@ private extension LoginGenericCreateController {
         view.addSubview(containerView)
     }
 
+    func createLogoImageView() {
+        // KHANDAQ design (Figma): brand logo centered above the screen title.
+        logoImageView = UIImageView(image: UIImage(named: "login-logo"))
+        logoImageView.contentMode = .scaleAspectFit
+        containerView.addSubview(logoImageView)
+    }
+
     func createTitleLabel() {
         titleLabel = UILabel()
         // KHANDAQ design (Figma): screen title is primary-colour, bold and left-aligned (was a centered
@@ -126,8 +135,14 @@ private extension LoginGenericCreateController {
             $0.height.equalTo(view)
         }
 
-        titleLabel.snp.makeConstraints {
+        logoImageView.snp.makeConstraints {
             $0.top.equalTo(containerView).offset(PrivateConstants.VerticalOffset)
+            $0.centerX.equalTo(containerView)
+            $0.height.equalTo(56.0)
+        }
+
+        titleLabel.snp.makeConstraints {
+            $0.top.equalTo(logoImageView.snp.bottom).offset(PrivateConstants.VerticalOffset)
             $0.leading.trailing.equalTo(containerView)
         }
 

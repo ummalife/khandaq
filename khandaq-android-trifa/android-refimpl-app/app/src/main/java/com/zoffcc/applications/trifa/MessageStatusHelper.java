@@ -77,7 +77,9 @@ final class MessageStatusHelper
             return OutgoingStatus.SENT;
         }
 
-        if ((message.message_id_tox == null) || message.message_id_tox.isEmpty())
+        // KHANDAQ (#66): still sending until the native send assigned a real (non-pending) message id.
+        if ((message.message_id_tox == null) || message.message_id_tox.isEmpty()
+            || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(message.message_id_tox))
         {
             return OutgoingStatus.SENDING;
         }
@@ -87,16 +89,11 @@ final class MessageStatusHelper
             return OutgoingStatus.DELIVERED;
         }
 
-        if (MessageDeliveryRetryHelper.isGroupFailed(message))
-        {
-            return OutgoingStatus.FAILED;
-        }
-
-        if (isGroupDeliveryOverdue(message))
-        {
-            return OutgoingStatus.NOT_DELIVERED;
-        }
-
+        // KHANDAQ (#66): a public NGC group send has NO delivery receipt, so the old elapsed-wall-clock
+        // FAILED / NOT_DELIVERED branches turned a SENT bubble into a clock (and then a red clock) the
+        // moment its row was recycled and re-bound >10s later. Once a real message_id_tox exists the
+        // message is terminally SENT for display; the DB-driven MessageDeliveryWatchdog still re-announces
+        // genuinely-unconfirmed messages independently.
         return OutgoingStatus.SENT;
     }
 

@@ -179,7 +179,9 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
                     centerCrop().
                     optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
 
-            if (!previewAlreadyBuilt && message.storage_frame_work && (mediaPath != null))
+            // KHANDAQ (#67): always (re)issue the load so a recycled/cleared preview is repopulated
+            // (served from Glide memory cache on repeat = no flicker); only the spinner reset is gated.
+            if (message.storage_frame_work && (mediaPath != null))
             {
                 try
                 {
@@ -198,7 +200,7 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
                     e.printStackTrace();
                 }
             }
-            else if (!previewAlreadyBuilt && VFS_ENCRYPT && HelperFiletransfer.isIocipherVirtualPath(mediaPath))
+            else if (VFS_ENCRYPT && HelperFiletransfer.isIocipherVirtualPath(mediaPath))
             {
                 try
                 {
@@ -217,7 +219,7 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
                     e.printStackTrace();
                 }
             }
-            else if (!previewAlreadyBuilt && mediaPath != null)
+            else if (mediaPath != null)
             {
                 try
                 {

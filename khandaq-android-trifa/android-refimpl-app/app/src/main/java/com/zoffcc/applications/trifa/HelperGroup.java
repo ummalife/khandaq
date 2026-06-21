@@ -4721,6 +4721,21 @@ public class HelperGroup
             e.printStackTrace();
         }
 
+        // KHANDAQ (#68): drop duplicate incoming group messages BEFORE insert. NGC re-delivers a message
+        // (mesh relay + lossless retransmit), firing this LIVE callback many times for the SAME message;
+        // only the history-sync path had dedup, so the live path produced ~Nx copies. Match by the stable
+        // (group + sender pubkey + tox message id + text) within a recent window.
+        if (!is_private_message)
+        {
+            GroupMessage existing_dup = get_last_group_message_in_this_group_within_n_seconds_from_sender_pubkey(
+                    m.group_identifier, m.tox_group_peer_pubkey, m.sent_timestamp, m.message_id_tox, 60, m.text);
+            if (existing_dup != null)
+            {
+                HelperGeneric.logI(TAG, "group_message_cb: skip duplicate incoming group message msg_id=" + m.message_id_tox);
+                return;
+            }
+        }
+
         if (group_message_list_activity != null)
         {
             if (group_message_list_activity.get_current_group_id().equalsIgnoreCase(group_id.toLowerCase()))

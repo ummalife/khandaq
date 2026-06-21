@@ -136,6 +136,25 @@ public final class MediaSendPreviewHelper
             return;
         }
 
+        // KHANDAQ (#85): for a GROUP, enqueue ALL picked URIs as ONE batch so the sequential
+        // group-send worker (stageGroupBatch size>1 branch) serializes them — one file fully sent
+        // before the next starts. The previous per-URI enqueueGroupUri fired N immediate sends
+        // back-to-back, and send_group_file's cancelStaleOutgoingChunkedSends then killed every
+        // in-flight sibling, so only the LAST picked photo/video survived.
+        if (TARGET_GROUP.equals(target))
+        {
+            final List<Uri> groupUris = new ArrayList<>(uris.size());
+            for (Uri uri : uris)
+            {
+                if (uri != null)
+                {
+                    groupUris.add(uri);
+                }
+            }
+            OutgoingAttachmentQueue.enqueueGroupUris(context, groupUris, groupId, activityPeer);
+            return;
+        }
+
         for (Uri uri : uris)
         {
             if (uri == null)
@@ -147,14 +166,7 @@ public final class MediaSendPreviewHelper
             single.setData(uri);
             single.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-            if (TARGET_GROUP.equals(target))
-            {
-                OutgoingAttachmentQueue.enqueueGroupUri(context, uri, groupId, activityPeer);
-            }
-            else
-            {
-                MessageListActivity.add_attachment(context, single, single, friendnum, activityPeer);
-            }
+            MessageListActivity.add_attachment(context, single, single, friendnum, activityPeer);
         }
     }
 

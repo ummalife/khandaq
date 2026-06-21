@@ -2140,7 +2140,11 @@ public class HelperGroup
             {
                 if (!HelperFiletransfer.isGroupMessageMediaReady(gm, null))
                 {
-                    retry_group_incoming_file_download(gm);
+                    // KHANDAQ (#84): route through the 15s-cooldown'd scheduler instead of calling
+                    // retry directly. NGC peer presence flickers constantly, and an unguarded retry on
+                    // every sighting re-requested the in-flight download over and over. The scheduler
+                    // also re-checks sender-online before firing.
+                    schedule_auto_retry_group_file_download(gm);
                 }
             }
         }
@@ -2216,7 +2220,12 @@ public class HelperGroup
         {
             // Resumable: keep partial progress (prepareRetryReceive is non-destructive); never reset UI to 0.
             NgcGroupFileTransfer.prepareRetryReceive(message);
-            record_ngc_transfer_started(message.group_identifier, message.msg_id_hash);
+            // KHANDAQ (#84): do NOT call record_ngc_transfer_started here — it removes
+            // ngc_file_transfer_bytes_done (the map that drives the % bar), so every retry tick snapped
+            // a healthy 90% download back to 0% and re-streamed from chunk 0. On RESUME we only bump the
+            // last-progress timestamp (so the stall watchdog backs off) and re-issue the partial resend
+            // request; the assembled chunks and byte count are preserved.
+            touch_ngc_transfer_progress(message.group_identifier, message.msg_id_hash);
             NgcGroupFileTransfer.sendFileResendRequest(message);
             arm_ngc_incoming_file_timeout(message.group_identifier, message.msg_id_hash);
             post_group_file_progress_refresh(message.group_identifier, message.msg_id_hash);

@@ -162,6 +162,55 @@ enum ThemeChrome {
         }
     }
 
+    // KHANDAQ design (Figma): navigation-bar action buttons sit in a soft grey capsule (iOS 26
+    // Liquid Glass look) — a circle for icon buttons (e.g. "+") and a pill for text buttons (e.g.
+    // "Править"). Applied selectively per screen, NOT globally, so back buttons stay plain as in
+    // the design.
+    static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector) -> UIBarButtonItem {
+        let size: CGFloat = 32.0
+        let button = UIButton(type: .system)
+        button.backgroundColor = theme.colorForType(.TabSelection)
+        button.tintColor = theme.colorForType(.LinkText)
+        button.layer.cornerRadius = size / 2.0
+        button.layer.masksToBounds = true
+        button.setImage(image, for: .normal)
+        button.imageView?.contentMode = .scaleAspectFit
+        // Keep the glyph clear of the circle edge regardless of the source image's natural size.
+        button.imageEdgeInsets = UIEdgeInsets(top: 7.0, left: 7.0, bottom: 7.0, right: 7.0)
+        button.addTarget(target, action: action, for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.widthAnchor.constraint(equalToConstant: size).isActive = true
+        button.heightAnchor.constraint(equalToConstant: size).isActive = true
+        return UIBarButtonItem(customView: button)
+    }
+
+    static func makeCircleNavButton(theme: Theme, systemImage: String, fallback: UIImage?, target: Any?, action: Selector) -> UIBarButtonItem {
+        var image = fallback
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .semibold)
+            image = UIImage(systemName: systemImage, withConfiguration: config) ?? fallback
+        }
+        return makeCircleNavButton(theme: theme, image: image, target: target, action: action)
+    }
+
+    /// Resizable grey capsule used as a bar-button background image — lets a SYSTEM bar button (e.g.
+    /// the auto-localized Edit/Done editButtonItem) keep its behaviour while gaining the design's pill.
+    static func navCapsuleBackgroundImage(theme: Theme) -> UIImage {
+        let height: CGFloat = 30.0
+        let cap = height / 2.0
+        let size = CGSize(width: cap * 2.0 + 1.0, height: height)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { _ in
+            let rect = CGRect(origin: .zero, size: size)
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: cap)
+            theme.colorForType(.TabSelection).setFill()
+            path.fill()
+        }
+        return image
+            .resizableImage(withCapInsets: UIEdgeInsets(top: cap, left: cap, bottom: cap, right: cap))
+            .withRenderingMode(.alwaysOriginal)
+    }
+
     static func applyCellBackground(_ theme: Theme, to cell: UITableViewCell, grouped: Bool = false) {
         let color = grouped
             ? theme.colorForType(.SettingsBackground)

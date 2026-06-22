@@ -56,17 +56,17 @@ class ChatListController: UIViewController {
         updateViewsVisibility()
         refreshFilterBadges()
 
-        let addButton = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(ChatListController.addButtonPressed))
+        // KHANDAQ design (Figma): icon buttons sit in grey circles; the Edit/Done button in a grey pill.
+        let addButton = ThemeChrome.makeCircleNavButton(
+                theme: theme, systemImage: "plus", fallback: nil,
+                target: self, action: #selector(ChatListController.addButtonPressed))
         addButton.accessibilityLabel = String(localized: "group_add_button")
 
         let themeButton: UIBarButtonItem
         if let image = themeToggleImage() {
-            themeButton = UIBarButtonItem(
-                image: image,
-                style: .plain,
-                target: self,
-                action: #selector(ChatListController.themeTogglePressed)
-            )
+            themeButton = ThemeChrome.makeCircleNavButton(
+                theme: theme, image: image,
+                target: self, action: #selector(ChatListController.themeTogglePressed))
         }
         else {
             themeButton = UIBarButtonItem(
@@ -78,6 +78,10 @@ class ChatListController: UIViewController {
         }
         themeButton.accessibilityLabel = String(localized: "theme_toggle_accessibility")
         navigationItem.rightBarButtonItems = [addButton, themeButton]
+
+        let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
+        editButtonItem.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
+        editButtonItem.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
 
         setupGlobalSearch()
     }

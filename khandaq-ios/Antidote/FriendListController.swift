@@ -236,10 +236,18 @@ extension FriendListController : UITextViewDelegate {
 
 private extension FriendListController {
     func addNavigationButtons() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .add,
+        // KHANDAQ design (Figma): "+" sits in a grey circle; the Edit/Done button gets a grey pill
+        // (keeping the system editButtonItem for its localization + toggle behaviour).
+        navigationItem.rightBarButtonItem = ThemeChrome.makeCircleNavButton(
+                theme: theme,
+                systemImage: "plus",
+                fallback: nil,
                 target: self,
                 action: #selector(FriendListController.addFriendButtonPressed))
+
+        let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
+        editButtonItem.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
+        editButtonItem.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
     }
 
     func updateViewsVisibility() {

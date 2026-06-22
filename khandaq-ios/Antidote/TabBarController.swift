@@ -107,7 +107,9 @@ private extension TabBarController {
     // KHANDAQ design (Figma): the active tab sits in a fully-rounded GREY pill (Fills-Vibrant/Tertiary
     // #EDEDED light), enclosing icon + label — only the icon/label themselves turn green.
     func makeSelectionPillImage(theme: Theme) -> UIImage {
-        let size = CGSize(width: 88.0, height: 56.0)
+        // Fixed natural-size pill drawn centered behind the active tab. NOT resizable — a resizable
+        // indicator gets stretched by UIKit and its rounded ends bleed into the neighbouring tabs.
+        let size = CGSize(width: 78.0, height: 46.0)
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { _ in
             let rect = CGRect(origin: .zero, size: size)
@@ -115,7 +117,7 @@ private extension TabBarController {
             theme.colorForType(.TabSelection).setFill()
             path.fill()
         }
-        return image.resizableImage(withCapInsets: .zero).withRenderingMode(.alwaysOriginal)
+        return image.withRenderingMode(.alwaysOriginal)
     }
 
     func configureNativeTabBarAppearance(theme: Theme) {

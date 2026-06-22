@@ -28,6 +28,8 @@ colors:
   text_secondary: "7C7C7C"
   text_tertiary: "A4A4A4"
   stroke_light: E6E6E6
+  bubble_outgoing: BFE3A3
+  chat_bg: E9F1E4
 
 values:
   login-background: white
@@ -62,10 +64,11 @@ values:
   chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: lightgrayblue
   chat-input-background: lightgrayblue
-  chat-incoming-bubble: lightgrayblue
-  chat-outgoing-bubble: purple
-  chat-outgoing-unread-bubble: rust
-  chat-outgoing-sentpush-bubble: pushyellow
+  chat-background: chat_bg
+  chat-incoming-bubble: white
+  chat-outgoing-bubble: bubble_outgoing
+  chat-outgoing-unread-bubble: bubble_outgoing
+  chat-outgoing-sentpush-bubble: bubble_outgoing
   chat-information-text: darkgray2
   tab-badge-background: palered
   tab-badge-text: white

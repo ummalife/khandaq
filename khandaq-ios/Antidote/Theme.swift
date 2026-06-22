@@ -48,6 +48,7 @@ class Theme {
         case ChatListCellMessage = "chat-list-cell-message"
         case ChatListCellUnreadBackground = "chat-list-cell-unread-background"
         case ChatInputBackground = "chat-input-background"
+        case ChatBackground = "chat-background"
         case ChatIncomingBubble = "chat-incoming-bubble"
         case ChatOutgoingBubble = "chat-outgoing-bubble"
         case ChatOutgoingUnreadBubble = "chat-outgoing-unread-bubble"
@@ -107,6 +108,7 @@ class Theme {
             ChatListCellMessage,
             ChatListCellUnreadBackground,
             ChatInputBackground,
+            ChatBackground,
             ChatIncomingBubble,
             ChatOutgoingBubble,
             ChatOutgoingUnreadBubble,

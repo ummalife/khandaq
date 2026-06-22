@@ -25,16 +25,18 @@ class ChatOutgoingTextCell: ChatBaseTextCell {
             }
         }
 
-        bubbleView.textColor = theme.colorForType(.ConnectingText)
+        // KHANDAQ design (Figma): outgoing bubbles are pale green with DARK text (was white-on-purple).
+        bubbleView.textColor = theme.colorForType(.NormalText)
         bubbleView.backgroundColor = bubbleNormalBackground
         bubbleView.tintColor = theme.colorForType(.NormalText)
         bubbleView.font = UIFont.preferredFont(forTextStyle: .body)
 
         statusImageView.image = UIImage(named: "chat-delivered-checkmark")?.withRenderingMode(.alwaysTemplate)
         if textModel.delivered {
-            statusImageView.tintColor = UIColor(red: 0.05, green: 0.65, blue: 0.91, alpha: 1.0)
+            // KHANDAQ design: green delivered checkmark (was a hard-coded blue).
+            statusImageView.tintColor = theme.colorForType(.LinkText)
         } else {
-            statusImageView.tintColor = UIColor(white: 0.58, alpha: 1.0)
+            statusImageView.tintColor = theme.colorForType(.ChatInformationText)
         }
         statusImageView.isHidden = false
     }

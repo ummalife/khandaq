@@ -113,11 +113,11 @@ class ChatGroupController: PortraitChatController {
     }
 
     override func loadView() {
-        loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
+        loadViewWithBackgroundColor(theme.colorForType(.ChatBackground))
 
         tableView = UITableView()
         tableView.estimatedRowHeight = 44.0
-        tableView.backgroundColor = theme.colorForType(.NormalBackground)
+        tableView.backgroundColor = theme.colorForType(.ChatBackground)
         tableView.separatorStyle = .none
         // KHANDAQ (#37): Telegram-style — drag the message list toward the keyboard to dismiss it
         // (works on the y-flipped table; the interactive dismiss tracks the finger in window coords).

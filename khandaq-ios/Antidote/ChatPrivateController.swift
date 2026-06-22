@@ -170,7 +170,8 @@ class ChatPrivateController: PortraitChatController {
     }
 
     override func loadView() {
-        loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
+        // KHANDAQ design (Figma): chat canvas uses the dedicated chat background, not NormalBackground.
+        loadViewWithBackgroundColor(theme.colorForType(.ChatBackground))
 
         createTableView()
         createTableHeaderViews()
@@ -1284,7 +1285,7 @@ private extension ChatPrivateController {
         tableView.scrollsToTop = false
         tableView.allowsSelection = false
         tableView.estimatedRowHeight = 44.0
-        tableView.backgroundColor = theme.colorForType(.NormalBackground)
+        tableView.backgroundColor = theme.colorForType(.ChatBackground)
         tableView.allowsMultipleSelectionDuringEditing = true
         tableView.separatorStyle = .none
         // KHANDAQ (#37): Telegram-style — drag the message list toward the keyboard to dismiss it

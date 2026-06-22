@@ -33,6 +33,8 @@ colors:
   accent_pressed: "027A63"
   text_secondary: "9A9A9F"
   text_tertiary: "7C7C82"
+  bubble_outgoing: "1E3D2E"
+  chat_bg: "111613"
 
 values:
   login-background: dark_bg
@@ -65,10 +67,11 @@ values:
   chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: dark_bg_tertiary
   chat-input-background: dark_bg_elevated
-  chat-incoming-bubble: dark_bg_tertiary
-  chat-outgoing-bubble: purple
-  chat-outgoing-unread-bubble: rust
-  chat-outgoing-sentpush-bubble: pushyellow
+  chat-background: chat_bg
+  chat-incoming-bubble: dark_bg_elevated
+  chat-outgoing-bubble: bubble_outgoing
+  chat-outgoing-unread-bubble: bubble_outgoing
+  chat-outgoing-sentpush-bubble: bubble_outgoing
   chat-information-text: muted_text
   tab-badge-background: palered
   tab-badge-text: white

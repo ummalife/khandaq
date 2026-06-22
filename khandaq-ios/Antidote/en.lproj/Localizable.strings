@@ -35,6 +35,7 @@
 "log_in" = "Log In";
 /* Login screen text */
 "create_profile" = "Create profile";
+"create_account_screen_title" = "Create profile";
 /* Login screen text */
 "import_to_khandaq" = "Import to Khandaq";
 /* Login screen text */

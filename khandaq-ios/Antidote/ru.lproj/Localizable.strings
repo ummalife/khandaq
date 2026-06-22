@@ -39,18 +39,19 @@
 "log_in" = "Войти";
 /* Login screen text */
 "create_profile" = "Создать профиль";
+"create_account_screen_title" = "Создание профиля";
 /* Login screen text */
 "import_to_khandaq" = "Импорт профиля";
 /* Login screen text */
-"create_account_username_title" = "Как показывать контакты?";
+"create_account_username_title" = "Имя";
 /* Login screen text */
-"create_account_username_placeholder" = "Имя";
+"create_account_username_placeholder" = "Введите ваше имя";
 /* Login screen text */
-"create_account_profile_title" = "Название профиля?";
+"create_account_profile_title" = "Название профиля";
 /* Login screen text */
-"create_account_profile_placeholder" = "Профиль";
+"create_account_profile_placeholder" = "Укажите название профиля";
 /* Login screen text */
-"create_account_profile_hint" = "напр. Home, iPhone";
+"create_account_profile_hint" = "Например: Home, Phone";
 /* Login screen text */
 "set_password_title" = "Установить пароль";
 /* Login screen text */

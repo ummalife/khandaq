@@ -115,9 +115,15 @@ class ChatGroupController: PortraitChatController {
     override func loadView() {
         loadViewWithBackgroundColor(theme.colorForType(.ChatBackground))
 
+        // KHANDAQ design (Figma): doodle wallpaper behind the (transparent) message cells.
+        let chatBackgroundView = ThemeChrome.makeChatDoodleBackgroundView()
+        view.addSubview(chatBackgroundView)
+        chatBackgroundView.snp.makeConstraints { $0.edges.equalTo(view) }
+
         tableView = UITableView()
         tableView.estimatedRowHeight = 44.0
-        tableView.backgroundColor = theme.colorForType(.ChatBackground)
+        // Transparent so the doodle background shows through.
+        tableView.backgroundColor = .clear
         tableView.separatorStyle = .none
         // KHANDAQ (#37): Telegram-style — drag the message list toward the keyboard to dismiss it
         // (works on the y-flipped table; the interactive dismiss tracks the finger in window coords).
@@ -742,7 +748,9 @@ extension ChatGroupController: UITableViewDataSource {
 
         if message.groupSystemMessage {
             let cell = tableView.dequeueReusableCell(withIdentifier: "groupSystemCell", for: indexPath)
-            cell.backgroundColor = theme.colorForType(.NormalBackground)
+            // Transparent so the doodle chat background shows through (matches the message cells).
+            cell.backgroundColor = .clear
+            cell.contentView.backgroundColor = .clear
             cell.selectionStyle = .none
             cell.textLabel?.numberOfLines = 0
             cell.textLabel?.font = UIFont.italicSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize)

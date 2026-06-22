@@ -83,6 +83,8 @@ class ChatPrivateController: PortraitChatController {
     // KHANDAQ design (Figma): end-to-end encryption notice card shown at the top of an empty chat.
     fileprivate var encryptionBanner: UIView!
     fileprivate var newMessagesView: UIView!
+    // KHANDAQ design (Figma): subtle line-art doodle pattern behind the (transparent) message cells.
+    fileprivate var chatBackgroundView: UIImageView!
     // KHANDAQ design (Figma): Telegram-style floating day chip ("Сегодня"/"Вчера"/date) that surfaces
     // while scrolling and reflects the date of the topmost visible message, then fades out.
     fileprivate var floatingDateView: UIView!
@@ -188,6 +190,7 @@ class ChatPrivateController: PortraitChatController {
         // KHANDAQ design (Figma): chat canvas uses the dedicated chat background, not NormalBackground.
         loadViewWithBackgroundColor(theme.colorForType(.ChatBackground))
 
+        createChatBackgroundView()
         createTableView()
         createTableHeaderViews()
         createNewMessagesView()
@@ -1373,7 +1376,8 @@ private extension ChatPrivateController {
         tableView.scrollsToTop = false
         tableView.allowsSelection = false
         tableView.estimatedRowHeight = 44.0
-        tableView.backgroundColor = theme.colorForType(.ChatBackground)
+        // Transparent so the doodle background view (added behind it) shows through.
+        tableView.backgroundColor = .clear
         tableView.allowsMultipleSelectionDuringEditing = true
         tableView.separatorStyle = .none
         // KHANDAQ (#37): Telegram-style — drag the message list toward the keyboard to dismiss it
@@ -1439,6 +1443,16 @@ private extension ChatPrivateController {
 
         button.snp.makeConstraints {
             $0.edges.equalTo(newMessagesView)
+        }
+    }
+
+    func createChatBackgroundView() {
+        // Doodle wallpaper drawn behind the y-flipped table. Added to the controller's view (NOT the
+        // table) so the doodles aren't mirrored, and the transparent cells let it show through.
+        chatBackgroundView = ThemeChrome.makeChatDoodleBackgroundView()
+        view.addSubview(chatBackgroundView)
+        chatBackgroundView.snp.makeConstraints {
+            $0.edges.equalTo(view)
         }
     }
 

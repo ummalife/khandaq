@@ -211,6 +211,19 @@ enum ThemeChrome {
             .withRenderingMode(.alwaysOriginal)
     }
 
+    // KHANDAQ design (Figma): subtle line-art doodle wallpaper behind the (transparent) chat cells.
+    // Rendered as a template image tinted per theme so the doodles read as a soft tone on the chat
+    // background. Caller adds it behind the table and pins its edges.
+    static func makeChatDoodleBackgroundView() -> UIImageView {
+        let imageView = UIImageView(image: UIImage(named: "chat-doodle")?.withRenderingMode(.alwaysTemplate))
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.tintColor = ThemeAppearance.isDarkMode
+            ? UIColor(red: 0.20, green: 0.27, blue: 0.23, alpha: 1.0)   // subtle lighter green on dark bg
+            : UIColor(red: 0.66, green: 0.77, blue: 0.70, alpha: 1.0)   // subtle sage on pale-green bg
+        return imageView
+    }
+
     static func applyCellBackground(_ theme: Theme, to cell: UITableViewCell, grouped: Bool = false) {
         let color = grouped
             ? theme.colorForType(.SettingsBackground)

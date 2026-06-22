@@ -29,11 +29,12 @@ class AddFriendController: UIViewController {
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate let ownToxAddress: String
 
+    fileprivate var myIdLabel: UILabel!
     fileprivate var idTextField: UITextField!
+    fileprivate var orLabel: UILabel!
 
     fileprivate var qrCodeButton: UIButton!
     fileprivate var qrGalleryButton: UIButton!
-    fileprivate var helpLabel: UILabel!
 
     fileprivate var cachedMessage: String?
 
@@ -271,14 +272,26 @@ extension AddFriendController: UITextFieldDelegate {
 
 private extension AddFriendController {
     func addNavigationButtons() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let send = UIBarButtonItem(
                 title: String(localized: "add_contact_send"),
                 style: .done,
                 target: self,
                 action: #selector(AddFriendController.sendButtonPressed))
+        // KHANDAQ design (Figma): the action button sits in a grey pill.
+        let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
+        send.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
+        send.setBackgroundImage(capsule, for: .disabled, barMetrics: .default)
+        navigationItem.rightBarButtonItem = send
     }
 
     func createViews() {
+        // KHANDAQ design (Figma): a "MyID пользователя" label above the field.
+        myIdLabel = UILabel()
+        myIdLabel.text = String(localized: "add_contact_myid_label")
+        myIdLabel.font = UIFont.systemFont(ofSize: 13.0)
+        myIdLabel.textColor = theme.colorForType(.FriendCellStatus)
+        view.addSubview(myIdLabel)
+
         // UITextField avoids UITextView+Placeholder crashes on iOS 17/26 when deleting pasted Tox IDs.
         idTextField = UITextField()
         idTextField.placeholder = String(localized: "add_contact_tox_id_placeholder")
@@ -306,60 +319,71 @@ private extension AddFriendController {
         idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
         view.addSubview(idTextField)
 
-        // KHANDAQ (#13): match the Android layout — a bordered "scan QR" button, a "scan QR from
-        // gallery" button, then a help line. Scanning from the camera already existed; gallery is new.
-        qrCodeButton = makeBorderedButton(title: String(localized: "add_contact_use_qr"),
-                                          action: #selector(AddFriendController.qrCodeButtonPressed))
-        qrGalleryButton = makeBorderedButton(title: String(localized: "add_contact_use_qr_gallery"),
-                                             action: #selector(AddFriendController.qrGalleryButtonPressed))
+        // KHANDAQ design (Figma): an "или" divider, then a filled grey "Добавить по QR-коду" row with
+        // a QR glyph. The gallery-scan row is kept (extra feature) in the same style.
+        orLabel = UILabel()
+        orLabel.text = String(localized: "add_contact_or_label")
+        orLabel.font = UIFont.systemFont(ofSize: 13.0)
+        orLabel.textColor = theme.colorForType(.FriendCellStatus)
+        orLabel.textAlignment = .center
+        view.addSubview(orLabel)
 
-        helpLabel = UILabel()
-        helpLabel.text = String(localized: "add_contact_help_text")
-        helpLabel.numberOfLines = 0
-        helpLabel.font = UIFont.systemFont(ofSize: 14)
-        helpLabel.textColor = theme.colorForType(.NormalText)
-        helpLabel.backgroundColor = .clear
-        view.addSubview(helpLabel)
+        qrCodeButton = makeQrRow(title: String(localized: "add_contact_use_qr"),
+                                 systemImage: "qrcode",
+                                 action: #selector(AddFriendController.qrCodeButtonPressed))
+        qrGalleryButton = makeQrRow(title: String(localized: "add_contact_use_qr_gallery"),
+                                    systemImage: "photo.on.rectangle",
+                                    action: #selector(AddFriendController.qrGalleryButtonPressed))
     }
 
-    func makeBorderedButton(title: String, action: Selector) -> UIButton {
+    func makeQrRow(title: String, systemImage: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
-        button.setTitle(title, for: UIControlState())
-        button.titleLabel?.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
+        button.setTitle("  " + title, for: UIControlState())
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16.0, weight: .medium)
         button.setTitleColor(theme.colorForType(.NormalText), for: UIControlState())
-        button.titleLabel?.numberOfLines = 0
-        button.titleLabel?.textAlignment = .center
-        button.layer.cornerRadius = 8.0
-        button.layer.borderWidth = 0.5
-        button.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
-        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        button.tintColor = theme.colorForType(.NormalText)
+        button.contentHorizontalAlignment = .left
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)
+            button.setImage(UIImage(systemName: systemImage, withConfiguration: config), for: .normal)
+        }
+        // KHANDAQ design (Figma): filled grey rounded row (not a bordered button).
+        button.backgroundColor = theme.colorForType(.ChatInputBackground)
+        button.layer.cornerRadius = 12.0
+        button.layer.masksToBounds = true
+        button.contentEdgeInsets = UIEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
         button.addTarget(self, action: action, for: .touchUpInside)
         view.addSubview(button)
         return button
     }
 
     func installConstraints() {
-        idTextField.snp.makeConstraints {
-            $0.top.equalTo(view).offset(Constants.TextViewTopOffset + 8)
+        myIdLabel.snp.makeConstraints {
+            $0.top.equalTo(view).offset(16)
             $0.leading.equalTo(view).offset(Constants.TextViewXOffset + 11)
             $0.trailing.equalTo(view).offset(-(Constants.TextViewXOffset + 11))
+        }
+
+        idTextField.snp.makeConstraints {
+            $0.top.equalTo(myIdLabel.snp.bottom).offset(8)
+            $0.leading.equalTo(myIdLabel)
+            $0.trailing.equalTo(myIdLabel)
             $0.height.equalTo(52)
         }
 
+        orLabel.snp.makeConstraints {
+            $0.top.equalTo(idTextField.snp.bottom).offset(12)
+            $0.leading.trailing.equalTo(idTextField)
+        }
+
         qrCodeButton.snp.makeConstraints {
-            $0.top.equalTo(idTextField.snp.bottom).offset(16)
+            $0.top.equalTo(orLabel.snp.bottom).offset(12)
             $0.leading.equalTo(idTextField)
             $0.trailing.equalTo(idTextField)
         }
 
         qrGalleryButton.snp.makeConstraints {
             $0.top.equalTo(qrCodeButton.snp.bottom).offset(12)
-            $0.leading.equalTo(idTextField)
-            $0.trailing.equalTo(idTextField)
-        }
-
-        helpLabel.snp.makeConstraints {
-            $0.top.equalTo(qrGalleryButton.snp.bottom).offset(16)
             $0.leading.equalTo(idTextField)
             $0.trailing.equalTo(idTextField)
         }

@@ -161,12 +161,13 @@
 /* Add contat button */
 "add_contact_send" = "Send";
 /* Add contat placeholder text */
-"add_contact_tox_id_placeholder" = "Paste ID";
+"add_contact_tox_id_placeholder" = "Enter MyID";
+"add_contact_myid_label" = "User's MyID";
 /* Add contat placeholder text */
 "add_contact_or_label" = "or";
 /* Add contat button */
-"add_contact_use_qr" = "Scan QR code";
-"add_contact_use_qr_gallery" = "Scan QR code from gallery";
+"add_contact_use_qr" = "Add by QR code";
+"add_contact_use_qr_gallery" = "QR code from gallery";
 "add_contact_help_text" = "Paste your friend's ID in the field above, or tap a QR-code button to scan their code with the camera.";
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Message";

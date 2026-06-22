@@ -806,9 +806,19 @@ private extension ActiveSessionCoordinator {
             UIImage(named: name)?.withRenderingMode(.alwaysTemplate)
         }
 
+        // KHANDAQ design (Figma): tab icons are clean SF-Symbol outlines — a person-in-circle for
+        // Contacts, twin bubbles for Chats, a gear for Settings. Fall back to the bundled assets on
+        // iOS < 13. (Profile keeps the live user avatar via makeProfileTabBarImage.)
+        func tabImage(systemName: String, fallback: String) -> UIImage? {
+            if #available(iOS 13.0, *), let symbol = UIImage(systemName: systemName) {
+                return symbol
+            }
+            return templateImage(fallback)
+        }
+
         let friendsItem = UITabBarItem(
                 title: String(localized: "contacts_title"),
-                image: templateImage("tab-bar-friends"),
+                image: tabImage(systemName: "person.crop.circle", fallback: "tab-bar-friends"),
                 tag: IphoneObjects.TabCoordinator.friends.rawValue)
         friendsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
         configureCompactTabBarItem(friendsItem, accessibilityTitle: String(localized: "contacts_title"))
@@ -816,7 +826,7 @@ private extension ActiveSessionCoordinator {
 
         let chatsItem = UITabBarItem(
                 title: String(localized: "chats_title"),
-                image: templateImage("tab-bar-chats"),
+                image: tabImage(systemName: "bubble.left.and.bubble.right", fallback: "tab-bar-chats"),
                 tag: IphoneObjects.TabCoordinator.chats.rawValue)
         chatsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
         configureCompactTabBarItem(chatsItem, accessibilityTitle: String(localized: "chats_title"))
@@ -824,7 +834,7 @@ private extension ActiveSessionCoordinator {
 
         let settingsItem = UITabBarItem(
                 title: String(localized: "settings_title"),
-                image: templateImage("tab-bar-settings"),
+                image: tabImage(systemName: "gearshape", fallback: "tab-bar-settings"),
                 tag: IphoneObjects.TabCoordinator.settings.rawValue)
         configureCompactTabBarItem(settingsItem, accessibilityTitle: String(localized: "settings_title"))
         controllers[IphoneObjects.TabCoordinator.settings.rawValue].tabBarItem = settingsItem

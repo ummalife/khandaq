@@ -25,6 +25,8 @@ class FriendListController: UIViewController {
     fileprivate weak var submanagerUser: OCTSubmanagerUser!
 
     fileprivate var placeholderView: UITextView!
+    // KHANDAQ design (Figma): explicit MyID actions in the empty contacts state.
+    fileprivate var emptyActionsStack: UIStackView!
     fileprivate var tableView: UITableView!
 
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects, submanagerFriends: OCTSubmanagerFriends, submanagerChats: OCTSubmanagerChats, submanagerUser: OCTSubmanagerUser) {
@@ -252,6 +254,7 @@ private extension FriendListController {
 
         navigationItem.leftBarButtonItem = isEmpty ? nil : editButtonItem
         placeholderView.isHidden = !isEmpty
+        emptyActionsStack?.isHidden = !isEmpty
     }
 
     func createTableView() {
@@ -288,6 +291,36 @@ private extension FriendListController {
         placeholderView.backgroundColor = theme.colorForType(.NormalBackground)
         placeholderView.linkTextAttributes = [NSAttributedStringKey.foregroundColor.rawValue : theme.colorForType(.LinkText)]
         view.addSubview(placeholderView)
+
+        let copyButton = makeEmptyActionButton(title: String(localized: "contacts_copy_myid"),
+                                               action: #selector(emptyCopyMyIdPressed))
+        let qrButton = makeEmptyActionButton(title: String(localized: "show_qr_code"),
+                                             action: #selector(emptyShowQRPressed))
+        emptyActionsStack = UIStackView(arrangedSubviews: [copyButton, qrButton])
+        emptyActionsStack.axis = .vertical
+        emptyActionsStack.spacing = 12.0
+        emptyActionsStack.distribution = .fillEqually
+        view.addSubview(emptyActionsStack)
+    }
+
+    private func makeEmptyActionButton(title: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.setTitleColor(theme.colorForType(.LinkText), for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16.0, weight: .medium)
+        button.backgroundColor = theme.colorForType(.ChatInputBackground)
+        button.layer.cornerRadius = 14.0
+        button.addTarget(self, action: action, for: .touchUpInside)
+        button.snp.makeConstraints { $0.height.equalTo(48.0) }
+        return button
+    }
+
+    @objc private func emptyCopyMyIdPressed() {
+        UIPasteboard.general.string = submanagerUser.userAddress
+    }
+
+    @objc private func emptyShowQRPressed() {
+        delegate?.friendListController(self, showQRCodeWithText: submanagerUser.userAddress)
     }
 
     func installConstraints() {
@@ -296,8 +329,14 @@ private extension FriendListController {
         }
 
         placeholderView.snp.makeConstraints {
-            $0.center.equalTo(view)
+            $0.centerX.equalTo(view)
+            $0.centerY.equalTo(view).offset(-48.0)
             $0.size.equalTo(placeholderView.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)))
+        }
+
+        emptyActionsStack.snp.makeConstraints {
+            $0.top.equalTo(placeholderView.snp.bottom).offset(24.0)
+            $0.leading.trailing.equalTo(view).inset(40.0)
         }
     }
 

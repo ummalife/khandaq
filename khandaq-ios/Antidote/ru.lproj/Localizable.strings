@@ -30,6 +30,7 @@
 "onboarding_decentralized_subtitle" = "Ваши сообщения не хранятся на серверах. Наслаждайтесь полной децентрализацией";
 "onboarding_next" = "Далее";
 "onboarding_create_account" = "Создать аккаунт";
+"contacts_copy_myid" = "Копировать MyID";
 /* Password field */
 "password" = "Пароль";
 /* Login button */

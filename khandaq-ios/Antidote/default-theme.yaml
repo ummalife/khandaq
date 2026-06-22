@@ -34,7 +34,8 @@ colors:
 
 values:
   login-background: white
-  login-gradient: lightblue
+  # KHANDAQ design (Figma): onboarding has a plain white backdrop (no blue bottom fade).
+  login-gradient: white
   login-tox-logo: accent
   login-button-text: white
   login-button-background: accent
@@ -64,7 +65,8 @@ values:
   friend-cell-status: text_secondary
   chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: lightgrayblue
-  chat-input-background: lightgrayblue
+  # KHANDAQ design (Figma): neutral grey input/field fill (was a bluish tint).
+  chat-input-background: fill_tertiary
   chat-background: chat_bg
   chat-incoming-bubble: white
   chat-outgoing-bubble: bubble_outgoing

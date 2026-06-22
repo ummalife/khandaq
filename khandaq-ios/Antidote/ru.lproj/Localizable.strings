@@ -117,7 +117,7 @@
 /* Tab name and screen name */
 "chats_title" = "Чаты";
 "chat_filter_groups" = "Группы";
-"chat_filter_favorites" = "Избранные";
+"chat_filter_favorites" = "Избранное";
 "chat_filter_add_favorite" = "В избранное";
 "chat_filter_remove_favorite" = "Убрать из избранного";
 "theme_toggle_accessibility" = "Переключить тёмную тему";
@@ -125,7 +125,7 @@
 "voice_recording_send" = "Отправить голосовое сообщение";
 "voice_recording_slide_to_cancel" = "‹ сдвиньте для отмены";
 "voice_recording_release_to_cancel" = "Отпустите для отмены";
-"global_search_placeholder" = "Поиск по всем чатам и сообщениям";
+"global_search_placeholder" = "Поиск";
 "global_search_section_chats" = "Чаты и группы";
 "global_search_section_messages" = "Сообщения";
 "global_search_no_results" = "Ничего не найдено";
@@ -231,11 +231,11 @@
 /* Status message */
 "status_offline" = "Не в сети";
 /* Status message */
-"status_online" = "В сети";
-"status_last_seen_just_now" = "был(а) только что";
-"status_last_seen_minutes_ago" = "был(а) %d мин. назад";
-"status_last_seen_hours_ago" = "был(а) %d ч. назад";
-"status_last_seen_long_ago" = "был(а) давно";
+"status_online" = "онлайн";
+"status_last_seen_just_now" = "был(-а) только что";
+"status_last_seen_minutes_ago" = "был(-а) %d мин. назад";
+"status_last_seen_hours_ago" = "был(-а) %d ч. назад";
+"status_last_seen_long_ago" = "был(-а) давно";
 /* Status message */
 "status_away" = "Отсутствую";
 /* Status message */
@@ -670,9 +670,9 @@
 "group_delete_system_msgs_title" = "Удалить системные сообщения";
 "group_delete_system_msgs_message" = "Удалить все системные сообщения (вход/выход) в этой группе навсегда?";
 "group_delete_system_msgs_confirm" = "Удалить";
-"group_info_member_online" = "В сети";
-"group_member_last_seen_just_now" = "Был(а) только что";
-"group_member_last_seen_minutes_format" = "Был(а) %d мин назад";
+"group_info_member_online" = "онлайн";
+"group_member_last_seen_just_now" = "Был(-а) только что";
+"group_member_last_seen_minutes_format" = "Был(-а) %d мин назад";
 "group_member_last_seen_hours_format" = "Был(а) %d ч назад";
 "group_member_last_seen_long_ago" = "Давно не был(а) в сети";
 "group_system_peer_joined" = "%@ вошёл в группу";

@@ -85,14 +85,15 @@ final class AttachmentMenuController: UIViewController {
     private func makeRow(_ item: Item, index: Int) -> UIButton {
         let row = UIButton(type: .system)
         row.tag = index
-        row.tintColor = theme.colorForType(.LinkText)
+        // KHANDAQ design (Figma): attachment-menu glyphs are neutral dark, not accent green.
+        row.tintColor = theme.colorForType(.NormalText)
         row.contentHorizontalAlignment = .left
         row.snp.makeConstraints { $0.height.equalTo(52.0) }
 
         let iconView = UIImageView()
         iconView.isUserInteractionEnabled = false
         iconView.contentMode = .scaleAspectFit
-        iconView.tintColor = theme.colorForType(.LinkText)
+        iconView.tintColor = theme.colorForType(.NormalText)
         if #available(iOS 13.0, *) {
             let config = UIImage.SymbolConfiguration(pointSize: 20.0, weight: .regular)
             iconView.image = UIImage(systemName: item.systemImage, withConfiguration: config)

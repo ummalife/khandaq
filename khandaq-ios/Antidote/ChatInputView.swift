@@ -351,7 +351,8 @@ private extension ChatInputView {
         sendButton = UIButton(type: .system)
         if #available(iOS 13.0, *) {
             let config = UIImage.SymbolConfiguration(pointSize: 30.0, weight: .regular)
-            sendButton.setImage(UIImage(systemName: "arrow.up.circle.fill", withConfiguration: config), for: .normal)
+            // KHANDAQ design (Figma): Telegram-style paper-plane on a green circle.
+            sendButton.setImage(UIImage(systemName: "paperplane.circle.fill", withConfiguration: config), for: .normal)
         } else {
             sendButton.setTitle(String(localized: "chat_send_button"), for: UIControlState())
             sendButton.titleLabel?.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)

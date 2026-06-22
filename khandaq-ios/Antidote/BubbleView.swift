@@ -176,7 +176,8 @@ class BubbleView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        layer.cornerRadius = 12.0
+        // KHANDAQ design (Figma): message bubbles use a softer ~16pt corner radius.
+        layer.cornerRadius = 16.0
         layer.masksToBounds = true
 
         textView = UITextView()

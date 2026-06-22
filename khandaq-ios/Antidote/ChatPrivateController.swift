@@ -1526,6 +1526,7 @@ private extension ChatPrivateController {
         view.addSubview(chatInputView)
 
         chatInputViewManager = ChatInputViewManager(inputView: chatInputView,
+                                                    theme: theme,
                                                     chat: chat,
                                                     submanagerChats: submanagerChats,
                                                     submanagerFiles: submanagerFiles,
@@ -1536,6 +1537,10 @@ private extension ChatPrivateController {
                 return text
             }
             return self.replyController.composeOutgoingText(text)
+        }
+        // KHANDAQ design (Figma): the "+" attachment menu's "Геолокация" shares the current location once.
+        chatInputViewManager.onShareLocation = { [weak self] in
+            self?.startLocationSharing(sendImmediately: true)
         }
         replyController.install(in: view, above: chatInputView, theme: theme)
     }

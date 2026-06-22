@@ -142,7 +142,8 @@ class ChatInputView: UIView {
 // MARK: Actions
 extension ChatInputView {
     @objc func cameraButtonPressed() {
-        delegate?.chatInputViewCameraButtonPressed(self, cameraView: cameraButton)
+        // Anchor the attachment menu to the visible "+" (emojiButton), not the hidden paperclip.
+        delegate?.chatInputViewCameraButtonPressed(self, cameraView: emojiButton)
     }
 
     @objc func emojiButtonPressed() {
@@ -235,6 +236,17 @@ extension ChatInputView {
         guard isVoiceRecording else { return }
         recordingEndedByControl = true
         finishVoiceRecording(cancelled: false)
+    }
+
+    /// KHANDAQ design (Figma): start a voice recording from the "+" attachment menu (tap to start;
+    /// the recording bar's send/cancel controls finish it — no hold required).
+    func beginVoiceRecordingFromMenu() {
+        guard !isVoiceRecording else { return }
+        isVoiceRecording = true
+        recordingEndedByControl = false
+        recordingWillCancel = false
+        showRecordingBar()
+        delegate?.chatInputViewVoiceRecordDidStart(self)
     }
 }
 

@@ -23,6 +23,7 @@ fileprivate let videoSendQueue = DispatchQueue(label: "khandaq.video.send", qos:
 class ChatInputViewManager: NSObject {
     fileprivate var chat: OCTChat!
     fileprivate weak var inputView: ChatInputView?
+    fileprivate let theme: Theme
 
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
     fileprivate weak var submanagerFiles: OCTSubmanagerFiles!
@@ -36,7 +37,12 @@ class ChatInputViewManager: NSObject {
 
     var outgoingTextComposer: ((String) -> String)?
 
+    // KHANDAQ design (Figma): set by the chat controller to share the current location once from the
+    // "+" attachment menu. When nil (e.g. groups), the Геолокация item is hidden.
+    var onShareLocation: (() -> Void)?
+
     init(inputView: ChatInputView,
+         theme: Theme,
          chat: OCTChat,
          submanagerChats: OCTSubmanagerChats,
          submanagerFiles: OCTSubmanagerFiles,
@@ -44,6 +50,7 @@ class ChatInputViewManager: NSObject {
          presentingViewController: UIViewController) {
 
         self.chat = chat
+        self.theme = theme
         self.inputView = inputView
         self.submanagerChats = submanagerChats
         self.submanagerFiles = submanagerFiles
@@ -68,33 +75,47 @@ class ChatInputViewManager: NSObject {
 
 extension ChatInputViewManager: ChatInputViewDelegate {
     func chatInputViewCameraButtonPressed(_ view: ChatInputView, cameraView: UIView) {
-        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        alert.popoverPresentationController?.sourceView = cameraView
-        alert.popoverPresentationController?.sourceRect = CGRect(x: cameraView.frame.size.width / 2, y: cameraView.frame.size.height / 2, width: 1.0, height: 1.0)
+        // KHANDAQ design (Figma): a rounded popup anchored above the "+" (Галерея / Камера / Аудио /
+        // Геолокация) instead of a native bottom action sheet.
+        var items: [AttachmentMenuController.Item] = []
+
+        items.append(.init(title: String(localized: "attach_gallery"), systemImage: "photo.on.rectangle") { [weak self] in
+            self?.presentPhotoLibraryPicker()
+        })
 
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            alert.addAction(UIAlertAction(title: String(localized: "photo_from_camera"), style: .default) { [unowned self] _ in
-                MediaPermission.requestCameraAccess(from: self.presentingViewController) { granted in
-                    guard granted else {
-                        return
-                    }
-
-                    let controller = UIImagePickerController()
-                    controller.delegate = self
-                    controller.sourceType = .camera
-                    controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
-                    controller.videoQuality = .typeMedium
-                    self.presentingViewController.present(controller, animated: true, completion: nil)
-                }
+            items.append(.init(title: String(localized: "photo_from_camera"), systemImage: "camera") { [weak self] in
+                self?.presentCameraPicker()
             })
         }
 
-        alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ in
-            self.presentPhotoLibraryPicker()
+        items.append(.init(title: String(localized: "attach_audio"), systemImage: "mic") { [weak view] in
+            view?.beginVoiceRecordingFromMenu()
         })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
-        presentingViewController.present(alert, animated: true, completion: nil)
+        if let shareLocation = onShareLocation {
+            items.append(.init(title: String(localized: "attach_location"), systemImage: "location") {
+                shareLocation()
+            })
+        }
+
+        let menu = AttachmentMenuController(theme: theme, items: items, sourceView: cameraView)
+        presentingViewController.present(menu, animated: true, completion: nil)
+    }
+
+    private func presentCameraPicker() {
+        MediaPermission.requestCameraAccess(from: presentingViewController) { [weak self] granted in
+            guard granted, let self = self else {
+                return
+            }
+
+            let controller = UIImagePickerController()
+            controller.delegate = self
+            controller.sourceType = .camera
+            controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
+            controller.videoQuality = .typeMedium
+            self.presentingViewController.present(controller, animated: true, completion: nil)
+        }
     }
 
     func chatInputViewSendButtonPressed(_ view: ChatInputView) {

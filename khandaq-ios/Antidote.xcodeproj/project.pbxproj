@@ -479,6 +479,7 @@
 		4E4EEA1F27DCECD3008B0E77 /* Bus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4EEA1E27DCECD3008B0E77 /* Bus.swift */; };
 		4E4EEA2127DCEC67008B0E78 /* LocationSharingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4EEA2027DCEC67008B0E78 /* LocationSharingCoordinator.swift */; };
 		8B8E9C45924FB18EB2C8044E /* libPods-ScreenshotsUITests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A1B3D525D11BDD4F3E9B831 /* libPods-ScreenshotsUITests.a */; };
+		8FF331E609E0EECC554FAC9B /* AttachmentMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2546D4D0F75885A382AA1E /* AttachmentMenuController.swift */; };
 		94011D6AE24947BDF2B63B08 /* WalkthroughController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */; };
 		96166DAAD67996D5A6819984 /* libPods-AntidoteTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 72586F4D098584EF43024224 /* libPods-AntidoteTests.a */; };
 		9C04BB6D1C17389200F58488 /* StaticTableBaseCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C04BB6C1C17389200F58488 /* StaticTableBaseCell.swift */; };
@@ -1066,6 +1067,7 @@
 		4E4EEA2027DCEC67008B0E78 /* LocationSharingCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LocationSharingCoordinator.swift; sourceTree = "<group>"; };
 		6A1B3D525D11BDD4F3E9B831 /* libPods-ScreenshotsUITests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-ScreenshotsUITests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		72586F4D098584EF43024224 /* libPods-AntidoteTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-AntidoteTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7B2546D4D0F75885A382AA1E /* AttachmentMenuController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentMenuController.swift; sourceTree = "<group>"; };
 		944EDDCE567FE077D7C49E6D /* OCTSubmanagerCallsSnapshotMock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerCallsSnapshotMock.swift; sourceTree = "<group>"; };
 		9C04BB6C1C17389200F58488 /* StaticTableBaseCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StaticTableBaseCell.swift; sourceTree = "<group>"; };
 		9C07151C1BCD2E5B003A27B5 /* PortraitNavigationController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PortraitNavigationController.swift; sourceTree = "<group>"; };
@@ -1342,6 +1344,7 @@
 				11771E341CA5C6D100EC259E /* Other */,
 				119AD2081BEC718C000C5CB8 /* Sounds */,
 				1164C8EA1BC97FF600B91107 /* Views */,
+				7B2546D4D0F75885A382AA1E /* AttachmentMenuController.swift */,
 			);
 			path = Antidote;
 			sourceTree = "<group>";
@@ -2688,6 +2691,7 @@
 				358FC42D04E29FF433F9D596 /* ReconnectBackoffCoordinator.swift in Sources */,
 				A080C1D9EA0046BE83E59B9F /* ImportInstructionsController.swift in Sources */,
 				94011D6AE24947BDF2B63B08 /* WalkthroughController.swift in Sources */,
+				8FF331E609E0EECC554FAC9B /* AttachmentMenuController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

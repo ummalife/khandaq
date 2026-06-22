@@ -322,6 +322,10 @@
 "photo_from_camera" = "Камера";
 /* Source of photo to take */
 "photo_from_photo_library" = "Медиатека";
+/* Attachment menu items (Figma) */
+"attach_gallery" = "Галерея";
+"attach_audio" = "Аудио";
+"attach_location" = "Геолокация";
 /* Error while converting avatar image */
 "change_avatar_error_convert_image" = "Ошибка конвертации изображения";
 

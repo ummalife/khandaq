@@ -323,6 +323,10 @@
 "photo_from_camera" = "Camera";
 /* Source of photo to take */
 "photo_from_photo_library" = "Photo Library";
+/* Attachment menu items (Figma) */
+"attach_gallery" = "Gallery";
+"attach_audio" = "Audio";
+"attach_location" = "Location";
 /* Error while converting avatar image */
 "change_avatar_error_convert_image" = "Cannot convert image";
 

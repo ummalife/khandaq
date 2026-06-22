@@ -35,6 +35,7 @@ colors:
   text_tertiary: "7C7C82"
   bubble_outgoing: "1E3D2E"
   chat_bg: "111613"
+  fill_tertiary: "2C2C2E"
 
 values:
   login-background: dark_bg
@@ -77,6 +78,7 @@ values:
   tab-badge-text: white
   tab-item-active: accent
   tab-item-inactive: muted_text
+  tab-selection: fill_tertiary
   notification-background: transparent_dark_gray
   notification-text: white
   settings-background: dark_bg

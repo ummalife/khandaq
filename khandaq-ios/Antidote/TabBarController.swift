@@ -104,38 +104,40 @@ extension TabBarController: UITabBarControllerDelegate {
 }
 
 private extension TabBarController {
-    // KHANDAQ design (Figma): soft green pill behind the active tab (icon + label).
+    // KHANDAQ design (Figma): the active tab sits in a fully-rounded GREY pill (Fills-Vibrant/Tertiary
+    // #EDEDED light), enclosing icon + label — only the icon/label themselves turn green.
     func makeSelectionPillImage(theme: Theme) -> UIImage {
-        let size = CGSize(width: 72.0, height: 48.0)
+        let size = CGSize(width: 88.0, height: 56.0)
         let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { ctx in
+        let image = renderer.image { _ in
             let rect = CGRect(origin: .zero, size: size)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: 16.0)
-            theme.colorForType(.TabItemActive).withAlphaComponent(0.14).setFill()
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: size.height / 2.0)
+            theme.colorForType(.TabSelection).setFill()
             path.fill()
         }
-        return image.withRenderingMode(.alwaysOriginal)
+        return image.resizableImage(withCapInsets: .zero).withRenderingMode(.alwaysOriginal)
     }
 
     func configureNativeTabBarAppearance(theme: Theme) {
         tabBar.tintColor = theme.colorForType(.TabItemActive)
         tabBar.unselectedItemTintColor = theme.colorForType(.TabItemInactive)
-        tabBar.barTintColor = theme.colorForType(.NormalBackground)
-        tabBar.isTranslucent = false
+        tabBar.isTranslucent = true
         tabBar.selectionIndicatorImage = makeSelectionPillImage(theme: theme)
 
         if #available(iOS 13.0, *) {
+            // Figma BG is iOS 26 "Liquid Glass" — use the system material rather than a flat fill.
             let appearance = UITabBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = theme.colorForType(.NormalBackground)
-            appearance.backgroundEffect = nil
-            appearance.shadowColor = theme.colorForType(.SeparatorsAndBorders)
+            appearance.configureWithDefaultBackground()
 
+            // Figma: labels SF Pro Semibold 10; inactive icon grey + near-black label; active green.
+            let font = UIFont.systemFont(ofSize: 10.0, weight: .semibold)
             let normalAttributes: [NSAttributedString.Key: Any] = [
-                .foregroundColor: theme.colorForType(.TabItemInactive)
+                .foregroundColor: theme.colorForType(.NormalText),
+                .font: font,
             ]
             let selectedAttributes: [NSAttributedString.Key: Any] = [
-                .foregroundColor: theme.colorForType(.TabItemActive)
+                .foregroundColor: theme.colorForType(.TabItemActive),
+                .font: font,
             ]
 
             appearance.stackedLayoutAppearance.normal.iconColor = theme.colorForType(.TabItemInactive)

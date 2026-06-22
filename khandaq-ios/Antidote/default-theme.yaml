@@ -30,6 +30,7 @@ colors:
   stroke_light: E6E6E6
   bubble_outgoing: BFE3A3
   chat_bg: E9F1E4
+  fill_tertiary: EDEDED
 
 values:
   login-background: white
@@ -74,6 +75,7 @@ values:
   tab-badge-text: white
   tab-item-active: accent
   tab-item-inactive: darkgray2
+  tab-selection: fill_tertiary
   notification-background: transparent_dark_gray
   notification-text: white
   settings-background: lightgraypink

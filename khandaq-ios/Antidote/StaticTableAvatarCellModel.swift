@@ -17,4 +17,7 @@ class StaticTableAvatarCellModel: StaticTableBaseCellModel {
     // KHANDAQ design (Figma): an optional display name shown under the avatar (friend profile card).
     // When nil the label stays hidden, so screens that don't set it (own-profile) are unchanged.
     var name: String?
+
+    // KHANDAQ design (Figma): a small camera badge overlaid on the avatar (own-profile, editable).
+    var showCameraBadge: Bool = false
 }

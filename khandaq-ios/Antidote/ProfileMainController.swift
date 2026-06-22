@@ -135,6 +135,7 @@ private extension ProfileMainController {
                     diameter: StaticTableAvatarCellModel.Constants.AvatarImageSize)
         }
         avatarModel.didTapOnAvatar = performAvatarAction
+        avatarModel.showCameraBadge = true
 
         userNameModel.title = String(localized: "name")
         userNameModel.value = submanagerUser.userName()
@@ -178,6 +179,7 @@ private extension ProfileMainController {
         profileDetailsModel.rightImageType = .arrow
 
         logoutModel.title = String(localized: "logout_button")
+        logoutModel.destructive = true
         logoutModel.didSelectHandler = logout
     }
 

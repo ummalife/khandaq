@@ -13,6 +13,7 @@ class StaticTableAvatarCell: StaticTableBaseCell {
     fileprivate var didTapOnAvatar: ((StaticTableAvatarCell) -> Void)?
 
     fileprivate var button: UIButton!
+    fileprivate var cameraBadge: UIImageView!
     fileprivate var nameLabel: UILabel!
     fileprivate var nameToBottomConstraint: Constraint?
     fileprivate var avatarToBottomConstraint: Constraint?
@@ -32,6 +33,10 @@ class StaticTableAvatarCell: StaticTableBaseCell {
         button.isUserInteractionEnabled = avatarModel.userInteractionEnabled
         button.setImage(avatarModel.avatar, for: UIControlState())
         didTapOnAvatar = avatarModel.didTapOnAvatar
+
+        cameraBadge.isHidden = !avatarModel.showCameraBadge
+        cameraBadge.backgroundColor = theme.colorForType(.NormalBackground)
+        cameraBadge.tintColor = theme.colorForType(.NormalText)
 
         let name = avatarModel.name
         nameLabel.text = name
@@ -57,6 +62,18 @@ class StaticTableAvatarCell: StaticTableBaseCell {
         button.addTarget(self, action: #selector(StaticTableAvatarCell.buttonPressed), for: .touchUpInside)
         customContentView.addSubview(button)
 
+        cameraBadge = UIImageView()
+        cameraBadge.isHidden = true
+        cameraBadge.contentMode = .center
+        cameraBadge.layer.cornerRadius = 16.0
+        cameraBadge.layer.masksToBounds = true
+        cameraBadge.isUserInteractionEnabled = false
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 15.0, weight: .regular)
+            cameraBadge.image = UIImage(systemName: "camera.fill", withConfiguration: config)
+        }
+        customContentView.addSubview(cameraBadge)
+
         nameLabel = UILabel()
         nameLabel.font = UIFont.systemFont(ofSize: 22.0, weight: .bold)
         nameLabel.textAlignment = .center
@@ -72,6 +89,12 @@ class StaticTableAvatarCell: StaticTableBaseCell {
             $0.top.equalTo(customContentView).offset(Constants.AvatarVerticalOffset)
             avatarToBottomConstraint = $0.bottom.equalTo(customContentView).offset(-Constants.AvatarVerticalOffset).constraint
             $0.size.equalTo(StaticTableAvatarCellModel.Constants.AvatarImageSize)
+        }
+
+        cameraBadge.snp.makeConstraints {
+            $0.trailing.equalTo(button)
+            $0.bottom.equalTo(button)
+            $0.size.equalTo(32.0)
         }
 
         nameLabel.snp.makeConstraints {

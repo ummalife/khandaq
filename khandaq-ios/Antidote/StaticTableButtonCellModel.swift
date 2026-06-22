@@ -6,4 +6,6 @@ import Foundation
 
 class StaticTableButtonCellModel: StaticTableSelectableCellModel {
     var title: String?
+    // KHANDAQ design (Figma): destructive actions (e.g. "Выйти") render in red instead of accent green.
+    var destructive: Bool = false
 }

@@ -56,7 +56,8 @@ class StaticTableDefaultCell: StaticTableBaseCell {
             userStatusViewHiddenConstraint.activate()
         }
 
-        titleLabel.textColor = theme.colorForType(.LinkText)
+        // KHANDAQ design (Figma): field captions (Имя/Статус/MyID…) are neutral grey, not accent green.
+        titleLabel.textColor = theme.colorForType(.ChatListCellMessage)
         valueLabel.textColor = theme.colorForType(.NormalText)
         rightButton.setTitleColor(theme.colorForType(.LinkText), for: UIControlState())
 

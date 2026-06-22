@@ -166,11 +166,8 @@ extension ChatInputView {
     }
 
     func updateEmojiButtonIcon() {
-        guard #available(iOS 13.0, *) else {
-            return
-        }
-        let name = isEmojiActive ? "keyboard" : "face.smiling"
-        emojiButton.setImage(UIImage(systemName: name), for: .normal)
+        // KHANDAQ design (Figma): the left button is a fixed green "+" (opens attachments), so there is
+        // no emoji/keyboard toggle icon to swap anymore.
     }
 
     @objc func sendButtonPressed() {
@@ -274,14 +271,17 @@ private extension ChatInputView {
         // KHANDAQ (#15): input bar laid out like the Android/Telegram build:
         // [emoji] [text…] [attach 📎] [mic 🎤 ⇄ send ➤]. Emoji just focuses the field (the system
         // keyboard provides the emoji panel); attach opens the camera/library/file menu.
+        // KHANDAQ design (Figma): the left button is a green "+" that opens the attachment menu
+        // (was a smiling-face that just focused the field; the system keyboard already provides emoji).
         emojiButton = UIButton(type: .system)
         if #available(iOS 13.0, *) {
-            emojiButton.setImage(UIImage(systemName: "face.smiling"), for: .normal)
+            let plusConfig = UIImage.SymbolConfiguration(pointSize: 28.0, weight: .regular)
+            emojiButton.setImage(UIImage(systemName: "plus.circle.fill", withConfiguration: plusConfig), for: .normal)
         } else {
-            emojiButton.setTitle("☺", for: .normal)
+            emojiButton.setTitle("+", for: .normal)
         }
         emojiButton.tintColor = theme.colorForType(.LinkText)
-        emojiButton.addTarget(self, action: #selector(ChatInputView.emojiButtonPressed), for: .touchUpInside)
+        emojiButton.addTarget(self, action: #selector(ChatInputView.cameraButtonPressed), for: .touchUpInside)
         emojiButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         addSubview(emojiButton)
 
@@ -294,6 +294,9 @@ private extension ChatInputView {
         cameraButton.tintColor = theme.colorForType(.LinkText)
         cameraButton.addTarget(self, action: #selector(ChatInputView.cameraButtonPressed), for: .touchUpInside)
         cameraButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
+        // KHANDAQ design (Figma): attachments are reached via the left "+", so the separate paperclip
+        // on the right is hidden.
+        cameraButton.isHidden = true
         addSubview(cameraButton)
 
         voiceButton = UIButton()
@@ -419,7 +422,8 @@ private extension ChatInputView {
 
         textView.snp.makeConstraints {
             $0.leading.equalTo(emojiButton.snp.trailing).offset(Constants.Offset)
-            $0.trailing.equalTo(cameraButton.snp.leading).offset(-Constants.Offset)
+            // KHANDAQ design: field runs to the mic (the paperclip is hidden; "+" handles attachments).
+            $0.trailing.equalTo(voiceButton.snp.leading).offset(-Constants.Offset)
             $0.top.equalTo(self).offset(Constants.Offset)
             $0.bottom.equalTo(self).offset(-Constants.Offset)
             $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)

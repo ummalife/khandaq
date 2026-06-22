@@ -17,6 +17,15 @@
 "import_step_2" = "Tap \"Open\"";
 "import_step_3" = "Choose Khandaq from the list of available apps";
 "import_step_4" = "Check the new profile name and tap OK";
+/* Onboarding walkthrough (Figma) */
+"onboarding_no_number_title" = "No phone number";
+"onboarding_no_number_subtitle" = "Sign up for the messenger with no need to link a phone number";
+"onboarding_encryption_title" = "Strong encryption";
+"onboarding_encryption_subtitle" = "All messages are encrypted with the Tox protocol and are accessible to no one but you and the recipient";
+"onboarding_decentralized_title" = "Just you and the recipient";
+"onboarding_decentralized_subtitle" = "Your messages are not stored on servers. Enjoy full decentralization";
+"onboarding_next" = "Next";
+"onboarding_create_account" = "Create account";
 /* Password field */
 "password" = "Password";
 /* Login button */

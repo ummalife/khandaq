@@ -470,6 +470,7 @@
 		11FC105D1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC105C1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift */; };
 		11FC105E1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC105C1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift */; };
 		358FC42D04E29FF433F9D596 /* ReconnectBackoffCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B71A73F5F6307B09B04 /* ReconnectBackoffCoordinator.swift */; };
+		47D14C83430DD0076D082C7D /* WalkthroughController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */; };
 		4E3D0F9527C9751300D5A068 /* LinearProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */; };
 		4E4B267F27C0DCAE00E07A66 /* Call.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4B267E27C0DCAE00E07A66 /* Call.swift */; };
 		4E4B268527C0DCB500E07A66 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4B268427C0DCB500E07A66 /* CallManager.swift */; };
@@ -478,6 +479,7 @@
 		4E4EEA1F27DCECD3008B0E77 /* Bus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4EEA1E27DCECD3008B0E77 /* Bus.swift */; };
 		4E4EEA2127DCEC67008B0E78 /* LocationSharingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4EEA2027DCEC67008B0E78 /* LocationSharingCoordinator.swift */; };
 		8B8E9C45924FB18EB2C8044E /* libPods-ScreenshotsUITests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6A1B3D525D11BDD4F3E9B831 /* libPods-ScreenshotsUITests.a */; };
+		94011D6AE24947BDF2B63B08 /* WalkthroughController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */; };
 		96166DAAD67996D5A6819984 /* libPods-AntidoteTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 72586F4D098584EF43024224 /* libPods-AntidoteTests.a */; };
 		9C04BB6D1C17389200F58488 /* StaticTableBaseCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C04BB6C1C17389200F58488 /* StaticTableBaseCell.swift */; };
 		9C07151D1BCD2E5B003A27B5 /* PortraitNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C07151C1BCD2E5B003A27B5 /* PortraitNavigationController.swift */; };
@@ -618,6 +620,7 @@
 		B27VID020608000000000001 /* VideoSendPreprocessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27VID010608000000000001 /* VideoSendPreprocessor.swift */; };
 		B27VVD020608000000000001 /* GroupNgcVideoOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27VVD010608000000000001 /* GroupNgcVideoOverlayView.swift */; };
 		B28PRS020608000000000001 /* FriendPresenceFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28PRS010608000000000001 /* FriendPresenceFormatter.swift */; };
+		D4DF16FA863F1F32963F8620 /* WalkthroughController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */; };
 		D4F896D05F7EAA7C321A2AA8 /* libPods-Antidote.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 034E57B3AE56E352BBAA0487 /* libPods-Antidote.a */; };
 		D781BAF842728768A8FDCDC2 /* ImportInstructionsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */; };
 		DD1DE47B33F63A05E7492F1D /* MessageDeliveryWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7479C4F3A734F1604F7D3A0 /* MessageDeliveryWatchdog.swift */; };
@@ -1052,6 +1055,7 @@
 		11FC105C1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OCTSubmanagerObjectsExtension.swift; sourceTree = "<group>"; };
 		22DCF57E8F127B60BD096DD1 /* Pods-ScreenshotsUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ScreenshotsUITests.release.xcconfig"; path = "Pods/Target Support Files/Pods-ScreenshotsUITests/Pods-ScreenshotsUITests.release.xcconfig"; sourceTree = "<group>"; };
 		2D5B916CEDBEC1B69CD1EFA4 /* Pods-Antidote.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Antidote.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Antidote/Pods-Antidote.debug.xcconfig"; sourceTree = "<group>"; };
+		32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WalkthroughController.swift; sourceTree = "<group>"; };
 		43C533DEE94E80C981FEC348 /* Pods-AntidoteTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AntidoteTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-AntidoteTests/Pods-AntidoteTests.debug.xcconfig"; sourceTree = "<group>"; };
 		4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinearProgressBar.swift; sourceTree = "<group>"; };
 		4E4B267E27C0DCAE00E07A66 /* Call.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Call.swift; sourceTree = "<group>"; };
@@ -1461,6 +1465,7 @@
 				1164C8D71BC922EB00B91107 /* UserDefaultsManager.swift */,
 				4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */,
 				CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */,
+				32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */,
 			);
 			name = Classes;
 			sourceTree = "<group>";
@@ -2454,6 +2459,7 @@
 				111782D31DC64796000C1721 /* BaseCellModel.swift in Sources */,
 				1117833E1DC64810000C1721 /* ChatInputView.swift in Sources */,
 				D781BAF842728768A8FDCDC2 /* ImportInstructionsController.swift in Sources */,
+				D4DF16FA863F1F32963F8620 /* WalkthroughController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2681,6 +2687,7 @@
 				DD1DE47B33F63A05E7492F1D /* MessageDeliveryWatchdog.swift in Sources */,
 				358FC42D04E29FF433F9D596 /* ReconnectBackoffCoordinator.swift in Sources */,
 				A080C1D9EA0046BE83E59B9F /* ImportInstructionsController.swift in Sources */,
+				94011D6AE24947BDF2B63B08 /* WalkthroughController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2908,6 +2915,7 @@
 				9CEE6AD01C4E8FDC00A1ECB5 /* AudioPlayer.swift in Sources */,
 				9CB1F9521D58CA4000105858 /* RunningCoordinator.swift in Sources */,
 				E6AD95EEACE9C1D99161F0F4 /* ImportInstructionsController.swift in Sources */,
+				47D14C83430DD0076D082C7D /* WalkthroughController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

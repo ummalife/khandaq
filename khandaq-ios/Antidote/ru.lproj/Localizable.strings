@@ -21,6 +21,15 @@
 "import_step_2" = "Нажмите «Открыть»";
 "import_step_3" = "Выберите Khandaq в списке доступных приложений";
 "import_step_4" = "Проверьте имя нового профиля и нажмите ОК";
+/* Onboarding walkthrough (Figma) */
+"onboarding_no_number_title" = "Без номера телефона";
+"onboarding_no_number_subtitle" = "Регистрируйтесь в мессенджере без необходимости привязки к номеру телефона";
+"onboarding_encryption_title" = "Надежное шифрование";
+"onboarding_encryption_subtitle" = "Все сообщения шифруются протоколом Tox и недоступны никому кроме вас и собеседника";
+"onboarding_decentralized_title" = "Только Вы и собеседник";
+"onboarding_decentralized_subtitle" = "Ваши сообщения не хранятся на серверах. Наслаждайтесь полной децентрализацией";
+"onboarding_next" = "Далее";
+"onboarding_create_account" = "Создать аккаунт";
 /* Password field */
 "password" = "Пароль";
 /* Login button */

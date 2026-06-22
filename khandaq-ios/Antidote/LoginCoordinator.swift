@@ -47,7 +47,9 @@ extension LoginCoordinator: TopCoordinatorProtocol {
     func startWithOptions(_ options: CoordinatorOptions?) {
         let profileNames = ProfileManager().allProfileNames
 
-        let controller: UIViewController = (profileNames.count > 0) ? createFormController() : createChoiceController()
+        // KHANDAQ design (Figma): first launch (no profile yet) opens the intro walkthrough; existing
+        // users go straight to the login form.
+        let controller: UIViewController = (profileNames.count > 0) ? createFormController() : createWalkthroughController()
 
         navigationController.pushViewController(controller, animated: false)
         window.rootViewController = navigationController
@@ -118,6 +120,16 @@ extension LoginCoordinator: LoginChoiceControllerDelegate {
     }
 }
 
+extension LoginCoordinator: WalkthroughControllerDelegate {
+    func walkthroughControllerCreateAccount(_ controller: WalkthroughController) {
+        showCreateAccountController()
+    }
+
+    func walkthroughControllerImportProfile(_ controller: WalkthroughController) {
+        showImportProfileController()
+    }
+}
+
 extension LoginCoordinator: LoginCreateAccountCoordinatorDelegate {
     func loginCreateAccountCoordinator(_ coordinator: LoginCreateAccountCoordinator, 
                                        didCreateAccountWithProfileName profileName: String,
@@ -164,6 +176,13 @@ private extension LoginCoordinator {
 
     func createChoiceController() -> LoginChoiceController {
         let controller = LoginChoiceController(theme: theme)
+        controller.delegate = self
+
+        return controller
+    }
+
+    func createWalkthroughController() -> WalkthroughController {
+        let controller = WalkthroughController(theme: theme)
         controller.delegate = self
 
         return controller

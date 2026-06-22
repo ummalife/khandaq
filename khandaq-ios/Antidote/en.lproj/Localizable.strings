@@ -27,6 +27,8 @@
 "onboarding_next" = "Next";
 "onboarding_create_account" = "Create account";
 "contacts_copy_myid" = "Copy MyID";
+"chat_encryption_badge" = "Tox protocol";
+"chat_encryption_info" = "All chat data is protected by Tox end-to-end encryption and is accessible to no one but you and your recipient";
 /* Password field */
 "password" = "Password";
 /* Login button */

@@ -31,6 +31,8 @@
 "onboarding_next" = "Далее";
 "onboarding_create_account" = "Создать аккаунт";
 "contacts_copy_myid" = "Копировать MyID";
+"chat_encryption_badge" = "Tox protocol";
+"chat_encryption_info" = "Все данные в чатах защищены протоколом сквозного шифрования Tox и недоступны никому кроме вас и вашего собеседника";
 /* Password field */
 "password" = "Пароль";
 /* Login button */

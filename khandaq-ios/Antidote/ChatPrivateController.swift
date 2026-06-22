@@ -80,6 +80,8 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var tableView: UITableView?
     fileprivate var typingHeaderView: ChatTypingHeaderView!
     fileprivate var fauxOfflineHeaderView: ChatFauxOfflineHeaderView!
+    // KHANDAQ design (Figma): end-to-end encryption notice card shown at the top of an empty chat.
+    fileprivate var encryptionBanner: UIView!
     fileprivate var newMessagesView: UIView!
     fileprivate var chatInputView: ChatInputView!
     fileprivate var editMessagesToolbar: UIToolbar!
@@ -178,13 +180,81 @@ class ChatPrivateController: PortraitChatController {
         createNewMessagesView()
         createInputView()
         createEditMessageToolbar()
+        createEncryptionBanner()
         installConstraints()
+    }
+
+    // KHANDAQ design (Figma): encryption-info card pinned to the top of an empty chat.
+    private func createEncryptionBanner() {
+        let card = UIView()
+        card.backgroundColor = theme.colorForType(.ChatIncomingBubble)
+        card.layer.cornerRadius = 16.0
+        card.layer.masksToBounds = true
+
+        let badge = UIView()
+        badge.backgroundColor = theme.colorForType(.TabItemActive).withAlphaComponent(0.14)
+        badge.layer.cornerRadius = 10.0
+        badge.layer.masksToBounds = true
+        card.addSubview(badge)
+
+        let lock = UIImageView()
+        if #available(iOS 13.0, *) {
+            lock.image = UIImage(systemName: "lock.fill")
+        }
+        lock.tintColor = theme.colorForType(.LinkText)
+        lock.contentMode = .scaleAspectFit
+        badge.addSubview(lock)
+
+        let badgeLabel = UILabel()
+        badgeLabel.text = String(localized: "chat_encryption_badge")
+        badgeLabel.font = UIFont.systemFont(ofSize: 13.0, weight: .semibold)
+        badgeLabel.textColor = theme.colorForType(.LinkText)
+        badge.addSubview(badgeLabel)
+
+        let info = UILabel()
+        info.text = String(localized: "chat_encryption_info")
+        info.font = UIFont.systemFont(ofSize: 14.0)
+        info.textColor = theme.colorForType(.NormalText)
+        info.numberOfLines = 0
+        card.addSubview(info)
+
+        view.addSubview(card)
+        encryptionBanner = card
+
+        badge.snp.makeConstraints {
+            $0.top.leading.equalTo(card).inset(12.0)
+            $0.height.equalTo(28.0)
+        }
+        lock.snp.makeConstraints {
+            $0.leading.equalTo(badge).offset(10.0)
+            $0.centerY.equalTo(badge)
+            $0.width.height.equalTo(13.0)
+        }
+        badgeLabel.snp.makeConstraints {
+            $0.leading.equalTo(lock.snp.trailing).offset(6.0)
+            $0.trailing.equalTo(badge).offset(-10.0)
+            $0.centerY.equalTo(badge)
+        }
+        info.snp.makeConstraints {
+            $0.top.equalTo(badge.snp.bottom).offset(10.0)
+            $0.leading.trailing.equalTo(card).inset(12.0)
+            $0.bottom.equalTo(card).offset(-12.0)
+        }
+        card.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide).offset(8.0)
+            $0.leading.trailing.equalTo(view).inset(16.0)
+        }
+    }
+
+    private func updateEncryptionBannerVisibility() {
+        encryptionBanner?.isHidden = messages.count > 0
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         addMessagesNotification()
+        updateEncryptionBannerVisibility()
 
         createNavigationViews()
         addFriendNotification()
@@ -1492,6 +1562,7 @@ private extension ChatPrivateController {
                     }
 
                     self.updateTableHeaderView()
+                    self.updateEncryptionBannerVisibility()
 
                     if insertions.contains(0) {
                         self.handleNewMessage()

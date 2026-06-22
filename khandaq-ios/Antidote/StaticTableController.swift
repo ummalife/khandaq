@@ -108,11 +108,12 @@ extension StaticTableController: UITableViewDataSource {
                 } else if #available(iOS 14.0, *) {
                     cell.automaticallyUpdatesBackgroundConfiguration = false
                     var config = UIBackgroundConfiguration.listGroupedCell()
-                    config.backgroundColor = theme.colorForType(.NormalBackground)
+                    // White (light) / elevated #2C2C2E (dark) so cards stand off the backdrop in both.
+                    config.backgroundColor = theme.colorForType(.ChatIncomingBubble)
                     cell.backgroundConfiguration = config
                     cell.contentView.backgroundColor = .clear
                 } else {
-                    cell.backgroundColor = theme.colorForType(.NormalBackground)
+                    cell.backgroundColor = theme.colorForType(.ChatIncomingBubble)
                     cell.contentView.backgroundColor = .clear
                 }
         }

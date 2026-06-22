@@ -50,14 +50,11 @@ class ChatListCell: BaseCell {
         nicknameLabel.text = chatModel.nickname
         nicknameLabel.textColor = theme.colorForType(.NormalText)
 
-        presenceLabel.text = chatModel.presenceText
-        presenceLabel.textColor = chatModel.presenceIsOnline
-            ? theme.colorForType(.OnlineStatus)
-            : theme.colorForType(.ChatListCellMessage)
-        presenceLabel.isHidden = chatModel.presenceText.isEmpty
-        // KHANDAQ design: a chat row is just name + last message (Figma 4pt gap). Collapse the unused
-        // presence line so the message sits right under the name instead of leaving a reserved band.
-        presenceHeightConstraint?.update(offset: chatModel.presenceText.isEmpty ? 0.0 : Constants.PresenceLabelHeight)
+        // KHANDAQ design (Figma): a chat row is exactly two lines — name + last message. The online /
+        // last-seen presence is shown in Контакты, not here, so the presence line is always collapsed.
+        presenceLabel.text = nil
+        presenceLabel.isHidden = true
+        presenceHeightConstraint?.update(offset: 0.0)
 
         messageLabel.text = chatModel.message
         messageLabel.textColor = chatModel.isDraft

@@ -1653,6 +1653,8 @@ private extension ChatPrivateController {
         }
 
         titleView.name = friend.nickname
+        // KHANDAQ design (Figma): contact avatar in the chat header.
+        titleView.avatar = AvatarManager(theme: theme).avatarFromString(friend.nickname, diameter: 30.0)
         updateTitlePresence(for: friend)
 
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)

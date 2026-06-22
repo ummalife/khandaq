@@ -289,7 +289,8 @@ private extension AddFriendController {
             idTextField.font = UIFont(name: "Menlo-Regular", size: 14) ?? UIFont.systemFont(ofSize: 14)
         }
         idTextField.textColor = theme.colorForType(.NormalText)
-        idTextField.backgroundColor = .clear
+        // KHANDAQ design (Figma): filled grey rounded field.
+        idTextField.backgroundColor = theme.colorForType(.ChatInputBackground)
         idTextField.returnKeyType = .done
         idTextField.adjustsFontSizeToFitWidth = false
         idTextField.autocapitalizationType = .allCharacters
@@ -297,9 +298,8 @@ private extension AddFriendController {
         idTextField.spellCheckingType = .no
         idTextField.keyboardType = .asciiCapable
         idTextField.clearButtonMode = .whileEditing
-        idTextField.layer.cornerRadius = 5.0
-        idTextField.layer.borderWidth = 0.5
-        idTextField.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
+        idTextField.layer.cornerRadius = 12.0
+        idTextField.layer.borderWidth = 0.0
         idTextField.layer.masksToBounds = true
         idTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 8, height: 1))
         idTextField.leftViewMode = .always

@@ -36,8 +36,9 @@ class LaunchPlaceholderController: UIViewController {
         NSLayoutConstraint.activate([
             logoView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             logoView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -36),
-            logoView.widthAnchor.constraint(equalToConstant: 160),
-            logoView.heightAnchor.constraint(equalToConstant: 160),
+            // KHANDAQ design: wide wordmark lockup (not a square badge).
+            logoView.widthAnchor.constraint(equalToConstant: 240),
+            logoView.heightAnchor.constraint(equalToConstant: 96),
 
             spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             spinner.topAnchor.constraint(equalTo: logoView.bottomAnchor, constant: 28),

@@ -27,6 +27,8 @@ class ProfileMainController: StaticTableController {
     fileprivate let statusMessageModel = StaticTableDefaultCellModel()
     // fileprivate let userStatusModel = StaticTableDefaultCellModel()
     fileprivate let toxIdModel = StaticTableDefaultCellModel()
+    fileprivate let copyMyIdModel = StaticTableButtonCellModel()
+    fileprivate let showQrModel = StaticTableButtonCellModel()
     fileprivate let capabilitiesModel = StaticTableDefaultCellModel()
     fileprivate let networkConnectionsModel = StaticTableDefaultCellModel()
     fileprivate let profileDetailsModel = StaticTableDefaultCellModel()
@@ -51,6 +53,8 @@ class ProfileMainController: StaticTableController {
             //],
             [
                 toxIdModel,
+                copyMyIdModel,
+                showQrModel,
             ],
             [
                 capabilitiesModel,
@@ -157,10 +161,20 @@ private extension ProfileMainController {
 
         toxIdModel.title = String(localized: "my_tox_id")
         toxIdModel.value = sanitizeAddressInput(submanagerUser.userAddress)
-        toxIdModel.rightButton = String(localized: "show_qr")
-        toxIdModel.rightButtonHandler = showToxIdQR
         toxIdModel.userInteractionEnabled = false
         toxIdModel.canCopyValue = true
+
+        // KHANDAQ design (Figma): explicit "Копировать MyID" + "Показать QR-код" buttons under the ID.
+        copyMyIdModel.title = String(localized: "contacts_copy_myid")
+        copyMyIdModel.didSelectHandler = { [weak self] _ in
+            guard let self = self else { return }
+            UIPasteboard.general.string = self.submanagerUser.userAddress
+        }
+
+        showQrModel.title = String(localized: "show_qr_code")
+        showQrModel.didSelectHandler = { [weak self] _ in
+            self?.showToxIdQR()
+        }
         // for debugging print own ToxID ----------------
         // print("TOXID: \(submanagerUser.userAddress)")
         // for debugging print own ToxID ----------------

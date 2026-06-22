@@ -930,16 +930,17 @@ extension ChatPrivateController: UITableViewDataSource {
             }
         }
 
+        // KHANDAQ design (Figma): message timestamps show the time only (no per-message date stamp,
+        // which rendered as a cramped second line like "июня22").
         if (incoming_text_message) {
             if (message.tssent == 0) {
-                model.dateString = timeFormatter.string(from: message.date()) + "\n" + dateFormatter.string(from: message.date())
+                model.dateString = timeFormatter.string(from: message.date())
             } else {
                let real_datetime = Date(timeIntervalSince1970: TimeInterval(message.tssent))
-                model.dateString = timeFormatter.string(from: real_datetime) + "\n" + dateFormatter.string(from: real_datetime)
-                // os_log("mmm:%s", timeFormatter.string(from: real_datetime))
+                model.dateString = timeFormatter.string(from: real_datetime)
             }
         } else {
-            model.dateString = timeFormatter.string(from: message.date()) + "\n" + dateFormatter.string(from: message.date())
+            model.dateString = timeFormatter.string(from: message.date())
         }
 
         cell.delegate = self
@@ -2107,10 +2108,11 @@ private extension ChatPrivateController {
             }
 
             navigationItem.leftBarButtonItems = nil
+            // KHANDAQ design (Figma): the chat header shows video + call only; location sharing lives in
+            // the "+" attachment menu.
             navigationItem.rightBarButtonItems = [
                 videoButton,
-                audioButton,
-                locationButton
+                audioButton
             ]
         }
     }

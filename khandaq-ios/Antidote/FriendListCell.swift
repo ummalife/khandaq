@@ -7,15 +7,16 @@ import SnapKit
 
 class FriendListCell: BaseCell {
     struct Constants {
-        // KHANDAQ design (Figma): match the chat cell — 56pt avatar, 16pt side margin, 12pt gap.
-        static let AvatarSize = 56.0
+        // KHANDAQ design (Figma contact cell 191:1270): compact 48pt row — 40pt avatar, 16pt side
+        // margin, 8pt gap, name + status tight.
+        static let AvatarSize = 40.0
         static let AvatarLeftOffset = 16.0
-        static let AvatarRightOffset = 12.0
+        static let AvatarRightOffset = 8.0
 
         static let TopLabelHeight = 20.0
-        static let MinimumBottomLabelHeight = 16.0
+        static let MinimumBottomLabelHeight = 18.0
 
-        static let VerticalOffset = 8.0
+        static let VerticalOffset = 5.0
         static let RightOffset = -16.0
     }
 
@@ -60,7 +61,8 @@ class FriendListCell: BaseCell {
         contentView.addSubview(avatarView)
 
         topLabel = UILabel()
-        topLabel.font = UIFont.systemFont(ofSize: 16.0, weight: .semibold)
+        // KHANDAQ design (Figma): contact name is regular weight (the chat list uses semibold).
+        topLabel.font = UIFont.systemFont(ofSize: 16.0)
         contentView.addSubview(topLabel)
 
         bottomLabel = UILabel()
@@ -91,7 +93,7 @@ class FriendListCell: BaseCell {
 
         bottomLabel.snp.makeConstraints {
             $0.leading.trailing.equalTo(topLabel)
-            $0.top.equalTo(topLabel.snp.bottom).offset(4.0)
+            $0.top.equalTo(topLabel.snp.bottom)
             $0.bottom.equalTo(contentView).offset(-Constants.VerticalOffset)
             $0.height.greaterThanOrEqualTo(Constants.MinimumBottomLabelHeight)
         }

@@ -83,6 +83,17 @@ class ChatMovableDateCell: BaseCell {
 
         _ = ChatMovableDateCell.__once
 
+        // KHANDAQ design (Figma): chat cells are transparent so the pale-green chat background
+        // (tableView background) shows through — otherwise the opaque white cell fill covers it and
+        // the white incoming bubble becomes invisible. On iOS 14+ the cell uses a background
+        // configuration that overrides backgroundColor, so clear that too.
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        if #available(iOS 14.0, *) {
+            automaticallyUpdatesBackgroundConfiguration = false
+            backgroundConfiguration = UIBackgroundConfiguration.clear()
+        }
+
         dateLabel.text = movableModel.dateString
         dateLabel.numberOfLines = 0 // --> multiline label
         dateLabel.textColor = theme.colorForType(.ChatListCellMessage)

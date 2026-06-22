@@ -36,6 +36,13 @@ class StaticTableController: UIViewController {
         installConstraints()
     }
 
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // KHANDAQ design (Figma): every pushed StaticTable sub-screen (Settings/Profile details, etc.)
+        // gets the grey circle back button; the helper skips tab roots (nav stack count == 1).
+        installKhandaqCircleBackButton(theme: theme)
+    }
+
     func reloadTableView() {
         tableView?.reloadData()
     }

@@ -80,7 +80,7 @@ values:
   tab-selection: fill_tertiary
   notification-background: transparent_dark_gray
   notification-text: white
-  settings-background: lightgraypink
+  settings-background: fill_tertiary
   call-text-color: white
   call-decline-button-background: red
   call-answer-button-background: green

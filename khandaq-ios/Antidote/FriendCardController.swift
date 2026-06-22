@@ -77,7 +77,7 @@ class FriendCardController: StaticTableController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        installKhandaqCircleBackButton(theme: cardTheme)
+        // (Circle back button installed centrally by StaticTableController.viewDidLoad.)
 
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)
         let results = submanagerObjects.friends(predicate: predicate)

@@ -76,7 +76,9 @@ class StaticTableDefaultCell: StaticTableBaseCell {
                 checkmarkSelected = false
             case .arrow:
                 showRightImageView = true
-                rightImageView.image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
+                // KHANDAQ design (Figma): neutral grey disclosure chevron (template-tinted).
+                rightImageView.image = UIImage(named: "right-arrow")!.flippedToCorrectLayout().withRenderingMode(.alwaysTemplate)
+                rightImageView.tintColor = theme.colorForType(.ChatListCellMessage)
                 checkmarkSelected = false
             case .checkmark:
                 showRightImageView = true

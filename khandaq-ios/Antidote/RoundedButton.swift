@@ -35,7 +35,7 @@ class RoundedButton: UIButton {
 
         setTitleColor(titleColor, for:UIControlState())
         titleLabel?.font = UIFont.systemFont(ofSize: 18.0)
-        layer.cornerRadius = 5.0
+        // KHANDAQ design (Figma Buttons page): primary buttons are fully-rounded pills.
         layer.masksToBounds = true
 
         let bgImage = UIImage.imageWithColor(bgColor, size: CGSize(width: 1.0, height: 1.0))
@@ -48,5 +48,10 @@ class RoundedButton: UIButton {
 
     override var intrinsicContentSize : CGSize {
         return CGSize(width: 0.0, height: Constants.Height)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2.0
     }
 }

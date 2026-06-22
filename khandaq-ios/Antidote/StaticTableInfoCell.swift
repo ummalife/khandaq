@@ -30,8 +30,11 @@ class StaticTableInfoCell: StaticTableBaseCell {
         titleLabel.textColor = theme.colorForType(.NormalText)
         titleLabel.text = infoModel.title
 
-        valueLabel.textColor = theme.colorForType(.LinkText)
+        // KHANDAQ design (Figma): secondary values (e.g. "Никогда", version) are neutral grey, not accent.
+        valueLabel.textColor = theme.colorForType(.ChatListCellMessage)
         valueLabel.text = infoModel.value
+
+        arrowImageView.tintColor = theme.colorForType(.ChatListCellMessage)
 
 
         if infoModel.showArrow {
@@ -60,7 +63,7 @@ class StaticTableInfoCell: StaticTableBaseCell {
         customContentView.addSubview(valueLabel)
 
         arrowImageView = UIImageView()
-        arrowImageView.image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
+        arrowImageView.image = UIImage(named: "right-arrow")!.flippedToCorrectLayout().withRenderingMode(.alwaysTemplate)
         customContentView.addSubview(arrowImageView)
     }
 

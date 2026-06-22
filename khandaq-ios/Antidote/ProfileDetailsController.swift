@@ -129,6 +129,7 @@ private extension ProfileDetailsController {
         exportProfileModel.didSelectHandler = exportProfile
 
         deleteProfileModel.title = String(localized: "delete_profile")
+        deleteProfileModel.destructive = true
         deleteProfileModel.didSelectHandler = deleteProfile
     }
 

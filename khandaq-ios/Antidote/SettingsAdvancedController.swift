@@ -65,6 +65,7 @@ private extension SettingsAdvancedController {
         #endif
 
         restoreDefaultsModel.title = String(localized: "settings_restore_default")
+        restoreDefaultsModel.destructive = true
         restoreDefaultsModel.didSelectHandler = restoreDefaultsSettings
     }
 

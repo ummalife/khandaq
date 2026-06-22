@@ -319,7 +319,8 @@ private extension ChatInputView {
         // rendered (near-)invisible while typing. NormalText flips correctly per light/dark theme.
         textView.textColor = theme.colorForType(.NormalText)
         textView.tintColor = theme.colorForType(.LinkText)
-        textView.layer.cornerRadius = 5.0
+        // KHANDAQ design (Figma): rounded pill input field.
+        textView.layer.cornerRadius = 18.0
         textView.layer.borderWidth = 0.5
         textView.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
         textView.layer.masksToBounds = true
@@ -367,13 +368,13 @@ private extension ChatInputView {
 
         recordingCancelButton = UIButton(type: .system)
         recordingCancelButton.setTitle(String(localized: "voice_recording_cancel"), for: .normal)
-        recordingCancelButton.setTitleColor(UIColor(red: 0.165, green: 0.671, blue: 0.933, alpha: 1.0), for: .normal)
+        recordingCancelButton.setTitleColor(theme.colorForType(.LinkText), for: .normal)
         recordingCancelButton.titleLabel?.font = UIFont.systemFont(ofSize: 16.0)
         recordingCancelButton.addTarget(self, action: #selector(ChatInputView.recordingCancelTapped), for: .touchUpInside)
         recordingBar.addSubview(recordingCancelButton)
 
         recordingSendButton = UIButton(type: .system)
-        recordingSendButton.backgroundColor = UIColor(red: 0.165, green: 0.671, blue: 0.933, alpha: 1.0)
+        recordingSendButton.backgroundColor = theme.colorForType(.LinkText)
         recordingSendButton.layer.cornerRadius = 20.0
         recordingSendButton.clipsToBounds = true
         recordingSendButton.tintColor = .white

@@ -162,11 +162,13 @@ private extension LoginFormController {
         profileFakeTextField = UITextField()
         profileFakeTextField.leftViewMode = .always
         profileFakeTextField.leftView = iconContainerWithImageName("login-profile-icon")
-        profileFakeTextField.borderStyle = .roundedRect
-        profileFakeTextField.layer.borderColor = theme.colorForType(.LoginButtonBackground).cgColor
-        profileFakeTextField.layer.borderWidth = 0.5
+        // KHANDAQ design (Figma): filled grey rounded field (was a green hairline border).
+        profileFakeTextField.borderStyle = .none
+        profileFakeTextField.backgroundColor = theme.colorForType(.ChatInputBackground)
+        profileFakeTextField.textColor = theme.colorForType(.NormalText)
+        profileFakeTextField.layer.borderWidth = 0.0
         profileFakeTextField.layer.masksToBounds = true
-        profileFakeTextField.layer.cornerRadius = 6.0
+        profileFakeTextField.layer.cornerRadius = 12.0
         profileFakeTextField.isAccessibilityElement = false
         profileFakeTextField.accessibilityElementsHidden = true
         // KHANDAQ (#4): expose the selected profile name as the "username" half of a login form.
@@ -190,13 +192,14 @@ private extension LoginFormController {
         // fills the saved credential via Face ID (without this, autofill relied on heuristics).
         passwordField.textContentType = .password
         passwordField.returnKeyType = .go
-        passwordField.borderStyle = .roundedRect
+        passwordField.borderStyle = .none
         passwordField.leftViewMode = .always
         passwordField.leftView = iconContainerWithImageName("login-password-icon")
-        passwordField.layer.borderColor = theme.colorForType(.LoginButtonBackground).cgColor
-        passwordField.layer.borderWidth = 0.5
+        passwordField.backgroundColor = theme.colorForType(.ChatInputBackground)
+        passwordField.textColor = theme.colorForType(.NormalText)
+        passwordField.layer.borderWidth = 0.0
         passwordField.layer.masksToBounds = true
-        passwordField.layer.cornerRadius = 6.0
+        passwordField.layer.cornerRadius = 12.0
         formView.addSubview(passwordField)
     }
 

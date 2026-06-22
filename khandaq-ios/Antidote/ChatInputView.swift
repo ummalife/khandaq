@@ -7,6 +7,7 @@ import SnapKit
 
 private struct Constants {
     static let TopBorderHeight = 0.5
+    static let PlusCircleSize: CGFloat = 32.0
     static let Offset: CGFloat = 5.0
     static let CameraHorizontalOffset: CGFloat = 10.0
     static let CameraBottomOffset: CGFloat = -10.0
@@ -271,16 +272,19 @@ private extension ChatInputView {
         // KHANDAQ (#15): input bar laid out like the Android/Telegram build:
         // [emoji] [text…] [attach 📎] [mic 🎤 ⇄ send ➤]. Emoji just focuses the field (the system
         // keyboard provides the emoji panel); attach opens the camera/library/file menu.
-        // KHANDAQ design (Figma): the left button is a green "+" that opens the attachment menu
-        // (was a smiling-face that just focused the field; the system keyboard already provides emoji).
+        // KHANDAQ design (Figma): the left button is a grey circle with a "+" glyph that opens the
+        // attachment menu (was a smiling-face that just focused the field).
         emojiButton = UIButton(type: .system)
         if #available(iOS 13.0, *) {
-            let plusConfig = UIImage.SymbolConfiguration(pointSize: 28.0, weight: .regular)
-            emojiButton.setImage(UIImage(systemName: "plus.circle.fill", withConfiguration: plusConfig), for: .normal)
+            let plusConfig = UIImage.SymbolConfiguration(pointSize: 18.0, weight: .semibold)
+            emojiButton.setImage(UIImage(systemName: "plus", withConfiguration: plusConfig), for: .normal)
         } else {
             emojiButton.setTitle("+", for: .normal)
         }
-        emojiButton.tintColor = theme.colorForType(.LinkText)
+        emojiButton.tintColor = theme.colorForType(.NormalText)
+        emojiButton.backgroundColor = theme.colorForType(.TabSelection)
+        emojiButton.layer.cornerRadius = Constants.PlusCircleSize / 2.0
+        emojiButton.layer.masksToBounds = true
         emojiButton.addTarget(self, action: #selector(ChatInputView.cameraButtonPressed), for: .touchUpInside)
         emojiButton.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         addSubview(emojiButton)
@@ -401,6 +405,7 @@ private extension ChatInputView {
         emojiButton.snp.makeConstraints {
             $0.leading.equalTo(self).offset(Constants.CameraHorizontalOffset)
             $0.bottom.equalTo(self).offset(Constants.CameraBottomOffset)
+            $0.size.equalTo(Constants.PlusCircleSize)
         }
 
         voiceButton.snp.makeConstraints {

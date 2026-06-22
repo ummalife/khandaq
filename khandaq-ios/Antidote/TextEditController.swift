@@ -6,8 +6,9 @@ import UIKit
 import SnapKit
 
 private struct Constants {
-    static let Offset = 20.0
-    static let FieldHeight = 40.0
+    // KHANDAQ design (Figma): 16pt grid, taller filled field.
+    static let Offset = 16.0
+    static let FieldHeight = 48.0
 }
 
 class TextEditController: UIViewController {
@@ -17,6 +18,7 @@ class TextEditController: UIViewController {
     fileprivate let changeTextHandler: (String) -> Void
     fileprivate let userFinishedEditing: () -> Void
 
+    fileprivate var captionLabel: UILabel!
     fileprivate var textField: UITextField!
 
     /**
@@ -50,6 +52,21 @@ class TextEditController: UIViewController {
         installConstraints()
     }
 
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        // KHANDAQ design (Figma): grey circle back + explicit "Готово".
+        installKhandaqCircleBackButton(theme: theme)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: String(localized: "change_password_done"),
+            style: .done, target: self, action: #selector(TextEditController.donePressed))
+    }
+
+    @objc func donePressed() {
+        changeTextHandler(textField.text ?? "")
+        userFinishedEditing()
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
@@ -74,17 +91,39 @@ extension TextEditController: UITextFieldDelegate {
 
 private extension TextEditController {
     func createTextField() {
+        // KHANDAQ design (Figma): grey caption above the field (the screen title).
+        captionLabel = UILabel()
+        captionLabel.text = title
+        captionLabel.font = UIFont.systemFont(ofSize: 13.0)
+        captionLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        view.addSubview(captionLabel)
+
         textField = UITextField()
         textField.text = defaultValue
         textField.delegate = self
         textField.returnKeyType = .done
-        textField.borderStyle = .roundedRect
+        // KHANDAQ design (Figma Forms): filled neutral-grey rounded field, no border.
+        textField.borderStyle = .none
+        textField.backgroundColor = theme.colorForType(.ChatInputBackground)
+        textField.textColor = theme.colorForType(.NormalText)
+        textField.layer.cornerRadius = 12.0
+        textField.layer.masksToBounds = true
+        textField.placeholder = title
+        textField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 1))
+        textField.leftViewMode = .always
+        textField.clearButtonMode = .whileEditing
         view.addSubview(textField)
     }
 
     func installConstraints() {
-        textField.snp.makeConstraints {
+        captionLabel.snp.makeConstraints {
             $0.top.equalTo(view).offset(Constants.Offset)
+            $0.leading.equalTo(view).offset(Constants.Offset)
+            $0.trailing.equalTo(view).offset(-Constants.Offset)
+        }
+
+        textField.snp.makeConstraints {
+            $0.top.equalTo(captionLabel.snp.bottom).offset(8.0)
             $0.leading.equalTo(view).offset(Constants.Offset)
             $0.trailing.equalTo(view).offset(-Constants.Offset)
             $0.height.equalTo(Constants.FieldHeight)

@@ -45,6 +45,7 @@ class Theme {
         case BusyStatus = "busy-status"
         case StatusBackground = "status-background"
         case FriendCellStatus = "friend-cell-status"
+        case DestructiveText = "destructive-text"
         case ChatListCellMessage = "chat-list-cell-message"
         case ChatListCellUnreadBackground = "chat-list-cell-unread-background"
         case ChatInputBackground = "chat-input-background"
@@ -106,6 +107,7 @@ class Theme {
             BusyStatus,
             StatusBackground,
             FriendCellStatus,
+            DestructiveText,
             ChatListCellMessage,
             ChatListCellUnreadBackground,
             ChatInputBackground,

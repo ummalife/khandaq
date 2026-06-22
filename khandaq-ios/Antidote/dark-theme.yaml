@@ -65,6 +65,7 @@ values:
   busy-status: palered
   status-background: dark_bg_elevated
   friend-cell-status: text_secondary
+  destructive-text: red
   chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: dark_bg_tertiary
   chat-input-background: dark_bg_elevated

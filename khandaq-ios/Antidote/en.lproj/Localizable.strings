@@ -191,6 +191,9 @@
 "status_title" = "Status";
 /* User Tox ID text */
 "my_tox_id" = "MyID";
+"qr_screen_title" = "QR scanning";
+"qr_my_id_heading" = "Your account's MyID";
+"qr_my_id_subtitle" = "Friends can message you by scanning your QR code";
 /* User public key text */
 "public_key" = "Public Key";
 /* Share Tox ID text */

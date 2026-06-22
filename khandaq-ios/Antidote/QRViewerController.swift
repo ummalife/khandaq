@@ -18,6 +18,9 @@ class QRViewerController: UIViewController {
     fileprivate var previousBrightness: CGFloat = 1.0
 
     fileprivate var closeButton: UIButton!
+    fileprivate var headingLabel: UILabel!
+    fileprivate var subtitleLabel: UILabel!
+    fileprivate var cardView: UIView!
     fileprivate var imageView: UIImageView!
 
     init(theme: Theme, text: String) {
@@ -39,6 +42,12 @@ class QRViewerController: UIViewController {
         installNavigationItems()
         createViews()
         installConstraints()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = String(localized: "qr_screen_title")
+        installKhandaqCircleBackButton(theme: theme)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -69,17 +78,57 @@ private extension QRViewerController {
     }
 
     func createViews() {
+        // KHANDAQ design (Figma): "MyID вашего аккаунта" heading + subtitle above the QR.
+        headingLabel = UILabel()
+        headingLabel.text = String(localized: "qr_my_id_heading")
+        headingLabel.font = UIFont.systemFont(ofSize: 17.0, weight: .semibold)
+        headingLabel.textColor = theme.colorForType(.NormalText)
+        view.addSubview(headingLabel)
+
+        subtitleLabel = UILabel()
+        subtitleLabel.text = String(localized: "qr_my_id_subtitle")
+        subtitleLabel.font = UIFont.systemFont(ofSize: 14.0)
+        subtitleLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        subtitleLabel.numberOfLines = 0
+        view.addSubview(subtitleLabel)
+
+        // KHANDAQ design (Figma): QR sits in a rounded card — kept white in both themes so the code
+        // always scans.
+        cardView = UIView()
+        cardView.backgroundColor = .white
+        cardView.layer.cornerRadius = 16.0
+        cardView.layer.masksToBounds = true
+        cardView.layer.borderWidth = 0.5
+        cardView.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
+        view.addSubview(cardView)
+
         imageView = UIImageView(image: qrImageFromText())
         imageView.contentMode = .scaleAspectFit
-        view.addSubview(imageView)
+        cardView.addSubview(imageView)
     }
 
     func installConstraints() {
+        headingLabel.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide).offset(20.0)
+            $0.leading.equalTo(view).offset(20.0)
+            $0.trailing.equalTo(view).offset(-20.0)
+        }
+
+        subtitleLabel.snp.makeConstraints {
+            $0.top.equalTo(headingLabel.snp.bottom).offset(4.0)
+            $0.leading.equalTo(headingLabel)
+            $0.trailing.equalTo(headingLabel)
+        }
+
+        cardView.snp.makeConstraints {
+            $0.top.equalTo(subtitleLabel.snp.bottom).offset(20.0)
+            $0.leading.equalTo(view).offset(20.0)
+            $0.trailing.equalTo(view).offset(-20.0)
+            $0.height.equalTo(cardView.snp.width)
+        }
+
         imageView.snp.makeConstraints {
-            $0.center.equalTo(view)
-            $0.width.lessThanOrEqualTo(view.snp.width)
-            $0.width.lessThanOrEqualTo(view.snp.height)
-            $0.width.equalTo(imageView.snp.height)
+            $0.edges.equalTo(cardView).inset(16.0)
         }
     }
 

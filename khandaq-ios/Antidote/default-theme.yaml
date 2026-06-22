@@ -63,6 +63,7 @@ values:
   busy-status: palered
   status-background: white
   friend-cell-status: text_secondary
+  destructive-text: red
   chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: lightgrayblue
   # KHANDAQ design (Figma): neutral grey input/field fill (was a bluish tint).

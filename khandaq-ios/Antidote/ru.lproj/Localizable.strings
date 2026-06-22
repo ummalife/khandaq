@@ -195,6 +195,9 @@
 "status_title" = "Статус подключения";
 /* User Tox ID text */
 "my_tox_id" = "MyID";
+"qr_screen_title" = "Сканирование QR";
+"qr_my_id_heading" = "MyID вашего аккаунта";
+"qr_my_id_subtitle" = "Друзья могут написать вам, отсканировав ваш QR-код";
 /* User public key text */
 "public_key" = "Публичный ключ";
 /* Share Tox ID text */

@@ -273,6 +273,7 @@
 "settings_profile_backup_description" = "Экспорт или импорт профиля Tox (.tox). Переносятся только Tox ID и контакты; история чатов не переносится.";
 "settings_import_profile_invalid_file" = "Выбранный файл не является профилем Tox (.tox).";
 /* Settings screen menu */
+"settings_dark_theme" = "Тёмная тема";
 "settings_notifications_message_preview" = "Превью уведомлений";
 "settings_group_system_messages" = "Системные сообщения групп";
 "settings_group_system_messages_description" = "Показывать join/leave и другие системные строки в групповых чатах.";

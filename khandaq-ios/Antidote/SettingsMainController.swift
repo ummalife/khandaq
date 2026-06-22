@@ -24,6 +24,7 @@ class SettingsMainController: StaticTableController {
     fileprivate let exportProfileModel = StaticTableDefaultCellModel()
     fileprivate let importProfileModel = StaticTableDefaultCellModel()
     fileprivate let autodownloadImagesModel = StaticTableInfoCellModel()
+    fileprivate let darkThemeModel = StaticTableSwitchCellModel()
     fileprivate let notificationsModel = StaticTableSwitchCellModel()
     fileprivate let groupSystemMessagesModel = StaticTableSwitchCellModel()
     fileprivate let longerbgModel = StaticTableSwitchCellModel()
@@ -42,6 +43,7 @@ class SettingsMainController: StaticTableController {
             importProfileModel: importProfileModel,
             autodownloadImagesModel: autodownloadImagesModel,
             longerbgModel: longerbgModel,
+            darkThemeModel: darkThemeModel,
             notificationsModel: notificationsModel,
             groupSystemMessagesModel: groupSystemMessagesModel,
             dateonmessagemodeModel: dateonmessagemodeModel,
@@ -98,6 +100,11 @@ private extension SettingsMainController{
                 autodownloadImagesModel.value = String(localized: "settings_always")
         }
 
+        // KHANDAQ design (Figma): the theme switch lives in Settings ("Тёмная тема").
+        darkThemeModel.title = String(localized: "settings_dark_theme")
+        darkThemeModel.on = ThemeAppearance.isDarkMode
+        darkThemeModel.valueChangedHandler = darkThemeValueChanged
+
         notificationsModel.title = String(localized: "settings_notifications_message_preview")
         notificationsModel.on = userDefaults.showNotificationPreview
         notificationsModel.valueChangedHandler = notificationsValueChanged
@@ -131,6 +138,10 @@ private extension SettingsMainController{
 
     func showFaqScreen(_: StaticTableBaseCell) {
         delegate?.settingsMainControllerShowFaqScreen(self)
+    }
+
+    func darkThemeValueChanged(_ on: Bool) {
+        ThemeAppearance.isDarkMode = on
     }
 
     func notificationsValueChanged(_ on: Bool) {
@@ -176,6 +187,7 @@ private extension SettingsMainController {
                               importProfileModel: StaticTableDefaultCellModel,
                               autodownloadImagesModel: StaticTableInfoCellModel,
                               longerbgModel: StaticTableSwitchCellModel,
+                              darkThemeModel: StaticTableSwitchCellModel,
                               notificationsModel: StaticTableSwitchCellModel,
                               groupSystemMessagesModel: StaticTableSwitchCellModel,
                               dateonmessagemodeModel: StaticTableSwitchCellModel,
@@ -189,6 +201,7 @@ private extension SettingsMainController {
         ]
         #if DEBUG
         let toggles: [StaticTableBaseCellModel] = [
+            darkThemeModel,
             notificationsModel,
             groupSystemMessagesModel,
             dateonmessagemodeModel,
@@ -204,6 +217,7 @@ private extension SettingsMainController {
         ]
         #else
         let toggles: [StaticTableBaseCellModel] = [
+            darkThemeModel,
             notificationsModel,
             groupSystemMessagesModel,
         ]

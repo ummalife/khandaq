@@ -274,6 +274,7 @@
 "settings_profile_backup_description" = "Export or import your Tox profile (.tox). Only your Tox ID and contacts are included; chat history is not transferred.";
 "settings_import_profile_invalid_file" = "The selected file is not a valid Tox profile (.tox).";
 /* Settings screen menu */
+"settings_dark_theme" = "Dark theme";
 "settings_notifications_message_preview" = "Notification Preview";
 "settings_group_system_messages" = "Group system messages";
 "settings_group_system_messages_description" = "Show join/leave and other system lines in group chats.";

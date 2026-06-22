@@ -83,6 +83,19 @@ class ChatPrivateController: PortraitChatController {
     // KHANDAQ design (Figma): end-to-end encryption notice card shown at the top of an empty chat.
     fileprivate var encryptionBanner: UIView!
     fileprivate var newMessagesView: UIView!
+    // KHANDAQ design (Figma): Telegram-style floating day chip ("Сегодня"/"Вчера"/date) that surfaces
+    // while scrolling and reflects the date of the topmost visible message, then fades out.
+    fileprivate var floatingDateView: UIView!
+    fileprivate var floatingDateLabel: UILabel!
+    fileprivate var floatingDateHideTimer: Timer?
+    fileprivate lazy var floatingDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        // Yields locale-aware "Сегодня"/"Вчера" for recent days, full date otherwise — no string keys.
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
     fileprivate var chatInputView: ChatInputView!
     fileprivate var editMessagesToolbar: UIToolbar!
 
@@ -178,6 +191,7 @@ class ChatPrivateController: PortraitChatController {
         createTableView()
         createTableHeaderViews()
         createNewMessagesView()
+        createFloatingDateView()
         createInputView()
         createEditMessageToolbar()
         createEncryptionBanner()
@@ -1242,6 +1256,9 @@ extension ChatPrivateController: UIScrollViewDelegate {
                 tableView.reloadData()
             }
         }
+
+        updateFloatingDate()
+        showFloatingDateMomentarily()
     }
 }
 
@@ -1425,6 +1442,71 @@ private extension ChatPrivateController {
         }
     }
 
+    func createFloatingDateView() {
+        floatingDateView = UIView()
+        // Same surface as an incoming bubble so it reads as a chat overlay in both themes.
+        floatingDateView.backgroundColor = theme.colorForType(.ChatIncomingBubble)
+        floatingDateView.layer.cornerRadius = 13.0
+        floatingDateView.layer.masksToBounds = true
+        floatingDateView.alpha = 0.0
+        floatingDateView.isUserInteractionEnabled = false
+        view.addSubview(floatingDateView)
+
+        floatingDateLabel = UILabel()
+        floatingDateLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        floatingDateLabel.backgroundColor = .clear
+        floatingDateLabel.textAlignment = .center
+        floatingDateLabel.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        floatingDateView.addSubview(floatingDateLabel)
+    }
+
+    /// Sets the floating chip to the date of the topmost on-screen message (the table is y-flipped,
+    /// so "topmost" is the visible cell with the smallest minY once converted to view coordinates).
+    func updateFloatingDate() {
+        guard let tableView = tableView, floatingDateView != nil,
+              messages.count > 0,
+              let visible = tableView.indexPathsForVisibleRows, !visible.isEmpty else {
+            return
+        }
+
+        var topRow: Int?
+        var topY = CGFloat.greatestFiniteMagnitude
+        for indexPath in visible {
+            let rect = tableView.convert(tableView.rectForRow(at: indexPath), to: view)
+            if rect.minY < topY {
+                topY = rect.minY
+                topRow = indexPath.row
+            }
+        }
+
+        guard let row = topRow else {
+            return
+        }
+
+        let message = messageEntry(atDisplayIndex: row).message
+        let date = (message.tssent != 0)
+            ? Date(timeIntervalSince1970: TimeInterval(message.tssent))
+            : message.date()
+        floatingDateLabel.text = floatingDateFormatter.string(from: date)
+    }
+
+    /// Fades the chip in, then schedules a fade-out so it only shows during/just after scrolling.
+    func showFloatingDateMomentarily() {
+        guard floatingDateView != nil, let text = floatingDateLabel.text, !text.isEmpty else {
+            return
+        }
+
+        floatingDateHideTimer?.invalidate()
+        UIView.animate(withDuration: 0.15) {
+            self.floatingDateView.alpha = 1.0
+        }
+        floatingDateHideTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+            UIView.animate(withDuration: 0.3) {
+                self?.floatingDateView.alpha = 0.0
+            }
+        }
+    }
+
     func createInputView() {
         chatInputView = ChatInputView(theme: theme)
         view.addSubview(chatInputView)
@@ -1472,6 +1554,18 @@ private extension ChatPrivateController {
         newMessagesView.snp.makeConstraints {
             $0.centerX.equalTo(tableView!)
             newMessageViewTopConstraint = $0.top.equalTo(chatInputView.snp.top).constraint
+        }
+
+        floatingDateView.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(8.0)
+            $0.centerX.equalTo(view)
+            $0.height.equalTo(26.0)
+        }
+
+        floatingDateLabel.snp.makeConstraints {
+            $0.top.bottom.equalTo(floatingDateView)
+            $0.leading.equalTo(floatingDateView).offset(12.0)
+            $0.trailing.equalTo(floatingDateView).offset(-12.0)
         }
 
         chatInputView.snp.makeConstraints {

@@ -175,7 +175,9 @@ class NotificationWindow: UIWindow {
         }
 
         let showBlock = { [unowned self] in
-            self.connectingViewTopConstraint.update(offset: 6.0)
+            // Drop the pill below a standard 44pt navigation bar so it stops covering the screen
+            // title (the chat header name was hidden behind it). It floats just under the header.
+            self.connectingViewTopConstraint.update(offset: 50.0)
             self.layoutIfNeeded()
         }
 

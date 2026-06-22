@@ -13,4 +13,8 @@ class StaticTableAvatarCellModel: StaticTableBaseCellModel {
     var didTapOnAvatar: ((StaticTableAvatarCell) -> Void)?
 
     var userInteractionEnabled: Bool = true
+
+    // KHANDAQ design (Figma): an optional display name shown under the avatar (friend profile card).
+    // When nil the label stays hidden, so screens that don't set it (own-profile) are unchanged.
+    var name: String?
 }

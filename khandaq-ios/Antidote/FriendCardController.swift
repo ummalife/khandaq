@@ -93,7 +93,9 @@ class FriendCardController: StaticTableController {
 
 private extension FriendCardController {
     func updateModels() {
-        title = friend.nickname
+        // KHANDAQ design (Figma): the header reads "Профиль"; the contact's display name sits under
+        // the avatar instead of in the navigation title.
+        title = String(localized: "profile_title")
 
         if let data = friend.avatarData {
             avatarModel.avatar = UIImage(data: data)
@@ -103,6 +105,7 @@ private extension FriendCardController {
                     friend.nickname,
                     diameter: StaticTableAvatarCellModel.Constants.AvatarImageSize)
         }
+        avatarModel.name = friend.nickname
         avatarModel.userInteractionEnabled = false
 
         chatButtonsModel.chatButtonHandler = { [unowned self] in

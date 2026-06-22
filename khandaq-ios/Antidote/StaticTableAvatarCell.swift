@@ -13,6 +13,9 @@ class StaticTableAvatarCell: StaticTableBaseCell {
     fileprivate var didTapOnAvatar: ((StaticTableAvatarCell) -> Void)?
 
     fileprivate var button: UIButton!
+    fileprivate var nameLabel: UILabel!
+    fileprivate var nameToBottomConstraint: Constraint?
+    fileprivate var avatarToBottomConstraint: Constraint?
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
         super.setupWithTheme(theme, model: model)
@@ -23,10 +26,26 @@ class StaticTableAvatarCell: StaticTableBaseCell {
         }
 
         selectionStyle = .none
+        backgroundColor = .clear
+        customContentView.backgroundColor = .clear
 
         button.isUserInteractionEnabled = avatarModel.userInteractionEnabled
         button.setImage(avatarModel.avatar, for: UIControlState())
         didTapOnAvatar = avatarModel.didTapOnAvatar
+
+        let name = avatarModel.name
+        nameLabel.text = name
+        nameLabel.textColor = theme.colorForType(.NormalText)
+        let hasName = !(name?.isEmpty ?? true)
+        nameLabel.isHidden = !hasName
+        // Pin the cell bottom to the name when present, otherwise to the avatar (own-profile screen).
+        if hasName {
+            avatarToBottomConstraint?.deactivate()
+            nameToBottomConstraint?.activate()
+        } else {
+            nameToBottomConstraint?.deactivate()
+            avatarToBottomConstraint?.activate()
+        }
     }
 
     override func createViews() {
@@ -37,6 +56,12 @@ class StaticTableAvatarCell: StaticTableBaseCell {
         button.layer.masksToBounds = true
         button.addTarget(self, action: #selector(StaticTableAvatarCell.buttonPressed), for: .touchUpInside)
         customContentView.addSubview(button)
+
+        nameLabel = UILabel()
+        nameLabel.font = UIFont.systemFont(ofSize: 22.0, weight: .bold)
+        nameLabel.textAlignment = .center
+        nameLabel.isHidden = true
+        customContentView.addSubview(nameLabel)
     }
 
     override func installConstraints() {
@@ -45,9 +70,20 @@ class StaticTableAvatarCell: StaticTableBaseCell {
         button.snp.makeConstraints {
             $0.centerX.equalTo(customContentView)
             $0.top.equalTo(customContentView).offset(Constants.AvatarVerticalOffset)
-            $0.bottom.equalTo(customContentView).offset(-Constants.AvatarVerticalOffset)
+            avatarToBottomConstraint = $0.bottom.equalTo(customContentView).offset(-Constants.AvatarVerticalOffset).constraint
             $0.size.equalTo(StaticTableAvatarCellModel.Constants.AvatarImageSize)
         }
+
+        nameLabel.snp.makeConstraints {
+            $0.top.equalTo(button.snp.bottom).offset(14.0)
+            $0.leading.greaterThanOrEqualTo(customContentView).offset(16.0)
+            $0.trailing.lessThanOrEqualTo(customContentView).offset(-16.0)
+            $0.centerX.equalTo(customContentView)
+            nameToBottomConstraint = $0.bottom.equalTo(customContentView).offset(-Constants.AvatarVerticalOffset).constraint
+        }
+
+        avatarToBottomConstraint?.activate()
+        nameToBottomConstraint?.deactivate()
     }
 }
 

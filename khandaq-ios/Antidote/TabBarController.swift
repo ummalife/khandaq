@@ -104,11 +104,25 @@ extension TabBarController: UITabBarControllerDelegate {
 }
 
 private extension TabBarController {
+    // KHANDAQ design (Figma): soft green pill behind the active tab (icon + label).
+    func makeSelectionPillImage(theme: Theme) -> UIImage {
+        let size = CGSize(width: 72.0, height: 48.0)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let rect = CGRect(origin: .zero, size: size)
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: 16.0)
+            theme.colorForType(.TabItemActive).withAlphaComponent(0.14).setFill()
+            path.fill()
+        }
+        return image.withRenderingMode(.alwaysOriginal)
+    }
+
     func configureNativeTabBarAppearance(theme: Theme) {
         tabBar.tintColor = theme.colorForType(.TabItemActive)
         tabBar.unselectedItemTintColor = theme.colorForType(.TabItemInactive)
         tabBar.barTintColor = theme.colorForType(.NormalBackground)
         tabBar.isTranslucent = false
+        tabBar.selectionIndicatorImage = makeSelectionPillImage(theme: theme)
 
         if #available(iOS 13.0, *) {
             let appearance = UITabBarAppearance()

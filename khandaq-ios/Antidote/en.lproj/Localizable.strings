@@ -204,7 +204,7 @@
 "qr_close_button" = "Close";
 
 /* Chat screen placeholder */
-"chat_no_chats" = "No chats";
+"chat_no_chats" = "Your chats will appear here. Write first or reply to a message to start chatting.";
 /* Chats screen message text */
 "chat_outgoing_file" = "Outgoing file:";
 /* Chats screen message text */

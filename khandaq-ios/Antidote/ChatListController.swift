@@ -254,7 +254,10 @@ private extension ChatListController {
         placeholderLabel = UILabel()
         placeholderLabel.text = String(localized: "chat_no_chats")
         placeholderLabel.textColor = theme.colorForType(.EmptyScreenPlaceholderText)
-        placeholderLabel.font = UIFont.khandaqFontWithSize(26.0, weight: .light)
+        // KHANDAQ design (Figma): soft centered multi-line caption (~15pt), not a single big line.
+        placeholderLabel.font = UIFont.systemFont(ofSize: 15.0)
+        placeholderLabel.numberOfLines = 0
+        placeholderLabel.textAlignment = .center
         placeholderLabel.backgroundColor = theme.colorForType(.NormalBackground)
         view.addSubview(placeholderLabel)
     }
@@ -271,8 +274,10 @@ private extension ChatListController {
         }
 
         placeholderLabel.snp.makeConstraints {
-            $0.center.equalTo(view)
-            $0.size.equalTo(placeholderLabel.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)))
+            $0.centerX.equalTo(view)
+            $0.centerY.equalTo(view).multipliedBy(0.85)
+            $0.leading.equalTo(view).offset(48.0)
+            $0.trailing.equalTo(view).offset(-48.0)
         }
     }
 

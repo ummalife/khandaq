@@ -282,13 +282,12 @@ private extension FriendListController {
         let top = String(localized: "contact_no_contacts_add_contact")
         let bottom = String(localized: "contact_no_contacts_share_tox_id")
 
+        // KHANDAQ design (Figma): plain centered grey caption (~15pt), no inline link — the two cards
+        // below provide the actions.
         let text = NSMutableAttributedString(string: "\(top)\(bottom)")
-        let linkRange = NSRange(location: top.count, length: bottom.count)
         let fullRange = NSRange(location: 0, length: text.length)
-
         text.addAttribute(NSAttributedStringKey.foregroundColor, value: theme.colorForType(.EmptyScreenPlaceholderText), range: fullRange)
-        text.addAttribute(NSAttributedStringKey.font, value: UIFont.khandaqFontWithSize(26.0, weight: .light), range: fullRange)
-        text.addAttribute(NSAttributedStringKey.link, value: "", range: linkRange)
+        text.addAttribute(NSAttributedStringKey.font, value: UIFont.systemFont(ofSize: 15.0), range: fullRange)
 
         placeholderView = UITextView()
         placeholderView.delegate = self
@@ -297,29 +296,57 @@ private extension FriendListController {
         placeholderView.isScrollEnabled = false
         placeholderView.textAlignment = .center
         placeholderView.backgroundColor = theme.colorForType(.NormalBackground)
-        placeholderView.linkTextAttributes = [NSAttributedStringKey.foregroundColor.rawValue : theme.colorForType(.LinkText)]
         view.addSubview(placeholderView)
 
+        // KHANDAQ design (Figma): two grey cards side-by-side, icon on top + dark label.
         let copyButton = makeEmptyActionButton(title: String(localized: "contacts_copy_myid"),
+                                               systemImage: "doc.on.doc",
                                                action: #selector(emptyCopyMyIdPressed))
         let qrButton = makeEmptyActionButton(title: String(localized: "show_qr_code"),
+                                             systemImage: "qrcode",
                                              action: #selector(emptyShowQRPressed))
         emptyActionsStack = UIStackView(arrangedSubviews: [copyButton, qrButton])
-        emptyActionsStack.axis = .vertical
+        emptyActionsStack.axis = .horizontal
         emptyActionsStack.spacing = 12.0
         emptyActionsStack.distribution = .fillEqually
         view.addSubview(emptyActionsStack)
     }
 
-    private func makeEmptyActionButton(title: String, action: Selector) -> UIButton {
+    private func makeEmptyActionButton(title: String, systemImage: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
-        button.setTitle(title, for: .normal)
-        button.setTitleColor(theme.colorForType(.LinkText), for: .normal)
-        button.titleLabel?.font = UIFont.systemFont(ofSize: 16.0, weight: .medium)
         button.backgroundColor = theme.colorForType(.ChatInputBackground)
         button.layer.cornerRadius = 14.0
         button.addTarget(self, action: action, for: .touchUpInside)
-        button.snp.makeConstraints { $0.height.equalTo(48.0) }
+        button.snp.makeConstraints { $0.height.equalTo(76.0) }
+
+        let icon = UIImageView()
+        icon.isUserInteractionEnabled = false
+        icon.contentMode = .scaleAspectFit
+        icon.tintColor = theme.colorForType(.NormalText)
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 22.0, weight: .regular)
+            icon.image = UIImage(systemName: systemImage, withConfiguration: config)
+        }
+        button.addSubview(icon)
+
+        let label = UILabel()
+        label.isUserInteractionEnabled = false
+        label.text = title
+        label.font = UIFont.systemFont(ofSize: 15.0)
+        label.textColor = theme.colorForType(.NormalText)
+        label.textAlignment = .center
+        label.numberOfLines = 2
+        button.addSubview(label)
+
+        icon.snp.makeConstraints {
+            $0.top.equalTo(button).offset(14.0)
+            $0.leading.equalTo(button).offset(14.0)
+        }
+        label.snp.makeConstraints {
+            $0.leading.equalTo(button).offset(14.0)
+            $0.trailing.equalTo(button).offset(-14.0)
+            $0.bottom.equalTo(button).offset(-12.0)
+        }
         return button
     }
 

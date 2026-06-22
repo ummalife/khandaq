@@ -208,7 +208,7 @@
 "qr_close_button" = "Закрыть";
 
 /* Chat screen placeholder */
-"chat_no_chats" = "Нет чатов";
+"chat_no_chats" = "Здесь будут ваши диалоги. Напишите первым или ответьте на сообщение, чтобы начать общение.";
 /* Chats screen message text */
 "chat_outgoing_file" = "Исходящий файл:";
 /* Chats screen message text */

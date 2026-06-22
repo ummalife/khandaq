@@ -35,7 +35,7 @@ class SettingsAdvancedController: StaticTableController {
         #endif
         sections.append([restoreDefaultsModel])
 
-        super.init(theme: theme, style: .grouped, model: sections)
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: sections)
 
         title = String(localized: "settings_advanced_settings")
         updateModels()

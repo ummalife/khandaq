@@ -20,7 +20,7 @@ class ChangeUserStatusController: StaticTableController {
     init(theme: Theme, selectedStatus: OCTToxUserStatus) {
         self.selectedStatus = selectedStatus
 
-        super.init(theme: theme, style: .plain, model: [
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: [
             [
                 onlineModel,
                 awayModel,

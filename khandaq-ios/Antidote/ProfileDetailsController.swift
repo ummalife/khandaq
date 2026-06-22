@@ -47,7 +47,7 @@ class ProfileDetailsController: StaticTableController {
         model.append([exportProfileModel, deleteProfileModel])
         footers.append(nil)
 
-        super.init(theme: theme, style: .grouped, model: model, footers: footers)
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: model, footers: footers)
 
         updateModel()
 

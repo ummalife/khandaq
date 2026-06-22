@@ -22,7 +22,7 @@ class ChangeAutodownloadImagesController: StaticTableController {
         self.userDefaults = UserDefaultsManager()
         self.selectedStatus = userDefaults.autodownloadImages
 
-        super.init(theme: theme, style: .plain, model: [
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: [
             [
                 neverModel,
                 wifiModel,

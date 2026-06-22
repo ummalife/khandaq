@@ -38,7 +38,7 @@ class SettingsMainController: StaticTableController {
         self.theme = theme
         self.submanagerObjects = submanagerObjects
 
-        super.init(theme: theme, style: .grouped, model: SettingsMainController.buildSections(
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: SettingsMainController.buildSections(
             exportProfileModel: exportProfileModel,
             importProfileModel: importProfileModel,
             autodownloadImagesModel: autodownloadImagesModel,

@@ -28,6 +28,14 @@ class StaticTableController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // KHANDAQ design (Figma): grouped screens use white inset cards on grey (.insetGrouped, iOS 13+).
+    static var insetGroupedStyle: UITableViewStyle {
+        if #available(iOS 13.0, *) {
+            return .insetGrouped
+        }
+        return .grouped
+    }
+
     override func loadView() {
         loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
 
@@ -88,8 +96,25 @@ extension StaticTableController: UITableViewDataSource {
             case .grouped:
                 cell.setBottomSeparatorHidden(isLastRow)
 
-        case .insetGrouped:
-            print("error")
+            case .insetGrouped:
+                // KHANDAQ design (Figma): white rounded inset card. The system grouped background
+                // configuration rounds the section's first/last cell corners automatically; we just
+                // supply the white fill and hide the separator under the last row of each section.
+                // The avatar cell stays on the plain grey backdrop (no card) — own-profile header.
+                cell.setBottomSeparatorHidden(isLastRow)
+                if cell is StaticTableAvatarCell {
+                    cell.backgroundColor = theme.colorForType(.SettingsBackground)
+                    cell.contentView.backgroundColor = .clear
+                } else if #available(iOS 14.0, *) {
+                    cell.automaticallyUpdatesBackgroundConfiguration = false
+                    var config = UIBackgroundConfiguration.listGroupedCell()
+                    config.backgroundColor = theme.colorForType(.NormalBackground)
+                    cell.backgroundConfiguration = config
+                    cell.contentView.backgroundColor = .clear
+                } else {
+                    cell.backgroundColor = theme.colorForType(.NormalBackground)
+                    cell.contentView.backgroundColor = .clear
+                }
         }
 
         return cell
@@ -208,8 +233,9 @@ private extension StaticTableController {
                 tableView!.backgroundColor = theme.colorForType(.NormalBackground)
             case .grouped:
                 tableView!.backgroundColor = theme.colorForType(.SettingsBackground)
-        case .insetGrouped:
-            print("error")
+            case .insetGrouped:
+                // KHANDAQ design (Figma): grey backdrop, white inset cards (cells provide the fill).
+                tableView!.backgroundColor = theme.colorForType(.SettingsBackground)
         }
 
         view.addSubview(tableView!)

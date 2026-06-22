@@ -38,7 +38,7 @@ class ProfileMainController: StaticTableController {
 
         avatarManager = AvatarManager(theme: theme)
 
-        super.init(theme: theme, style: .plain, model: [
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: [
             [
                 avatarModel,
             ],

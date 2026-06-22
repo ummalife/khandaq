@@ -16,6 +16,7 @@ class FriendCardController: StaticTableController {
 
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
 
+    fileprivate let cardTheme: Theme
     fileprivate let friend: OCTFriend
 
     fileprivate let avatarManager: AvatarManager
@@ -31,6 +32,7 @@ class FriendCardController: StaticTableController {
 
     init(theme: Theme, friend: OCTFriend, submanagerObjects: OCTSubmanagerObjects) {
         self.submanagerObjects = submanagerObjects
+        self.cardTheme = theme
         self.friend = friend
 
         self.avatarManager = AvatarManager(theme: theme)
@@ -74,6 +76,8 @@ class FriendCardController: StaticTableController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        installKhandaqCircleBackButton(theme: cardTheme)
 
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)
         let results = submanagerObjects.friends(predicate: predicate)

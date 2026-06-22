@@ -470,6 +470,7 @@
 		11FC105D1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC105C1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift */; };
 		11FC105E1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC105C1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift */; };
 		358FC42D04E29FF433F9D596 /* ReconnectBackoffCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B71A73F5F6307B09B04 /* ReconnectBackoffCoordinator.swift */; };
+		3F9BB0F12C3981D227460419 /* KhandaqBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E87D6E7F9208C3C45EDD8D /* KhandaqBackButton.swift */; };
 		47D14C83430DD0076D082C7D /* WalkthroughController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */; };
 		4E3D0F9527C9751300D5A068 /* LinearProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */; };
 		4E4B267F27C0DCAE00E07A66 /* Call.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4B267E27C0DCAE00E07A66 /* Call.swift */; };
@@ -1137,6 +1138,7 @@
 		CEC32120B965BE40E0029DB1 /* Pods-AntidoteTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AntidoteTests.release.xcconfig"; path = "Pods/Target Support Files/Pods-AntidoteTests/Pods-AntidoteTests.release.xcconfig"; sourceTree = "<group>"; };
 		D7479C4F3A734F1604F7D3A0 /* MessageDeliveryWatchdog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDeliveryWatchdog.swift; sourceTree = "<group>"; };
 		DEADBEEF0000000000001301 /* ChatPreviewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatPreviewController.swift; sourceTree = "<group>"; };
+		F0E87D6E7F9208C3C45EDD8D /* KhandaqBackButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KhandaqBackButton.swift; sourceTree = "<group>"; };
 		KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupCreateNameController.swift; sourceTree = "<group>"; };
 		KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupJoinHelper.swift; sourceTree = "<group>"; };
 		KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelectController.swift; sourceTree = "<group>"; };
@@ -1345,6 +1347,7 @@
 				119AD2081BEC718C000C5CB8 /* Sounds */,
 				1164C8EA1BC97FF600B91107 /* Views */,
 				7B2546D4D0F75885A382AA1E /* AttachmentMenuController.swift */,
+				F0E87D6E7F9208C3C45EDD8D /* KhandaqBackButton.swift */,
 			);
 			path = Antidote;
 			sourceTree = "<group>";
@@ -2692,6 +2695,7 @@
 				A080C1D9EA0046BE83E59B9F /* ImportInstructionsController.swift in Sources */,
 				94011D6AE24947BDF2B63B08 /* WalkthroughController.swift in Sources */,
 				8FF331E609E0EECC554FAC9B /* AttachmentMenuController.swift in Sources */,
+				3F9BB0F12C3981D227460419 /* KhandaqBackButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -166,11 +166,11 @@ enum ThemeChrome {
     // Liquid Glass look) — a circle for icon buttons (e.g. "+") and a pill for text buttons (e.g.
     // "Править"). Applied selectively per screen, NOT globally, so back buttons stay plain as in
     // the design.
-    static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector) -> UIBarButtonItem {
+    static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector, tint: UIColor? = nil) -> UIBarButtonItem {
         let size: CGFloat = 32.0
         let button = UIButton(type: .system)
         button.backgroundColor = theme.colorForType(.TabSelection)
-        button.tintColor = theme.colorForType(.LinkText)
+        button.tintColor = tint ?? theme.colorForType(.LinkText)
         button.layer.cornerRadius = size / 2.0
         button.layer.masksToBounds = true
         button.setImage(image, for: .normal)

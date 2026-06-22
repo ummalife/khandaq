@@ -64,6 +64,11 @@ class AddFriendController: UIViewController {
 
         updateSendButton()
     }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        installKhandaqCircleBackButton(theme: theme)
+    }
 }
 
 extension AddFriendController {

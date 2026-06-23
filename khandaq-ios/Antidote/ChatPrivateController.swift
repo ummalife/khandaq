@@ -354,7 +354,12 @@ class ChatPrivateController: PortraitChatController {
             self.replyController.scrollToReplyTarget(meta,
                                                      messages: self.messages,
                                                      tableView: tableView,
-                                                     submanagerObjects: self.submanagerObjects)
+                                                     submanagerObjects: self.submanagerObjects,
+                                                     ensureLoaded: { [weak self] targetIndex in
+                                                         guard let self = self else { return }
+                                                         self.visibleMessages = min(self.messages.count, targetIndex + 30)
+                                                         self.tableView?.reloadData()
+                                                     })
         }
     }
 
@@ -402,6 +407,23 @@ class ChatPrivateController: PortraitChatController {
         guard let messageId = GlobalSearchScrollTarget.take(forChatId: chat.uniqueIdentifier),
               let tableView = tableView else {
             return
+        }
+
+        // KHANDAQ (#7): the target may be older than the currently loaded window — the chat paginates
+        // and only `visibleMessages` rows are loaded. Find its storage index and expand the window to
+        // include it before looking up the display row, otherwise the scroll silently no-ops.
+        var storageIndex: Int?
+        for i in 0..<messages.count where messages[i].uniqueIdentifier == messageId {
+            storageIndex = i
+            break
+        }
+        guard let targetStorageIndex = storageIndex else {
+            return
+        }
+        if targetStorageIndex >= visibleMessages {
+            visibleMessages = min(messages.count, targetStorageIndex + Constants.MessagesPortionSize)
+            tableView.reloadData()
+            tableView.layoutIfNeeded()
         }
 
         let rows = tableView.numberOfRows(inSection: 0)
@@ -509,17 +531,22 @@ extension ChatPrivateController {
     }
 
     @objc func newMessagesViewPressed() {
+        scrollToNewestMessage()
+    }
+
+    // KHANDAQ (#119): jump to the newest message (row 0 in the inverted table).
+    func scrollToNewestMessage(animated: Bool = true) {
         guard let tableView = tableView else {
             return
         }
 
-        tableView.setContentOffset(CGPoint.zero, animated: true)
+        tableView.setContentOffset(CGPoint.zero, animated: animated)
 
         // iOS is broken =\
         // See https://stackoverflow.com/a/30804874
         let delayTime = DispatchTime.now() + Double(Int64(0.2 * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
         DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
-            self?.tableView?.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+            self?.tableView?.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: animated)
         }
     }
 
@@ -1914,6 +1941,15 @@ private extension ChatPrivateController {
         guard let tableView = tableView else {
             return
         }
+
+        // KHANDAQ (#119): when WE just sent the newest message, always jump straight to it
+        // (Telegram-style) instead of surfacing the "new messages" pill.
+        if messages.count > 0, messages[0].isOutgoing() {
+            toggleNewMessageView(show: false)
+            scrollToNewestMessage()
+            return
+        }
+
         guard let visible = tableView.indexPathsForVisibleRows else {
             return
         }

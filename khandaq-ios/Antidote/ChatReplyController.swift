@@ -73,12 +73,14 @@ final class ChatReplyController {
     func scrollToReplyTarget(_ meta: MessageReplyHelper.ReplyMeta,
                              messages: Results<OCTMessageAbstract>,
                              tableView: UITableView,
-                             submanagerObjects: OCTSubmanagerObjects) {
-        let loaded = min(tableView.numberOfRows(inSection: 0), messages.count)
+                             submanagerObjects: OCTSubmanagerObjects,
+                             ensureLoaded: (Int) -> Void) {
+        // KHANDAQ (#100): search the FULL history, not just the currently loaded window — replying to
+        // an older (paginated-out) message must still jump to it.
         var bestIndex: Int?
         var bestDelta = Int64.max
 
-        for index in 0..<loaded {
+        for index in 0..<messages.count {
             let message = messages[index]
             if meta.localMessageId != 0,
                MessageReplyHelper.stableLocalId(message.uniqueIdentifier) == meta.localMessageId {
@@ -110,6 +112,16 @@ final class ChatReplyController {
         }
 
         guard let index = bestIndex else {
+            return
+        }
+
+        // KHANDAQ (#100): expand the loaded window if the target is paginated out, then scroll.
+        // The guard keeps us crash-safe if storage index still maps past the display rows.
+        if index >= tableView.numberOfRows(inSection: 0) {
+            ensureLoaded(index)
+            tableView.layoutIfNeeded()
+        }
+        guard index < tableView.numberOfRows(inSection: 0) else {
             return
         }
 

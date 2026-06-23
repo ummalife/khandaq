@@ -91,7 +91,12 @@ extension ChatGroupController {
             self.replyController.scrollToReplyTarget(meta,
                                                      messages: messages,
                                                      tableView: self.tableView,
-                                                     submanagerObjects: self.submanagerObjects)
+                                                     submanagerObjects: self.submanagerObjects,
+                                                     ensureLoaded: { [weak self] targetIndex in
+                                                         guard let self = self else { return }
+                                                         self.visibleMessages = min(messages.count, targetIndex + 30)
+                                                         self.tableView?.reloadData()
+                                                     })
         }
     }
 

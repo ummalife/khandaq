@@ -34,6 +34,9 @@ class ChatGroupController: PortraitChatController {
 
     var messages: Results<OCTMessageAbstract>
     fileprivate var messagesToken: RLMNotificationToken?
+    // KHANDAQ (#119): id of the newest own-outgoing message we already auto-scrolled to (so status-only
+    // updates don't re-scroll the list).
+    fileprivate var lastAutoScrolledOutgoingId: String?
     var visibleMessages: Int
     fileprivate var showsSystemMessages: Bool
 
@@ -211,7 +214,7 @@ class ChatGroupController: PortraitChatController {
         installMessageToolsUI()
 
         messagesToken = messages.addNotificationBlock { [weak self] _ in
-            self?.tableView?.reloadData()
+            self?.handleMessagesChange()
         }
 
         connectionStatusObserver = NotificationCenter.default.addObserver(
@@ -262,6 +265,22 @@ class ChatGroupController: PortraitChatController {
         guard let messageId = GlobalSearchScrollTarget.take(forChatId: chat.uniqueIdentifier),
               let tableView = tableView else {
             return
+        }
+
+        // KHANDAQ (#7): the target may be older than the loaded window — expand `visibleMessages` to
+        // include its storage index before looking up the display row, otherwise the scroll no-ops.
+        var storageIndex: Int?
+        for i in 0..<messages.count where messages[i].uniqueIdentifier == messageId {
+            storageIndex = i
+            break
+        }
+        guard let targetStorageIndex = storageIndex else {
+            return
+        }
+        if targetStorageIndex >= visibleMessages {
+            visibleMessages = min(messages.count, targetStorageIndex + Constants.MessagesPortionSize)
+            tableView.reloadData()
+            tableView.layoutIfNeeded()
         }
 
         let rows = tableView.numberOfRows(inSection: 0)
@@ -828,6 +847,40 @@ extension ChatGroupController: UITableViewDelegate {
         }
     }
 
+    // KHANDAQ (#119): reload + jump to the newest message when WE just sent it (Telegram-style).
+    func handleMessagesChange() {
+        tableView?.reloadData()
+        scrollToNewestIfOwnOutgoing()
+    }
+
+    func scrollToNewestIfOwnOutgoing() {
+        guard messages.count > 0 else {
+            return
+        }
+        let newest = messages[0]
+        guard newest.isOutgoing() else {
+            return
+        }
+        let id = newest.uniqueIdentifier
+        guard id != lastAutoScrolledOutgoingId else {
+            return
+        }
+        lastAutoScrolledOutgoingId = id
+        scrollToNewestMessage()
+    }
+
+    func scrollToNewestMessage(animated: Bool = true) {
+        guard let tableView = tableView else {
+            return
+        }
+        tableView.setContentOffset(CGPoint.zero, animated: animated)
+        // iOS needs a re-assert after layout settles (see ChatPrivateController).
+        let delayTime = DispatchTime.now() + Double(Int64(0.2 * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
+        DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
+            self?.tableView?.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: animated)
+        }
+    }
+
     // KHANDAQ (#15): file/media cells don't self-size in height (the movable-content cell hierarchy
     // breaks automatic-dimension for them — the row stays at the estimate and the square preview box
     // is squashed to a strip). Give inline image/video bubbles an explicit aspect-ratio height; let
@@ -1297,7 +1350,7 @@ private extension ChatGroupController {
                                                            submanagerObjects: submanagerObjects,
                                                            showSystemMessages: showSystemMessages)
         messagesToken = messages.addNotificationBlock { [weak self] _ in
-            self?.tableView?.reloadData()
+            self?.handleMessagesChange()
         }
         tableView?.reloadData()
     }

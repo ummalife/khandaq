@@ -1472,6 +1472,25 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
 }
 
 - (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                           messageId:(uint32_t)messageId
+                                text:(NSString *)text
+{
+    NSParameterAssert(chat);
+    NSParameterAssert(text);
+
+    if (messageId == 0 || text.length == 0) {
+        return NO;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
+                              chat.uniqueIdentifier, messageId, text];
+    RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+
+    return results.count > 0;
+}
+
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
                                 text:(NSString *)text
                     nearDateInterval:(NSTimeInterval)dateInterval
                        windowSeconds:(NSTimeInterval)windowSeconds

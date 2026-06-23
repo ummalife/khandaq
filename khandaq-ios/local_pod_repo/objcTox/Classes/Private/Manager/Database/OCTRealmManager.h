@@ -177,6 +177,14 @@
                               peerId:(uint32_t)peerId
                                 text:(NSString *)text;
 
+// KHANDAQ (#114): peer-agnostic dedup by (chat + messageId + text). NGC relays/re-delivers the same
+// logical message with the SAME messageId but a DIFFERENT (volatile) peerId, so the peerId-scoped
+// variant above misses it on the live path. Window-free — a legitimate repeat carries a different
+// messageId, so it is never collapsed.
+- (BOOL)groupTextMessageExistsInChat:(OCTChat *)chat
+                           messageId:(uint32_t)messageId
+                                text:(NSString *)text;
+
 // KHANDAQ (#42): persistent dedup that survives an app restart. History-sync re-delivers a message
 // with its ORIGINAL timestamp; matching chat + identical text + (near) the same dateInterval catches
 // a re-synced copy whose volatile messageId no longer matches the stored one. The tight window keeps

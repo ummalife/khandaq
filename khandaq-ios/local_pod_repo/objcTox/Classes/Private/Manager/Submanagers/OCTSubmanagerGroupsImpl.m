@@ -2170,6 +2170,16 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                      windowSeconds:45.0];
     }
 
+    // KHANDAQ (#114): peer-agnostic dedup by (messageId + text). NGC relays/re-delivers the same logical
+    // message with the SAME messageId but a DIFFERENT peerId, sometimes outside the content window above —
+    // the stable catch is messageId + text. A legitimate repeat carries a new messageId, so this is safe.
+    // (Sender retry storms use different messageIds and are still caught by the content dedup above.)
+    if (! alreadyStored && messageId > 0) {
+        alreadyStored = [realmManager groupTextMessageExistsInChat:chat
+                                                         messageId:messageId
+                                                              text:message];
+    }
+
     if (! alreadyStored) {
         [realmManager addGroupMessageWithText:message
                                          type:type

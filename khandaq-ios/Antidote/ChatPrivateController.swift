@@ -1656,14 +1656,27 @@ private extension ChatPrivateController {
                         let countReconciles = (oldRows + animatedInsertions.count - animatedDeletions.count) == projectedRows
 
                         if indicesInBounds && countReconciles {
+                            // KHANDAQ (#86/#90/crash): apply EXACTLY the reconciled (window-clamped) index
+                            // paths — not the clamping helpers, which would re-clamp against the just-
+                            // advanced window and insert an extra row at the pagination boundary.
+                            let deletePaths = animatedDeletions.map { IndexPath(row: $0, section: 0) }
+                            let insertPaths = animatedInsertions.map { IndexPath(row: $0, section: 0) }
+                            // Advance the visible window BEFORE endUpdates so the data source reports the
+                            // post-update count during the batch. Updating it afterwards left
+                            // displayableRowCount() = min(old visibleMessages, new messages.count), which on
+                            // a paginated chat is one short of what the table expects → invalid-batch abort.
+                            self.visibleMessages = newVisible
                             tableView.beginUpdates()
-                            self.updateTableViewWithDeletions(deletions)
-                            self.updateTableViewWithInsertions(insertions)
+                            if !deletePaths.isEmpty {
+                                tableView.deleteRows(at: deletePaths, with: .top)
+                            }
+                            if !insertPaths.isEmpty {
+                                tableView.insertRows(at: insertPaths, with: .top)
+                            }
                             tableView.endUpdates()
                             if !modifications.isEmpty {
                                 self.updateTableViewWithModifications(modifications)
                             }
-                            self.visibleMessages = newVisible
                         }
                         else {
                             self.visibleMessages = newVisible

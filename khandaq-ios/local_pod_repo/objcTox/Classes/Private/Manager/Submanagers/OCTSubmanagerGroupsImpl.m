@@ -3339,9 +3339,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return YES;
             }
 
+            // KHANDAQ (#114): peer-agnostic dedup. A relayed / re-synced copy carries the SAME messageId
+            // but a DIFFERENT (volatile) peerId, so the peerId-scoped variant let it slip through and
+            // history-sync inserted a duplicate — surfacing the same message many times under different
+            // sender attributions. Match the live path: collapse by (messageId + text) regardless of the
+            // relaying peer.
             return [realmManager groupTextMessageExistsInChat:chat
                                                     messageId:messageId
-                                                       peerId:peerId
                                                          text:text];
         }
         fileExistsBlock:^BOOL(OCTChat *chat, NSString *msgIdHashHex) {

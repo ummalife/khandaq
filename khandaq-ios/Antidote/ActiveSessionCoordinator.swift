@@ -16,6 +16,7 @@ private struct Options {
     static let ToShowKey = "ToShowKey"
     static let StoredOptions = "StoredOptions"
     static let ThemeReloadOnlyKey = "ThemeReloadOnly"
+    static let SelectedTabIndexKey = "SelectedTabIndex"
 
     enum Coordinator {
         case none
@@ -75,6 +76,12 @@ class ActiveSessionCoordinator: NSObject {
      */
     fileprivate var iPhone: IphoneObjects!
     fileprivate var iPad: IpadObjects!
+
+    /// KHANDAQ (#98): currently selected iPhone tab (nil on iPad) — preserved across a theme reload.
+    var currentTabIndex: Int? {
+        guard case .iPhone = InterfaceIdiom.current() else { return nil }
+        return iPhone?.tabBarController.selectedIndex
+    }
 
     fileprivate var isPresentingSharePicker = false
     fileprivate var pendingSharePayload: ShareInboxPayload?
@@ -286,7 +293,12 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
         }
 
         if case .iPhone = InterfaceIdiom.current() {
-            iPhone.tabBarController.selectTab(at: IphoneObjects.TabCoordinator.chats.rawValue)
+            // KHANDAQ (#98): on a theme reload keep whatever tab the user was on (the toggle lives in
+            // Settings); only default to Chats on a genuine fresh session start.
+            let isThemeReload = options?[Options.ThemeReloadOnlyKey] as? Bool ?? false
+            let tabIndex = (isThemeReload ? options?[Options.SelectedTabIndexKey] as? Int : nil)
+                ?? IphoneObjects.TabCoordinator.chats.rawValue
+            iPhone.tabBarController.selectTab(at: tabIndex)
             iPhone.tabBarController.preloadChildTabViews()
             iPhone.tabBarController.view.setNeedsLayout()
             iPhone.tabBarController.view.layoutIfNeeded()

@@ -1781,7 +1781,7 @@ private extension ChatPrivateController {
 
         titleView.name = friend.nickname
         // KHANDAQ design (Figma): contact avatar in the chat header.
-        titleView.avatar = AvatarManager(theme: theme).avatarFromString(friend.nickname, diameter: 30.0)
+        updateTitleAvatar(for: friend)
         updateTitlePresence(for: friend)
 
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)
@@ -1797,6 +1797,7 @@ private extension ChatPrivateController {
                     fallthrough
                 case .update:
                     self.titleView.name = friend.nickname
+                    self.updateTitleAvatar(for: friend)
                     self.updateTitlePresence(for: friend)
 
                     let isConnected = friend.isConnected
@@ -1822,6 +1823,16 @@ private extension ChatPrivateController {
             UInt32.max)
         let compound = NSCompoundPredicate(orPredicateWithSubpredicates: [textPredicate, filePredicate])
         return messages.objects(with: compound).count > 0
+    }
+
+    fileprivate func updateTitleAvatar(for friend: OCTFriend) {
+        // KHANDAQ (#95): show the contact's real avatar in the chat header (mirrors FriendCardController);
+        // fall back to initials only when the contact has no avatar set.
+        if let data = friend.avatarData, let image = UIImage(data: data) {
+            titleView.avatar = image
+        } else {
+            titleView.avatar = AvatarManager(theme: theme).avatarFromString(friend.nickname, diameter: 30.0)
+        }
     }
 
     func updateTitlePresence(for friend: OCTFriend) {

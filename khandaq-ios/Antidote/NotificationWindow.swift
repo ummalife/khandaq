@@ -128,6 +128,9 @@ class NotificationWindow: UIWindow {
 
         connectingViewLabel.layer.removeAllAnimations()
         connectingViewLabel.alpha = 1.0
+        // KHANDAQ (#94): re-assert the label color on every state change. A theme switch recreates
+        // the NotificationWindow; without this the green pill could show invisible (blank green) text.
+        connectingViewLabel.textColor = theme.colorForType(.ConnectingText)
 
         switch state {
             case .connecting:

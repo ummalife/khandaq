@@ -217,8 +217,9 @@ extension FriendListController : UITextViewDelegate {
             let toxId = submanagerUser.userAddress
             let alert = UIAlertController(title: String(localized: "my_tox_id"), message: toxId, preferredStyle: .alert)
 
-            alert.addAction(UIAlertAction(title: String(localized: "copy"), style: .default) { _ -> Void in
+            alert.addAction(UIAlertAction(title: String(localized: "copy"), style: .default) { [weak self] _ -> Void in
                 UIPasteboard.general.string = toxId
+                self?.showCopiedHUD(String(localized: "group_member_action_copy_done"))
             })
 
             alert.addAction(UIAlertAction(title: String(localized: "show_qr_code"), style: .default) { [weak self] _ -> Void in
@@ -338,20 +339,26 @@ private extension FriendListController {
         label.numberOfLines = 2
         button.addSubview(label)
 
+        // KHANDAQ (#103): give the icon an explicit size and anchor the label BELOW it. Previously
+        // icon and label were pinned independently (both top-left / bottom), so on narrower devices
+        // (iPhone 13 Pro) the text overlapped the icon.
         icon.snp.makeConstraints {
             $0.top.equalTo(button).offset(14.0)
             $0.leading.equalTo(button).offset(14.0)
+            $0.width.height.equalTo(24.0)
         }
         label.snp.makeConstraints {
+            $0.top.equalTo(icon.snp.bottom).offset(8.0)
             $0.leading.equalTo(button).offset(14.0)
             $0.trailing.equalTo(button).offset(-14.0)
-            $0.bottom.equalTo(button).offset(-12.0)
+            $0.bottom.lessThanOrEqualTo(button).offset(-12.0)
         }
         return button
     }
 
     @objc private func emptyCopyMyIdPressed() {
         UIPasteboard.general.string = submanagerUser.userAddress
+        showCopiedHUD(String(localized: "group_member_action_copy_done"))
     }
 
     @objc private func emptyShowQRPressed() {

@@ -512,12 +512,21 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     }
 
     [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
+        // KHANDAQ (#97): preserve a user-chosen nickname. Only let the nickname keep tracking the
+        // friend's name when the user hasn't set a custom alias (nickname empty, or still equal to
+        // the previous auto-derived value). Otherwise a reconnect/name update clobbers the alias.
+        BOOL nicknameTracksName = (theFriend.nickname.length == 0)
+            || [theFriend.nickname isEqualToString:theFriend.name]
+            || [theFriend.nickname isEqualToString:OCTShortPublicKeyLabel(publicKey)];
+
         theFriend.name = name;
 
-        if (!OCTIsGenericDefaultFriendName(name)) {
-            theFriend.nickname = name;
-        } else {
-            theFriend.nickname = OCTShortPublicKeyLabel(publicKey);
+        if (nicknameTracksName) {
+            if (!OCTIsGenericDefaultFriendName(name)) {
+                theFriend.nickname = name;
+            } else {
+                theFriend.nickname = OCTShortPublicKeyLabel(publicKey);
+            }
         }
     }];
 }

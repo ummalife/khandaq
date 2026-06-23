@@ -169,6 +169,7 @@ private extension ProfileMainController {
         copyMyIdModel.didSelectHandler = { [weak self] _ in
             guard let self = self else { return }
             UIPasteboard.general.string = self.submanagerUser.userAddress
+            self.showCopiedHUD(String(localized: "group_member_action_copy_done"))
         }
 
         showQrModel.title = String(localized: "show_qr_code")

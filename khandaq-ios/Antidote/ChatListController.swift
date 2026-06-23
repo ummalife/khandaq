@@ -143,6 +143,15 @@ class ChatListController: UIViewController {
         // modal is presented (shouldDeferListUpdates), so a group created via the name dialog could be
         // missing from the list afterwards until something else triggered a reload.
         tableManager.tableView.reloadData()
+
+        // KHANDAQ (#94): force the search field to lay out before it appears. After a theme reload the
+        // controller is freshly created; the `.minimal` field could otherwise render as a torn pill in
+        // dark mode until a later relayout corrected it.
+        if #available(iOS 13.0, *) {
+            let field = searchController.searchBar.searchTextField
+            field.setNeedsLayout()
+            field.layoutIfNeeded()
+        }
     }
 
     override func viewDidLayoutSubviews() {

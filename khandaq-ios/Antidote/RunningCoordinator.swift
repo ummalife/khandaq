@@ -109,6 +109,10 @@ extension RunningCoordinator {
         let preservedOptions = options ?? [:]
         var reloadOptions = preservedOptions
         reloadOptions["ThemeReloadOnly"] = true
+        // KHANDAQ (#98): preserve the tab the user is currently on across the theme rebuild.
+        if let tabIndex = activeSessionCoordinator?.currentTabIndex {
+            reloadOptions["SelectedTabIndex"] = tabIndex
+        }
 
         let oldSession = activeSessionCoordinator
 

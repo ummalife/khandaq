@@ -532,8 +532,26 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
             peer.peerId = (int32_t)peerId;
             peer.peerRole = (int32_t)peerRole;
 
-            if (peerName.length > 0) {
-                peer.peerName = peerName;
+            NSString *resolvedName = peerName;
+            // KHANDAQ (#101): peerId is volatile — it changes when a member reconnects or after an app
+            // restart, so a returning member gets a brand-new OCTGroupPeer with an empty name (until
+            // toxcore re-syncs it) and shows the "Peer N" fallback. Inherit the last-known name from any
+            // existing row in this chat with the SAME (stable) public key. The old peerId row is still
+            // present here — removeGroupPeersForChat: runs only after every upsert in refreshPeersForChat.
+            if (resolvedName.length == 0 && normalizedPubkey.length > 0) {
+                RLMResults *known = [OCTGroupPeer objectsInRealm:self.realm where:
+                                     @"chatUniqueIdentifier == %@ AND peerPublicKeyHex == %@ AND peerName != nil",
+                                     chat.uniqueIdentifier, normalizedPubkey];
+                for (OCTGroupPeer *candidate in known) {
+                    if (candidate.peerName.length > 0) {
+                        resolvedName = candidate.peerName;
+                        break;
+                    }
+                }
+            }
+
+            if (resolvedName.length > 0) {
+                peer.peerName = resolvedName;
             }
 
             if (normalizedPubkey.length > 0) {

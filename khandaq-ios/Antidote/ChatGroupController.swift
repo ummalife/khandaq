@@ -50,6 +50,8 @@ class ChatGroupController: PortraitChatController {
 
     var tableView: UITableView!
     var chatInputView: ChatInputView!
+    // KHANDAQ (#93-task): floating "jump to latest" button, shown when scrolled up.
+    fileprivate var scrollDownButton: UIButton!
     fileprivate var tableViewToChatInputConstraint: Constraint!
     fileprivate var chatInputViewBottomConstraint: Constraint?
     fileprivate let imageCache = NSCache<AnyObject, AnyObject>()
@@ -152,6 +154,18 @@ class ChatGroupController: PortraitChatController {
         view.addSubview(chatInputView)
         view.addSubview(ngcVideoOverlay)
 
+        // KHANDAQ (#93-task): floating "jump to latest" button (mirrors the 1:1 chat).
+        scrollDownButton = UIButton(type: .system)
+        scrollDownButton.setTitle("↓", for: .normal)
+        scrollDownButton.titleLabel?.font = UIFont.systemFont(ofSize: 20.0, weight: .semibold)
+        scrollDownButton.setTitleColor(theme.colorForType(.ConnectingText), for: .normal)
+        scrollDownButton.backgroundColor = theme.colorForType(.ConnectingBackground)
+        scrollDownButton.layer.cornerRadius = 20.0
+        scrollDownButton.layer.masksToBounds = true
+        scrollDownButton.alpha = 0.0
+        scrollDownButton.addTarget(self, action: #selector(ChatGroupController.scrollDownButtonPressed), for: .touchUpInside)
+        view.addSubview(scrollDownButton)
+
         // KHANDAQ: install the reply preview (which adds previewView into `view`) BEFORE constraining
         // the table's bottom to previewView.top. Doing the constraint first crashed with
         // "Unable to activate constraint ... no common ancestor" because previewView had no superview
@@ -181,6 +195,12 @@ class ChatGroupController: PortraitChatController {
                 $0.top.equalTo(view)
             }
             $0.bottom.equalTo(chatInputView.snp.top)
+        }
+
+        scrollDownButton.snp.makeConstraints {
+            $0.trailing.equalTo(view).offset(-12.0)
+            $0.bottom.equalTo(chatInputView.snp.top).offset(-10.0)
+            $0.width.height.equalTo(40.0)
         }
     }
 
@@ -845,6 +865,13 @@ extension ChatGroupController: UITableViewDelegate {
                 tableView.reloadData()
             }
         }
+
+        // KHANDAQ (#93-task): show the jump-to-latest button whenever the newest row is off-screen.
+        let atBottom = tableView.indexPathsForVisibleRows?.contains(IndexPath(row: 0, section: 0)) ?? true
+        let target: CGFloat = atBottom ? 0.0 : 1.0
+        if scrollDownButton.alpha != target {
+            UIView.animate(withDuration: 0.2) { self.scrollDownButton.alpha = target }
+        }
     }
 
     // KHANDAQ (#119): reload + jump to the newest message when WE just sent it (Telegram-style).
@@ -879,6 +906,10 @@ extension ChatGroupController: UITableViewDelegate {
         DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
             self?.tableView?.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: animated)
         }
+    }
+
+    @objc func scrollDownButtonPressed() {
+        scrollToNewestMessage()
     }
 
     // KHANDAQ (#15): file/media cells don't self-size in height (the movable-content cell hierarchy

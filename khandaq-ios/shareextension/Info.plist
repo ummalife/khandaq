@@ -19,7 +19,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>142887</string>
+	<string>142888</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>khandaq</string>

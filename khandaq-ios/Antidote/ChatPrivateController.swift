@@ -1287,6 +1287,10 @@ extension ChatPrivateController: UIScrollViewDelegate {
             }
         }
 
+        // KHANDAQ (#93-task): show the jump-to-latest button whenever the newest row is off-screen.
+        let atBottom = tableView.indexPathsForVisibleRows?.contains(IndexPath(row: 0, section: 0)) ?? true
+        toggleNewMessageView(show: !atBottom)
+
         updateFloatingDate()
         showFloatingDateMomentarily()
     }
@@ -1451,10 +1455,13 @@ private extension ChatPrivateController {
         view.addSubview(newMessagesView)
 
         let label = UILabel()
-        label.text = String(localized: "chat_new_messages")
+        // KHANDAQ (#93-task): repurposed as a Telegram-style "jump to latest" button — shown whenever
+        // the newest message is scrolled off-screen (and on a new incoming message while scrolled up).
+        label.text = "↓"
         label.textColor = theme.colorForType(.ConnectingText)
         label.backgroundColor = .clear
-        label.font = UIFont.systemFont(ofSize: 12.0)
+        label.font = UIFont.systemFont(ofSize: 18.0, weight: .semibold)
+        label.textAlignment = .center
         newMessagesView.addSubview(label)
 
         let button = UIButton()

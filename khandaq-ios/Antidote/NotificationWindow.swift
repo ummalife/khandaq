@@ -15,7 +15,7 @@ class NotificationWindow: UIWindow {
 
     fileprivate var connectingView: UIView!
     fileprivate var connectingViewLabel: UILabel!
-    fileprivate var connectingViewTopConstraint: Constraint!
+    fileprivate var connectingViewBottomConstraint: Constraint!
 
     // KHANDAQ: custom in-app banner (replaces LNNotificationsUI, which ignored the Dynamic Island).
     fileprivate var bannerView: NotificationBannerView?
@@ -175,9 +175,8 @@ class NotificationWindow: UIWindow {
         }
 
         let showBlock = { [unowned self] in
-            // Drop the pill below a standard 44pt navigation bar so it stops covering the screen
-            // title (the chat header name was hidden behind it). It floats just under the header.
-            self.connectingViewTopConstraint.update(offset: 50.0)
+            // Slide the toast up to sit just above the tab bar / input bar.
+            self.connectingViewBottomConstraint.update(offset: -56.0)
             self.layoutIfNeeded()
         }
 
@@ -186,8 +185,8 @@ class NotificationWindow: UIWindow {
         let hidePreparation = {}
 
         let hideBlock = { [unowned self] in
-            // Tuck the pill up above the safe-area top so it slides out under the island.
-            self.connectingViewTopConstraint.update(offset: -(self.connectingView.frame.size.height + 12.0))
+            // Tuck the toast down below the safe-area bottom so it slides out of view.
+            self.connectingViewBottomConstraint.update(offset: self.connectingView.frame.size.height + 12.0)
             self.layoutIfNeeded()
             self.connectingViewLabel.layer.removeAllAnimations()
         }
@@ -240,8 +239,11 @@ private extension NotificationWindow {
         connectingView.addSubview(connectingViewLabel)
 
         connectingView.snp.makeConstraints {
-            // Anchor below the safe-area top (under the island), centered, sized to its content.
-            connectingViewTopConstraint = $0.top.equalTo(self.safeAreaLayoutGuide.snp.top).offset(6.0).constraint
+            // KHANDAQ: a bottom toast (above the tab bar / input bar), centered. The top of the screen
+            // is occupied by the navigation title AND the search bar on both the chat list and the chat
+            // dialog, so any top position covered one of them — a bottom chip clears all of it. Starts
+            // tucked just below the safe area; slides up when shown.
+            connectingViewBottomConstraint = $0.bottom.equalTo(self.safeAreaLayoutGuide.snp.bottom).offset(60.0).constraint
             $0.centerX.equalTo(self)
             $0.height.equalTo(26.0)
             $0.leading.greaterThanOrEqualTo(self).offset(12.0)

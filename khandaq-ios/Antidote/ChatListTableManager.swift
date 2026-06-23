@@ -410,7 +410,17 @@ extension ChatListTableManager: UITableViewDelegate {
         let title: String
         let avatar: UIImage?
 
-        if chat.isGroup {
+        if chat.isSavedMessages {
+            // KHANDAQ (#109/#110): the long-press peek of Saved Messages must show "Избранное" + the
+            // bookmark — not the 1:1 fallback "Удалённый контакт" (Saved Messages has no friend).
+            title = String(localized: "saved_messages_title")
+            var icon: UIImage?
+            if #available(iOS 13.0, *) {
+                icon = UIImage(systemName: "bookmark.fill")?.withTintColor(theme.colorForType(.LinkText), renderingMode: .alwaysOriginal)
+            }
+            avatar = icon ?? avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+        }
+        else if chat.isGroup {
             // KHANDAQ (#46): prefer the owner-changeable TOPIC (see groupTopic note above).
             title = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
                 ?? String(localized: "group_chat_default_title")
@@ -624,8 +634,10 @@ private extension ChatListTableManager {
             return ("", false)
         }
 
-        if let text = message.messageText {
-            return (text.text ?? "", false)
+        if message.messageText != nil {
+            // KHANDAQ (#109): show the clean visible body in the list preview, not the reply/mention wire
+            // markup ([KQ|...|Вы] ... [KQ/end]).
+            return (MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? "", false)
         }
         else if let file = message.messageFile {
             let fileName = file.fileName ?? ""

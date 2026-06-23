@@ -128,7 +128,8 @@ final class ChatPreviewController: UIViewController {
 
     fileprivate func text(for message: OCTMessageAbstract) -> String {
         if let messageText = message.messageText {
-            return messageText.text ?? ""
+            // KHANDAQ (#109): clean visible body in the peek bubbles, not the reply/mention wire markup.
+            return MessageReplyHelper.plainBody(for: message) ?? messageText.text ?? ""
         }
         if let file = message.messageFile {
             let fileName = file.fileName ?? ""

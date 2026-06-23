@@ -89,12 +89,22 @@ static BOOL OCTIsGenericDefaultFriendName(NSString *name)
 
 static void OCTApplyFriendName(OCTFriend *friend, NSString *name, NSString *publicKey)
 {
+    // KHANDAQ (#97): preserve a user-chosen nickname. Only keep the nickname tracking the friend's
+    // name when the user hasn't set a custom alias (nickname empty, still equal to the previous name,
+    // or still the auto-derived public-key label). This helper runs on friend load/connect/refresh, so
+    // without the guard a restart or reconnect clobbers the alias back to the name.
+    BOOL nicknameTracksName = (friend.nickname.length == 0)
+        || [friend.nickname isEqualToString:friend.name]
+        || [friend.nickname isEqualToString:OCTShortPublicKeyLabel(publicKey)];
+
     friend.name = name ?: @"";
 
-    if (!OCTIsGenericDefaultFriendName(name)) {
-        friend.nickname = name;
-    } else {
-        friend.nickname = OCTShortPublicKeyLabel(publicKey);
+    if (nicknameTracksName) {
+        if (!OCTIsGenericDefaultFriendName(name)) {
+            friend.nickname = name;
+        } else {
+            friend.nickname = OCTShortPublicKeyLabel(publicKey);
+        }
     }
 }
 
@@ -512,22 +522,8 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     }
 
     [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
-        // KHANDAQ (#97): preserve a user-chosen nickname. Only let the nickname keep tracking the
-        // friend's name when the user hasn't set a custom alias (nickname empty, or still equal to
-        // the previous auto-derived value). Otherwise a reconnect/name update clobbers the alias.
-        BOOL nicknameTracksName = (theFriend.nickname.length == 0)
-            || [theFriend.nickname isEqualToString:theFriend.name]
-            || [theFriend.nickname isEqualToString:OCTShortPublicKeyLabel(publicKey)];
-
-        theFriend.name = name;
-
-        if (nicknameTracksName) {
-            if (!OCTIsGenericDefaultFriendName(name)) {
-                theFriend.nickname = name;
-            } else {
-                theFriend.nickname = OCTShortPublicKeyLabel(publicKey);
-            }
-        }
+        // KHANDAQ (#97): apply via the shared helper, which preserves a user-chosen nickname.
+        OCTApplyFriendName(theFriend, name, publicKey);
     }];
 }
 

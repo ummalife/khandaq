@@ -189,7 +189,7 @@ extension ChatInputView {
                 recordingEndedByControl = false
                 recordingWillCancel = false
                 recordingTouchStartX = gesture.location(in: self).x
-                showRecordingBar()
+                showRecordingBar(showControls: false)
                 delegate?.chatInputViewVoiceRecordDidStart(self)
             case .changed:
                 guard isVoiceRecording, !recordingEndedByControl else { return }
@@ -245,7 +245,7 @@ extension ChatInputView {
         isVoiceRecording = true
         recordingEndedByControl = false
         recordingWillCancel = false
-        showRecordingBar()
+        showRecordingBar(showControls: true)
         delegate?.chatInputViewVoiceRecordDidStart(self)
     }
 }
@@ -365,6 +365,8 @@ private extension ChatInputView {
 
         recordingBar = UIView()
         recordingBar.isHidden = true
+        // KHANDAQ (#116): opaque background so the chat wallpaper doesn't show through the recording UI.
+        recordingBar.backgroundColor = theme.colorForType(.ChatInputBackground)
         addSubview(recordingBar)
 
         recordingDot = UIView()
@@ -536,18 +538,19 @@ private extension ChatInputView {
         voiceButton.isEnabled = voiceButtonEnabled && !hasText
     }
 
-    func showRecordingBar() {
+    func showRecordingBar(showControls: Bool = false) {
         emojiButton.isHidden = true
         cameraButton.isHidden = true
         voiceButton.isHidden = true
         textView.isHidden = true
         sendButton.isHidden = true
         recordingBar.isHidden = false
-        // KHANDAQ (#35): hold-to-record uses slide-to-cancel; the tap cancel/send buttons are
-        // unreachable while the finger holds the mic, so show the slide hint instead.
-        recordingCancelButton.isHidden = true
-        recordingSendButton.isHidden = true
-        slideHintLabel.isHidden = false
+        // KHANDAQ (#35/#116): hold-to-record uses slide-to-cancel (the finger holds the mic, so the tap
+        // buttons are unreachable); tap-to-record from the "+" menu shows explicit cancel/send buttons
+        // instead (you can't slide a tap). The two control sets are mutually exclusive → never overlap.
+        recordingCancelButton.isHidden = !showControls
+        recordingSendButton.isHidden = !showControls
+        slideHintLabel.isHidden = showControls
         recordingTimerLabel.alpha = 1.0
         updateSlideToCancelHint()
         recordingStartedAt = Date()

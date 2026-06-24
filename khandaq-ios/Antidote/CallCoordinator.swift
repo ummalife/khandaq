@@ -88,7 +88,17 @@ class CallCoordinator: NSObject {
                 handleErrorWithType(.callToChat)
                 return
             }
-            self.startCallToChat(chat, enableVideo: enableVideo)
+            // KHANDAQ (#112): a video call also needs camera access. Without this gate the camera was
+            // opened blind and AVCaptureDeviceInput failed with a generic "Внутренняя ошибка" when
+            // access was denied/not-yet-granted. Request it up front, then start the video call.
+            guard enableVideo else {
+                self.startCallToChat(chat, enableVideo: false)
+                return
+            }
+            MediaPermission.requestCameraAccess(from: self.presentingController) { [weak self] cameraGranted in
+                guard let self = self, cameraGranted else { return }
+                self.startCallToChat(chat, enableVideo: true)
+            }
         }
     }
 
@@ -211,12 +221,32 @@ extension CallCoordinator: CallActiveControllerDelegate {
             return
         }
 
+        // KHANDAQ (#112): turning the camera ON mid-call needs camera access first — the video engine
+        // otherwise fails and surfaces a generic "Внутренняя ошибка". Turning it OFF needs no permission.
+        if outgoingVideo {
+            MediaPermission.requestCameraAccess(from: controller) { [weak self] granted in
+                guard let self = self else { return }
+                guard granted else {
+                    controller.outgoingVideo = false
+                    return
+                }
+                do {
+                    try submanagerCalls.enableVideoSending(true, for: activeCall.call)
+                }
+                catch {
+                    handleErrorWithType(.enableVideoSending)
+                    controller.outgoingVideo = false
+                }
+            }
+            return
+        }
+
         do {
-            try submanagerCalls.enableVideoSending(outgoingVideo, for: activeCall.call)
+            try submanagerCalls.enableVideoSending(false, for: activeCall.call)
         }
         catch {
             handleErrorWithType(.enableVideoSending)
-            controller.outgoingVideo = !outgoingVideo
+            controller.outgoingVideo = true
         }
     }
 

@@ -100,7 +100,18 @@ private extension TextViewController {
             }
             let options = [ NSAttributedString.DocumentReadingOptionKey.documentType : NSAttributedString.DocumentType.html ]
 
-            try textView.attributedText = NSAttributedString(data: data, options: options, documentAttributes: nil)
+            // KHANDAQ: the bundled HTML carries no TEXT_COLOR/TITLE_COLOR placeholders, so the color
+            // substitution above is a no-op and the parsed text defaults to BLACK — unreadable on the
+            // dark theme. Force the theme text color over every non-link range (links keep their tint).
+            let parsed = try NSAttributedString(data: data, options: options, documentAttributes: nil)
+            let mutable = NSMutableAttributedString(attributedString: parsed)
+            let fullRange = NSRange(location: 0, length: mutable.length)
+            mutable.enumerateAttributes(in: fullRange, options: []) { attributes, range, _ in
+                if attributes[.link] == nil {
+                    mutable.addAttribute(.foregroundColor, value: textColor, range: range)
+                }
+            }
+            textView.attributedText = mutable
         }
         catch {
             handleErrorWithType(.cannotLoadHTML)

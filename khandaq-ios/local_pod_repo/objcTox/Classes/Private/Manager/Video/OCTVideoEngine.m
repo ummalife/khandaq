@@ -361,7 +361,13 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
         CVPixelBufferRelease(bufferRef);
 
-        self.videoView.image = coreImage;
+        // KHANDAQ (remote-video fix): OCTVideoView is a GLKView whose -setImage: triggers a synchronous
+        // -display (drawRect + OpenGL ES). That MUST run on the main thread; invoked here from the
+        // background processingQueue, the incoming remote frames never actually rendered — which is why
+        // only the local self-preview (a separate AVCaptureVideoPreviewLayer) was visible during a call.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.videoView.image = coreImage;
+        });
     });
 }
 

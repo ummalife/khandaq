@@ -57,9 +57,11 @@ class AppCoordinator {
                               duration: ThemeChrome.transitionDuration,
                               options: [.transitionCrossDissolve, .allowAnimatedContent],
                               animations: {
+                // KHANDAQ: flip the window interface style BEFORE re-theming — the search field
+                // (.minimal) and tab-bar material are system-drawn from overrideUserInterfaceStyle.
                 ThemeChrome.applyGlobalAppearance(newTheme)
-                ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
                 ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
+                ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
                 transitionWindow.layoutIfNeeded()
             }, completion: { [weak self] _ in
                 self?.isReloadingAppearance = false
@@ -72,10 +74,14 @@ class AppCoordinator {
                           duration: ThemeChrome.transitionDuration,
                           options: [.transitionCrossDissolve, .allowAnimatedContent],
                           animations: {
+            // KHANDAQ: set the window interface style FIRST, before reloadTheme rebuilds the session.
+            // The search field (.minimal) and tab bar (default material) are system-drawn from the
+            // window's overrideUserInterfaceStyle; building them before the flip left the search pill
+            // background and tab-bar material stuck on the previous theme after a toggle.
             ThemeChrome.applyGlobalAppearance(newTheme)
+            ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
             running.reloadTheme(newTheme)
             ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
-            ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
             transitionWindow.layoutIfNeeded()
         }, completion: { [weak self] _ in
             self?.isReloadingAppearance = false

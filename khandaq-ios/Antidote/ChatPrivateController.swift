@@ -541,6 +541,10 @@ extension ChatPrivateController {
         guard let tableView = tableView else {
             return
         }
+        // KHANDAQ: nothing to scroll to in an empty chat — scrollToRow(row:0) on 0 rows crashes.
+        guard tableView.numberOfRows(inSection: 0) > 0 else {
+            return
+        }
 
         tableView.setContentOffset(CGPoint.zero, animated: animated)
 
@@ -548,7 +552,10 @@ extension ChatPrivateController {
         // See https://stackoverflow.com/a/30804874
         let delayTime = DispatchTime.now() + Double(Int64(0.2 * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)
         DispatchQueue.main.asyncAfter(deadline: delayTime) { [weak self] in
-            self?.tableView?.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: animated)
+            guard let tableView = self?.tableView, tableView.numberOfRows(inSection: 0) > 0 else {
+                return
+            }
+            tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: animated)
         }
     }
 
@@ -1335,7 +1342,10 @@ extension ChatPrivateController: UIScrollViewDelegate {
         }
 
         // KHANDAQ (#93-task): show the jump-to-latest button whenever the newest row is off-screen.
-        let atBottom = tableView.indexPathsForVisibleRows?.contains(IndexPath(row: 0, section: 0)) ?? true
+        // An empty chat has no rows, so indexPathsForVisibleRows is [] (contains == false) — treat
+        // "no rows" as already-at-bottom so the button stays hidden (and can't crash on tap).
+        let atBottom = tableView.numberOfRows(inSection: 0) == 0
+            || (tableView.indexPathsForVisibleRows?.contains(IndexPath(row: 0, section: 0)) ?? true)
         toggleNewMessageView(show: !atBottom)
 
         updateFloatingDate()

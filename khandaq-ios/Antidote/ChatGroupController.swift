@@ -1004,12 +1004,27 @@ extension ChatGroupController: UITableViewDelegate {
         return delta >= 0 && delta <= 5.0
     }
 
+    /// KHANDAQ (#122): true only if the file message is actually rendered inline (downloaded/ready,
+    /// recognized media, within the inline size limit) — mirrors the heightForRowAt gate. A caption is
+    /// merged into its file ONLY when this holds; otherwise it would vanish behind a failed/generic-file
+    /// bubble.
+    func isFileDisplayedInline(_ fileMessage: OCTMessageAbstract) -> Bool {
+        guard let messageFile = fileMessage.messageFile,
+              fileMessage.isOutgoing() || messageFile.fileType == .ready,
+              let path = messageFile.filePath(),
+              messageFile.fileSize < Constants.MaxImageSizeToShowInline,
+              inlineMediaSize(forFileAt: path, messageFile: messageFile) != nil else {
+            return false
+        }
+        return true
+    }
+
     func captionMessage(forFileAtStorageIndex storageIndex: Int) -> OCTMessageAbstract? {
         guard storageIndex >= 0, storageIndex < messages.count else {
             return nil
         }
         let file = messages[storageIndex]
-        guard file.messageFile != nil else {
+        guard file.messageFile != nil, isFileDisplayedInline(file) else {
             return nil
         }
         let captionIndex = storageIndex - 1
@@ -1038,7 +1053,9 @@ extension ChatGroupController: UITableViewDelegate {
             return false
         }
         let file = messages[fileIndex]
-        return file.messageFile != nil && isCaption(message, forFile: file)
+        // KHANDAQ (#122): merge only if the file is actually shown inline; otherwise show the caption as
+        // a normal message instead of hiding it behind a failed/generic-file bubble.
+        return file.messageFile != nil && isCaption(message, forFile: file) && isFileDisplayedInline(file)
     }
 
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {

@@ -56,12 +56,14 @@
     }
 
     if (! [[NSFileManager defaultManager] createFileAtPath:self.tempFilePath contents:nil attributes:nil]) {
+        OCTLogWarn(@"OCTFilePathOutput cannot create temp file at %@", self.tempFilePath);
         return NO;
     }
 
     self.handle = [NSFileHandle fileHandleForWritingAtPath:self.tempFilePath];
 
     if (! self.handle) {
+        OCTLogWarn(@"OCTFilePathOutput cannot open handle for temp file at %@", self.tempFilePath);
         return NO;
     }
 
@@ -93,12 +95,32 @@
 
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
-    // Remove dummy file.
-    if (! [fileManager removeItemAtPath:self.resultFilePath error:nil]) {
+    // KHANDAQ (#107a): make sure the RESULT directory exists too. Like the temp dir (see #48 above), the
+    // downloads directory can be absent on (re)download — which made the placeholder creation in init
+    // and/or the move below fail, surfacing to the user as "download failed" with the real error
+    // swallowed (errors were passed as nil here).
+    NSString *resultDir = [self.resultFilePath stringByDeletingLastPathComponent];
+    if (resultDir.length > 0) {
+        [fileManager createDirectoryAtPath:resultDir withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+
+    // Remove the dummy placeholder ONLY if it's still there — when the result directory was missing it
+    // may never have been created, and a missing placeholder must NOT abort an otherwise-fine download.
+    if ([fileManager fileExistsAtPath:self.resultFilePath]) {
+        NSError *removeError = nil;
+        if (! [fileManager removeItemAtPath:self.resultFilePath error:&removeError]) {
+            OCTLogWarn(@"OCTFilePathOutput cannot remove placeholder at %@: %@", self.resultFilePath, removeError);
+            return NO;
+        }
+    }
+
+    NSError *moveError = nil;
+    if (! [fileManager moveItemAtPath:self.tempFilePath toPath:self.resultFilePath error:&moveError]) {
+        OCTLogWarn(@"OCTFilePathOutput cannot move %@ -> %@: %@", self.tempFilePath, self.resultFilePath, moveError);
         return NO;
     }
 
-    return [[NSFileManager defaultManager] moveItemAtPath:self.tempFilePath toPath:self.resultFilePath error:nil];
+    return YES;
 }
 
 - (void)cancel

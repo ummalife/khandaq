@@ -1121,12 +1121,27 @@ extension ChatPrivateController: UITableViewDelegate {
         return delta >= 0 && delta <= 5.0
     }
 
+    /// KHANDAQ (#122): true only if the file message is actually rendered inline (downloaded/ready,
+    /// recognized media, within the inline size limit) — mirrors the heightForRowAt gate. A caption is
+    /// merged into its file ONLY when this holds; otherwise the caption would vanish behind a failed /
+    /// generic-file bubble.
+    func isFileDisplayedInline(_ fileMessage: OCTMessageAbstract) -> Bool {
+        guard let messageFile = fileMessage.messageFile,
+              fileMessage.isOutgoing() || messageFile.fileType == .ready,
+              let path = messageFile.filePath(),
+              messageFile.fileSize < Constants.MaxImageSizeToShowInline,
+              inlineMediaSize(forFileAt: path, messageFile: messageFile) != nil else {
+            return false
+        }
+        return true
+    }
+
     func captionMessage(forFileAtStorageIndex storageIndex: Int) -> OCTMessageAbstract? {
         guard storageIndex >= 0, storageIndex < messages.count else {
             return nil
         }
         let file = messages[storageIndex]
-        guard file.messageFile != nil else {
+        guard file.messageFile != nil, isFileDisplayedInline(file) else {
             return nil
         }
         let captionIndex = storageIndex - 1   // newer message (DESC order) = sent just after the file
@@ -1179,7 +1194,9 @@ extension ChatPrivateController: UITableViewDelegate {
             return false
         }
         let file = messages[fileIndex]
-        return file.messageFile != nil && isCaption(message, forFile: file)
+        // KHANDAQ (#122): merge the caption ONLY if its file is actually shown inline. If the photo
+        // failed to download / renders as a generic file, show the caption as a normal message instead.
+        return file.messageFile != nil && isCaption(message, forFile: file) && isFileDisplayedInline(file)
     }
 
     func inferredFileUTI(for messageFile: OCTMessageFile) -> String? {

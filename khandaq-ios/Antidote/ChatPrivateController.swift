@@ -2164,10 +2164,16 @@ private extension ChatPrivateController {
             return
         }
 
-        let uti = messageFile.fileUTI
+        // KHANDAQ (#120): infer the UTI from the extension — outgoing files often have no stored fileUTI,
+        // so a sent video (especially .mpg) fell through to the generic-file bubble. Matches the group.
+        let uti = inferredFileUTI(for: messageFile)
         let fileName = messageFile.fileName
+        let fileCell = (cell as? ChatIncomingFileCell) ?? (cell as? ChatOutgoingFileCell)
 
         if UTTypeConformsTo(uti as CFString? ?? "" as CFString, kUTTypeImage) {
+            if let pixelSize = mediaPixelSize(forFileAt: file, isVideo: false) {
+                fileCell?.loadingView.setPreviewSize(pixelSize)
+            }
             if let image = imageCache.object(forKey: file as AnyObject) as? UIImage {
                 applyInlinePreview(image, durationText: nil, to: cell)
             }
@@ -2178,8 +2184,11 @@ private extension ChatPrivateController {
         }
 
         if ChatFileMediaLoader.isVideoFile(uti: uti, fileName: fileName) {
+            if let pixelSize = mediaPixelSize(forFileAt: file, isVideo: true) {
+                fileCell?.loadingView.setPreviewSize(pixelSize)
+            }
             if let preview = ChatFileMediaLoader.cachedPreview(for: file) {
-                applyInlinePreview(preview.image, durationText: preview.durationText, to: cell)
+                applyInlinePreview(preview.image, durationText: preview.durationText, isVideo: true, to: cell)
             }
             else {
                 loadVideoPreviewForCellAtIndexPath(indexPath, fromFile: file)
@@ -2187,11 +2196,19 @@ private extension ChatPrivateController {
         }
     }
 
-    func applyInlinePreview(_ image: UIImage, durationText: String?, to cell: UITableViewCell) {
+    func applyInlinePreview(_ image: UIImage, durationText: String?, isVideo: Bool = false, to cell: UITableViewCell) {
         let fileCell = (cell as? ChatIncomingFileCell) ?? (cell as? ChatOutgoingFileCell)
         fileCell?.setButtonImage(image)
-        if let durationText = durationText, let outgoing = fileCell as? ChatOutgoingFileCell {
-            outgoing.setVideoDurationLabel(durationText)
+
+        if isVideo {
+            // KHANDAQ (#120): video gets a play overlay + duration on both incoming and outgoing cells.
+            // The 1:1 path previously set neither, so a sent video rendered as a plain file bubble.
+            (fileCell as? ChatIncomingFileCell)?.setVideoPlayOverlay()
+            (fileCell as? ChatOutgoingFileCell)?.setVideoPlayOverlay()
+            if let durationText = durationText {
+                (fileCell as? ChatIncomingFileCell)?.setVideoDurationLabel(durationText)
+                (fileCell as? ChatOutgoingFileCell)?.setVideoDurationLabel(durationText)
+            }
         }
     }
 
@@ -2208,7 +2225,7 @@ private extension ChatPrivateController {
                 guard let cell = optionalCell else {
                     return
                 }
-                self?.applyInlinePreview(preview.image, durationText: preview.durationText, to: cell)
+                self?.applyInlinePreview(preview.image, durationText: preview.durationText, isVideo: true, to: cell)
             }
         }
     }

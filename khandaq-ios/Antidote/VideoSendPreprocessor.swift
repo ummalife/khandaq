@@ -452,7 +452,9 @@ enum ChatFileMediaLoader {
         }
 
         switch ext {
-            case "mov", "mp4", "m4v", "avi", "mkv", "webm":
+            // KHANDAQ (#120): include MPEG-1/2 (.mpg/.mpeg) and other common containers — a sent .MPG
+            // with no stored UTI was falling through to the generic-file bubble.
+            case "mov", "mp4", "m4v", "avi", "mkv", "webm", "mpg", "mpeg", "mpe", "3gp", "3gpp", "wmv", "flv", "ts", "m2ts", "mts":
                 return true
             default:
                 return false

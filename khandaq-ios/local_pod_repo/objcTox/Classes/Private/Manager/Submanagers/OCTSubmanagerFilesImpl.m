@@ -767,6 +767,21 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     }
 }
 
+// KHANDAQ: periodic safety net (driven by the app's MessageDeliveryWatchdog) so files/voice queued
+// while the recipient was offline actually deliver once they reconnect — the one-shot
+// friendConnectionStatusChangeNotification: above can miss files added around the status flip.
+// Reuses the proven per-friend resend; retrySendingFile only acts on WaitingConfirmation files with
+// a failed file number, so this is idempotent and safe to call every tick.
+- (void)resendPendingOutgoingFilesToAllOnlineFriends
+{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"connectionStatus != %d", OCTToxConnectionStatusNone];
+    RLMResults *onlineFriends = [self.dataSource.managerGetRealmManager objectsWithClass:[OCTFriend class] predicate:predicate];
+
+    for (OCTFriend *friend in onlineFriends) {
+        [self resendPendingOutgoingFilesToFriend:friend];
+    }
+}
+
 - (void)userAvatarWasUpdatedNotification
 {
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"connectionStatus != %d", OCTToxConnectionStatusNone];

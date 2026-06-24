@@ -42,5 +42,7 @@ final class MessageDeliveryWatchdog {
 
         toxManager.chats.tickDeliveryWatchdog()
         toxManager.groups.flushAllPendingGroupMessagesIfNeeded()
+        // KHANDAQ: also retry files/voice queued while the recipient was offline (parity with text).
+        toxManager.files.resendPendingOutgoingFilesToAllOnlineFriends()
     }
 }

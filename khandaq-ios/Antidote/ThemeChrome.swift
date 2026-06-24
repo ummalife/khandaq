@@ -167,7 +167,8 @@ enum ThemeChrome {
     // "Править"). Applied selectively per screen, NOT globally, so back buttons stay plain as in
     // the design.
     static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector, tint: UIColor? = nil) -> UIBarButtonItem {
-        let size: CGFloat = 32.0
+        // KHANDAQ (#102): slightly smaller circle — 32pt felt bulky on narrower devices (iPhone 13 Pro).
+        let size: CGFloat = 29.0
         let button = UIButton(type: .system)
         button.backgroundColor = theme.colorForType(.TabSelection)
         button.tintColor = tint ?? theme.colorForType(.LinkText)

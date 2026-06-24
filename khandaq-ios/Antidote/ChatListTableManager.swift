@@ -214,11 +214,23 @@ extension ChatListTableManager: UITableViewDataSource {
         if chat.isSavedMessages {
             let model = ChatListCellModel()
             let title = String(localized: "saved_messages_title")
-            var icon: UIImage?
+            // KHANDAQ (#118): render the bookmark on a filled circle at the standard avatar size, so it
+            // matches the other (circular) avatars instead of a bare, oversized glyph.
+            let diameter = CGFloat(ChatListCell.Constants.AvatarSize)
             if #available(iOS 13.0, *) {
-                icon = UIImage(systemName: "bookmark.fill")?.withTintColor(theme.colorForType(.LinkText), renderingMode: .alwaysOriginal)
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: diameter, height: diameter))
+                model.avatar = renderer.image { ctx in
+                    theme.colorForType(.LinkText).setFill()
+                    ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: diameter, height: diameter))
+                    let glyph = diameter * 0.5
+                    UIImage(systemName: "bookmark.fill")?
+                        .withTintColor(.white, renderingMode: .alwaysOriginal)
+                        .draw(in: CGRect(x: (diameter - glyph) / 2, y: (diameter - glyph) / 2, width: glyph, height: glyph))
+                }
             }
-            model.avatar = icon ?? avatarManager.avatarFromString(title, diameter: CGFloat(ChatListCell.Constants.AvatarSize))
+            else {
+                model.avatar = avatarManager.avatarFromString(title, diameter: diameter)
+            }
             model.nickname = title
             let preview = lastMessagePreview(in: chat, friend: nil)
             model.message = preview.text

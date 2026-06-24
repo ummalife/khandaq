@@ -43,6 +43,16 @@ class ChatGroupController: PortraitChatController {
     fileprivate let timeFormatter: DateFormatter
     fileprivate var inputViewManager: ChatGroupInputViewManager?
 
+    // KHANDAQ (#99): locale-aware "Сегодня"/"Вчера"/full-date for the day separators (the group
+    // controller has no floating-date pill, so it owns its own formatter).
+    fileprivate lazy var daySeparatorFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
+
     var editMessagesToolbar: UIToolbar!
     var editMessagesToolbarBottomConstraint: Constraint?
     var messageSearchQuery = ""
@@ -836,6 +846,7 @@ extension ChatGroupController: UITableViewDataSource {
             model.searchHighlight = highlight
             model.dateString = dateText
             model.delivered = (message.messageText?.isDelivered ?? false) || (message.messageText?.groupSyncConfirmations ?? 0) > 0
+            model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
             cell.delegate = self
             cell.replySwipeDelegate = self
             cell.setupWithTheme(theme, model: model)
@@ -863,6 +874,7 @@ extension ChatGroupController: UITableViewDataSource {
         attachReplyQuoteHandler(to: model, messages: messages)
         model.searchHighlight = highlight
         model.dateString = dateText
+        model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
         cell.delegate = self
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)
@@ -930,6 +942,29 @@ extension ChatGroupController: UITableViewDelegate {
     // breaks automatic-dimension for them — the row stays at the estimate and the square preview box
     // is squashed to a strip). Give inline image/video bubbles an explicit aspect-ratio height; let
     // everything else keep automatic sizing.
+    /// KHANDAQ (#99): day-separator label for the row that begins a calendar day's block (its oldest
+    /// message). nil mid-day or while searching. Mirrors ChatPrivateController.daySeparatorString.
+    func daySeparatorString(forDisplayIndex row: Int) -> String? {
+        guard messageSearchQuery.isEmpty, row >= 0, row < displayableRowCount() else {
+            return nil
+        }
+        let calendar = Calendar.current
+        let message = messageEntry(atDisplayIndex: row).message
+        // System messages don't carry a ChatMovableDateCell, so never anchor a separator on them.
+        if message.groupSystemMessage {
+            return nil
+        }
+        let day = calendar.startOfDay(for: message.date())
+        let nextRow = row + 1
+        if nextRow < displayableRowCount() {
+            let older = messageEntry(atDisplayIndex: nextRow).message
+            if calendar.startOfDay(for: older.date()) == day {
+                return nil
+            }
+        }
+        return daySeparatorFormatter.string(from: message.date())
+    }
+
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         let entry = messageEntry(atDisplayIndex: indexPath.row)
         let message = entry.message
@@ -955,6 +990,10 @@ extension ChatGroupController: UITableViewDelegate {
            let caption = MessageReplyHelper.plainBody(for: captionMsg), !caption.isEmpty {
             // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
+        }
+        // KHANDAQ (#99): media rows have an explicit height; add the separator band on a day boundary.
+        if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
+            height += ChatMovableDateCell.daySeparatorReservedHeight
         }
         return height
     }
@@ -1182,6 +1221,7 @@ private extension ChatGroupController {
         }
 
         model.dateString = dateText
+        model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
 
         cell.setupWithTheme(theme, model: model)
 

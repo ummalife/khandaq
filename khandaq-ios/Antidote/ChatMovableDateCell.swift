@@ -70,6 +70,16 @@ class ChatMovableDateCell: BaseCell {
     fileprivate var movableContentViewLeftConstraint: Constraint!
     fileprivate var dateLabel: UILabel!
 
+    // KHANDAQ (#99): Telegram-style day separator pinned at the cell's coordinate-top (= visual top,
+    // since the table's y-flip is cancelled by the per-cell y-flip — content is upright). Added to
+    // contentView (NOT movableContentView) so it stays put during the swipe-to-reveal-time pan. When
+    // the model carries no dateSeparator, the pill is hidden and movableContentView fills the cell as
+    // before (top offset 0) — zero layout impact on the vast majority of rows.
+    static let daySeparatorReservedHeight: CGFloat = 34.0
+    fileprivate var movableContentViewTopConstraint: Constraint!
+    fileprivate var daySeparatorContainer: UIView!
+    fileprivate var daySeparatorLabel: UILabel!
+
     fileprivate var isShowingMenu: Bool = false
     fileprivate static var setupOnceToken: Int = 0
 
@@ -97,6 +107,19 @@ class ChatMovableDateCell: BaseCell {
         dateLabel.text = movableModel.dateString
         dateLabel.numberOfLines = 0 // --> multiline label
         dateLabel.textColor = theme.colorForType(.ChatListCellMessage)
+
+        // KHANDAQ (#99): show/hide the day separator and reserve top space only when present. The
+        // reserved offset is reset on every reuse, so a recycled separator cell lays out cleanly.
+        if let separator = movableModel.dateSeparator, !separator.isEmpty {
+            daySeparatorLabel.text = separator
+            daySeparatorContainer.isHidden = false
+            daySeparatorContainer.backgroundColor = theme.colorForType(.ChatIncomingBubble)
+            daySeparatorLabel.textColor = theme.colorForType(.ChatListCellMessage)
+            movableContentViewTopConstraint.update(offset: ChatMovableDateCell.daySeparatorReservedHeight)
+        } else {
+            daySeparatorContainer.isHidden = true
+            movableContentViewTopConstraint.update(offset: 0.0)
+        }
     }
 
     override func createViews() {
@@ -110,6 +133,19 @@ class ChatMovableDateCell: BaseCell {
         dateLabel.font = UIFont.khandaqFontWithSize(11.0, weight: .medium)
         movableContentView.addSubview(dateLabel)
 
+        // KHANDAQ (#99): day separator pill (hidden unless the model sets dateSeparator).
+        daySeparatorContainer = UIView()
+        daySeparatorContainer.layer.cornerRadius = 13.0
+        daySeparatorContainer.layer.masksToBounds = true
+        daySeparatorContainer.isUserInteractionEnabled = false
+        daySeparatorContainer.isHidden = true
+        contentView.addSubview(daySeparatorContainer)
+
+        daySeparatorLabel = UILabel()
+        daySeparatorLabel.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        daySeparatorLabel.textAlignment = .center
+        daySeparatorContainer.addSubview(daySeparatorLabel)
+
         let swipeReply = UISwipeGestureRecognizer(target: self, action: #selector(handleReplySwipe))
         swipeReply.direction = .right
         movableContentView.addGestureRecognizer(swipeReply)
@@ -122,18 +158,33 @@ class ChatMovableDateCell: BaseCell {
         super.installConstraints()
 
         movableContentView.snp.makeConstraints {
-            $0.top.equalTo(contentView)
+            // KHANDAQ (#99): split the old `size.equalTo(contentView)` into width + bottom so the TOP can
+            // be pushed down by the day-separator's reserved height (0 by default → identical layout).
+            movableContentViewTopConstraint = $0.top.equalTo(contentView).constraint
             if (UserDefaultsManager().DateonmessageMode == true) {
                 movableContentViewLeftConstraint = $0.leading.equalTo(contentView).constraint.update(offset: -39)
             } else {
                 movableContentViewLeftConstraint = $0.leading.equalTo(contentView).constraint
             }
-            $0.size.equalTo(contentView)
+            $0.width.equalTo(contentView)
+            $0.bottom.equalTo(contentView)
         }
 
         dateLabel.snp.makeConstraints {
             $0.centerY.equalTo(movableContentView)
             $0.leading.equalTo(movableContentView.snp.trailing)
+        }
+
+        // Pill centred at the coordinate-top (visual top) of the cell, within the reserved band.
+        daySeparatorContainer.snp.makeConstraints {
+            $0.top.equalTo(contentView).offset(4.0)
+            $0.centerX.equalTo(contentView)
+            $0.height.equalTo(26.0)
+        }
+        daySeparatorLabel.snp.makeConstraints {
+            $0.top.bottom.equalTo(daySeparatorContainer)
+            $0.leading.equalTo(daySeparatorContainer).offset(12.0)
+            $0.trailing.equalTo(daySeparatorContainer).offset(-12.0)
         }
     }
 

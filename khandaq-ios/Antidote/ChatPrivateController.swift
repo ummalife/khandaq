@@ -989,6 +989,9 @@ extension ChatPrivateController: UITableViewDataSource {
             model.dateString = timeFormatter.string(from: message.date())
         }
 
+        // KHANDAQ (#99): tag the row with a day separator when it begins a new calendar day.
+        model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
+
         cell.delegate = self
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)
@@ -1003,6 +1006,26 @@ extension ChatPrivateController: UITableViewDataSource {
 }
 
 extension ChatPrivateController: UITableViewDelegate {
+    /// KHANDAQ (#99): day-separator label for the row that begins a calendar day's block — its OLDEST
+    /// message, i.e. the one whose next-older neighbour (display index + 1, newest-first order) falls on
+    /// a different day, or the very oldest row. nil mid-day or while searching (filtered subset).
+    func daySeparatorString(forDisplayIndex row: Int) -> String? {
+        guard messageSearchQuery.isEmpty, row >= 0, row < displayableRowCount() else {
+            return nil
+        }
+        let calendar = Calendar.current
+        let message = messageEntry(atDisplayIndex: row).message
+        let day = calendar.startOfDay(for: message.date())
+        let nextRow = row + 1
+        if nextRow < displayableRowCount() {
+            let older = messageEntry(atDisplayIndex: nextRow).message
+            if calendar.startOfDay(for: older.date()) == day {
+                return nil
+            }
+        }
+        return floatingDateFormatter.string(from: message.date())
+    }
+
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         let entry = messageEntry(atDisplayIndex: indexPath.row)
         let message = entry.message
@@ -1031,6 +1054,11 @@ extension ChatPrivateController: UITableViewDelegate {
            let caption = MessageReplyHelper.plainBody(for: captionMsg), !caption.isEmpty {
             // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
+        }
+        // KHANDAQ (#99): media rows have an explicit height (no auto-sizing), so add the separator band
+        // here when this row starts a new day — text/voice rows self-size and need no adjustment.
+        if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
+            height += ChatMovableDateCell.daySeparatorReservedHeight
         }
         return height
     }

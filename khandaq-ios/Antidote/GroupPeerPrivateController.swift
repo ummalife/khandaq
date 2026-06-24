@@ -79,6 +79,8 @@ class GroupPeerPrivateController: PortraitChatController {
 
         chatInputView = ChatInputView(theme: theme)
         chatInputView.cameraButtonEnabled = false
+        // KHANDAQ (#113): NGC private messages are text-only — hide the "+" so it isn't a dead button.
+        chatInputView.attachmentButtonHidden = true
         chatInputView.delegate = self
         view.addSubview(chatInputView)
 

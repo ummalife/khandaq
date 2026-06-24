@@ -64,6 +64,18 @@ class ChatInputView: UIView {
         }
     }
 
+    // KHANDAQ (#113): hide the "+" attach button entirely for chats that can't attach (NGC group-peer
+    // private messages are text-only). Default false → identical layout for normal chats.
+    var attachmentButtonHidden: Bool = false {
+        didSet {
+            guard attachmentButtonHidden != oldValue, textViewLeadingConstraint != nil else {
+                return
+            }
+            applyAttachmentButtonHidden()
+        }
+    }
+    fileprivate var textViewLeadingConstraint: Constraint?
+
     fileprivate var topBorder: UIView!
     fileprivate var emojiButton: UIButton!
     fileprivate var cameraButton: UIButton!
@@ -441,7 +453,7 @@ private extension ChatInputView {
         }
 
         textView.snp.makeConstraints {
-            $0.leading.equalTo(emojiButton.snp.trailing).offset(Constants.Offset)
+            textViewLeadingConstraint = $0.leading.equalTo(emojiButton.snp.trailing).offset(Constants.Offset).constraint
             // KHANDAQ design: field runs to the mic (the paperclip is hidden; "+" handles attachments).
             $0.trailing.equalTo(voiceButton.snp.leading).offset(-Constants.Offset)
             $0.top.equalTo(self).offset(Constants.Offset)
@@ -513,6 +525,18 @@ private extension ChatInputView {
         }
     }
 
+    func applyAttachmentButtonHidden() {
+        emojiButton.isHidden = attachmentButtonHidden
+        textViewLeadingConstraint?.deactivate()
+        textView.snp.makeConstraints {
+            if attachmentButtonHidden {
+                textViewLeadingConstraint = $0.leading.equalTo(self).offset(Constants.CameraHorizontalOffset).constraint
+            } else {
+                textViewLeadingConstraint = $0.leading.equalTo(emojiButton.snp.trailing).offset(Constants.Offset).constraint
+            }
+        }
+    }
+
     func updateViews() {
         textView.isScrollEnabled = true
         textView.autocapitalizationType = .sentences
@@ -525,7 +549,7 @@ private extension ChatInputView {
 
         // Always visible outside the recording state (showRecordingBar hides them, this restores them).
         textView.isHidden = false
-        emojiButton.isHidden = false
+        emojiButton.isHidden = attachmentButtonHidden
 
         let hasText = !textView.text.isEmpty
         cameraButton.isHidden = !cameraButtonEnabled

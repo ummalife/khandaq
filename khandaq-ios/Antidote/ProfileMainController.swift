@@ -53,7 +53,6 @@ class ProfileMainController: StaticTableController {
             //],
             [
                 toxIdModel,
-                copyMyIdModel,
                 showQrModel,
             ],
             [
@@ -161,12 +160,11 @@ private extension ProfileMainController {
 
         toxIdModel.title = String(localized: "my_tox_id")
         toxIdModel.value = sanitizeAddressInput(submanagerUser.userAddress)
-        toxIdModel.userInteractionEnabled = false
+        // KHANDAQ (#117): tap the MyID row to copy it (with a toast) — the separate "Копировать MyID"
+        // button was redundant and bulky and is removed; long-press still works via canCopyValue.
+        toxIdModel.userInteractionEnabled = true
         toxIdModel.canCopyValue = true
-
-        // KHANDAQ design (Figma): explicit "Копировать MyID" + "Показать QR-код" buttons under the ID.
-        copyMyIdModel.title = String(localized: "contacts_copy_myid")
-        copyMyIdModel.didSelectHandler = { [weak self] _ in
+        toxIdModel.didSelectHandler = { [weak self] _ in
             guard let self = self else { return }
             UIPasteboard.general.string = self.submanagerUser.userAddress
             self.showCopiedHUD(String(localized: "group_member_action_copy_done"))

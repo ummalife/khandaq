@@ -43,7 +43,7 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
             return
         }
 
-        statusImageView.image = UIImage(named: "chat-delivered-checkmark")?.withRenderingMode(.alwaysTemplate)
+        statusImageView.image = MessageStatusIcon.image(delivered: fileModel.delivered)
         statusImageView.tintColor = fileModel.delivered
             ? UIColor(red: 0.05, green: 0.65, blue: 0.91, alpha: 1.0)
             : UIColor(white: 0.58, alpha: 1.0)
@@ -68,7 +68,8 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
         super.installConstraints()
 
         statusImageView.snp.makeConstraints {
-            $0.width.height.equalTo(14)
+            // KHANDAQ (#107b): fix the height; width follows the glyph (single vs double check) intrinsically.
+            $0.height.equalTo(14)
             $0.trailing.equalTo(loadingView).offset(-6)
             $0.bottom.equalTo(loadingView).offset(-4)
         }

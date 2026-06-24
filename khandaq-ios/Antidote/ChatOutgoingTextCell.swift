@@ -31,7 +31,7 @@ class ChatOutgoingTextCell: ChatBaseTextCell {
         bubbleView.tintColor = theme.colorForType(.NormalText)
         bubbleView.font = UIFont.preferredFont(forTextStyle: .body)
 
-        statusImageView.image = UIImage(named: "chat-delivered-checkmark")?.withRenderingMode(.alwaysTemplate)
+        statusImageView.image = MessageStatusIcon.image(delivered: textModel.delivered)
         if textModel.delivered {
             // KHANDAQ design: green delivered checkmark (was a hard-coded blue).
             statusImageView.tintColor = theme.colorForType(.LinkText)
@@ -58,7 +58,8 @@ class ChatOutgoingTextCell: ChatBaseTextCell {
         }
 
         statusImageView.snp.makeConstraints {
-            $0.width.height.equalTo(14)
+            // KHANDAQ (#107b): fix the height; width follows the glyph (single vs double check) intrinsically.
+            $0.height.equalTo(14)
             $0.trailing.equalTo(bubbleView).offset(-6)
             $0.bottom.equalTo(bubbleView).offset(-4)
         }

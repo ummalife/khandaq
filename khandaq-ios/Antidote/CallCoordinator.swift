@@ -522,7 +522,12 @@ extension CallCoordinator {
             }
         }
 
-        if activeCall.call.friendSendingVideo {
+        // KHANDAQ: attach the remote feed when the peer flags video OR when frames are actually
+        // arriving — the toxav SENDING_V state can lag or never fire even though video frames are
+        // being delivered, which left the feed unattached and the remote camera invisible. Detach
+        // only when neither holds.
+        let frameCount = submanagerCalls.receivedVideoFrameCount()
+        if activeCall.call.friendSendingVideo || frameCount > 0 {
             if activeController!.videoFeed == nil {
                 activeController!.videoFeed = submanagerCalls.videoFeed()
             }
@@ -531,6 +536,15 @@ extension CallCoordinator {
             if activeController!.videoFeed != nil {
                 activeController!.videoFeed = nil
             }
+        }
+
+        // KHANDAQ (remote-video diagnostic): surface the incoming-frame count + flags on the call
+        // screen during a video call so a screenshot pinpoints the break (rx:0 = peer not transmitting).
+        if activeCall.call.videoIsEnabled || activeCall.call.friendSendingVideo || frameCount > 0 {
+            activeController!.debugVideoInfo = "rx:\(frameCount) sendV:\(activeCall.call.friendSendingVideo ? 1 : 0) feed:\(activeController!.videoFeed != nil ? 1 : 0)"
+        }
+        else {
+            activeController!.debugVideoInfo = ""
         }
     }
 }

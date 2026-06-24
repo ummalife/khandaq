@@ -73,6 +73,7 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 - (BOOL)setupAndReturnError:(NSError **)error
 {
     OCTLogVerbose(@"setupAndReturnError");
+    self.receivedFrameCount = 0;
 #if TARGET_OS_IPHONE
     AVCaptureDevice *videoCaptureDevice = [self getDeviceForPosition:AVCaptureDevicePositionFront];
 #else
@@ -274,6 +275,9 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
                            vStride:(OCTToxAVStrideData)vStride
                       friendNumber:(OCTToxFriendNumber)friendNumber
 {
+    // KHANDAQ: count every frame the peer sends us, BEFORE any early-return, so the diagnostic
+    // reflects what actually arrives over the network regardless of whether the view is ready.
+    self.receivedFrameCount++;
 
     if (! self.videoView) {
         return;

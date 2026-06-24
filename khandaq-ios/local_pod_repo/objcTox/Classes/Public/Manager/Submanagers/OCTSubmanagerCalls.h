@@ -148,4 +148,10 @@
 
 #endif
 
+/**
+ * KHANDAQ: number of incoming video frames received from the peer in the current/most-recent call.
+ * Used by the call UI to diagnose a missing remote camera (0 = nothing arriving from the peer).
+ */
+- (NSUInteger)receivedVideoFrameCount;
+
 @end

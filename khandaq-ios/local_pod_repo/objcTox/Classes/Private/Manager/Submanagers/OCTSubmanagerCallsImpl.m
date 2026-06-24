@@ -222,6 +222,11 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
     return [self.videoEngine videoFeed];
 }
 
+- (NSUInteger)receivedVideoFrameCount
+{
+    return self.videoEngine.receivedFrameCount;
+}
+
 - (void)getVideoCallPreview:(void (^)(CALayer *))completionBlock
 {
     [self.videoEngine getVideoCallPreview:completionBlock];

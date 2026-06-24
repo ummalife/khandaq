@@ -1653,6 +1653,20 @@ private extension ChatPrivateController {
             }
         }
 
+        // KHANDAQ (#115): the input bar is pushed up by the home-indicator safe area (see above), which
+        // left the chat doodle showing through the gap beneath it. Fill that gap with the bar's own
+        // background so the input bar reads as reaching the screen edge. Pinned bar-bottom → view-bottom,
+        // so it also covers the hidden area behind the keyboard when it's raised (no visible effect there).
+        let inputBottomFiller = UIView()
+        inputBottomFiller.backgroundColor = theme.colorForType(.ChatInputBackground)
+        inputBottomFiller.isUserInteractionEnabled = false
+        view.insertSubview(inputBottomFiller, belowSubview: chatInputView)
+        inputBottomFiller.snp.makeConstraints {
+            $0.leading.trailing.equalTo(view)
+            $0.top.equalTo(chatInputView.snp.bottom)
+            $0.bottom.equalTo(view)
+        }
+
         editMessagesToolbar.snp.makeConstraints {
             $0.edges.equalTo(chatInputView)
         }

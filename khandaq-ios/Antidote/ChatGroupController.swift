@@ -187,6 +187,18 @@ class ChatGroupController: PortraitChatController {
             }
         }
 
+        // KHANDAQ (#115): fill the home-indicator gap beneath the input bar with the bar's own
+        // background (the bar is pushed up by the safe area, exposing the chat doodle otherwise).
+        let inputBottomFiller = UIView()
+        inputBottomFiller.backgroundColor = theme.colorForType(.ChatInputBackground)
+        inputBottomFiller.isUserInteractionEnabled = false
+        view.insertSubview(inputBottomFiller, belowSubview: chatInputView)
+        inputBottomFiller.snp.makeConstraints {
+            $0.leading.trailing.equalTo(view)
+            $0.top.equalTo(chatInputView.snp.bottom)
+            $0.bottom.equalTo(view)
+        }
+
         ngcVideoOverlay.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)
             if #available(iOS 11.0, *) {

@@ -32,6 +32,35 @@ final class ChatReplyController {
         previewView.hidePreview()
     }
 
+    // KHANDAQ (#121): persist the pending reply per-chat so a reply selected, then abandoned by leaving
+    // the chat without sending, survives re-entry (the controller — and its in-memory pendingMeta — is
+    // gone on exit). Mirrors how the draft text is persisted on the chat.
+    private static func persistKey(forChatId chatId: String) -> String {
+        return "khandaqPendingReply_\(chatId)"
+    }
+
+    func savePending(forChatId chatId: String) {
+        let key = ChatReplyController.persistKey(forChatId: chatId)
+        guard let meta = pendingMeta, let data = try? JSONEncoder().encode(meta) else {
+            UserDefaults.standard.removeObject(forKey: key)
+            return
+        }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    func restorePending(forChatId chatId: String, theme: Theme) {
+        guard pendingMeta == nil else {
+            return
+        }
+        let key = ChatReplyController.persistKey(forChatId: chatId)
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let meta = try? JSONDecoder().decode(MessageReplyHelper.ReplyMeta.self, from: data) else {
+            return
+        }
+        pendingMeta = meta
+        previewView.show(meta: meta, theme: theme)
+    }
+
     func composeOutgoingText(_ userText: String) -> String {
         let encoded = MessageReplyHelper.encode(pendingMeta, bodyText: userText)
         clear()

@@ -12,7 +12,7 @@ enum MessageReplyHelper {
     private static let legacyPrefix = "----\n"
     private static let legacySuffix = "\n----"
 
-    struct ReplyMeta {
+    struct ReplyMeta: Codable {
         var localMessageId: Int64 = 0
         var senderPubkeyTail: String = ""
         var sortTimestampMs: Int64 = 0

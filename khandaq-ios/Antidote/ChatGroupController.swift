@@ -207,6 +207,7 @@ class ChatGroupController: PortraitChatController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        replyController.restorePending(forChatId: chat.uniqueIdentifier, theme: theme)
         inputViewManager = ChatGroupInputViewManager(inputView: chatInputView,
                                                      chat: chat,
                                                      submanagerGroups: submanagerGroups,
@@ -643,6 +644,7 @@ class ChatGroupController: PortraitChatController {
         ngcVideoOverlay.clearFrames()
         ngcVideoOverlay.setVisible(false)
         saveEnteredText()
+        replyController.savePending(forChatId: chat.uniqueIdentifier)
         delegate?.chatGroupControllerWillDisappear(self)
     }
 

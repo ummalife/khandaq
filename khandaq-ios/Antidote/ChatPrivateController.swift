@@ -270,6 +270,7 @@ class ChatPrivateController: PortraitChatController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        replyController.restorePending(forChatId: chat.uniqueIdentifier, theme: theme)
         addMessagesNotification()
         updateEncryptionBannerVisibility()
 
@@ -383,6 +384,7 @@ class ChatPrivateController: PortraitChatController {
         // chat was open, leaving the unread badge stuck after the user has actually read everything.
         updateLastReadDate()
         chatInputViewManager?.endUserInteraction()
+        replyController.savePending(forChatId: chat.uniqueIdentifier)
         delegate?.chatPrivateControllerWillDisappear(self)
     }
 

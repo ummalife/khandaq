@@ -42,7 +42,8 @@ values:
   login-description-label: white
   login-form-background: white
   login-form-text: black
-  login-link-color: white
+  # KHANDAQ: green (accent), like the "или" separator — was `white`, invisible on the light login bg.
+  login-link-color: accent
 
   # Color used for fullscreen translucent views background, e.g. fullscreen picker
   translucent-background: transparent_white

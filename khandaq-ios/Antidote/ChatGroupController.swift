@@ -326,22 +326,28 @@ class ChatGroupController: PortraitChatController {
             tableView.layoutIfNeeded()
         }
 
+        tableView.layoutIfNeeded()
+
         let rows = tableView.numberOfRows(inSection: 0)
         for row in 0..<rows {
             guard messageEntry(atDisplayIndex: row).message.uniqueIdentifier == messageId else {
                 continue
             }
             let indexPath = IndexPath(row: row, section: 0)
-            tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                guard let cell = tableView.cellForRow(at: indexPath) else {
-                    return
+            // KHANDAQ (#126): defer the scroll one runloop so it runs AFTER viewDidAppear's layout pass
+            // settles the table's content size (scrolling inline landed short or no-opped).
+            DispatchQueue.main.async {
+                tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard let cell = tableView.cellForRow(at: indexPath) else {
+                        return
+                    }
+                    UIView.animate(withDuration: 0.25, animations: {
+                        cell.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.25)
+                    }, completion: { _ in
+                        UIView.animate(withDuration: 0.4) { cell.backgroundColor = .clear }
+                    })
                 }
-                UIView.animate(withDuration: 0.25, animations: {
-                    cell.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.25)
-                }, completion: { _ in
-                    UIView.animate(withDuration: 0.4) { cell.backgroundColor = .clear }
-                })
             }
             return
         }

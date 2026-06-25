@@ -136,6 +136,15 @@ enum ThemeChrome {
             return
         }
 
+        // KHANDAQ: never recurse into a UISearchBar. The generic re-theme below paints the search
+        // field's private background subview with .NormalBackground, which blanks the rounded pill
+        // (and breaks the placeholder) after a theme rebuild — a fresh launch only escapes it because
+        // apply() runs before that subview exists. The bar themes itself from the window's interface
+        // style, so leave its internals alone.
+        if view is UISearchBar {
+            return
+        }
+
         if let tableView = view as? UITableView {
             let isGrouped = tableView.style == .grouped
             tableView.backgroundColor = isGrouped

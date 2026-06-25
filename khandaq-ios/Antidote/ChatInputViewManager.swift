@@ -89,8 +89,10 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             })
         }
 
-        items.append(.init(title: String(localized: "attach_audio"), systemImage: "mic") { [weak view] in
-            view?.beginVoiceRecordingFromMenu()
+        // KHANDAQ (#135): the "Аудио" menu item must pick an existing audio FILE, not start a
+        // voice recording (hold-to-record on the voice button already covers voice notes).
+        items.append(.init(title: String(localized: "attach_audio"), systemImage: "music.note") { [weak self] in
+            self?.presentAudioFilePicker()
         })
 
         if let shareLocation = onShareLocation {
@@ -285,7 +287,39 @@ extension ChatInputViewManager {
     }
 }
 
+extension ChatInputViewManager: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else {
+            return
+        }
+
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        // KHANDAQ (#135): send the picked audio file. Saved Messages stores it locally.
+        if chat.isSavedMessages {
+            storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
+            return
+        }
+
+        submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
+            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        }
+    }
+}
+
 fileprivate extension ChatInputViewManager {
+    // KHANDAQ (#135): pick an existing audio file (mp3/m4a/wav/…) and send it as a file.
+    func presentAudioFilePicker() {
+        let controller = UIDocumentPickerViewController(documentTypes: [kUTTypeAudio as String], in: .import)
+        controller.delegate = self
+        presentingViewController.present(controller, animated: true, completion: nil)
+    }
+
     func presentPhotoLibraryPicker() {
         if #available(iOS 14.0, *) {
             var configuration = PHPickerConfiguration()

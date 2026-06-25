@@ -136,12 +136,13 @@ enum ThemeChrome {
             return
         }
 
-        // KHANDAQ: never recurse into a UISearchBar. The generic re-theme below paints the search
-        // field's private background subview with .NormalBackground, which blanks the rounded pill
-        // (and breaks the placeholder) after a theme rebuild — a fresh launch only escapes it because
-        // apply() runs before that subview exists. The bar themes itself from the window's interface
-        // style, so leave its internals alone.
-        if view is UISearchBar {
+        // KHANDAQ: never recurse into system controls that own their internal appearance — the
+        // generic re-theme below paints their PRIVATE subviews with .NormalBackground. After a live
+        // theme rebuild this blanked the UISearchBar's rounded field pill (+ placeholder) and drew a
+        // dark square box behind each UISwitch knob. A fresh launch escapes it only because apply()
+        // runs before those internals exist. These controls theme themselves from the window's
+        // interface style, so leave their internals alone.
+        if view is UISearchBar || view is UISwitch {
             return
         }
 

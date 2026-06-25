@@ -97,8 +97,11 @@ private extension CallBaseController {
 
     func installConstraints() {
         topContainer.snp.makeConstraints {
-            topContainerTopConstraint = $0.top.equalTo(view).constraint
-            $0.top.leading.trailing.equalTo(view)
+            // KHANDAQ: pin to the safe-area top so the caller name clears the notch / Dynamic Island
+            // (on XS Max etc. it was tucked under the notch). The stored constraint still drives the
+            // hide animation (offset -height moves it up out of view).
+            topContainerTopConstraint = $0.top.equalTo(view.safeAreaLayoutGuide).constraint
+            $0.leading.trailing.equalTo(view)
             $0.height.equalTo(Constants.TopContainerHeight)
         }
 

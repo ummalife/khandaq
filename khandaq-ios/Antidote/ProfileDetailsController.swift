@@ -266,32 +266,22 @@ private extension ProfileDetailsController {
     }
 
     func deleteProfile(_ cell: StaticTableBaseCell) {
-        let title1 = String(localized: "delete_profile_confirmation_title_1")
-        let title2 = String(localized: "delete_profile_confirmation_title_2")
-        let message = String(localized: "delete_profile_confirmation_message")
-        let yes = String(localized: "alert_delete")
-        let cancel = String(localized: "alert_cancel")
+        // KHANDAQ: single irreversible confirmation, matching the login-screen profile picker. The old
+        // two-step alert1→alert2 ("Delete this profile?" then "Are you sure?") was redundant now that the
+        // message already states the action can't be undone; both buttons do the same full wipe anyway.
+        let name = UserDefaultsManager().lastActiveProfile ?? ""
+        let undone = String(localized: "delete_profile_confirmation_message")
+        let message = name.isEmpty ? undone : "\(name)\n\n\(undone)"
 
-        let alert1 = UIAlertController(title: title1, message: message, preferredStyle: .actionSheet)
-        alert1.popoverPresentationController?.sourceView = cell
-        alert1.popoverPresentationController?.sourceRect = CGRect(x: cell.frame.size.width / 2, y: cell.frame.size.height / 2, width: 1.0, height: 1.0)
-
-        alert1.addAction(UIAlertAction(title: yes, style: .destructive) { [unowned self] _ -> Void in
-            let alert2 = UIAlertController(title: title2, message: nil, preferredStyle: .actionSheet)
-            alert2.popoverPresentationController?.sourceView = cell
-            alert2.popoverPresentationController?.sourceRect = CGRect(x: cell.frame.size.width / 2, y: cell.frame.size.height / 2, width: 1.0, height: 1.0)
-
-            alert2.addAction(UIAlertAction(title: yes, style: .destructive) { [unowned self] _ -> Void in
-                self.reallyDeleteProfile()
-            })
-            alert2.addAction(UIAlertAction(title: cancel, style: .cancel, handler: nil))
-
-            self.present(alert2, animated: true, completion: nil)
+        let alert = UIAlertController(title: String(localized: "delete_profile_confirmation_title_1"),
+                                      message: message,
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [unowned self] _ -> Void in
+            self.reallyDeleteProfile()
         })
 
-        alert1.addAction(UIAlertAction(title: cancel, style: .cancel, handler: nil))
-
-        present(alert1, animated: true, completion: nil)
+        present(alert, animated: true, completion: nil)
     }
 
     func reallyDeleteProfile() {

@@ -1113,17 +1113,19 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
 
-    OCTMessageAbstract *message = [realmManager addMessageWithFileNumber:fileNumber
-                                                                fileType:OCTMessageFileTypeWaitingConfirmation
-                                                                fileSize:fileSize
-                                                                fileName:fileName
-                                                                filePath:nil
-                                                                 fileUTI:[self fileUTIFromFileName:fileName]
-                                                                    chat:chat
-                                                                  sender:friend];
-    if (message) {
-        [self acceptFileTransfer:message failureBlock:nil];
-    }
+    [realmManager addMessageWithFileNumber:fileNumber
+                                  fileType:OCTMessageFileTypeWaitingConfirmation
+                                  fileSize:fileSize
+                                  fileName:fileName
+                                  filePath:nil
+                                   fileUTI:[self fileUTIFromFileName:fileName]
+                                      chat:chat
+                                    sender:friend];
+    // KHANDAQ: do NOT auto-accept here. The "Загрузка вложений" setting (Never / Wi-Fi / Always) is an
+    // app-layer policy enforced by AutomationCoordinator, which observes new incoming file messages and
+    // accepts them only when the setting allows. Unconditionally accepting at the submanager level
+    // bypassed that, so every incoming 1:1 file downloaded even with "Never" selected. Leaving the
+    // message as WaitingConfirmation lets the user (or the policy) start the download.
 }
 
 - (void)avatarFileReceiveForFileNumber:(OCTToxFileNumber)fileNumber

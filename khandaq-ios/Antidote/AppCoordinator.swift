@@ -74,14 +74,15 @@ class AppCoordinator {
                           duration: ThemeChrome.transitionDuration,
                           options: [.transitionCrossDissolve, .allowAnimatedContent],
                           animations: {
-            // KHANDAQ: set the window interface style FIRST, before reloadTheme rebuilds the session.
-            // The search field (.minimal) and tab bar (default material) are system-drawn from the
-            // window's overrideUserInterfaceStyle; building them before the flip left the search pill
-            // background and tab-bar material stuck on the previous theme after a toggle.
+            // KHANDAQ: reloadTheme rebuilds the whole session from scratch — exactly like a fresh
+            // launch / app restart, which the user confirms renders the theme correctly everywhere.
+            // We must NOT then run ThemeChrome.apply over that freshly-built hierarchy: its generic
+            // recursion clobbers system controls' private subviews (blank search pill, dark square box
+            // behind UISwitch knobs, mis-tinted cell chevrons) — every theme-toggle glitch traced back
+            // to this. Set the window style + global appearance proxies first, rebuild, and stop.
             ThemeChrome.applyGlobalAppearance(newTheme)
             ThemeChrome.applyWindowStyle(transitionWindow, theme: newTheme)
             running.reloadTheme(newTheme)
-            ThemeChrome.apply(to: transitionWindow.rootViewController, theme: newTheme)
             transitionWindow.layoutIfNeeded()
         }, completion: { [weak self] _ in
             self?.isReloadingAppearance = false

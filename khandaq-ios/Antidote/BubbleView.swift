@@ -20,7 +20,15 @@ class BubbleView: UIView {
     fileprivate var mapImageView: UIImageView?
     fileprivate var locationTapRecognizer: UITapGestureRecognizer?
     let replyQuoteView = ChatReplyQuoteView()
-    var onReplyQuoteTap: (() -> Void)?
+    // KHANDAQ (#100): keep the quote view's tap handler in sync no matter the assignment order.
+    // The cell sets onReplyQuoteTap AFTER calling bindReplyQuote, so without this didSet the quote's
+    // onTap was left nil (set to the then-nil handler inside bindReplyQuote) and tapping a reply quote
+    // did nothing in both 1:1 and group chats.
+    var onReplyQuoteTap: (() -> Void)? {
+        didSet {
+            replyQuoteView.onTap = onReplyQuoteTap
+        }
+    }
     var onLocationTap: (() -> Void)?
 
     var text: String? {

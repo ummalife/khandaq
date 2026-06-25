@@ -105,6 +105,27 @@ extension LoginCoordinator: LoginFormControllerDelegate {
         showImportProfileController()
     }
 
+    func loginFormControllerDeleteProfile(_ controller: LoginFormController, profileName: String) {
+        do {
+            try ProfileManager().deleteProfileWithName(profileName)
+        }
+        catch let error as NSError {
+            handleErrorWithType(.deleteProfile, error: error)
+            return
+        }
+
+        // Clear the remembered active profile if it was the one we just deleted, then rebuild the
+        // login screen with the updated list (or the walkthrough when no profiles remain).
+        let userDefaults = UserDefaultsManager()
+        if userDefaults.lastActiveProfile == profileName {
+            userDefaults.lastActiveProfile = nil
+        }
+
+        let profileNames = ProfileManager().allProfileNames
+        let newController: UIViewController = (profileNames.count > 0) ? createFormController() : createWalkthroughController()
+        navigationController.setViewControllers([newController], animated: false)
+    }
+
     func loginFormController(_ controller: LoginFormController, isProfileEncrypted profile: String) -> Bool {
         return isProfileEncrypted(profile)
     }

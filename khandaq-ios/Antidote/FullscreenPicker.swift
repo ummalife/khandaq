@@ -16,6 +16,8 @@ protocol FullscreenPickerDelegate: class {
 
 class FullscreenPicker: UIView {
     weak var delegate: FullscreenPickerDelegate?
+    // KHANDAQ: optional "delete the currently-selected row" action (used to remove a login profile).
+    var onDelete: ((Int) -> Void)?
 
     fileprivate var theme: Theme
 
@@ -61,6 +63,10 @@ extension FullscreenPicker {
         delegate?.fullscreenPicker(self, willDismissWithSelectedIndex: picker.selectedRow(inComponent: 0))
         hide()
     }
+
+    @objc func deleteButtonPressed() {
+        onDelete?(picker.selectedRow(inComponent: 0))
+    }
 }
 
 extension FullscreenPicker: UIPickerViewDataSource {
@@ -76,6 +82,20 @@ extension FullscreenPicker: UIPickerViewDataSource {
 extension FullscreenPicker: UIPickerViewDelegate {
     func pickerView(_ pickerView: UIPickerView, titleForRow row: Int, forComponent component: Int) -> String? {
         return stringsArray[row]
+    }
+
+    // KHANDAQ: render each row with an explicit themed text color. The default titleForRow uses the
+    // system label color, which the window's dark interface style turns WHITE — invisible on the
+    // picker's background in the dark theme (the profile names couldn't be read). viewForRow takes
+    // full control so the names are visible in both themes.
+    func pickerView(_ pickerView: UIPickerView, viewForRow row: Int, forComponent component: Int, reusing view: UIView?) -> UIView {
+        let label = (view as? UILabel) ?? UILabel()
+        label.text = stringsArray[row]
+        label.textColor = theme.colorForType(.NormalText)
+        label.textAlignment = .center
+        label.font = UIFont.systemFont(ofSize: 21.0)
+        label.backgroundColor = .clear
+        return label
     }
 
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
@@ -99,15 +119,20 @@ private extension FullscreenPicker {
         toolbar = UIToolbar()
         toolbar.tintColor = theme.colorForType(.LoginButtonText)
         toolbar.barTintColor = theme.loginNavigationBarColor
+        // KHANDAQ: a destructive "delete profile" button on the left of the picker toolbar.
+        let deleteItem = UIBarButtonItem(barButtonSystemItem: .trash, target: self, action: #selector(FullscreenPicker.deleteButtonPressed))
+        deleteItem.tintColor = UIColor(red: 1.0, green: 0.27, blue: 0.23, alpha: 1.0)
         toolbar.items = [
+            deleteItem,
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: self, action: nil),
             UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(FullscreenPicker.doneButtonPressed))
         ]
         addSubview(toolbar)
 
         picker = UIPickerView()
-        // Picker is always white, despite choosen theme
-        picker.backgroundColor = .white
+        // KHANDAQ: theme the picker background (was hard-coded white) so it matches the active theme;
+        // the row text color is set explicitly in viewForRow so names stay readable on both.
+        picker.backgroundColor = theme.colorForType(.NormalBackground)
         picker.delegate = self
         picker.dataSource = self
         addSubview(picker)

@@ -9,6 +9,7 @@ protocol LoginFormControllerDelegate: class {
     func loginFormControllerLogin(_ controller: LoginFormController, profileName: String, password: String?)
     func loginFormControllerCreateAccount(_ controller: LoginFormController)
     func loginFormControllerImportProfile(_ controller: LoginFormController)
+    func loginFormControllerDeleteProfile(_ controller: LoginFormController, profileName: String)
 
     func loginFormController(_ controller: LoginFormController, isProfileEncrypted profile: String) -> Bool
 }
@@ -100,10 +101,32 @@ extension LoginFormController {
 
         let picker = FullscreenPicker(theme: theme, strings: profileNames, selectedIndex: selectedIndex)
         picker.delegate = self
+        picker.onDelete = { [weak self] row in
+            self?.confirmDeleteProfile(at: row)
+        }
 
         contentContainerView.accessibilityElementsHidden = true
         picker.showAnimatedInView(view)
 }
+
+    private func confirmDeleteProfile(at row: Int) {
+        guard profileNames.indices.contains(row) else {
+            return
+        }
+        let name = profileNames[row]
+        let alert = UIAlertController(
+            title: String(localized: "delete_profile_confirmation_title_1"),
+            message: "\(name)\n\n\(String(localized: "delete_profile_confirmation_message"))",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            self.delegate?.loginFormControllerDeleteProfile(self, profileName: name)
+        })
+        present(alert, animated: true, completion: nil)
+    }
 
     @objc func loginButtonPressed() {
         let isEmpty = (passwordField.text == nil) || passwordField.text!.isEmpty

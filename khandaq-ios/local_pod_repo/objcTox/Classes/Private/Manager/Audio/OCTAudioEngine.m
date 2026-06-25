@@ -79,16 +79,14 @@
         ? AVAudioSessionPortOverrideSpeaker
         : AVAudioSessionPortOverrideNone;
 
-    if (! [session overrideOutputAudioPort:override error:error]) {
-        return NO;
-    }
-
-    // Route changes can reset processing; keep the active call mode.
-    NSString *mode = [session mode];
-    if (mode.length == 0) {
-        mode = AVAudioSessionModeVoiceChat;
-    }
-    return [session setMode:mode error:error];
+    // KHANDAQ: a speaker toggle must be a *pure* output-port override. We previously also
+    // re-applied setMode: on every toggle ("keep the active call mode"), but the audio path
+    // here is a software AudioQueue (no VoiceProcessingIO/AEC unit whose mode actually matters),
+    // and OCTAudioQueue does NOT observe route-change/interruption notifications — so the extra
+    // setMode: reconfiguration tore down the still-running input and output queues on rapid
+    // toggles, leaving the mic and speaker both dead after a couple of taps mid-call.
+    // overrideOutputAudioPort: alone reroutes output without disturbing the live queues.
+    return [session overrideOutputAudioPort:override error:error];
 }
 
 #endif

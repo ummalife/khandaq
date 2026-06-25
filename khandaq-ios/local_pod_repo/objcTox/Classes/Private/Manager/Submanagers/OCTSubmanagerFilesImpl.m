@@ -847,8 +847,19 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
             __block BOOL exists = NO;
 
             dispatch_sync(dispatch_get_main_queue(), ^{
-                NSPredicate *predicate = [NSPredicate predicateWithFormat:@"internalFilePath == %@",
-                                          [path stringByAbbreviatingWithTildeInPath]];
+                // KHANDAQ (#125): a file is "bounded" if ANY message still references it. The stored
+                // internalFilePath can be in three historical formats — container-relative
+                // ("Documents/.../name"), tilde ("~/Documents/.../name"), or a legacy absolute path.
+                // The old exact tilde-match stopped matching once paths were stored container-relative
+                // (the #44 re-rooting fix), so cleanup wrongly treated every still-referenced upload as
+                // unbounded and DELETED it — outgoing photos/videos/voice notes vanished on the next
+                // launch and only an icon was left on re-entry. Match on the unique on-disk file name,
+                // which all three formats share and which is immune to container-UUID drift; biasing
+                // toward "keep" here is correct (an orphan wastes space, a false delete loses data).
+                NSString *name = [path lastPathComponent];
+                NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                          @"internalFilePath ENDSWITH %@ OR internalFilePath == %@",
+                                          [@"/" stringByAppendingString:name], name];
 
                 OCTRealmManager *realmManager = strongSelf.dataSource.managerGetRealmManager;
                 RLMResults *results = [realmManager objectsWithClass:[OCTMessageFile class] predicate:predicate];

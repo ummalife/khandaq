@@ -499,16 +499,17 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 - (void)orientationChanged
 {
 #if TARGET_OS_IPHONE
-    UIDeviceOrientation deviceOrientation = [UIDevice currentDevice].orientation;
     AVCaptureConnection *conn = [self.dataOutput connectionWithMediaType:AVMediaTypeVideo];
+    if (! conn) {
+        return;
+    }
+
+    UIDeviceOrientation deviceOrientation = [UIDevice currentDevice].orientation;
     AVCaptureVideoOrientation orientation;
 
     switch (deviceOrientation) {
-        case UIInterfaceOrientationPortraitUpsideDown:
+        case UIDeviceOrientationPortraitUpsideDown:
             orientation = AVCaptureVideoOrientationPortraitUpsideDown;
-            break;
-        case UIDeviceOrientationPortrait:
-            orientation = AVCaptureVideoOrientationPortrait;
             break;
         /* Landscapes are reversed, otherwise for some reason the video will be upside down */
         case UIDeviceOrientationLandscapeLeft:
@@ -517,13 +518,47 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
         case UIDeviceOrientationLandscapeRight:
             orientation = AVCaptureVideoOrientationLandscapeLeft;
             break;
+        case UIDeviceOrientationPortrait:
         default:
-            return;
+            // KHANDAQ: the call UI is locked to portrait, and the device orientation is .unknown /
+            // .faceUp at call start — and we never call beginGeneratingDeviceOrientationNotifications,
+            // so it is effectively ALWAYS .unknown. The old `default: return` then left the capture
+            // connection at its sensor-native LANDSCAPE default, so the remote always saw a sideways
+            // video. Default to portrait to match the portrait-locked call UI.
+            orientation = AVCaptureVideoOrientationPortrait;
+            break;
     }
 
-    conn.videoOrientation = orientation;
-    self.previewLayer.connection.videoOrientation = orientation;
+    [self applyCaptureOrientation:orientation toConnection:conn];
+    if (self.previewLayer.connection) {
+        [self applyCaptureOrientation:orientation toConnection:self.previewLayer.connection];
+    }
 #endif
 }
+
+#if TARGET_OS_IPHONE
+- (void)applyCaptureOrientation:(AVCaptureVideoOrientation)orientation toConnection:(AVCaptureConnection *)conn
+{
+    // KHANDAQ: AVCaptureConnection.videoOrientation is deprecated on iOS 17+ (and can be ignored there).
+    // Use videoRotationAngle on iOS 17+ with Apple's documented orientation→angle mapping, and fall back
+    // to videoOrientation on older systems. Without this the capture stayed landscape on iOS 17/18/26.
+    if (@available(iOS 17.0, *)) {
+        CGFloat angle;
+        switch (orientation) {
+            case AVCaptureVideoOrientationPortrait:           angle = 90.0;  break;
+            case AVCaptureVideoOrientationPortraitUpsideDown: angle = 270.0; break;
+            case AVCaptureVideoOrientationLandscapeRight:     angle = 0.0;   break;
+            case AVCaptureVideoOrientationLandscapeLeft:      angle = 180.0; break;
+            default:                                          angle = 90.0;  break;
+        }
+        if ([conn isVideoRotationAngleSupported:angle]) {
+            conn.videoRotationAngle = angle;
+        }
+    }
+    else if (conn.supportsVideoOrientation) {
+        conn.videoOrientation = orientation;
+    }
+}
+#endif
 
 @end

@@ -15,7 +15,7 @@ class NotificationWindow: UIWindow {
 
     fileprivate var connectingView: UIView!
     fileprivate var connectingViewLabel: UILabel!
-    fileprivate var connectingViewBottomConstraint: Constraint!
+    fileprivate var connectingViewTopConstraint: Constraint!
 
     // KHANDAQ: custom in-app banner (replaces LNNotificationsUI, which ignored the Dynamic Island).
     fileprivate var bannerView: NotificationBannerView?
@@ -178,8 +178,8 @@ class NotificationWindow: UIWindow {
         }
 
         let showBlock = { [unowned self] in
-            // Slide the toast up to sit just above the tab bar / input bar.
-            self.connectingViewBottomConstraint.update(offset: -56.0)
+            // Slide the chip down to sit just below the Dynamic Island / notch (top, Telegram-style).
+            self.connectingViewTopConstraint.update(offset: 6.0)
             self.layoutIfNeeded()
         }
 
@@ -188,8 +188,8 @@ class NotificationWindow: UIWindow {
         let hidePreparation = {}
 
         let hideBlock = { [unowned self] in
-            // Tuck the toast down below the safe-area bottom so it slides out of view.
-            self.connectingViewBottomConstraint.update(offset: self.connectingView.frame.size.height + 12.0)
+            // Tuck the chip up above the safe-area top so it slides out of view.
+            self.connectingViewTopConstraint.update(offset: -(self.connectingView.frame.size.height + 12.0))
             self.layoutIfNeeded()
             self.connectingViewLabel.layer.removeAllAnimations()
         }
@@ -242,11 +242,10 @@ private extension NotificationWindow {
         connectingView.addSubview(connectingViewLabel)
 
         connectingView.snp.makeConstraints {
-            // KHANDAQ: a bottom toast (above the tab bar / input bar), centered. The top of the screen
-            // is occupied by the navigation title AND the search bar on both the chat list and the chat
-            // dialog, so any top position covered one of them — a bottom chip clears all of it. Starts
-            // tucked just below the safe area; slides up when shown.
-            connectingViewBottomConstraint = $0.bottom.equalTo(self.safeAreaLayoutGuide.snp.bottom).offset(60.0).constraint
+            // KHANDAQ (#113): a TOP chip just under the Dynamic Island / notch (Telegram-style), centered.
+            // Starts tucked above the safe area; slides down into view when shown. Sits over the nav-title
+            // area like Telegram's "Connecting…" indicator.
+            connectingViewTopConstraint = $0.top.equalTo(self.safeAreaLayoutGuide.snp.top).offset(-38.0).constraint
             $0.centerX.equalTo(self)
             $0.height.equalTo(26.0)
             $0.leading.greaterThanOrEqualTo(self).offset(12.0)

@@ -336,7 +336,12 @@ private extension FriendListController {
         label.font = UIFont.systemFont(ofSize: 15.0)
         label.textColor = theme.colorForType(.NormalText)
         label.textAlignment = .center
-        label.numberOfLines = 2
+        // KHANDAQ (#132/#133): the card only has room for one line under the icon, so a wide title
+        // ("Копировать MyID" / "Показать QR-код") rendered on a single line and clipped to "…My…".
+        // Keep one line and shrink the font to fit the card width instead of truncating.
+        label.numberOfLines = 1
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.7
         button.addSubview(label)
 
         // KHANDAQ (#103): give the icon an explicit size and anchor the label BELOW it. Previously

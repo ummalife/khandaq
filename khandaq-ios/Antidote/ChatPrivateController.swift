@@ -1490,6 +1490,12 @@ private extension ChatPrivateController {
         tableView.register(ChatOutgoingFileCell.self, forCellReuseIdentifier: ChatOutgoingFileCell.staticReuseIdentifier)
 
         tableViewTapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(ChatPrivateController.tapOnTableView))
+        // KHANDAQ: don't cancel touches in the table. This keyboard-dismiss tap defaults to
+        // cancelsTouchesInView=true, which swallowed taps on the reply-quote control (a custom
+        // UIControl — UIKit doesn't auto-prioritise it the way it does a UIButton), so tapping a
+        // reply quote in 1:1 chats never jumped to the original message. Group chats have no such
+        // table tap gesture, which is exactly why reply-tap worked there but not in 1:1.
+        tableViewTapGestureRecognizer.cancelsTouchesInView = false
         tableView.addGestureRecognizer(tableViewTapGestureRecognizer)
 
         let panGR = UIPanGestureRecognizer(target: self, action: #selector(ChatPrivateController.panOnTableView(_:)))

@@ -1,0 +1,87 @@
+{
+  "version": "0.2.9",
+  "date": "2026-06-25",
+  "title": "iOS polish — no more duplicate group messages, day separators, offline voice, delivery ticks & call fixes",
+  "summary": "A large iOS-focused round shipped to TestFlight (builds 142885–142899) from real-device QA. Headline fix: group messages no longer duplicate under different sender names. Chats gain Telegram-style day separators, inline photo/video previews with a play button, and sent/delivered ticks. Voice notes and files now queue while the recipient is offline and deliver once they reconnect (just like text). Names and nicknames stop resetting after a restart, video calls request camera access properly, the Licenses screen is readable in dark mode, and an empty-chat crash on the jump-to-latest button is fixed. Remote-camera display and call echo are still being worked on.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "iOS — group messages no longer duplicate",
+      "description": "The top reported pain: in groups a single message could appear many times under different sender names/roles. Tox relays carry the same message under a volatile peer id, so the de-duplication now keys on the stable message id + text on both the live and history-sync paths. Messages appear exactly once.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "important",
+      "title": "iOS — voice notes & files deliver after the recipient comes back online",
+      "description": "Previously a voice message or photo sent while the other person was offline simply failed. Now it queues (like text) and is retried automatically every few seconds, so it arrives within moments of them reconnecting.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "important",
+      "title": "iOS — names and nicknames stop resetting after a restart",
+      "description": "Custom nicknames and group member names persisted incorrectly and reverted on relaunch. They are now kept reliably across restarts (group peers are matched by their stable public key).",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "important",
+      "title": "iOS — files/audio received from Android now download",
+      "description": "Incoming audio and files from Android could fail with 'Download failed'. The file writer now ensures the destination exists, handles the placeholder cleanly and surfaces real errors, so transfers complete.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "important",
+      "title": "iOS — crash fixed when tapping the jump-to-latest arrow in an empty chat",
+      "description": "In a chat with no messages the down-arrow button wrongly appeared and tapping it crashed the app. It is now hidden when there is nothing to scroll to, and the jump is guarded against an empty list.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — Telegram-style day separators in chats",
+      "description": "Messages are now grouped by day with a centered 'Today / Yesterday / date' chip above the first message of each day, in both 1:1 and group chats.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — photos and videos show inline previews",
+      "description": "Sent and received images and videos render as a proper thumbnail (with a play button for video) instead of a generic file row, matching the design and Android.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — delivery ticks for outgoing messages",
+      "description": "Outgoing messages now show a single tick when sent and a double tick once delivered.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — video call asks for camera access",
+      "description": "Starting or turning on video in a call now requests camera permission up front and shows a clear 'open Settings' prompt if denied, instead of a generic internal error. (Showing the other person's camera and removing call echo are still in progress.)",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — Licenses screen readable in dark mode",
+      "description": "The acknowledgements/licenses text rendered as black-on-black in the dark theme; it now uses the theme text color and is readable.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — message captions shown even when the photo didn't load",
+      "description": "A caption attached to a photo is now shown as a normal message when the photo itself isn't displayed inline, so replies and text aren't lost behind a failed image.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — chat navigation and search polish",
+      "description": "Global search across all chats with tap-to-jump to a message, a jump-to-latest button, auto-scroll to the newest message after you send, a selected reply that survives leaving and re-entering a chat, and smoother day-chip scrolling.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS — UI and theme fixes",
+      "description": "Filled the empty strip under the input bar, fixed the voice-recording bar overlap/background, kept the current tab when switching theme, restored chat-header avatars, tidied the navigation buttons, gave Saved Messages a bookmark icon, added a multi-line status field, and made MyID tap-to-copy.",
+      "platforms": ["ios"]
+    }
+  ]
+}

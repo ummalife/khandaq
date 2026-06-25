@@ -14,6 +14,10 @@ protocol CallCoordinatorDelegate: class {
 
 private struct Constants {
     static let DeclineAfterInterval = 1.5
+    // KHANDAQ: number of consecutive call-update ticks (~1s each) with NO new video frames before we
+    // detach the remote feed. The cumulative frame count never decreases, so we detect a stopped
+    // stream by frames no longer arriving — a short grace avoids flicker on a brief network stall.
+    static let NoVideoFrameTicksToDetach = 2
 }
 
 private class ActiveCall {
@@ -50,10 +54,23 @@ class CallCoordinator: NSObject {
     fileprivate var toxAnswerInProgress = false
     fileprivate var toxAnswerCompleted = false
 
+    // KHANDAQ: track remote-video liveness by frame-count delta (see activeCallWasUpdated).
+    fileprivate var lastReceivedVideoFrameCount = 0
+    fileprivate var noNewVideoFrameTicks = Constants.NoVideoFrameTicksToDetach
+
+    // KHANDAQ: the speaker default (on for video, earpiece for audio) is applied ONCE per call, not on
+    // every update tick — otherwise the user's manual speaker toggle was clobbered ~1s later.
+    fileprivate var appliedInitialSpeakerRoute = false
+
     fileprivate var activeCall: ActiveCall? {
         didSet {
             switch (oldValue, activeCall) {
                 case (.none, .some):
+                    // KHANDAQ: fresh call — reset remote-video frame tracking so a previous call's
+                    // cumulative count doesn't leave the feed attached (last frame frozen) on this one.
+                    lastReceivedVideoFrameCount = 0
+                    noNewVideoFrameTicks = Constants.NoVideoFrameTicksToDetach
+                    appliedInitialSpeakerRoute = false
                     delegate?.callCoordinatorDidStartCall(self)
                 case (.some, .none):
                     delegate?.callCoordinatorDidFinishCall(self)
@@ -505,8 +522,12 @@ extension CallCoordinator {
         }
 
         activeController!.outgoingVideo = activeCall.call.videoIsEnabled
-        activeController!.speaker = activeCall.call.videoIsEnabled
-        if activeCall.call.status == .active {
+        // KHANDAQ: apply the speaker default (on for video, earpiece for audio) only ONCE, when the call
+        // first goes active. Re-applying it on every update tick reset the user's manual speaker toggle
+        // about a second after they pressed it ("кнопка сбрасывается автоматически").
+        if activeCall.call.status == .active && !appliedInitialSpeakerRoute {
+            appliedInitialSpeakerRoute = true
+            activeController!.speaker = activeCall.call.videoIsEnabled
             try? submanagerCalls.routeAudio(toSpeaker: activeCall.call.videoIsEnabled)
         }
         if activeCall.call.videoIsEnabled {
@@ -522,12 +543,23 @@ extension CallCoordinator {
             }
         }
 
-        // KHANDAQ: attach the remote feed when the peer flags video OR when frames are actually
-        // arriving — the toxav SENDING_V state can lag or never fire even though video frames are
-        // being delivered, which left the feed unattached and the remote camera invisible. Detach
-        // only when neither holds.
-        let frameCount = submanagerCalls.receivedVideoFrameCount()
-        if activeCall.call.friendSendingVideo || frameCount > 0 {
+        // KHANDAQ: decide remote-feed attachment by whether frames are ACTUALLY still arriving, using
+        // the frame-count delta between ticks. The earlier `frameCount > 0` test was wrong: the count
+        // is cumulative and never decreases, so once a single frame arrived the feed stayed attached
+        // forever — the last frame froze on screen after the peer turned their camera off or the call
+        // went audio-only. friendSendingVideo can attach a touch sooner but must NOT keep the feed
+        // alive on its own (toxav's SENDING_V flag lags / can stay stale).
+        let frameCount = Int(submanagerCalls.receivedVideoFrameCount())
+        if frameCount > lastReceivedVideoFrameCount {
+            noNewVideoFrameTicks = 0
+        }
+        else {
+            noNewVideoFrameTicks += 1
+        }
+        lastReceivedVideoFrameCount = frameCount
+
+        let videoLive = noNewVideoFrameTicks < Constants.NoVideoFrameTicksToDetach
+        if videoLive {
             if activeController!.videoFeed == nil {
                 activeController!.videoFeed = submanagerCalls.videoFeed()
             }

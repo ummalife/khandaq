@@ -31,6 +31,7 @@ class LoginFormController: LoginLogoController {
     fileprivate var profileFakeTextField: UITextField!
     fileprivate var profileButton: UIButton!
     fileprivate var passwordField: UITextField!
+    fileprivate var passwordVisibilityButton: UIButton!
 
     fileprivate var loginButton: RoundedButton!
 
@@ -223,7 +224,39 @@ private extension LoginFormController {
         passwordField.layer.borderWidth = 0.0
         passwordField.layer.masksToBounds = true
         passwordField.layer.cornerRadius = 12.0
+
+        // KHANDAQ: classic show/hide-password eye on the right of the field.
+        passwordVisibilityButton = UIButton(type: .system)
+        passwordVisibilityButton.tintColor = theme.colorForType(.NormalText).withAlphaComponent(0.55)
+        passwordVisibilityButton.frame = CGRect(x: 0, y: 0, width: 44.0, height: 44.0)
+        passwordVisibilityButton.addTarget(self, action: #selector(LoginFormController.togglePasswordVisibility), for: .touchUpInside)
+        updatePasswordVisibilityIcon()
+        passwordField.rightView = passwordVisibilityButton
+        passwordField.rightViewMode = .always
+
         formView.addSubview(passwordField)
+    }
+
+    @objc func togglePasswordVisibility() {
+        let savedText = passwordField.text
+        passwordField.isSecureTextEntry.toggle()
+        // Toggling isSecureTextEntry mid-edit drops the text on the next keystroke; re-assert it.
+        if passwordField.isFirstResponder {
+            passwordField.text = nil
+            passwordField.text = savedText
+        }
+        updatePasswordVisibilityIcon()
+    }
+
+    private func updatePasswordVisibilityIcon() {
+        // Icon reflects the current state: crossed-out eye = hidden, open eye = visible.
+        let symbolName = passwordField.isSecureTextEntry ? "eye.slash" : "eye"
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .regular)
+            passwordVisibilityButton.setImage(UIImage(systemName: symbolName, withConfiguration: config), for: .normal)
+        } else {
+            passwordVisibilityButton.setTitle(passwordField.isSecureTextEntry ? "👁" : "🙈", for: .normal)
+        }
     }
 
     func createLoginButton() {

@@ -687,9 +687,11 @@ extension ChatPrivateController {
                     if self.friend != nil {
 
                         DispatchQueue.main.async {
-                            // send a text message to trigger PUSH notification, and make friend come online (hopefully)
-                            // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
-                            self.submanagerChats.sendMessage(to: self.chat, text: "calling you", type: .normal, successBlock: nil, failureBlock: nil)
+                            // KHANDAQ (#152): wake an offline friend before the call with a SILENT push.
+                            // We used to send a literal "calling you" TEXT message here (to trigger the
+                            // push), but it was a visible chat message that spammed both sides on every
+                            // call attempt/retry. triggerWakePush pings the friend's push token directly.
+                            self.submanagerChats.triggerWakePush(for: self.chat)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
                                 os_log("PUSH:10_seconds")
                                 self.submanagerChats.sendMessagePush(to: self.chat)

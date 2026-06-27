@@ -1378,19 +1378,22 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             fatalError("Message call cannot be copied")
         }
         else if let messageFile = message.messageFile {
-            guard UTTypeConformsTo(messageFile.fileUTI as CFString? ?? "" as CFString, kUTTypeImage) else {
-                fatalError("Cannot copy non-image file")
+            // KHANDAQ (#154): a media bubble's caption is a separate (merged) message with no row of its
+            // own, so "Copy" on the media used to copy only the IMAGE — pasting elsewhere gave the picture,
+            // never the caption text. Prefer the caption TEXT (universally pasteable, and what users
+            // expect); fall back to the image for a plain photo. Never crash on a non-image / missing file.
+            let storageIdx = messages.indexOfObject(message)
+            if storageIdx >= 0,
+               let captionMsg = captionMessage(forFileAtStorageIndex: storageIdx),
+               let captionText = MessageReplyHelper.plainBody(for: captionMsg), !captionText.isEmpty {
+                UIPasteboard.general.string = captionText
             }
-            guard let file = messageFile.filePath() else {
-                assertionFailure("Tried to copy non-existing file")
-                return
+            else if UTTypeConformsTo(inferredFileUTI(for: messageFile) as CFString? ?? "" as CFString, kUTTypeImage),
+                    let file = messageFile.filePath(),
+                    let image = UIImage(contentsOfFile: file) {
+                UIPasteboard.general.image = image
             }
-            guard let image = UIImage(contentsOfFile: file) else {
-                assertionFailure("Cannot create image from file")
-                return
-            }
-
-            UIPasteboard.general.image = image
+            // else: a non-image file with no caption — nothing sensible to copy; do nothing (was a crash).
         }
     }
 

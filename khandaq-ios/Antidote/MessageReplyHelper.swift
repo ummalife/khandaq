@@ -33,20 +33,38 @@ enum MessageReplyHelper {
         }
 
         if rawText.hasPrefix(headerPrefix),
-           let headerEnd = rawText.range(of: headerSuffix),
-           let footerRange = rawText.range(of: footer),
-           headerEnd.upperBound <= footerRange.lowerBound {
+           let headerEnd = rawText.range(of: headerSuffix) {
             let headerBody = String(rawText[rawText.index(rawText.startIndex, offsetBy: headerPrefix.count)..<headerEnd.lowerBound])
             if var meta = parseHeader(headerBody) {
                 let previewStart = headerEnd.upperBound
-                if previewStart < footerRange.lowerBound {
-                    meta.previewText = String(rawText[previewStart..<footerRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if let footerRange = rawText.range(of: footer), headerEnd.upperBound <= footerRange.lowerBound {
+                    // Normal form: preview lives between the header and the [KQ/end] footer; body follows it.
+                    if previewStart < footerRange.lowerBound {
+                        meta.previewText = String(rawText[previewStart..<footerRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    parsed.reply = meta
+                    let bodyStart = footerRange.upperBound
+                    parsed.bodyText = bodyStart < rawText.endIndex
+                        ? trimLeading(String(rawText[bodyStart...]))
+                        : ""
                 }
-                parsed.reply = meta
-                let bodyStart = footerRange.upperBound
-                parsed.bodyText = bodyStart < rawText.endIndex
-                    ? trimLeading(String(rawText[bodyStart...]))
-                    : ""
+                else {
+                    // KHANDAQ (#146): the [KQ/end] footer is missing (a peer build that omits it, or a
+                    // truncated/split message). parseHeader already validated the int64 localId + timestamp,
+                    // so this IS a reply — don't leak the raw "[KQ|…]" marker as the message body. Take the
+                    // first line after the header as the quoted preview and the rest as the actual body.
+                    let after = String(rawText[previewStart...]).drop(while: { $0 == "\n" || $0 == "\r" })
+                    if let nl = after.firstIndex(where: { $0 == "\n" || $0 == "\r" }) {
+                        meta.previewText = String(after[..<nl]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        parsed.bodyText = trimLeading(String(after[after.index(after: nl)...]))
+                    }
+                    else {
+                        meta.previewText = String(after).trimmingCharacters(in: .whitespacesAndNewlines)
+                        parsed.bodyText = ""
+                    }
+                    parsed.reply = meta
+                }
                 return parsed
             }
         }

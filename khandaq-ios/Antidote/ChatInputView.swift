@@ -291,6 +291,10 @@ private extension ChatInputView {
     func createViews(_ theme: Theme) {
         topBorder = UIView()
         topBorder.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+        // KHANDAQ (#155): hide the hard separator above the input bar — it sat right at the table's
+        // bottom edge and clipped the last message (e.g. a call-log row with no bottom padding). The
+        // input field's own border + the background contrast give enough separation (Telegram-style).
+        topBorder.isHidden = true
         addSubview(topBorder)
 
         // KHANDAQ (#15): input bar laid out like the Android/Telegram build:

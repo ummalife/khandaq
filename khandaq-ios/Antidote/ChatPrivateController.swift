@@ -1471,8 +1471,8 @@ private extension ChatPrivateController {
         tableView.transform = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 0)
         // KHANDAQ (#37): the table is y-flipped (d:-1), so contentInset.top renders at the VISUAL
         // bottom — a small gap so the newest message clears the input bar instead of touching it.
-        tableView.contentInset.top = 6.0
-        tableView.scrollIndicatorInsets.top = 6.0
+        tableView.contentInset.top = 10.0
+        tableView.scrollIndicatorInsets.top = 10.0
         tableView.scrollsToTop = false
         tableView.allowsSelection = false
         tableView.estimatedRowHeight = 44.0

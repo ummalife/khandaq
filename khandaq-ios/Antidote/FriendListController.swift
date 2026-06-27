@@ -318,7 +318,8 @@ private extension FriendListController {
         button.backgroundColor = theme.colorForType(.ChatInputBackground)
         button.layer.cornerRadius = 14.0
         button.addTarget(self, action: action, for: .touchUpInside)
-        button.snp.makeConstraints { $0.height.equalTo(76.0) }
+        // KHANDAQ (#132/#133): a bit taller so a two-line title fits on narrow devices.
+        button.snp.makeConstraints { $0.height.equalTo(88.0) }
 
         let icon = UIImageView()
         icon.isUserInteractionEnabled = false
@@ -336,10 +337,10 @@ private extension FriendListController {
         label.font = UIFont.systemFont(ofSize: 15.0)
         label.textColor = theme.colorForType(.NormalText)
         label.textAlignment = .center
-        // KHANDAQ (#132/#133): the card only has room for one line under the icon, so a wide title
-        // ("Копировать MyID" / "Показать QR-код") rendered on a single line and clipped to "…My…".
-        // Keep one line and shrink the font to fit the card width instead of truncating.
-        label.numberOfLines = 1
+        // KHANDAQ (#132/#133): a wide title ("Копировать MyID" / "Показать QR-код") didn't fit one line
+        // on narrower devices and clipped to "…My…". Allow it to wrap to two lines (the card is taller
+        // now) and, as a final safety for very long localisations, shrink the font a little.
+        label.numberOfLines = 2
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.7
         button.addSubview(label)
@@ -348,15 +349,15 @@ private extension FriendListController {
         // icon and label were pinned independently (both top-left / bottom), so on narrower devices
         // (iPhone 13 Pro) the text overlapped the icon.
         icon.snp.makeConstraints {
-            $0.top.equalTo(button).offset(14.0)
+            $0.top.equalTo(button).offset(12.0)
             $0.leading.equalTo(button).offset(14.0)
             $0.width.height.equalTo(24.0)
         }
         label.snp.makeConstraints {
-            $0.top.equalTo(icon.snp.bottom).offset(8.0)
+            $0.top.equalTo(icon.snp.bottom).offset(6.0)
             $0.leading.equalTo(button).offset(14.0)
             $0.trailing.equalTo(button).offset(-14.0)
-            $0.bottom.lessThanOrEqualTo(button).offset(-12.0)
+            $0.bottom.lessThanOrEqualTo(button).offset(-10.0)
         }
         return button
     }

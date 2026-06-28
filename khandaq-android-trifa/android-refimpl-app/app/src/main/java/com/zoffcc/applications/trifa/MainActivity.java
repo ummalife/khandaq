@@ -9510,7 +9510,25 @@ public class MainActivity extends AppCompatActivity
 
     private void updateMainToolbarForTab(final int tabId)
     {
-        MainHeaderBrandingHelper.update(this);
+        // KHANDAQ: header title = current tab name (Figma); connection state stays in the spinner/dot.
+        final int tabTitleRes;
+        if (tabId == R.id.bottom_nav_contacts)
+        {
+            tabTitleRes = R.string.tab_contacts;
+        }
+        else if (tabId == R.id.bottom_nav_settings)
+        {
+            tabTitleRes = R.string.tab_settings;
+        }
+        else if (tabId == R.id.bottom_nav_profile)
+        {
+            tabTitleRes = R.string.tab_profile;
+        }
+        else
+        {
+            tabTitleRes = R.string.tab_chats;
+        }
+        MainHeaderBrandingHelper.setTitle(this, tabTitleRes);
 
         if (mainChatSearch != null)
         {

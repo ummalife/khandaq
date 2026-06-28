@@ -177,12 +177,24 @@ final class MainHeaderBrandingHelper
         activity.runOnUiThread(() -> update(activity));
     }
 
+    // KHANDAQ: the header title shows the current bottom-nav tab name (Чаты/Контакты/…), matching
+    // Figma. Connection state is conveyed only by the spinner + quality dot, not the title text.
+    private static int headerTitleRes = R.string.app_name;
+
+    static void setTitle(@Nullable final AppCompatActivity activity, final int resId)
+    {
+        headerTitleRes = resId;
+        update(activity);
+    }
+
     static void update(@Nullable final AppCompatActivity activity)
     {
         if (titleView == null || activity == null)
         {
             return;
         }
+
+        titleView.setText(headerTitleRes);
 
         final boolean connected = isNetworkBrandedOnline();
         final ConnectionQualityMonitor.Level quality = ConnectionQualityMonitor.get().getLevel();
@@ -194,7 +206,6 @@ final class MainHeaderBrandingHelper
         {
             // Online: flash a green dot briefly, then hide it (no permanent indicator). Weak/medium
             // signal keeps a steady yellow dot since that's worth surfacing.
-            titleView.setText(R.string.app_name);
             if (connectingSpinner != null)
             {
                 connectingSpinner.setVisibility(View.GONE);
@@ -224,7 +235,6 @@ final class MainHeaderBrandingHelper
         else if (noNetwork)
         {
             // No network: steady red dot, no spinner.
-            titleView.setText(R.string.app_name);
             if (connectingSpinner != null)
             {
                 connectingSpinner.setVisibility(View.GONE);
@@ -239,7 +249,6 @@ final class MainHeaderBrandingHelper
         else
         {
             // Connecting: spinner + "Connecting…", no dot.
-            titleView.setText(R.string.main_header_connecting);
             if (connectingSpinner != null)
             {
                 connectingSpinner.setVisibility(View.VISIBLE);

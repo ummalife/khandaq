@@ -10,9 +10,11 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
+        app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar"
+        app:titleTextColor="@color/tg_chat_header_title" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -143,7 +145,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:backgroundTint="@color/khandaq_primary"
+            android:backgroundTint="@color/onboarding_accent"
             android:enabled="false"
             android:insetTop="0dp"
             android:insetBottom="0dp"
@@ -151,7 +153,8 @@
             android:onClick="add_friend_clicked"
             android:text="@string/add_friend_activity_add"
             android:textAllCaps="false"
-            android:textColor="@android:color/white" />
+            android:textColor="@android:color/white"
+            app:cornerRadius="24dp" />
 
     </LinearLayout>
 

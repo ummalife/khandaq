@@ -221,6 +221,7 @@
             android:padding="@dimen/chat_input_icon_padding"
             android:scaleType="fitCenter"
             app:srcCompat="@drawable/i_emoji_google_category_people"
+            app:tint="@color/tg_chat_input_icon"
             tools:ignore="ContentDescription" />
 
         <FrameLayout
@@ -266,6 +267,7 @@
             android:clickable="true"
             android:padding="@dimen/chat_input_icon_padding"
             android:scaleType="fitCenter"
+            app:tint="@color/tg_chat_input_icon"
             tools:ignore="ContentDescription" />
 
         <ImageButton
@@ -277,6 +279,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="@dimen/chat_input_icon_padding"
             android:scaleType="fitCenter"
+            app:tint="@color/tg_chat_input_icon"
             android:src="@drawable/baseline_keyboard_voice_24" />
 
         </LinearLayout>

@@ -207,6 +207,28 @@
                 android:contentDescription="@string/profile_qr_content_description"
                 android:scaleType="fitCenter" />
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:layout_marginTop="12dp"
+                android:background="@color/md_grey_300_seperator" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/profile_label_capabilities"
+                android:textColor="@color/onboarding_desc"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/profile_capabilities_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/onboarding_title"
+                android:textSize="15sp" />
+
         </LinearLayout>
 
         <LinearLayout

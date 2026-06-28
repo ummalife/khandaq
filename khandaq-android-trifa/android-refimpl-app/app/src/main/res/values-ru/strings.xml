@@ -25,6 +25,8 @@
     <string name="import_step_2">Нажмите «Открыть»</string>
     <string name="import_step_3">Выберите Khandaq в списке доступных приложений</string>
     <string name="import_step_4">Проверьте имя нового профиля и нажмите ОК</string>
+    <string name="chat_action_search">Поиск</string>
+    <string name="chat_action_video">Видеозвонок</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
     <string name="chat_reply_action">Ответить</string>

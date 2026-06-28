@@ -25,6 +25,8 @@
     <string name="import_step_2">Tap “Open”</string>
     <string name="import_step_3">Choose Khandaq from the list of available apps</string>
     <string name="import_step_4">Check the new profile name and tap OK</string>
+    <string name="chat_action_search">Search</string>
+    <string name="chat_action_video">Video call</string>
     <string name="main_header_connecting">Connecting…</string>
     <string name="connection_warn_weak">Weak connection</string>
     <string name="connection_good">Connection stable</string>

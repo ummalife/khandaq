@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ chat header overflow (Figma: only phone is a visible icon; everything else lives in ⋮). -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_chat_search"
+        android:title="@string/chat_action_search"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_chat_video"
+        android:title="@string/chat_action_video"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_chat_filter_all"
+        android:title="@string/chat_filter_all_messages"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_chat_filter_files"
+        android:title="@string/chat_filter_files_only"
+        app:showAsAction="never" />
+</menu>

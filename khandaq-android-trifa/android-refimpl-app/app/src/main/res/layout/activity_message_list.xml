@@ -109,6 +109,7 @@
                 android:scaleType="centerInside"
                 android:src="@drawable/circle_orange" />
 
+            <!-- video call moved to the ⋮ overflow (Figma); kept for refs, hidden in the row -->
             <ImageButton
                 android:id="@+id/ml_video_icon"
                 android:layout_width="40dp"
@@ -121,16 +122,20 @@
                 android:onClick="start_call_to_friend"
                 android:padding="7dp"
                 android:scaleType="centerInside"
-                android:src="@drawable/circle_orange" />
+                android:src="@drawable/circle_orange"
+                android:visibility="gone" />
 
+            <!-- search opens from the ⋮ overflow; fills the row when revealed -->
             <androidx.appcompat.widget.SearchView
                 android:id="@+id/search_view_messages"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:focusable="false"
-                app:iconifiedByDefault="true" />
+                android:visibility="gone"
+                app:iconifiedByDefault="false" />
 
+            <!-- filter driven from the ⋮ overflow; kept for its selection logic, hidden in the row -->
             <com.zoffcc.applications.trifa.CustomSpinner
                 android:id="@+id/spinner_filter_msgs"
                 android:layout_width="wrap_content"
@@ -138,7 +143,8 @@
                 android:layout_gravity="center_vertical"
                 android:contentDescription="@string/chat_filter_spinner_description"
                 android:layout_marginLeft="0dp"
-                android:paddingLeft="0dp" />
+                android:paddingLeft="0dp"
+                android:visibility="gone" />
 
         </LinearLayout>
     </androidx.appcompat.widget.Toolbar>

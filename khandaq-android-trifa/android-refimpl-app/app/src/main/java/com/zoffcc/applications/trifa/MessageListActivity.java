@@ -43,6 +43,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
@@ -298,6 +299,12 @@ public class MessageListActivity extends AppCompatActivity
         messageSearchView = (SearchView) findViewById(R.id.search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
         messageSearchView.setIconifiedByDefault(true);
+        // KHANDAQ: search opens from the ⋮ overflow and fills the header; collapsing restores it.
+        messageSearchView.setOnCloseListener(() ->
+        {
+            exitChatSearchMode();
+            return false;
+        });
 
         spinner_filter_msgs = (CustomSpinner) findViewById(R.id.spinner_filter_msgs);
         ArrayList<String> chat_filter_labels = new ArrayList<>(Arrays.asList(
@@ -2661,6 +2668,83 @@ public class MessageListActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    // KHANDAQ: chat-header overflow (⋮) — search / video call / message filter (Figma).
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu)
+    {
+        getMenuInflater().inflate(R.menu.menu_chat_header, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item)
+    {
+        final int id = item.getItemId();
+        if (id == R.id.action_chat_search)
+        {
+            enterChatSearchMode();
+            return true;
+        }
+        else if (id == R.id.action_chat_video)
+        {
+            start_call_to_friend(findViewById(R.id.toolbar));
+            return true;
+        }
+        else if (id == R.id.action_chat_filter_all)
+        {
+            if (spinner_filter_msgs != null)
+            {
+                spinner_filter_msgs.setSelection(0);
+            }
+            return true;
+        }
+        else if (id == R.id.action_chat_filter_files)
+        {
+            if (spinner_filter_msgs != null)
+            {
+                spinner_filter_msgs.setSelection(1);
+            }
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void enterChatSearchMode()
+    {
+        final View profileTap = findViewById(R.id.ml_header_profile_tap);
+        if (profileTap != null)
+        {
+            profileTap.setVisibility(View.GONE);
+        }
+        if (ml_phone_icon != null)
+        {
+            ml_phone_icon.setVisibility(View.GONE);
+        }
+        if (messageSearchView != null)
+        {
+            messageSearchView.setVisibility(View.VISIBLE);
+            messageSearchView.setIconified(false);
+            messageSearchView.requestFocus();
+        }
+    }
+
+    private void exitChatSearchMode()
+    {
+        if (messageSearchView != null)
+        {
+            messageSearchView.setVisibility(View.GONE);
+        }
+        final View profileTap = findViewById(R.id.ml_header_profile_tap);
+        if (profileTap != null)
+        {
+            profileTap.setVisibility(View.VISIBLE);
+        }
+        if (ml_phone_icon != null)
+        {
+            ml_phone_icon.setVisibility(View.VISIBLE);
         }
     }
 

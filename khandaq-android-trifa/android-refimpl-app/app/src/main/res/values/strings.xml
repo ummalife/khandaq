@@ -32,6 +32,15 @@
     <string name="profile_label_myid">MyID</string>
     <string name="profile_label_capabilities">Tox Capabilities</string>
     <string name="profile_show_qr">Show QR code</string>
+    <string name="settings_export_profile">Export profile</string>
+    <string name="settings_import_profile">Import profile</string>
+    <string name="settings_import_subtitle">Export or import a Tox profile (.tox). Only the Tox ID and contacts are transferred; chat history is not.</string>
+    <string name="settings_dark_theme">Dark theme</string>
+    <string name="settings_notif_preview">Notification preview</string>
+    <string name="settings_group_system">Group system messages</string>
+    <string name="settings_advanced">Advanced settings</string>
+    <string name="settings_faq">FAQ</string>
+    <string name="settings_about_app">About</string>
     <string name="main_header_connecting">Connecting…</string>
     <string name="connection_warn_weak">Weak connection</string>
     <string name="connection_good">Connection stable</string>

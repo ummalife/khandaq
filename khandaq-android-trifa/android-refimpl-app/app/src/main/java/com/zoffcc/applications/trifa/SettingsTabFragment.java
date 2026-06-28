@@ -3,27 +3,30 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.R;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.ListView;
+import android.widget.CompoundButton;
 
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.material.switchmaterial.SwitchMaterial;
+
+/**
+ * KHANDAQ Settings tab (Figma 2031:11056): grouped-card list with inline toggles. Export/import,
+ * advanced, FAQ and about are navigation rows; the dark-theme / notification-preview / group-system
+ * switches read & write the existing prefs (no behaviour change vs the old preference screens).
+ */
 public class SettingsTabFragment extends Fragment
 {
-    private static final int ITEM_GENERAL = 0;
-    private static final int ITEM_NOTIFICATIONS = 1;
-    private static final int ITEM_MAINTENANCE = 2;
-    private static final int ITEM_ABOUT = 3;
-
-    private ListView listView;
+    private View settingsContent;
     private View prefsContainer;
-    private View backupFooter;
 
     @Nullable
     @Override
@@ -37,85 +40,111 @@ public class SettingsTabFragment extends Fragment
     {
         super.onViewCreated(view, savedInstanceState);
 
-        listView = view.findViewById(R.id.settings_tab_list);
+        settingsContent = view.findViewById(R.id.settings_tab_content);
         prefsContainer = view.findViewById(R.id.settings_tab_prefs_container);
 
-        backupFooter = LayoutInflater.from(requireContext()).inflate(R.layout.settings_backup_footer, listView, false);
-        listView.addFooterView(backupFooter, null, false);
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
 
-        final String[] labels = new String[] {
-                getString(R.string.pref_header_general),
-                getString(R.string.pref_header_notifications),
-                getString(R.string.MainActivity_maint),
-                getString(R.string.MainActivity_about),
-        };
-
-        listView.setAdapter(new ArrayAdapter<>(requireContext(), android.R.layout.simple_list_item_1, labels));
-        listView.setOnItemClickListener(new AdapterView.OnItemClickListener()
-        {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View itemView, int position, long id)
+        // --- navigation rows ---
+        bindRow(view, R.id.setting_export, () -> openMaintenance(ToxProfileImportHelper.EXTRA_OPEN_EXPORT_PICKER));
+        bindRow(view, R.id.setting_import, () -> openMaintenance(ToxProfileImportHelper.EXTRA_OPEN_IMPORT_PICKER));
+        bindRow(view, R.id.setting_advanced,
+                () -> showPreferenceFragment(new SettingsActivity.GeneralPreferenceFragment()));
+        bindRow(view, R.id.setting_faq, this::openFaq);
+        bindRow(view, R.id.setting_about, () -> {
+            final MainActivity activity = (MainActivity) getActivity();
+            if (activity != null && Callstate.state == 0)
             {
-                final MainActivity activity = (MainActivity) getActivity();
-                if (activity == null || Callstate.state != 0)
-                {
-                    return;
-                }
-
-                switch (position)
-                {
-                    case ITEM_GENERAL:
-                        showPreferenceFragment(new SettingsActivity.GeneralPreferenceFragment());
-                        break;
-                    case ITEM_NOTIFICATIONS:
-                        showPreferenceFragment(new SettingsActivity.NotificationPreferenceFragment());
-                        break;
-                    case ITEM_MAINTENANCE:
-                        activity.startActivity(new Intent(activity, MaintenanceActivity.class));
-                        break;
-                    case ITEM_ABOUT:
-                        activity.startActivity(new Intent(activity, Aboutpage.class));
-                        break;
-                }
+                activity.startActivity(new Intent(activity, Aboutpage.class));
             }
         });
 
-        backupFooter.findViewById(R.id.settings_backup_export_card).setOnClickListener(new View.OnClickListener()
+        // --- inline toggles ---
+        final SwitchMaterial darkSwitch = view.findViewById(R.id.switch_dark_theme);
+        if (darkSwitch != null)
         {
-            @Override
-            public void onClick(View v)
+            darkSwitch.setChecked(isNightModeActive());
+            darkSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
             {
-                final MainActivity activity = (MainActivity) getActivity();
-                if (activity == null || Callstate.state != 0)
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked)
                 {
-                    return;
+                    if (isChecked == isNightModeActive())
+                    {
+                        return; // already in the requested mode
+                    }
+                    final MainActivity activity = (MainActivity) getActivity();
+                    if (activity != null)
+                    {
+                        activity.toggleDarkModeFromToolbar();
+                    }
                 }
-                final Intent exportIntent = new Intent(activity, MaintenanceActivity.class);
-                exportIntent.putExtra(ToxProfileImportHelper.EXTRA_OPEN_EXPORT_PICKER, true);
-                activity.startActivity(exportIntent);
-            }
-        });
+            });
+        }
 
-        backupFooter.findViewById(R.id.settings_backup_import_card).setOnClickListener(new View.OnClickListener()
+        bindPrefSwitch(view, R.id.switch_notif_preview, prefs, "notification_show_content", false);
+        bindPrefSwitch(view, R.id.switch_group_system, prefs, "conference_show_system_messages", false);
+    }
+
+    private void bindRow(final View root, final int id, final Runnable action)
+    {
+        final View row = root.findViewById(id);
+        if (row != null)
         {
-            @Override
-            public void onClick(View v)
-            {
-                final MainActivity activity = (MainActivity) getActivity();
-                if (activity == null || Callstate.state != 0)
+            row.setOnClickListener(v -> {
+                if (Callstate.state == 0)
                 {
-                    return;
+                    action.run();
                 }
-                final Intent importIntent = new Intent(activity, MaintenanceActivity.class);
-                importIntent.putExtra(ToxProfileImportHelper.EXTRA_OPEN_IMPORT_PICKER, true);
-                activity.startActivity(importIntent);
-            }
-        });
+            });
+        }
+    }
+
+    private void bindPrefSwitch(final View root, final int id, final SharedPreferences prefs,
+                                final String key, final boolean def)
+    {
+        final SwitchMaterial sw = root.findViewById(id);
+        if (sw == null)
+        {
+            return;
+        }
+        sw.setChecked(prefs.getBoolean(key, def));
+        sw.setOnCheckedChangeListener((buttonView, isChecked) ->
+                prefs.edit().putBoolean(key, isChecked).apply());
+    }
+
+    private boolean isNightModeActive()
+    {
+        final int mode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    private void openMaintenance(final String extra)
+    {
+        final MainActivity activity = (MainActivity) getActivity();
+        if (activity == null || Callstate.state != 0)
+        {
+            return;
+        }
+        final Intent intent = new Intent(activity, MaintenanceActivity.class);
+        intent.putExtra(extra, true);
+        activity.startActivity(intent);
+    }
+
+    private void openFaq()
+    {
+        try
+        {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://khandaq.org")));
+        }
+        catch (Exception ignored)
+        {
+        }
     }
 
     public boolean handleBackPress()
     {
-        if (prefsContainer == null || listView == null)
+        if (prefsContainer == null || settingsContent == null)
         {
             return false;
         }
@@ -147,7 +176,7 @@ public class SettingsTabFragment extends Fragment
             return;
         }
 
-        listView.setVisibility(View.GONE);
+        settingsContent.setVisibility(View.GONE);
         prefsContainer.setVisibility(View.VISIBLE);
 
         try
@@ -165,7 +194,7 @@ public class SettingsTabFragment extends Fragment
 
     private void showHeaderList()
     {
-        listView.setVisibility(View.VISIBLE);
+        settingsContent.setVisibility(View.VISIBLE);
         prefsContainer.setVisibility(View.GONE);
     }
 }

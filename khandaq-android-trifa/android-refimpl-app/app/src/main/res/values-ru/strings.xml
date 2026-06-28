@@ -32,6 +32,15 @@
     <string name="profile_label_myid">MyID</string>
     <string name="profile_label_capabilities">Tox Capabilities</string>
     <string name="profile_show_qr">Показать QR-код</string>
+    <string name="settings_export_profile">Экспорт профиля</string>
+    <string name="settings_import_profile">Импорт профиля</string>
+    <string name="settings_import_subtitle">Экспорт или импорт профиля Tox (.tox). Переносятся только Tox ID и контакты, история чатов не переносится.</string>
+    <string name="settings_dark_theme">Тёмная тема</string>
+    <string name="settings_notif_preview">Превью уведомлений</string>
+    <string name="settings_group_system">Системные сообщения групп</string>
+    <string name="settings_advanced">Расширенные настройки</string>
+    <string name="settings_faq">FAQ</string>
+    <string name="settings_about_app">О приложении</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
     <string name="chat_reply_action">Ответить</string>

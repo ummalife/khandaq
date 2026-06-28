@@ -66,7 +66,10 @@ final class MainHeaderBrandingHelper
 
     static void setup(final AppCompatActivity activity, final Toolbar toolbar)
     {
-        if (activity == null || toolbar == null || setupDone)
+        // NOTE: must re-bind the custom view on every setup (incl. config-change recreate, e.g. theme
+        // toggle) — the static view refs otherwise point at the destroyed activity and the new toolbar
+        // keeps its XML default title. The quality listener below is idempotent (setLevelListener).
+        if (activity == null || toolbar == null)
         {
             return;
         }

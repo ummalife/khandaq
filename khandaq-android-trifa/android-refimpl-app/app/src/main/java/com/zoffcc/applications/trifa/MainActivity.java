@@ -9555,7 +9555,7 @@ public class MainActivity extends AppCompatActivity
         invalidateOptionsMenu();
     }
 
-    private void toggleDarkModeFromToolbar()
+    void toggleDarkModeFromToolbar()
     {
         final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
         final String currentValue = settings.getString("dark_mode_pref", "0");

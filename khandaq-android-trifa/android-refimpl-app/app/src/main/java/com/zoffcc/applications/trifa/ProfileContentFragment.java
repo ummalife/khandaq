@@ -454,6 +454,28 @@ public class ProfileContentFragment extends Fragment
         mystatus_message_edittext.addTextChangedListener(profileFieldWatcher);
         profileDirty = false;
 
+        // KHANDAQ: Имя/Статус are value rows; tapping opens an edit dialog (Figma).
+        final android.widget.TextView nameValue = view.findViewById(R.id.profile_name_value);
+        final android.widget.TextView statusValue = view.findViewById(R.id.profile_status_value);
+        if (nameValue != null)
+        {
+            nameValue.setText(global_my_name);
+        }
+        if (statusValue != null)
+        {
+            statusValue.setText(global_my_status_message);
+        }
+        final View rowName = view.findViewById(R.id.row_name);
+        if (rowName != null)
+        {
+            rowName.setOnClickListener(v -> showProfileEditDialog(true));
+        }
+        final View rowStatus = view.findViewById(R.id.row_status);
+        if (rowStatus != null)
+        {
+            rowStatus.setOnClickListener(v -> showProfileEditDialog(false));
+        }
+
         profile_save_button.setOnClickListener(v -> saveProfileChanges(true));
 
         final OnEditorActionListener saveOnDoneListener = (v, actionId, event) -> {
@@ -946,10 +968,59 @@ public class ProfileContentFragment extends Fragment
             }
 
             profileDirty = false;
+            refreshProfileValueRows();
         }
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    // KHANDAQ: edit Имя/Статус via a dialog that writes the hidden field and reuses saveProfileChanges().
+    private void showProfileEditDialog(final boolean isName)
+    {
+        final EditText input = new EditText(requireContext());
+        input.setSingleLine(true);
+        final int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        input.setPadding(pad, pad / 2, pad, pad / 2);
+        input.setText(isName ? global_my_name : global_my_status_message);
+        input.setSelection(input.getText().length());
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(isName ? R.string.profile_label_name : R.string.profile_label_status)
+                .setView(input)
+                .setPositiveButton(R.string.profile_save_button, (d, w) ->
+                {
+                    if (isName)
+                    {
+                        mynick_edittext.setText(input.getText().toString());
+                    }
+                    else
+                    {
+                        mystatus_message_edittext.setText(input.getText().toString());
+                    }
+                    saveProfileChanges(true);
+                    refreshProfileValueRows();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void refreshProfileValueRows()
+    {
+        final View root = getView();
+        if (root == null)
+        {
+            return;
+        }
+        final android.widget.TextView nameValue = root.findViewById(R.id.profile_name_value);
+        final android.widget.TextView statusValue = root.findViewById(R.id.profile_status_value);
+        if (nameValue != null)
+        {
+            nameValue.setText(global_my_name);
+        }
+        if (statusValue != null)
+        {
+            statusValue.setText(global_my_status_message);
         }
     }
 

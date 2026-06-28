@@ -59,43 +59,56 @@
             </FrameLayout>
         </LinearLayout>
 
-        <!-- Card 1 (Figma): Имя / Статус -->
+        <!-- Card 1 (Figma): Имя / Статус — value rows, tap to edit (dialog). The hidden EditTexts
+             back saveProfileChanges() so the existing save logic is reused unchanged. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="16dp"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="16dp"
             android:orientation="vertical"
             android:background="@drawable/bg_profile_card">
 
             <LinearLayout
+                android:id="@+id/row_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="10dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="@string/profile_label_name"
-                    android:textSize="13sp"
-                    android:textColor="@color/onboarding_desc" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                <EditText
-                    android:id="@+id/mynick_edittext"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@android:color/transparent"
-                    android:paddingVertical="2dp"
-                    android:hint="@string/profile_label_name"
-                    android:textColor="@color/onboarding_title"
-                    android:textColorHint="@color/onboarding_hint"
-                    android:imeOptions="flagNoPersonalizedLearning|actionNext"
-                    android:inputType="text"
-                    android:maxLines="1"
-                    android:singleLine="true"
-                    android:textSize="16sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/profile_label_name"
+                        android:textSize="13sp"
+                        android:textColor="@color/onboarding_desc" />
+
+                    <TextView
+                        android:id="@+id/profile_name_value"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:importantForAccessibility="no" />
             </LinearLayout>
 
             <View
@@ -105,34 +118,66 @@
                 android:background="@color/md_grey_300_seperator" />
 
             <LinearLayout
+                android:id="@+id/row_status"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="10dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="@string/profile_label_status"
-                    android:textSize="13sp"
-                    android:textColor="@color/onboarding_desc" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                <EditText
-                    android:id="@+id/mystatus_message_edittext"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@android:color/transparent"
-                    android:paddingVertical="2dp"
-                    android:hint="@string/profile_label_status"
-                    android:textColor="@color/onboarding_title"
-                    android:textColorHint="@color/onboarding_hint"
-                    android:imeOptions="flagNoPersonalizedLearning|actionDone"
-                    android:inputType="text"
-                    android:maxLines="1"
-                    android:singleLine="true"
-                    android:textSize="16sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/profile_label_status"
+                        android:textSize="13sp"
+                        android:textColor="@color/onboarding_desc" />
+
+                    <TextView
+                        android:id="@+id/profile_status_value"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:importantForAccessibility="no" />
             </LinearLayout>
+
+            <EditText
+                android:id="@+id/mynick_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="flagNoPersonalizedLearning|actionNext"
+                android:inputType="text"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/mystatus_message_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="flagNoPersonalizedLearning|actionDone"
+                android:inputType="text"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:visibility="gone" />
 
         </LinearLayout>
 
@@ -146,17 +191,8 @@
             android:text="@string/profile_save_button"
             android:textAllCaps="false"
             android:textColor="@android:color/white"
-            android:textSize="16sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="20dp"
-            android:layout_marginRight="20dp"
-            android:layout_marginBottom="20dp"
-            android:text="@string/profile_save_hint"
-            android:textColor="@color/friend_list_text_color"
-            android:textSize="13sp" />
+            android:textSize="16sp"
+            android:visibility="gone" />
 
         <!-- Card 2 (Figma): MyID -->
         <LinearLayout

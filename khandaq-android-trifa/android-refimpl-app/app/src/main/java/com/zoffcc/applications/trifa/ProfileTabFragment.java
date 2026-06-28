@@ -31,4 +31,20 @@ public class ProfileTabFragment extends Fragment
                     .commit();
         }
     }
+
+    // KHANDAQ: reload the profile (name/status value rows etc.) each time the tab is shown — the
+    // nested fragment's onResume doesn't re-fire on the parent's show/hide.
+    @Override
+    public void onHiddenChanged(boolean hidden)
+    {
+        super.onHiddenChanged(hidden);
+        if (!hidden)
+        {
+            final Fragment f = getChildFragmentManager().findFragmentById(R.id.profile_tab_container);
+            if (f instanceof ProfileContentFragment)
+            {
+                ((ProfileContentFragment) f).reloadProfileFromTox();
+            }
+        }
+    }
 }

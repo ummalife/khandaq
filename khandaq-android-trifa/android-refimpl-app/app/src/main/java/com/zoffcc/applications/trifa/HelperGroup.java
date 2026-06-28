@@ -8870,7 +8870,13 @@ public class HelperGroup
             info.guardianproject.iocipher.File f2 = new info.guardianproject.iocipher.File(f1.getParent());
             f2.mkdirs();
 
-            save_group_incoming_file(m.path_name, m.file_name, data, header, file_size);
+            // KHANDAQ (#120 / Figma "Загрузка вложений"): only auto-save the group file when the global
+            // policy allows (Всегда, or Только Wi-Fi on Wi-Fi). On Никогда the message is still inserted
+            // (shown as not-downloaded) so the user can fetch it manually.
+            if (HelperFiletransfer.attachment_auto_download_allowed())
+            {
+                save_group_incoming_file(m.path_name, m.file_name, data, header, file_size);
+            }
 
             if (group_message_list_activity != null)
             {

@@ -48,6 +48,10 @@
     <string name="profile_qr_modal_desc">Friends can message you by scanning your QR code.</string>
     <string name="settings_faq">FAQ</string>
     <string name="settings_about_app">About</string>
+    <string name="settings_attachment_download">Attachment download</string>
+    <string name="settings_dl_never">Never</string>
+    <string name="settings_dl_wifi">Wi-Fi only</string>
+    <string name="settings_dl_always">Always</string>
     <string name="main_header_connecting">Connecting…</string>
     <string name="connection_warn_weak">Weak connection</string>
     <string name="connection_good">Connection stable</string>

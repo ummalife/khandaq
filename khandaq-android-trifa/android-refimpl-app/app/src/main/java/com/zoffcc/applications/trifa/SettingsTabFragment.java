@@ -84,6 +84,48 @@ public class SettingsTabFragment extends Fragment
 
         bindPrefSwitch(view, R.id.switch_notif_preview, prefs, "notification_show_content", false);
         bindPrefSwitch(view, R.id.switch_group_system, prefs, "conference_show_system_messages", false);
+
+        bindAttachmentDownloadRow(view, prefs);
+    }
+
+    // KHANDAQ (Figma "Загрузка вложений"): picker Никогда / Только Wi-Fi / Всегда, bound to the global
+    // attachment_download_mode pref (also applied live to MainActivity.PREF__attachment_download_mode).
+    private void bindAttachmentDownloadRow(final View root, final SharedPreferences prefs)
+    {
+        final View row = root.findViewById(R.id.setting_attachment_download);
+        final android.widget.TextView value = root.findViewById(R.id.setting_attachment_download_value);
+        if (row == null || value == null)
+        {
+            return;
+        }
+        final int[] modeLabels = {R.string.settings_dl_never, R.string.settings_dl_wifi, R.string.settings_dl_always};
+        value.setText(modeLabels[clampDownloadMode(prefs.getInt("attachment_download_mode", 2))]);
+        row.setOnClickListener(v ->
+        {
+            if (Callstate.state != 0)
+            {
+                return;
+            }
+            final int current = clampDownloadMode(prefs.getInt("attachment_download_mode", 2));
+            final CharSequence[] items = {getString(R.string.settings_dl_never), getString(R.string.settings_dl_wifi),
+                                          getString(R.string.settings_dl_always)};
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.settings_attachment_download)
+                    .setSingleChoiceItems(items, current, (d, which) ->
+                    {
+                        prefs.edit().putInt("attachment_download_mode", which).apply();
+                        MainActivity.PREF__attachment_download_mode = which;
+                        value.setText(modeLabels[which]);
+                        d.dismiss();
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
+    }
+
+    private int clampDownloadMode(final int m)
+    {
+        return (m < 0 || m > 2) ? 2 : m;
     }
 
     private void bindRow(final View root, final int id, final Runnable action)

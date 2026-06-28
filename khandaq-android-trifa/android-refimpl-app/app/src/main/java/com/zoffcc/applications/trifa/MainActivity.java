@@ -541,6 +541,8 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__auto_accept_image = true;
     static boolean PREF__auto_accept_video = false;
     static boolean PREF__auto_accept_all_upto = false;
+    // KHANDAQ (Figma "Загрузка вложений"): global attachment auto-download policy. 0=Никогда, 1=Только Wi-Fi, 2=Всегда (default = current behavior)
+    static int PREF__attachment_download_mode = 2;
     static int PREF__video_cam_resolution = 0;
     static final int PREF_GLOBAL_FONT_SIZE_DEFAULT = 2;
     static int PREF__global_font_size = PREF_GLOBAL_FONT_SIZE_DEFAULT;
@@ -1227,6 +1229,16 @@ public class MainActivity extends AppCompatActivity
         {
             e.printStackTrace();
             PREF__auto_accept_all_upto = false;
+        }
+
+        try
+        {
+            PREF__attachment_download_mode = settings.getInt("attachment_download_mode", 2);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__attachment_download_mode = 2;
         }
 
         try
@@ -3718,6 +3730,16 @@ public class MainActivity extends AppCompatActivity
         {
             e.printStackTrace();
             PREF__auto_accept_all_upto = false;
+        }
+
+        try
+        {
+            PREF__attachment_download_mode = settings.getInt("attachment_download_mode", 2);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__attachment_download_mode = 2;
         }
 
         try

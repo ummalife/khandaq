@@ -22,6 +22,9 @@ package com.zoffcc.applications.trifa;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -113,10 +116,61 @@ public class HelperFiletransfer
 {
     private static final String TAG = "trifa.Hlp.Filetransfer";
 
+    // KHANDAQ (Figma "Загрузка вложений" / #120): global attachment auto-download gate.
+    // 0=Никогда (never), 1=Только Wi-Fi (wifi-only), 2=Всегда (always = default, unchanged behavior).
+    // Applies to BOTH the 1:1 (this file) and the NGC group path (HelperGroup.group_custom_packet_cb).
+    public static boolean attachment_auto_download_allowed()
+    {
+        final int mode = MainActivity.PREF__attachment_download_mode;
+        if (mode == 0)
+        {
+            return false;
+        }
+        if (mode == 1)
+        {
+            return is_on_wifi();
+        }
+        return true;
+    }
+
+    private static boolean is_on_wifi()
+    {
+        try
+        {
+            final Context ctx = MainActivity.context_s;
+            if (ctx == null)
+            {
+                return false;
+            }
+            final ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null)
+            {
+                return false;
+            }
+            final Network n = cm.getActiveNetwork();
+            if (n == null)
+            {
+                return false;
+            }
+            final NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+            return (caps != null) && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
     public static boolean check_auto_accept_incoming_filetransfer(Message message)
     {
         try
         {
+            // KHANDAQ: respect the global attachment-download policy (Никогда / Только Wi-Fi) for 1:1 too.
+            if (!attachment_auto_download_allowed())
+            {
+                return false;
+            }
+
             if (get_filetransfer_state_from_id(message.filetransfer_id) != TOX_FILE_CONTROL_PAUSE.value)
             {
                 return false;

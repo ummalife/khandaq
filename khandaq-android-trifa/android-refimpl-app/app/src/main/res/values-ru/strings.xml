@@ -41,6 +41,11 @@
     <string name="settings_advanced">Расширенные настройки</string>
     <string name="profile_logout">Выйти</string>
     <string name="profile_logout_confirm">Выйти из профиля?</string>
+    <string name="profile_edit_save">Сохранить изменения</string>
+    <string name="profile_edit_name_hint">Ваше имя</string>
+    <string name="profile_edit_status_hint">Ваш статус</string>
+    <string name="profile_qr_modal_title">MyID вашего аккаунта</string>
+    <string name="profile_qr_modal_desc">Друзья могут написать вам, отсканировав ваш QR-код.</string>
     <string name="settings_faq">FAQ</string>
     <string name="settings_about_app">О приложении</string>
     <string name="chat_date_today">Сегодня</string>

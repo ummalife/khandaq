@@ -41,6 +41,11 @@
     <string name="settings_advanced">Advanced settings</string>
     <string name="profile_logout">Log out</string>
     <string name="profile_logout_confirm">Log out of this profile?</string>
+    <string name="profile_edit_save">Save changes</string>
+    <string name="profile_edit_name_hint">Your name</string>
+    <string name="profile_edit_status_hint">Your status</string>
+    <string name="profile_qr_modal_title">Your account MyID</string>
+    <string name="profile_qr_modal_desc">Friends can message you by scanning your QR code.</string>
     <string name="settings_faq">FAQ</string>
     <string name="settings_about_app">About</string>
     <string name="main_header_connecting">Connecting…</string>

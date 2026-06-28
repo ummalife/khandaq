@@ -141,6 +141,8 @@ public class ProfileContentFragment extends Fragment
     TextView my_pushurl_text = null;
     TextView mytox_network_connections = null;
     static final int MEDIAPICK_ID_002 = 8003;
+    static final int PROFILE_FIELD_EDIT_ID = 8005;
+    private boolean editingProfileName = false;
 
     static Handler profile_handler_s = null;
     private boolean stop_me_netconn = false;
@@ -468,20 +470,19 @@ public class ProfileContentFragment extends Fragment
         final View rowName = view.findViewById(R.id.row_name);
         if (rowName != null)
         {
-            rowName.setOnClickListener(v -> showProfileEditDialog(true));
+            rowName.setOnClickListener(v -> openProfileFieldEditor(true));
         }
         final View rowStatus = view.findViewById(R.id.row_status);
         if (rowStatus != null)
         {
-            rowStatus.setOnClickListener(v -> showProfileEditDialog(false));
+            rowStatus.setOnClickListener(v -> openProfileFieldEditor(false));
         }
 
-        // KHANDAQ: "Показать QR-код" toggles the QR (hidden by default, Figma).
+        // KHANDAQ: "Показать QR-код" opens the MyID QR modal (Figma).
         final View showQrButton = view.findViewById(R.id.show_qr_button);
-        if (showQrButton != null && mytoxid_imageview != null)
+        if (showQrButton != null)
         {
-            showQrButton.setOnClickListener(v -> mytoxid_imageview.setVisibility(
-                    mytoxid_imageview.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
+            showQrButton.setOnClickListener(v -> showQrModal());
         }
 
         // KHANDAQ: "Выйти" (Figma) — confirm, then log out and return to the login screen.
@@ -646,6 +647,24 @@ public class ProfileContentFragment extends Fragment
     public void onActivityResult(int requestCode, int resultCode, Intent data)
     {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PROFILE_FIELD_EDIT_ID && resultCode == Activity.RESULT_OK && data != null)
+        {
+            final String value = data.getStringExtra(ProfileFieldEditActivity.RESULT_VALUE);
+            if (value != null)
+            {
+                if (editingProfileName)
+                {
+                    mynick_edittext.setText(value);
+                }
+                else
+                {
+                    mystatus_message_edittext.setText(value);
+                }
+                saveProfileChanges(true);
+                refreshProfileValueRows();
+            }
+            return;
+        }
         if (requestCode == MEDIAPICK_ID_002 && resultCode == Activity.RESULT_OK)
         {
             if ((data == null) || (data.getData() == null))
@@ -1015,33 +1034,32 @@ public class ProfileContentFragment extends Fragment
         }
     }
 
-    // KHANDAQ: edit Имя/Статус via a dialog that writes the hidden field and reuses saveProfileChanges().
-    private void showProfileEditDialog(final boolean isName)
+    // KHANDAQ: edit Имя/Статус on a full-screen editor (Figma); result is applied via saveProfileChanges().
+    private void openProfileFieldEditor(final boolean isName)
     {
-        final EditText input = new EditText(requireContext());
-        input.setSingleLine(true);
-        final int pad = (int) (20 * getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad / 2, pad, pad / 2);
-        input.setText(isName ? global_my_name : global_my_status_message);
-        input.setSelection(input.getText().length());
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle(isName ? R.string.profile_label_name : R.string.profile_label_status)
-                .setView(input)
-                .setPositiveButton(R.string.profile_save_button, (d, w) ->
-                {
-                    if (isName)
-                    {
-                        mynick_edittext.setText(input.getText().toString());
-                    }
-                    else
-                    {
-                        mystatus_message_edittext.setText(input.getText().toString());
-                    }
-                    saveProfileChanges(true);
-                    refreshProfileValueRows();
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        editingProfileName = isName;
+        final Intent i = new Intent(requireContext(), ProfileFieldEditActivity.class);
+        i.putExtra(ProfileFieldEditActivity.EXTRA_IS_NAME, isName);
+        i.putExtra(ProfileFieldEditActivity.EXTRA_VALUE, isName ? global_my_name : global_my_status_message);
+        startActivityForResult(i, PROFILE_FIELD_EDIT_ID);
+    }
+
+    // KHANDAQ: show the MyID QR in a modal card (Figma) instead of inline.
+    private void showQrModal()
+    {
+        try
+        {
+            final View content = getLayoutInflater().inflate(R.layout.dialog_my_qr, null);
+            final ImageView qr = content.findViewById(R.id.qr_modal_image);
+            qr.setImageBitmap(encodeAsBitmap("tox:" + MainActivity.get_my_toxid()));
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setView(content)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+        }
+        catch (Exception ignored)
+        {
+        }
     }
 
     private void refreshProfileValueRows()

@@ -234,6 +234,17 @@
                 android:textColor="@color/onboarding_title"
                 android:textSize="14sp" />
 
+            <TextView
+                android:id="@+id/show_qr_button"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_profile_pill_btn"
+                android:gravity="center"
+                android:text="@string/profile_show_qr"
+                android:textColor="@color/onboarding_title"
+                android:textSize="14sp" />
+
             <ImageView
                 android:id="@+id/mytoxid_imageview"
                 android:layout_width="@dimen/profile_qr_code_size"
@@ -241,7 +252,8 @@
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="12dp"
                 android:contentDescription="@string/profile_qr_content_description"
-                android:scaleType="fitCenter" />
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
 
             <View
                 android:layout_width="match_parent"

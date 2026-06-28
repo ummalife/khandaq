@@ -476,6 +476,14 @@ public class ProfileContentFragment extends Fragment
             rowStatus.setOnClickListener(v -> showProfileEditDialog(false));
         }
 
+        // KHANDAQ: "Показать QR-код" toggles the QR (hidden by default, Figma).
+        final View showQrButton = view.findViewById(R.id.show_qr_button);
+        if (showQrButton != null && mytoxid_imageview != null)
+        {
+            showQrButton.setOnClickListener(v -> mytoxid_imageview.setVisibility(
+                    mytoxid_imageview.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
+        }
+
         profile_save_button.setOnClickListener(v -> saveProfileChanges(true));
 
         final OnEditorActionListener saveOnDoneListener = (v, actionId, event) -> {

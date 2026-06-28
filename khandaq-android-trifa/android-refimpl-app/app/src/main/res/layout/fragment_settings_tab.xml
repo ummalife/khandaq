@@ -127,7 +127,10 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:clickable="true"
-                        android:focusable="true" />
+                        android:focusable="true"
+                        app:useMaterialThemeColors="false"
+                        app:thumbTint="@color/khandaq_switch_thumb"
+                        app:trackTint="@color/khandaq_switch_track" />
                 </LinearLayout>
 
                 <View android:layout_width="match_parent" android:layout_height="0.5dp"
@@ -155,7 +158,10 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:clickable="true"
-                        android:focusable="true" />
+                        android:focusable="true"
+                        app:useMaterialThemeColors="false"
+                        app:thumbTint="@color/khandaq_switch_thumb"
+                        app:trackTint="@color/khandaq_switch_track" />
                 </LinearLayout>
 
                 <View android:layout_width="match_parent" android:layout_height="0.5dp"
@@ -183,7 +189,10 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:clickable="true"
-                        android:focusable="true" />
+                        android:focusable="true"
+                        app:useMaterialThemeColors="false"
+                        app:thumbTint="@color/khandaq_switch_thumb"
+                        app:trackTint="@color/khandaq_switch_track" />
                 </LinearLayout>
 
                 <View android:layout_width="match_parent" android:layout_height="0.5dp"

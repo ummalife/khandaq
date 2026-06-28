@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ switch track: teal (alpha applied by the switch) when on, grey when off -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/khandaq_teal" android:state_checked="true" />
+    <item android:color="#BDBDBD" />
+</selector>

@@ -9540,6 +9540,13 @@ public class MainActivity extends AppCompatActivity
             chatFilterTabsContainer.setVisibility(tabId == R.id.bottom_nav_chats ? View.VISIBLE : View.GONE);
         }
 
+        // KHANDAQ: add-contact FAB (Figma) is shown only on the Контакты tab.
+        final View fabAddContact = findViewById(R.id.fab_add_contact);
+        if (fabAddContact != null)
+        {
+            fabAddContact.setVisibility(tabId == R.id.bottom_nav_contacts ? View.VISIBLE : View.GONE);
+        }
+
         if (tabId == R.id.bottom_nav_chats)
         {
             applyChatFilterTabSelection(currentChatFilterTab, true);

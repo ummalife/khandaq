@@ -84,6 +84,22 @@
         app:labelVisibilityMode="labeled"
         app:menu="@menu/bottom_nav_main" />
 
+    <!-- KHANDAQ: contacts add FAB (Figma) — shown only on the Контакты tab; reuses show_add_friend -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_add_contact"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/bottom_navigation"
+        android:layout_alignParentEnd="true"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:contentDescription="@string/layout___add_friend"
+        android:onClick="show_add_friend"
+        android:src="@drawable/ic_add_24"
+        android:visibility="gone"
+        app:backgroundTint="@color/khandaq_teal"
+        app:tint="@android:color/white" />
+
     <Spinner
         android:id="@+id/spinner_own_status"
         android:layout_width="0dp"

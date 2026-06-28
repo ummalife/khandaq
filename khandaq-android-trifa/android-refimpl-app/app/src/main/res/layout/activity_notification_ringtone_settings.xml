@@ -12,12 +12,12 @@
         android:id="@+id/notification_ringtone_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
         app:navigationContentDescription="@string/abc_action_bar_up_description"
         app:navigationIcon="?attr/homeAsUpIndicator"
         app:title="@string/pref_title_ringtone"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar" />
 
     <LinearLayout
         android:layout_width="match_parent"

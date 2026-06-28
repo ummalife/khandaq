@@ -6,6 +6,15 @@
     android:background="@drawable/chat_background_1"
     android:orientation="vertical">
 
+    <!-- Figma chat doodle wallpaper (light); night variant = solid dark -->
+    <ImageView
+        android:id="@+id/chat_wallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        android:src="@drawable/chat_wallpaper" />
+
     <!--android:scrollbarAlwaysDrawVerticalTrack="true"-->
     <!--android:scrollbars="vertical"-->
 

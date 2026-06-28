@@ -1,5 +1,30 @@
 <resources>
     <string name="app_name" translatable="false">Khandaq</string>
+    <!-- KHANDAQ onboarding (Figma) -->
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_create_account">Create account</string>
+    <string name="onboarding_import_profile">Import profile</string>
+    <string name="onboarding_title_1">No phone number</string>
+    <string name="onboarding_desc_1">Sign up for the messenger without linking a phone number</string>
+    <string name="onboarding_title_2">Strong encryption</string>
+    <string name="onboarding_desc_2">All messages are encrypted with the Tox protocol and are accessible only to you and your contact</string>
+    <string name="onboarding_title_3">Only you and your contact</string>
+    <string name="onboarding_desc_3">Your messages are not stored on servers. Enjoy full decentralization</string>
+    <string name="onboarding_pw_title">Set password</string>
+    <string name="onboarding_pw_label">Password</string>
+    <string name="onboarding_pw_hint">Enter password</string>
+    <string name="onboarding_pw_helper">A password protects your data. At least 8 characters, letters and digits. Keep it safe — it cannot be recovered.</string>
+    <string name="onboarding_pw_confirm_label">Confirm password</string>
+    <string name="onboarding_pw_confirm_hint">Re-enter password</string>
+    <string name="onboarding_create">Create</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_login_title">Log in to profile</string>
+    <string name="onboarding_login_btn">Log in</string>
+    <string name="import_step_1">Send the .tox file to your device (via email, Dropbox, or another option)</string>
+    <string name="import_step_2">Tap “Open”</string>
+    <string name="import_step_3">Choose Khandaq from the list of available apps</string>
+    <string name="import_step_4">Check the new profile name and tap OK</string>
     <string name="main_header_connecting">Connecting…</string>
     <string name="connection_warn_weak">Weak connection</string>
     <string name="connection_good">Connection stable</string>

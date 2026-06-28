@@ -137,9 +137,9 @@ public class StartMainActivityWrapper extends AppCompatActivity
             if (set_pattern)
             {
                 /* this is the first time the user starts this app
-                 * ask the user to enter a password or skip
+                 * show the KHANDAQ onboarding intro, which leads into SetPasswordActivity
                  */
-                Intent pattern = new Intent(this, SetPasswordActivity.class);
+                Intent pattern = new Intent(this, OnboardingActivity.class);
                 startActivity(pattern);
                 finish();
             }

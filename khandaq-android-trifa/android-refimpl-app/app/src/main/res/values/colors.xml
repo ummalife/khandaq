@@ -8,6 +8,18 @@
     <color name="khandaq_gunmetal">#243036</color>
     <color name="khandaq_emerald">#69C58F</color>
     <color name="khandaq_accent">#C8A85A</color>
+    <!-- KHANDAQ onboarding (Figma): brand teal accent #029B7D + soft mint backdrop -->
+    <color name="khandaq_teal">#029B7D</color>
+    <color name="onboarding_bg">#EAF5F3</color>
+    <color name="onboarding_title">#1F1F1F</color>
+    <color name="onboarding_desc">#7C7C7C</color>
+    <color name="onboarding_progress_track">#D0E8E4</color>
+    <color name="onboarding_progress_active">#029B7D</color>
+    <color name="onboarding_btn_secondary_bg">#E1E7E5</color>
+    <color name="onboarding_accent">#029B7D</color>
+    <color name="onboarding_form_bg">#FFFFFF</color>
+    <color name="onboarding_field_bg">#F2F4F6</color>
+    <color name="onboarding_hint">#A4A4A4</color>
     <color name="khandaq_background">#0B0F0E</color>
     <color name="khandaq_surface">#151B19</color>
     <color name="khandaq_text">#F4FAF6</color>

@@ -87,6 +87,7 @@
             android:name="com.zoffcc.applications.trifa.StartMainActivityWrapper"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:launchMode="singleTask"
+            android:theme="@style/SplashTheme"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -240,6 +241,18 @@
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaCheckPatternActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+        </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.OnboardingActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme">
+        </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.ImportProfileInfoActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.SetPasswordActivity"

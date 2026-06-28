@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ onboarding (Figma): rounded input field (h48, bg #F2F4F6 light / #262B34 dark) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/onboarding_field_bg" />
+    <corners android:radius="24dp" />
+</shape>

@@ -21,6 +21,7 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -133,6 +134,28 @@ public class SetPasswordActivity extends AppCompatActivity
                 });
             }
         });
+
+        // KHANDAQ: arrived from the "Импорт профиля" instructions screen → open the .tox picker
+        // directly (the instructions screen already replaced the first-launch info dialog).
+        if (getIntent() != null && getIntent().getBooleanExtra("KHANDAQ_AUTOSTART_IMPORT", false))
+        {
+            importProfileLauncher.launch(ToxProfileImportHelper.TOX_IMPORT_MIME_TYPES);
+        }
+
+        // KHANDAQ: app-bar back → return to the onboarding intro.
+        ImageView backButton = (ImageView) findViewById(R.id.back_button);
+        if (backButton != null)
+        {
+            backButton.setOnClickListener(new OnClickListener()
+            {
+                @Override
+                public void onClick(View view)
+                {
+                    startActivity(new Intent(SetPasswordActivity.this, OnboardingActivity.class));
+                    finish();
+                }
+            });
+        }
 
 
         mLoginFormView = findViewById(R.id.login_form);

@@ -1,5 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- KHANDAQ onboarding (Figma) -->
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_create_account">Создать аккаунт</string>
+    <string name="onboarding_import_profile">Импорт профиля</string>
+    <string name="onboarding_title_1">Без номера телефона</string>
+    <string name="onboarding_desc_1">Регистрируйтесь в мессенджере без необходимости привязки к номеру телефона</string>
+    <string name="onboarding_title_2">Надежное шифрование</string>
+    <string name="onboarding_desc_2">Все сообщения шифруются протоколом Tox и недоступны никому кроме вас и собеседника</string>
+    <string name="onboarding_title_3">Только Вы и собеседник</string>
+    <string name="onboarding_desc_3">Ваши сообщения не хранятся на серверах. Наслаждайтесь полной децентрализацией</string>
+    <string name="onboarding_pw_title">Установить пароль</string>
+    <string name="onboarding_pw_label">Пароль</string>
+    <string name="onboarding_pw_hint">Введите пароль</string>
+    <string name="onboarding_pw_helper">Пароль нужен для защиты данных. Минимум 8 символов, буквы и цифры. Храните его в безопасности - восстановить нельзя.</string>
+    <string name="onboarding_pw_confirm_label">Подтвердите пароль</string>
+    <string name="onboarding_pw_confirm_hint">Введите пароль повторно</string>
+    <string name="onboarding_create">Создать</string>
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_back">Назад</string>
+    <string name="onboarding_login_title">Войти в профиль</string>
+    <string name="onboarding_login_btn">Войти</string>
+    <string name="import_step_1">Отправьте файл .tox на ваше устройство (используя почту, Dropbox, или другой вариант)</string>
+    <string name="import_step_2">Нажмите «Открыть»</string>
+    <string name="import_step_3">Выберите Khandaq в списке доступных приложений</string>
+    <string name="import_step_4">Проверьте имя нового профиля и нажмите ОК</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
     <string name="chat_reply_action">Ответить</string>

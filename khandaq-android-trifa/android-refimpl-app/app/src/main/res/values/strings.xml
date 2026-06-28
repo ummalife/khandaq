@@ -39,6 +39,8 @@
     <string name="settings_notif_preview">Notification preview</string>
     <string name="settings_group_system">Group system messages</string>
     <string name="settings_advanced">Advanced settings</string>
+    <string name="profile_logout">Log out</string>
+    <string name="profile_logout_confirm">Log out of this profile?</string>
     <string name="settings_faq">FAQ</string>
     <string name="settings_about_app">About</string>
     <string name="main_header_connecting">Connecting…</string>

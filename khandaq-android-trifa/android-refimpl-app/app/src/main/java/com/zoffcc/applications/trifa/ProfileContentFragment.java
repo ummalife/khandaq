@@ -484,6 +484,17 @@ public class ProfileContentFragment extends Fragment
                     mytoxid_imageview.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
         }
 
+        // KHANDAQ: "Выйти" (Figma) — confirm, then log out and return to the login screen.
+        final View logoutRow = view.findViewById(R.id.profile_logout_row);
+        if (logoutRow != null)
+        {
+            logoutRow.setOnClickListener(v -> new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setMessage(R.string.profile_logout_confirm)
+                    .setPositiveButton(R.string.profile_logout, (d, w) -> performLogout())
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show());
+        }
+
         profile_save_button.setOnClickListener(v -> saveProfileChanges(true));
 
         final OnEditorActionListener saveOnDoneListener = (v, actionId, event) -> {
@@ -981,6 +992,26 @@ public class ProfileContentFragment extends Fragment
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    // KHANDAQ: log out — stop tox, then go to the login screen (fresh launch shows CheckPassword).
+    private void performLogout()
+    {
+        MainActivity.manually_log_out();
+        try
+        {
+            final Intent intent = new Intent(requireContext(), CheckPasswordActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        }
+        catch (Exception ignored)
+        {
+        }
+        final android.app.Activity act = getActivity();
+        if (act != null)
+        {
+            act.finish();
         }
     }
 

@@ -277,6 +277,25 @@
                 android:textColor="@color/onboarding_title"
                 android:textSize="15sp" />
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:layout_marginTop="12dp"
+                android:background="@color/md_grey_300_seperator" />
+
+            <TextView
+                android:id="@+id/profile_logout_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingVertical="8dp"
+                android:text="@string/profile_logout"
+                android:textColor="#C80606"
+                android:textSize="16sp" />
+
         </LinearLayout>
 
         <LinearLayout

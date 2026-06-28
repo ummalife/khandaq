@@ -80,6 +80,7 @@
         app:elevation="8dp"
         app:itemIconTint="@color/bottom_nav_item_color"
         app:itemTextColor="@color/bottom_nav_item_color"
+        app:itemActiveIndicatorStyle="@style/KhandaqNavActiveIndicator"
         app:labelVisibilityMode="labeled"
         app:menu="@menu/bottom_nav_main" />
 

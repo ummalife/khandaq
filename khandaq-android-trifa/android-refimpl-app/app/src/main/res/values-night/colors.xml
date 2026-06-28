@@ -24,8 +24,9 @@
     <color name="khandaq_text">#F4FAF6</color>
     <color name="khandaq_text_muted">#8A9A92</color>
     <color name="khandaq_stroke_light">#33443F</color>
-    <color name="tab_active">#0A84FF</color>
+    <color name="tab_active">#10B98F</color>
     <color name="tab_inactive">#98989D</color>
+    <color name="khandaq_nav_indicator">#22332E</color>
     <color name="colorPrimary">@color/khandaq_primary</color>
     <color name="colorPrimaryDark">@color/khandaq_primary_deep</color>
     <color name="colorAccent">@color/khandaq_emerald</color>

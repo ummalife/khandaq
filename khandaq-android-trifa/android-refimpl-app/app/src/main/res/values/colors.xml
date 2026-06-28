@@ -28,8 +28,9 @@
     <color name="khandaq_bubble_out_light">#D4EBE0</color>
     <color name="khandaq_bubble_in_light">#FFFFFF</color>
     <color name="khandaq_stroke_light">#DDE5E1</color>
-    <color name="tab_active">#007AFF</color>
+    <color name="tab_active">#029B7D</color>
     <color name="tab_inactive">#8E8E93</color>
+    <color name="khandaq_nav_indicator">#D0E8E4</color>
     <!-- Always dark — for inputs and list rows on light backgrounds (theme-independent) -->
     <color name="text_on_light_surface">#DE000000</color>
     <color name="chat_input_text">@color/tg_chat_input_text</color>

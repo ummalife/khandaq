@@ -5,6 +5,11 @@
         <item name="android:windowBackground">@drawable/splash_bg</item>
     </style>
 
+    <!-- KHANDAQ bottom-nav active indicator pill (Figma: pale teal behind the active item) -->
+    <style name="KhandaqNavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/khandaq_nav_indicator</item>
+    </style>
+
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>

@@ -27,6 +27,11 @@
     <string name="import_step_4">Проверьте имя нового профиля и нажмите ОК</string>
     <string name="chat_action_search">Поиск</string>
     <string name="chat_action_video">Видеозвонок</string>
+    <string name="profile_label_name">Имя</string>
+    <string name="profile_label_status">Статус</string>
+    <string name="profile_label_myid">MyID</string>
+    <string name="profile_label_capabilities">Tox Capabilities</string>
+    <string name="profile_show_qr">Показать QR-код</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
     <string name="chat_reply_action">Ответить</string>

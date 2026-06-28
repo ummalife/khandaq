@@ -27,6 +27,11 @@
     <string name="import_step_4">Check the new profile name and tap OK</string>
     <string name="chat_action_search">Search</string>
     <string name="chat_action_video">Video call</string>
+    <string name="profile_label_name">Name</string>
+    <string name="profile_label_status">Status</string>
+    <string name="profile_label_myid">MyID</string>
+    <string name="profile_label_capabilities">Tox Capabilities</string>
+    <string name="profile_show_qr">Show QR code</string>
     <string name="main_header_connecting">Connecting…</string>
     <string name="connection_warn_weak">Weak connection</string>
     <string name="connection_good">Connection stable</string>

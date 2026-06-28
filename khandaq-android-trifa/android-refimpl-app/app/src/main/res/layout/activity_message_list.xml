@@ -7,6 +7,9 @@
     android:orientation="vertical"
     tools:context="com.zoffcc.applications.trifa.MessageListActivity">
 
+    <!-- KHANDAQ: single-row chat header (Figma): back(nav) + avatar + name/status + call icons +
+         filter + search. Layout-only restructure — all ids/onClick preserved; search is now an
+         expandable icon (iconifiedByDefault). -->
     <androidx.appcompat.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:app="http://schemas.android.com/apk/res-auto"
         android:id="@+id/toolbar"
@@ -14,142 +17,131 @@
         android:layout_height="wrap_content"
         android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
+        app:contentInsetStartWithNavigation="0dp"
         app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
         app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar">
 
-        <TextView
-            android:layout_width="10dp"
-            android:layout_height="match_parent"
-            android:background="@null"
-            android:text="" />
-
-        <com.zoffcc.applications.trifa.CustomSpinner
-            android:id="@+id/spinner_filter_msgs"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:contentDescription="@string/chat_filter_spinner_description"
-            android:layout_marginLeft="0dp"
-            android:paddingLeft="0dp" />
-
-        <androidx.appcompat.widget.SearchView
-            android:id="@+id/search_view_messages"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:focusable="false"
-            app:iconifiedByDefault="false"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-    </androidx.appcompat.widget.Toolbar>
-
-    <LinearLayout
-        android:id="@+id/ml_header_bar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/tg_chat_header_bg"
-        android:minHeight="55dp"
-        android:orientation="horizontal"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
-
         <LinearLayout
-            android:id="@+id/ml_header_profile_tap"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@android:color/transparent"
-            android:clickable="true"
-            android:contentDescription="@string/message_list_open_friend_profile"
-            android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <de.hdodenhof.circleimageview.CircleImageView
-                android:id="@+id/ml_avatar"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="4dip"
-                android:layout_marginRight="4dip"
-                android:src="@drawable/circle_red"
-                android:visibility="gone" />
-
-            <ImageView
-                android:id="@+id/ml_icon"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:visibility="gone" />
-
-            <ImageView
-                android:id="@+id/ml_status_icon"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:visibility="gone" />
-
             <LinearLayout
+                android:id="@+id/ml_header_profile_tap"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:paddingStart="6dp"
-                android:paddingEnd="10dp">
+                android:background="@android:color/transparent"
+                android:clickable="true"
+                android:contentDescription="@string/message_list_open_friend_profile"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/ml_maintext"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="@string/layout___name"
-                    android:textColor="@color/tg_chat_header_title"
-                    android:textSize="16sp" />
-
-                <TextView
-                    android:id="@+id/ml_presence_status"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text=""
-                    android:textColor="@color/tg_chat_header_subtitle"
-                    android:textSize="13sp"
+                <de.hdodenhof.circleimageview.CircleImageView
+                    android:id="@+id/ml_avatar"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginLeft="0dip"
+                    android:layout_marginRight="4dip"
+                    android:src="@drawable/circle_red"
                     android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/ml_icon"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/ml_status_icon"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp">
+
+                    <TextView
+                        android:id="@+id/ml_maintext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/layout___name"
+                        android:textColor="@color/tg_chat_header_title"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/ml_presence_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text=""
+                        android:textColor="@color/tg_chat_header_subtitle"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
+            <ImageButton
+                android:id="@+id/ml_phone_icon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:onClick="start_audio_call_to_friend"
+                android:padding="7dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/circle_orange" />
+
+            <ImageButton
+                android:id="@+id/ml_video_icon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:onClick="start_call_to_friend"
+                android:padding="7dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/circle_orange" />
+
+            <androidx.appcompat.widget.SearchView
+                android:id="@+id/search_view_messages"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:focusable="false"
+                app:iconifiedByDefault="true" />
+
+            <com.zoffcc.applications.trifa.CustomSpinner
+                android:id="@+id/spinner_filter_msgs"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="center_vertical"
+                android:contentDescription="@string/chat_filter_spinner_description"
+                android:layout_marginLeft="0dp"
+                android:paddingLeft="0dp" />
+
         </LinearLayout>
-
-        <ImageButton
-            android:id="@+id/ml_phone_icon"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="center_vertical"
-            android:layout_margin="15dp"
-            android:layout_weight="0"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:onClick="start_audio_call_to_friend"
-            android:padding="7dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/circle_orange" />
-
-        <ImageButton
-            android:id="@+id/ml_video_icon"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="center_vertical"
-            android:layout_margin="7dp"
-            android:layout_weight="0"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:onClick="start_call_to_friend"
-            android:padding="7dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/circle_orange" />
-
-
-    </LinearLayout>
+    </androidx.appcompat.widget.Toolbar>
 
     <FrameLayout
         android:layout_width="match_parent"

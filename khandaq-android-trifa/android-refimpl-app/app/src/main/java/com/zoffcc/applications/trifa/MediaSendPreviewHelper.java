@@ -109,21 +109,32 @@ public final class MediaSendPreviewHelper
             return;
         }
 
-        try
+        final String captionText = caption.trim();
+        // KHANDAQ (#127): the file send is dispatched ASYNC (add_attachment -> posted dispatchOutgoing ->
+        // add_outgoing_file -> tox_file_send), but the caption text would otherwise be sent SYNCHRONOUSLY
+        // right here — so the caption packet hits the wire BEFORE the file is even initiated. The receiver
+        // stamps each message on arrival, so it then renders the caption ABOVE the photo (desync). Defer the
+        // caption so the file's initiation (a fast control packet — only the chunk transfer is slow) goes out
+        // first; Tox preserves per-friend order, so the receiver gets file-then-caption and renders photo,
+        // then caption. Imperceptible (~1s) and fixes both 1:1 and group.
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
         {
-            if (TARGET_GROUP.equals(target))
+            try
             {
-                sendGroupCaption(context, groupId, caption.trim());
+                if (TARGET_GROUP.equals(target))
+                {
+                    sendGroupCaption(context, groupId, captionText);
+                }
+                else
+                {
+                    sendFriendCaption(context, friendnum, activityPeer, captionText);
+                }
             }
-            else
+            catch (Exception e)
             {
-                sendFriendCaption(context, friendnum, activityPeer, caption.trim());
+                Log.i(TAG, "sendConfirmedMedia:caption:EE:" + e.getMessage());
             }
-        }
-        catch (Exception e)
-        {
-            Log.i(TAG, "sendConfirmedMedia:caption:EE:" + e.getMessage());
-        }
+        }, 1200L);
     }
 
     /** Send picked URIs through the legacy attachment path (async friendnum wait, proven stable). */

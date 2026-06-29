@@ -314,10 +314,22 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
 
     void DetachedFromWindow(boolean release)
     {
-        ft_audio_player.onPause();
-        if (release)
+        // KHANDAQ: outgoing photo/file bubbles have no audio player set up — onPause/onStop NPE'd internally
+        // (logged stack trace). Guard null + swallow the lib's internal NPE for non-audio holders.
+        if (ft_audio_player == null)
         {
-            ft_audio_player.onStop();
+            return;
+        }
+        try
+        {
+            ft_audio_player.onPause();
+            if (release)
+            {
+                ft_audio_player.onStop();
+            }
+        }
+        catch (Exception ignored)
+        {
         }
     }
 

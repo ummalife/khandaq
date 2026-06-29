@@ -23,9 +23,12 @@ public final class ListEmptyStateHelper
     private final TextView titleView;
     private final TextView hintView;
     private final TextView actionView;
+    private final TextView actionView2;
 
     @Nullable
     private Runnable actionListener;
+    @Nullable
+    private Runnable actionListener2;
 
     public ListEmptyStateHelper(@Nullable final View root)
     {
@@ -36,6 +39,7 @@ public final class ListEmptyStateHelper
             titleView = null;
             hintView = null;
             actionView = null;
+            actionView2 = null;
             return;
         }
 
@@ -49,11 +53,26 @@ public final class ListEmptyStateHelper
                 actionListener.run();
             }
         });
+        actionView2 = root.findViewById(R.id.list_empty_action_2);
+        if (actionView2 != null)
+        {
+            actionView2.setOnClickListener(v -> {
+                if (actionListener2 != null)
+                {
+                    actionListener2.run();
+                }
+            });
+        }
     }
 
     public void setOnActionClickListener(@Nullable final Runnable listener)
     {
         actionListener = listener;
+    }
+
+    public void setOnAction2ClickListener(@Nullable final Runnable listener)
+    {
+        actionListener2 = listener;
     }
 
     public void setVisible(final boolean visible)
@@ -75,6 +94,7 @@ public final class ListEmptyStateHelper
         @StringRes final int titleRes;
         @StringRes final int hintRes;
         @StringRes final int actionRes;
+        @StringRes final int action2Res; // KHANDAQ: optional 2nd action (contacts: "Показать QR-код")
         final boolean showAction;
 
         switch (kind)
@@ -84,6 +104,7 @@ public final class ListEmptyStateHelper
                 titleRes = R.string.empty_state_groups_title;
                 hintRes = R.string.empty_state_groups_hint;
                 actionRes = R.string.empty_state_groups_action;
+                action2Res = 0;
                 showAction = true;
                 break;
             case KIND_FAVORITES:
@@ -91,13 +112,15 @@ public final class ListEmptyStateHelper
                 titleRes = R.string.empty_state_favorites_title;
                 hintRes = R.string.empty_state_favorites_hint;
                 actionRes = 0;
+                action2Res = 0;
                 showAction = false;
                 break;
             case KIND_CONTACTS:
                 iconRes = R.drawable.ic_empty_contacts;
                 titleRes = R.string.empty_state_contacts_title;
                 hintRes = R.string.empty_state_contacts_hint;
-                actionRes = R.string.empty_state_contacts_action;
+                actionRes = R.string.empty_state_contacts_action; // "Копировать MyID"
+                action2Res = R.string.profile_show_qr;             // "Показать QR-код"
                 showAction = true;
                 break;
             case KIND_CHATS:
@@ -106,6 +129,7 @@ public final class ListEmptyStateHelper
                 titleRes = R.string.empty_state_chats_title;
                 hintRes = R.string.empty_state_chats_hint;
                 actionRes = R.string.empty_state_chats_action;
+                action2Res = 0;
                 showAction = true;
                 break;
         }
@@ -122,6 +146,19 @@ public final class ListEmptyStateHelper
         else
         {
             actionView.setVisibility(View.GONE);
+        }
+
+        if (actionView2 != null)
+        {
+            if (action2Res != 0)
+            {
+                actionView2.setText(action2Res);
+                actionView2.setVisibility(View.VISIBLE);
+            }
+            else
+            {
+                actionView2.setVisibility(View.GONE);
+            }
         }
     }
 }

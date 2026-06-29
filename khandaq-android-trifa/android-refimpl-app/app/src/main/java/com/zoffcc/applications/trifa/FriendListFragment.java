@@ -475,7 +475,9 @@ public class FriendListFragment extends Fragment
         adapter.notifyDataSetChanged();
 
         emptyStateHelper = new ListEmptyStateHelper(view1.findViewById(R.id.list_empty_state));
-        emptyStateHelper.setOnActionClickListener(this::handleEmptyStateAction);
+        // KHANDAQ (Figma contacts empty-state): action1 = Копировать MyID, action2 = Показать QR-код.
+        emptyStateHelper.setOnActionClickListener(this::copyMyIdFromEmptyState);
+        emptyStateHelper.setOnAction2ClickListener(this::showMyQrFromEmptyState);
         initEmptyStateObserver();
         adapter.registerAdapterDataObserver(emptyStateObserver);
         refreshEmptyState();
@@ -1640,6 +1642,42 @@ public class FriendListFragment extends Fragment
     private void handleEmptyStateAction()
     {
         handleEmptyStateActionForTab(chatFilterTab);
+    }
+
+    // KHANDAQ (Figma contacts empty-state): when you have no contacts, share your own MyID.
+    private void copyMyIdFromEmptyState()
+    {
+        try
+        {
+            final android.content.ClipboardManager cb = (android.content.ClipboardManager)
+                    requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cb != null)
+            {
+                cb.setPrimaryClip(android.content.ClipData.newPlainText("", MainActivity.get_my_toxid()));
+                android.widget.Toast.makeText(requireContext(), R.string.id_copied_to_clipboard,
+                                              android.widget.Toast.LENGTH_SHORT).show();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    private void showMyQrFromEmptyState()
+    {
+        try
+        {
+            final View content = getLayoutInflater().inflate(R.layout.dialog_my_qr, null);
+            final android.widget.ImageView qr = content.findViewById(R.id.qr_modal_image);
+            qr.setImageBitmap(ProfileContentFragment.encodeAsBitmap("tox:" + MainActivity.get_my_toxid()));
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setView(content)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+        }
+        catch (Exception ignored)
+        {
+        }
     }
 
     synchronized void add_all_friends_clear(final int delay)

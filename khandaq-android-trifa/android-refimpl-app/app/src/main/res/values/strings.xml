@@ -645,8 +645,8 @@
     <string name="empty_state_favorites_title">No favorites</string>
     <string name="empty_state_favorites_hint">Pin chats from the chat menu to find them here quickly</string>
     <string name="empty_state_contacts_title">No contacts</string>
-    <string name="empty_state_contacts_hint">Add someone by Tox ID or QR code</string>
-    <string name="empty_state_contacts_action">Add contact</string>
+    <string name="empty_state_contacts_hint">You don\'t have any contacts yet — add some, or share your MyID with them</string>
+    <string name="empty_state_contacts_action">Copy MyID</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_profile">Profile</string>
     <string name="theme_toggle_accessibility">Toggle dark mode</string>

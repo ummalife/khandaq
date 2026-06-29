@@ -65,4 +65,23 @@
         tools:text="Start chat"
         tools:visibility="visible" />
 
+    <!-- KHANDAQ (Figma contacts empty-state): optional 2nd action, e.g. "Показать QR-код" -->
+    <TextView
+        android:id="@+id/list_empty_action_2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:gravity="center"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:textColor="@color/khandaq_primary"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:text="Show QR code"
+        tools:visibility="visible" />
+
 </LinearLayout>

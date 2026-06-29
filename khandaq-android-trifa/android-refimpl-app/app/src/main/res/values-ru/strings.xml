@@ -398,8 +398,8 @@
     <string name="empty_state_favorites_title">Нет избранных</string>
     <string name="empty_state_favorites_hint">Добавьте чат в избранное через меню чата</string>
     <string name="empty_state_contacts_title">Нет контактов</string>
-    <string name="empty_state_contacts_hint">Добавьте контакт по Tox ID или QR-коду</string>
-    <string name="empty_state_contacts_action">Добавить контакт</string>
+    <string name="empty_state_contacts_hint">У вас пока нет контактов, вы можете их добавить или дать им свой MyID</string>
+    <string name="empty_state_contacts_action">Копировать MyID</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_profile">Профиль</string>
     <string name="theme_toggle_accessibility">Переключить тёмную тему</string>

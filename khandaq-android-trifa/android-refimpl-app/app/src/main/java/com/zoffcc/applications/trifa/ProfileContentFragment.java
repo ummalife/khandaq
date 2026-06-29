@@ -1148,7 +1148,7 @@ public class ProfileContentFragment extends Fragment
         }
     }
 
-    Bitmap encodeAsBitmap(String str) throws WriterException
+    static Bitmap encodeAsBitmap(String str) throws WriterException
     {
         BitMatrix result;
         try

@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Dark mode: no light doodle wallpaper (Figma has no dark chat); solid chat bg -->
-<color xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/tg_chat_screen_bg" />

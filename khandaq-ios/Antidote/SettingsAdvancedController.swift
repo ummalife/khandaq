@@ -15,19 +15,27 @@ class SettingsAdvancedController: StaticTableController {
     fileprivate let userDefaults = UserDefaultsManager()
 
     fileprivate let UDPModel = StaticTableSwitchCellModel()
+    fileprivate let networkDiagnosticsModel = StaticTableDefaultCellModel()
     fileprivate let restoreDefaultsModel = StaticTableButtonCellModel()
+    #if DEBUG
+    fileprivate let qaAutomationModel = StaticTableDefaultCellModel()
+    #endif
+
+    weak var sessionCoordinator: ActiveSessionCoordinator?
 
     init(theme: Theme) {
         self.theme = theme
 
-        super.init(theme: theme, style: .grouped, model: [
-            [
-                UDPModel,
-            ],
-            [
-                restoreDefaultsModel,
-            ],
-        ])
+        var sections: [[StaticTableBaseCellModel]] = [
+            [UDPModel],
+            [networkDiagnosticsModel],
+        ]
+        #if DEBUG
+        sections.append([qaAutomationModel])
+        #endif
+        sections.append([restoreDefaultsModel])
+
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: sections)
 
         title = String(localized: "settings_advanced_settings")
         updateModels()
@@ -44,9 +52,37 @@ private extension SettingsAdvancedController {
         UDPModel.on = userDefaults.UDPEnabled
         UDPModel.valueChangedHandler = UDPChanged
 
+        networkDiagnosticsModel.title = String(localized: "network_connections_title")
+        networkDiagnosticsModel.value = String(localized: "network_connections_summary")
+        networkDiagnosticsModel.rightImageType = .arrow
+        networkDiagnosticsModel.didSelectHandler = showNetworkDiagnostics
+
+        #if DEBUG
+        qaAutomationModel.title = "QA Automation"
+        qaAutomationModel.value = "Cross-platform test commands"
+        qaAutomationModel.rightImageType = .arrow
+        qaAutomationModel.didSelectHandler = showQaAutomation
+        #endif
+
         restoreDefaultsModel.title = String(localized: "settings_restore_default")
+        restoreDefaultsModel.destructive = true
         restoreDefaultsModel.didSelectHandler = restoreDefaultsSettings
     }
+
+    func showNetworkDiagnostics(_: StaticTableBaseCell) {
+        let controller = NetworkDiagnosticsDetailController(theme: theme)
+        navigationController?.pushViewController(controller, animated: true)
+    }
+
+    #if DEBUG
+    func showQaAutomation(_: StaticTableBaseCell) {
+        guard let sessionCoordinator = sessionCoordinator else {
+            return
+        }
+        let controller = QaDebugController(theme: theme, sessionCoordinator: sessionCoordinator)
+        navigationController?.pushViewController(controller, animated: true)
+    }
+    #endif
 
     func UDPChanged(_ on: Bool) {
         let previous = userDefaults.UDPEnabled

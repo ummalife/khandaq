@@ -12,12 +12,30 @@
 "create_account" = "Create Account";
 /* Login screen text */
 "import_profile" = "Import Profile";
+/* Import profile instruction steps (Figma) */
+"import_step_1" = "Send the .tox file to your device (using email, Dropbox, or another method)";
+"import_step_2" = "Tap \"Open\"";
+"import_step_3" = "Choose Khandaq from the list of available apps";
+"import_step_4" = "Check the new profile name and tap OK";
+/* Onboarding walkthrough (Figma) */
+"onboarding_no_number_title" = "No phone number";
+"onboarding_no_number_subtitle" = "Sign up for the messenger with no need to link a phone number";
+"onboarding_encryption_title" = "Strong encryption";
+"onboarding_encryption_subtitle" = "All messages are encrypted with the Tox protocol and are accessible to no one but you and the recipient";
+"onboarding_decentralized_title" = "Just you and the recipient";
+"onboarding_decentralized_subtitle" = "Your messages are not stored on servers. Enjoy full decentralization";
+"onboarding_next" = "Next";
+"onboarding_create_account" = "Create account";
+"contacts_copy_myid" = "Copy MyID";
+"chat_encryption_badge" = "Tox protocol";
+"chat_encryption_info" = "All chat data is protected by Tox end-to-end encryption and is accessible to no one but you and your recipient";
 /* Password field */
 "password" = "Password";
 /* Login button */
 "log_in" = "Log In";
 /* Login screen text */
 "create_profile" = "Create profile";
+"create_account_screen_title" = "Create profile";
 /* Login screen text */
 "import_to_khandaq" = "Import to Khandaq";
 /* Login screen text */
@@ -81,11 +99,32 @@
 
 /* Label shown when connecting to Tox network */
 "connecting_label" = "Connecting...";
+"conn_state_offline" = "No connection";
+"conn_state_connected" = "Online";
+"conn_state_weak" = "Weak connection";
+"conn_state_stable" = "Connection stable";
+"conn_quality_strong" = "strong";
+"conn_quality_medium" = "medium";
+"conn_quality_weak" = "weak";
+"conn_quality_offline" = "offline";
 
 /* Tab name and screen name */
 "contacts_title" = "Contacts";
 /* Tab name and screen name */
 "chats_title" = "Chats";
+"chat_filter_groups" = "Groups";
+"chat_filter_favorites" = "Favorites";
+"chat_filter_add_favorite" = "Add to favorites";
+"chat_filter_remove_favorite" = "Remove from favorites";
+"theme_toggle_accessibility" = "Toggle dark mode";
+"voice_recording_cancel" = "Cancel";
+"voice_recording_send" = "Send voice message";
+"voice_recording_slide_to_cancel" = "‹ slide to cancel";
+"voice_recording_release_to_cancel" = "Release to cancel";
+"global_search_placeholder" = "Search all chats and messages";
+"global_search_section_chats" = "Chats and groups";
+"global_search_section_messages" = "Messages";
+"global_search_no_results" = "Nothing found";
 /* Tab name and screen name */
 "settings_title" = "Settings";
 /* Tab name and screen name */
@@ -124,16 +163,23 @@
 "add_contact_send" = "Send";
 /* Add contat placeholder text */
 "add_contact_tox_id_placeholder" = "Enter MyID";
+"add_contact_myid_label" = "User's MyID";
 /* Add contat placeholder text */
 "add_contact_or_label" = "or";
 /* Add contat button */
-"add_contact_use_qr" = "Use QR code";
+"add_contact_use_qr" = "Add by QR code";
+"add_contact_use_qr_gallery" = "QR code from gallery";
+"add_contact_help_text" = "Paste your friend's ID in the field above, or tap a QR-code button to scan their code with the camera.";
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Message";
 /* Add contat default text sended to contact */
 "add_contact_default_message_text" = "Hello! Could you please add me to your contact list?";
 /* Add contat error */
 "add_contact_wrong_qr" = "Wrong QR code. It should contain MyID";
+"add_contact_invalid_id_format" = "Invalid ID format";
+"add_contact_already_friend" = "This contact is already in your list.";
+"add_contact_request_already_pending" = "A friend request to this contact is already pending.";
+"add_contact_public_key_only_hint" = "Only the public key was entered. The request will use nospam=0 and may not reach the contact unless they use that exact ID. Prefer the full 76-character MyID from their profile.";
 
 /* User name text */
 "name" = "Name";
@@ -145,6 +191,9 @@
 "status_title" = "Status";
 /* User Tox ID text */
 "my_tox_id" = "MyID";
+"qr_screen_title" = "QR scanning";
+"qr_my_id_heading" = "Your account's MyID";
+"qr_my_id_subtitle" = "Friends can message you by scanning your QR code";
 /* User public key text */
 "public_key" = "Public Key";
 /* Share Tox ID text */
@@ -158,7 +207,7 @@
 "qr_close_button" = "Close";
 
 /* Chat screen placeholder */
-"chat_no_chats" = "No chats";
+"chat_no_chats" = "Your chats will appear here. Write first or reply to a message to start chatting.";
 /* Chats screen message text */
 "chat_outgoing_file" = "Outgoing file:";
 /* Chats screen message text */
@@ -179,6 +228,7 @@
 "chat_more_menu_item" = "More";
 /* Message shown on chat list when contact is typing */
 "chat_is_typing_text" = "is typing...";
+"chat_draft_prefix" = "Draft: %@";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Messages and files will be delivered when your contact comes online. A push notification was sent to wake their device.";
 
@@ -186,6 +236,10 @@
 "status_offline" = "Offline";
 /* Status message */
 "status_online" = "Online";
+"status_last_seen_just_now" = "last seen just now";
+"status_last_seen_minutes_ago" = "last seen %d min ago";
+"status_last_seen_hours_ago" = "last seen %d h ago";
+"status_last_seen_long_ago" = "last seen a long time ago";
 /* Status message */
 "status_away" = "Away";
 /* Status message */
@@ -220,8 +274,13 @@
 "settings_autodownload_images" = "Autodownload files";
 /* Settings screen menu */
 "settings_autodownload_images_description" = "Automatically download incoming files.";
+"settings_profile_backup_description" = "Export or import your Tox profile (.tox). Only your Tox ID and contacts are included; chat history is not transferred.";
+"settings_import_profile_invalid_file" = "The selected file is not a valid Tox profile (.tox).";
 /* Settings screen menu */
+"settings_dark_theme" = "Dark theme";
 "settings_notifications_message_preview" = "Notification Preview";
+"settings_group_system_messages" = "Group system messages";
+"settings_group_system_messages_description" = "Show join/leave and other system lines in group chats.";
 /* Settings screen menu */
 "settings_notifications_description" = "When application goes to background, you will still receive notifications up to 10 minutes.";
 /* Settings screen menu */
@@ -268,11 +327,20 @@
 "photo_from_camera" = "Camera";
 /* Source of photo to take */
 "photo_from_photo_library" = "Photo Library";
+/* Attachment menu items (Figma) */
+"attach_gallery" = "Gallery";
+"attach_audio" = "Audio";
+"attach_location" = "Location";
 /* Error while converting avatar image */
 "change_avatar_error_convert_image" = "Cannot convert image";
 
 /* Alert text when sending file to contacts */
 "file_send_to_contact" = "Send to contact";
+"file_send_to_group" = "Send to group";
+"group_select_no_groups" = "No groups yet";
+"share_extension_preparing" = "Preparing share…";
+"share_extension_open_app" = "Opening Khandaq…";
+"share_extension_failed" = "Could not share to Khandaq";
 
 /* Profile menu item */
 "export_profile" = "Export Profile";
@@ -294,6 +362,7 @@
 
 /* File message text */
 "chat_file_cancelled" = "Cancelled";
+"chat_file_download_failed" = "Download failed";
 /* File message text */
 "chat_waiting" = "Waiting...";
 /* File message text */
@@ -315,6 +384,8 @@
 "alert_delete" = "Delete";
 /* Delete button */
 "alert_cancel" = "Cancel";
+/* OK button */
+"alert_ok" = "OK";
 
 /* Error while creating new profile */
 "login_enter_username_and_profile" = "Please enter both username and profile name.";
@@ -333,6 +404,17 @@
 "error_too_many_files" = "Too many active file transfers";
 /* Error */
 "error_internal_message" = "Internal error";
+/* Video send */
+"video_send_preparing" = "Preparing video…";
+"video_send_preparation_failed" = "Could not prepare video for sending.";
+"video_send_too_large" = "Video is too large (max 500 MB).";
+"video_send_busy" = "Another video is still being prepared. Please wait.";
+"video_send_too_long" = "Video is too long (max 10 minutes).";
+"video_send_cancel" = "Cancel";
+"file_transfer_stalled" = "File transfer stalled. You can cancel and try again.";
+"media_send_button" = "Send";
+"media_send_caption_hint" = "Add a caption…";
+"media_send_counter_format" = "%1$d / %2$d";
 /* Error */
 "error_wrong_password_title" = "Wrong password";
 /* Error */
@@ -404,6 +486,7 @@
 "call_error_microphone_denied" = "Microphone access is required to answer calls";
 "permission_denied_title" = "Permission required";
 "camera_access_denied_message" = "Camera access is disabled. Allow camera access in Settings to use this feature.";
+"microphone_access_denied_message" = "Microphone access is disabled. Allow microphone access in Settings to use this feature.";
 "open_settings" = "Settings";
 
 /* Error while using color theme */
@@ -435,3 +518,218 @@
 "accessibility_incoming_message_label" = "Message";
 /* Outgoing message label */
 "accessibility_outgoing_message_label" = "Your message";
+
+/* NGC groups */
+"group_add_button" = "Add group";
+"group_create_public" = "Create public group";
+"group_create_private" = "Create private group";
+"group_create_private_hint" = "Set a password so only invited members can join.";
+"group_create_private_failed" = "Could not create private group.";
+"group_join_by_id" = "Join by chat ID";
+"group_name_placeholder" = "Group name";
+"group_chat_id_placeholder" = "64-character chat ID";
+"group_join_hint" = "Paste the group chat ID from another device.";
+"group_join_clipboard_prompt" = "A group chat ID was found in your clipboard. Join this group?";
+"group_join_action" = "Join";
+"group_join_invalid_id" = "Chat ID must be 64 hex characters.";
+"group_create_failed" = "Could not create group.";
+"group_create_in_progress" = "Creating group…";
+"launch_loading" = "Loading…";
+"group_join_failed" = "Could not join group.";
+"group_join_fail_peer_limit" = "This group is full. The peer limit has been reached.";
+"group_join_fail_invalid_password" = "Invalid group password.";
+"group_join_password_hint" = "Enter the group password if required.";
+"group_join_invalid_qr" = "This QR code does not contain a valid group chat ID.";
+"group_scan_qr" = "Scan group QR";
+"group_chat_default_title" = "Group";
+"group_chat_list_subtitle" = "Group chat";
+"group_chat_list_private" = "Private";
+"group_chat_list_disconnected" = "Connecting…";
+"group_chat_list_private_unread_format" = "%d private unread";
+"group_disconnected_banner" = "Connecting to group… Messages will send when connected.";
+"group_connecting_banner_format" = "Connecting to group… (attempt %d)";
+"group_member_count_format" = "%d members";
+"group_member_online_count_format" = "%d members · %d online";
+"group_send_observer_role" = "You are an observer in this group and cannot send messages. Ask a moderator to change your role to Member.";
+"group_my_peer_name_header" = "Your name in group";
+"group_my_peer_name_placeholder" = "Enter display name";
+"group_my_peer_name_set_failed" = "Could not update your group name.";
+"group_system_peer_renamed" = "%@ changed their name";
+"group_system_privacy_changed" = "Privacy changed to: %@";
+"group_system_privacy_public" = "Public";
+"group_system_privacy_private" = "Private";
+"group_info_button" = "Info";
+"group_info_title" = "Group info";
+"group_chat_id_header" = "Chat ID";
+"group_chat_id_footer" = "Share this ID so others can join the group.";
+"group_chat_id_loading" = "Loading…";
+"group_members_header" = "Members";
+"group_members_header_format" = "Members (%d)";
+"group_members_header_online_format" = "Members: %1$d · %2$d online";
+"group_members_empty" = "No members yet";
+"group_member_list_title" = "Members";
+"group_member_status_offline" = "Offline";
+"group_member_action_private_msg" = "Private group message";
+"group_member_action_open_chat" = "Open direct chat";
+"group_member_action_add_friend" = "Add friend";
+"group_member_action_add_friend_sent" = "Friend request sent.";
+"group_member_action_copy_id" = "Copy ID";
+"group_member_action_copy_done" = "ID copied";
+"group_messages_search_placeholder" = "Search messages";
+"group_messages_quote_action" = "Quote";
+"chat_reply_action" = "Reply";
+"chat_forward_action" = "Forward";
+"chat_forwarded_from_format" = "↪ Forwarded from %@";
+"saved_messages_title" = "Saved Messages";
+"chat_reply_cancel" = "Cancel reply";
+"chat_reply_header" = "In reply to %@";
+"chat_reply_self_name" = "You";
+"chat_reply_unknown_sender" = "Unknown";
+"group_messages_select_action" = "Select messages";
+"group_messages_copy_action" = "Copy";
+"network_connections_title" = "Network connections";
+"network_connections_summary" = "DHT, relays, reconnect log";
+"network_connections_loading" = "Loading network status…";
+"network_connections_beta_notice" = "Connection event log and runtime quality metrics. Full UDP/TCP dump is not available on iOS yet.";
+"group_peer_fallback_format" = "Peer %d";
+"group_error_disconnected" = "Group is not connected yet. Wait a moment and try again.";
+"group_error_not_found" = "Group session was lost. Reopen the group or join again by chat ID.";
+"group_error_permissions" = "You do not have permission to send messages in this group.";
+"group_error_send_failed" = "Could not send the group message.";
+"group_invite_alert_title" = "Group invite";
+"group_invite_alert_message_format" = "%@ invited you to join \"%@\".";
+"group_invite_accept" = "Join";
+"group_invite_accept_failed" = "Could not join the group.";
+"group_invite_accept_bad_invite" = "The invite is invalid or has expired.";
+"group_invite_unknown_friend" = "A contact";
+"group_invite_friend_action" = "Invite friend";
+"group_invite_friend_success" = "Invite sent.";
+"group_invite_friend_failed" = "Could not invite friend.";
+"group_invite_friend_not_found" = "Friend not found.";
+"group_invite_friends_empty" = "No connected friends to invite.";
+"group_error_password" = "Invalid group password.";
+"group_file_attach" = "File";
+"group_share_location" = "Share location";
+"group_live_audio_toggle" = "Live audio";
+"group_live_video_toggle" = "Live video";
+"group_live_video_quality_toggle" = "Video quality";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_live_video_toggle_active" = "Live video active";
+"group_live_video_toggle_incoming" = "Incoming live video";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu\n%@";
+"group_video_join_title" = "Join group video?";
+"group_video_join_message" = "Send your video and audio to everyone in this group?";
+"group_video_join_confirm" = "Yes, start video";
+"group_video_join_decline" = "No";
+"group_send_voice_confirm_title" = "Send voice message?";
+"group_send_voice_confirm_message" = "Send this voice message to the group?";
+"group_incoming_message_error" = "Could not process incoming group message.";
+"group_image_shrink_failed" = "Could not prepare image for sending.";
+"group_incoming_file_error" = "Could not process incoming group file.";
+"chat_file_too_large" = "File is too large.";
+"chat_incoming_file_too_large" = "Incoming file is too large.";
+"chat_opening_file_failed" = "Could not open file.";
+"group_file_prepare_failed" = "Could not prepare file for sending.";
+"group_peer_unknown" = "Unknown";
+"group_live_video_stream_unknown_peer" = "Unknown";
+"group_live_media_not_connected" = "Group is not connected. Wait until the group is online, then try again.";
+"group_live_media_start_failed" = "Could not start live media in this group.";
+"group_live_video_simulator_unavailable" = "Group live video is not available in the simulator. Use a real device.";
+"group_live_video_camera_denied" = "Camera access is required for group video.";
+"group_live_video_no_camera" = "No camera is available on this device.";
+"group_live_audio_codec_unavailable" = "Live audio is not available on this device.";
+"group_live_audio_simulator_unavailable" = "Group live audio is not available in the simulator. Use a real device.";
+"group_voice_hold_to_record" = "Hold the microphone button to record a voice message";
+"voice_message_label" = "Voice message";
+"group_file_too_large" = "File is too large (max 200 MB).";
+"group_file_send_failed" = "Could not send the file.";
+"group_notifications_header" = "Notifications";
+"group_notifications_mute" = "Mute group notifications";
+"group_peer_notifications_mute" = "Mute notifications from member";
+"group_peer_notifications_unmute" = "Unmute notifications from member";
+"group_peer_notifications_muted" = "Muted";
+"group_peer_kick" = "Remove from group";
+"group_peer_kick_confirm_format" = "Remove %@ from this group?";
+"group_peer_kick_failed" = "Could not remove member.";
+"group_peer_kick_not_found" = "Member not found in group.";
+"group_leave_action" = "Leave group";
+"group_leave_confirm_message" = "You will leave this group and the chat will be removed from your list.";
+"group_leave_part_message_placeholder" = "Goodbye message (optional)";
+"group_leave_footer" = "You can rejoin later using the chat ID.";
+"group_leave_failed" = "Could not leave group.";
+"group_clear_history_action" = "Clear chat history";
+"group_clear_history_confirm_message" = "All messages in this group will be deleted on this device. You will stay in the group.";
+"group_delete_chat_title" = "Delete group chat";
+"group_delete_chat_message" = "Clear local messages or leave the group entirely?";
+"group_danger_header" = "Chat actions";
+"group_danger_footer" = "Clear history removes messages locally. Leaving removes the chat from your list; you can rejoin with the chat ID.";
+"group_danger_footer_with_system_format" = "Clear history removes messages locally. %ld system messages can be deleted separately.";
+"group_delete_system_msgs_action" = "Delete system messages";
+"group_delete_system_msgs_count_format" = "%ld messages";
+"group_delete_system_msgs_title" = "Delete system messages";
+"group_delete_system_msgs_message" = "Delete all system messages (join/leave) in this group permanently?";
+"group_delete_system_msgs_confirm" = "Delete";
+"group_info_member_online" = "Online";
+"group_member_last_seen_just_now" = "Last seen just now";
+"group_member_last_seen_minutes_format" = "Last seen %d min ago";
+"group_member_last_seen_hours_format" = "Last seen %d h ago";
+"group_member_last_seen_long_ago" = "Last seen a long time ago";
+"group_system_peer_joined" = "%@ joined the group";
+"group_system_peer_left" = "%@ left the group";
+"group_system_peer_kicked" = "%@ was removed from the group";
+"group_system_group_created" = "Group created";
+"group_system_you_joined" = "You joined the group";
+"group_role_founder" = "Founder";
+"group_role_moderator" = "Moderator";
+"group_role_user" = "Member";
+"group_role_observer" = "Observer";
+"group_role_make_moderator" = "Make moderator";
+"group_role_make_user" = "Make member";
+"group_role_make_observer" = "Make observer";
+"group_role_set_failed" = "Could not change member role.";
+"group_role_set_invalid" = "Invalid role for this member.";
+"group_role_set_self" = "You cannot change your own role.";
+"group_topic_header" = "Group topic";
+"group_topic_placeholder" = "Enter group topic";
+"group_topic_footer" = "Visible to all members. Saved when you confirm.";
+"group_topic_footer_locked" = "Topic lock is on. Regular members cannot change the topic.";
+"group_topic_footer_locked_moderator" = "Topic lock is on. You can change the topic as a moderator.";
+"group_topic_footer_no_permission" = "Only founder and moderators can change the topic.";
+"group_peer_private_unread_format" = "%d unread PM";
+"group_private_message_unread_action_format" = "Private message (%d unread)";
+"group_topic_set_failed" = "Could not update group topic.";
+"group_topic_too_long" = "Topic is too long.";
+"group_password_header" = "Group password";
+"group_password_placeholder" = "Set or change password";
+"group_password_footer" = "Founder only. Leave empty to remove password.";
+"group_password_set_failed" = "Could not update group password.";
+"group_password_too_long" = "Password is too long.";
+"group_topic_lock_header" = "Topic lock";
+"group_topic_lock_label" = "Only founder and moderators can set topic";
+"group_topic_lock_footer" = "When enabled, regular members cannot change the group topic.";
+"group_topic_lock_set_failed" = "Could not update topic lock.";
+"group_peer_limit_header" = "Peer limit";
+"group_peer_limit_label" = "Maximum members";
+"group_peer_limit_value_format" = "Limit: %d";
+"group_peer_limit_placeholder" = "100";
+"group_peer_limit_footer" = "Founder only. Maximum number of peers allowed in the group.";
+"group_peer_limit_at_capacity_footer" = "The group is at its peer limit. New members may not be able to join.";
+"group_peer_limit_set_failed" = "Could not update peer limit.";
+"group_privacy_header" = "Privacy";
+"group_privacy_private_label" = "Private group";
+"group_privacy_footer" = "Private groups require a password to join.";
+"group_privacy_set_failed" = "Could not update privacy state.";
+"group_voice_header" = "Voice permissions";
+"group_voice_footer" = "Controls who may send voice messages in the group.";
+"group_voice_all" = "All members";
+"group_voice_moderator" = "Moderators and founder";
+"group_voice_founder" = "Founder only";
+"group_voice_set_failed" = "Could not update voice state.";
+"group_show_invite_qr" = "Show invite QR code";
+"group_peer_limit_invalid" = "Enter a number greater than zero.";
+"group_private_message_action" = "Private message";
+"group_private_message_failed" = "Could not send private message.";
+"group_private_message_notification_title_format" = "🔒 %@ (private)";
+"alert_create" = "Create";

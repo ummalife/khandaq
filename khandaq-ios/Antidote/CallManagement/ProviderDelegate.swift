@@ -100,7 +100,7 @@ extension ProviderDelegate: CXProviderDelegate {
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         os_log("cc:ProviderDelegate:didActivate")
-        print("cc:ProviderDelegate:didActivate %@", audioSession)
+        log("cc:ProviderDelegate:didActivate \(audioSession)")
 
         guard let runcoord = AppDelegate.shared.coordinator?.activeCoordinator as? RunningCoordinator,
               let sessionCoord = runcoord.activeSessionCoordinator else {
@@ -139,18 +139,27 @@ extension ProviderDelegate: CXProviderDelegate {
 
         let session = AVAudioSession.sharedInstance()
         let mode = forVideo ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat
+        var options: AVAudioSessionCategoryOptions = [.allowBluetooth]
+        if forVideo {
+            options.insert(.defaultToSpeaker)
+        }
         do {
             try session.setCategory(
                 AVAudioSessionCategoryPlayAndRecord,
-                with: [.allowBluetooth, .defaultToSpeaker]
+                with: options
             )
             try session.setMode(mode)
             try session.setPreferredSampleRate(48000)
             try session.setPreferredIOBufferDuration(0.005)
+            if forVideo {
+                try session.overrideOutputAudioPort(.speaker)
+            } else {
+                try session.overrideOutputAudioPort(.none)
+            }
             // Do not call setActive here — CallKit activates the session in didActivate.
         } catch (let error) {
             os_log("cc:ProviderDelegate:configureAudioSession:EE_01")
-            print("cc:ProviderDelegate:configureAudioSession:Error while configuring audio session: \(error)")
+            log("cc:ProviderDelegate:configureAudioSession:Error while configuring audio session: \(error)")
         }
 
         os_log("ProviderDelegate:configureAudioSession:end")

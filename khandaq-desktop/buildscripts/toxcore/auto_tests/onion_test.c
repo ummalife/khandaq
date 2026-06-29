@@ -41,7 +41,7 @@ static int handle_test_1(void *object, const IP_Port *source, const uint8_t *pac
 
     const char req_message[] = "Install Gentoo";
     uint8_t req_packet[1 + sizeof(req_message)];
-    req_packet[0] = NET_PACKET_ANNOUNCE_REQUEST_OLD;
+    req_packet[0] = NET_PACKET_ANNOUNCE_REQUEST;
     memcpy(req_packet + 1, req_message, sizeof(req_message));
 
     if (memcmp(packet, req_packet, sizeof(req_packet)) != 0) {
@@ -50,7 +50,7 @@ static int handle_test_1(void *object, const IP_Port *source, const uint8_t *pac
 
     const char res_message[] = "install gentoo";
     uint8_t res_packet[1 + sizeof(res_message)];
-    res_packet[0] = NET_PACKET_ANNOUNCE_RESPONSE_OLD;
+    res_packet[0] = NET_PACKET_ANNOUNCE_RESPONSE;
     memcpy(res_packet + 1, res_message, sizeof(res_message));
 
     if (send_onion_response(onion->net, source, res_packet, sizeof(res_packet),
@@ -67,7 +67,7 @@ static int handle_test_2(void *object, const IP_Port *source, const uint8_t *pac
 {
     const char res_message[] = "install gentoo";
     uint8_t res_packet[1 + sizeof(res_message)];
-    res_packet[0] = NET_PACKET_ANNOUNCE_RESPONSE_OLD;
+    res_packet[0] = NET_PACKET_ANNOUNCE_RESPONSE;
     memcpy(res_packet + 1, res_message, sizeof(res_message));
 
     if (length != sizeof(res_packet)) {
@@ -101,12 +101,47 @@ static int handle_test_3(void *object, const IP_Port *source, const uint8_t *pac
 {
     Onion *onion = (Onion *)object;
 
-    if (length != (1 + CRYPTO_NONCE_SIZE + ONION_ANNOUNCE_SENDBACK_DATA_LENGTH + 1 + CRYPTO_SHA256_SIZE +
-                   CRYPTO_MAC_SIZE)) {
+    if (length < ONION_ANNOUNCE_RESPONSE_MIN_SIZE || length > ONION_ANNOUNCE_RESPONSE_MAX_SIZE) {
         return 1;
     }
 
-    uint8_t plain[1 + CRYPTO_SHA256_SIZE];
+    uint8_t plain[2 + CRYPTO_SHA256_SIZE];
+#if 0
+    print_client_id(packet, length);
+#endif
+    int len = decrypt_data(test_3_pub_key, dht_get_self_secret_key(onion->dht),
+                           packet + 1 + ONION_ANNOUNCE_SENDBACK_DATA_LENGTH,
+                           packet + 1 + ONION_ANNOUNCE_SENDBACK_DATA_LENGTH + CRYPTO_NONCE_SIZE,
+                           2 + CRYPTO_SHA256_SIZE + CRYPTO_MAC_SIZE, plain);
+
+    if (len == -1) {
+        return 1;
+    }
+
+
+    if (memcmp(packet + 1, sb_data, ONION_ANNOUNCE_SENDBACK_DATA_LENGTH) != 0) {
+        return 1;
+    }
+
+    memcpy(test_3_ping_id, plain + 1, CRYPTO_SHA256_SIZE);
+#if 0
+    print_client_id(test_3_ping_id, sizeof(test_3_ping_id));
+#endif
+    handled_test_3 = 1;
+    return 0;
+}
+
+/* TODO: DEPRECATE */
+static int handle_test_3_old(void *object, const IP_Port *source, const uint8_t *packet, uint16_t length,
+                             void *userdata)
+{
+    Onion *onion = (Onion *)object;
+
+    if (length < ONION_ANNOUNCE_RESPONSE_MIN_SIZE || length > ONION_ANNOUNCE_RESPONSE_MAX_SIZE) {
+        return 1;
+    }
+
+    uint8_t plain[2 + CRYPTO_SHA256_SIZE];
 #if 0
     print_client_id(packet, length);
 #endif
@@ -191,9 +226,9 @@ static void test_basic(void)
     const Network *ns = system_network();
 
     Logger *log1 = logger_new();
-    logger_callback_log(log1, (logger_cb *)print_debug_log, nullptr, &index[0]);
+    logger_callback_log(log1, print_debug_logger, nullptr, &index[0]);
     Logger *log2 = logger_new();
-    logger_callback_log(log2, (logger_cb *)print_debug_log, nullptr, &index[1]);
+    logger_callback_log(log2, print_debug_logger, nullptr, &index[1]);
 
     const Random *rng = system_random();
     ck_assert(rng != nullptr);
@@ -204,7 +239,7 @@ static void test_basic(void)
     Onion *onion1 = new_onion(log1, mono_time1, rng, new_dht(log1, rng, ns, mono_time1, new_networking(log1, ns, &ip, 36567), true, false));
     Onion *onion2 = new_onion(log2, mono_time2, rng, new_dht(log2, rng, ns, mono_time2, new_networking(log2, ns, &ip, 36568), true, false));
     ck_assert_msg((onion1 != nullptr) && (onion2 != nullptr), "Onion failed initializing.");
-    networking_registerhandler(onion2->net, NET_PACKET_ANNOUNCE_REQUEST_OLD, &handle_test_1, onion2);
+    networking_registerhandler(onion2->net, NET_PACKET_ANNOUNCE_REQUEST, &handle_test_1, onion2);
 
     IP_Port on1 = {ip, net_port(onion1->net)};
     Node_format n1;
@@ -218,7 +253,7 @@ static void test_basic(void)
 
     const char req_message[] = "Install Gentoo";
     uint8_t req_packet[1 + sizeof(req_message)];
-    req_packet[0] = NET_PACKET_ANNOUNCE_REQUEST_OLD;
+    req_packet[0] = NET_PACKET_ANNOUNCE_REQUEST;
     memcpy(req_packet + 1, req_message, sizeof(req_message));
 
     Node_format nodes[4];
@@ -237,7 +272,7 @@ static void test_basic(void)
         do_onion(mono_time2, onion2);
     } while (handled_test_1 == 0);
 
-    networking_registerhandler(onion1->net, NET_PACKET_ANNOUNCE_RESPONSE_OLD, &handle_test_2, onion1);
+    networking_registerhandler(onion1->net, NET_PACKET_ANNOUNCE_RESPONSE, &handle_test_2, onion1);
     handled_test_2 = 0;
 
     do {
@@ -247,7 +282,8 @@ static void test_basic(void)
 
     Onion_Announce *onion1_a = new_onion_announce(log1, rng, mono_time1, onion1->dht);
     Onion_Announce *onion2_a = new_onion_announce(log2, rng, mono_time2, onion2->dht);
-    networking_registerhandler(onion1->net, NET_PACKET_ANNOUNCE_RESPONSE_OLD, &handle_test_3, onion1);
+    networking_registerhandler(onion1->net, NET_PACKET_ANNOUNCE_RESPONSE, &handle_test_3, onion1);
+    networking_registerhandler(onion1->net, NET_PACKET_ANNOUNCE_RESPONSE_OLD, &handle_test_3_old, onion1);
     ck_assert_msg((onion1_a != nullptr) && (onion2_a != nullptr), "Onion_Announce failed initializing.");
     uint8_t zeroes[64] = {0};
     random_bytes(rng, sb_data, sizeof(sb_data));
@@ -268,6 +304,8 @@ static void test_basic(void)
         do_onion(mono_time2, onion2);
         c_sleep(50);
     } while (handled_test_3 == 0);
+
+    printf("test 3 complete\n");
 
     random_bytes(rng, sb_data, sizeof(sb_data));
     memcpy(&s, sb_data, sizeof(uint64_t));
@@ -291,7 +329,7 @@ static void test_basic(void)
 
     c_sleep(1000);
     Logger *log3 = logger_new();
-    logger_callback_log(log3, (logger_cb *)print_debug_log, nullptr, &index[2]);
+    logger_callback_log(log3, print_debug_logger, nullptr, &index[2]);
 
     Mono_Time *mono_time3 = mono_time_new(nullptr, nullptr);
 
@@ -311,6 +349,8 @@ static void test_basic(void)
         do_onion(mono_time2, onion2);
         c_sleep(50);
     } while (handled_test_4 == 0);
+
+    printf("test 4 complete\n");
 
     kill_onion_announce(onion2_a);
     kill_onion_announce(onion1_a);
@@ -378,7 +418,7 @@ static Onions *new_onions(const Random *rng, uint16_t port, uint32_t *index)
         return nullptr;
     }
 
-    logger_callback_log(on->log, (logger_cb *)print_debug_log, nullptr, index);
+    logger_callback_log(on->log, print_debug_logger, nullptr, index);
 
     on->mono_time = mono_time_new(nullptr, nullptr);
 
@@ -500,10 +540,10 @@ static void dht_pk_callback(void *object, int32_t number, const uint8_t *dht_pub
 {
     if ((NUM_FIRST == number && !first) || (NUM_LAST == number && !last)) {
         Onions *on = (Onions *)object;
-        uint16_t count = 0;
-        int ret = dht_addfriend(on->onion->dht, dht_public_key, &dht_ip_callback, object, number, &count);
+        uint32_t token = 0;
+        int ret = dht_addfriend(on->onion->dht, dht_public_key, &dht_ip_callback, object, number, &token);
         ck_assert_msg(ret == 0, "dht_addfriend() did not return 0");
-        ck_assert_msg(count == 1, "Count not 1, count is %u", count);
+        ck_assert_msg(token == 1, "Count not 1, count is %u", token);
 
         if (NUM_FIRST == number && !first) {
             first = 1;

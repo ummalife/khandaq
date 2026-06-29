@@ -1,6 +1,6 @@
 <resources>
 
-    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
@@ -17,13 +17,21 @@
         <item name="android:textColorPrimary">@color/md_grey_50</item>
         <item name="android:textColorSecondary">@color/gray</item>
 
+        <item name="textAppearanceHeadline6">@style/TextAppearance.Khandaq.Headline</item>
+        <item name="textAppearanceBody1">@style/TextAppearance.Khandaq.Body</item>
+        <item name="textAppearanceBody2">@style/TextAppearance.Khandaq.Caption</item>
+        <item name="textAppearanceButton">@style/TextAppearance.Khandaq.Button</item>
+        <item name="toolbarStyle">@style/Khandaq.Toolbar</item>
+        <item name="textInputStyle">@style/Widget.Khandaq.TextInputLayout</item>
+
     </style>
 
     <style name="SettingsTheme" parent="AppTheme">
-        <item name="android:windowBackground">@android:color/white</item>
-        <item name="android:colorBackground">@android:color/white</item>
-        <item name="android:textColorPrimary">@color/md_always_black_1000</item>
+        <item name="android:windowBackground">@color/khandaq_surface</item>
+        <item name="android:colorBackground">@color/khandaq_surface</item>
+        <item name="android:textColorPrimary">@color/md_grey_50</item>
         <item name="android:textColorSecondary">@color/gray</item>
+        <item name="colorControlHighlight">#33FFFFFF</item>
     </style>
 
     <style name="FullscreenTheme" parent="AppTheme">
@@ -35,7 +43,7 @@
 
     <style name="DrawerArrowStyle" parent="Widget.AppCompat.DrawerArrowToggle">
         <item name="spinBars">true</item>
-        <item name="color">@android:color/white</item>
+        <item name="color">@color/tg_chat_title</item>
     </style>
 
 

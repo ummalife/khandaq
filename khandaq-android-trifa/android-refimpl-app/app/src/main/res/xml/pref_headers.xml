@@ -10,4 +10,22 @@
         android:icon="@drawable/ic_notifications_black_24dp"
         android:title="@string/pref_header_notifications"/>
 
+    <header
+        android:icon="@drawable/ic_info_black_24dp"
+        android:title="@string/MainActivity_maint">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.zoffcc.applications.trifa.MaintenanceActivity"
+            android:targetPackage="org.khandaq.messenger" />
+    </header>
+
+    <header
+        android:icon="@drawable/ic_info_black_24dp"
+        android:title="@string/MainActivity_about">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.zoffcc.applications.trifa.Aboutpage"
+            android:targetPackage="org.khandaq.messenger" />
+    </header>
+
 </preference-headers>

@@ -22,6 +22,7 @@
 #import <objcTox/OCTSubmanagerFiles.h>
 #import <objcTox/OCTSubmanagerFilesProgressSubscriber.h>
 #import <objcTox/OCTSubmanagerFriends.h>
+#import <objcTox/OCTSubmanagerGroups.h>
 #import <objcTox/OCTSubmanagerObjects.h>
 #import <objcTox/OCTSubmanagerUser.h>
 #import <objcTox/OCTTox.h>

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/outside_friend_info_container"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/tg_chat_row_height"
+    android:background="@color/tg_chat_bg">
+
+    <RelativeLayout
+        android:id="@+id/chat_list_row"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/tg_chat_item_ripple"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <ImageView
+            android:id="@+id/f_notification"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <de.hdodenhof.circleimageview.CircleImageView
+            android:id="@+id/f_avatar_icon"
+            android:layout_width="@dimen/tg_chat_avatar_size"
+            android:layout_height="@dimen/tg_chat_avatar_size"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:src="@drawable/circle_blue"
+            app:civ_border_width="0dp" />
+
+        <RelativeLayout
+            android:id="@+id/f_status_container"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/f_status_icon"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/f_relay_icon"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </RelativeLayout>
+
+        <ImageView
+            android:id="@+id/f_user_status_icon"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/f_ip_addr_text"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <RelativeLayout
+            android:id="@+id/friend_line_container"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <RelativeLayout
+            android:id="@+id/f_conf_container_parent"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <RelativeLayout
+            android:id="@+id/f_status_info_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="12dp"
+            android:layout_toStartOf="@+id/f_chat_meta_container"
+            android:layout_toEndOf="@id/f_avatar_icon">
+
+            <TextView
+                android:id="@+id/f_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_alignParentTop="true"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Chat name"
+                android:textColor="@color/tg_chat_title"
+                android:textSize="@dimen/tg_chat_title_size" />
+
+            <TextView
+                android:id="@+id/f_status_message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/f_name"
+                android:layout_alignParentStart="true"
+                android:layout_marginTop="3dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif"
+                android:maxLines="1"
+                android:text="Last message preview"
+                android:textColor="@color/tg_chat_preview"
+                android:textSize="@dimen/tg_chat_preview_size" />
+
+            <TextView
+                android:id="@+id/f_last_online_timestamp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </RelativeLayout>
+
+        <LinearLayout
+            android:id="@+id/f_chat_meta_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentTop="true"
+            android:layout_marginTop="14dp"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/f_chat_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif"
+                android:gravity="end"
+                android:minWidth="44dp"
+                android:text="20:48"
+                android:textColor="@color/tg_chat_time"
+                android:textSize="@dimen/tg_chat_time_size" />
+
+            <TextView
+                android:id="@+id/f_unread_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/tg_unread_badge_bg"
+                android:gravity="center"
+                android:minWidth="22dp"
+                android:minHeight="22dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:text="3"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="invisible" />
+        </LinearLayout>
+
+    </RelativeLayout>
+
+</FrameLayout>

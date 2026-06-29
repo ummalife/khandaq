@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ: "MyID вашего аккаунта" QR modal (Figma) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="24dp"
+    android:paddingBottom="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/profile_qr_modal_title"
+        android:textColor="@color/onboarding_title"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="@string/profile_qr_modal_desc"
+        android:textColor="@color/onboarding_hint"
+        android:textSize="14sp" />
+
+    <ImageView
+        android:id="@+id/qr_modal_image"
+        android:layout_width="240dp"
+        android:layout_height="240dp"
+        android:layout_marginTop="20dp"
+        android:background="@android:color/white"
+        android:contentDescription="@null"
+        android:padding="8dp" />
+
+</LinearLayout>

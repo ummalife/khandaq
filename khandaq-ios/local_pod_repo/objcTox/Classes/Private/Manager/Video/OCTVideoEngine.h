@@ -17,6 +17,11 @@
  */
 @property (nonatomic, assign) OCTToxFriendNumber friendNumber;
 
+// KHANDAQ: total incoming (decoded) video frames received from the peer. Surfaced on the call screen
+// to diagnose "I don't see the other camera": 0 = peer isn't transmitting / toxav isn't receiving;
+// >0 = frames do arrive (so the issue is feed attachment / render, not the network).
+@property (atomic, assign) NSUInteger receivedFrameCount;
+
 /**
  * This must be called prior to using the video session.
  * @param error Pointer to error object.

@@ -72,6 +72,7 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
@@ -81,12 +82,7 @@ import android.widget.Toast;
 import com.mikepenz.fontawesome_typeface_library.FontAwesome;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
-import com.mikepenz.materialdrawer.Drawer;
-import com.mikepenz.materialdrawer.DrawerBuilder;
-import com.mikepenz.materialdrawer.model.DividerDrawerItem;
-import com.mikepenz.materialdrawer.model.PrimaryDrawerItem;
-import com.mikepenz.materialdrawer.model.interfaces.IDrawerItem;
-import com.mikepenz.materialdrawer.model.interfaces.IProfile;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.vanniktech.emoji.EmojiManager;
 import com.yariksoffice.lingver.Lingver;
 import com.zoffcc.applications.nativeaudio.NativeAudio;
@@ -120,10 +116,15 @@ import java.util.Random;
 import java.util.concurrent.Semaphore;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.RecyclerView;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
@@ -163,6 +164,7 @@ import static com.zoffcc.applications.trifa.GroupMessageListActivity.show_ngc_in
 import static com.zoffcc.applications.trifa.HelperConference.get_last_conference_message_in_this_conference_within_n_seconds_from_sender_pubkey;
 import static com.zoffcc.applications.trifa.HelperConference.tox_conference_by_confid__wrapper;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.check_auto_accept_incoming_filetransfer;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.resume_stalled_incoming_filetransfers;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.flush_and_close_vfs_ft_from_cache;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_incoming_filetransfer_local_filename;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
@@ -178,6 +180,7 @@ import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_ke
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_get_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperFriend.update_friend_in_db_capabilities;
 import static com.zoffcc.applications.trifa.HelperFriend.update_friend_in_db_ip_addr_str;
+import static com.zoffcc.applications.trifa.HelperFriend.update_friend_msgv3_capability;
 import static com.zoffcc.applications.trifa.HelperGeneric.append_logger_msg;
 import static com.zoffcc.applications.trifa.HelperGeneric.bytes_to_hex;
 import static com.zoffcc.applications.trifa.HelperGeneric.del_g_opts;
@@ -224,7 +227,6 @@ import static com.zoffcc.applications.trifa.HelperRelay.is_any_relay;
 import static com.zoffcc.applications.trifa.HelperRelay.own_push_token_load;
 import static com.zoffcc.applications.trifa.HelperRelay.send_pushtoken_to_relay;
 import static com.zoffcc.applications.trifa.HelperToxNotification.tox_notification_change_wrapper;
-import static com.zoffcc.applications.trifa.MessageListActivity.ml_friend_typing;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.AVATAR_INCOMING_MAX_BYTE_SIZE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.CONFERENCE_ID_LENGTH;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.CONNECTION_STATUS_MANUAL_LOGOUT;
@@ -255,7 +257,6 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.ORBOT_PROXY_HOST;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.ORBOT_PROXY_PORT;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PREF__DB_secrect_key__user_hash;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_PUSH_SETUP_HOWTO_URL;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_COMMUNITY_GROUPID;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_INCOMING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_FT_DIRECTION.TRIFA_FT_DIRECTION_OUTGOING;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
@@ -277,6 +278,9 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.bootstrapping;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.count_video_frame_received;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.count_video_frame_sent;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_for_battery_savings_ts;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.fail_incoming_filetransfer;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.verify_incoming_file_complete;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_incoming_ft_ts;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_outgoung_ft_ts;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_connection_status;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_self_last_went_offline_timestamp;
@@ -308,6 +312,7 @@ import static com.zoffcc.applications.trifa.ToxVars.TOXAV_FRIEND_CALL_STATE.TOXA
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONFERENCE_TYPE.TOX_CONFERENCE_TYPE_AV;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONFERENCE_TYPE.TOX_CONFERENCE_TYPE_TEXT;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_CAPABILITY_MSGV3;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_CANCEL;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_PAUSE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_FILE_CONTROL.TOX_FILE_CONTROL_RESUME;
@@ -323,7 +328,6 @@ import static com.zoffcc.applications.trifa.ToxVars.TOX_USER_STATUS.TOX_USER_STA
 import static com.zoffcc.applications.trifa.ToxVars.TOX_USER_STATUS.TOX_USER_STATUS_NONE;
 import static com.zoffcc.applications.trifa.TrifaToxService.TOX_SERVICE_STARTED;
 import static com.zoffcc.applications.trifa.TrifaToxService.is_tox_started;
-import static com.zoffcc.applications.trifa.TrifaToxService.manually_logged_out;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 import static com.zoffcc.applications.trifa.TrifaToxService.resend_old_messages;
 import static com.zoffcc.applications.trifa.TrifaToxService.resend_v3_messages;
@@ -403,6 +407,7 @@ public class MainActivity extends AppCompatActivity
     static int NOTIFICATION_ID = 293821038;
     static int WATCHDOG_NOTIFICATION_ID = 696935351;
     static FriendListFragment friend_list_fragment = null;
+    static FriendListFragment contacts_list_fragment = null;
     static MessageListFragment message_list_fragment = null;
     static MessageListActivity message_list_activity = null;
     static ConferenceMessageListFragment conference_message_list_fragment = null;
@@ -511,6 +516,7 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__tox_set_do_not_sync_av = false;
     static boolean PREF__use_audio_rec_effects = false;
     static boolean PREF__window_security = false;
+    static boolean PREF__send_read_receipts = true;
     public static int PREF__X_eac_delay_ms = 80;
     static boolean PREF__force_udp_only = false;
     static boolean PREF__use_incognito_keyboard = true;
@@ -535,6 +541,8 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__auto_accept_image = true;
     static boolean PREF__auto_accept_video = false;
     static boolean PREF__auto_accept_all_upto = false;
+    // KHANDAQ (Figma "Загрузка вложений"): global attachment auto-download policy. 0=Никогда, 1=Только Wi-Fi, 2=Всегда (default = current behavior)
+    static int PREF__attachment_download_mode = 2;
     static int PREF__video_cam_resolution = 0;
     static final int PREF_GLOBAL_FONT_SIZE_DEFAULT = 2;
     static int PREF__global_font_size = PREF_GLOBAL_FONT_SIZE_DEFAULT;
@@ -607,23 +615,42 @@ public class MainActivity extends AppCompatActivity
     static Map<String, Long> lookup_peer_listnum_pubkey = new HashMap<String, Long>();
     // ---- lookup cache for conference drawer ----
 
-    // main drawer ----------
-    static Drawer main_drawer = null;
-    // main drawer ----------
+    // main bottom navigation ----------
+    private BottomNavigationView bottomNavigationView = null;
+    private EditText mainChatSearch = null;
+    private FriendListFragment contactsFragment = null;
+    private FriendListFragment chatsFragment = null;
+    private SettingsTabFragment settingsFragment = null;
+    private ProfileTabFragment profileFragment = null;
+    private int currentMainTab = R.id.bottom_nav_chats;
+    private static final String PREF_CHAT_FILTER_TAB = "chat_list_filter_tab";
+    private View chatFilterTabsContainer = null;
+    private View chatFilterTabDirect = null;
+    private View chatFilterTabGroups = null;
+    private View chatFilterTabFavorites = null;
+    private TextView chatFilterBadgeDirect = null;
+    private TextView chatFilterBadgeGroups = null;
+    private TextView chatFilterBadgeFavorites = null;
+    private TextView chatFilterLabelDirect = null;
+    private TextView chatFilterLabelGroups = null;
+    private TextView chatFilterLabelFavorites = null;
+    private ChatFilterTabIndicatorHelper chatFilterTabIndicatorHelper = null;
+    private int currentChatFilterTab = FriendListFragment.CHAT_FILTER_DIRECT;
+    // main bottom navigation ----------
 
     Spinner spinner_own_status = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
-        Log.i(TAG, "M:STARTUP:super onCreate");
+        HelperGeneric.logI(TAG, "M:STARTUP:super onCreate");
         super.onCreate(savedInstanceState);
-        Log.i(TAG, "M:STARTUP:onCreate");
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "M:STARTUP:onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
-        Log.i(TAG, "M:STARTUP:Lingver set");
+        HelperGeneric.logI(TAG, "M:STARTUP:Lingver set");
         Log.d(TAG, "Lingver_Locale: " + Lingver.getInstance().getLocale());
         Log.d(TAG, "Lingver_Language: " + Lingver.getInstance().getLanguage());
         // Log.d(TAG, "Actual_Language: " + resources.configuration.getLocaleCompat());
@@ -632,7 +659,7 @@ public class MainActivity extends AppCompatActivity
         {
             if (BuildConfig.DEBUG)
             {
-                Log.i(TAG, "***** BuildConfig.DEBUG *****");
+                HelperGeneric.logI(TAG, "***** BuildConfig.DEBUG *****");
                 //StrictMode.setVmPolicy(
                 //        new StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().penaltyLog().build());
             }
@@ -647,22 +674,22 @@ public class MainActivity extends AppCompatActivity
         global_showing_messageview = false;
         global_showing_anygroupview = false;
 
-        Log.i(TAG, "is_nightmode_active:" + is_nightmode_active(this));
+        HelperGeneric.logI(TAG, "is_nightmode_active:" + is_nightmode_active(this));
 
         try
         {
-            Log.i(TAG, "M:STARTUP:Thread=" + Thread.currentThread().getName());
+            HelperGeneric.logI(TAG, "M:STARTUP:Thread=" + Thread.currentThread().getName());
         }
         catch (Exception e)
         {
         }
 
-        Log.i(TAG, "M:STARTUP:setContentView start");
+        HelperGeneric.logI(TAG, "M:STARTUP:setContentView start");
         setContentView(R.layout.activity_main);
-        Log.i(TAG, "M:STARTUP:setContentView end");
+        ThemeTransitionHelper.scheduleCrossfadeAfterCreate(this);
+        HelperGeneric.logI(TAG, "M:STARTUP:setContentView end");
 
         main_profile_bar = findViewById(R.id.main_profile_bar);
-        main_profile_avatar = findViewById(R.id.main_profile_avatar);
         main_profile_name = findViewById(R.id.main_profile_name);
         if (main_profile_bar != null)
         {
@@ -671,11 +698,11 @@ public class MainActivity extends AppCompatActivity
 
         if (native_lib_loaded)
         {
-            Log.i(TAG, "M:STARTUP:native_lib_loaded OK");
+            HelperGeneric.logI(TAG, "M:STARTUP:native_lib_loaded OK");
         }
         else
         {
-            Log.i(TAG, "M:STARTUP:native_lib_loaded failed");
+            HelperGeneric.logI(TAG, "M:STARTUP:native_lib_loaded failed");
             show_wrong_credentials();
             finish();
             return;
@@ -690,33 +717,45 @@ public class MainActivity extends AppCompatActivity
                 IntentFilter filter = new IntentFilter();
                 filter.addAction("android.intent.action.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED");
                 this.registerReceiver(ar, filter);
-                Log.i(TAG, "ExactAlarmChagedReceiver registered");
+                HelperGeneric.logI(TAG, "ExactAlarmChagedReceiver registered");
             }
             else
             {
-                Log.i(TAG, "ExactAlarmChagedReceiver:below API S");
+                HelperGeneric.logI(TAG, "ExactAlarmChagedReceiver:below API S");
             }
         }
         catch(Exception e22)
         {
-            Log.i(TAG, "ExactAlarmChagedReceiver:EE:" + e22.getMessage());
+            HelperGeneric.logI(TAG, "ExactAlarmChagedReceiver:EE:" + e22.getMessage());
             e22.printStackTrace();
         }
         */
 
-        Log.i(TAG, "M:STARTUP:toolbar");
+        HelperGeneric.logI(TAG, "M:STARTUP:toolbar");
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        if (getSupportActionBar() != null)
+        {
+            getSupportActionBar().setDisplayShowTitleEnabled(true);
+        }
+        MainHeaderBrandingHelper.setup(this, toolbar);
 
-        Log.i(TAG, "M:STARTUP:EmojiManager install");
+        HelperGeneric.logI(TAG, "M:STARTUP:EmojiManager install");
         // EmojiManager.install(new IosEmojiProvider());
-        EmojiManager.install(new com.vanniktech.emoji.google.GoogleEmojiProvider());
+        EmojiManager.install(new KhandaqGoogleEmojiProvider());
         // EmojiManager.install(new com.vanniktech.emoji.twitter.TwitterEmojiProvider());
 
 
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
         PREF__DB_secrect_key = DbSecretKeyStorage.resolveDbSecretKey(this);
+
+        if (DB_ENCRYPT && TextUtils.isEmpty(PREF__DB_secrect_key))
+        {
+            Log.w(TAG, "M:STARTUP:empty DB secret key");
+            show_wrong_credentials();
+            finish();
+            return;
+        }
 
         main_handler = new Handler(getMainLooper());
         main_handler_s = main_handler;
@@ -727,43 +766,83 @@ public class MainActivity extends AppCompatActivity
 
         if ((!TOX_SERVICE_STARTED) || (orma == null))
         {
-            Log.i(TAG, "M:STARTUP:init DB");
+            HelperGeneric.logI(TAG, "M:STARTUP:init DB (background)");
 
-            try
+            // KHANDAQ: initialize the (SQLCipher-encrypted) database on a BACKGROUND thread. Its key
+            // derivation + first-run table creation is heavy and on slower devices took >5s on the UI
+            // thread, which triggered an ANR ("приложение не отвечает") that looked like a crash.
+            // onCreate now returns immediately; the rest of startup runs in onCreateContinue() once
+            // the database is ready.
+            new Thread(new Runnable()
             {
-                String dbs_path = getDir("dbs", MODE_PRIVATE).getAbsolutePath() + "/" + MAIN_DB_NAME;
-                // Log.i(TAG, "db:path=" + dbs_path);
-                File database_dir = new File(new File(dbs_path).getParent());
-                database_dir.mkdirs();
-
-                if (DB_ENCRYPT)
+                @Override
+                public void run()
                 {
-                    orma = OrmaDatabase_wrapper(dbs_path, PREF__DB_secrect_key, PREF__DB_wal_mode);
-                    DbSecretKeyStorage.persistLastWorkingDbSecretKey(this, PREF__DB_secrect_key);
-                }
-                else
-                {
-                    orma = OrmaDatabase_wrapper(dbs_path, null, PREF__DB_wal_mode);
-                }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-                Log.i(TAG, "M:STARTUP:init DB:EE1");
-                Log.i(TAG, "db:EE1:" + e.getMessage());
-                show_wrong_credentials();
-                finish();
-                return;
-            }
+                    try
+                    {
+                        String dbs_path = getDir("dbs", MODE_PRIVATE).getAbsolutePath() + "/" + MAIN_DB_NAME;
+                        File database_dir = new File(new File(dbs_path).getParent());
+                        database_dir.mkdirs();
 
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
-            // ** // ** // orma.deleteFromMessage().execute();
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
-            // ----- Clear all messages from DB -----
+                        if (DB_ENCRYPT)
+                        {
+                            orma = OrmaDatabase_wrapper(dbs_path, PREF__DB_secrect_key, PREF__DB_wal_mode);
+                            DbSecretKeyStorage.persistLastWorkingDbSecretKey(MainActivity.this, PREF__DB_secrect_key);
+                        }
+                        else
+                        {
+                            orma = OrmaDatabase_wrapper(dbs_path, null, PREF__DB_wal_mode);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                        HelperGeneric.logI(TAG, "M:STARTUP:init DB:EE1");
+                        HelperGeneric.logI(TAG, "db:EE1:" + e.getMessage());
+                        runOnUiThread(new Runnable()
+                        {
+                            @Override
+                            public void run()
+                            {
+                                show_wrong_credentials();
+                                finish();
+                            }
+                        });
+                        return;
+                    }
+
+                    runOnUiThread(new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            // KHANDAQ: the activity may have been finished/destroyed while the DB
+                            // initialized in the background — don't continue startup on a dead activity.
+                            if (isFinishing() || isDestroyed())
+                            {
+                                HelperGeneric.logI(TAG, "M:STARTUP:onCreateContinue skipped (activity gone)");
+                                return;
+                            }
+                            onCreateContinue(savedInstanceState);
+                        }
+                    });
+                }
+            }).start();
+
+            return;
         }
+
+        onCreateContinue(savedInstanceState);
+    }
+
+    private void onCreateContinue(final Bundle savedInstanceState)
+    {
+        // KHANDAQ: re-derive the locals that were declared in onCreate before the DB init was moved
+        // off the UI thread (both are only used from here on).
+        final Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
+
+        FavoritesChatHelper.ensureInitialized(this);
 
         if (PREF__window_security)
         {
@@ -778,10 +857,10 @@ public class MainActivity extends AppCompatActivity
         //        catch (Exception e)
         //        {
         //            e.printStackTrace();
-        //            Log.i(TAG, "onCreate:setThreadPriority:EE:" + e.getMessage());
+        //            HelperGeneric.logI(TAG, "onCreate:setThreadPriority:EE:" + e.getMessage());
         //        }
 
-        Log.i(TAG, "M:STARTUP:getVersionInfo");
+        HelperGeneric.logI(TAG, "M:STARTUP:getVersionInfo");
         getVersionInfo();
 
         try
@@ -819,10 +898,10 @@ public class MainActivity extends AppCompatActivity
         SD_CARD_FILES_EXPORT_DIR = getExternalFilesDir(null).getAbsolutePath() + "/vfs_export/";
         SD_CARD_FILES_DEBUG_DIR = getExternalFilesDir(null).getAbsolutePath() + "/debug/";
         SD_CARD_FILES_OUTGOING_WRAPPER_DIR = getExternalFilesDir(null).getAbsolutePath() + "/outgoing/";
-        // Log.i(TAG, "SD_CARD_FILES_EXPORT_DIR:" + SD_CARD_FILES_EXPORT_DIR);
+        // HelperGeneric.logI(TAG, "SD_CARD_FILES_EXPORT_DIR:" + SD_CARD_FILES_EXPORT_DIR);
         SD_CARD_TMP_DUMMYFILE = HelperGeneric.make_some_static_dummy_file(this.getBaseContext());
         audio_manager_s = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        Log.i(TAG, "java.library.path:" + System.getProperty("java.library.path"));
+        HelperGeneric.logI(TAG, "java.library.path:" + System.getProperty("java.library.path"));
         nmn3 = (NotificationManager) context_s.getSystemService(NOTIFICATION_SERVICE);
 
         try
@@ -836,10 +915,11 @@ public class MainActivity extends AppCompatActivity
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
         {
-            Log.i(TAG, "M:STARTUP:notification channels");
+            HelperGeneric.logI(TAG, "M:STARTUP:notification channels");
             HelperMsgNotification.ensure_notification_channels(this, nmn3);
             String channelName;
-            channelId_toxservice = "khandaq_online_service";
+            HelperToxNotification.ensureChannel(this);
+            channelId_toxservice = HelperToxNotification.CHANNEL_ID_TOX_SERVICE;
             channelName = getString(R.string.notification_channel_toxservice);
             int importance = NotificationManager.IMPORTANCE_MIN;
             notification_channel_toxservice = new NotificationChannel(channelId_toxservice, channelName, importance);
@@ -863,12 +943,13 @@ public class MainActivity extends AppCompatActivity
         PREF__conference_show_system_messages = settings.getBoolean("conference_show_system_messages", false);
         PREF__X_battery_saving_mode = settings.getBoolean("X_battery_saving_mode", false);
         PREF__X_misc_button_enabled = settings.getBoolean("X_misc_button_enabled", false);
-        PREF__local_discovery_enabled = settings.getBoolean("local_discovery_enabled", false);
+        PREF__local_discovery_enabled = settings.getBoolean("local_discovery_enabled", true);
         PREF__force_udp_only = settings.getBoolean("force_udp_only", false);
         PREF__use_incognito_keyboard = settings.getBoolean("use_incognito_keyboard", true);
         PREF__speakerphone_tweak = settings.getBoolean("speakerphone_tweak", false);
         PREF__mic_gain_factor_toggle = settings.getBoolean("mic_gain_factor_toggle", false);
         PREF__window_security = settings.getBoolean("window_security", false);
+        PREF__send_read_receipts = settings.getBoolean("pref_send_read_receipts", true);
         PREF__use_native_audio_play = settings.getBoolean("X_use_native_audio_play", true);
         PREF__use_H264_hw_encoding = settings.getBoolean("use_H264_hw_encoding", false);
 
@@ -881,13 +962,30 @@ public class MainActivity extends AppCompatActivity
             else
             {
                 PREF__X_battery_saving_timeout = Integer.parseInt(settings.getString("X_battery_saving_timeout", "15"));
-                Log.i(TAG, "PREF__X_battery_saving_timeout:1:=" + PREF__X_battery_saving_timeout);
+                HelperGeneric.logI(TAG, "PREF__X_battery_saving_timeout:1:=" + PREF__X_battery_saving_timeout);
             }
         }
         catch (Exception e)
         {
             e.printStackTrace();
             PREF__X_battery_saving_timeout = 15;
+        }
+
+        // NOTE (Khandaq): this migration sets PREF__udp_enabled=false ("TCP mode"), but it is
+        // currently a NO-OP at the transport level: the native layer in create_tox()
+        // (jni-c-toxcore.c, "options.udp_enabled = true;") unconditionally re-enables UDP, ignoring
+        // this flag. So the shipped libjni-c-toxcore.so ALWAYS runs UDP-enabled regardless of what we
+        // set here. That is actually acceptable today: NGC public-group discovery (the onion DHT
+        // announce-lookup a chat-id join depends on) needs UDP, and pure-TCP discovery is an unsolved
+        // toxcore-level gap. The real consequence is for joiners on UDP-blocked networks (mobile
+        // carriers / some regions): their chat-id join cannot complete (see HelperGroup
+        // .maybe_hint_udp_blocked) — the working bypass is a friend-assisted invite. The pref is kept
+        // so a future rebuilt .so that honors it can flip transport without another migration.
+        // Do NOT trust this flag to mean "TCP-only" until jni-c-toxcore.c:699 is rebuilt and shipped.
+        if (!settings.getBoolean("khandaq_ngc_udp_tcp_v3", false))
+        {
+            settings.edit().putBoolean("udp_enabled", false).
+                    putBoolean("khandaq_ngc_udp_tcp_v3", true).apply();
         }
 
         boolean tmp1 = settings.getBoolean("udp_enabled", false);
@@ -901,17 +999,14 @@ public class MainActivity extends AppCompatActivity
             PREF__udp_enabled = 0;
         }
 
-        PREF__higher_video_quality = 0;
-        GLOBAL_VIDEO_BITRATE = LOWER_GLOBAL_VIDEO_BITRATE;
-
         try
         {
-            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "0"));
+            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "1"));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__video_call_quality = 0;
+            PREF__video_call_quality = 1;
         }
 
 
@@ -945,17 +1040,17 @@ public class MainActivity extends AppCompatActivity
 
         if (PREF__orbot_enabled)
         {
-            Log.i(TAG, "M:STARTUP:wait for orbot");
+            HelperGeneric.logI(TAG, "M:STARTUP:wait for orbot");
             boolean orbot_installed = OrbotHelper.isOrbotInstalled(this);
 
             //if (orbot_installed)
             {
                 boolean orbot_running = orbot_is_really_running; // OrbotHelper.isOrbotRunning(this);
-                Log.i(TAG, "waiting_for_orbot_info:orbot_running=" + orbot_running);
+                HelperGeneric.logI(TAG, "waiting_for_orbot_info:orbot_running=" + orbot_running);
 
                 if (orbot_running)
                 {
-                    Log.i(TAG, "waiting_for_orbot_info:F1");
+                    HelperGeneric.logI(TAG, "waiting_for_orbot_info:F1");
                     HelperGeneric.waiting_for_orbot_info(false);
                     OrbotHelper.get(this).statusTimeout(120 * 1000).addStatusCallback(new StatusCallback()
                     {
@@ -984,7 +1079,7 @@ public class MainActivity extends AppCompatActivity
                         public void onStatusTimeout()
                         {
                             // throw new RuntimeException("Orbot status request timed out");
-                            Log.i(TAG, "waiting_for_orbot_info:EEO1:" + "Orbot status request timed out");
+                            HelperGeneric.logI(TAG, "waiting_for_orbot_info:EEO1:" + "Orbot status request timed out");
                         }
 
                         @Override
@@ -999,13 +1094,13 @@ public class MainActivity extends AppCompatActivity
 
                     if (OrbotHelper.requestStartTor(this))
                     {
-                        Log.i(TAG, "waiting_for_orbot_info:*T2");
+                        HelperGeneric.logI(TAG, "waiting_for_orbot_info:*T2");
                         HelperGeneric.waiting_for_orbot_info(true);
                     }
                     else
                     {
                         // should never get here
-                        Log.i(TAG, "waiting_for_orbot_info:F3");
+                        HelperGeneric.logI(TAG, "waiting_for_orbot_info:F3");
                         HelperGeneric.waiting_for_orbot_info(false);
                     }
 
@@ -1036,7 +1131,7 @@ public class MainActivity extends AppCompatActivity
                         public void onStatusTimeout()
                         {
                             // throw new RuntimeException("Orbot status request timed out");
-                            Log.i(TAG, "waiting_for_orbot_info:EEO2:" + "Orbot status request timed out");
+                            HelperGeneric.logI(TAG, "waiting_for_orbot_info:EEO2:" + "Orbot status request timed out");
                         }
 
                         @Override
@@ -1049,7 +1144,7 @@ public class MainActivity extends AppCompatActivity
             /*
             else
             {
-                Log.i(TAG, "waiting_for_orbot_info:F4");
+                HelperGeneric.logI(TAG, "waiting_for_orbot_info:F4");
                 HelperGeneric.waiting_for_orbot_info(false);
                 Intent orbot_get = OrbotHelper.getOrbotInstallIntent(this);
 
@@ -1066,13 +1161,13 @@ public class MainActivity extends AppCompatActivity
         }
         else
         {
-            Log.i(TAG, "waiting_for_orbot_info:F5");
+            HelperGeneric.logI(TAG, "waiting_for_orbot_info:F5");
             HelperGeneric.waiting_for_orbot_info(false);
         }
 
-        Log.i(TAG, "PREF__UV_reversed:2=" + PREF__UV_reversed);
-        Log.i(TAG, "PREF__notification_sound:2=" + PREF__notification_sound);
-        Log.i(TAG, "PREF__notification_vibrate:2=" + PREF__notification_vibrate);
+        HelperGeneric.logI(TAG, "PREF__UV_reversed:2=" + PREF__UV_reversed);
+        HelperGeneric.logI(TAG, "PREF__notification_sound:2=" + PREF__notification_sound);
+        HelperGeneric.logI(TAG, "PREF__notification_vibrate:2=" + PREF__notification_vibrate);
 
         try
         {
@@ -1138,6 +1233,16 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
+            PREF__attachment_download_mode = settings.getInt("attachment_download_mode", 2);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__attachment_download_mode = 2;
+        }
+
+        try
+        {
             PREF__X_zoom_incoming_video = settings.getBoolean("X_zoom_incoming_video", false);
         }
         catch (Exception e)
@@ -1163,13 +1268,15 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__video_cam_resolution = Integer.parseInt(settings.getString("video_cam_resolution", "" + 0));
+            PREF__video_cam_resolution = Integer.parseInt(settings.getString("video_cam_resolution", "" + 1));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__video_cam_resolution = 0;
+            PREF__video_cam_resolution = 1;
         }
+
+        HelperGeneric.applyGlobalVideoBitrateFromPrefs(this);
 
         try
         {
@@ -1318,7 +1425,7 @@ public class MainActivity extends AppCompatActivity
         {
             fadeInAndShowImage(top_imageview, 5000);
         }
-        update_main_profile_bar();
+        // update_main_profile_bar() deferred until after VFS mount (needs IOCipher)
         // TODO: remake this into something nicer ----------
         // --------- status spinner ---------
         spinner_own_status = (Spinner) findViewById(R.id.spinner_own_status);
@@ -1377,214 +1484,11 @@ public class MainActivity extends AppCompatActivity
 
         // --------- status spinner ---------
         // get permission ----------
-        Log.i(TAG, "M:STARTUP:permissions");
+        HelperGeneric.logI(TAG, "M:STARTUP:permissions");
         MainActivityPermissionsDispatcher.dummyForPermissions001WithPermissionCheck(this);
         // get permission ----------
-        // -------- drawer ------------
-        // -------- drawer ------------
-        // -------- drawer ------------
-        Log.i(TAG, "M:STARTUP:drawer");
-        PrimaryDrawerItem item1 = new PrimaryDrawerItem().withIdentifier(1).withName(
-                R.string.MainActivity_profile).withIcon(GoogleMaterial.Icon.gmd_face);
-        PrimaryDrawerItem item2 = new PrimaryDrawerItem().withIdentifier(2).withName(
-                R.string.MainActivity_settings).withIcon(GoogleMaterial.Icon.gmd_settings);
-        PrimaryDrawerItem item3;
-        if (manually_logged_out)
-        {
-            item3 = new PrimaryDrawerItem().withIdentifier(3).withName(R.string.MainActivity_manually_logged_out_true).withIcon(GoogleMaterial.Icon.gmd_refresh);
-        }
-        else
-        {
-            item3 = new PrimaryDrawerItem().withIdentifier(3).withName(R.string.MainActivity_manually_logged_out_false).withIcon(GoogleMaterial.Icon.gmd_refresh);
-        }
-        PrimaryDrawerItem item4 = new PrimaryDrawerItem().withIdentifier(4).withName(
-                R.string.MainActivity_maint).withIcon(GoogleMaterial.Icon.gmd_build);
-        PrimaryDrawerItem item5 = new PrimaryDrawerItem().withIdentifier(5).withName(
-                R.string.MainActivity_about).withIcon(GoogleMaterial.Icon.gmd_info);
-        PrimaryDrawerItem item6 = new PrimaryDrawerItem().withIdentifier(6).withName(
-                R.string.MainActivity_join_trifa_groupchat).withIcon(GoogleMaterial.Icon.gmd_info);
-        PrimaryDrawerItem item7 = new PrimaryDrawerItem().withIdentifier(7).withName(
-                R.string.MainActivity_exit).withIcon(GoogleMaterial.Icon.gmd_exit_to_app);
-        // create the drawer and remember the `Drawer` result object
-        main_drawer = new DrawerBuilder().withActivity(this).withInnerShadow(false).withRootView(
-                R.id.drawer_container).withShowDrawerOnFirstLaunch(false).withActionBarDrawerToggleAnimated(
-                true).withActionBarDrawerToggle(true).withToolbar(toolbar).addDrawerItems(item1,
-                                                                                          new DividerDrawerItem(),
-                                                                                          item2, item3, item4, item5,
-                                                                                          new DividerDrawerItem(),
-                                                                                          item6,
-                                                                                          new DividerDrawerItem(),
-                                                                                          item7).withTranslucentStatusBar(
-                false).withOnDrawerItemClickListener(
-                new Drawer.OnDrawerItemClickListener()
-                {
-                    @Override
-                    public boolean onItemClick(View view, int position, IDrawerItem drawerItem)
-                    {
-                        final long itemId = drawerItem != null ? drawerItem.getIdentifier() : -1;
-                        Log.i(TAG, "drawer:item=" + itemId + " pos=" + position);
-
-                        if (itemId == 1)
-                        {
-                            // profile
-                            try
-                            {
-                                if (Callstate.state == 0)
-                                {
-                                    Log.i(TAG, "start profile activity");
-                                    Intent intent = new Intent(context_s, ProfileActivity.class);
-                                    startActivityForResult(intent, ProfileActivity_ID);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        else if (itemId == 2)
-                        {
-                            // settings
-                            try
-                            {
-                                if (Callstate.state == 0)
-                                {
-                                    Log.i(TAG, "start settings activity");
-                                    Intent intent = new Intent(context_s, SettingsActivity.class);
-                                    startActivityForResult(intent, SettingsActivity_ID);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        else if (itemId == 3)
-                        {
-                            // tox log out / log in
-                            try
-                            {
-                                if (is_tox_started)
-                                {
-                                    manually_log_out();
-                                }
-                                else
-                                {
-                                    manually_log_in();
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        else if (itemId == 4)
-                        {
-                            // Maintenance
-                            try
-                            {
-                                Log.i(TAG, "start Maintenance activity");
-                                Intent intent = new Intent(context_s, MaintenanceActivity.class);
-                                startActivityForResult(intent, MaintenanceActivity_ID);
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        else if (itemId == 5)
-                        {
-                            // About
-                            try
-                            {
-                                Log.i(TAG, "start aboutpage activity");
-                                Intent intent = new Intent(context_s, Aboutpage.class);
-                                startActivityForResult(intent, AboutpageActivity_ID);
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        else if (itemId == 6)
-                        {
-                            // Join Khandaq Community public NGC group chat
-                            try
-                            {
-                                if (is_tox_started)
-                                {
-                                    JoinPublicGroupActivity.show_join_public_group_activity(view.getContext(), KHANDAQ_COMMUNITY_GROUPID);
-                                }
-                                else
-                                {
-                                    display_toast_with_context_custom_duration(view.getContext(),"Tox not yet started!", 2000, 100);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-                        else if (itemId == 7)
-                        {
-                            // Exit app
-                            try
-                            {
-                                ConfGroupAudioService.stop_me(true);
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-
-                            try
-                            {
-                                CallAudioService.stop_me(true);
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-
-                            try
-                            {
-                                if (is_tox_started)
-                                {
-                                    tox_service_fg.stop_tox_fg(true);
-                                    tox_service_fg.stop_me(true);
-                                }
-                                else
-                                {
-                                    // just exit
-                                    tox_service_fg.stop_me(true);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                e.printStackTrace();
-                            }
-                        }
-
-                        return true;
-                    }
-                }).build();
-
-        //        DrawerLayout drawer_layout = (DrawerLayout) findViewById(R.id.material_drawer_layout);
-        //        ActionBarDrawerToggle drawerToggle = new ActionBarDrawerToggle(this, drawer_layout, toolbar, R.string.faw_envelope_open, R.string.faw_envelope_open);
-        //
-        //        drawer_layout.setDrawerListener(drawerToggle);
-        //
-        //        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        //        getSupportActionBar().setHomeButtonEnabled(true);
-        //        drawerToggle.syncState();
-        // show hambuger icon -------
-        // getSupportActionBar().setDisplayHomeAsUpEnabled(false);
-        // main_drawer.getActionBarDrawerToggle().setDrawerIndicatorEnabled(true);
-        // show back icon -------
-        // main_drawer.getActionBarDrawerToggle().setDrawerIndicatorEnabled(false);
-        // getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        // -------- drawer ------------
-        // -------- drawer ------------
-        // -------- drawer ------------
+        setupBottomNavigation(savedInstanceState);
+        apply_main_header_icon_tint(toolbar);
         // reset calling state
         Callstate.state = 0;
         Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_NONE.value;
@@ -1596,23 +1500,23 @@ public class MainActivity extends AppCompatActivity
         last_video_frame_received = -1;
         count_video_frame_received = 0;
         count_video_frame_sent = 0;
-        Log.i(TAG, "friend_pubkey:set:002");
+        HelperGeneric.logI(TAG, "friend_pubkey:set:002");
         Callstate.friend_pubkey = "-1";
-        Callstate.audio_speaker = true;
+        Callstate.audio_speaker = false;
         Callstate.other_audio_enabled = 1;
         Callstate.other_video_enabled = 1;
         Callstate.my_audio_enabled = 1;
         Callstate.my_video_enabled = 1;
 
         String native_api = getNativeLibAPI();
-        Log.i(TAG, "loaded:native_api=" + native_api);
-        Log.i(TAG, "loaded:c-toxcore:v" + tox_version_major() + "." + tox_version_minor() + "." + tox_version_patch());
-        Log.i(TAG, "loaded:jni-c-toxcore:v" + jnictoxcore_version());
-        Log.i(TAG, "loaded:libavutil:v" + libavutil_version());
+        HelperGeneric.logI(TAG, "loaded:native_api=" + native_api);
+        HelperGeneric.logI(TAG, "loaded:c-toxcore:v" + tox_version_major() + "." + tox_version_minor() + "." + tox_version_patch());
+        HelperGeneric.logI(TAG, "loaded:jni-c-toxcore:v" + jnictoxcore_version());
+        HelperGeneric.logI(TAG, "loaded:libavutil:v" + libavutil_version());
 
         if ((!TOX_SERVICE_STARTED) || (vfs == null))
         {
-            Log.i(TAG, "M:STARTUP:init VFS");
+            HelperGeneric.logI(TAG, "M:STARTUP:init VFS");
 
             if (VFS_ENCRYPT)
             {
@@ -1621,98 +1525,100 @@ public class MainActivity extends AppCompatActivity
                     String dbFile = getDir("vfs", MODE_PRIVATE).getAbsolutePath() + "/" + MAIN_VFS_NAME;
                     File database_dir = new File(new File(dbFile).getParent());
                     database_dir.mkdirs();
-                    // Log.i(TAG, "vfs:path=" + dbFile);
+                    // HelperGeneric.logI(TAG, "vfs:path=" + dbFile);
                     vfs = VirtualFileSystem.get();
 
                     try
                     {
                         if (!vfs.isMounted())
                         {
-                            Log.i(TAG, "VFS:mount:[1]:start:" + Thread.currentThread().getId() + ":" +
+                            HelperGeneric.logI(TAG, "VFS:mount:[1]:start:" + Thread.currentThread().getId() + ":" +
                                        Thread.currentThread().getName());
                             vfs.mount(dbFile, PREF__DB_secrect_key);
-                            Log.i(TAG, "VFS:mount:[1]:end");
+                            HelperGeneric.logI(TAG, "VFS:mount:[1]:end");
                         }
                     }
                     catch (Exception ee)
                     {
-                        Log.i(TAG, "vfs:EE1:" + ee.getMessage());
+                        HelperGeneric.logI(TAG, "vfs:EE1:" + ee.getMessage());
                         ee.printStackTrace();
-                        Log.i(TAG, "VFS:mount:[2]:start:" + Thread.currentThread().getId() + ":" +
+                        HelperGeneric.logI(TAG, "VFS:mount:[2]:start:" + Thread.currentThread().getId() + ":" +
                                    Thread.currentThread().getName());
                         vfs.mount(dbFile, PREF__DB_secrect_key);
-                        Log.i(TAG, "VFS:mount:[2]:end");
+                        HelperGeneric.logI(TAG, "VFS:mount:[2]:end");
                     }
 
-                    // Log.i(TAG, "vfs:open(1)=OK:path=" + dbFile);
+                    // HelperGeneric.logI(TAG, "vfs:open(1)=OK:path=" + dbFile);
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "vfs:EE2:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "vfs:EE2:" + e.getMessage());
                     String dbFile = getDir("vfs", MODE_PRIVATE).getAbsolutePath() + "/" + MAIN_VFS_NAME;
 
                     if (DELETE_SQL_AND_VFS_ON_ERROR)
                     {
                         try
                         {
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**--------:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**--------:" + dbFile);
                             new File(dbFile).delete();
-                            Log.i(TAG, "vfs:**deleting database**--------:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
-                            Log.i(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**--------:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
+                            HelperGeneric.logI(TAG, "vfs:**deleting database**:" + dbFile);
                         }
                         catch (Exception e3)
                         {
                             e3.printStackTrace();
-                            Log.i(TAG, "vfs:EE3:" + e3.getMessage());
+                            HelperGeneric.logI(TAG, "vfs:EE3:" + e3.getMessage());
                         }
                     }
 
                     try
                     {
-                        // Log.i(TAG, "vfs:path=" + dbFile);
+                        // HelperGeneric.logI(TAG, "vfs:path=" + dbFile);
                         vfs = VirtualFileSystem.get();
                         vfs.createNewContainer(dbFile, PREF__DB_secrect_key);
-                        Log.i(TAG, "VFS:mount:[3]:start:" + Thread.currentThread().getId() + ":" +
+                        HelperGeneric.logI(TAG, "VFS:mount:[3]:start:" + Thread.currentThread().getId() + ":" +
                                    Thread.currentThread().getName());
                         vfs.mount(PREF__DB_secrect_key);
-                        Log.i(TAG, "VFS:mount:[3]:end");
-                        // Log.i(TAG, "vfs:open(2)=OK:path=" + dbFile);
+                        HelperGeneric.logI(TAG, "VFS:mount:[3]:end");
+                        // HelperGeneric.logI(TAG, "vfs:open(2)=OK:path=" + dbFile);
                     }
                     catch (Exception e2)
                     {
                         e2.printStackTrace();
-                        Log.i(TAG, "vfs:EE4:" + e2.getMessage());
+                        HelperGeneric.logI(TAG, "vfs:EE4:" + e2.getMessage());
                         show_wrong_credentials();
                         finish();
                         return;
                     }
                 }
 
-                // Log.i(TAG, "vfs:encrypted:(1)prefix=" + VFS_PREFIX);
+                // HelperGeneric.logI(TAG, "vfs:encrypted:(1)prefix=" + VFS_PREFIX);
             }
             else
             {
                 // VFS not encrypted -------------
                 VFS_PREFIX = getExternalFilesDir(null).getAbsolutePath() + "/vfs/";
-                // Log.i(TAG, "vfs:not_encrypted:(2)prefix=" + VFS_PREFIX);
+                // HelperGeneric.logI(TAG, "vfs:not_encrypted:(2)prefix=" + VFS_PREFIX);
                 // VFS not encrypted -------------
             }
         }
 
+        update_main_profile_bar();
+
         // cleanup temp dirs --------
         if (!TOX_SERVICE_STARTED)
         {
-            Log.i(TAG, "M:STARTUP:cleanup_temp_dirs (background)");
+            HelperGeneric.logI(TAG, "M:STARTUP:cleanup_temp_dirs (background)");
             HelperGeneric.cleanup_temp_dirs();
         }
 
@@ -1738,15 +1644,15 @@ public class MainActivity extends AppCompatActivity
 
         if (!TOX_SERVICE_STARTED)
         {
-            Log.i(TAG, "M:STARTUP:start ToxService");
-            Log.i(TAG, "set_all_conferences_inactive:005");
+            HelperGeneric.logI(TAG, "M:STARTUP:start ToxService");
+            HelperGeneric.logI(TAG, "set_all_conferences_inactive:005");
             HelperConference.set_all_conferences_inactive();
             startService(i);
         }
 
         if (!TOX_SERVICE_STARTED)
         {
-            Log.i(TAG, "M:STARTUP:start ToxThread");
+            HelperGeneric.logI(TAG, "M:STARTUP:start ToxThread");
             tox_thread_start();
         }
 
@@ -1785,7 +1691,7 @@ public class MainActivity extends AppCompatActivity
         ////// WATCHDOG //////
         */
 
-        Log.i(TAG, "M:STARTUP:-- DONE --");
+        HelperGeneric.logI(TAG, "M:STARTUP:-- DONE --");
     }
 
     void upgrade_db_schema_do(int old_version, int new_version)
@@ -2849,7 +2755,7 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void upgrade(int old_version, int new_version)
             {
-                Log.i(TAG, "trying to upgrade schema from " + old_version + " to " + new_version);
+                HelperGeneric.logI(TAG, "trying to upgrade schema from " + old_version + " to " + new_version);
                 upgrade_db_schema_do(old_version, new_version);
             }
         });
@@ -2867,50 +2773,10 @@ public class MainActivity extends AppCompatActivity
         return orma;
     }
 
-    private void manually_log_in()
-    {
-        global_start_tox();
-        manually_logged_out = false;
-        try
-        {
-            final Thread t = new Thread()
-            {
-                @Override
-                public void run()
-                {
-                    try
-                    {
-                        Thread.sleep(50);
-                        Log.i(TAG, "connection_status: manual activate");
-                        tox_notification_change_wrapper(tox_self_get_connection_status(), "");
-                    }
-                    catch (Exception e)
-                    {
-                    }
-                }
-            };
-            t.start();
-        }
-        catch(Exception e)
-        {
-        }
-
-        try
-        {
-            PrimaryDrawerItem manual_logout_item = new PrimaryDrawerItem().withIdentifier(3).
-                    withName(R.string.MainActivity_manually_logged_out_false).
-                    withIcon(GoogleMaterial.Icon.gmd_refresh);
-            main_drawer.updateItem(manual_logout_item);
-        }
-        catch(Exception e)
-        {
-        }
-    }
-
     static void manually_log_out()
     {
         global_stop_tox();
-        manually_logged_out = true;
+        TrifaToxService.manually_logged_out = true;
         try
         {
             final Thread t = new Thread()
@@ -2921,7 +2787,7 @@ public class MainActivity extends AppCompatActivity
                     try
                     {
                         Thread.sleep(50);
-                        Log.i(TAG, "connection_status: manual logout");
+                        HelperGeneric.logI(TAG, "connection_status: manual logout");
                         tox_notification_change_wrapper(CONNECTION_STATUS_MANUAL_LOGOUT, "");
                     }
                     catch (Exception e)
@@ -2934,16 +2800,47 @@ public class MainActivity extends AppCompatActivity
         catch(Exception e)
         {
         }
+    }
 
-        try
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu)
+    {
+        if (menu != null)
         {
-            PrimaryDrawerItem manual_logout_item = new PrimaryDrawerItem().withIdentifier(3).withName(R.string.MainActivity_manually_logged_out_true).withIcon(
-                    GoogleMaterial.Icon.gmd_refresh);
-            main_drawer.updateItem(manual_logout_item);
+            final boolean contactsOrChatsTab = (currentMainTab == R.id.bottom_nav_contacts)
+                    || (currentMainTab == R.id.bottom_nav_chats);
+            final MenuItem addFriendItem = menu.findItem(R.id.item_addfriend);
+            final MenuItem themeItem = menu.findItem(R.id.item_theme_toggle);
+            final MenuItem groupMenuItem = menu.findItem(R.id.item_group_menu);
+
+            if (addFriendItem != null)
+            {
+                addFriendItem.setVisible(contactsOrChatsTab);
+                if (contactsOrChatsTab)
+                {
+                    updateAddFriendMenuIcon(addFriendItem);
+                }
+            }
+            if (groupMenuItem != null)
+            {
+                // KHANDAQ: the group menu (create private/public group) stays. Only "join public group
+                // by chat-id" is hidden (android:visible="false" on item_join_group_public in
+                // res/menu/menu_main.xml) pending the NGC cold-chat-id discovery fix — cold join by id
+                // does not connect yet. Group creation + friend-invite flow are unaffected.
+                groupMenuItem.setVisible(currentMainTab == R.id.bottom_nav_chats);
+                if (currentMainTab == R.id.bottom_nav_chats)
+                {
+                    updateGroupMenuIcon(groupMenuItem);
+                }
+            }
+            if (themeItem != null)
+            {
+                updateThemeToggleMenuIcon(themeItem);
+            }
+            tint_main_options_menu_icons(menu);
         }
-        catch(Exception e)
-        {
-        }
+
+        return super.onPrepareOptionsMenu(menu);
     }
 
     @Override
@@ -2951,6 +2848,41 @@ public class MainActivity extends AppCompatActivity
     {
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return super.onCreateOptionsMenu(menu);
+    }
+
+    private void apply_main_header_icon_tint(final Toolbar toolbar)
+    {
+        final int iconTint = ContextCompat.getColor(this, R.color.tg_chat_title);
+        if (toolbar != null)
+        {
+            final Drawable nav = toolbar.getNavigationIcon();
+            if (nav != null)
+            {
+                final Drawable tinted = DrawableCompat.wrap(nav.mutate());
+                DrawableCompat.setTint(tinted, iconTint);
+                toolbar.setNavigationIcon(tinted);
+            }
+        }
+    }
+
+    private void tint_main_options_menu_icons(final Menu menu)
+    {
+        if (menu == null)
+        {
+            return;
+        }
+        final int iconTint = ContextCompat.getColor(this, R.color.tg_chat_title);
+        for (int i = 0; i < menu.size(); i++)
+        {
+            final MenuItem item = menu.getItem(i);
+            final Drawable icon = item.getIcon();
+            if (icon != null)
+            {
+                final Drawable tinted = DrawableCompat.wrap(icon.mutate());
+                DrawableCompat.setTint(tinted, iconTint);
+                item.setIcon(tinted);
+            }
+        }
     }
 
     void remove_all_progressDialogs()
@@ -2970,13 +2902,15 @@ public class MainActivity extends AppCompatActivity
     {
         switch (item.getItemId())
         {
+            case R.id.item_theme_toggle:
+                toggleDarkModeFromToolbar();
+                break;
             case R.id.item_addfriend:
                 final Intent intent = new Intent(this, AddFriendActivity.class);
                 startActivityForResult(intent, AddFriendActivity_ID);
                 break;
             case R.id.item_create_group_private:
-                final Intent intent2 = new Intent(this, AddPrivateGroupActivity.class);
-                startActivityForResult(intent2, AddPrivateGroupActivity_ID);
+                show_create_private_group(null);
                 break;
             case R.id.item_create_group_public:
                 final Intent intent3 = new Intent(this, AddPublicGroupActivity.class);
@@ -2985,16 +2919,6 @@ public class MainActivity extends AppCompatActivity
             case R.id.item_join_group_public:
                 final Intent intent4 = new Intent(this, JoinPublicGroupActivity.class);
                 startActivityForResult(intent4, JoinPublicGroupActivity_ID);
-                break;
-            case R.id.item_join_khandaq_community:
-                if (is_tox_started)
-                {
-                    JoinPublicGroupActivity.show_join_public_group_activity(this, KHANDAQ_COMMUNITY_GROUPID);
-                }
-                else
-                {
-                    display_toast_with_context_custom_duration(this, "Tox not yet started!", 2000, 100);
-                }
                 break;
         }
         return true;
@@ -3013,11 +2937,11 @@ public class MainActivity extends AppCompatActivity
                 {
                     // final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     // final String human_datetime = df.format(new Date(file.lastModified()));
-                    Log.i(TAG, "VFS:f:" + parent + "/" + file.getName() + " bytes=" + file.length());
+                    HelperGeneric.logI(TAG, "VFS:f:" + parent + "/" + file.getName() + " bytes=" + file.length());
                 }
                 else if (file.isDirectory())
                 {
-                    Log.i(TAG, "VFS:d:" + parent + "/" + file.getName() + "/");
+                    HelperGeneric.logI(TAG, "VFS:d:" + parent + "/" + file.getName() + "/");
                     vfs_listFilesAndFilesSubDirectories(file.getAbsolutePath(), depth + 1,
                                                         parent + "/" + file.getName());
                 }
@@ -3034,11 +2958,11 @@ public class MainActivity extends AppCompatActivity
                 {
                     // final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     // final String human_datetime = df.format(new Date(file.lastModified()));
-                    Log.i(TAG, "VFS:f:" + parent + "/" + file.getName() + " bytes=" + file.length());
+                    HelperGeneric.logI(TAG, "VFS:f:" + parent + "/" + file.getName() + " bytes=" + file.length());
                 }
                 else if (file.isDirectory())
                 {
-                    Log.i(TAG, "VFS:d:" + parent + "/" + file.getName() + "/");
+                    HelperGeneric.logI(TAG, "VFS:d:" + parent + "/" + file.getName() + "/");
                     vfs_listFilesAndFilesSubDirectories(file.getAbsolutePath(), depth + 1,
                                                         parent + "/" + file.getName());
                 }
@@ -3050,7 +2974,7 @@ public class MainActivity extends AppCompatActivity
     // ------- for runtime permissions -------
     // ------- for runtime permissions -------
     // ------- for runtime permissions -------
-    @NeedsPermission({Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA})
+    @NeedsPermission({Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE})
     void dummyForPermissions001()
     {
     }
@@ -3159,7 +3083,7 @@ public class MainActivity extends AppCompatActivity
                                 }
 
                                 // remove "waiting for orbot view"
-                                Log.i(TAG, "waiting_for_orbot_info:+F99");
+                                HelperGeneric.logI(TAG, "waiting_for_orbot_info:+F99");
                                 orbot_is_really_running = true;
                                 HelperGeneric.waiting_for_orbot_info(false);
                             }
@@ -3192,7 +3116,7 @@ public class MainActivity extends AppCompatActivity
                                  PREF__ngc_audio_bitrate, PREF__ngc_audio_samplerate, PREF__ngc_audio_channels);
                         }
 
-                        Log.i(TAG, "set_all_conferences_inactive:002");
+                        HelperGeneric.logI(TAG, "set_all_conferences_inactive:002");
                         HelperConference.set_all_conferences_inactive();
                         tox_service_fg.tox_thread_start_fg();
                     }
@@ -3207,7 +3131,7 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "tox_thread_start:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "tox_thread_start:EE:" + e.getMessage());
         }
     }
 
@@ -3255,7 +3179,7 @@ public class MainActivity extends AppCompatActivity
     //        catch (Exception e)
     //        {
     //            e.printStackTrace();
-    //            Log.i(TAG, "stop_tox:EE:" + e.getMessage());
+    //            HelperGeneric.logI(TAG, "stop_tox:EE:" + e.getMessage());
     //        }
     //    }
 
@@ -3331,7 +3255,7 @@ public class MainActivity extends AppCompatActivity
                      PREF__force_udp_only_to_int, PREF__ngc_video_bitrate, PREF__ngc_video_max_quantizer,
                      PREF__ngc_audio_bitrate, PREF__ngc_audio_samplerate, PREF__ngc_audio_channels);
 
-                Log.i(TAG, "set_all_conferences_inactive:001");
+                HelperGeneric.logI(TAG, "set_all_conferences_inactive:001");
                 HelperConference.set_all_conferences_inactive();
                 tox_service_fg.tox_thread_start_fg();
             }
@@ -3390,18 +3314,32 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onPause()
     {
-        Log.i(TAG, "onPause");
+        HelperGeneric.logI(TAG, "onPause");
         main_activity_resumed = false;
         super.onPause();
-        MainActivity.friend_list_fragment = null;
+    }
+
+    private void refreshFriendListFragmentReferences()
+    {
+        if (chatsFragment != null)
+        {
+            MainActivity.friend_list_fragment = chatsFragment;
+        }
+        if (contactsFragment != null)
+        {
+            MainActivity.contacts_list_fragment = contactsFragment;
+        }
     }
 
     @Override
     protected void onResume()
     {
-        Log.i(TAG, "onResume");
+        HelperGeneric.logI(TAG, "onResume");
         main_activity_resumed = true;
         super.onResume();
+        refreshFriendListFragmentReferences();
+        ProfileTabConnectionIndicator.updateAsync();
+        MainHeaderBrandingHelper.update(this);
 
         if (main_handler_s != null)
         {
@@ -3411,6 +3349,11 @@ public class MainActivity extends AppCompatActivity
                 public void run()
                 {
                     HelperMsgNotification.consume_pending_open_chat(MainActivity.this);
+                    if (is_tox_started)
+                    {
+                        resume_stalled_incoming_filetransfers();
+                        TrifaToxService.wakeup_tox_thread();
+                    }
                 }
             });
         }
@@ -3444,12 +3387,13 @@ public class MainActivity extends AppCompatActivity
         PREF__conference_show_system_messages = settings.getBoolean("conference_show_system_messages", false);
         PREF__X_battery_saving_mode = settings.getBoolean("X_battery_saving_mode", false);
         PREF__X_misc_button_enabled = settings.getBoolean("X_misc_button_enabled", false);
-        PREF__local_discovery_enabled = settings.getBoolean("local_discovery_enabled", false);
+        PREF__local_discovery_enabled = settings.getBoolean("local_discovery_enabled", true);
         PREF__force_udp_only = settings.getBoolean("force_udp_only", false);
         PREF__use_incognito_keyboard = settings.getBoolean("use_incognito_keyboard", true);
         PREF__speakerphone_tweak = settings.getBoolean("speakerphone_tweak", false);
         PREF__mic_gain_factor_toggle = settings.getBoolean("mic_gain_factor_toggle", false);
         PREF__window_security = settings.getBoolean("window_security", false);
+        PREF__send_read_receipts = settings.getBoolean("pref_send_read_receipts", true);
         PREF__use_native_audio_play = settings.getBoolean("X_use_native_audio_play", true);
         PREF__tox_set_do_not_sync_av = settings.getBoolean("X_tox_set_do_not_sync_av", false);
         PREF__use_H264_hw_encoding = settings.getBoolean("use_H264_hw_encoding", false);
@@ -3468,7 +3412,7 @@ public class MainActivity extends AppCompatActivity
             else
             {
                 PREF__X_battery_saving_timeout = Integer.parseInt(settings.getString("X_battery_saving_timeout", "15"));
-                Log.i(TAG, "PREF__X_battery_saving_timeout:2:=" + PREF__X_battery_saving_timeout);
+                HelperGeneric.logI(TAG, "PREF__X_battery_saving_timeout:2:=" + PREF__X_battery_saving_timeout);
             }
         }
         catch (Exception e)
@@ -3538,7 +3482,7 @@ public class MainActivity extends AppCompatActivity
         try
         {
             PREF_mic_gain_factor = (float) (settings.getInt("mic_gain_factor", 1));
-            Log.i(TAG, "PREF_mic_gain_factor:1=" + PREF_mic_gain_factor);
+            HelperGeneric.logI(TAG, "PREF_mic_gain_factor:1=" + PREF_mic_gain_factor);
             // PREF_mic_gain_factor = PREF_mic_gain_factor + 1.0f;
 
             if (PREF_mic_gain_factor < 1.0f)
@@ -3549,12 +3493,12 @@ public class MainActivity extends AppCompatActivity
             {
                 PREF_mic_gain_factor = 30.0f;
             }
-            Log.i(TAG, "PREF_mic_gain_factor:2=" + PREF_mic_gain_factor);
+            HelperGeneric.logI(TAG, "PREF_mic_gain_factor:2=" + PREF_mic_gain_factor);
         }
         catch (Exception e)
         {
             PREF_mic_gain_factor = 1.0f;
-            Log.i(TAG, "PREF_mic_gain_factor:E=" + PREF_mic_gain_factor);
+            HelperGeneric.logI(TAG, "PREF_mic_gain_factor:E=" + PREF_mic_gain_factor);
             e.printStackTrace();
         }
 
@@ -3661,6 +3605,23 @@ public class MainActivity extends AppCompatActivity
         }
 
 
+        // NOTE (Khandaq): this migration sets PREF__udp_enabled=false ("TCP mode"), but it is
+        // currently a NO-OP at the transport level: the native layer in create_tox()
+        // (jni-c-toxcore.c, "options.udp_enabled = true;") unconditionally re-enables UDP, ignoring
+        // this flag. So the shipped libjni-c-toxcore.so ALWAYS runs UDP-enabled regardless of what we
+        // set here. That is actually acceptable today: NGC public-group discovery (the onion DHT
+        // announce-lookup a chat-id join depends on) needs UDP, and pure-TCP discovery is an unsolved
+        // toxcore-level gap. The real consequence is for joiners on UDP-blocked networks (mobile
+        // carriers / some regions): their chat-id join cannot complete (see HelperGroup
+        // .maybe_hint_udp_blocked) — the working bypass is a friend-assisted invite. The pref is kept
+        // so a future rebuilt .so that honors it can flip transport without another migration.
+        // Do NOT trust this flag to mean "TCP-only" until jni-c-toxcore.c:699 is rebuilt and shipped.
+        if (!settings.getBoolean("khandaq_ngc_udp_tcp_v3", false))
+        {
+            settings.edit().putBoolean("udp_enabled", false).
+                    putBoolean("khandaq_ngc_udp_tcp_v3", true).apply();
+        }
+
         boolean tmp1 = settings.getBoolean("udp_enabled", false);
 
         if (tmp1)
@@ -3672,17 +3633,14 @@ public class MainActivity extends AppCompatActivity
             PREF__udp_enabled = 0;
         }
 
-        PREF__higher_video_quality = 0;
-        GLOBAL_VIDEO_BITRATE = LOWER_GLOBAL_VIDEO_BITRATE;
-
         try
         {
-            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "0"));
+            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "1"));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__video_call_quality = 0;
+            PREF__video_call_quality = 1;
         }
 
         try
@@ -3731,8 +3689,8 @@ public class MainActivity extends AppCompatActivity
         // ------- FIXED -------
 
 
-        Log.i(TAG, "PREF__UV_reversed:2=" + PREF__UV_reversed);
-        Log.i(TAG, "PREF__min_audio_samplingrate_out:2=" + PREF__min_audio_samplingrate_out);
+        HelperGeneric.logI(TAG, "PREF__UV_reversed:2=" + PREF__UV_reversed);
+        HelperGeneric.logI(TAG, "PREF__min_audio_samplingrate_out:2=" + PREF__min_audio_samplingrate_out);
 
         try
         {
@@ -3776,6 +3734,16 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
+            PREF__attachment_download_mode = settings.getInt("attachment_download_mode", 2);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            PREF__attachment_download_mode = 2;
+        }
+
+        try
+        {
             PREF__X_zoom_incoming_video = settings.getBoolean("X_zoom_incoming_video", false);
         }
         catch (Exception e)
@@ -3801,13 +3769,15 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__video_cam_resolution = Integer.parseInt(settings.getString("video_cam_resolution", "" + 0));
+            PREF__video_cam_resolution = Integer.parseInt(settings.getString("video_cam_resolution", "" + 1));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__video_cam_resolution = 0;
+            PREF__video_cam_resolution = 1;
         }
+
+        HelperGeneric.applyGlobalVideoBitrateFromPrefs(this);
 
         try
         {
@@ -3817,6 +3787,8 @@ public class MainActivity extends AppCompatActivity
         {
             PREF__dark_mode_pref = 0;
         }
+
+        MainApplication.applyDarkModeFromPref(settings.getString("dark_mode_pref", "0"));
 
         if (PREF__dark_mode_pref == 0)
         {
@@ -4007,7 +3979,10 @@ public class MainActivity extends AppCompatActivity
 
         update_main_profile_bar();
 
-        spinner_own_status.setSelection(global_tox_self_status);
+        if (spinner_own_status != null)
+        {
+            spinner_own_status.setSelection(global_tox_self_status);
+        }
         // just in case, update own activity pointer!
         main_activity_s = this;
 
@@ -4066,14 +4041,14 @@ public class MainActivity extends AppCompatActivity
         }
         catch (Exception ee2)
         {
-            Log.i(TAG, "NOTIFICATION_TOKEN_DB_KEY_NEED_ACK:EE03:" + ee2.getMessage());
+            HelperGeneric.logI(TAG, "NOTIFICATION_TOKEN_DB_KEY_NEED_ACK:EE03:" + ee2.getMessage());
         }
     }
 
     @Override
     protected void onNewIntent(Intent i)
     {
-        Log.i(TAG, "onNewIntent:i=" + i);
+        HelperGeneric.logI(TAG, "onNewIntent:i=" + i);
         super.onNewIntent(i);
         setIntent(i);
         final String open_chat_key = HelperMsgNotification.extract_open_chat_key_from_intent(i);
@@ -4097,14 +4072,12 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onBackPressed()
     {
-        if (main_drawer.isDrawerOpen())
+        if (currentMainTab == R.id.bottom_nav_settings && settingsFragment != null && settingsFragment.handleBackPress())
         {
-            main_drawer.closeDrawer();
+            return;
         }
-        else
-        {
-            super.onBackPressed();
-        }
+
+        super.onBackPressed();
     }
 
     // -- this is for incoming video --
@@ -4138,9 +4111,9 @@ public class MainActivity extends AppCompatActivity
             {
                 if (!PREF__NO_RECYCLE_VIDEO_FRAME_BITMAP)
                 {
-                    Log.i(TAG, "video_frame_image.recycle:start");
+                    HelperGeneric.logI(TAG, "video_frame_image.recycle:start");
                     video_frame_image.recycle();
-                    Log.i(TAG, "video_frame_image.recycle:end");
+                    HelperGeneric.logI(TAG, "video_frame_image.recycle:end");
                 }
             }
 
@@ -4160,9 +4133,9 @@ public class MainActivity extends AppCompatActivity
         int frame_width_px = (int) Math.max(frame_width_px1, Math.abs(ystride));
         int frame_height_px = (int) frame_height_px1;
         buffer_size_in_bytes = y_layer_size + v_layer_size + u_layer_size;
-        Log.i(TAG, "YUV420 frame w1=" + frame_width_px1 + " h1=" + frame_height_px1 + " bytes=" + buffer_size_in_bytes);
-        Log.i(TAG, "YUV420 frame w=" + frame_width_px + " h=" + frame_height_px + " bytes=" + buffer_size_in_bytes);
-        Log.i(TAG, "YUV420 frame ystride=" + ystride + " ustride=" + ustride + " vstride=" + vstride);
+        HelperGeneric.logI(TAG, "YUV420 frame w1=" + frame_width_px1 + " h1=" + frame_height_px1 + " bytes=" + buffer_size_in_bytes);
+        HelperGeneric.logI(TAG, "YUV420 frame w=" + frame_width_px + " h=" + frame_height_px + " bytes=" + buffer_size_in_bytes);
+        HelperGeneric.logI(TAG, "YUV420 frame ystride=" + ystride + " ustride=" + ustride + " vstride=" + vstride);
         video_buffer_1 = ByteBuffer.allocateDirect(buffer_size_in_bytes);
         set_JNI_video_buffer(video_buffer_1, frame_width_px, frame_height_px);
         RenderScript rs = RenderScript.create(context_s);
@@ -4288,6 +4261,8 @@ public class MainActivity extends AppCompatActivity
     public static native long tox_friend_by_public_key(@NonNull String friend_public_key_string);
 
     public static native String tox_friend_get_name(long friend_number);
+
+    public static native String tox_friend_get_status_message(long friend_number);
 
     public static native String tox_friend_get_public_key(long friend_number);
 
@@ -4473,6 +4448,28 @@ public class MainActivity extends AppCompatActivity
 
     public static native int tox_group_self_set_name(long group_number, @NonNull String my_peer_name);
 
+    public static native String tox_group_self_get_name(long group_number);
+
+    /** Prebuilt lib may lack this JNI symbol — never crash callers. */
+    private static volatile boolean tox_group_self_get_name_jni_available = true;
+
+    public static String tox_group_self_get_name_safe(final long group_number)
+    {
+        if (!tox_group_self_get_name_jni_available || group_number < 0)
+        {
+            return null;
+        }
+        try
+        {
+            return tox_group_self_get_name(group_number);
+        }
+        catch (Throwable ignored)
+        {
+            tox_group_self_get_name_jni_available = false;
+            return null;
+        }
+    }
+
     public static native String tox_group_self_get_public_key(long group_number);
 
     public static native int tox_group_self_get_role(long group_number);
@@ -4490,6 +4487,14 @@ public class MainActivity extends AppCompatActivity
     public static native int tox_group_get_peer_limit(long group_number);
 
     public static native int tox_group_founder_set_peer_limit(long group_number, int max_peers);
+
+    public static native int tox_group_founder_set_password(long group_number, @Nullable String password);
+
+    public static native int tox_group_founder_set_topic_lock(long group_number, int topic_lock);
+
+    public static native int tox_group_founder_set_privacy_state(long group_number, int privacy_state);
+
+    public static native int tox_group_get_topic_lock(long group_number);
 
     public static native long tox_group_offline_peer_count(long group_number);
 
@@ -4792,7 +4797,7 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        Log.i(TAG, "toxav_call:from=" + friend_number + " audio=" + audio_enabled + " video=" + video_enabled);
+        HelperGeneric.logI(TAG, "toxav_call:from=" + friend_number + " audio=" + audio_enabled + " video=" + video_enabled);
         final long fn = friend_number;
         final int f_audio_enabled = audio_enabled;
         final int f_video_enabled = video_enabled;
@@ -4805,30 +4810,31 @@ public class MainActivity extends AppCompatActivity
                 {
                     if (Callstate.state == 0)
                     {
-                        Log.i(TAG, "CALL:start:show activity");
+                        HelperGeneric.logI(TAG, "CALL:start:show activity");
 
-                        if (PREF__use_software_aec)
+                        if (PREF__use_software_aec || f_video_enabled != 0)
                         {
-                            set_aec_active(0); // --ACTIVE--
+                            set_aec_active(1);
                         }
                         else
                         {
                             set_aec_active(0);
                         }
+                        set_gainprocessing_active(1);
 
                         if (f_video_enabled == 0)
                         {
                             Callstate.audio_call = true;
                             set_debug_text("_AUDIO_");
 
-                            Log.i(TAG, "toxav_call:Callstate.audio_call = true");
+                            HelperGeneric.logI(TAG, "toxav_call:Callstate.audio_call = true");
                         }
                         else
                         {
                             Callstate.audio_call = false;
                             set_debug_text("VIDEO");
 
-                            Log.i(TAG, "toxav_call:Callstate.audio_call = false");
+                            HelperGeneric.logI(TAG, "toxav_call:Callstate.audio_call = false");
                         }
 
                         Callstate.state = 1;
@@ -4837,7 +4843,7 @@ public class MainActivity extends AppCompatActivity
                         Callstate.call_first_video_frame_received = -1;
                         Callstate.call_first_audio_frame_received = -1;
                         Callstate.call_start_timestamp = -1;
-                        Callstate.audio_speaker = true;
+                        Callstate.audio_speaker = (f_video_enabled != 0);
                         Callstate.other_audio_enabled = 1;
                         Callstate.other_video_enabled = 1;
                         Callstate.my_audio_enabled = 1;
@@ -4857,7 +4863,7 @@ public class MainActivity extends AppCompatActivity
                         catch (Exception e)
                         {
                         }
-                        Log.i(TAG, "friend_pubkey:set:003");
+                        HelperGeneric.logI(TAG, "friend_pubkey:set:003");
                         Callstate.friend_pubkey = HelperFriend.tox_friend_get_public_key__wrapper(fn);
                         Callstate.friend_alias_name = get_friend_name_from_pubkey(Callstate.friend_pubkey);
                         Callstate.other_audio_enabled = f_audio_enabled;
@@ -4872,7 +4878,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "CALL:start:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "CALL:start:EE:" + e.getMessage());
                 }
             }
         };
@@ -4901,10 +4907,10 @@ public class MainActivity extends AppCompatActivity
             int local_delta_correction = pts_delta - local_delta;
             int local_delta_correction_abs = Math.abs(local_delta - pts_delta);
 
-            Log.i(TAG, "V:pts_delta=" + pts_delta + " local_delta=" + local_delta + " local_delta_correction=" +
+            HelperGeneric.logI(TAG, "V:pts_delta=" + pts_delta + " local_delta=" + local_delta + " local_delta_correction=" +
                        local_delta_correction + " local_delta_correction_abs=" + local_delta_correction_abs);
 
-            Log.i(TAG, "V:pts=" + pts);
+            HelperGeneric.logI(TAG, "V:pts=" + pts);
 
             global_last_video_pts = pts;
             global_last_video_ts = ts1;
@@ -4934,10 +4940,10 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        // Log.i(TAG,
+        // HelperGeneric.logI(TAG,
         //      "---> VIDEO_FRAME_RATE_INCOMING w=" + frame_width_px + " h=" + frame_height_px + " ystride=" + ystride);
 
-        //        Log.i(TAG,
+        //        HelperGeneric.logI(TAG,
         //              "toxav_video_receive_frame:from=" + friend_number + " video width=" + frame_width_px + " video height=" +
         //              frame_height_px + " call_first_video_frame_received=" + Callstate.call_first_video_frame_received);
 
@@ -4945,7 +4951,7 @@ public class MainActivity extends AppCompatActivity
             (Callstate.frame_height_px != frame_height_px) || (Callstate.ystride != ystride) ||
             (Callstate.ustride != ustride) || (Callstate.vstride != vstride))
         {
-            //            Log.i(TAG, "toxav_video_receive_frame:from=" + friend_number + " video width=" + frame_width_px +
+            //            HelperGeneric.logI(TAG, "toxav_video_receive_frame:from=" + friend_number + " video width=" + frame_width_px +
             //                       " video height=" + frame_height_px);
             Callstate.call_first_video_frame_received = System.currentTimeMillis();
             last_video_frame_received = System.currentTimeMillis();
@@ -4968,7 +4974,7 @@ public class MainActivity extends AppCompatActivity
             {
                 VIDEO_FRAME_RATE_INCOMING = (int) ((((float) count_video_frame_received / ((float) (
                         (System.currentTimeMillis() - last_video_frame_received) / 1000.0f))) / 1.0f) + 0.5);
-                // Log.i(TAG, "VIDEO_FRAME_RATE_INCOMING=" + VIDEO_FRAME_RATE_INCOMING + " fps");
+                // HelperGeneric.logI(TAG, "VIDEO_FRAME_RATE_INCOMING=" + VIDEO_FRAME_RATE_INCOMING + " fps");
                 HelperGeneric.update_fps();
                 last_video_frame_received = System.currentTimeMillis();
                 count_video_frame_received = -1;
@@ -5084,8 +5090,8 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        Log.i(TAG, "toxav_call_state:INCOMING_CALL:from=" + friend_number + " state=" + a_TOXAV_FRIEND_CALL_STATE);
-        Log.i(TAG, "Callstate.tox_call_state:INCOMING_CALL=" + a_TOXAV_FRIEND_CALL_STATE + " old=" +
+        HelperGeneric.logI(TAG, "toxav_call_state:INCOMING_CALL:from=" + friend_number + " state=" + a_TOXAV_FRIEND_CALL_STATE);
+        HelperGeneric.logI(TAG, "Callstate.tox_call_state:INCOMING_CALL=" + a_TOXAV_FRIEND_CALL_STATE + " old=" +
                    Callstate.tox_call_state);
 
         if (Callstate.state == 1)
@@ -5097,7 +5103,7 @@ public class MainActivity extends AppCompatActivity
                  (TOXAV_FRIEND_CALL_STATE_SENDING_A.value + TOXAV_FRIEND_CALL_STATE_SENDING_V.value +
                   TOXAV_FRIEND_CALL_STATE_ACCEPTING_A.value + TOXAV_FRIEND_CALL_STATE_ACCEPTING_V.value)) > 0)
             {
-                Log.i(TAG, "toxav_call_state:from=" + friend_number + " call starting");
+                HelperGeneric.logI(TAG, "toxav_call_state:from=" + friend_number + " call starting");
                 Callstate.call_start_timestamp = System.currentTimeMillis();
                 Runnable myRunnable = new Runnable()
                 {
@@ -5129,7 +5135,7 @@ public class MainActivity extends AppCompatActivity
                     }
                 };
                 HelperCall.postToCallActivity(myRunnable);
-                Log.i(TAG, "on_call_started_actions:02");
+                HelperGeneric.logI(TAG, "on_call_started_actions:02");
                 on_call_started_actions();
 
                 if (Callstate.audio_call)
@@ -5139,20 +5145,20 @@ public class MainActivity extends AppCompatActivity
             }
             else if ((a_TOXAV_FRIEND_CALL_STATE & (TOXAV_FRIEND_CALL_STATE_FINISHED.value)) > 0)
             {
-                Log.i(TAG, "toxav_call_state:from=" + friend_number + " call ending(1)");
+                HelperGeneric.logI(TAG, "toxav_call_state:from=" + friend_number + " call ending(1)");
                 org.khandaq.messenger.HelperCallNotification.cancel(context_s);
                 CallAudioService.stop_me(false);
             }
             else if ((old_value > TOXAV_FRIEND_CALL_STATE_NONE.value) &&
                      (a_TOXAV_FRIEND_CALL_STATE == TOXAV_FRIEND_CALL_STATE_NONE.value))
             {
-                Log.i(TAG, "toxav_call_state:from=" + friend_number + " call ending(2)");
+                HelperGeneric.logI(TAG, "toxav_call_state:from=" + friend_number + " call ending(2)");
                 org.khandaq.messenger.HelperCallNotification.cancel(context_s);
                 CallAudioService.stop_me(false);
             }
             else if ((a_TOXAV_FRIEND_CALL_STATE & (TOXAV_FRIEND_CALL_STATE_ERROR.value)) > 0)
             {
-                Log.i(TAG, "toxav_call_state:from=" + friend_number + " call ERROR(3)");
+                HelperGeneric.logI(TAG, "toxav_call_state:from=" + friend_number + " call ERROR(3)");
                 CallAudioService.stop_me(false);
             }
         }
@@ -5166,7 +5172,7 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        // Log.i(TAG,
+        // HelperGeneric.logI(TAG,
         //       "toxav_bit_rate_status:from=" + friend_number + " audio_bit_rate=" + audio_bit_rate + " video_bit_rate=" +
         //      video_bit_rate);
 
@@ -5196,17 +5202,15 @@ public class MainActivity extends AppCompatActivity
                 {
                     try
                     {
-                        // HINT: disabled (for VP8 this does not work properly anyway)
-                        // set only video bitrate according to suggestion from c-toxcore
-                        // Callstate.video_bitrate = video_bit_rate_;
-                        // toxav_bit_rate_set(friend_number_, Callstate.audio_bitrate, video_bit_rate_);
+                        // Apply toxcore suggested bitrate with quality/network bounds
+                        HelperGeneric.adaptVideoBitrateFromSuggestion(video_bit_rate_);
                         HelperGeneric.update_bitrates();
-                        Log.i(TAG, "toxav_bit_rate_status:CALL:toxav_bit_rate_set");
+                        HelperGeneric.logI(TAG, "toxav_bit_rate_status:CALL:toxav_bit_rate_set");
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "toxav_bit_rate_status:CALL:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "toxav_bit_rate_status:CALL:EE:" + e.getMessage());
                     }
                 }
             };
@@ -5222,42 +5226,42 @@ public class MainActivity extends AppCompatActivity
 
     static void android_toxav_callback_call_comm_cb_method(long friend_number, long a_TOXAV_CALL_COMM_INFO, long comm_number)
     {
-        // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
+        // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
         if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_DECODER_IN_USE_VP8.value)
         {
-            // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:3:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
+            // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:3:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
             Callstate.video_in_codec = VIDEO_CODEC_VP8;
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_DECODER_IN_USE_H264.value)
         {
-            // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:4:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
+            // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:4:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
             Callstate.video_in_codec = VIDEO_CODEC_H264;
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_DECODER_IN_USE_H265.value)
         {
-            // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:4:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
+            // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:4:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
             Callstate.video_in_codec = VIDEO_CODEC_H265;
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_ENCODER_IN_USE_VP8.value)
         {
             Callstate.video_out_codec = VIDEO_CODEC_VP8;
-            // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:1:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
+            // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:1:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_ENCODER_IN_USE_H264.value)
         {
             Callstate.video_out_codec = VIDEO_CODEC_H264;
-            // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:2:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
+            // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:2:" + a_TOXAV_CALL_COMM_INFO + ":" + comm_number);
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE.value)
         {
             Callstate.video_in_bitrate = comm_number;
-            // Log.i(TAG,
+            // HelperGeneric.logI(TAG,
             //      "android_toxav_callback_call_comm_cb_method:TOXAV_CALL_COMM_DECODER_CURRENT_BITRATE:" + comm_number);
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE.value)
         {
             Callstate.video_bitrate = comm_number;
-            // Log.i(TAG,
+            // HelperGeneric.logI(TAG,
             //      "android_toxav_callback_call_comm_cb_method:TOXAV_CALL_COMM_ENCODER_CURRENT_BITRATE:" + comm_number);
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_PLAY_BUFFER_ENTRIES.value)
@@ -5273,7 +5277,7 @@ public class MainActivity extends AppCompatActivity
             else
             {
                 Callstate.play_buffer_entries = (int) comm_number;
-                // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:play_buffer_entries=:" + comm_number);
+                // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:play_buffer_entries=:" + comm_number);
             }
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_NETWORK_ROUND_TRIP_MS.value)
@@ -5289,7 +5293,7 @@ public class MainActivity extends AppCompatActivity
             else
             {
                 Callstate.round_trip_time = comm_number;
-                // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:round_trip_time=:" + Callstate.round_trip_time);
+                // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:round_trip_time=:" + Callstate.round_trip_time);
             }
         }
         else if (a_TOXAV_CALL_COMM_INFO == TOXAV_CALL_COMM_PLAY_DELAY.value)
@@ -5305,7 +5309,7 @@ public class MainActivity extends AppCompatActivity
             else
             {
                 Callstate.play_delay = comm_number;
-                // Log.i(TAG, "android_toxav_callback_call_comm_cb_method:play_delay=:" + Callstate.play_delay);
+                // HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:play_delay=:" + Callstate.play_delay);
             }
         }
 
@@ -5316,7 +5320,7 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "android_toxav_callback_call_comm_cb_method:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "android_toxav_callback_call_comm_cb_method:EE:" + e.getMessage());
         }
     }
 
@@ -5349,11 +5353,11 @@ public class MainActivity extends AppCompatActivity
             // audio_to_video_out_of_sync > 0  ... audio is too early
             int audio_to_video_out_of_sync = (int) (pts - global_last_video_pts) - audio_pkt_to_video_pkt_delta;
 
-            Log.i(TAG, "pts_delta=" + pts_delta + " local_delta=" + local_delta + " local_delta_correction=" +
+            HelperGeneric.logI(TAG, "pts_delta=" + pts_delta + " local_delta=" + local_delta + " local_delta_correction=" +
                        local_delta_correction + " local_delta_correction_abs=" + local_delta_correction_abs);
-            Log.i(TAG, "audio_pkt_to_video_pkt_delta=" + audio_pkt_to_video_pkt_delta);
+            HelperGeneric.logI(TAG, "audio_pkt_to_video_pkt_delta=" + audio_pkt_to_video_pkt_delta);
 
-            Log.i(TAG, "A:pts=" + pts);
+            HelperGeneric.logI(TAG, "A:pts=" + pts);
 
             global_last_audio_pts = pts;
             global_last_audio_ts = ts1;
@@ -5365,7 +5369,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_toxav_callback_audio_receive_frame_cb_method(long friend_number, long sample_count, int channels, long sampling_rate)
     {
-        // Log.i(TAG,
+        // HelperGeneric.logI(TAG,
         //      "audio_play:android_toxav_callback_audio_receive_frame_cb_method:" + friend_number + " " + sample_count +
         //      " " + channels + " " + sampling_rate);
 
@@ -5380,7 +5384,7 @@ public class MainActivity extends AppCompatActivity
             if (Callstate.call_first_audio_frame_received == -1)
             {
                 sampling_rate_ = sampling_rate;
-                Log.i(TAG, "audio_play:read:incoming sampling_rate[0]=" + sampling_rate + " kHz");
+                HelperGeneric.logI(TAG, "audio_play:read:incoming sampling_rate[0]=" + sampling_rate + " kHz");
                 channels_ = channels;
             }
 
@@ -5391,9 +5395,9 @@ public class MainActivity extends AppCompatActivity
         {
             Callstate.call_first_audio_frame_received = System.currentTimeMillis();
             sampling_rate_ = sampling_rate;
-            Log.i(TAG, "audio_play:read:incoming sampling_rate[1]=" + sampling_rate + " Hz");
+            HelperGeneric.logI(TAG, "audio_play:read:incoming sampling_rate[1]=" + sampling_rate + " Hz");
             channels_ = channels;
-            Log.i(TAG,
+            HelperGeneric.logI(TAG,
                   "audio_play:read:init sample_count=" + sample_count + " channels=" + channels + " sampling_rate=" +
                   sampling_rate);
             temp_string_a =
@@ -5404,8 +5408,8 @@ public class MainActivity extends AppCompatActivity
             AudioReceiver.buffer_size = ((int) ((48000 * 2) * 2)) * audio_out_buffer_mult;  // TODO: this is really bad
             AudioReceiver.sleep_millis = (int) (((float) sample_count / (float) sampling_rate) * 1000.0f *
                                                 0.9f); // TODO: this is bad also
-            Log.i(TAG, "audio_play:read:init buffer_size=" + AudioReceiver.buffer_size);
-            Log.i(TAG, "audio_play:read:init sleep_millis=" + AudioReceiver.sleep_millis);
+            HelperGeneric.logI(TAG, "audio_play:read:init buffer_size=" + AudioReceiver.buffer_size);
+            HelperGeneric.logI(TAG, "audio_play:read:init sleep_millis=" + AudioReceiver.sleep_millis);
 
             // reset audio in buffers
             try
@@ -5424,7 +5428,7 @@ public class MainActivity extends AppCompatActivity
             if (audio_buffer_2 == null)
             {
                 audio_buffer_2 = ByteBuffer.allocateDirect(AudioReceiver.buffer_size);
-                Log.i(TAG, "audio_play:audio_buffer_2[" + 0 + "] size=" + AudioReceiver.buffer_size);
+                HelperGeneric.logI(TAG, "audio_play:audio_buffer_2[" + 0 + "] size=" + AudioReceiver.buffer_size);
 
                 // audio_buffer_play = ByteBuffer.allocateDirect(AudioReceiver.buffer_size);
                 // always write to buffer[0] in the pipeline !! -----------
@@ -5435,10 +5439,10 @@ public class MainActivity extends AppCompatActivity
             int frame_size_ = (int) ((sample_count * 1000) / sampling_rate);
 
             // always write to buffer[0] in the pipeline !! -----------
-            Log.i(TAG, "audio_play:audio_buffer_play size=" + AudioReceiver.buffer_size);
+            HelperGeneric.logI(TAG, "audio_play:audio_buffer_play size=" + AudioReceiver.buffer_size);
         }
 
-        // Log.i(TAG, "audio_play:NativeAudio Play:001a:" + NativeAudio.channel_count + " " + channels_);
+        // HelperGeneric.logI(TAG, "audio_play:NativeAudio Play:001a:" + NativeAudio.channel_count + " " + channels_);
 
         debug__audio_pkt_incoming++;
 
@@ -5452,7 +5456,7 @@ public class MainActivity extends AppCompatActivity
             channels_ = channels;
         }
 
-        // Log.i(TAG, "audio_play:NativeAudio Play:001b:" + NativeAudio.channel_count + " " + channels_);
+        // HelperGeneric.logI(TAG, "audio_play:NativeAudio Play:001b:" + NativeAudio.channel_count + " " + channels_);
 
         if (sample_count == 0)
         {
@@ -5472,7 +5476,7 @@ public class MainActivity extends AppCompatActivity
                         try
                         {
                             Thread.sleep(20);
-                            Log.i(TAG, "audio_play:sleep --------");
+                            HelperGeneric.logI(TAG, "audio_play:sleep --------");
                         }
                         catch (Exception e)
                         {
@@ -5481,13 +5485,13 @@ public class MainActivity extends AppCompatActivity
                     }
                 }
 
-                // Log.i(TAG, "audio_play:NativeAudio Play:001c:" + NativeAudio.channel_count + " " + channels_);
+                // HelperGeneric.logI(TAG, "audio_play:NativeAudio Play:001c:" + NativeAudio.channel_count + " " + channels_);
                 if ((NativeAudio.sampling_rate != (int) sampling_rate_) || (NativeAudio.channel_count != channels_))
                 {
-                    Log.i(TAG, "audio_play:values_changed");
+                    HelperGeneric.logI(TAG, "audio_play:values_changed");
                     NativeAudio.sampling_rate = (int) sampling_rate_;
                     NativeAudio.channel_count = channels_;
-                    Log.i(TAG, "audio_play:NativeAudio restart Engine");
+                    HelperGeneric.logI(TAG, "audio_play:NativeAudio restart Engine");
                     // TODO: locking? or something like that
                     NativeAudio.restartNativeAudioPlayEngine((int) sampling_rate_, channels_);
                 }
@@ -5508,7 +5512,7 @@ public class MainActivity extends AppCompatActivity
                                                                                    NativeAudio.n_buf_size_in_bytes -
                                                                                    NativeAudio.n_bytes_in_buffer[NativeAudio.n_cur_buf]));
 
-                    //Log.i(TAG,
+                    //HelperGeneric.logI(TAG,
                     //      "audio_play:play_buffers:003:n_audio_in_buffer_max_count=" + n_audio_in_buffer_max_count +
                     //      " n_cur_buf=" + NativeAudio.n_cur_buf + " n_bytes_in_buffer=" +
                     //      NativeAudio.n_bytes_in_buffer[NativeAudio.n_cur_buf]);
@@ -5575,7 +5579,7 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "audio_play:EE3:" + e.getMessage());
+            HelperGeneric.logI(TAG, "audio_play:EE3:" + e.getMessage());
         }
     }
 
@@ -5596,9 +5600,9 @@ public class MainActivity extends AppCompatActivity
         {
             Callstate.call_first_audio_frame_received = System.currentTimeMillis();
             sampling_rate_ = sampling_rate;
-            Log.i(TAG, "group_audio_receive_frame:read:incoming sampling_rate[1]=" + sampling_rate + " Hz");
+            HelperGeneric.logI(TAG, "group_audio_receive_frame:read:incoming sampling_rate[1]=" + sampling_rate + " Hz");
             channels_ = channels;
-            Log.i(TAG, "group_audio_receive_frame:read:init sample_count=" + sample_count + " channels=" + channels +
+            HelperGeneric.logI(TAG, "group_audio_receive_frame:read:init sample_count=" + sample_count + " channels=" + channels +
                        " sampling_rate=" + sampling_rate);
             temp_string_a =
                     "" + (int) ((Callstate.call_first_audio_frame_received - Callstate.call_start_timestamp) / 1000) +
@@ -5607,8 +5611,8 @@ public class MainActivity extends AppCompatActivity
             AudioReceiver.buffer_size = ((int) ((48000 * 2) * 2)) * audio_out_buffer_mult; // TODO: this is really bad
             AudioReceiver.sleep_millis = (int) (((float) sample_count / (float) sampling_rate) * 1000.0f *
                                                 0.9f); // TODO: this is bad also
-            Log.i(TAG, "group_audio_receive_frame:read:init buffer_size=" + AudioReceiver.buffer_size);
-            Log.i(TAG, "group_audio_receive_frame:read:init sleep_millis=" + AudioReceiver.sleep_millis);
+            HelperGeneric.logI(TAG, "group_audio_receive_frame:read:init buffer_size=" + AudioReceiver.buffer_size);
+            HelperGeneric.logI(TAG, "group_audio_receive_frame:read:init sleep_millis=" + AudioReceiver.sleep_millis);
             // reset audio in buffers
             try
             {
@@ -5625,7 +5629,7 @@ public class MainActivity extends AppCompatActivity
             if (audio_buffer_2 == null)
             {
                 audio_buffer_2 = ByteBuffer.allocateDirect(AudioReceiver.buffer_size);
-                Log.i(TAG, "group_audio_receive_frame:audio_buffer_2[" + 0 + "] size=" + AudioReceiver.buffer_size);
+                HelperGeneric.logI(TAG, "group_audio_receive_frame:audio_buffer_2[" + 0 + "] size=" + AudioReceiver.buffer_size);
 
                 // audio_buffer_play = ByteBuffer.allocateDirect(AudioReceiver.buffer_size);
                 // always write to buffer[0] in the pipeline !! -----------
@@ -5636,7 +5640,7 @@ public class MainActivity extends AppCompatActivity
             int frame_size_ = (int) ((sample_count * 1000) / sampling_rate);
 
             // always write to buffer[0] in the pipeline !! -----------
-            Log.i(TAG, "group_audio_receive_frame:audio_buffer_play size=" + AudioReceiver.buffer_size);
+            HelperGeneric.logI(TAG, "group_audio_receive_frame:audio_buffer_play size=" + AudioReceiver.buffer_size);
         }
 
         if (sampling_rate_ != sampling_rate)
@@ -5667,7 +5671,7 @@ public class MainActivity extends AppCompatActivity
                         try
                         {
                             Thread.sleep(20);
-                            Log.i(TAG, "group_audio_receive_frame:sleep --------");
+                            HelperGeneric.logI(TAG, "group_audio_receive_frame:sleep --------");
                         }
                         catch (Exception e)
                         {
@@ -5676,13 +5680,13 @@ public class MainActivity extends AppCompatActivity
                     }
                 }
 
-                // Log.i(TAG, "audio_play:NativeAudio Play:001");
+                // HelperGeneric.logI(TAG, "audio_play:NativeAudio Play:001");
                 if ((NativeAudio.sampling_rate != (int) sampling_rate_) || (NativeAudio.channel_count != channels_))
                 {
-                    Log.i(TAG, "group_audio_receive_frame:values_changed");
+                    HelperGeneric.logI(TAG, "group_audio_receive_frame:values_changed");
                     NativeAudio.sampling_rate = (int) sampling_rate_;
                     NativeAudio.channel_count = channels_;
-                    Log.i(TAG, "group_audio_receive_frame:NativeAudio restart Engine");
+                    HelperGeneric.logI(TAG, "group_audio_receive_frame:NativeAudio restart Engine");
                     // TODO: locking? or something like that
                     NativeAudio.restartNativeAudioPlayEngine((int) sampling_rate_, channels_);
                 }
@@ -5762,7 +5766,7 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "group_audio_receive_frame:EE3:" + e.getMessage());
+            HelperGeneric.logI(TAG, "group_audio_receive_frame:EE3:" + e.getMessage());
         }
     }
 
@@ -5778,7 +5782,7 @@ public class MainActivity extends AppCompatActivity
     static void android_tox_callback_self_connection_status_cb_method(int a_TOX_CONNECTION)
     {
         final int connection_status_prev = global_self_connection_status;
-        Log.i(TAG, "self_connection_status:" + a_TOX_CONNECTION);
+        HelperGeneric.logI(TAG, "self_connection_status:" + a_TOX_CONNECTION);
         global_self_connection_status = a_TOX_CONNECTION;
         TrifaToxService.write_debug_file("CB_SELF_CONN_STATUS__cstatus:" + a_TOX_CONNECTION + "_b:" + bootstrapping);
 
@@ -5793,14 +5797,28 @@ public class MainActivity extends AppCompatActivity
             append_logger_msg(TAG + "::" + "went OFFLINE:self connection status=" + a_TOX_CONNECTION);
         }
 
+        if (a_TOX_CONNECTION != 0)
+        {
+            ConnectionQualityMonitor.get().onToxConnected();
+        }
+        else
+        {
+            ConnectionQualityMonitor.get().onToxDisconnected();
+        }
+
+        if ((connection_status_prev == TOX_CONNECTION_NONE.value) && (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value))
+        {
+            DeliveryRestoreCoordinator.onConnectionRestored();
+        }
+
         if (bootstrapping)
         {
-            Log.i(TAG, "self_connection_status:bootstrapping=true");
+            HelperGeneric.logI(TAG, "self_connection_status:bootstrapping=true");
 
             // we just went online
             if (a_TOX_CONNECTION != 0)
             {
-                Log.i(TAG, "self_connection_status:bootstrapping set to false");
+                HelperGeneric.logI(TAG, "self_connection_status:bootstrapping set to false");
                 bootstrapping = false;
                 global_self_last_went_online_timestamp = System.currentTimeMillis();
                 global_self_last_went_offline_timestamp = -1;
@@ -5817,7 +5835,7 @@ public class MainActivity extends AppCompatActivity
                 global_self_last_went_online_timestamp = System.currentTimeMillis();
                 global_self_last_went_offline_timestamp = -1;
 
-                Log.i(TAG, "self_connection_status:went_online");
+                HelperGeneric.logI(TAG, "self_connection_status:went_online");
                 // TODO: stop any active calls
             }
             else
@@ -5829,29 +5847,38 @@ public class MainActivity extends AppCompatActivity
         // -- notification ------------------
         // -- notification ------------------
         tox_notification_change_wrapper(a_TOX_CONNECTION, "");
+        ProfileTabConnectionIndicator.updateAsync();
+        MainHeaderBrandingHelper.updateAsync();
         // -- notification ------------------
         // -- notification ------------------
     }
 
     static void android_tox_callback_friend_name_cb_method(long friend_number, String friend_name, long length)
     {
-        // Log.i(TAG, "friend_alias_name:friend:" + friend_number + " name:" + friend_alias_name);
-        FriendList f = main_get_friend(friend_number);
+        final Runnable work = () -> {
+            FriendList f = main_get_friend(friend_number);
 
-        // Log.i(TAG, "friend_alias_name:002:" + f);
-        if (f != null)
+            if (f != null)
+            {
+                HelperFriend.apply_friend_name_from_callback(friend_number, f, friend_name);
+                HelperFriend.update_single_friend_in_friendlist_view(f);
+                MessageListActivity.notify_friend_profile_updated(friend_number);
+            }
+        };
+
+        if (main_handler_s != null)
         {
-        f.name = friend_name;
-        HelperFriend.sync_friend_name_from_tox(friend_number, f);
-        HelperFriend.update_friend_in_db_name(f);
-            HelperFriend.update_single_friend_in_friendlist_view(f);
-            MessageListActivity.notify_friend_profile_updated(friend_number);
+            main_handler_s.post(work);
+        }
+        else
+        {
+            work.run();
         }
     }
 
     static void android_tox_callback_friend_status_message_cb_method(long friend_number, String status_message, long length)
     {
-        // Log.i(TAG, "friend_status_message:friend:" + friend_number + " status message:" + status_message);
+        // HelperGeneric.logI(TAG, "friend_status_message:friend:" + friend_number + " status message:" + status_message);
         FriendList f = main_get_friend(friend_number);
 
         if (f != null)
@@ -5864,28 +5891,28 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_friend_status_cb_method(long friend_number, int a_TOX_USER_STATUS)
     {
-        // Log.i(TAG, "friend_status:friend:" + friend_number + " status:" + a_TOX_USER_STATUS);
+        // HelperGeneric.logI(TAG, "friend_status:friend:" + friend_number + " status:" + a_TOX_USER_STATUS);
         FriendList f = main_get_friend(friend_number);
 
         if (f != null)
         {
             f.TOX_USER_STATUS = a_TOX_USER_STATUS;
-            // Log.i(TAG, "friend_status:2:f.TOX_USER_STATUS=" + f.TOX_USER_STATUS);
+            // HelperGeneric.logI(TAG, "friend_status:2:f.TOX_USER_STATUS=" + f.TOX_USER_STATUS);
             HelperFriend.update_friend_in_db_status(f);
 
             try
             {
                 if (message_list_activity != null)
                 {
-                    // Log.i(TAG, "friend_status:002");
+                    // HelperGeneric.logI(TAG, "friend_status:002");
                     message_list_activity.set_friend_status_icon();
-                    // Log.i(TAG, "friend_status:003");
+                    // HelperGeneric.logI(TAG, "friend_status:003");
                 }
             }
             catch (Exception e)
             {
                 // e.printStackTrace();
-                Log.i(TAG, "friend_status:EE1:" + e.getMessage());
+                HelperGeneric.logI(TAG, "friend_status:EE1:" + e.getMessage());
             }
 
             HelperFriend.update_single_friend_in_friendlist_view(f);
@@ -5895,11 +5922,13 @@ public class MainActivity extends AppCompatActivity
     static void android_tox_callback_friend_connection_status_cb_method(long friend_number, int a_TOX_CONNECTION)
     {
         FriendList f = main_get_friend(friend_number);
-        // Log.i(TAG, "friend_connection_status:pubkey=" + f.tox_public_key_string + " friend:" +
+        // HelperGeneric.logI(TAG, "friend_connection_status:pubkey=" + f.tox_public_key_string + " friend:" +
         //           get_friend_name_from_pubkey(f.tox_public_key_string) + " connection status:" + a_TOX_CONNECTION);
 
         if (f != null)
         {
+            ConnectionHealthMonitor.onFriendConnectionChanged(friend_number, a_TOX_CONNECTION);
+
             if (f.TOX_CONNECTION_real != a_TOX_CONNECTION)
             {
                 if (f.TOX_CONNECTION_real == TOX_CONNECTION_NONE.value)
@@ -5907,10 +5936,23 @@ public class MainActivity extends AppCompatActivity
                     // ******** friend just came online ********
                     // update and save this friends TOX CAPABILITIES
                     long friend_capabilities = tox_friend_get_capabilities(friend_number);
-                    // Log.i(TAG, "" + get_friend_name_from_num(friend_number) + " friend_capabilities: " + friend_capabilities + " decoded:" + TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(friend_capabilities)) + " " + (1L << 63L));
+                    // HelperGeneric.logI(TAG, "" + get_friend_name_from_num(friend_number) + " friend_capabilities: " + friend_capabilities + " decoded:" + TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(friend_capabilities)) + " " + (1L << 63L));
                     f.capabilities = friend_capabilities;
                     update_friend_in_db_capabilities(f);
+                    if ((friend_capabilities & TOX_CAPABILITY_MSGV3) != 0)
+                    {
+                        update_friend_msgv3_capability(friend_number, 1);
+                    }
                     HelperFriend.sync_friend_name_from_tox(friend_number, f);
+                    // Force-resend pending friend-assisted group joins now AND a couple times over
+                    // the next seconds: at this exact instant the lossless channel may not be ready,
+                    // so a single attempt can race the transition (sent=0) and stall the join.
+                    HelperGroup.schedule_friend_online_invite_resends();
+                    // KHANDAQ: also flush any manual "invite to group" that failed earlier because this
+                    // friend was momentarily offline (flapping connection) — re-fire now that it is online
+                    // (immediate + a couple of delayed retries to ride out the channel-ready race).
+                    HelperGroup.schedule_manual_invite_resends(f.tox_public_key_string);
+                    MessageDeliveryWatchdog.tick();
                 }
             }
 
@@ -5923,19 +5965,19 @@ public class MainActivity extends AppCompatActivity
                     // check for stale filetransfers
                     try
                     {
-                        // Log.i(TAG, "check_for_stale_ft:001:friend=" + f);
+                        // HelperGeneric.logI(TAG, "check_for_stale_ft:001:friend=" + f);
                         List<com.zoffcc.applications.sorm.Filetransfer> fts_active = orma.selectFromFiletransfer().file_numberNotEq(-1).kindEq(
                                 TOX_FILE_KIND_DATA.value).tox_public_key_stringEq(f.tox_public_key_string).toList();
                         for (com.zoffcc.applications.sorm.Filetransfer ft : fts_active)
                         {
-                            // Log.i(TAG, "check_for_stale_ft:002:ft=" + ft);
+                            // HelperGeneric.logI(TAG, "check_for_stale_ft:002:ft=" + ft);
 
                             ByteBuffer file_id_buffer = ByteBuffer.allocateDirect(TOX_FILE_ID_LENGTH);
                             tox_file_get_file_id(friend_number, ft.file_number, file_id_buffer);
                             final String file_id_buffer_hex = HelperGeneric.bytesToHex(file_id_buffer.array(),
                                                                                        file_id_buffer.arrayOffset(),
                                                                                        file_id_buffer.limit()).toUpperCase();
-                            //Log.i(TAG, "check_for_stale_ft:003:ft_hex_from_db=" + ft.tox_file_id_hex +
+                            //HelperGeneric.logI(TAG, "check_for_stale_ft:003:ft_hex_from_db=" + ft.tox_file_id_hex +
                             //           " file_id_buffer_hex=" + file_id_buffer_hex);
 
                         }
@@ -5943,7 +5985,7 @@ public class MainActivity extends AppCompatActivity
                     catch (Exception e)
                     {
                         // e.printStackTrace();
-                        // Log.i(TAG, "check_for_stale_ft:088:EE:" + e.getMessage());
+                        // HelperGeneric.logI(TAG, "check_for_stale_ft:088:EE:" + e.getMessage());
                     }
                 }
             }
@@ -5995,10 +6037,11 @@ public class MainActivity extends AppCompatActivity
                         }
                         else
                         {
-                            // Log.i(TAG, "friend_connection_status:resend_old_messages" +
+                            // HelperGeneric.logI(TAG, "friend_connection_status:resend_old_messages" +
                             //            get_friend_name_from_pubkey(f.tox_public_key_string));
                             resend_old_messages(f.tox_public_key_string);
                         }
+                        HelperFiletransfer.retry_pending_incoming_files_for_friend(f.tox_public_key_string);
                     }
                     catch (Exception e)
                     {
@@ -6045,11 +6088,11 @@ public class MainActivity extends AppCompatActivity
             {
                 if (a_TOX_CONNECTION == 0)
                 {
-                    // Log.i(TAG, "friend_connection_status:friend:" + friend_number + ":went offline");
+                    // HelperGeneric.logI(TAG, "friend_connection_status:friend:" + friend_number + ":went offline");
                     // TODO: stop any active calls to/from this friend
                     try
                     {
-                        // Log.i(TAG, "friend_connection_status:friend:" + friend_number + ":stop any calls");
+                        // HelperGeneric.logI(TAG, "friend_connection_status:friend:" + friend_number + ":stop any calls");
                         toxav_call_control(friend_number, ToxVars.TOXAV_CALL_CONTROL.TOXAV_CALL_CONTROL_CANCEL.value);
 
                         if (tox_friend_by_public_key__wrapper(Callstate.friend_pubkey) == friend_number)
@@ -6066,6 +6109,14 @@ public class MainActivity extends AppCompatActivity
                 f.TOX_CONNECTION_real = a_TOX_CONNECTION;
                 f.TOX_CONNECTION_on_off_real = HelperGeneric.get_toxconnection_wrapper(f.TOX_CONNECTION);
                 HelperFriend.update_friend_in_db_connection_status_real(f);
+
+                if (a_TOX_CONNECTION != TOX_CONNECTION_NONE.value)
+                {
+                    HelperFiletransfer.on_friend_connection_available(f.tox_public_key_string);
+                    // KHANDAQ: friend just came online — re-arm unacked outgoing messages so they are
+                    // resent and re-acknowledged (re-syncs delivery status, clears stale "failed").
+                    HelperMessage.rearm_unacked_direct_messages_on_reconnect(f.tox_public_key_string);
+                }
             }
 
             if (is_any_relay(f.tox_public_key_string))
@@ -6114,7 +6165,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_friend_typing_cb_method(long friend_number, final int typing)
     {
-        // Log.i(TAG, "friend_typing_cb:fn=" + friend_number + " typing=" + typing);
+        // HelperGeneric.logI(TAG, "friend_typing_cb:fn=" + friend_number + " typing=" + typing);
         final long friend_number_ = friend_number;
         Runnable myRunnable = new Runnable()
         {
@@ -6126,26 +6177,16 @@ public class MainActivity extends AppCompatActivity
                 {
                     if (message_list_activity != null)
                     {
-                        if (ml_friend_typing != null)
+                        if (message_list_activity.get_current_friendnum() == friend_number_)
                         {
-                            if (message_list_activity.get_current_friendnum() == friend_number_)
-                            {
-                                if (typing == 1)
-                                {
-                                    ml_friend_typing.setText(R.string.MainActivity_friend_is_typing);
-                                }
-                                else
-                                {
-                                    ml_friend_typing.setText("");
-                                }
-                            }
+                            message_list_activity.set_friend_typing_indicator(typing);
                         }
                     }
                 }
                 catch (Exception e)
                 {
                     // e.printStackTrace();
-                    Log.i(TAG, "friend_typing_cb:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "friend_typing_cb:EE:" + e.getMessage());
                 }
             }
         };
@@ -6160,8 +6201,8 @@ public class MainActivity extends AppCompatActivity
     {
         if (PREF__X_battery_saving_mode)
         {
-            // Log.i(TAG, "friend_read_receipt_message_v2_cb::IN:fn=" + get_friend_name_from_num(friend_number));
-            //**// Log.i(TAG, "global_last_activity_for_battery_savings_ts:003:*PING*");
+            // HelperGeneric.logI(TAG, "friend_read_receipt_message_v2_cb::IN:fn=" + get_friend_name_from_num(friend_number));
+            //**// HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:003:*PING*");
         }
         //**// global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
 
@@ -6170,7 +6211,7 @@ public class MainActivity extends AppCompatActivity
         final String message_id_hash_as_hex_string = HelperGeneric.bytesToHex(msg_id_buffer.array(),
                                                                               msg_id_buffer.arrayOffset(),
                                                                               msg_id_buffer.limit());
-        // Log.i(TAG, "receipt_message_v2_cb:MSGv2HASH:2=" + message_id_hash_as_hex_string);
+        // HelperGeneric.logI(TAG, "receipt_message_v2_cb:MSGv2HASH:2=" + message_id_hash_as_hex_string);
 
         try
         {
@@ -6196,7 +6237,7 @@ public class MainActivity extends AppCompatActivity
 
                         if (m != null)
                         {
-                            // Log.i(TAG, "receipt_message_v2_cb:msgid_via_relay found");
+                            // HelperGeneric.logI(TAG, "receipt_message_v2_cb:msgid_via_relay found");
                             Runnable myRunnable = new Runnable()
                             {
                                 @Override
@@ -6232,7 +6273,7 @@ public class MainActivity extends AppCompatActivity
 
             if (m != null)
             {
-                Log.i(TAG, "receipt_message_v2_cb:msgid found");
+                HelperGeneric.logI(TAG, "receipt_message_v2_cb:msgid found");
                 Runnable myRunnable = new Runnable()
                 {
                     @Override
@@ -6267,7 +6308,7 @@ public class MainActivity extends AppCompatActivity
             }
             else
             {
-                Log.i(TAG, "receipt_message_v2_cb:msgid *NOT* found");
+                HelperGeneric.logI(TAG, "receipt_message_v2_cb:msgid *NOT* found");
             }
         }
         catch (Exception e)
@@ -6278,11 +6319,11 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_friend_read_receipt_cb_method(long friend_number, long message_id)
     {
-        // Log.i(TAG,
+        // HelperGeneric.logI(TAG,
         //s      "friend_read_receipt:friend:" + get_friend_name_from_num(friend_number) + " message_id:" + message_id);
         if (PREF__X_battery_saving_mode)
         {
-            Log.i(TAG, "global_last_activity_for_battery_savings_ts:004:*PING*");
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:004:*PING*");
         }
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
 
@@ -6291,7 +6332,7 @@ public class MainActivity extends AppCompatActivity
             if (get_friend_msgv3_capability(friend_number) == 1)
             {
                 // HINT: friend has msgV3 capability, ignore normal read receipts
-                // Log.i(TAG, "friend_read_receipt:msgV3:ignore low level ACK");
+                // HelperGeneric.logI(TAG, "friend_read_receipt:msgV3:ignore low level ACK");
                 return;
             }
 
@@ -6301,12 +6342,12 @@ public class MainActivity extends AppCompatActivity
                     1).orderByIdDesc().toList().get(0);
             // there can be older messages with same message_id for this friend! so always take the latest one! -------
 
-            // Log.i(TAG, "friend_read_receipt:m=" + m);
-            // Log.i(TAG, "friend_read_receipt:m:message_id=" + m.message_id + " text=" + m.text + " friendpubkey=" + m.tox_friendpubkey + " read=" + m.read + " direction=" + m.direction);
+            // HelperGeneric.logI(TAG, "friend_read_receipt:m=" + m);
+            // HelperGeneric.logI(TAG, "friend_read_receipt:m:message_id=" + m.message_id + " text=" + m.text + " friendpubkey=" + m.tox_friendpubkey + " read=" + m.read + " direction=" + m.direction);
 
             if (m != null)
             {
-                // Log.i(TAG,
+                // HelperGeneric.logI(TAG,
                 //      "friend_read_receipt:friend:" + get_friend_name_from_num(friend_number) + " message:" + m.text +
                 //      " m=" + m);
 
@@ -6339,28 +6380,62 @@ public class MainActivity extends AppCompatActivity
         }
         catch (Exception e)
         {
-            Log.i(TAG, "friend_read_receipt:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "friend_read_receipt:EE:" + e.getMessage());
             e.printStackTrace();
         }
     }
 
     static void android_tox_callback_friend_request_cb_method(String friend_public_key, String friend_request_message, long length)
     {
-        // Log.i(TAG, "friend_request:friend:" + friend_public_key + " friend request message:" + friend_request_message);
-        // Log.i(TAG, "friend_request:friend:" + friend_public_key.substring(0, TOX_PUBLIC_KEY_SIZE * 2) +
-        //            " friend request message:" + friend_request_message);
-        String friend_public_key__ = friend_public_key.substring(0, TOX_PUBLIC_KEY_SIZE * 2);
-        HelperFriend.add_friend_to_system(friend_public_key__.toUpperCase(), false, null);
+        final String friend_public_key__ = friend_public_key.substring(0, TOX_PUBLIC_KEY_SIZE * 2).toUpperCase();
+        final String message = (friend_request_message != null) ? friend_request_message : "";
 
-        display_toast(context_s.getString(R.string.invite_friend_success), false, 300);
+        if (main_handler_s == null || main_activity_s == null)
+        {
+            return;
+        }
+
+        main_handler_s.post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                showIncomingFriendRequestDialog(friend_public_key__, message);
+            }
+        });
+    }
+
+    private static void showIncomingFriendRequestDialog(final String friendPublicKey, final String message)
+    {
+        if (main_activity_s == null || main_activity_s.isFinishing())
+        {
+            return;
+        }
+
+        String body = message.length() > 0 ? message : friendPublicKey;
+
+        new AlertDialog.Builder(main_activity_s)
+                .setTitle(R.string.friend_request_dialog_title)
+                .setMessage(body)
+                .setNegativeButton(R.string.friend_request_decline, null)
+                .setPositiveButton(R.string.friend_request_accept, new DialogInterface.OnClickListener()
+                {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which)
+                    {
+                        HelperFriend.add_friend_to_system(friendPublicKey, false, null);
+                        display_toast(context_s.getString(R.string.invite_friend_success), false, 300);
+                    }
+                })
+                .show();
     }
 
     static void android_tox_callback_friend_message_v2_cb_method(long friend_number, String friend_message, long length, long ts_sec, long ts_ms, byte[] raw_message, long raw_message_length)
     {
-        // Log.i(TAG, "friend_message_v2_cb::IN:fn=" + get_friend_name_from_num(friend_number) + " len=" + length);
+        // HelperGeneric.logI(TAG, "friend_message_v2_cb::IN:fn=" + get_friend_name_from_num(friend_number) + " len=" + length);
         if (PREF__X_battery_saving_mode)
         {
-            Log.i(TAG, "global_last_activity_for_battery_savings_ts:005:*PING*");
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:005:*PING*");
         }
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
         HelperGeneric.receive_incoming_message(1, 0, friend_number, friend_message, raw_message, raw_message_length,
@@ -6369,7 +6444,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_friend_lossless_packet_cb_method(long friend_number, byte[] data, long length)
     {
-        // Log.i(TAG, "friend_lossless_packet_cb::IN:fn=" + get_friend_name_from_num(friend_number) + " len=" + length +
+        // HelperGeneric.logI(TAG, "friend_lossless_packet_cb::IN:fn=" + get_friend_name_from_num(friend_number) + " len=" + length +
         //           " data=" + bytes_to_hex(data));
 
         if (length > 0)
@@ -6378,22 +6453,34 @@ public class MainActivity extends AppCompatActivity
             {
                 if (length == (TOX_PUBLIC_KEY_SIZE + 1))
                 {
-                    // Log.i(TAG, "friend_lossless_packet_cb:recevied CONTROL_PROXY_MESSAGE_TYPE_PROXY_PUBKEY_FOR_FRIEND");
+                    // HelperGeneric.logI(TAG, "friend_lossless_packet_cb:recevied CONTROL_PROXY_MESSAGE_TYPE_PROXY_PUBKEY_FOR_FRIEND");
                     String relay_pubkey = bytes_to_hex(data).substring(2);
-                    // Log.i(TAG, "friend_lossless_packet_cb:recevied pubkey:" + relay_pubkey);
+                    // HelperGeneric.logI(TAG, "friend_lossless_packet_cb:recevied pubkey:" + relay_pubkey);
                     HelperFriend.add_friend_to_system(relay_pubkey.toUpperCase(), true,
                                                       HelperFriend.tox_friend_get_public_key__wrapper(friend_number));
                 }
             }
+            else if (data[0] == (byte) MessageChunker.PKT_CHUNK || data[0] == (byte) MessageChunker.PKT_CHUNK_ACK)
+            {
+                MessageChunker.handleIncoming(friend_number, data, (int) length);
+            }
+            else if (data[0] == (byte) HelperGroup.LOSSLESS_PKT_GROUP_INVITE_REQUEST)
+            {
+                HelperGroup.handle_group_invite_request(friend_number, data, (int) length);
+            }
+            else if (data[0] == (byte) ConnectionHealthMonitor.PKT_CONN_KEEPALIVE)
+            {
+                ConnectionHealthMonitor.onKeepaliveReceived(friend_number);
+            }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {
-                //Log.i(TAG,
+                //HelperGeneric.logI(TAG,
                 //      "android_tox_callback_friend_lossless_packet_cb_method:CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND:len=" +
                 //      length);
                 if (length > ("https://".length() + 1))
                 {
                     final String pushurl = new String(Arrays.copyOfRange(data, 1, data.length), StandardCharsets.UTF_8);
-                    //Log.i(TAG,
+                    //HelperGeneric.logI(TAG,
                     //      "android_tox_callback_friend_lossless_packet_cb_method:CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND:pushurl=" +
                     //      pushurl);
                     HelperFriend.add_pushurl_for_friend(pushurl,
@@ -6413,7 +6500,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_friend_sync_message_v2_cb_method(long friend_number, long ts_sec, long ts_ms, byte[] raw_message, long raw_message_length, byte[] raw_data, long raw_data_length)
     {
-        // Log.i(TAG, "friend_sync_message_v2_cb::IN:fn=" + get_friend_name_from_num(friend_number));
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb::IN:fn=" + get_friend_name_from_num(friend_number));
 
         if (!HelperRelay.is_own_relay(HelperFriend.tox_friend_get_public_key__wrapper(friend_number)))
         {
@@ -6423,34 +6510,34 @@ public class MainActivity extends AppCompatActivity
 
         if (PREF__X_battery_saving_mode)
         {
-            Log.i(TAG, "global_last_activity_for_battery_savings_ts:006:*PING*");
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:006:*PING*");
         }
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
-        // Log.i(TAG, "friend_sync_message_v2_cb:fn=" + friend_number + " full rawmsg    =" + bytes_to_hex(raw_message));
-        // Log.i(TAG, "friend_sync_message_v2_cb:fn=" + friend_number + " wrapped rawdata=" + bytes_to_hex(raw_data));
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:fn=" + friend_number + " full rawmsg    =" + bytes_to_hex(raw_message));
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:fn=" + friend_number + " wrapped rawdata=" + bytes_to_hex(raw_data));
         final ByteBuffer raw_message_buf_wrapped = ByteBuffer.allocateDirect((int) raw_data_length);
         raw_message_buf_wrapped.put(raw_data, 0, (int) raw_data_length);
         ByteBuffer raw_message_buf = ByteBuffer.allocateDirect((int) raw_message_length);
         raw_message_buf.put(raw_message, 0, (int) raw_message_length);
         long msg_sec = tox_messagev2_get_ts_sec(raw_message_buf);
         long msg_ms = tox_messagev2_get_ts_ms(raw_message_buf);
-        // Log.i(TAG, "friend_sync_message_v2_cb:sec=" + msg_sec + " ms=" + msg_ms);
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:sec=" + msg_sec + " ms=" + msg_ms);
         ByteBuffer msg_id_buffer = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
         tox_messagev2_get_message_id(raw_message_buf, msg_id_buffer);
         String msg_id_as_hex_string = HelperGeneric.bytesToHex(msg_id_buffer.array(), msg_id_buffer.arrayOffset(),
                                                                msg_id_buffer.limit());
-        // Log.i(TAG, "friend_sync_message_v2_cb:MSGv2HASH=" + msg_id_as_hex_string);
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:MSGv2HASH=" + msg_id_as_hex_string);
         String real_sender_as_hex_string = tox_messagev2_get_sync_message_pubkey(raw_message_buf);
-        // Log.i(TAG, "friend_sync_message_v2_cb:real sender pubkey=" + real_sender_as_hex_string + " " +
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:real sender pubkey=" + real_sender_as_hex_string + " " +
         //           get_friend_name_from_pubkey(real_sender_as_hex_string));
         long msgv2_type = tox_messagev2_get_sync_message_type(raw_message_buf);
-        // Log.i(TAG, "friend_sync_message_v2_cb:msg type=" + ToxVars.TOX_FILE_KIND.value_str((int) msgv2_type));
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:msg type=" + ToxVars.TOX_FILE_KIND.value_str((int) msgv2_type));
         ByteBuffer msg_id_buffer_wrapped = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
         tox_messagev2_get_message_id(raw_message_buf_wrapped, msg_id_buffer_wrapped);
         String msg_id_as_hex_string_wrapped = HelperGeneric.bytesToHex(msg_id_buffer_wrapped.array(),
                                                                        msg_id_buffer_wrapped.arrayOffset(),
                                                                        msg_id_buffer_wrapped.limit());
-        // Log.i(TAG, "friend_sync_message_v2_cb:MSGv2HASH=" + msg_id_as_hex_string_wrapped + " len=" +
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:MSGv2HASH=" + msg_id_as_hex_string_wrapped + " len=" +
         //           msg_id_as_hex_string_wrapped.length());
 
         if (msgv2_type == ToxVars.TOX_FILE_KIND.TOX_FILE_KIND_MESSAGEV2_SEND.value)
@@ -6469,7 +6556,7 @@ public class MainActivity extends AppCompatActivity
     {
         long msg_wrapped_sec = tox_messagev2_get_ts_sec(raw_message_buf_wrapped);
         long msg_wrapped_ms = tox_messagev2_get_ts_ms(raw_message_buf_wrapped);
-        // Log.i(TAG, "friend_sync_message_v2_cb:sec=" + msg_wrapped_sec + " ms=" + msg_wrapped_ms);
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:sec=" + msg_wrapped_sec + " ms=" + msg_wrapped_ms);
         ByteBuffer msg_text_buffer_wrapped = ByteBuffer.allocateDirect((int) raw_data_length);
         long text_length = tox_messagev2_get_message_text(raw_message_buf_wrapped, raw_data_length, 0, 0,
                                                           msg_text_buffer_wrapped);
@@ -6489,9 +6576,9 @@ public class MainActivity extends AppCompatActivity
         String msg_text_as_hex_string_wrapped = HelperGeneric.bytesToHex(msg_text_buffer_wrapped.array(),
                                                                          msg_text_buffer_wrapped.arrayOffset(),
                                                                          msg_text_buffer_wrapped.limit());
-        // Log.i(TAG, "friend_sync_message_v2_cb:len=" + text_length + " wrapped msg text str=" +
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:len=" + text_length + " wrapped msg text str=" +
         //            wrapped_msg_text_as_string);
-        // Log.i(TAG, "friend_sync_message_v2_cb:wrapped msg text hex=" + msg_text_as_hex_string_wrapped);
+        // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:wrapped msg text hex=" + msg_text_as_hex_string_wrapped);
 
         try
         {
@@ -6500,11 +6587,11 @@ public class MainActivity extends AppCompatActivity
                 // pubkey does NOT belong to a friend. it is probably a conference id
                 // check it here
 
-                // Log.i(TAG, "friend_sync_message_v2_cb:LL:" + orma.selectFromConferenceDB().toList());
+                // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:LL:" + orma.selectFromConferenceDB().toList());
                 String real_conference_id = real_sender_as_hex_string;
 
                 long conference_num = HelperConference.tox_conference_by_confid__wrapper(real_conference_id);
-                // Log.i(TAG, "friend_sync_message_v2_cb:1:conference_num=" + conference_num);
+                // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:1:conference_num=" + conference_num);
                 if (conference_num > -1)
                 {
                     String real_sender_peer_pubkey = wrapped_msg_text_as_string.substring(0, 64);
@@ -6514,7 +6601,7 @@ public class MainActivity extends AppCompatActivity
                     String real_sender_text = "";
                     String real_send_message_id = "";
 
-                    // Log.i(TAG,
+                    // HelperGeneric.logI(TAG,
                     //      "xxxxxxxxxxxxx2:" + real_sender_text_.length() + " " + real_sender_text_.substring(8, 9) +
                     //      " " + real_sender_text_.substring(9) + " " + real_sender_text_.substring(0, 8));
 
@@ -6535,7 +6622,7 @@ public class MainActivity extends AppCompatActivity
                     // add text as conference message
                     long sender_peer_num = HelperConference.get_peernum_from_peer_pubkey(real_conference_id,
                                                                                          real_sender_peer_pubkey);
-                    // Log.i(TAG, "friend_sync_message_v2_cb:sender_peer_num=" + sender_peer_num);
+                    // HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:sender_peer_num=" + sender_peer_num);
 
                     // now check if this is "potentially" a double message, we can not be sure a 100%
                     // since there is no uniqe key for each message
@@ -6547,7 +6634,7 @@ public class MainActivity extends AppCompatActivity
                     {
                         if (cm.text.equals(real_sender_text))
                         {
-                            Log.i(TAG, "friend_sync_message_v2_cb:potentially double message:1");
+                            HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:potentially double message:1");
                             // ok it's a "potentially" double message
                             // just ignore it, but still send "receipt" to proxy so it won't send this message again
                             send_friend_msg_receipt_v2_wrapper(friend_number, 3, msg_id_buffer,
@@ -6600,11 +6687,11 @@ public class MainActivity extends AppCompatActivity
                                 real_conference_id, real_sender_peer_pubkey, sync_msg_received_timestamp,
                                 real_send_message_id, MESSAGE_GROUP_SYNC_DOUBLE_INTERVAL_SECS, real_sender_text);
 
-                        // Log.i(TAG, "m.message_id_tox=" + real_send_message_id);
+                        // HelperGeneric.logI(TAG, "m.message_id_tox=" + real_send_message_id);
 
                         if (gm != null)
                         {
-                            Log.i(TAG, "friend_sync_message_v2_cb:potentially double message:2");
+                            HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:potentially double message:2");
                             // ok it's a "potentially" double message
                             // just ignore it, but still send "receipt" to proxy so it won't send this message again
                             send_friend_msg_receipt_v2_wrapper(friend_number, 3, msg_id_buffer,
@@ -6620,7 +6707,7 @@ public class MainActivity extends AppCompatActivity
                         // ========= DEBUG =========
                         //if (real_conference_id.equals(TOX_TRIFA_PUBLIC_GROUPID))
                         //{
-                        //    Log.i(TAG, "DEBUG:ignoring toxproxy for TOX_TRIFA_PUBLIC_GROUPID:DEBUG");
+                        //    HelperGeneric.logI(TAG, "DEBUG:ignoring toxproxy for TOX_TRIFA_PUBLIC_GROUPID:DEBUG");
                         //    return;
                         //}
                         // ========= DEBUG =========
@@ -6661,7 +6748,7 @@ public class MainActivity extends AppCompatActivity
                     {
                         // sync message from unkown original sender
                         // still send "receipt" to our relay, or else it will send us this message forever
-                        Log.i(TAG, "friend_sync_message_v2_cb:send receipt for unknown message");
+                        HelperGeneric.logI(TAG, "friend_sync_message_v2_cb:send receipt for unknown message");
                         send_friend_msg_receipt_v2_wrapper(friend_number, 4, msg_id_buffer,
                                                            (System.currentTimeMillis() / 1000));
                     }
@@ -6692,12 +6779,31 @@ public class MainActivity extends AppCompatActivity
     {
         if (PREF__X_battery_saving_mode)
         {
-            Log.i(TAG, "global_last_activity_for_battery_savings_ts:007:*PING*");
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:007:*PING*");
         }
-        // Log.i(TAG, "friend_message_cb::IN:fn=" + get_friend_name_from_num(friend_number) + " len=" + length);
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
-        HelperGeneric.receive_incoming_message(0, message_type, friend_number, friend_message, null, 0, null,
-                                               msgV3hash_bin, message_timestamp);
+
+        final long fn = friend_number;
+        final int mt = message_type;
+        final String msg = friend_message;
+        final byte[] hash = msgV3hash_bin;
+        final long ts = message_timestamp;
+        final int previewLen = (msg != null) ? Math.min(msg.length(), 48) : 0;
+        final String preview = (msg != null && previewLen > 0) ? msg.substring(0, previewLen) : "";
+        HelperGeneric.logI(TAG, "friend_message_cb:IN fn=" + HelperFriend.get_friend_name_from_num(fn)
+                + " type=" + mt + " len=" + length + " msgv3=" + (hash != null)
+                + " preview=" + preview);
+
+        final Runnable work = () -> HelperGeneric.receive_incoming_message(0, mt, fn, msg, null, 0, null, hash, ts);
+
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(work);
+        }
+        else
+        {
+            work.run();
+        }
     }
     // --- incoming message ---
     // --- incoming message ---
@@ -6707,21 +6813,33 @@ public class MainActivity extends AppCompatActivity
     {
         if (PREF__X_battery_saving_mode)
         {
-            Log.i(TAG, "global_last_activity_for_battery_savings_ts:008:*PING*:file_recv_control_cb");
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:008:*PING*:file_recv_control_cb");
         }
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
-        // Log.i(TAG, "file_recv_control:" + friend_number + ":fn==" + file_number + ":" + a_TOX_FILE_CONTROL);
+        // HelperGeneric.logI(TAG, "file_recv_control:" + friend_number + ":fn==" + file_number + ":" + a_TOX_FILE_CONTROL);
 
         if (a_TOX_FILE_CONTROL == TOX_FILE_CONTROL_CANCEL.value)
         {
+            HelperGeneric.logI(TAG, "file_recv_control:CANCEL fn=" + friend_number + " filenum=" + file_number);
             HelperFiletransfer.cancel_filetransfer(friend_number, file_number);
         }
         else if (a_TOX_FILE_CONTROL == TOX_FILE_CONTROL_RESUME.value)
         {
+            FileTransferDebug.logFileControlResume(friend_number, file_number);
             try
             {
-                long ft_id = HelperFiletransfer.get_filetransfer_id_from_friendnum_and_filenum(friend_number,
-                                                                                               file_number);
+                long ft_id = HelperFiletransfer.get_outgoing_filetransfer_id_from_friendnum_and_filenum(friend_number,
+                                                                                                          file_number);
+                if (ft_id < 0)
+                {
+                    ft_id = HelperFiletransfer.get_filetransfer_id_from_friendnum_and_filenum(friend_number,
+                                                                                              file_number);
+                }
+                if (ft_id < 0)
+                {
+                    HelperGeneric.logI(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:unknown ft fn=" + file_number);
+                    return;
+                }
                 com.zoffcc.applications.sorm.Filetransfer ft_check = orma.selectFromFiletransfer().idEq(ft_id).get(0);
 
                 // -------- DEBUG --------
@@ -6730,28 +6848,28 @@ public class MainActivity extends AppCompatActivity
                 //                        orderByIdDesc().
                 //                        limit(30).toList();
                 //                int ii;
-                //                Log.i(TAG, "file_recv_control:SQL:===============================================");
+                //                HelperGeneric.logI(TAG, "file_recv_control:SQL:===============================================");
                 //                for (ii = 0; ii < ft_res.size(); ii++)
                 //                {
-                //                    Log.i(TAG, "file_recv_control:SQL:" + ft_res.get(ii));
+                //                    HelperGeneric.logI(TAG, "file_recv_control:SQL:" + ft_res.get(ii));
                 //                }
-                //                Log.i(TAG, "file_recv_control:SQL:===============================================");
+                //                HelperGeneric.logI(TAG, "file_recv_control:SQL:===============================================");
                 // -------- DEBUG --------
 
                 if (ft_check.kind == TOX_FILE_KIND_AVATAR.value)
                 {
-                    //Log.i(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME::+AVATAR+");
-                    //Log.i(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:ft_id=" + ft_id);
+                    //HelperGeneric.logI(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME::+AVATAR+");
+                    //HelperGeneric.logI(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:ft_id=" + ft_id);
                     HelperFiletransfer.set_filetransfer_state_from_id(ft_id, TOX_FILE_CONTROL_RESUME.value);
                     // if outgoing FT set "ft_accepted" to true
                     HelperFiletransfer.set_filetransfer_accepted_from_id(ft_id);
                 }
                 else
                 {
-                    //Log.i(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME::*DATA*");
-                    //Log.i(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:ft_id=" + ft_id);
+                    //HelperGeneric.logI(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME::*DATA*");
+                    //HelperGeneric.logI(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:ft_id=" + ft_id);
                     long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(ft_id, friend_number);
-                    //Log.i(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:msg_id=" + msg_id);
+                    //HelperGeneric.logI(TAG, "file_recv_control:TOX_FILE_CONTROL_RESUME:msg_id=" + msg_id);
                     HelperFiletransfer.set_filetransfer_state_from_id(ft_id, TOX_FILE_CONTROL_RESUME.value);
                     HelperMessage.set_message_state_from_id(msg_id, TOX_FILE_CONTROL_RESUME.value);
                     // if outgoing FT set "ft_accepted" to true
@@ -6769,6 +6887,7 @@ public class MainActivity extends AppCompatActivity
                     catch (Exception e)
                     {
                     }
+                    TrifaToxService.wakeup_tox_thread();
                 }
             }
             catch (Exception e)
@@ -6808,14 +6927,15 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_file_chunk_request_cb_method(long friend_number, long file_number, long position, long length)
     {
+        FileTransferDebug.logFileChunkRequest(friend_number, file_number, position, length);
         //if (PREF__X_battery_saving_mode)
         //{
-        //    Log.i(TAG, "global_last_activity_for_battery_savings_ts:009:*PING*");
+        //    HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:009:*PING*");
         //}
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
         global_last_activity_outgoung_ft_ts = System.currentTimeMillis();
 
-        // Log.i(TAG, "file_chunk_request:" + friend_number + ":" + file_number + ":" + position + ":" + length);
+        // HelperGeneric.logI(TAG, "file_chunk_request:" + friend_number + ":" + file_number + ":" + position + ":" + length);
 
         try
         {
@@ -6826,11 +6946,11 @@ public class MainActivity extends AppCompatActivity
 
             if (ft == null)
             {
-                Log.i(TAG, "file_chunk_request:ft=NULL");
+                HelperGeneric.logI(TAG, "file_chunk_request:ft=NULL");
                 return;
             }
 
-            // Log.i(TAG, "file_chunk_request:ft=" + ft.kind + ":" + ft);
+            // HelperGeneric.logI(TAG, "file_chunk_request:ft=" + ft.kind + ":" + ft);
 
             if (ft.kind == TOX_FILE_KIND_AVATAR.value)
             {
@@ -6841,7 +6961,7 @@ public class MainActivity extends AppCompatActivity
                     // avatar transfer finished -----------
                     ByteBuffer avatar_chunk = ByteBuffer.allocateDirect(1);
                     int res = tox_file_send_chunk(friend_number, file_number, position, avatar_chunk, 0);
-                    // Log.i(TAG, "file_chunk_request:res(2)=" + res);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:res(2)=" + res);
                     // remove FT from DB
                     HelperFiletransfer.delete_filetransfers_from_friendnum_and_filenum(friend_number, file_number);
                 }
@@ -6866,7 +6986,7 @@ public class MainActivity extends AppCompatActivity
                                 avatar_chunk.put(bytes_chunck);
                                 int res = tox_file_send_chunk(friend_number, file_number, position, avatar_chunk,
                                                               avatar_chunk_length);
-                                // Log.i(TAG, "file_chunk_request:res(1)=" + res);
+                                // HelperGeneric.logI(TAG, "file_chunk_request:res(1)=" + res);
                                 // int res = tox_hash(hash_bytes, avatar_bytes, avatar_bytes.capacity());
                             }
                         }
@@ -6879,7 +6999,7 @@ public class MainActivity extends AppCompatActivity
                 {
                     remove_ft_from_cache((Filetransfer) ft);
 
-                    Log.i(TAG, "file_chunk_request:file fully sent");
+                    HelperGeneric.logI(TAG, "file_chunk_request:file fully sent");
                     // transfer finished -----------
                     long filedb_id = -1;
 
@@ -6893,16 +7013,16 @@ public class MainActivity extends AppCompatActivity
                     file_.is_in_VFS = false;
                     file_.filesize = ft.filesize;
                     long row_id = orma.insertIntoFileDB(file_);
-                    // Log.i(TAG, "file_chunk_request:FileDB:row_id=" + row_id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:FileDB:row_id=" + row_id);
                     filedb_id = orma.selectFromFileDB().tox_public_key_stringEq(
                             ft.tox_public_key_string).file_nameEq(ft.file_name).path_nameEq(
                             ft.path_name).directionEq(ft.direction).filesizeEq(
                             ft.filesize).orderByIdDesc().get(0).id;
-                    // Log.i(TAG, "file_chunk_request:FileDB:filedb_id=" + filedb_id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:FileDB:filedb_id=" + filedb_id);
 
-                    // Log.i(TAG, "file_chunk_request:file_READY:001:f.id=" + ft.id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:001:f.id=" + ft.id);
                     long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(ft.id, friend_number);
-                    // Log.i(TAG, "file_chunk_request:file_READY:001a:msg_id=" + msg_id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:001a:msg_id=" + msg_id);
                     String full_path_builder = ft.path_name + "/" + ft.file_name;
                     if (ft.storage_frame_work)
                     {
@@ -6919,21 +7039,22 @@ public class MainActivity extends AppCompatActivity
 
                     try
                     {
-                        // Log.i(TAG, "file_chunk_request:file_READY:002");
+                        // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:002");
 
                         if (ft.id != -1)
                         {
-                            // Log.i(TAG, "file_chunk_request:file_READY:003:f.id=" + ft.id + " msg_id=" + msg_id);
+                            // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:003:f.id=" + ft.id + " msg_id=" + msg_id);
                             HelperMessage.update_single_message_from_messge_id(msg_id, true);
                         }
                     }
                     catch (Exception e)
                     {
-                        Log.i(TAG, "file_chunk_request:file_READY:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "file_chunk_request:file_READY:EE:" + e.getMessage());
                     }
 
                     // transfer finished -----------
                     HelperFiletransfer.delete_filetransfers_from_friendnum_and_filenum(friend_number, file_number);
+                    HelperFiletransfer.try_start_next_queued_outgoing_file(ft.tox_public_key_string);
                 }
                 else
                 {
@@ -6964,11 +7085,13 @@ public class MainActivity extends AppCompatActivity
                         file_chunk.put(bytes_chunck);
                         int res = tox_file_send_chunk(friend_number, file_number, position, file_chunk,
                                                       file_chunk_length + TOX_FILE_ID_LENGTH);
+                        HelperFiletransfer.handle_outgoing_chunk_send_result(ft, friend_number, file_number, position,
+                                length, res);
                     }
                     else
                     {
                         final String fname = new File(ft.path_name + "/" + ft.file_name).getAbsolutePath();
-                        // Log.i(TAG, "file_chunk_request:fname=" + fname);
+                        // HelperGeneric.logI(TAG, "file_chunk_request:fname=" + fname);
                         long file_chunk_length = length;
                         byte[] bytes_chunck = HelperGeneric.read_chunk_from_SD_file(fname, position, file_chunk_length,
                                                                                     true);
@@ -6980,8 +7103,8 @@ public class MainActivity extends AppCompatActivity
                         file_chunk.put(bytes_chunck);
                         int res = tox_file_send_chunk(friend_number, file_number, position, file_chunk,
                                                       file_chunk_length + TOX_FILE_ID_LENGTH);
-                        // Log.i(TAG, "file_chunk_request:res(1)=" + res);
-                        // TODO: handle error codes from tox_file_send_chunk() here ----
+                        HelperFiletransfer.handle_outgoing_chunk_send_result(ft, friend_number, file_number, position,
+                                length, res);
                     }
 
                     if (ft.filesize < UPDATE_MESSAGE_PROGRESS_SMALL_FILE_IS_LESS_THAN_BYTES)
@@ -7038,7 +7161,7 @@ public class MainActivity extends AppCompatActivity
                 {
                     remove_ft_from_cache((Filetransfer) ft);
 
-                    Log.i(TAG, "file_chunk_request:file fully sent");
+                    HelperGeneric.logI(TAG, "file_chunk_request:file fully sent");
                     // transfer finished -----------
                     long filedb_id = -1;
 
@@ -7052,16 +7175,16 @@ public class MainActivity extends AppCompatActivity
                     file_.is_in_VFS = false;
                     file_.filesize = ft.filesize;
                     long row_id = orma.insertIntoFileDB(file_);
-                    // Log.i(TAG, "file_chunk_request:FileDB:row_id=" + row_id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:FileDB:row_id=" + row_id);
                     filedb_id = orma.selectFromFileDB().tox_public_key_stringEq(
                             ft.tox_public_key_string).file_nameEq(ft.file_name).path_nameEq(
                             ft.path_name).directionEq(ft.direction).filesizeEq(
                             ft.filesize).orderByIdDesc().get(0).id;
-                    // Log.i(TAG, "file_chunk_request:FileDB:filedb_id=" + filedb_id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:FileDB:filedb_id=" + filedb_id);
 
-                    // Log.i(TAG, "file_chunk_request:file_READY:001:f.id=" + ft.id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:001:f.id=" + ft.id);
                     long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(ft.id, friend_number);
-                    // Log.i(TAG, "file_chunk_request:file_READY:001a:msg_id=" + msg_id);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:001a:msg_id=" + msg_id);
                     String full_path_builder = ft.path_name + "/" + ft.file_name;
                     if (ft.storage_frame_work)
                     {
@@ -7078,25 +7201,26 @@ public class MainActivity extends AppCompatActivity
 
                     try
                     {
-                        // Log.i(TAG, "file_chunk_request:file_READY:002");
+                        // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:002");
 
                         if (ft.id != -1)
                         {
-                            // Log.i(TAG, "file_chunk_request:file_READY:003:f.id=" + ft.id + " msg_id=" + msg_id);
+                            // HelperGeneric.logI(TAG, "file_chunk_request:file_READY:003:f.id=" + ft.id + " msg_id=" + msg_id);
                             HelperMessage.update_single_message_from_messge_id(msg_id, true);
                         }
                     }
                     catch (Exception e)
                     {
-                        Log.i(TAG, "file_chunk_request:file_READY:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "file_chunk_request:file_READY:EE:" + e.getMessage());
                     }
 
                     // transfer finished -----------
                     ByteBuffer dummy_chunk = ByteBuffer.allocateDirect(1);
                     int res = tox_file_send_chunk(friend_number, file_number, position, dummy_chunk, 0);
-                    // Log.i(TAG, "file_chunk_request:res(2)=" + res);
+                    // HelperGeneric.logI(TAG, "file_chunk_request:res(2)=" + res);
                     // remove FT from DB
                     HelperFiletransfer.delete_filetransfers_from_friendnum_and_filenum(friend_number, file_number);
+                    HelperFiletransfer.try_start_next_queued_outgoing_file(ft.tox_public_key_string);
                 }
                 else
                 {
@@ -7123,11 +7247,13 @@ public class MainActivity extends AppCompatActivity
                         file_chunk.put(bytes_chunck);
                         int res = tox_file_send_chunk(friend_number, file_number, position, file_chunk,
                                                       file_chunk_length);
+                        HelperFiletransfer.handle_outgoing_chunk_send_result(ft, friend_number, file_number, position,
+                                length, res);
                     }
                     else
                     {
                         final String fname = new File(ft.path_name + "/" + ft.file_name).getAbsolutePath();
-                        // Log.i(TAG, "file_chunk_request:fname=" + fname);
+                        // HelperGeneric.logI(TAG, "file_chunk_request:fname=" + fname);
                         long file_chunk_length = length;
                         byte[] bytes_chunck = HelperGeneric.read_chunk_from_SD_file(fname, position, file_chunk_length,
                                                                                     true);
@@ -7138,8 +7264,8 @@ public class MainActivity extends AppCompatActivity
                         file_chunk.put(bytes_chunck);
                         int res = tox_file_send_chunk(friend_number, file_number, position, file_chunk,
                                                       file_chunk_length);
-                        // Log.i(TAG, "file_chunk_request:res(1)=" + res);
-                        // TODO: handle error codes from tox_file_send_chunk() here ----
+                        HelperFiletransfer.handle_outgoing_chunk_send_result(ft, friend_number, file_number, position,
+                                length, res);
                     }
 
                     if (ft.filesize < UPDATE_MESSAGE_PROGRESS_SMALL_FILE_IS_LESS_THAN_BYTES)
@@ -7194,12 +7320,13 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "file_chunk_request:EE1:" + e.getMessage());
+            HelperGeneric.logI(TAG, "file_chunk_request:EE1:" + e.getMessage());
         }
     }
 
     static void android_tox_callback_file_recv_cb_method(long friend_number, long file_number, int a_TOX_FILE_KIND, long file_size, String filename, long filename_length)
     {
+        FileTransferDebug.logFileRecv(friend_number, file_number, file_size, filename);
         // HINT: ~~IOCipher can only handle files up to 2GBytes in size~~
         //         ^^^ this is no longer true!!
         if (file_size >= MAX_ALLOWED_INCOMING_FILESIZE_BYTES)
@@ -7213,26 +7340,26 @@ public class MainActivity extends AppCompatActivity
                 e.printStackTrace();
             }
 
-            display_toast("Incoming file is too large", false, 800);
+            display_toast(context_s.getString(R.string.chat_incoming_file_too_large), false, 800);
             return;
         }
 
         if (PREF__X_battery_saving_mode)
         {
-            Log.i(TAG, "global_last_activity_for_battery_savings_ts:010:*PING*:file_recv_cb");
+            HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:010:*PING*:file_recv_cb");
         }
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
-        // Log.i(TAG,
+        // HelperGeneric.logI(TAG,
         //      "file_recv:" + get_friend_name_from_num(friend_number) + ":fn==" + file_number + ":" + a_TOX_FILE_KIND +
         //      ":" + file_size + ":" + filename + ":" + filename_length);
 
         if (a_TOX_FILE_KIND == TOX_FILE_KIND_AVATAR.value)
         {
-            // Log.i(TAG, "file_recv:TOX_FILE_KIND_AVATAR");
+            // HelperGeneric.logI(TAG, "file_recv:TOX_FILE_KIND_AVATAR");
 
             if (file_size > AVATAR_INCOMING_MAX_BYTE_SIZE)
             {
-                Log.i(TAG, "file_recv:avatar_too_large");
+                HelperGeneric.logI(TAG, "file_recv:avatar_too_large");
                 try
                 {
                     tox_file_control(friend_number, file_number, TOX_FILE_CONTROL_CANCEL.value);
@@ -7245,7 +7372,7 @@ public class MainActivity extends AppCompatActivity
             }
             else if (file_size == 0)
             {
-                // Log.i(TAG, "file_recv:avatar_size_zero");
+                // HelperGeneric.logI(TAG, "file_recv:avatar_size_zero");
 
                 // friend wants to unset avatar
                 HelperFriend.del_friend_avatar(HelperFriend.tox_friend_get_public_key__wrapper(friend_number),
@@ -7270,11 +7397,11 @@ public class MainActivity extends AppCompatActivity
                                                                        file_id_buffer.arrayOffset(),
                                                                        file_id_buffer.limit()).toUpperCase();
             final String saved_hash_hex = get_friend_avatar_saved_hash_hex(HelperFriend.tox_friend_get_public_key__wrapper(friend_number));
-            // Log.i(TAG, "file_recv:TOX_FILE_KIND_AVATAR:incoming hash:" + file_id_buffer_hex + " saved hash:" + saved_hash_hex);
+            // HelperGeneric.logI(TAG, "file_recv:TOX_FILE_KIND_AVATAR:incoming hash:" + file_id_buffer_hex + " saved hash:" + saved_hash_hex);
 
             if ((file_id_buffer_hex != null) && (saved_hash_hex != null) && (saved_hash_hex.equals(file_id_buffer_hex)))
             {
-                Log.i(TAG, "file_recv:avatar_hash_is_the_same");
+                HelperGeneric.logI(TAG, "file_recv:avatar_hash_is_the_same");
                 try
                 {
                     tox_file_control(friend_number, file_number, TOX_FILE_CONTROL_CANCEL.value);
@@ -7332,7 +7459,7 @@ public class MainActivity extends AppCompatActivity
             final String file_id_buffer_hex = HelperGeneric.bytesToHex(file_id_buffer.array(),
                                                                        file_id_buffer.arrayOffset(),
                                                                        file_id_buffer.limit()).toUpperCase();
-            Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
+            HelperGeneric.logI(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
 
             Filetransfer f = new Filetransfer();
             f.tox_public_key_string = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
@@ -7430,7 +7557,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                Log.i(TAG, "update *new* status:EE1:" + e.getMessage());
+                HelperGeneric.logI(TAG, "update *new* status:EE1:" + e.getMessage());
             }
 
             // --- notification ---
@@ -7444,32 +7571,8 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             // --- notification ---
 
-            final Message m2 = m;
-
-            try
-            {
-                Thread t = new Thread()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            sleep(1 * 50);
-                        }
-                        catch (Exception e2)
-                        {
-                            e2.printStackTrace();
-                        }
-                        check_auto_accept_incoming_filetransfer(m2);
-                    }
-                };
-                t.start();
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
+            check_auto_accept_incoming_filetransfer(m);
+            HelperFiletransfer.ensure_incoming_dm_file_accepted(m);
         }
         else // DATA file ft
         {
@@ -7590,7 +7693,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                Log.i(TAG, "update *new* status:EE1:" + e.getMessage());
+                HelperGeneric.logI(TAG, "update *new* status:EE1:" + e.getMessage());
             }
 
             // --- notification ---
@@ -7604,32 +7707,8 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             // --- notification ---
 
-            final Message m2 = m;
-
-            try
-            {
-                Thread t = new Thread()
-                {
-                    @Override
-                    public void run()
-                    {
-                        try
-                        {
-                            sleep(1 * 50);
-                        }
-                        catch (Exception e2)
-                        {
-                            e2.printStackTrace();
-                        }
-                        check_auto_accept_incoming_filetransfer(m2);
-                    }
-                };
-                t.start();
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
+            check_auto_accept_incoming_filetransfer(m);
+            HelperFiletransfer.ensure_incoming_dm_file_accepted(m);
         }
     }
 
@@ -7637,14 +7716,14 @@ public class MainActivity extends AppCompatActivity
     {
         //if (PREF__X_battery_saving_mode)
         //{
-        //    Log.i(TAG, "global_last_activity_for_battery_savings_ts:011:*PING*");
+        //    HelperGeneric.logI(TAG, "global_last_activity_for_battery_savings_ts:011:*PING*");
         //}
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
-        global_last_activity_outgoung_ft_ts = System.currentTimeMillis();
+        global_last_activity_incoming_ft_ts = System.currentTimeMillis();
 
-        //Log.i(TAG, "file_recv_chunk:" + friend_number + ":fn==" + file_number + ":position=" + position + ":length=" + length + ":data len=" + data.length + ":data=" + data);
-        //Log.i(TAG, "file_recv_chunk:--START--");
-        //Log.i(TAG, "file_recv_chunk:" + friend_number + ":" + file_number + ":" + position + ":" + length);
+        //HelperGeneric.logI(TAG, "file_recv_chunk:" + friend_number + ":fn==" + file_number + ":position=" + position + ":length=" + length + ":data len=" + data.length + ":data=" + data);
+        //HelperGeneric.logI(TAG, "file_recv_chunk:--START--");
+        //HelperGeneric.logI(TAG, "file_recv_chunk:" + friend_number + ":" + file_number + ":" + position + ":" + length);
         Filetransfer f = null;
 
         try
@@ -7660,7 +7739,9 @@ public class MainActivity extends AppCompatActivity
 
             if (position == 0)
             {
-                // Log.i(TAG, "file_recv_chunk:START-O-F:filesize==" + f.filesize);
+                // HelperGeneric.logI(TAG, "file_recv_chunk:START-O-F:filesize==" + f.filesize);
+
+                orma.updateFiletransfer().idEq(f.id).transfer_start_ts(System.currentTimeMillis()).execute();
 
                 // file start. just to be sure, make directories
                 if (VFS_ENCRYPT)
@@ -7668,16 +7749,16 @@ public class MainActivity extends AppCompatActivity
                     info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(
                             f.path_name + "/" + f.file_name);
                     info.guardianproject.iocipher.File f2 = new info.guardianproject.iocipher.File(f1.getParent());
-                    // Log.i(TAG, "file_recv_chunk:f1=" + f1.getAbsolutePath());
-                    // Log.i(TAG, "file_recv_chunk:f2=" + f2.getAbsolutePath());
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:f1=" + f1.getAbsolutePath());
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:f2=" + f2.getAbsolutePath());
                     f2.mkdirs();
                 }
                 else
                 {
                     java.io.File f1 = new java.io.File(f.path_name + "/" + f.file_name);
                     java.io.File f2 = new java.io.File(f1.getParent());
-                    // Log.i(TAG, "file_recv_chunk:f1=" + f1.getAbsolutePath());
-                    // Log.i(TAG, "file_recv_chunk:f2=" + f2.getAbsolutePath());
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:f1=" + f1.getAbsolutePath());
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:f2=" + f2.getAbsolutePath());
                     f2.mkdirs();
                 }
             }
@@ -7692,11 +7773,25 @@ public class MainActivity extends AppCompatActivity
         {
             try
             {
-                // Log.i(TAG, "file_recv_chunk:file fully received");
                 flush_and_close_vfs_ft_from_cache(f);
+
+                if (!verify_incoming_file_complete(f))
+                {
+                    fail_incoming_filetransfer(f, friend_number, file_number, "incomplete_before_move");
+                    return;
+                }
+
+                // HelperGeneric.logI(TAG, "file_recv_chunk:file fully received");
                 HelperGeneric.move_tmp_file_to_real_file(f.path_name, f.file_name,
                                                          VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string +
                                                          "/", f.file_name);
+                if (HelperFiletransfer.get_vfs_file_length(VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/",
+                                                           f.file_name) < f.filesize)
+                {
+                    fail_incoming_filetransfer(f, friend_number, file_number, "incomplete_after_move");
+                    return;
+                }
+
                 long filedb_id = -1;
 
                 if (f.kind != TOX_FILE_KIND_AVATAR.value)
@@ -7710,13 +7805,13 @@ public class MainActivity extends AppCompatActivity
                     file_.file_name = f.file_name;
                     file_.filesize = f.filesize;
                     long row_id = orma.insertIntoFileDB(file_);
-                    // Log.i(TAG, "file_recv_chunk:FileDB:row_id=" + row_id);
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:FileDB:row_id=" + row_id);
                     filedb_id = orma.selectFromFileDB().tox_public_key_stringEq(
                             f.tox_public_key_string).file_nameEq(f.file_name).orderByIdDesc().get(0).id;
-                    // Log.i(TAG, "file_recv_chunk:FileDB:filedb_id=" + filedb_id);
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:FileDB:filedb_id=" + filedb_id);
                 }
 
-                // Log.i(TAG, "file_recv_chunk:kind=" + f.kind);
+                // HelperGeneric.logI(TAG, "file_recv_chunk:kind=" + f.kind);
 
                 if (f.kind == TOX_FILE_KIND_AVATAR.value)
                 {
@@ -7730,14 +7825,14 @@ public class MainActivity extends AppCompatActivity
                     HelperFriend.set_friend_avatar(HelperFriend.tox_friend_get_public_key__wrapper(friend_number),
                                                    VFS_PREFIX + VFS_FILE_DIR + "/" + f.tox_public_key_string + "/",
                                                    f.file_name, file_id_buffer_hex);
-                    // Log.i(TAG, "file_recv_chunk:kind=avatar:set_friend_avatar:" + VFS_PREFIX + VFS_FILE_DIR + "/" +
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:kind=avatar:set_friend_avatar:" + VFS_PREFIX + VFS_FILE_DIR + "/" +
                     //           f.tox_public_key_string + "/" + f.file_name);
                 }
                 else
                 {
-                    // Log.i(TAG, "file_recv_chunk:file_READY:001:f.id=" + f.id);
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:file_READY:001:f.id=" + f.id);
                     long msg_id = HelperMessage.get_message_id_from_filetransfer_id_and_friendnum(f.id, friend_number);
-                    // Log.i(TAG, "file_recv_chunk:file_READY:001a:msg_id=" + msg_id);
+                    // HelperGeneric.logI(TAG, "file_recv_chunk:file_READY:001a:msg_id=" + msg_id);
                     HelperMessage.update_message_in_db_filename_fullpath_friendnum_and_filenum(friend_number,
                                                                                                file_number, VFS_PREFIX +
                                                                                                             VFS_FILE_DIR +
@@ -7753,17 +7848,17 @@ public class MainActivity extends AppCompatActivity
 
                     try
                     {
-                        // Log.i(TAG, "file_recv_chunk:file_READY:002");
+                        // HelperGeneric.logI(TAG, "file_recv_chunk:file_READY:002");
 
                         if (f.id != -1)
                         {
-                            // Log.i(TAG, "file_recv_chunk:file_READY:003:f.id=" + f.id + " msg_id=" + msg_id);
+                            // HelperGeneric.logI(TAG, "file_recv_chunk:file_READY:003:f.id=" + f.id + " msg_id=" + msg_id);
                             HelperMessage.update_single_message_from_messge_id(msg_id, true);
                         }
                     }
                     catch (Exception e)
                     {
-                        Log.i(TAG, "file_recv_chunk:file_READY:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "file_recv_chunk:file_READY:EE:" + e.getMessage());
                     }
                 }
 
@@ -7776,6 +7871,7 @@ public class MainActivity extends AppCompatActivity
             {
                 remove_vfs_ft_from_cache(f);
                 e2.printStackTrace();
+                fail_incoming_filetransfer(f, friend_number, file_number, "completion_error:" + e2.getMessage());
             }
         }
         else // normal chunck recevied ---------- (NOT start, and NOT end)
@@ -7799,6 +7895,10 @@ public class MainActivity extends AppCompatActivity
                     }
                     catch (Exception e)
                     {
+                        HelperGeneric.logI(TAG, "file_recv_chunk:write_failed:" + e.getMessage());
+                        e.printStackTrace();
+                        fail_incoming_filetransfer(f, friend_number, file_number, "chunk_write:" + e.getMessage());
+                        return;
                     }
                 }
 
@@ -7807,7 +7907,7 @@ public class MainActivity extends AppCompatActivity
                     if ((f.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES_SMALL_FILES) < position)
                     {
                         f.current_position = position;
-                        // Log.i(TAG, "file_recv_chunk:filesize==:2:" + f.filesize);
+                        // HelperGeneric.logI(TAG, "file_recv_chunk:filesize==:2:" + f.filesize);
                         HelperFiletransfer.update_filetransfer_db_current_position(f);
 
                         if (f.kind != TOX_FILE_KIND_AVATAR.value)
@@ -7831,7 +7931,7 @@ public class MainActivity extends AppCompatActivity
                     if ((f.current_position + UPDATE_MESSAGE_PROGRESS_AFTER_BYTES) < position)
                     {
                         f.current_position = position;
-                        // Log.i(TAG, "file_recv_chunk:filesize==:2:" + f.filesize);
+                        // HelperGeneric.logI(TAG, "file_recv_chunk:filesize==:2:" + f.filesize);
                         HelperFiletransfer.update_filetransfer_db_current_position(f);
 
                         if (f.kind != TOX_FILE_KIND_AVATAR.value)
@@ -7854,28 +7954,28 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                Log.i(TAG, "file_recv_chunk:EE1:" + e.getMessage());
+                HelperGeneric.logI(TAG, "file_recv_chunk:EE1:" + e.getMessage());
             }
         }
     }
 
     // void test(int i)
     // {
-    //    Log.i(TAG, "test:" + i);
+    //    HelperGeneric.logI(TAG, "test:" + i);
     // }
 
     static void android_tox_log_cb_method(int a_TOX_LOG_LEVEL, String file, long line, String function, String message)
     {
         if (CTOXCORE_NATIVE_LOGGING)
         {
-            Log.i(TAG, "C-TOXCORE:" + ToxVars.TOX_LOG_LEVEL.value_str(a_TOX_LOG_LEVEL) + ":file=" + file + ":linenum=" +
+            HelperGeneric.logI(TAG, "C-TOXCORE:" + ToxVars.TOX_LOG_LEVEL.value_str(a_TOX_LOG_LEVEL) + ":file=" + file + ":linenum=" +
                        line + ":func=" + function + ":msg=" + message);
         }
     }
 
     static void logger_XX(int level, String text)
     {
-        Log.i(TAG, text);
+        HelperGeneric.logI(TAG, text);
     }
     // -------- called by native methods --------
     // -------- called by native methods --------
@@ -7895,13 +7995,13 @@ public class MainActivity extends AppCompatActivity
                 invite_to_conference_own_relay(conference_number);
             }
         }
-        Log.i(TAG, "conference_connected_cb:cf_num=" + conference_number);
+        HelperGeneric.logI(TAG, "conference_connected_cb:cf_num=" + conference_number);
         HelperGeneric.update_savedata_file_wrapper();
     }
 
     static void android_tox_callback_conference_invite_cb_method(final long friend_number, final int a_TOX_CONFERENCE_TYPE, final byte[] cookie_buffer, final long cookie_length)
     {
-        // Log.i(TAG, "conference_invite_cb:fn=" + friend_number + " type=" + a_TOX_CONFERENCE_TYPE + " cookie_length=" +
+        // HelperGeneric.logI(TAG, "conference_invite_cb:fn=" + friend_number + " type=" + a_TOX_CONFERENCE_TYPE + " cookie_length=" +
         //            cookie_length + " cookie=" + bytes_to_hex(cookie_buffer));
 
         //try
@@ -7913,7 +8013,7 @@ public class MainActivity extends AppCompatActivity
         //{
         ByteBuffer cookie_buf2 = ByteBuffer.allocateDirect((int) cookie_length);
         cookie_buf2.put(cookie_buffer);
-        Log.i(TAG, "conference_invite_cb:bytebuffer offset=" + cookie_buf2.arrayOffset());
+        HelperGeneric.logI(TAG, "conference_invite_cb:bytebuffer offset=" + cookie_buf2.arrayOffset());
 
         long conference_num = -1;
         if (a_TOX_CONFERENCE_TYPE != TOX_CONFERENCE_TYPE_AV.value)
@@ -7925,19 +8025,19 @@ public class MainActivity extends AppCompatActivity
             conference_num = toxav_join_av_groupchat(friend_number, cookie_buf2, cookie_length);
             HelperGeneric.update_savedata_file_wrapper();
             long result = toxav_groupchat_disable_av(conference_num);
-            Log.i(TAG, "conference_invite_cb:toxav_groupchat_disable_av result=" + result);
+            HelperGeneric.logI(TAG, "conference_invite_cb:toxav_groupchat_disable_av result=" + result);
         }
 
         display_toast(context_s.getString(R.string.invite_join_conference_success), false, 300);
 
         cache_confid_confnum.clear();
 
-        Log.i(TAG, "conference_invite_cb:tox_conference_join res=" + conference_num);
+        HelperGeneric.logI(TAG, "conference_invite_cb:tox_conference_join res=" + conference_num);
         // strip first 3 bytes of cookie to get the conference_id.
         // this is aweful and hardcoded
         String conference_identifier = bytes_to_hex(
                 Arrays.copyOfRange(cookie_buffer, 3, (int) (3 + CONFERENCE_ID_LENGTH)));
-        Log.i(TAG, "conference_invite_cb:conferenc ID=" + conference_identifier);
+        HelperGeneric.logI(TAG, "conference_invite_cb:conferenc ID=" + conference_identifier);
 
         // invite also my ToxProxy -------------
         if (a_TOX_CONFERENCE_TYPE == TOX_CONFERENCE_TYPE_TEXT.value)
@@ -7963,7 +8063,7 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        // Log.i(TAG,"conference_message_cb:cf_num=" + conference_number + " pnum=" + peer_number + " msg=" + message_orig);
+        // HelperGeneric.logI(TAG,"conference_message_cb:cf_num=" + conference_number + " pnum=" + peer_number + " msg=" + message_orig);
         int res = tox_conference_peer_number_is_ours(conference_number, peer_number);
 
         if (res == 1)
@@ -7975,7 +8075,7 @@ public class MainActivity extends AppCompatActivity
         String message_ = "";
         String message_id_ = "";
 
-        // Log.i(TAG, "xxxxxxxxxxxxx1:" + message_orig.length() + " " + message_orig.substring(8, 9) + " " +
+        // HelperGeneric.logI(TAG, "xxxxxxxxxxxxx1:" + message_orig.length() + " " + message_orig.substring(8, 9) + " " +
         //           message_orig.substring(9) + " " + message_orig.substring(0, 8));
 
         if ((message_orig.length() > 8) && (message_orig.startsWith(":", 8)))
@@ -8023,12 +8123,12 @@ public class MainActivity extends AppCompatActivity
 
         if (conference_message_list_activity != null)
         {
-            Log.i(TAG,
+            HelperGeneric.logI(TAG,
                   "noti_and_badge:002conf:" + conference_message_list_activity.get_current_conf_id() + ":" + conf_id);
 
             if (conference_message_list_activity.get_current_conf_id().equals(conf_id))
             {
-                // Log.i(TAG, "noti_and_badge:003:");
+                // HelperGeneric.logI(TAG, "noti_and_badge:003:");
                 // no notifcation and no badge update
                 do_notification = false;
                 do_badge_update = false;
@@ -8058,7 +8158,7 @@ public class MainActivity extends AppCompatActivity
         {
             if (cm.text.equals(message_))
             {
-                Log.i(TAG, "conference_message_cb:potentially double message:2");
+                HelperGeneric.logI(TAG, "conference_message_cb:potentially double message:2");
                 // ok it's a "potentially" double message
                 return;
             }
@@ -8088,7 +8188,7 @@ public class MainActivity extends AppCompatActivity
         else
         {
             long new_msg_id = HelperConference.insert_into_conference_message_db(m, false);
-            Log.i(TAG, "conference_message_cb:new_msg_id=" + new_msg_id);
+            HelperGeneric.logI(TAG, "conference_message_cb:new_msg_id=" + new_msg_id);
         }
 
         // HelperConference.update_single_conference_in_friendlist_view(conf_temp);
@@ -8102,7 +8202,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_conference_title_cb_method(long conference_number, long peer_number, String title, long title_length)
     {
-        // Log.i(TAG, "conference_title_cb:" + "confnum=" + conference_number + " peernum=" + peer_number + " new_title=" +
+        // HelperGeneric.logI(TAG, "conference_title_cb:" + "confnum=" + conference_number + " peernum=" + peer_number + " new_title=" +
         //           title + " title_length=" + title_length);
 
         try
@@ -8132,7 +8232,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e2)
             {
                 e2.printStackTrace();
-                Log.i(TAG, "get_conference_title_from_confid:EE:3:" + e2.getMessage());
+                HelperGeneric.logI(TAG, "get_conference_title_from_confid:EE:3:" + e2.getMessage());
             }
 
             HelperConference.update_single_conference_in_friendlist_view(conf_temp2);
@@ -8140,7 +8240,7 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "android_tox_callback_conference_title_cb_method:EE1:" + e.getMessage());
+            HelperGeneric.logI(TAG, "android_tox_callback_conference_title_cb_method:EE1:" + e.getMessage());
         }
 
         try
@@ -8161,7 +8261,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_conference_peer_name_cb_method(long conference_number, long peer_number, String name, long name_length)
     {
-        // Log.i(TAG, "conference_peer_name_cb:cf_num=" + conference_number);
+        // HelperGeneric.logI(TAG, "conference_peer_name_cb:cf_num=" + conference_number);
 
         try
         {
@@ -8211,10 +8311,10 @@ public class MainActivity extends AppCompatActivity
                 {
                     // don't use the wrapper here!
                     String peer_pubkey_temp = tox_conference_peer_get_public_key(conference_number, peer_number);
-                    // Log.i(TAG, "namelist_change_cb:003:peer_pubkey_temp=" + peer_pubkey_temp);
+                    // HelperGeneric.logI(TAG, "namelist_change_cb:003:peer_pubkey_temp=" + peer_pubkey_temp);
                     // don't use the wrapper here!
                     peer_name_temp = name;
-                    // Log.i(TAG, "namelist_change_cb:004:peer_name_temp=" + peer_name_temp);
+                    // HelperGeneric.logI(TAG, "namelist_change_cb:004:peer_name_temp=" + peer_name_temp);
 
                     try
                     {
@@ -8236,26 +8336,26 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "namelist_change_cb:005:EE1:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "namelist_change_cb:005:EE1:" + e.getMessage());
                 }
 
                 try
                 {
                     if (conference_message_list_activity != null)
                     {
-                        // Log.i(TAG, "namelist_change_cb:INFO:" + " 001");
+                        // HelperGeneric.logI(TAG, "namelist_change_cb:INFO:" + " 001");
 
                         if (conference_message_list_activity.get_current_conf_id().equals(
                                 conf_temp.conference_identifier))
                         {
                             String peer_pubkey_temp2 = tox_conference_peer_get_public_key(conference_number,
                                                                                           peer_number);
-                            //Log.i(TAG,
+                            //HelperGeneric.logI(TAG,
                             //      "namelist_change_cb:INFO:" + " 002 " + conference_number + ":" + peer_number + ":" +
                             //      peer_pubkey_temp2);
                             conference_message_list_activity.add_group_user(peer_pubkey_temp2, peer_number,
                                                                             peer_name_temp2, false);
-                            //Log.i(TAG, "namelist_change_cb:INFO:" + " 003");
+                            //HelperGeneric.logI(TAG, "namelist_change_cb:INFO:" + " 003");
                         }
                     }
                 }
@@ -8274,7 +8374,7 @@ public class MainActivity extends AppCompatActivity
                     cpcdb.peer_name = peer_name_temp2;
                     cpcdb.last_update_timestamp = System.currentTimeMillis();
                     orma.insertIntoConferencePeerCacheDB(cpcdb);
-                    // Log.i(TAG, "namelist_change_cb:insertIntoConferencePeerCacheDB:" + cpcdb);
+                    // HelperGeneric.logI(TAG, "namelist_change_cb:insertIntoConferencePeerCacheDB:" + cpcdb);
                 }
                 catch (Exception e4)
                 {
@@ -8282,7 +8382,7 @@ public class MainActivity extends AppCompatActivity
                 }
 
                 m.text = "" + peer_name_temp + " changed name.";
-                // Log.i(TAG, "namelist_change_cb:INFO:" + peer_name_temp + " changed name.");
+                // HelperGeneric.logI(TAG, "namelist_change_cb:INFO:" + peer_name_temp + " changed name.");
             }
         }
         catch (Exception e)
@@ -8294,7 +8394,7 @@ public class MainActivity extends AppCompatActivity
     static void android_tox_callback_conference_peer_list_changed_cb_method(long conference_number)
     {
         // update all peers in this conference
-        // Log.i(TAG, "conference_peer_list_changed_cb:cf_num=" + conference_number);
+        // HelperGeneric.logI(TAG, "conference_peer_list_changed_cb:cf_num=" + conference_number);
 
         try
         {
@@ -8329,12 +8429,12 @@ public class MainActivity extends AppCompatActivity
                 {
                     if (conference_message_list_activity != null)
                     {
-                        // Log.i(TAG, "peer_list_changed_cb:INFO:" + " 001.1");
+                        // HelperGeneric.logI(TAG, "peer_list_changed_cb:INFO:" + " 001.1");
 
                         if (conference_message_list_activity.get_current_conf_id().equals(
                                 conf_temp.conference_identifier))
                         {
-                            // Log.i(TAG, "peer_list_changed_cb:INFO:" + " 002.1 " + conference_number);
+                            // HelperGeneric.logI(TAG, "peer_list_changed_cb:INFO:" + " 002.1 " + conference_number);
                             conference_message_list_activity.update_group_all_users();
                         }
                     }
@@ -8348,11 +8448,11 @@ public class MainActivity extends AppCompatActivity
                 {
                     if (conference_audio_activity != null)
                     {
-                        // Log.i(TAG, "peer_list_changed_cb:INFO:" + " 001.1");
+                        // HelperGeneric.logI(TAG, "peer_list_changed_cb:INFO:" + " 001.1");
 
                         if (conference_audio_activity.get_current_conf_id().equals(conf_temp.conference_identifier))
                         {
-                            // Log.i(TAG, "peer_list_changed_cb:INFO:" + " 002.1 " + conference_number);
+                            // HelperGeneric.logI(TAG, "peer_list_changed_cb:INFO:" + " 002.1 " + conference_number);
                             conference_audio_activity.update_group_all_users();
                         }
                     }
@@ -8407,7 +8507,7 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_privacy_state_cb_method(long group_number, final int a_TOX_GROUP_PRIVACY_STATE)
     {
-        Log.i(TAG,
+        HelperGeneric.logI(TAG,
               "group_privacy_state_cb:group_number=" + group_number + " privacy_state=" + a_TOX_GROUP_PRIVACY_STATE);
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
         update_group_in_db_privacy_state(group_identifier, a_TOX_GROUP_PRIVACY_STATE);
@@ -8421,9 +8521,38 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_invite_cb_method(long friend_number, final byte[] invite_data, final long invite_data_length, String group_name)
     {
-        Log.i(TAG,
+        HelperGeneric.logI(TAG,
               "group_invite_cb:fn=" + friend_number + " invite_data_length=" + invite_data_length + " invite_data=" +
               bytes_to_hex(invite_data) + " groupname=" + group_name);
+
+        // friend-assisted join: if we already created a stuck (peerless) instance of
+        // this group via tox_group_join, drop it first — tox_group_invite_accept
+        // would otherwise create a duplicate instance of the same chat id.
+        try
+        {
+            final String incoming_chat_id = bytes_to_hex(
+                    Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH)).toLowerCase();
+            final long existing_gn = HelperGroup.tox_group_by_groupid__wrapper(incoming_chat_id);
+            if (existing_gn >= 0)
+            {
+                final long existing_peers = tox_group_peer_count(existing_gn);
+                final int existing_conn = tox_group_is_connected(existing_gn);
+                if (existing_conn == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value
+                    && existing_peers > 1L)
+                {
+                    HelperGeneric.logI(TAG, "group_invite_cb:already in group with peers, ignoring invite gn=" + existing_gn);
+                    return;
+                }
+                HelperGeneric.logI(TAG, "group_invite_cb:leaving stuck instance gn=" + existing_gn + " peers=" + existing_peers
+                           + " conn=" + existing_conn + " before invite accept");
+                tox_group_leave(existing_gn, null);
+                update_savedata_file_wrapper();
+            }
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "group_invite_cb:dup-check:EE:" + e.getMessage());
+        }
 
         final ByteBuffer invite_data_buf_wrapped = ByteBuffer.allocateDirect((int) invite_data_length);
         invite_data_buf_wrapped.put(invite_data, 0, (int) invite_data_length);
@@ -8431,7 +8560,7 @@ public class MainActivity extends AppCompatActivity
         long new_group_num = tox_group_invite_accept(friend_number, invite_data_buf_wrapped, invite_data_length,
                                                      HelperGroup.get_group_peer_join_name(), null);
 
-        Log.i(TAG, "group_invite_cb:fn=" + friend_number + " got invited to group num=" + new_group_num);
+        HelperGeneric.logI(TAG, "group_invite_cb:fn=" + friend_number + " got invited to group num=" + new_group_num);
         update_savedata_file_wrapper();
 
         if ((new_group_num >= 0) && (new_group_num < UINT32_MAX_JAVA))
@@ -8440,13 +8569,17 @@ public class MainActivity extends AppCompatActivity
 
             // TODO: get real group_identifier and privacy_state, get it via API call
             String group_identifier = bytes_to_hex(Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH));
+            HelperGroup.clear_pending_friend_assisted_join(group_identifier);
             HelperGroup.add_group_wrapper(friend_number, new_group_num, group_identifier, 0);
             final int new_privacy_state = tox_group_get_privacy_state(new_group_num);
-            Log.i(TAG, "group_invite_cb:fn=" + friend_number + " got invited to group num=" + new_group_num +
+            HelperGeneric.logI(TAG, "group_invite_cb:fn=" + friend_number + " got invited to group num=" + new_group_num +
                        " new_privacy_state=" + new_privacy_state);
             update_group_in_db_privacy_state(group_identifier, new_privacy_state);
             update_group_in_friendlist(group_identifier);
             update_group_in_groupmessagelist(group_identifier);
+            HelperGroup.reconnect_group_if_disconnected(new_group_num, group_identifier);
+            HelperGroup.sync_group_peers_from_tox_to_db(new_group_num);
+            HelperGroup.on_group_connected(new_group_num);
             if (have_own_relay())
             {
                 invite_to_group_own_relay(new_group_num);
@@ -8456,7 +8589,8 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_peer_join_cb_method(long group_number, long peer_id)
     {
-        // Log.i(TAG, "group_peer_join_cb:group_number=" + group_number + " peer_id=" + peer_id);
+        HelperGeneric.logI(TAG, "group_peer_join_cb:group_number=" + group_number + " peer_id=" + peer_id
+                + " id=" + tox_group_by_groupnum__wrapper(group_number));
 
         final String temp_group_identifier = tox_group_by_groupnum__wrapper(group_number);
         update_group_in_friendlist(temp_group_identifier);
@@ -8474,15 +8608,17 @@ public class MainActivity extends AppCompatActivity
             peer_role = ToxVars.Tox_Group_Role.TOX_GROUP_ROLE_OBSERVER.value;
         }
         update_group_messages_peer_role(temp_group_identifier, group_peer_pubkey, peer_role);
-        add_group_peer_to_db(group_number, temp_group_identifier, peer_id, group_peer_pubkey, peer_role);
-        add_system_message_to_group_chat(temp_group_identifier, "peer " + peer_id + " joined the group");
-        update_group_in_groupmessagelist(temp_group_identifier);
-        HelperGroup.khandaq_community_auto_promote_peer(group_number, peer_id);
+        HelperGroup.record_group_peer_on_join(group_number, temp_group_identifier, peer_id, group_peer_pubkey, peer_role);
+        HelperGroup.notify_group_peer_joined(group_number, peer_id);
+        update_group_in_friendlist(temp_group_identifier);
+        update_group_in_groupmessagelist(temp_group_identifier, true);
         int privacy_state = tox_group_get_privacy_state(group_number);
         if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
         {
             send_ngch_request(temp_group_identifier, tox_group_peer_get_public_key__wrapper(group_number, peer_id));
             sync_group_message_history(group_number, peer_id);
+            HelperGroup.sync_group_message_history_to_all_peers(group_number);
+            HelperGroup.schedule_group_message_resync(group_number);
         }
         // update_savedata_file_wrapper_throttled();
         update_savedata_file_wrapper();
@@ -8490,15 +8626,18 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_peer_exit_cb_method(long group_number, long peer_id, int a_Tox_Group_Exit_Type)
     {
-        // Log.i(TAG, "group_peer_exit_cb:group_number=" + group_number + " peer_id=" + peer_id + " exit_type=" +
+        // HelperGeneric.logI(TAG, "group_peer_exit_cb:group_number=" + group_number + " peer_id=" + peer_id + " exit_type=" +
         //           a_Tox_Group_Exit_Type);
 
         final String temp_group_identifier = tox_group_by_groupnum__wrapper(group_number);
+        HelperGroup.record_group_peer_last_seen_on_exit(group_number, peer_id);
+        HelperGroup.handle_group_peer_transport_lost(group_number, peer_id, a_Tox_Group_Exit_Type);
+        // intentional leave/kick -> not a member anymore, drop from members DB
+        HelperGroup.remove_group_peer_from_db_on_exit(group_number, peer_id, a_Tox_Group_Exit_Type);
+        HelperGroup.sync_group_peers_from_tox_to_db(group_number);
         update_group_in_friendlist(temp_group_identifier);
-        update_group_in_groupmessagelist(temp_group_identifier);
-        add_system_message_to_group_chat(temp_group_identifier, "peer " + peer_id + " left the group: " +
-                                                                ToxVars.Tox_Group_Exit_Type.value_str(
-                                                                        a_Tox_Group_Exit_Type));
+        update_group_in_groupmessagelist(temp_group_identifier, true);
+        HelperGroup.notify_group_peer_exit(group_number, peer_id, a_Tox_Group_Exit_Type);
         update_savedata_file_wrapper();
     }
 
@@ -8521,20 +8660,20 @@ public class MainActivity extends AppCompatActivity
         }
         update_group_peer_in_db(group_number, temp_group_identifier, peer_id, group_peer_pubkey, peer_role);
         update_group_in_groupmessagelist(temp_group_identifier);
-        add_system_message_to_group_chat(temp_group_identifier, "peer " + peer_id + " changed name");
+        HelperGroup.notify_group_peer_name_changed(group_number, peer_id);
         update_savedata_file_wrapper();
     }
 
     static void android_tox_callback_group_join_fail_cb_method(long group_number, int a_Tox_Group_Join_Fail)
     {
-        Log.i(TAG, "group_join_fail_cb:group_number=" + group_number + " fail=" + a_Tox_Group_Join_Fail);
-        final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
+        HelperGeneric.logI(TAG, "group_join_fail_cb:group_number=" + group_number + " fail=" + a_Tox_Group_Join_Fail);
+        HelperGroup.handle_group_join_fail_async(group_number, a_Tox_Group_Join_Fail);
         update_savedata_file_wrapper();
     }
 
     static void android_tox_callback_group_self_join_cb_method(long group_number)
     {
-        Log.i(TAG, "group_self_join_cb:group_number=" + group_number);
+        HelperGeneric.logI(TAG, "group_self_join_cb:group_number=" + group_number);
         final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
 
         set_group_active(group_identifier);
@@ -8560,7 +8699,7 @@ public class MainActivity extends AppCompatActivity
             invite_to_group_own_relay(group_number);
         }
 
-        HelperGroup.khandaq_community_on_connected(group_number);
+        HelperGroup.on_group_self_joined(group_number, group_identifier);
     }
 
     static void android_tox_callback_group_moderation_cb_method(long group_number, long source_peer_id, long target_peer_id, int a_Tox_Group_Mod_Event)
@@ -8569,12 +8708,12 @@ public class MainActivity extends AppCompatActivity
         {
             if ((source_peer_id == UINT32_MAX_JAVA) || (target_peer_id == UINT32_MAX_JAVA))
             {
-                // Log.i(TAG, "group_moderation_cb:ERROR:group_number=" + group_number + " speer=" + source_peer_id + " tpeer=" + target_peer_id + " a_Tox_Group_Mod_Event=" + a_Tox_Group_Mod_Event);
+                // HelperGeneric.logI(TAG, "group_moderation_cb:ERROR:group_number=" + group_number + " speer=" + source_peer_id + " tpeer=" + target_peer_id + " a_Tox_Group_Mod_Event=" + a_Tox_Group_Mod_Event);
                 return;
             }
 
             final String group_identifier = tox_group_by_groupnum__wrapper(group_number);
-            Log.i(TAG, "group_moderation_cb:group_number=" + group_number + " group_identifier=" + group_identifier + " speer=" + source_peer_id + " tpeer=" + target_peer_id + " a_Tox_Group_Mod_Event=" + a_Tox_Group_Mod_Event);
+            HelperGeneric.logI(TAG, "group_moderation_cb:group_number=" + group_number + " group_identifier=" + group_identifier + " speer=" + source_peer_id + " tpeer=" + target_peer_id + " a_Tox_Group_Mod_Event=" + a_Tox_Group_Mod_Event);
 
             String group_peer_pubkey = null;
             try
@@ -8609,11 +8748,6 @@ public class MainActivity extends AppCompatActivity
                                 + ToxVars.Tox_Group_Mod_Event.value_str(a_Tox_Group_Mod_Event));
             }
 
-            if (a_Tox_Group_Mod_Event == ToxVars.Tox_Group_Mod_Event.TOX_GROUP_MOD_EVENT_OBSERVER.value)
-            {
-                HelperGroup.khandaq_community_auto_promote_peer(group_number, target_peer_id);
-            }
-
             update_group_in_groupmessagelist(group_identifier);
             update_savedata_file_wrapper();
         }
@@ -8625,9 +8759,23 @@ public class MainActivity extends AppCompatActivity
 
     static void android_tox_callback_group_connection_status_cb_method(long group_number, int a_TOX_GROUP_CONNECTION_STATUS)
     {
-        // Log.i(TAG, "group_connection_status_cb:group_number=" + group_number + " status=" + a_TOX_GROUP_CONNECTION_STATUS);
+        HelperGeneric.logI(TAG, "group_connection_status_cb:group_number=" + group_number + " status=" + a_TOX_GROUP_CONNECTION_STATUS
+                + " id=" + tox_group_by_groupnum__wrapper(group_number));
 
-        update_group_in_friendlist(group_number);
+        final String conn_group_identifier = tox_group_by_groupnum__wrapper(group_number);
+
+        if (a_TOX_GROUP_CONNECTION_STATUS ==
+            TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+        {
+            HelperGroup.sync_group_peers_from_tox_to_db(group_number);
+            update_group_in_groupmessagelist(conn_group_identifier, true);
+            HelperGroup.on_group_connected(group_number);
+        }
+        else if (conn_group_identifier != null)
+        {
+            HelperGroup.schedule_group_auto_reconnect(group_number, conn_group_identifier);
+            update_group_in_groupmessagelist(conn_group_identifier, true);
+        }
 
         try
         {
@@ -8644,18 +8792,12 @@ public class MainActivity extends AppCompatActivity
             e.printStackTrace();
         }
 
-        if (a_TOX_GROUP_CONNECTION_STATUS ==
-            TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
-        {
-            HelperGroup.khandaq_community_on_connected(group_number);
-        }
-
         update_savedata_file_wrapper();
     }
 
     static void android_tox_callback_group_topic_cb_method(long group_number, long peer_id, String topic, long topic_length)
     {
-        // Log.i(TAG, "group_topic_cb: groupnum=" + group_number + " peer=" + peer_id + " topic=" + topic);
+        // HelperGeneric.logI(TAG, "group_topic_cb: groupnum=" + group_number + " peer=" + peer_id + " topic=" + topic);
         if (topic == null)
         {
             topic = "";
@@ -8671,11 +8813,47 @@ public class MainActivity extends AppCompatActivity
         update_savedata_file_wrapper();
     }
 
+    /** Routes chunked NGC file transfer packets (0x12 begin / 0x13 chunk / 0x14 request). */
+    private static boolean routeNgcChunkedFileTransferPacket(final long group_number, final long peer_id,
+                                                             final byte[] data, final long length)
+    {
+        if (data == null || length < NgcGroupFileTransfer.FILE_REQUEST_HEADER
+                || length > TOX_MAX_NGC_FILE_AND_HEADER_SIZE)
+        {
+            return false;
+        }
+        if (data[0] != (byte) 0x66 || data[1] != (byte) 0x77 || data[2] != (byte) 0x88
+                || data[3] != (byte) 0x11 || data[4] != (byte) 0x34 || data[5] != (byte) 0x35
+                || data[6] != (byte) 0x1)
+        {
+            return false;
+        }
+
+        if (data[7] == NgcGroupFileTransfer.PKT_FILE_REQUEST)
+        {
+            NgcGroupFileTransfer.handleIncomingFileRequest(group_number, peer_id, data, (int) length);
+            return true;
+        }
+        if (data[7] == NgcGroupFileTransfer.PKT_FILE_CHUNK
+                && length >= (NgcGroupFileTransfer.FILE_CHUNK_HEADER + 1))
+        {
+            NgcGroupFileTransfer.handleIncomingChunk(group_number, peer_id, data, (int) length);
+            return true;
+        }
+        if (data[7] == NgcGroupFileTransfer.PKT_FILE_BEGIN
+                && length >= NgcGroupFileTransfer.FILE_BEGIN_HEADER)
+        {
+            NgcGroupFileTransfer.handleIncomingBegin(group_number, peer_id, data, (int) length);
+            return true;
+        }
+        return false;
+    }
+
     static void android_tox_callback_group_custom_packet_cb_method(long group_number, long peer_id, final byte[] data, long length)
     {
         try
         {
-            // Log.i(TAG,
+            // HelperGeneric.logI(TAG,
             //      "group_custom_packet_cb:group_number=" + group_number + " peer_id=" + peer_id + " length=" + length +
             //      " data=" + HelperGeneric.bytesToHex(data, 0, (int) length));
         }
@@ -8689,6 +8867,11 @@ public class MainActivity extends AppCompatActivity
             return;
         }
         // check for muted or kicked peers
+
+        if (routeNgcChunkedFileTransferPacket(group_number, peer_id, data, length))
+        {
+            return;
+        }
 
         // check for correct signature of packets
         final long header_ngc_audio_v1 = 6 + 1 + 1 + 1 + 1;
@@ -8714,14 +8897,22 @@ public class MainActivity extends AppCompatActivity
                 {
                     handle_incoming_group_file(group_number, peer_id, data, length, header_ngc_histsync_and_files);
                 }
+                else if ((data[6] == (byte) 0x1) && (data[7] == (byte) 0x12))
+                {
+                    NgcGroupFileTransfer.handleIncomingBegin(group_number, peer_id, data, (int) length);
+                }
+                else if ((data[6] == (byte) 0x1) && (data[7] == (byte) 0x13))
+                {
+                    NgcGroupFileTransfer.handleIncomingChunk(group_number, peer_id, data, (int) length);
+                }
                 else
                 {
-                    // Log.i(TAG, "group_custom_packet_cb:wrong signature 2");
+                    // HelperGeneric.logI(TAG, "group_custom_packet_cb:wrong signature 2");
                 }
             }
             else
             {
-                // Log.i(TAG, "group_custom_packet_cb:wrong signature 1");
+                // HelperGeneric.logI(TAG, "group_custom_packet_cb:wrong signature 1");
             }
         }
 
@@ -8752,17 +8943,17 @@ public class MainActivity extends AppCompatActivity
                          && (data[8] == (byte) 480) && (data[9] == (byte) 640) && (data[10] == (byte) 1)
                          && (length >= (header_ngc_video_v2 + 1)))
                 {
-                    // Log.i(TAG, "group_custom_packet_cb:video_v2");
+                    // HelperGeneric.logI(TAG, "group_custom_packet_cb:video_v2");
                     show_ngc_incoming_video_frame_v2(group_number, peer_id, data, length);
                 }
                 else
                 {
-                    // Log.i(TAG, "group_custom_packet_cb:wrong signature 2");
+                    // HelperGeneric.logI(TAG, "group_custom_packet_cb:wrong signature 2");
                 }
             }
             else
             {
-                // Log.i(TAG, "group_custom_packet_cb:wrong signature 1");
+                // HelperGeneric.logI(TAG, "group_custom_packet_cb:wrong signature 1");
             }
         }
 
@@ -8803,7 +8994,7 @@ public class MainActivity extends AppCompatActivity
     {
         try
         {
-            //Log.i(TAG,
+            //HelperGeneric.logI(TAG,
             //      "group_custom_private_packet_cb:group_number=" + group_number + " peer_id=" + peer_id + " length=" + length +
             //      " data=" + HelperGeneric.bytesToHex(data, 0, (int) length));
         }
@@ -8817,7 +9008,7 @@ public class MainActivity extends AppCompatActivity
             if (res == peer_id)
             {
                 // HINT: ignore own packets
-                // Log.i(TAG, "group_custom_private_packet_cb:gn=" + group_number + " peerid=" + peer_id + " ignoring own packet");
+                // HelperGeneric.logI(TAG, "group_custom_private_packet_cb:gn=" + group_number + " peerid=" + peer_id + " ignoring own packet");
                 return;
             }
         }
@@ -8832,11 +9023,16 @@ public class MainActivity extends AppCompatActivity
         }
         // check for muted or kicked peers
 
+        if (routeNgcChunkedFileTransferPacket(group_number, peer_id, data, length))
+        {
+            return;
+        }
+
         // check for correct signature of packets
         final long header = 6 + 1 + 1;
         if ((length > TOX_MAX_NGC_FILE_AND_HEADER_SIZE) || (length < header))
         {
-            Log.i(TAG, "group_custom_private_packet_cb: data length has wrong size: " + length);
+            HelperGeneric.logI(TAG, "group_custom_private_packet_cb: data length has wrong size: " + length);
             return;
         }
 
@@ -8859,7 +9055,7 @@ public class MainActivity extends AppCompatActivity
         {
             if ((data[6] == (byte)0x1) && (data[7] == (byte)0x1))
             {
-                // Log.i(TAG, "group_custom_private_packet_cb: got ngch_request");
+                // HelperGeneric.logI(TAG, "group_custom_private_packet_cb: got ngch_request");
                 int privacy_state = tox_group_get_privacy_state(group_number);
                 if (privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
                 {
@@ -8867,7 +9063,7 @@ public class MainActivity extends AppCompatActivity
                 }
                 else
                 {
-                    Log.i(TAG, "group_custom_private_packet_cb: only sync history for public groups!");
+                    HelperGeneric.logI(TAG, "group_custom_private_packet_cb: only sync history for public groups!");
                 }
             }
             else if ((data[6] == (byte)0x1) && (data[7] == (byte)0x2))
@@ -8875,18 +9071,26 @@ public class MainActivity extends AppCompatActivity
                 final int header_syncmsg = 6 + 1 + 1 + 4 + 32 + 4 + 25;
                 if (length >= (header_syncmsg + 1))
                 {
-                    // Log.i(TAG, "group_custom_private_packet_cb: got ngch_syncmsg");
+                    HelperGeneric.logI(TAG, "group_custom_private_packet_cb:ngch_syncmsg gn=" + group_number + " peer=" + peer_id
+                            + " len=" + length);
                     handle_incoming_sync_group_message(group_number, peer_id, data, length);
                 }
             }
             else if ((data[6] == (byte)0x1) && (data[7] == (byte)0x3))
             {
-                // Log.i(TAG, "group_custom_private_packet_cb: got ngch_syncfile:xxxxxxx");
+                // HelperGeneric.logI(TAG, "group_custom_private_packet_cb: got ngch_syncfile:xxxxxxx");
                 final int header_syncfile = 6 + 1 + 1 + 32 + 32 + 4 + 25 + 255;
                 if (length >= (header_syncfile + 1))
                 {
-                    // Log.i(TAG, "group_custom_private_packet_cb: got ngch_syncfile");
+                    // HelperGeneric.logI(TAG, "group_custom_private_packet_cb: got ngch_syncfile");
                     handle_incoming_sync_group_file(group_number, peer_id, data, length);
+                }
+            }
+            else if ((data[6] == (byte)0x1) && (data[7] == (byte)0x4))
+            {
+                if (length >= (6 + 1 + 1 + 4))
+                {
+                    HelperGroup.handle_incoming_group_delivery_receipt(group_number, peer_id, data, (int) length);
                 }
             }
         }
@@ -8907,12 +9111,22 @@ public class MainActivity extends AppCompatActivity
         {
             System.loadLibrary("jni-c-toxcore");
             native_lib_loaded = true;
-            Log.i(TAG, "successfully loaded jni-c-toxcore library");
+            HelperGeneric.logI(TAG, "successfully loaded jni-c-toxcore library");
+            try
+            {
+                System.loadLibrary("jni-c-toxcore-topic-patch");
+                HelperGeneric.logI(TAG, "successfully loaded jni-c-toxcore-topic-patch library");
+            }
+            catch (java.lang.UnsatisfiedLinkError patchErr)
+            {
+                // Optional: only needed when prebuilt libjni-c-toxcore.so lacks tox_group_set_topic JNI.
+                HelperGeneric.logI(TAG, "jni-c-toxcore-topic-patch not loaded (may be linked in main lib)");
+            }
         }
         catch (java.lang.UnsatisfiedLinkError e)
         {
             native_lib_loaded = false;
-            Log.i(TAG, "loadLibrary jni-c-toxcore failed!");
+            HelperGeneric.logI(TAG, "loadLibrary jni-c-toxcore failed!");
             e.printStackTrace();
         }
 
@@ -8920,12 +9134,12 @@ public class MainActivity extends AppCompatActivity
         {
             System.loadLibrary("native-audio-jni");
             native_audio_lib_loaded = true;
-            Log.i(TAG, "successfully loaded native-audio-jni library");
+            HelperGeneric.logI(TAG, "successfully loaded native-audio-jni library");
         }
         catch (java.lang.UnsatisfiedLinkError e)
         {
             native_audio_lib_loaded = false;
-            Log.i(TAG, "loadLibrary native-audio-jni failed!");
+            HelperGeneric.logI(TAG, "loadLibrary native-audio-jni failed!");
             e.printStackTrace();
 
             final Thread t = new Thread()
@@ -8940,7 +9154,7 @@ public class MainActivity extends AppCompatActivity
                     }
                     catch (Exception e)
                     {
-                        Log.i(TAG, "loadLibrary native-audio-jni failed: toast failed to show");
+                        HelperGeneric.logI(TAG, "loadLibrary native-audio-jni failed: toast failed to show");
                     }
                 }
             };
@@ -8952,12 +9166,12 @@ public class MainActivity extends AppCompatActivity
             try
             {
                 System.loadLibrary("loggingstdout");
-                Log.i(TAG, "successfully loaded loggingstdout library");
+                HelperGeneric.logI(TAG, "successfully loaded loggingstdout library");
                 com.zoffcc.applications.loggingstdout.LoggingStdout.start_logging();
             }
             catch (java.lang.UnsatisfiedLinkError e)
             {
-                Log.i(TAG, "loadLibrary loggingstdout failed!");
+                HelperGeneric.logI(TAG, "loadLibrary loggingstdout failed!");
                 e.printStackTrace();
 
                 final Thread t = new Thread()
@@ -8972,7 +9186,7 @@ public class MainActivity extends AppCompatActivity
                         }
                         catch (Exception e)
                         {
-                            Log.i(TAG, "loadLibrary loggingstdout failed: toast failed to show");
+                            HelperGeneric.logI(TAG, "loadLibrary loggingstdout failed: toast failed to show");
                         }
                     }
                 };
@@ -8988,6 +9202,11 @@ public class MainActivity extends AppCompatActivity
         startActivityForResult(intent, AddFriendActivity_ID);
     }
 
+    public void show_create_private_group(@Nullable View view)
+    {
+        startActivityForResult(new Intent(this, AddPrivateGroupActivity.class), AddPrivateGroupActivity_ID);
+    }
+
     void open_profile_activity()
     {
         try
@@ -8997,13 +9216,419 @@ public class MainActivity extends AppCompatActivity
                 return;
             }
 
-            final Intent intent = new Intent(this, ProfileActivity.class);
-            startActivityForResult(intent, ProfileActivity_ID);
+            if (bottomNavigationView != null)
+            {
+                bottomNavigationView.setSelectedItemId(R.id.bottom_nav_profile);
+            }
         }
         catch (Exception e)
         {
             e.printStackTrace();
         }
+    }
+
+    void exit_application_from_menu()
+    {
+        try
+        {
+            ConfGroupAudioService.stop_me(true);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        try
+        {
+            CallAudioService.stop_me(true);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        try
+        {
+            if (is_tox_started)
+            {
+                tox_service_fg.stop_tox_fg(true);
+                tox_service_fg.stop_me(true);
+            }
+            else
+            {
+                tox_service_fg.stop_me(true);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void setupBottomNavigation(final Bundle savedInstanceState)
+    {
+        bottomNavigationView = findViewById(R.id.bottom_navigation);
+        mainChatSearch = findViewById(R.id.main_chat_search);
+        // KHANDAQ (#34): the chat-list search field acts as a button that opens the dedicated global
+        // search screen (Telegram-style: searches every chat/group + all messages at once).
+        if (mainChatSearch != null)
+        {
+            mainChatSearch.setFocusable(false);
+            mainChatSearch.setFocusableInTouchMode(false);
+            mainChatSearch.setOnClickListener(v ->
+                    startActivity(new android.content.Intent(MainActivity.this, GlobalSearchActivity.class)));
+        }
+        setupChatFilterTabs();
+
+        if (savedInstanceState == null)
+        {
+            contactsFragment = FriendListFragment.newInstance(FriendListFragment.LIST_MODE_CONTACTS);
+            chatsFragment = FriendListFragment.newInstance(FriendListFragment.LIST_MODE_CHATS);
+            settingsFragment = new SettingsTabFragment();
+            profileFragment = new ProfileTabFragment();
+
+            getSupportFragmentManager().beginTransaction()
+                    .add(R.id.main_fragment_container, contactsFragment, "tab_contacts")
+                    .add(R.id.main_fragment_container, chatsFragment, "tab_chats")
+                    .add(R.id.main_fragment_container, settingsFragment, "tab_settings")
+                    .add(R.id.main_fragment_container, profileFragment, "tab_profile")
+                    .hide(contactsFragment)
+                    .hide(settingsFragment)
+                    .hide(profileFragment)
+                    // KHANDAQ: onCreateContinue() may run from the async DB-init callback AFTER the
+                    // activity already saved its state (e.g. screen locked during startup), where a
+                    // plain commit() throws "Can not perform this action after onSaveInstanceState".
+                    // This is the initial tab setup (no back stack), so allowing state loss is safe.
+                    .commitAllowingStateLoss();
+            bindChatFilterPagerListener();
+        }
+        else
+        {
+            contactsFragment = (FriendListFragment) getSupportFragmentManager().findFragmentByTag("tab_contacts");
+            chatsFragment = (FriendListFragment) getSupportFragmentManager().findFragmentByTag("tab_chats");
+            settingsFragment = (SettingsTabFragment) getSupportFragmentManager().findFragmentByTag("tab_settings");
+            profileFragment = (ProfileTabFragment) getSupportFragmentManager().findFragmentByTag("tab_profile");
+            currentMainTab = savedInstanceState.getInt("current_main_tab", R.id.bottom_nav_chats);
+            bindChatFilterPagerListener();
+        }
+
+        bottomNavigationView.setOnItemSelectedListener(item -> {
+            switchMainTab(item.getItemId());
+            return true;
+        });
+
+        if (savedInstanceState == null)
+        {
+            bottomNavigationView.setSelectedItemId(R.id.bottom_nav_chats);
+            currentMainTab = R.id.bottom_nav_chats;
+        }
+        else
+        {
+            bottomNavigationView.setSelectedItemId(currentMainTab);
+        }
+
+        updateMainToolbarForTab(currentMainTab);
+        applyChatFilterTabSelection(currentChatFilterTab, false, false);
+        ProfileTabConnectionIndicator.updateAsync();
+        MainHeaderBrandingHelper.update(this);
+        ProfileTabAvatarHelper.updateAsync();
+    }
+
+    private void setupChatFilterTabs()
+    {
+        chatFilterTabsContainer = findViewById(R.id.chat_list_filter_tabs);
+        chatFilterTabDirect = findViewById(R.id.chat_filter_tab_direct);
+        chatFilterTabGroups = findViewById(R.id.chat_filter_tab_groups);
+        chatFilterTabFavorites = findViewById(R.id.chat_filter_tab_favorites);
+        final View slidingIndicator = findViewById(R.id.chat_filter_tab_indicator_sliding);
+
+        if (chatFilterTabDirect != null)
+        {
+            chatFilterLabelDirect = chatFilterTabDirect.findViewById(R.id.chat_filter_tab_label);
+            chatFilterBadgeDirect = chatFilterTabDirect.findViewById(R.id.chat_filter_tab_badge);
+            chatFilterLabelDirect.setText(R.string.tab_chats);
+            chatFilterTabDirect.setOnClickListener(v -> selectChatFilterTab(FriendListFragment.CHAT_FILTER_DIRECT));
+        }
+        if (chatFilterTabGroups != null)
+        {
+            chatFilterLabelGroups = chatFilterTabGroups.findViewById(R.id.chat_filter_tab_label);
+            chatFilterBadgeGroups = chatFilterTabGroups.findViewById(R.id.chat_filter_tab_badge);
+            chatFilterLabelGroups.setText(R.string.chat_filter_groups);
+            chatFilterTabGroups.setOnClickListener(v -> selectChatFilterTab(FriendListFragment.CHAT_FILTER_GROUPS));
+        }
+        if (chatFilterTabFavorites != null)
+        {
+            chatFilterLabelFavorites = chatFilterTabFavorites.findViewById(R.id.chat_filter_tab_label);
+            chatFilterBadgeFavorites = chatFilterTabFavorites.findViewById(R.id.chat_filter_tab_badge);
+            chatFilterLabelFavorites.setText(R.string.chat_filter_favorites);
+            chatFilterTabFavorites.setOnClickListener(v -> selectChatFilterTab(FriendListFragment.CHAT_FILTER_FAVORITES));
+        }
+
+        final int activeColor = ContextCompat.getColor(this, R.color.tg_chat_title);
+        final int inactiveColor = ContextCompat.getColor(this, R.color.tg_chat_preview);
+        chatFilterTabIndicatorHelper = new ChatFilterTabIndicatorHelper(
+                chatFilterTabDirect,
+                chatFilterTabGroups,
+                chatFilterTabFavorites,
+                chatFilterLabelDirect,
+                chatFilterLabelGroups,
+                chatFilterLabelFavorites,
+                slidingIndicator,
+                activeColor,
+                inactiveColor);
+
+        if (chatFilterTabsContainer != null)
+        {
+            chatFilterTabsContainer.addOnLayoutChangeListener(
+                    (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                        if (chatFilterTabIndicatorHelper != null)
+                        {
+                            chatFilterTabIndicatorHelper.remeasureTabs();
+                        }
+                    });
+        }
+
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        currentChatFilterTab = prefs.getInt(PREF_CHAT_FILTER_TAB, FriendListFragment.CHAT_FILTER_DIRECT);
+    }
+
+    private void bindChatFilterPagerListener()
+    {
+        if (chatsFragment == null)
+        {
+            return;
+        }
+
+        chatsFragment.setChatFilterPagerListener(new FriendListFragment.ChatFilterPagerListener()
+        {
+            @Override
+            public void onChatFilterPageScrolled(final int position, final float positionOffset)
+            {
+                if (chatFilterTabIndicatorHelper != null)
+                {
+                    chatFilterTabIndicatorHelper.setScrollPosition(position, positionOffset);
+                }
+            }
+
+            @Override
+            public void onChatFilterPageSelected(final int tab)
+            {
+                applyChatFilterTabSelectionFromPager(tab);
+            }
+        });
+    }
+
+    private void applyChatFilterTabSelectionFromPager(final int tab)
+    {
+        currentChatFilterTab = tab;
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putInt(PREF_CHAT_FILTER_TAB, tab).apply();
+        if (chatFilterTabIndicatorHelper != null)
+        {
+            chatFilterTabIndicatorHelper.snapToTab(tab);
+        }
+        if (chatsFragment != null)
+        {
+            chatsFragment.syncChatFilterTabSelection(tab);
+        }
+        refreshChatFilterTabBadges();
+    }
+
+    private void selectChatFilterTab(final int tab)
+    {
+        applyChatFilterTabSelection(tab, true, true);
+    }
+
+    private void applyChatFilterTabSelection(final int tab, final boolean reloadList)
+    {
+        applyChatFilterTabSelection(tab, reloadList, false);
+    }
+
+    private void applyChatFilterTabSelection(final int tab, final boolean reloadList, final boolean smoothPager)
+    {
+        currentChatFilterTab = tab;
+        PreferenceManager.getDefaultSharedPreferences(this).edit().putInt(PREF_CHAT_FILTER_TAB, tab).apply();
+
+        if (chatsFragment != null)
+        {
+            chatsFragment.selectChatFilterPage(tab, smoothPager);
+            if (reloadList)
+            {
+                chatsFragment.applyChatFilterTabFromMain(tab, true);
+            }
+            else
+            {
+                chatsFragment.syncChatFilterTabSelection(tab);
+            }
+        }
+
+        if (!smoothPager && chatFilterTabIndicatorHelper != null)
+        {
+            chatFilterTabIndicatorHelper.snapToTab(tab);
+        }
+
+        refreshChatFilterTabBadges();
+    }
+
+    public void refreshChatFilterTabBadges()
+    {
+        if (chatFilterTabsContainer == null || currentMainTab != R.id.bottom_nav_chats)
+        {
+            return;
+        }
+
+        final ChatListFilterHelper.TabUnreadCounts counts = ChatListFilterHelper.computeUnreadCounts(this);
+        ChatListUiHelper.bind_unread_badge(chatFilterBadgeDirect, counts.direct);
+        ChatListUiHelper.bind_unread_badge(chatFilterBadgeGroups, counts.groups);
+        ChatListUiHelper.bind_unread_badge(chatFilterBadgeFavorites, counts.favorites);
+    }
+
+    public void onChatFavoriteChanged()
+    {
+        refreshChatFilterTabBadges();
+        if (chatsFragment != null && currentMainTab == R.id.bottom_nav_chats)
+        {
+            chatsFragment.add_all_friends_clear(0);
+        }
+    }
+
+    private void switchMainTab(final int tabId)
+    {
+        if (contactsFragment == null || chatsFragment == null || settingsFragment == null || profileFragment == null)
+        {
+            return;
+        }
+
+        currentMainTab = tabId;
+        final FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        transaction.hide(contactsFragment);
+        transaction.hide(chatsFragment);
+        transaction.hide(settingsFragment);
+        transaction.hide(profileFragment);
+
+        if (tabId == R.id.bottom_nav_contacts)
+        {
+            transaction.show(contactsFragment);
+            contactsFragment.add_all_friends_clear_force(0);
+        }
+        else if (tabId == R.id.bottom_nav_chats)
+        {
+            transaction.show(chatsFragment);
+            chatsFragment.add_all_friends_clear(0);
+        }
+        else if (tabId == R.id.bottom_nav_settings)
+        {
+            transaction.show(settingsFragment);
+        }
+        else if (tabId == R.id.bottom_nav_profile)
+        {
+            transaction.show(profileFragment);
+        }
+
+        // KHANDAQ: tab switches (incl. the initial one during async startup) must survive a
+        // state-saved activity — show/hide of tabs has no back stack, so state loss is safe.
+        transaction.commitAllowingStateLoss();
+        updateMainToolbarForTab(tabId);
+    }
+
+    private void updateMainToolbarForTab(final int tabId)
+    {
+        // KHANDAQ: header title = current tab name (Figma); connection state stays in the spinner/dot.
+        final int tabTitleRes;
+        if (tabId == R.id.bottom_nav_contacts)
+        {
+            tabTitleRes = R.string.tab_contacts;
+        }
+        else if (tabId == R.id.bottom_nav_settings)
+        {
+            tabTitleRes = R.string.tab_settings;
+        }
+        else if (tabId == R.id.bottom_nav_profile)
+        {
+            tabTitleRes = R.string.tab_profile;
+        }
+        else
+        {
+            tabTitleRes = R.string.tab_chats;
+        }
+        MainHeaderBrandingHelper.setTitle(this, tabTitleRes);
+
+        if (mainChatSearch != null)
+        {
+            mainChatSearch.setVisibility(tabId == R.id.bottom_nav_chats ? View.VISIBLE : View.GONE);
+        }
+
+        if (chatFilterTabsContainer != null)
+        {
+            chatFilterTabsContainer.setVisibility(tabId == R.id.bottom_nav_chats ? View.VISIBLE : View.GONE);
+        }
+
+        // KHANDAQ: add-contact FAB (Figma) is shown only on the Контакты tab.
+        final View fabAddContact = findViewById(R.id.fab_add_contact);
+        if (fabAddContact != null)
+        {
+            fabAddContact.setVisibility(tabId == R.id.bottom_nav_contacts ? View.VISIBLE : View.GONE);
+        }
+
+        if (tabId == R.id.bottom_nav_chats)
+        {
+            applyChatFilterTabSelection(currentChatFilterTab, true);
+        }
+
+        invalidateOptionsMenu();
+    }
+
+    void toggleDarkModeFromToolbar()
+    {
+        final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
+        final String currentValue = settings.getString("dark_mode_pref", "0");
+        final String nextValue;
+
+        if ("1".equals(currentValue) || ("0".equals(currentValue) && is_nightmode_active(this)))
+        {
+            nextValue = "2";
+        }
+        else
+        {
+            nextValue = "1";
+        }
+
+        ThemeTransitionHelper.recreateWithThemeCrossfade(this, nextValue);
+    }
+
+    private Drawable createMainToolbarMenuIcon(final GoogleMaterial.Icon icon)
+    {
+        return new IconicsDrawable(this)
+                .icon(icon)
+                .color(ContextCompat.getColor(this, R.color.tg_chat_title))
+                .sizeDp(24);
+    }
+
+    private void updateAddFriendMenuIcon(final MenuItem addFriendItem)
+    {
+        addFriendItem.setIcon(createMainToolbarMenuIcon(GoogleMaterial.Icon.gmd_person_add));
+        addFriendItem.setTitle(R.string.layout___add_friend);
+    }
+
+    private void updateGroupMenuIcon(final MenuItem groupMenuItem)
+    {
+        groupMenuItem.setIcon(createMainToolbarMenuIcon(GoogleMaterial.Icon.gmd_group_add));
+        groupMenuItem.setTitle(R.string.group_actions_menu_title);
+    }
+
+    private void updateThemeToggleMenuIcon(final MenuItem themeItem)
+    {
+        final GoogleMaterial.Icon icon = is_nightmode_active(this)
+                ? GoogleMaterial.Icon.gmd_brightness_3
+                : GoogleMaterial.Icon.gmd_wb_sunny;
+        themeItem.setIcon(createMainToolbarMenuIcon(icon));
+        themeItem.setTitle(R.string.theme_toggle_accessibility);
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        outState.putInt("current_main_tab", currentMainTab);
     }
 
     static void update_main_profile_bar()
@@ -9029,8 +9654,10 @@ public class MainActivity extends AppCompatActivity
             {
                 HelperGeneric.fill_own_avatar_icon(main_activity_s, main_profile_avatar);
             }
+
+            ProfileTabAvatarHelper.updateAsync();
         }
-        catch (Exception ignored)
+        catch (Throwable ignored)
         {
         }
     }
@@ -9060,14 +9687,20 @@ public class MainActivity extends AppCompatActivity
         }
         else if (requestCode == AddPrivateGroupActivity_ID)
         {
-            if (resultCode == RESULT_OK)
+            if (resultCode == RESULT_OK && data != null)
             {
-                HelperGroup.create_new_group(
+                final boolean created = HelperGroup.create_new_group(
                         ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value,
                         data.getStringExtra("group_name"),
                         R.string.add_private_group_success,
                         R.string.add_private_group_failed,
-                        "You created the Group (as Private [invite only] Group)");
+                        "You created the Group (as Private [invite only] Group)",
+                        data.getStringExtra("group_password"));
+                if (created && chatsFragment != null)
+                {
+                    applyChatFilterTabSelection(FriendListFragment.CHAT_FILTER_GROUPS, false);
+                    chatsFragment.add_all_friends_clear(0);
+                }
             }
         }
         else if (requestCode == AddPublicGroupActivity_ID)
@@ -9084,14 +9717,7 @@ public class MainActivity extends AppCompatActivity
         }
         else if (requestCode == JoinPublicGroupActivity_ID)
         {
-            if (resultCode == RESULT_OK)
-            {
-                // HelperGroup.do_join_public_group(data);
-            }
-            else
-            {
-                // (resultCode == RESULT_CANCELED)
-            }
+            // JoinPublicGroupActivity opens the group chat on success.
         }
     }
 
@@ -9103,9 +9729,9 @@ public class MainActivity extends AppCompatActivity
             emailIntent.putExtra(Intent.EXTRA_SUBJECT, subject);
             ArrayList<Uri> uris = new ArrayList<>();
             uris.add(Uri.parse("file://" + full_file_name));
-            Log.i(TAG, "email:full_file_name=" + full_file_name);
+            HelperGeneric.logI(TAG, "email:full_file_name=" + full_file_name);
             File ff = new File(full_file_name);
-            Log.i(TAG, "email:full_file_name exists:" + ff.exists());
+            HelperGeneric.logI(TAG, "email:full_file_name exists:" + ff.exists());
 
             try
             {
@@ -9117,7 +9743,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                Log.i(TAG, "email:EE1:" + e.getMessage());
+                HelperGeneric.logI(TAG, "email:EE1:" + e.getMessage());
             }
 
             List<ResolveInfo> resolveInfos = getPackageManager().queryIntentActivities(emailIntent, 0);
@@ -9128,7 +9754,7 @@ public class MainActivity extends AppCompatActivity
                 for (ResolveInfo info : resolveInfos)
                 {
                     Intent intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                    Log.i(TAG, "email:" + "comp=" + info.activityInfo.packageName + " " + info.activityInfo.name);
+                    HelperGeneric.logI(TAG, "email:" + "comp=" + info.activityInfo.packageName + " " + info.activityInfo.name);
                     intent.setComponent(new ComponentName(info.activityInfo.packageName, info.activityInfo.name));
                     intent.putExtra(Intent.EXTRA_EMAIL, new String[]{recipient});
 
@@ -9143,8 +9769,8 @@ public class MainActivity extends AppCompatActivity
                         // ArrayList<String> extra_text = new ArrayList<String>();
                         // extra_text.add(message);
                         // intent.putStringArrayListExtra(android.content.Intent.EXTRA_TEXT, extra_text);
-                        // Log.i(TAG, "email:" + "message=" + message);
-                        // Log.i(TAG, "email:" + "intent extra_text=" + extra_text);
+                        // HelperGeneric.logI(TAG, "email:" + "message=" + message);
+                        // HelperGeneric.logI(TAG, "email:" + "intent extra_text=" + extra_text);
                     }
 
                     intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
@@ -9162,7 +9788,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception email_app)
                 {
                     email_app.printStackTrace();
-                    Log.i(TAG, "email:" + "Error starting Email App");
+                    HelperGeneric.logI(TAG, "email:" + "Error starting Email App");
                     new AlertDialog.Builder(c).setMessage(
                             R.string.MainActivity_error_starting_email_app).setPositiveButton(
                             R.string.MainActivity_button_ok, null).show();
@@ -9170,7 +9796,7 @@ public class MainActivity extends AppCompatActivity
             }
             else
             {
-                Log.i(TAG, "email:" + "No Email App found");
+                HelperGeneric.logI(TAG, "email:" + "No Email App found");
                 new AlertDialog.Builder(c).setMessage(R.string.MainActivity_no_email_app_found).setPositiveButton(
                         R.string.MainActivity_button_ok, null).show();
             }
@@ -9179,13 +9805,13 @@ public class MainActivity extends AppCompatActivity
         {
             // cannot send email for some reason
             e.printStackTrace();
-            Log.i(TAG, "email:EE2:" + e.getMessage());
+            HelperGeneric.logI(TAG, "email:EE2:" + e.getMessage());
         }
     }
 
     static String safe_string_XX(byte[] in)
     {
-        Log.i(TAG, "safe_string:in=" + in);
+        HelperGeneric.logI(TAG, "safe_string:in=" + in);
         String out = "";
 
         try
@@ -9195,7 +9821,7 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "safe_string:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "safe_string:EE:" + e.getMessage());
 
             try
             {
@@ -9204,11 +9830,11 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e2)
             {
                 e2.printStackTrace();
-                Log.i(TAG, "safe_string:EE2:" + e2.getMessage());
+                HelperGeneric.logI(TAG, "safe_string:EE2:" + e2.getMessage());
             }
         }
 
-        Log.i(TAG, "safe_string:out=" + out);
+        HelperGeneric.logI(TAG, "safe_string:out=" + out);
         return out;
     }
 
@@ -9293,7 +9919,7 @@ public class MainActivity extends AppCompatActivity
                             catch (Exception e)
                             {
                                 e.printStackTrace();
-                                Log.i(TAG, "delete_selected_messages_asynchtask:EE4:" + e.getMessage());
+                                HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE4:" + e.getMessage());
                             }
                         }
                     }
@@ -9321,7 +9947,7 @@ public class MainActivity extends AppCompatActivity
                                 catch (Exception e6)
                                 {
                                     e6.printStackTrace();
-                                    Log.i(TAG, "delete_selected_messages_asynchtask:EE5:" + e6.getMessage());
+                                    HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE5:" + e6.getMessage());
                                 }
 
                                 orma.deleteFromFileDB().idEq(m_to_delete.filedb_id).execute();
@@ -9329,7 +9955,7 @@ public class MainActivity extends AppCompatActivity
                             catch (Exception e)
                             {
                                 e.printStackTrace();
-                                Log.i(TAG, "delete_selected_messages_asynchtask:EE4:" + e.getMessage());
+                                HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE4:" + e.getMessage());
                             }
                         }
                     }
@@ -9386,13 +10012,13 @@ public class MainActivity extends AppCompatActivity
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "delete_selected_messages_asynchtask:EE1:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE1:" + e.getMessage());
                         }
                     }
                     catch (Exception e2)
                     {
                         e2.printStackTrace();
-                        Log.i(TAG, "delete_selected_messages_asynchtask:EE2:" + e2.getMessage());
+                        HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE2:" + e2.getMessage());
                     }
 
                     // ---------- delete the message itself ----------
@@ -9400,7 +10026,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e2)
                 {
                     e2.printStackTrace();
-                    Log.i(TAG, "delete_selected_messages_asynchtask:EE3:" + e2.getMessage());
+                    HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE3:" + e2.getMessage());
                 }
             }
 
@@ -9423,7 +10049,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e4)
             {
                 e4.printStackTrace();
-                Log.i(TAG, "save_selected_messages_asynchtask:EE3:" + e4.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_messages_asynchtask:EE3:" + e4.getMessage());
             }
         }
 
@@ -9450,7 +10076,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "onPreExecute:start:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "onPreExecute:start:EE:" + e.getMessage());
                 }
             }
         }
@@ -9489,7 +10115,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e2)
                 {
                     e2.printStackTrace();
-                    Log.i(TAG, "save_selected_messages_asynchtask:EE1:" + e2.getMessage());
+                    HelperGeneric.logI(TAG, "save_selected_messages_asynchtask:EE1:" + e2.getMessage());
                 }
             }
 
@@ -9511,19 +10137,19 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e)
             {
                 e.printStackTrace();
-                Log.i(TAG, "save_selected_messages_asynchtask:EE2:" + e.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_messages_asynchtask:EE2:" + e.getMessage());
             }
 
             try
             {
                 progressDialog2.dismiss();
                 Context c = weakContext.get();
-                Toast.makeText(c, "Files exported to:" + "\n" + export_directory, Toast.LENGTH_SHORT).show();
+                Toast.makeText(c, c.getString(R.string.files_exported_to, export_directory), Toast.LENGTH_SHORT).show();
             }
             catch (Exception e4)
             {
                 e4.printStackTrace();
-                Log.i(TAG, "save_selected_messages_asynchtask:EE3:" + e4.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_messages_asynchtask:EE3:" + e4.getMessage());
             }
         }
 
@@ -9579,7 +10205,7 @@ public class MainActivity extends AppCompatActivity
             }
             catch (Exception e)
             {
-                Log.i(TAG, "save_selected_message_custom_asynchtask:public:EE:" + e.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_message_custom_asynchtask:public:EE:" + e.getMessage());
             }
 
             try
@@ -9595,7 +10221,7 @@ public class MainActivity extends AppCompatActivity
             }
             catch (Exception e)
             {
-                Log.i(TAG, "save_selected_message_custom_asynchtask:fallback:EE:" + e.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_message_custom_asynchtask:fallback:EE:" + e.getMessage());
             }
 
             return null;
@@ -9641,7 +10267,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e4)
             {
                 e4.printStackTrace();
-                Log.i(TAG, "save_selected_message_custom_asynchtask:EE3:" + e4.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_message_custom_asynchtask:EE3:" + e4.getMessage());
             }
         }
 
@@ -9689,7 +10315,7 @@ public class MainActivity extends AppCompatActivity
             }
             catch (Exception e)
             {
-                Log.i(TAG, "save_selected_group_message_custom_asynchtask:public:EE:" + e.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_group_message_custom_asynchtask:public:EE:" + e.getMessage());
             }
 
             try
@@ -9703,7 +10329,7 @@ public class MainActivity extends AppCompatActivity
             }
             catch (Exception e)
             {
-                Log.i(TAG, "save_selected_group_message_custom_asynchtask:fallback:EE:" + e.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_group_message_custom_asynchtask:fallback:EE:" + e.getMessage());
             }
 
             return null;
@@ -9753,7 +10379,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e4)
             {
                 e4.printStackTrace();
-                Log.i(TAG, "save_selected_group_message_custom_asynchtask:EE3:" + e4.getMessage());
+                HelperGeneric.logI(TAG, "save_selected_group_message_custom_asynchtask:EE3:" + e4.getMessage());
             }
         }
 
@@ -9861,13 +10487,13 @@ public class MainActivity extends AppCompatActivity
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "delete_selected_conference_messages_asynchtask:EE1:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "delete_selected_conference_messages_asynchtask:EE1:" + e.getMessage());
                         }
                     }
                     catch (Exception e2)
                     {
                         e2.printStackTrace();
-                        Log.i(TAG, "delete_selected_conference_messages_asynchtask:EE2:" + e2.getMessage());
+                        HelperGeneric.logI(TAG, "delete_selected_conference_messages_asynchtask:EE2:" + e2.getMessage());
                     }
 
                     // ---------- delete the message itself ----------
@@ -9875,7 +10501,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e2)
                 {
                     e2.printStackTrace();
-                    Log.i(TAG, "delete_selected_conference_messages_asynchtask:EE3:" + e2.getMessage());
+                    HelperGeneric.logI(TAG, "delete_selected_conference_messages_asynchtask:EE3:" + e2.getMessage());
                 }
             }
 
@@ -9896,7 +10522,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e4)
             {
                 e4.printStackTrace();
-                Log.i(TAG, "delete_selected_conference_messages_asynchtask:EE3:" + e4.getMessage());
+                HelperGeneric.logI(TAG, "delete_selected_conference_messages_asynchtask:EE3:" + e4.getMessage());
             }
         }
 
@@ -9923,7 +10549,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "onPreExecute:start:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "onPreExecute:start:EE:" + e.getMessage());
                 }
             }
         }
@@ -9990,7 +10616,7 @@ public class MainActivity extends AppCompatActivity
                             catch (Exception e)
                             {
                                 e.printStackTrace();
-                                Log.i(TAG, "delete_selected_messages_asynchtask:EE4:" + e.getMessage());
+                                HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE4:" + e.getMessage());
                             }
                         }
                     }
@@ -10014,7 +10640,7 @@ public class MainActivity extends AppCompatActivity
                             catch (Exception e6)
                             {
                                 e6.printStackTrace();
-                                Log.i(TAG, "delete_selected_messages_asynchtask:EE5:" + e6.getMessage());
+                                HelperGeneric.logI(TAG, "delete_selected_messages_asynchtask:EE5:" + e6.getMessage());
                             }
                         }
                     }
@@ -10070,13 +10696,13 @@ public class MainActivity extends AppCompatActivity
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "delete_selected_group_messages_asynchtask:EE1:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "delete_selected_group_messages_asynchtask:EE1:" + e.getMessage());
                         }
                     }
                     catch (Exception e2)
                     {
                         e2.printStackTrace();
-                        Log.i(TAG, "delete_selected_group_messages_asynchtask:EE2:" + e2.getMessage());
+                        HelperGeneric.logI(TAG, "delete_selected_group_messages_asynchtask:EE2:" + e2.getMessage());
                     }
 
                     // ---------- delete the message itself ----------
@@ -10084,7 +10710,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e2)
                 {
                     e2.printStackTrace();
-                    Log.i(TAG, "delete_selected_group_messages_asynchtask:EE3:" + e2.getMessage());
+                    HelperGeneric.logI(TAG, "delete_selected_group_messages_asynchtask:EE3:" + e2.getMessage());
                 }
             }
 
@@ -10105,7 +10731,7 @@ public class MainActivity extends AppCompatActivity
             catch (Exception e4)
             {
                 e4.printStackTrace();
-                Log.i(TAG, "delete_selected_group_messages_asynchtask:EE3:" + e4.getMessage());
+                HelperGeneric.logI(TAG, "delete_selected_group_messages_asynchtask:EE3:" + e4.getMessage());
             }
         }
 
@@ -10132,7 +10758,7 @@ public class MainActivity extends AppCompatActivity
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "onPreExecute:start:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "onPreExecute:start:EE:" + e.getMessage());
                 }
             }
         }

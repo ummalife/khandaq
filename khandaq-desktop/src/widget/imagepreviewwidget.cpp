@@ -26,13 +26,16 @@
 #include <QApplication>
 #include <QDesktopWidget>
 #include <QBuffer>
+#include <QImageReader>
 
 namespace
 {
 QPixmap pixmapFromFile(const QString& filename)
 {
-    static const QStringList previewExtensions = {"png", "jpeg", "jpg", "gif", "svg",
-                                                  "PNG", "JPEG", "JPG", "GIF", "SVG"};
+    // KHANDAQ (security D-2): dropped SVG — a tiny .svg can declare an enormous canvas / nested-use
+    // bomb that explodes on render.
+    static const QStringList previewExtensions = {"png", "jpeg", "jpg", "gif",
+                                                  "PNG", "JPEG", "JPG", "GIF"};
 
     if (!previewExtensions.contains(QFileInfo(filename).suffix())) {
         return QPixmap();
@@ -44,6 +47,24 @@ QPixmap pixmapFromFile(const QString& filename)
     }
 
     const QByteArray imageFileData = imageFile.readAll();
+
+    // KHANDAQ (security D-2): reject decode-bombs (tiny file, gigantic pixel dimensions) by reading
+    // only the header first. Qt5 has no per-reader allocation limit, so a naive fromData() on a
+    // received image could try to allocate gigabytes → OOM/hang.
+    {
+        QBuffer probeBuffer;
+        probeBuffer.setData(imageFileData);
+        probeBuffer.open(QIODevice::ReadOnly);
+        QImageReader probe(&probeBuffer);
+        const QSize dims = probe.size();
+        static const qint64 kMaxPreviewPixels = 64LL * 1000 * 1000; // ~64 megapixels
+        if (dims.isValid()
+            && (static_cast<qint64>(dims.width()) * static_cast<qint64>(dims.height()) > kMaxPreviewPixels
+                || dims.width() > 16384 || dims.height() > 16384)) {
+            return QPixmap();
+        }
+    }
+
     QImage image = QImage::fromData(imageFileData);
     auto orientation = ExifTransform::getOrientation(imageFileData);
     image = ExifTransform::applyTransformation(image, orientation);

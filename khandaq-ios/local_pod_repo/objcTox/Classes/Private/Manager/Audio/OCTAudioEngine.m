@@ -79,6 +79,13 @@
         ? AVAudioSessionPortOverrideSpeaker
         : AVAudioSessionPortOverrideNone;
 
+    // KHANDAQ: a speaker toggle must be a *pure* output-port override. We previously also
+    // re-applied setMode: on every toggle ("keep the active call mode"), but the audio path
+    // here is a software AudioQueue (no VoiceProcessingIO/AEC unit whose mode actually matters),
+    // and OCTAudioQueue does NOT observe route-change/interruption notifications — so the extra
+    // setMode: reconfiguration tore down the still-running input and output queues on rapid
+    // toggles, leaving the mic and speaker both dead after a couple of taps mid-call.
+    // overrideOutputAudioPort: alone reroutes output without disturbing the live queues.
     return [session overrideOutputAudioPort:override error:error];
 }
 
@@ -110,41 +117,36 @@
                                   error:(NSError **)error
 {
     AVAudioSession *session = [AVAudioSession sharedInstance];
-    AVAudioSessionCategoryOptions options =
-        AVAudioSessionCategoryOptionAllowBluetooth |
-        AVAudioSessionCategoryOptionDefaultToSpeaker;
+    AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionAllowBluetooth;
+    if (videoCall) {
+        options |= AVAudioSessionCategoryOptionDefaultToSpeaker;
+    }
     NSString *mode = videoCall ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat;
+    AVAudioSessionPortOverride portOverride = videoCall
+        ? AVAudioSessionPortOverrideSpeaker
+        : AVAudioSessionPortOverrideNone;
+
+    // Always apply category/mode/route — even when CallKit already activated the session.
+    if (! [session setCategory:AVAudioSessionCategoryPlayAndRecord
+                   withOptions:options
+                         error:error]) {
+        return NO;
+    }
+    if (! [session setPreferredSampleRate:kDefaultSampleRate error:error]) {
+        return NO;
+    }
+    if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
+        return NO;
+    }
+    if (! [session setMode:mode error:error]) {
+        return NO;
+    }
+    if (! [session overrideOutputAudioPort:portOverride error:error]) {
+        return NO;
+    }
 
     if (reconfigure) {
-        if (! [session setCategory:AVAudioSessionCategoryPlayAndRecord
-                       withOptions:options
-                             error:error]) {
-            return NO;
-        }
-        if (! [session setPreferredSampleRate:kDefaultSampleRate error:error]) {
-            return NO;
-        }
-        if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
-            return NO;
-        }
-        if (! [session setMode:mode error:error]) {
-            return NO;
-        }
-        if (! [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:error]) {
-            return NO;
-        }
         if (! [session setActive:YES error:error]) {
-            return NO;
-        }
-    }
-    else {
-        if (! [session setPreferredSampleRate:kDefaultSampleRate error:error]) {
-            return NO;
-        }
-        if (! [session setPreferredIOBufferDuration:0.005 error:error]) {
-            return NO;
-        }
-        if (! [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:error]) {
             return NO;
         }
     }

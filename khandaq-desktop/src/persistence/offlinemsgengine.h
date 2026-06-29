@@ -43,6 +43,8 @@ public:
     void addUnsentMessage(Message const& message, CompletionFn completionCallback);
     void addSentCoreMessage(ReceiptNum receipt, Message const& message, CompletionFn completionCallback);
     void addSentExtendedMessage(ExtendedReceiptNum receipt, Message const& message, CompletionFn completionCallback);
+    void abandonCoreMessage(ReceiptNum receipt);
+    void abandonExtendedMessage(ExtendedReceiptNum receipt);
 
     struct RemovedMessage
     {

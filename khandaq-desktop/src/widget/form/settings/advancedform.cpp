@@ -26,7 +26,10 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QProcess>
+#include <QPushButton>
+#include <QTextEdit>
 
+#include "src/core/networkdiagnostics.h"
 #include "src/model/status.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
@@ -70,6 +73,15 @@ AdvancedForm::AdvancedForm(Settings& settings_, Style& style, IMessageBoxManager
 
     updateWarningLabel();
 
+    networkDiagText = new QTextEdit(this);
+    networkDiagText->setReadOnly(true);
+    networkDiagText->setMinimumHeight(140);
+    auto* refreshNetworkDiag = new QPushButton(tr("Refresh Network Diagnostics"), this);
+    connect(refreshNetworkDiag, &QPushButton::clicked, this, &AdvancedForm::on_btnRefreshNetworkDiag_clicked);
+    bodyUI->verticalLayout_2->addWidget(refreshNetworkDiag);
+    bodyUI->verticalLayout_2->addWidget(networkDiagText);
+    on_btnRefreshNetworkDiag_clicked();
+
     eventsInit();
     Translator::registerHandler(std::bind(&AdvancedForm::retranslateUi, this), this);
 }
@@ -109,6 +121,15 @@ void AdvancedForm::on_btnExportLog_clicked()
         qDebug() << "Successfully copied to: " << savefile;
     else
         qDebug() << "File was not copied";
+}
+
+void AdvancedForm::on_btnRefreshNetworkDiag_clicked()
+{
+    const QString text = QStringLiteral("--- events ---\n")
+        + NetworkDiagnostics::eventLogSnapshot();
+    if (networkDiagText != nullptr) {
+        networkDiagText->setPlainText(text);
+    }
 }
 
 void AdvancedForm::on_btnCopyDebug_clicked()

@@ -54,7 +54,12 @@ private:
     void sendProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete);
     void sendExtendedProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete);
     void sendCoreProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete);
+    void scheduleMessageRetry(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete, int attempt);
     OfflineMsgEngine::CompletionFn getCompletionFn(DispatchedMessageId messageId);
+    OfflineMsgEngine::CompletionFn wrapWithReceiptTimeout(Message const& message,
+                                                            OfflineMsgEngine::CompletionFn inner,
+                                                            const char* sendKind, uint64_t receiptId,
+                                                            int attempt, bool isExtended);
 
     Friend& f;
     ICoreExtPacketAllocator& coreExtPacketAllocator;

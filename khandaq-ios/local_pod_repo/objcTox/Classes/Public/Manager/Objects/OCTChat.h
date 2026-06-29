@@ -14,9 +14,72 @@
 @interface OCTChat : OCTObject
 
 /**
- * Array with OCTFriends that participate in this chat.
+ * YES for NGC group chats; 1:1 chats use `friends` instead.
  */
+@property BOOL isGroup;
+
+/**
+ * Tox group number (valid when `isGroup` is YES).
+ */
+@property int32_t groupNumber;
+
+/**
+ * 64-char hex group chat id (valid when `isGroup` is YES).
+ */
+@property (nullable) NSString *groupChatIdHex;
+
+/**
+ * Display name of the group.
+ */
+@property (nullable) NSString *groupName;
+
+/**
+ * OCTToxGroupPrivacyState raw value.
+ */
+@property int32_t groupPrivacyState;
+
+/**
+ * OCTToxGroupVoiceState raw value.
+ */
+@property int32_t groupVoiceState;
+
+/**
+ * Cached NGC peer count (includes self when known).
+ */
+@property int32_t groupPeerCount;
+
+/**
+ * When YES, suppress local notifications for this group chat.
+ */
+@property BOOL groupNotificationsSilent;
+
+/**
+ * NGC group topic (display title).
+ */
+@property (nullable) NSString *groupTopic;
+
+/**
+ * Cached group password when set (founder-visible via Tox).
+ */
+@property (nullable) NSString *groupPassword;
+
+/**
+ * When YES, only founder and moderators may set the group topic.
+ */
+@property BOOL groupTopicLockEnabled;
+
+/**
+ * Maximum peers allowed in the group (0 = use default).
+ */
+@property int32_t groupPeerLimit;
+
 @property (nonnull) RLMArray<OCTFriend> *friends;
+
+/**
+ * KHANDAQ: YES only for the built-in local-only "Saved Messages" chat. Persisted so it cannot be
+ * confused with a 1:1 chat whose friend was deleted (which also ends up friend-less).
+ */
+@property BOOL isSavedMessages;
 
 /**
  * The latest message that was send or received.
@@ -68,6 +131,11 @@
  * @return YES if there are unread messages, NO otherwise.
  */
 - (BOOL)hasUnreadMessages;
+
+/**
+ * KHANDAQ: YES for the built-in local-only "Saved Messages" chat.
+ */
+- (BOOL)isSavedMessagesChat;
 
 @end
 

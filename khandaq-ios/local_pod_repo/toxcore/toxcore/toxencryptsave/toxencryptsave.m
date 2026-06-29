@@ -384,5 +384,9 @@ bool tox_pass_decrypt(const uint8_t *ciphertext, size_t ciphertext_len, const ui
  */
 bool tox_is_data_encrypted(const uint8_t *data)
 {
+    if (data == NULL) {
+        return false;
+    }
+
     return memcmp(data, TOX_ENC_SAVE_MAGIC_NUMBER, TOX_ENC_SAVE_MAGIC_LENGTH) == 0;
 }

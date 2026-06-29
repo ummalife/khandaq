@@ -31,10 +31,12 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import static com.zoffcc.applications.trifa.GroupMessageListActivity.add_attachment_ngc;
+import static com.zoffcc.applications.trifa.HelperGeneric.collect_shared_text_from_intent;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.filter_out_non_hex_chars;
 import static com.zoffcc.applications.trifa.HelperGeneric.normalize_tox_address;
@@ -68,10 +70,10 @@ public class ShareActivity extends AppCompatActivity
         t1 = (TextView) findViewById(R.id.text1);
         t1.setText("Share Content ...\nNot yet implemented via share.");
 
-        Log.i(TAG, "onCreate");
+        HelperGeneric.logI(TAG, "onCreate");
 
         intent = getIntent();
-        // Log.i(TAG, "onCreate:intent=" + intent);
+        // HelperGeneric.logI(TAG, "onCreate:intent=" + intent);
         action = intent.getAction();
         type = intent.getType();
 
@@ -85,7 +87,7 @@ public class ShareActivity extends AppCompatActivity
             if (Intent.ACTION_SEARCH.equals(action))
             {
                 String query = intent.getStringExtra(SearchManager.QUERY);
-                // Log.i(TAG, "onCreate:query=" + query);
+                // HelperGeneric.logI(TAG, "onCreate:query=" + query);
             }
             else if (Intent.ACTION_SEND.equals(action) && type != null)
             {
@@ -93,6 +95,7 @@ public class ShareActivity extends AppCompatActivity
                 {
                     Intent intent_friend_selection = new Intent(this, FriendSelectSingleActivity.class);
                     intent_friend_selection.putExtra("offline", 1);
+                    intent_friend_selection.putExtra("ngc_groups", 1);
                     startActivityForResult(intent_friend_selection, SelectFriendSingleActivity_ID);
                 }
                 else
@@ -109,6 +112,7 @@ public class ShareActivity extends AppCompatActivity
                 {
                     Intent intent_friend_selection = new Intent(this, FriendSelectSingleActivity.class);
                     intent_friend_selection.putExtra("offline", 1);
+                    intent_friend_selection.putExtra("ngc_groups", 1);
                     startActivityForResult(intent_friend_selection, SelectFriendSingleActivity_ID);
                 }
                 else
@@ -122,20 +126,20 @@ public class ShareActivity extends AppCompatActivity
             else if (Intent.ACTION_VIEW.equals(action))
             {
                 ClipData cdata = intent.getClipData();
-                // Log.i(TAG, "onCreate:cdata=" + cdata);
+                // HelperGeneric.logI(TAG, "onCreate:cdata=" + cdata);
                 if (cdata != null)
                 {
                     int item_count = cdata.getItemCount();
-                    // Log.i(TAG, "onCreate:item_count=" + item_count);
-                    // Log.i(TAG, "onCreate:getDescription=" + cdata.getDescription());
+                    // HelperGeneric.logI(TAG, "onCreate:item_count=" + item_count);
+                    // HelperGeneric.logI(TAG, "onCreate:getDescription=" + cdata.getDescription());
                 }
 
                 Uri data = intent.getData();
-                // Log.i(TAG, "onCreate:data=" + data);
+                // HelperGeneric.logI(TAG, "onCreate:data=" + data);
                 String dataString = intent.getDataString();
-                // Log.i(TAG, "onCreate:dataString=" + dataString);
+                // HelperGeneric.logI(TAG, "onCreate:dataString=" + dataString);
                 String shareWith = dataString.substring(dataString.lastIndexOf('/') + 1);
-                // Log.i(TAG, "onCreate:shareWith=" + shareWith);
+                // HelperGeneric.logI(TAG, "onCreate:shareWith=" + shareWith);
 
                 // handle tox:......... URL
                 if ((dataString != null) && (dataString.length() > 5) && (dataString.startsWith("tox:")))
@@ -157,26 +161,34 @@ public class ShareActivity extends AppCompatActivity
                         handleToxNGCPublicGroupInvite(key_only_sanitzied);
                     }
                 }
+                else if (dataString != null)
+                {
+                    final String groupId = parseKhandaqGroupId(dataString);
+                    if (groupId != null)
+                    {
+                        handleToxNGCPublicGroupInvite(groupId);
+                    }
+                }
             }
             else
             {
                 ClipData cdata = intent.getClipData();
-                // Log.i(TAG, "onCreate:cdata=" + cdata);
+                // HelperGeneric.logI(TAG, "onCreate:cdata=" + cdata);
                 if (cdata != null)
                 {
                     int item_count = cdata.getItemCount();
-                    // Log.i(TAG, "onCreate:item_count=" + item_count);
-                    // Log.i(TAG, "onCreate:getDescription=" + cdata.getDescription());
+                    // HelperGeneric.logI(TAG, "onCreate:item_count=" + item_count);
+                    // HelperGeneric.logI(TAG, "onCreate:getDescription=" + cdata.getDescription());
                 }
 
                 Uri data = intent.getData();
-                // Log.i(TAG, "onCreate:data=" + data);
+                // HelperGeneric.logI(TAG, "onCreate:data=" + data);
                 String dataString = intent.getDataString();
-                // Log.i(TAG, "onCreate:dataString=" + dataString);
+                // HelperGeneric.logI(TAG, "onCreate:dataString=" + dataString);
                 try
                 {
                     String shareWith = dataString.substring(dataString.lastIndexOf('/') + 1);
-                    // Log.i(TAG, "onCreate:shareWith=" + shareWith);
+                    // HelperGeneric.logI(TAG, "onCreate:shareWith=" + shareWith);
                 }
                 catch (Exception e2)
                 {
@@ -186,7 +198,7 @@ public class ShareActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "onCreate:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "onCreate:EE:" + e.getMessage());
         }
     }
 
@@ -194,13 +206,13 @@ public class ShareActivity extends AppCompatActivity
     protected void onNewIntent(Intent intent)
     {
         super.onNewIntent(intent);
-        // Log.i(TAG, "onNewIntent:intent=" + intent);
+        // HelperGeneric.logI(TAG, "onNewIntent:intent=" + intent);
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data)
     {
         super.onActivityResult(requestCode, resultCode, data);
-        Log.i(TAG, "onActivityResult:intent=" + data);
+        HelperGeneric.logI(TAG, "onActivityResult:intent=" + data);
         if (requestCode == SelectFriendSingleActivity_ID)
         {
             if (resultCode == RESULT_OK)
@@ -208,21 +220,21 @@ public class ShareActivity extends AppCompatActivity
                 try
                 {
                     String result_friend_pubkey = data.getData().toString();
-                    Log.i(TAG, "onActivityResult:result_friend_pubkey=" + result_friend_pubkey);
+                    HelperGeneric.logI(TAG, "onActivityResult:result_friend_pubkey=" + result_friend_pubkey);
                     if (result_friend_pubkey != null)
                     {
                         if (result_friend_pubkey.length() <= 2)
                         {
-                            Log.i(TAG, "onActivityResult:result_friend_pubkey.length()=" + result_friend_pubkey.length());
+                            HelperGeneric.logI(TAG, "onActivityResult:result_friend_pubkey.length()=" + result_friend_pubkey.length());
                             return;
                         }
 
                         int item_type = Integer.parseInt(result_friend_pubkey.substring(0, 1));
                         String item_id = result_friend_pubkey.substring(2);
 
-                        // Log.i(TAG, "type="+ type + " action=" + action + " item_type=" + item_type + " item_id="+item_id.length()+ " "+item_id);
-                        // Log.i(TAG, "onActivityResult:intent:" + intent);
-                        // Log.i(TAG, "onActivityResult:Intent.EXTRA_TEXT:" + intent.getStringExtra(Intent.EXTRA_TEXT));
+                        // HelperGeneric.logI(TAG, "type="+ type + " action=" + action + " item_type=" + item_type + " item_id="+item_id.length()+ " "+item_id);
+                        // HelperGeneric.logI(TAG, "onActivityResult:intent:" + intent);
+                        // HelperGeneric.logI(TAG, "onActivityResult:Intent.EXTRA_TEXT:" + intent.getStringExtra(Intent.EXTRA_TEXT));
 
                         if ((item_id.length() == TOX_PUBLIC_KEY_SIZE * 2) && (item_type == 0))
                         {
@@ -230,26 +242,30 @@ public class ShareActivity extends AppCompatActivity
                             {
                                 if (("text/plain".equals(type)) && (intent.getStringExtra(Intent.EXTRA_TEXT) != null))
                                 {
-                                    Log.i(TAG,"handle:001");
+                                    HelperGeneric.logI(TAG,"handle:001");
                                     handleSendText(intent, item_id);
                                 }
                                 else
                                 {
-                                    Log.i(TAG,"handle:002");
+                                    HelperGeneric.logI(TAG,"handle:002");
                                     handleSendImage(intent, item_id, 0);
                                 }
                                 return;
                             }
                             else if (Intent.ACTION_SEND_MULTIPLE.equals(action) && type != null)
                             {
-                                if (type.startsWith("image/"))
+                                if ("text/plain".equals(type))
                                 {
-                                    Log.i(TAG,"handle:003");
+                                    handleSendMultipleText(intent, item_id);
+                                }
+                                else if (type.startsWith("image/"))
+                                {
+                                    HelperGeneric.logI(TAG,"handle:003");
                                     handleSendMultipleImages(intent, item_id, 0);
                                 }
                                 else
                                 {
-                                    Log.i(TAG,"handle:004");
+                                    HelperGeneric.logI(TAG,"handle:004");
                                     handleSendMultipleImages(intent, item_id, 0);
                                 }
                                 return;
@@ -261,26 +277,29 @@ public class ShareActivity extends AppCompatActivity
                             {
                                 if (("text/plain".equals(type)) && (intent.getStringExtra(Intent.EXTRA_TEXT) != null))
                                 {
-                                    // TODO: write me
-                                    Log.i(TAG,"handle:011");
+                                    handleSendTextToGroup(intent, item_id);
                                 }
                                 else
                                 {
-                                    Log.i(TAG,"handle:012");
+                                    HelperGeneric.logI(TAG,"handle:012");
                                     handleSendImage(intent, item_id, 2);
                                 }
                                 return;
                             }
                             else if (Intent.ACTION_SEND_MULTIPLE.equals(action) && type != null)
                             {
-                                if (type.startsWith("image/"))
+                                if ("text/plain".equals(type))
                                 {
-                                    Log.i(TAG,"handle:013");
+                                    handleSendMultipleTextToGroup(intent, item_id);
+                                }
+                                else if (type.startsWith("image/"))
+                                {
+                                    HelperGeneric.logI(TAG,"handle:013");
                                     handleSendMultipleImages(intent, item_id, 2);
                                 }
                                 else
                                 {
-                                    Log.i(TAG,"handle:014");
+                                    HelperGeneric.logI(TAG,"handle:014");
                                     handleSendMultipleImages(intent, item_id, 2);
                                 }
                                 return;
@@ -290,7 +309,7 @@ public class ShareActivity extends AppCompatActivity
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "EE03:"+ e.getMessage());
+                    HelperGeneric.logI(TAG, "EE03:"+ e.getMessage());
                     e.printStackTrace();
                 }
             }
@@ -299,7 +318,7 @@ public class ShareActivity extends AppCompatActivity
 
     void handleToxFriendInvite(final String friend_pubkey)
     {
-        Log.i(TAG, "handleToxFriendInvite:friend_pubkey=" + friend_pubkey);
+        HelperGeneric.logI(TAG, "handleToxFriendInvite:friend_pubkey=" + friend_pubkey);
         // ** // MessageListActivity.show_messagelist_for_friend(this, friend_pubkey);
         // close this share activity
         this.finish();
@@ -309,7 +328,7 @@ public class ShareActivity extends AppCompatActivity
     {
         try
         {
-            Log.i(TAG, "handleToxFriendInvite:ngc_group_pubkey=" + ngc_group_pubkey.substring(0, 5));
+            HelperGeneric.logI(TAG, "handleToxFriendInvite:ngc_group_pubkey=" + ngc_group_pubkey.substring(0, 5));
         }
         catch(Exception ignored)
         {
@@ -319,14 +338,78 @@ public class ShareActivity extends AppCompatActivity
         this.finish();
     }
 
+    @Nullable
+    static String parseKhandaqGroupId(@Nullable String url)
+    {
+        if (url == null)
+        {
+            return null;
+        }
+
+        final String lower = url.toLowerCase();
+        String hexPart = null;
+
+        if (lower.startsWith("khandaq://group/"))
+        {
+            hexPart = url.substring("khandaq://group/".length());
+        }
+        else if (lower.startsWith("khandaq:group:"))
+        {
+            hexPart = url.substring("khandaq:group:".length());
+        }
+
+        if (hexPart == null)
+        {
+            return null;
+        }
+
+        final String sanitized = filter_out_non_hex_chars(hexPart);
+        if (sanitized.length() == (TOX_GROUP_CHAT_ID_SIZE * 2))
+        {
+            return sanitized.toUpperCase();
+        }
+
+        return null;
+    }
+
     void handleSendText(Intent intent, String friend_pubkey)
     {
         String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
         if (sharedText != null)
         {
-            // Log.i(TAG, "handleSendText:sharedText=" + sharedText);
+            // HelperGeneric.logI(TAG, "handleSendText:sharedText=" + sharedText);
             MessageListActivity.show_messagelist_for_friend(this, friend_pubkey, sharedText);
             // close this share activity
+            this.finish();
+        }
+    }
+
+    void handleSendTextToGroup(Intent intent, String group_id)
+    {
+        final String sharedText = collect_shared_text_from_intent(intent);
+        if (sharedText != null)
+        {
+            GroupMessageListActivity.show_messagelist_for_id(this, group_id, sharedText);
+            this.finish();
+        }
+    }
+
+    void handleSendMultipleText(Intent intent, String friend_pubkey)
+    {
+        final String sharedText = collect_shared_text_from_intent(intent);
+        if (sharedText != null)
+        {
+            MessageListActivity.show_messagelist_for_friend(this, friend_pubkey, sharedText);
+            this.finish();
+        }
+    }
+
+    void handleSendMultipleTextToGroup(Intent intent, String group_id)
+    {
+        final String sharedText = collect_shared_text_from_intent(intent);
+        if (sharedText != null)
+        {
+            GroupMessageListActivity.show_messagelist_for_id(this, group_id, sharedText);
             this.finish();
         }
     }
@@ -359,26 +442,17 @@ public class ShareActivity extends AppCompatActivity
         ArrayList<Uri> imageUris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
         if (imageUris != null)
         {
-            for (Uri imageUri : imageUris)
-            {
-                Intent intent_fixup = new Intent();
-                intent_fixup.setData(imageUri);
-                if (type == 0)
-                {
-                    add_attachment(this, intent_fixup, intent, tox_friend_by_public_key__wrapper(id), false);
-                }
-                else if (type == 2)
-                {
-                    add_attachment_ngc(this, intent_fixup, intent, id, false);
-                }
-            }
-
             if (type == 0)
             {
+                MediaSendPreviewHelper.dispatchAttachments(this, imageUris,
+                        MediaSendPreviewHelper.TARGET_FRIEND,
+                        tox_friend_by_public_key__wrapper(id), null, false);
                 MessageListActivity.show_messagelist_for_friend(this, id, null);
             }
             else if (type == 2)
             {
+                MediaSendPreviewHelper.dispatchAttachments(this, imageUris,
+                        MediaSendPreviewHelper.TARGET_GROUP, -1, id, false);
                 GroupMessageListActivity.show_messagelist_for_id(this, id, null);
             }
             // close this share activity

@@ -113,36 +113,7 @@ public class MessageListHolder_file_incoming_state_pause_has_accepted extends Re
             m = new Message();
         }
 
-        int drawable_id = R.drawable.rounded_orange_bg_with_border;
-        try
-        {
-            if (m.filetransfer_kind == TOX_FILE_KIND_FTV2.value)
-            {
-                drawable_id = R.drawable.rounded_orange_bg;
-            }
-
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
-        catch (Exception e)
-        {
-            final int sdk = android.os.Build.VERSION.SDK_INT;
-            if (sdk < android.os.Build.VERSION_CODES.JELLY_BEAN)
-            {
-                rounded_bg_container.setBackgroundDrawable(ContextCompat.getDrawable(context, drawable_id));
-            }
-            else
-            {
-                rounded_bg_container.setBackground(ContextCompat.getDrawable(context, drawable_id));
-            }
-        }
+        ChatBubbleUiHelper.apply_file_message_bubble(rounded_bg_container, false, false);
 
         date_time.setText(long_date_time_format(m.rcvd_timestamp));
 
@@ -262,10 +233,12 @@ public class MessageListHolder_file_incoming_state_pause_has_accepted extends Re
         }
 
         ft_progressbar.setMax(100);
+        ft_progressbar.setVisibility(View.VISIBLE);
         // ft_progressbar.setIndeterminate(false);
 
         HelperGeneric.fill_friend_avatar_icon(m, context, img_avatar);
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+        ChatTransferProgressHelper.applyDirect(context, itemView, message, false);
     }
 
     private void cancel_incoming_filetransfer(final Message message)

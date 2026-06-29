@@ -6,8 +6,11 @@ import UIKit
 import SnapKit
 
 private struct Constants {
-    static let ButtonSize = 40.0
-    static let VerticalOffset = 8.0
+    // KHANDAQ design (Figma profile): action buttons are grey circles with a label underneath.
+    static let CircleSize = 52.0
+    static let IconInset = 15.0
+    static let LabelTopOffset = 6.0
+    static let VerticalOffset = 10.0
 }
 
 class StaticTableChatButtonsCell: StaticTableBaseCell {
@@ -15,7 +18,12 @@ class StaticTableChatButtonsCell: StaticTableBaseCell {
     fileprivate var callButton: UIButton!
     fileprivate var videoButton: UIButton!
 
-    fileprivate var separators: [UIView]!
+    fileprivate var chatColumn: UIStackView!
+    fileprivate var callColumn: UIStackView!
+    fileprivate var videoColumn: UIStackView!
+
+    fileprivate var labels: [UILabel] = []
+    fileprivate var rowStack: UIStackView!
 
     fileprivate var chatButtonHandler: (() -> Void)?
     fileprivate var callButtonHandler: (() -> Void)?
@@ -30,78 +38,67 @@ class StaticTableChatButtonsCell: StaticTableBaseCell {
         }
 
         selectionStyle = .none
+        backgroundColor = .clear
+        customContentView.backgroundColor = .clear
 
         chatButtonHandler = buttonsModel.chatButtonHandler
         callButtonHandler = buttonsModel.callButtonHandler
         videoButtonHandler = buttonsModel.videoButtonHandler
 
-        chatButton.isEnabled = buttonsModel.chatButtonEnabled
-        callButton.isEnabled = buttonsModel.callButtonEnabled
-        videoButton.isEnabled = buttonsModel.videoButtonEnabled
+        for button in [chatButton, callButton, videoButton] {
+            button?.backgroundColor = theme.colorForType(.TabSelection)
+            button?.tintColor = theme.colorForType(.LinkText)
+        }
+        for label in labels {
+            label.textColor = theme.colorForType(.NormalText)
+        }
+
+        applyEnabled(chatButton, column: chatColumn, enabled: buttonsModel.chatButtonEnabled)
+        applyEnabled(callButton, column: callColumn, enabled: buttonsModel.callButtonEnabled)
+        applyEnabled(videoButton, column: videoColumn, enabled: buttonsModel.videoButtonEnabled)
+    }
+
+    private func applyEnabled(_ button: UIButton, column: UIStackView, enabled: Bool) {
+        button.isEnabled = enabled
+        column.alpha = enabled ? 1.0 : 0.4
     }
 
     override func createViews() {
         super.createViews()
 
-        chatButton = createButtonWithImageName("friend-card-chat",
-                                               accessibilityLabel: String(localized: "accessibility_chat_button_label"),
-                                               accessibilityHint: String(localized: "accessibility_chat_button_hint"),
-                                               action: #selector(StaticTableChatButtonsCell.chatButtonPressed))
-        callButton = createButtonWithImageName("start-call",
-                                               accessibilityLabel: String(localized: "accessibility_call_button_label"),
-                                               accessibilityHint: String(localized: "accessibility_call_button_hint"),
-                                               action: #selector(StaticTableChatButtonsCell.callButtonPressed))
-        videoButton = createButtonWithImageName("video-call",
-                                               accessibilityLabel: String(localized: "accessibility_video_button_label"),
-                                               accessibilityHint: String(localized: "accessibility_video_button_hint"),
-                                               action: #selector(StaticTableChatButtonsCell.videoButtonPressed))
+        chatButton = createCircleButton("friend-card-chat",
+                                        accessibilityLabel: String(localized: "accessibility_chat_button_label"),
+                                        accessibilityHint: String(localized: "accessibility_chat_button_hint"),
+                                        action: #selector(StaticTableChatButtonsCell.chatButtonPressed))
+        callButton = createCircleButton("start-call",
+                                        accessibilityLabel: String(localized: "accessibility_call_button_label"),
+                                        accessibilityHint: String(localized: "accessibility_call_button_hint"),
+                                        action: #selector(StaticTableChatButtonsCell.callButtonPressed))
+        videoButton = createCircleButton("video-call",
+                                         accessibilityLabel: String(localized: "accessibility_video_button_label"),
+                                         accessibilityHint: String(localized: "accessibility_video_button_hint"),
+                                         action: #selector(StaticTableChatButtonsCell.videoButtonPressed))
 
-        separators = [UIView]()
-        for _ in 0...3 {
-            let sep = UIView()
-            sep.backgroundColor = UIColor.clear
-            customContentView.addSubview(sep)
-            separators.append(sep)
-        }
+        chatColumn = makeColumn(button: chatButton, title: String(localized: "accessibility_chat_button_label"))
+        callColumn = makeColumn(button: callButton, title: String(localized: "accessibility_call_button_label"))
+        videoColumn = makeColumn(button: videoButton, title: String(localized: "accessibility_video_button_label"))
+
+        rowStack = UIStackView(arrangedSubviews: [chatColumn, callColumn, videoColumn])
+        rowStack.axis = .horizontal
+        rowStack.distribution = .fillEqually
+        rowStack.alignment = .center
+        customContentView.addSubview(rowStack)
     }
 
     override func installConstraints() {
         super.installConstraints()
 
-        var previous: UIView? = nil
-        for (index, sep) in separators.enumerated() {
-            sep.snp.makeConstraints {
-                if previous != nil {
-                    $0.width.equalTo(previous!.snp.width)
-                }
-
-                if index == 0 {
-                    $0.leading.equalTo(customContentView)
-                }
-
-                if index == (separators.count-1) {
-                    $0.trailing.equalTo(customContentView)
-                }
-            }
-
-            previous = sep
+        rowStack.snp.makeConstraints {
+            $0.top.equalTo(customContentView).offset(Constants.VerticalOffset)
+            $0.bottom.equalTo(customContentView).offset(-Constants.VerticalOffset)
+            $0.leading.equalTo(customContentView).offset(24.0)
+            $0.trailing.equalTo(customContentView).offset(-24.0)
         }
-
-        func installForButton(_ button: UIButton, index: Int) {
-            button.snp.makeConstraints {
-                $0.top.equalTo(customContentView).offset(Constants.VerticalOffset)
-                $0.bottom.equalTo(customContentView).offset(-Constants.VerticalOffset)
-
-                $0.leading.equalTo(separators[index].snp.trailing)
-                $0.trailing.equalTo(separators[index+1].snp.leading)
-
-                $0.size.equalTo(Constants.ButtonSize)
-            }
-        }
-
-        installForButton(chatButton, index: 0)
-        installForButton(callButton, index: 1)
-        installForButton(videoButton, index: 2)
     }
 }
 
@@ -120,19 +117,43 @@ extension StaticTableChatButtonsCell {
 }
 
 private extension StaticTableChatButtonsCell {
-    func createButtonWithImageName(_ imageName: String,
-                                   accessibilityLabel: String,
-                                   accessibilityHint: String,
-                                   action: Selector) -> UIButton {
+    func createCircleButton(_ imageName: String,
+                            accessibilityLabel: String,
+                            accessibilityHint: String,
+                            action: Selector) -> UIButton {
         let image = UIImage.templateNamed(imageName)
 
         let button = UIButton()
         button.setImage(image, for: UIControlState())
+        button.imageView?.contentMode = .scaleAspectFit
+        button.imageEdgeInsets = UIEdgeInsets(top: Constants.IconInset, left: Constants.IconInset,
+                                              bottom: Constants.IconInset, right: Constants.IconInset)
+        button.layer.cornerRadius = CGFloat(Constants.CircleSize) / 2.0
+        button.layer.masksToBounds = true
         button.accessibilityLabel = accessibilityLabel
         button.accessibilityHint = accessibilityHint
         button.addTarget(self, action: action, for: .touchUpInside)
-        customContentView.addSubview(button)
+
+        button.snp.makeConstraints {
+            $0.size.equalTo(Constants.CircleSize)
+        }
 
         return button
+    }
+
+    func makeColumn(button: UIButton, title: String) -> UIStackView {
+        let label = UILabel()
+        label.text = title
+        label.font = UIFont.systemFont(ofSize: 12.0)
+        label.textAlignment = .center
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.8
+        labels.append(label)
+
+        let column = UIStackView(arrangedSubviews: [button, label])
+        column.axis = .vertical
+        column.alignment = .center
+        column.spacing = Constants.LabelTopOffset
+        return column
     }
 }

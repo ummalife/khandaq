@@ -17,8 +17,12 @@
 
 set -euo pipefail
 
-FFMPEG_VERSION=4.4.1
-FFMPEG_HASH=eadbad9e9ab30b25f5520fbfde99fae4a92a1ae3c0257a8d68569a4651e30e02
+# KHANDAQ (security): bumped 4.4.1 -> 4.4.5, the last 4.4.x release, picking up the
+# branch's accumulated decoder CVE fixes. Same 4.4 ABI, no risk to the cross-compile.
+# TODO: move the Windows build to a modern FFmpeg (Linux uses n8.x) — needs a Windows
+# CI build to verify avcodec API changes, so out of scope for this drop-in bump.
+FFMPEG_VERSION=4.4.5
+FFMPEG_HASH=f9514e0d3515aee5a271283df71636e1d1ff7274b15853bcd84e144be416ab07
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

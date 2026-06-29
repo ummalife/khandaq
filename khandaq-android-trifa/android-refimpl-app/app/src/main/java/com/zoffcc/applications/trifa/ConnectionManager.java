@@ -8,9 +8,11 @@ import android.net.NetworkInfo;
 import android.util.Log;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.append_logger_msg;
+import static com.zoffcc.applications.trifa.HelperGeneric.sync_have_internet_connectivity;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.HAVE_INTERNET_CONNECTIVITY;
-import static com.zoffcc.applications.trifa.TrifaToxService.bootstrap_me;
+import static com.zoffcc.applications.trifa.ReconnectBackoffCoordinator.Reason.NETWORK_CHANGE;
 
+/** Legacy CONNECTIVITY_ACTION fallback for API levels without NetworkCallback. */
 public class ConnectionManager extends BroadcastReceiver
 {
     private static final String TAG = "trifa.ConManager";
@@ -22,37 +24,35 @@ public class ConnectionManager extends BroadcastReceiver
         {
             Log.i(TAG, "onReceive:intent=" + intent);
 
-            boolean noConnectivity = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
-            final boolean connectivity_old = HAVE_INTERNET_CONNECTIVITY;
-            HAVE_INTERNET_CONNECTIVITY = !noConnectivity;
-            append_logger_msg(TAG + "::" + "HAVE_INTERNET_CONNECTIVITY=" + HAVE_INTERNET_CONNECTIVITY + " connectivity_old=" + connectivity_old);
+            final boolean noConnectivity =
+                    intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
+            final boolean failOver =
+                    intent.getBooleanExtra(ConnectivityManager.EXTRA_IS_FAILOVER, false);
+            final String reason = intent.getStringExtra(ConnectivityManager.EXTRA_REASON);
+            final NetworkInfo info1 = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK_INFO);
+            final NetworkInfo info2 = intent.getParcelableExtra(ConnectivityManager.EXTRA_OTHER_NETWORK_INFO);
 
-            if ((connectivity_old != HAVE_INTERNET_CONNECTIVITY) && (HAVE_INTERNET_CONNECTIVITY == true))
+            sync_have_internet_connectivity(context);
+            if (noConnectivity)
             {
-                append_logger_msg(TAG + "::" + "bootstrap_me()");
-                bootstrap_me(false);
+                HAVE_INTERNET_CONNECTIVITY = false;
             }
 
-            NetworkInfo info1 = intent.getParcelableExtra(ConnectivityManager.EXTRA_NETWORK_INFO);
-            NetworkInfo info2 = intent.getParcelableExtra(ConnectivityManager.EXTRA_OTHER_NETWORK_INFO);
-            String reason = intent.getStringExtra(ConnectivityManager.EXTRA_REASON);
-            boolean failOver = intent.getBooleanExtra(ConnectivityManager.EXTRA_IS_FAILOVER, false);
-            Log.i(TAG, "onReceive:reason=" + reason);
-            Log.i(TAG, "onReceive:failOver=" + failOver);
-            Log.i(TAG, "onReceive:noConnectivity=" + noConnectivity);
-            Log.i(TAG, "onReceive: mNetworkInfo=" + info1 + " mOtherNetworkInfo = " + (info2 == null ? "[none]" : info2 + " noConn=" + noConnectivity));
-            append_logger_msg(TAG + "::" + "reason=" + reason + " failOver=" + failOver);
-            append_logger_msg(TAG + "::" + "mNetworkInfo=" + info1);
-            append_logger_msg(TAG + "::" + "mOtherNetworkInfo=" + (info2 == null ? "[none]" : info2));
+            append_logger_msg(TAG + "::HAVE_INTERNET=" + HAVE_INTERNET_CONNECTIVITY
+                    + " noConn=" + noConnectivity + " failOver=" + failOver + " reason=" + reason);
+
+            if (HAVE_INTERNET_CONNECTIVITY && (failOver || noConnectivity == false))
+            {
+                ReconnectBackoffCoordinator.get().scheduleReconnect(NETWORK_CHANGE, true);
+            }
+
+            Log.i(TAG, "onReceive: mNetworkInfo=" + info1 + " mOtherNetworkInfo="
+                    + (info2 == null ? "[none]" : info2));
         }
         catch (Exception e)
         {
             e.printStackTrace();
             Log.i(TAG, "onReceive:EE:" + e.getMessage());
-
-            // HINT: if in doubt, say that we have connectivity
-            HAVE_INTERNET_CONNECTIVITY = true;
-            append_logger_msg(TAG + "::" + "HAVE_INTERNET_CONNECTIVITY[hardcoded]=" + HAVE_INTERNET_CONNECTIVITY);
         }
     }
 }

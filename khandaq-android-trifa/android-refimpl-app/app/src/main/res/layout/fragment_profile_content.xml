@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tg_chat_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingTop="24dp"
+            android:paddingBottom="16dp">
+
+            <FrameLayout
+                android:layout_width="@dimen/profile_avatar_size"
+                android:layout_height="@dimen/profile_avatar_size">
+
+                <de.hdodenhof.circleimageview.CircleImageView
+                    android:id="@+id/profile_icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:civ_border_color="#40000000"
+                    app:civ_border_width="1dp"
+                    tools:src="@mipmap/ic_launcher_round" />
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/profile_icon_edit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_marginEnd="-2dp"
+                    android:layout_marginBottom="-2dp"
+                    android:contentDescription="@null"
+                    android:tint="@color/design_default_color_on_primary"
+                    app:fabCustomSize="32dp"
+                    app:maxImageSize="18dp"
+                    app:srcCompat="@drawable/ic_baseline_edit_24" />
+
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/profile_icon_remove"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|start"
+                    android:layout_marginStart="-2dp"
+                    android:layout_marginBottom="-2dp"
+                    android:contentDescription="@null"
+                    android:tint="@color/design_default_color_on_primary"
+                    app:fabCustomSize="32dp"
+                    app:maxImageSize="18dp"
+                    app:srcCompat="@drawable/ic_baseline_clear_24" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Card 1 (Figma): Имя / Статус — value rows, tap to edit (dialog). The hidden EditTexts
+             back saveProfileChanges() so the existing save logic is reused unchanged. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="16dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_profile_card">
+
+            <LinearLayout
+                android:id="@+id/row_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/profile_label_name"
+                        android:textSize="13sp"
+                        android:textColor="@color/onboarding_desc" />
+
+                    <TextView
+                        android:id="@+id/profile_name_value"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:importantForAccessibility="no" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:layout_marginHorizontal="16dp"
+                android:background="@color/md_grey_300_seperator" />
+
+            <LinearLayout
+                android:id="@+id/row_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/profile_label_status"
+                        android:textSize="13sp"
+                        android:textColor="@color/onboarding_desc" />
+
+                    <TextView
+                        android:id="@+id/profile_status_value"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:importantForAccessibility="no" />
+            </LinearLayout>
+
+            <EditText
+                android:id="@+id/mynick_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="flagNoPersonalizedLearning|actionNext"
+                android:inputType="text"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:visibility="gone" />
+
+            <EditText
+                android:id="@+id/mystatus_message_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="flagNoPersonalizedLearning|actionDone"
+                android:inputType="text"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/profile_save_button"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_onboarding_btn"
+            android:text="@string/profile_save_button"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+        <!-- Card 2 (Figma): MyID -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginBottom="24dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_profile_card"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/profile_label_myid"
+                android:textColor="@color/onboarding_title"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/mytoxid_textview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="monospace"
+                android:textColor="@color/onboarding_desc"
+                android:textIsSelectable="true"
+                android:textSize="13sp"
+                android:typeface="monospace" />
+
+            <Button
+                android:id="@+id/copy_toxid_button"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_profile_pill_btn"
+                android:text="@string/layout___copy_toxid"
+                android:textAllCaps="false"
+                android:textColor="@color/onboarding_title"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/show_qr_button"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_profile_pill_btn"
+                android:gravity="center"
+                android:text="@string/profile_show_qr"
+                android:textColor="@color/onboarding_title"
+                android:textSize="14sp" />
+
+            <ImageView
+                android:id="@+id/mytoxid_imageview"
+                android:layout_width="@dimen/profile_qr_code_size"
+                android:layout_height="@dimen/profile_qr_code_size"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:contentDescription="@string/profile_qr_content_description"
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:layout_marginTop="12dp"
+                android:background="@color/md_grey_300_seperator" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/profile_label_capabilities"
+                android:textColor="@color/onboarding_desc"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/profile_capabilities_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/onboarding_title"
+                android:textSize="15sp" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:layout_marginTop="12dp"
+                android:background="@color/md_grey_300_seperator" />
+
+            <TextView
+                android:id="@+id/profile_logout_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingVertical="8dp"
+                android:text="@string/profile_logout"
+                android:textColor="#C80606"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/profile_advanced_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+        <Button
+            android:id="@+id/remove_relay_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginRight="20dp"
+            android:layout_marginBottom="5dp"
+            android:text="@string/layout___remove_own_relay" />
+
+        <TextView
+            android:id="@+id/my_relay_toxid_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:layout_marginLeft="20dp"
+            android:layout_weight="0"
+            android:paddingLeft="4dp"
+            android:paddingRight="2dp"
+            android:paddingBottom="15dp"
+            android:text="@string/layout___relay_pubkey"
+            android:textAlignment="textStart"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/my_relay_toxid_textview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:fontFamily="monospace"
+            android:gravity="fill_horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="15dp"
+            android:textAlignment="gravity"
+            android:textIsSelectable="true"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:typeface="monospace"
+            tools:text="TOXID94583458340958309458093850934805830583085389053095DUMMY" />
+
+        <TextView
+            android:id="@+id/profile_capabilities_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:layout_marginLeft="20dp"
+            android:layout_weight="0"
+            android:paddingLeft="4dp"
+            android:paddingRight="2dp"
+            android:paddingBottom="15dp"
+            android:text="@string/layout___capabilities"
+            android:textAlignment="textStart"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/my_toxcapabilities_textview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:fontFamily="monospace"
+            android:gravity="center_horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="15dp"
+            android:text="__"
+            android:textIsSelectable="true"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:typeface="monospace" />
+
+        <Button
+            android:id="@+id/remove_own_pushurl_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginRight="20dp"
+            android:layout_marginBottom="5dp"
+            android:text="@string/layout___remove_own_pushurl" />
+
+        <TextView
+            android:id="@+id/my_pushurl_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:layout_marginLeft="20dp"
+            android:layout_weight="0"
+            android:paddingLeft="4dp"
+            android:paddingRight="2dp"
+            android:paddingBottom="15dp"
+            android:text="@string/layout___own_pushurl"
+            android:textAlignment="textStart"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/my_pushurl_textview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:fontFamily="monospace"
+            android:gravity="fill_horizontal"
+            android:paddingTop="12dp"
+            android:paddingBottom="15dp"
+            android:textAlignment="gravity"
+            android:textIsSelectable="true"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:typeface="monospace"
+            tools:text="https://" />
+
+        <Button
+            android:id="@+id/new_nospam_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginRight="20dp"
+            android:layout_marginBottom="5dp"
+            android:text="@string/layout___new_random_nospam" />
+
+        <Button
+            android:id="@+id/load_network_connections_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="25dp"
+            android:layout_marginRight="20dp"
+            android:layout_marginBottom="5dp"
+            android:text="@string/layout___load_network_connections" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="10dp"
+            android:layout_weight="0"
+            android:paddingLeft="4dp"
+            android:paddingRight="2dp"
+            android:paddingBottom="15dp"
+            android:text="@string/layout___active_network_connections"
+            android:textAlignment="textStart"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mytox_network_connections"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:fontFamily="monospace"
+            android:gravity="fill_horizontal"
+            android:paddingBottom="15dp"
+            android:text=""
+            android:textAlignment="gravity"
+            android:ellipsize="none"
+            android:hyphenationFrequency="none"
+            android:textIsSelectable="true"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:typeface="monospace" />
+
+        <TextView
+            android:id="@+id/dummy_0004"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_gravity="start"
+            android:layout_marginLeft="20dp"
+            android:layout_weight="0"
+            android:paddingLeft="4dp"
+            android:paddingRight="2dp"
+            android:paddingBottom="15dp"
+            android:text=""
+            android:textAlignment="textStart"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

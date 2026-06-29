@@ -9,7 +9,7 @@
 
 Pod::Spec.new do |s|
   s.name             = "objcTox"
-  s.version          = "0.7.8"
+  s.version          = "0.9.18"
   s.summary          = "Objective-C wrapper for Tox"
   s.homepage         = "https://github.com/Zoxcore/objcTox"
   s.license          = "MIT"
@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
 
   s.source_files = 'Classes/**/*.{m,h}'
   s.public_header_files = 'Classes/Public/**/*.h'
-  s.dependency 'toxcore', '~> 0.2.12'
+  s.dependency 'toxcore', '~> 0.2.19'
   s.dependency 'TPCircularBuffer', '~> 0.0.1'
   s.dependency 'CocoaLumberjack', '1.9.2'
   s.dependency 'Realm', '10.36.0'

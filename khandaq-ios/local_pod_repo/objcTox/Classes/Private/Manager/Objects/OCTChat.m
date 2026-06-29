@@ -36,4 +36,9 @@
     return (self.lastMessage.dateInterval > self.lastReadDateInterval);
 }
 
+- (BOOL)isSavedMessagesChat
+{
+    return self.isSavedMessages;
+}
+
 @end

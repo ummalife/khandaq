@@ -5,7 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/dist/linux"
 OUT="${KHANDAQ_DEB_OUT:-$ROOT/dist/linux}"
-VERSION="${KHANDAQ_VERSION:-0.2.5}"
+if [[ -z "${KHANDAQ_VERSION:-}" && -f "$ROOT/VERSION" ]]; then
+  KHANDAQ_VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+fi
+VERSION="${KHANDAQ_VERSION:-0.2.6}"
 PKG="khandaq-messenger_${VERSION}_amd64"
 ICONS="$ROOT/khandaq-desktop/img/icons"
 IMAGE="${KHANDAQ_DEB_IMAGE:-ubuntu:24.04}"

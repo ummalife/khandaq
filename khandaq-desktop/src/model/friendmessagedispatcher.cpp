@@ -21,6 +21,26 @@
 #include "src/persistence/settings.h"
 #include "src/model/status.h"
 
+#include <QTimer>
+
+#include <atomic>
+#include <cstdint>
+#include <memory>
+
+namespace {
+constexpr int RECEIPT_TIMEOUT_MS = 20000;
+constexpr int MAX_RECEIPT_RETRIES = 5;
+constexpr int RECEIPT_RETRY_BASE_MS = 2000;
+constexpr int RECEIPT_RETRY_MAX_MS = 30000;
+
+/** Outgoing friend messages use the Tox core path for reliable cross-client delivery. */
+ExtensionSet coreOnlyExtensions(ExtensionSet extensions)
+{
+    extensions[ExtensionType::messages] = false;
+    return extensions;
+}
+}
+
 FriendMessageDispatcher::FriendMessageDispatcher(Friend& f_, MessageProcessor processor_,
                                                  ICoreFriendMessageSender& messageSender_,
                                                  ICoreExtPacketAllocator& coreExtPacketAllocator_)
@@ -40,7 +60,8 @@ FriendMessageDispatcher::sendMessage(bool isAction, const QString& content)
 {
     const auto firstId = nextMessageId;
     auto lastId = nextMessageId;
-    for (const auto& message : processor.processOutgoingMessage(isAction, content, f.getSupportedExtensions())) {
+    for (const auto& message : processor.processOutgoingMessage(isAction, content,
+                                                               coreOnlyExtensions(f.getSupportedExtensions()))) {
         auto messageId = nextMessageId++;
         lastId = messageId;
 
@@ -61,7 +82,7 @@ FriendMessageDispatcher::sendExtendedMessage(const QString& content, ExtensionSe
     const auto firstId = nextMessageId;
     auto lastId = nextMessageId;
 
-    for (const auto& message : processor.processOutgoingMessage(false, content, extensions)) {
+    for (const auto& message : processor.processOutgoingMessage(false, content, coreOnlyExtensions(extensions))) {
         auto messageId = nextMessageId++;
         lastId = messageId;
 
@@ -89,6 +110,8 @@ void FriendMessageDispatcher::onMessageReceived(bool isAction, const QString& co
  */
 void FriendMessageDispatcher::onReceiptReceived(ReceiptNum receipt)
 {
+    qDebug() << "FriendMessageDispatcher: core read receipt" << receipt.get()
+             << "friend" << f.getPublicKey().toString();
     offlineMsgEngine.onReceiptReceived(receipt);
 }
 
@@ -100,6 +123,8 @@ void FriendMessageDispatcher::onExtMessageReceived(const QString& content)
 
 void FriendMessageDispatcher::onExtReceiptReceived(uint64_t receiptId)
 {
+    qDebug() << "FriendMessageDispatcher: extended read receipt" << receiptId
+             << "friend" << f.getPublicKey().toString();
     offlineMsgEngine.onExtendedReceiptReceived(ExtendedReceiptNum(receiptId));
 }
 
@@ -134,11 +159,8 @@ void FriendMessageDispatcher::sendProcessedMessage(Message const& message, Offli
         return;
     }
 
-    if (message.extensionSet[ExtensionType::messages] && !message.isAction) {
-        sendExtendedProcessedMessage(message, onOfflineMsgComplete);
-    } else {
-        sendCoreProcessedMessage(message, onOfflineMsgComplete);
-    }
+    Q_UNUSED(coreExtPacketAllocator);
+    sendCoreProcessedMessage(message, onOfflineMsgComplete);
 }
 
 
@@ -152,22 +174,43 @@ void FriendMessageDispatcher::sendExtendedProcessedMessage(Message const& messag
         return;
     }
 
-    auto receipt = ExtendedReceiptNum();
-
     const auto friendId = f.getId();
     auto packet = coreExtPacketAllocator.getPacket(friendId);
 
-    if (message.extensionSet[ExtensionType::messages]) {
-        receipt.get() = packet->addExtendedMessage(message.content);
+    const uint64_t rawReceipt = packet->addExtendedMessage(message.content);
+    if (rawReceipt == UINT64_MAX) {
+        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+        return;
     }
 
+    const ExtendedReceiptNum receipt(rawReceipt);
     const auto messageSent = packet->send();
 
     if (messageSent) {
-        offlineMsgEngine.addSentExtendedMessage(receipt, message, onOfflineMsgComplete);
+        offlineMsgEngine.addSentExtendedMessage(
+            receipt, message, wrapWithReceiptTimeout(message, onOfflineMsgComplete, "extended",
+                                                     receipt.get(), 0, true));
     } else {
         offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
     }
+}
+
+void FriendMessageDispatcher::scheduleMessageRetry(Message const& message,
+                                                   OfflineMsgEngine::CompletionFn onOfflineMsgComplete,
+                                                   int attempt)
+{
+    if (attempt >= MAX_RECEIPT_RETRIES) {
+        qWarning() << "FriendMessageDispatcher: giving up after" << MAX_RECEIPT_RETRIES
+                   << "retries for friend" << f.getPublicKey().toString();
+        offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
+        onOfflineMsgComplete(false);
+        return;
+    }
+
+    const int delayMs = qMin(RECEIPT_RETRY_BASE_MS * (1 << attempt), RECEIPT_RETRY_MAX_MS);
+    QTimer::singleShot(delayMs, this, [this, message, onOfflineMsgComplete, attempt]() {
+        sendProcessedMessage(message, onOfflineMsgComplete);
+    });
 }
 
 void FriendMessageDispatcher::sendCoreProcessedMessage(Message const& message, OfflineMsgEngine::CompletionFn onOfflineMsgComplete)
@@ -182,10 +225,61 @@ void FriendMessageDispatcher::sendCoreProcessedMessage(Message const& message, O
     const auto messageSent = sendFn(messageSender, friendId, message.content, receipt);
 
     if (messageSent) {
-        offlineMsgEngine.addSentCoreMessage(receipt, message, onOfflineMsgComplete);
+        offlineMsgEngine.addSentCoreMessage(
+            receipt, message, wrapWithReceiptTimeout(message, onOfflineMsgComplete, "core",
+                                                     receipt.get(), 0, false));
     } else {
         offlineMsgEngine.addUnsentMessage(message, onOfflineMsgComplete);
     }
+}
+
+OfflineMsgEngine::CompletionFn FriendMessageDispatcher::wrapWithReceiptTimeout(
+    Message const& message, OfflineMsgEngine::CompletionFn inner, const char* sendKind,
+    uint64_t receiptId, int attempt, bool isExtended)
+{
+    const QString friendPk = f.getPublicKey().toString();
+    auto finished = std::make_shared<std::atomic<bool>>(false);
+
+    const auto completeOnce = [inner, finished, friendPk, sendKind, receiptId](bool success) {
+        if (finished->exchange(true)) {
+            return;
+        }
+
+        if (success) {
+            qDebug() << "FriendMessageDispatcher: delivery confirmed" << sendKind
+                     << "receipt" << receiptId << "friend" << friendPk;
+        }
+
+        inner(success);
+    };
+
+    QTimer::singleShot(RECEIPT_TIMEOUT_MS, this,
+                       [this, message, inner, completeOnce, finished, friendPk, sendKind, receiptId,
+                        attempt, isExtended]() {
+                           if (finished->load()) {
+                               return;
+                           }
+
+                           qInfo() << "FriendMessageDispatcher: receipt timeout, retrying" << sendKind
+                                   << "receipt" << receiptId << "friend" << friendPk << "attempt"
+                                   << attempt;
+
+                           if (isExtended) {
+                               offlineMsgEngine.abandonExtendedMessage(ExtendedReceiptNum(receiptId));
+                           } else {
+                               offlineMsgEngine.abandonCoreMessage(ReceiptNum(receiptId));
+                           }
+
+                           scheduleMessageRetry(message, inner, attempt + 1);
+                       });
+
+    return [completeOnce, finished](bool success) {
+        if (!success) {
+            finished->store(true);
+        }
+
+        completeOnce(success);
+    };
 }
 
 OfflineMsgEngine::CompletionFn FriendMessageDispatcher::getCompletionFn(DispatchedMessageId messageId)

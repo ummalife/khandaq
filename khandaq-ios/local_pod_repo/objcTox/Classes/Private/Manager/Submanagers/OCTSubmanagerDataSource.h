@@ -8,6 +8,7 @@
 @class OCTRealmManager;
 @protocol OCTFileStorageProtocol;
 @protocol OCTSubmanagerChats;
+@protocol OCTSubmanagerFriends;
 
 /**
  * Notification is send when connection status of friend has changed.
@@ -39,6 +40,11 @@ static NSString *const kOCTScheduleFileTransferCleanupNotification = @"kOCTSched
  */
 static NSString *const kOCTNetworkRebootstrapCompletedNotification = @"kOCTNetworkRebootstrapCompletedNotification";
 
+/**
+ * Posted when self connection status transitions from offline to online (DHT connected).
+ */
+static NSString *const kOCTSelfConnectionBecameOnlineNotification = @"kOCTSelfConnectionBecameOnlineNotification";
+
 @protocol OCTSubmanagerDataSource <NSObject>
 
 - (OCTTox *)managerGetTox;
@@ -49,5 +55,6 @@ static NSString *const kOCTNetworkRebootstrapCompletedNotification = @"kOCTNetwo
 - (NSNotificationCenter *)managerGetNotificationCenter;
 - (BOOL)managerUseFauxOfflineMessaging;
 - (id<OCTSubmanagerChats>)managerGetChats;
+- (id<OCTSubmanagerFriends>)managerGetFriends;
 
 @end

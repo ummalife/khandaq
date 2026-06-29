@@ -188,13 +188,8 @@ void CoreExt::onExtendedMessageNegotiation(uint32_t friendId, bool compatible, u
 {
     auto coreExt = static_cast<CoreExt*>(userData);
 
-    // HACK: handling configurable max message size per-friend is not trivial.
-    // For now the upper layers just assume that the max size for extended
-    // messages is the same for all friends. If a friend has a max message size
-    // lower than this value we just pretend they do not have the extension since
-    // we will not split correctly for this friend.
-    if (maxMessageSize < coreExt->getMaxExtendedMessageSize())
-        compatible = false;
-
-    emit coreExt->extendedMessageSupport(friendId, compatible);
+    // Accept peer negotiation even when their max chunk size differs from ours.
+    // Splitting is handled per-message; rejecting negotiation caused asymmetric
+    // extension state where one client sent toxext packets the other could not receive.
+    emit coreExt->extendedMessageSupport(friendId, compatible && maxMessageSize > 0);
 }

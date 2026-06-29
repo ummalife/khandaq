@@ -15,6 +15,8 @@
 #include "forwarding.h"
 #include "friend_connection.h"
 #include "friend_requests.h"
+#include "group_announce.h"
+#include "group_common.h"
 #include "logger.h"
 #include "net_crypto.h"
 #include "state.h"
@@ -31,12 +33,15 @@
 #define FRIEND_ADDRESS_SIZE (CRYPTO_PUBLIC_KEY_SIZE + sizeof(uint32_t) + sizeof(uint16_t))
 
 typedef enum Message_Type {
-    MESSAGE_NORMAL = 0,
-    MESSAGE_ACTION = 1,
+    MESSAGE_NORMAL,
+    MESSAGE_ACTION,
     MESSAGE_HIGH_LEVEL_ACK = 2,
 } Message_Type;
 
+#ifndef MESSENGER_DEFINED
+#define MESSENGER_DEFINED
 typedef struct Messenger Messenger;
+#endif  // MESSENGER_DEFINED
 
 // Returns the size of the data
 typedef uint32_t m_state_size_cb(const Messenger *m);
@@ -86,6 +91,9 @@ typedef struct Messenger_Options {
 #define TOX_CAPABILITY_MSGV2 ((uint64_t)1) << 1
 #define TOX_CAPABILITY_TOXAV_H264 ((uint64_t)1) << 2
 #define TOX_CAPABILITY_MSGV3 ((uint64_t)1) << 3
+#define TOX_CAPABILITY_FTV2 ((uint64_t)1) << 4
+#define TOX_CAPABILITY_TOXAV_H265 ((uint64_t)1) << 5
+#define TOX_CAPABILITY_FTV2A ((uint64_t)1) << 6
 /* add new flags/bits here */
 /* if the TOX_CAPABILITY_NEXT_IMPLEMENTATION flag is set it means
  * we are using a different system for indicating capabilities now,
@@ -94,7 +102,11 @@ typedef struct Messenger_Options {
  */
 #define TOX_CAPABILITY_NEXT_IMPLEMENTATION ((uint64_t)1) << 63
 /* hardcoded capabilities of this version/branch of toxcore */
-#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV3)
+#ifdef TOX_CAPABILITIES_ACTIVE
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV2 | TOX_CAPABILITY_MSGV3 | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_TOXAV_H265 | TOX_CAPABILITY_FTV2 | TOX_CAPABILITY_FTV2A)
+#else
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_TOXAV_H265)
+#endif
 /* size of the FLAGS in bytes */
 #define TOX_CAPABILITIES_SIZE sizeof(uint64_t)
 
@@ -148,6 +160,7 @@ typedef enum Userstatus {
 } Userstatus;
 
 #define FILE_ID_LENGTH 32
+#define FILE_OFFSET_LENGTH 8
 
 struct File_Transfers {
     uint64_t size;
@@ -157,6 +170,14 @@ struct File_Transfers {
     uint32_t last_packet_number; /* number of the last packet sent. */
     uint64_t requested; /* total data requested by the request chunk callback */
     uint8_t id[FILE_ID_LENGTH];
+    uint32_t file_type;
+    bool received_seek_control;
+    uint8_t received_seek_control_counter;
+    uint32_t file_receiver_last_received_chunk_this_many_iterations_ago;
+    uint32_t file_sender_started_this_many_iterations_ago;
+    bool ft_send_ackd;
+    uint8_t filename[255]; // "MAX_FILENAME_LENGTH 255" in Messenger.c and "TOX_MAX_FILENAME_LENGTH 255" in tox.h -> how can we keep that in sync?
+    uint32_t filename_length;
 };
 typedef enum Filestatus {
     FILESTATUS_NONE,
@@ -174,15 +195,18 @@ typedef enum File_Pause {
 } File_Pause;
 
 typedef enum Filecontrol {
-    FILECONTROL_ACCEPT,
-    FILECONTROL_PAUSE,
-    FILECONTROL_KILL,
-    FILECONTROL_SEEK,
+    FILECONTROL_ACCEPT = 0,
+    FILECONTROL_PAUSE = 1,
+    FILECONTROL_KILL = 2,
+    FILECONTROL_SEEK = 3,
+    FILECONTROL_FINISHED = 4,
+    FILECONTROL_SEND_ACK = 8, // HINT: leave some free values just in case upstream will use then for something
 } Filecontrol;
 
 typedef enum Filekind {
     FILEKIND_DATA,
     FILEKIND_AVATAR,
+    FILEKIND_FTV2 = 16,
 } Filekind;
 
 
@@ -212,18 +236,10 @@ typedef void m_friend_lossy_packet_cb(Messenger *m, uint32_t friend_number, uint
                                       size_t length, void *user_data);
 typedef void m_friend_lossless_packet_cb(Messenger *m, uint32_t friend_number, uint8_t packet_id, const uint8_t *data,
         size_t length, void *user_data);
-typedef void m_friend_connectionstatuschange_internal_cb(Messenger *m, uint32_t friend_number,
-        uint8_t connection_status, void *user_data);
 typedef void m_conference_invite_cb(Messenger *m, uint32_t friend_number, const uint8_t *cookie, uint16_t length,
                                     void *user_data);
-typedef void m_msi_packet_cb(Messenger *m, uint32_t friend_number, const uint8_t *data, uint16_t length,
-                             void *user_data);
-typedef int m_lossy_rtp_packet_cb(Messenger *m, uint32_t friendnumber, const uint8_t *data, uint16_t len, void *object);
-
-typedef struct RTP_Packet_Handler {
-    m_lossy_rtp_packet_cb *function;
-    void *object;
-} RTP_Packet_Handler;
+typedef void m_group_invite_cb(const Messenger *m, uint32_t friendnumber, const uint8_t *data, size_t length,
+                               const uint8_t *group_name, size_t group_name_length, void *userdata);
 
 typedef struct Friend {
     uint8_t real_pk[CRYPTO_PUBLIC_KEY_SIZE];
@@ -251,9 +267,8 @@ typedef struct Friend {
     Connection_Status last_connection_udp_tcp;
     struct File_Transfers file_sending[MAX_CONCURRENT_FILE_PIPES];
     uint32_t num_sending_files;
+    uint32_t num_receiving_files;
     struct File_Transfers file_receiving[MAX_CONCURRENT_FILE_PIPES];
-
-    RTP_Packet_Handler lossy_rtp_packethandlers[PACKET_ID_RANGE_LOSSY_AV_SIZE];
 
     struct Receipts *receipts_start;
     struct Receipts *receipts_end;
@@ -293,7 +308,9 @@ struct Messenger {
     uint32_t numfriends;
 
     uint64_t lastdump;
-    uint8_t is_receiving_file;
+
+    GC_Session *group_handler;
+    GC_Announces_List *group_announce;
 
     bool has_added_relays; // If the first connection has occurred in do_messenger
 
@@ -308,19 +325,16 @@ struct Messenger {
     m_friend_typing_cb *friend_typingchange;
     m_friend_read_receipt_cb *read_receipt;
     m_friend_connection_status_cb *friend_connectionstatuschange;
-    m_friend_connectionstatuschange_internal_cb *friend_connectionstatuschange_internal;
-    void *friend_connectionstatuschange_internal_userdata;
 
     struct Group_Chats *conferences_object; /* Set by new_groupchats()*/
     m_conference_invite_cb *conference_invite;
+
+    m_group_invite_cb *group_invite;
 
     m_file_recv_cb *file_sendrequest;
     m_file_recv_control_cb *file_filecontrol;
     m_file_recv_chunk_cb *file_filedata;
     m_file_chunk_request_cb *file_reqchunk;
-
-    m_msi_packet_cb *msi_packet;
-    void *msi_packet_userdata;
 
     m_friend_lossy_packet_cb *lossy_packethandler;
     m_friend_lossless_packet_cb *lossless_packethandler;
@@ -330,6 +344,14 @@ struct Messenger {
 
     Messenger_Options options;
 };
+
+/**
+ * Determines if the friendnumber passed is valid in the Messenger object.
+ *
+ * @param friendnumber The index in the friend list.
+ */
+non_null()
+bool friend_is_valid(const Messenger *m, int32_t friendnumber);
 
 /**
  * Format: `[real_pk (32 bytes)][nospam number (4 bytes)][checksum (2 bytes)]`
@@ -374,6 +396,19 @@ int32_t m_addfriend(Messenger *m, const uint8_t *address, const uint8_t *data, u
 non_null()
 int32_t m_addfriend_norequest(Messenger *m, const uint8_t *real_pk);
 
+/** @brief Initializes the friend connection and onion connection for a groupchat.
+ *
+ * @retval true on success.
+ */
+non_null()
+bool m_create_group_connection(Messenger *m, GC_Chat *chat);
+
+/*
+ * Kills the friend connection for a groupchat.
+ */
+non_null()
+void m_kill_group_connection(Messenger *m, const GC_Chat *chat);
+
 /** @return the friend number associated to that public key.
  * @retval -1 if no such friend.
  */
@@ -413,6 +448,8 @@ int m_delfriend(Messenger *m, int32_t friendnumber);
  */
 non_null()
 int m_get_friend_connectionstatus(const Messenger *m, int32_t friendnumber);
+
+void m_get_friend_connection_ip(const Messenger *m, int32_t friendnumber, uint8_t *ip_str);
 
 /**
  * Checks if there exists a friend with given friendnumber.
@@ -605,12 +642,6 @@ non_null() void m_callback_read_receipt(Messenger *m, m_friend_read_receipt_cb *
  */
 non_null() void m_callback_connectionstatus(Messenger *m, m_friend_connection_status_cb *function);
 
-/** Same as previous but for internal A/V core usage only */
-non_null() void m_callback_connectionstatus_internal_av(
-    Messenger *m, m_friend_connectionstatuschange_internal_cb *function, void *userdata);
-
-
-/** @brief Set the callback for typing changes. */
 non_null() void m_callback_core_connection(Messenger *m, m_self_connection_status_cb *function);
 
 /*** CONFERENCES */
@@ -619,6 +650,12 @@ non_null() void m_callback_core_connection(Messenger *m, m_self_connection_statu
 non_null(1) nullable(2)
 void m_callback_conference_invite(Messenger *m, m_conference_invite_cb *function);
 
+/* Set the callback for group invites.
+ */
+non_null(1) nullable(2)
+void m_callback_group_invite(Messenger *m, m_group_invite_cb *function);
+
+
 /** @brief Send a conference invite packet.
  *
  * return true on success
@@ -626,6 +663,17 @@ void m_callback_conference_invite(Messenger *m, m_conference_invite_cb *function
  */
 non_null()
 bool send_conference_invite_packet(const Messenger *m, int32_t friendnumber, const uint8_t *data, uint16_t length);
+
+/* Send a group invite packet.
+ *
+ *  WARNING: Return-value semantics are different than for
+ *  send_conference_invite_packet().
+ *
+ *  return true on success
+ */
+non_null()
+bool send_group_invite_packet(const Messenger *m, uint32_t friendnumber, const uint8_t *data, uint16_t length);
+
 
 /*** FILE SENDING */
 
@@ -710,42 +758,12 @@ int file_seek(const Messenger *m, int32_t friendnumber, uint32_t filenumber, uin
 non_null(1) nullable(5)
 int send_file_data(const Messenger *m, int32_t friendnumber, uint32_t filenumber, uint64_t position, const uint8_t *data, uint16_t length);
 
-/*** A/V related */
-
-/** @brief Set the callback for msi packets. */
-non_null(1) nullable(2, 3)
-void m_callback_msi_packet(Messenger *m, m_msi_packet_cb *function, void *userdata);
-
-/** @brief Send an msi packet.
- *
- * @retval true on success
- * @retval false on failure
- */
-non_null()
-bool m_msi_packet(const Messenger *m, int32_t friendnumber, const uint8_t *data, uint16_t length);
-
-/** @brief Set handlers for lossy rtp packets.
- *
- * @retval -1 on failure.
- * @retval 0 on success.
- */
-non_null(1) nullable(4, 5)
-int m_callback_rtp_packet(Messenger *m, int32_t friendnumber, uint8_t byte,
-                          m_lossy_rtp_packet_cb *function, void *object);
-
 /*** CUSTOM PACKETS */
 
 /** @brief Set handlers for custom lossy packets. */
 non_null() void custom_lossy_packet_registerhandler(Messenger *m, m_friend_lossy_packet_cb *lossy_packethandler);
 
 /** @brief High level function to send custom lossy packets.
- *
- * TODO(oxij): this name is confusing, because this function sends both av and custom lossy packets.
- * Meanwhile, m_handle_lossy_packet routes custom packets to custom_lossy_packet_registerhandler
- * as you would expect from its name.
- *
- * I.e. custom_lossy_packet_registerhandler's "custom lossy packet" and this "custom lossy packet"
- * are not the same set of packets.
  *
  * @retval -1 if friend invalid.
  * @retval -2 if length wrong.
@@ -864,6 +882,9 @@ non_null()
 uint32_t copy_friendlist(const Messenger *m, uint32_t *out_list, uint32_t list_size);
 
 non_null()
-bool m_is_receiving_file(Messenger *m);
+void print_all_tcp_relays(const Messenger *m, char *relays_report_string);
+
+non_null()
+void print_all_udp_connections(const Messenger *m, char *connections_report_string);
 
 #endif

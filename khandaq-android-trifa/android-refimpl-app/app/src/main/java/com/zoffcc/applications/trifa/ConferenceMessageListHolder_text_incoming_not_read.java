@@ -562,8 +562,6 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
             }
             imageView.setVisibility(View.VISIBLE);
             textView_container.setMinimumHeight((int) dp2px(0));
-            textView_container.setPadding(0, textView_container.getPaddingTop(), 0,
-                                          textView_container.getPaddingBottom()); // left, top, right, bottom
             LinearLayout.LayoutParams parameter = (LinearLayout.LayoutParams) textView_container.getLayoutParams();
             parameter.setMargins(0, parameter.topMargin, parameter.rightMargin,
                                  parameter.bottomMargin); // left, top, right, bottom

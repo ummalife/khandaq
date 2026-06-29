@@ -391,9 +391,23 @@
     <string name="layout___create_new_public_group">创建新公共群</string>
     <string name="title_activity_groupinfo">群组信息</string>
     <string name="join_public_group_failed">未能加入该公开群</string>
+    <string name="join_public_group_failed_not_ready">客户端仍在连接中。请等待几秒后重试。</string>
+    <string name="join_public_group_failed_bad_id">群 ID 无效。请复制全部 64 位十六进制字符。</string>
+    <string name="join_public_group_failed_network">无法在网络上找到该群。请检查网络后重试。</string>
+    <string name="join_public_group_failed_password">该群需要密码。</string>
+    <string name="join_public_group_error_no_id">请输入群 ID</string>
+    <string name="join_public_group_error_illegal_chars">群 ID 包含无效字符。仅允许 A–F 和 0–9。</string>
+    <string name="join_public_group_error_length">群 ID 必须为 64 位十六进制字符。</string>
+
     <string name="join_public_group_joined">你已加入公开群</string>
     <string name="add_public_group_failed">创建公开群失败</string>
     <string name="add_private_group_failed">创建私密群失败</string>
+    <string name="group_password_placeholder">群组密码（仅私密群）</string>
+    <string name="group_password_set">设置群组密码</string>
+    <string name="group_topic_lock">话题锁定（仅创始人）</string>
+    <string name="group_privacy_set">设置隐私</string>
+    <string name="group_create_private_password">可选群组密码</string>
+
     <string name="add_private_group_success">你已创建了一个私密群</string>
     <string name="add_friend_failed">添加好友失败</string>
     <string name="add_friend_success">你已添加新好友</string>
@@ -415,8 +429,7 @@
     <string name="pref_title_allow_push_server_ntfy">允许 nfty.sh 服务器</string>
     <string name="pref_description_allow_push_server_ntfy">警告：允许 ntfy.sh 服务器进行推送通知，如果朋友使用你的推送令牌订阅，可能会在你收到推送通知时泄露你的时间戳元数据。警告：ntfy.sh 没有密码和身份验证。</string>
     <string name="pref_title_allow_enable_ngc_features">NGC - 新群聊</string>
-    <string name="pref_description_enable_ngc_features">!! 实验性 !!
-\n不完全正常工作！！</string>
+    <string name="pref_description_enable_ngc_features">启用新一代群组聊天（NGC），提供改进的消息、语音和视频。</string>
     <string name="incoming_filetransfer_size_too_large">传入的文件太大。 只能接收最大 2 GBytes 的文件。</string>
     <string name="pref_title_message_paging_num_msgs_per_page">每页消息数</string>
     <string name="pref_description_message_paging_num_msgs_per_page">设置每页显示的消息数。0 表示不分页</string>
@@ -455,4 +468,51 @@
     <string name="pref_description_use_H264_hw_encoding">对 H 264 视频编码使用硬件加速</string>
     <string name="pref_title_allow_push_server_sunup">允许 Mozilla sunup 服务器</string>
     <string name="pref_description_allow_push_server_sunup">警告：允许使用 Mozilla sunup 服务器用于通知推送，如果你的好友用你的推送令牌订阅，该设置可能会在你接收推送通知时泄露你的时间戳元数据。警告：Mozilla sunup 没有密码也没有身份认证。</string>
+    <string name="group_video_join_title">加入群组视频？</string>
+    <string name="group_video_join_message">向群组中的所有人发送您的视频和音频？</string>
+    <string name="group_video_join_confirm">是，开始视频</string>
+    <string name="group_video_join_decline">否</string>
+    <string name="group_send_voice_confirm_title">发送语音消息？</string>
+    <string name="group_send_voice_confirm_message">将此语音消息发送到群组？</string>
+    <string name="group_peer_unknown">未知</string>
+    <string name="group_incoming_message_error">无法处理收到的群组消息。</string>
+    <string name="group_file_send_failed">群组文件发送失败。</string>
+    <string name="group_image_shrink_failed">无法准备要发送的图片。</string>
+    <string name="group_incoming_file_error">无法处理收到的群组文件。</string>
+    <string name="chat_file_too_large">文件太大。</string>
+    <string name="chat_incoming_file_too_large">收到的文件太大。</string>
+    <string name="chat_opening_file_failed">无法打开文件。</string>
+    <string name="group_file_too_large">文件对此群组来说太大。</string>
+    <string name="group_file_prepare_failed">无法准备要发送的文件。</string>
+    <string name="add_group_failed_empty_name">请输入群组名称。</string>
+    <string name="maintenance_exporting">正在导出…</string>
+    <string name="maintenance_export_ready">导出完成</string>
+    <string name="maintenance_export_failed">导出失败</string>
+    <string name="set_password_setup_failed">无法设置密码。请重试。</string>
+    <string name="power_charging_connected">充电器已连接</string>
+    <string name="power_charging_disconnected">充电器已断开</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

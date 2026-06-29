@@ -16,11 +16,20 @@ class ChatGenericFileCellModel: ChatMovableDateCellModel {
     var state: State = .waitingConfirmation
     var fileName: String?
     var fileSize: String?
+    var fileSizeBytes: Int64 = 0
     var fileUTI: String?
+    /// KHANDAQ: Telegram-style caption rendered under the media in the same cell.
+    var caption: String?
 
     var startLoadingHandle: (() -> Void)?
     var cancelHandle: (() -> Void)?
     var retryHandle: (() -> Void)?
     var pauseOrResumeHandle: (() -> Void)?
     var openHandle: (() -> Void)?
+
+    var isVoiceMessage = false
+    var voiceMessageId: String?
+    var voiceTransferProgress: Float = 0
+    var voiceDuration: TimeInterval = 0
+    var voicePlayToggleHandle: (() -> Void)?
 }

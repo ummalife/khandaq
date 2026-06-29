@@ -44,19 +44,36 @@ class CallActiveController: CallBaseController {
             switch state {
                 case .none:
                     infoLabel.text = nil
+                    stopCallDurationTimer()
                 case .reaching:
                     infoLabel.text = String(localized: "call_reaching")
+                    stopCallDurationTimer()
 
                     bigVideoButton?.isEnabled = false
                     smallVideoButton?.isEnabled = false
                 case .active(let duration):
-                    infoLabel.text = String(timeInterval: duration)
-
                     bigVideoButton?.isEnabled = true
                     smallVideoButton?.isEnabled = true
+
+                    // KHANDAQ (#121): drive the on-screen timer from a local 1s tick, synced once to
+                    // toxav's callDuration. Previously the label updated only when callDuration changed,
+                    // so it froze for a moment whenever a camera (video) toggle made toxav briefly stall
+                    // its duration updates. The monotonic systemUptime base keeps it accurate (no drift)
+                    // while ticking smoothly through such stalls.
+                    if callDurationTimer == nil {
+                        callDurationBase = duration
+                        callDurationBaseTime = ProcessInfo.processInfo.systemUptime
+                        infoLabel.text = String(timeInterval: duration)
+                        startCallDurationTimer()
+                    }
             }
         }
     }
+
+    // KHANDAQ (#121): local smooth call-duration timer (see the .active state case).
+    fileprivate var callDurationTimer: Timer?
+    fileprivate var callDurationBase: TimeInterval = 0
+    fileprivate var callDurationBaseTime: TimeInterval = 0
 
     var mute: Bool = false {
         didSet {
@@ -65,7 +82,7 @@ class CallActiveController: CallBaseController {
         }
     }
 
-    var speaker: Bool = true {
+    var speaker: Bool = false {
         didSet {
             bigSpeakerButton?.isSelected = speaker
             smallSpeakerButton?.isSelected = speaker
@@ -150,6 +167,16 @@ class CallActiveController: CallBaseController {
 
     fileprivate var smallContainerViewBottomConstraint: Constraint!
 
+    // KHANDAQ (remote-video diagnostic): tiny line under the timer showing incoming-frame count and
+    // the video flags, so a screenshot of a broken video call pinpoints where the chain breaks.
+    fileprivate var debugLabel: UILabel!
+    var debugVideoInfo: String = "" {
+        didSet {
+            _ = view
+            debugLabel?.text = debugVideoInfo
+        }
+    }
+
     fileprivate var smallContainerView: UIView!
     fileprivate var smallMuteButton: CallButton?
     fileprivate var smallSpeakerButton: CallButton?
@@ -164,6 +191,10 @@ class CallActiveController: CallBaseController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        callDurationTimer?.invalidate()
+    }
+
     override func loadView() {
         super.loadView()
 
@@ -172,8 +203,10 @@ class CallActiveController: CallBaseController {
         createBigViews()
         createSmallViews()
         installConstraints()
+        createDebugLabel()
 
         view.bringSubview(toFront: topContainer)
+        view.bringSubview(toFront: debugLabel)
 
         setButtonsInitValues()
 
@@ -196,6 +229,7 @@ class CallActiveController: CallBaseController {
     override func prepareForRemoval() {
         super.prepareForRemoval()
 
+        stopCallDurationTimer()
         bigMuteButton?.isEnabled = false
         bigSpeakerButton?.isEnabled = false
         bigVideoButton?.isEnabled = false
@@ -243,6 +277,23 @@ extension CallActiveController {
 }
 
 private extension CallActiveController {
+    // KHANDAQ (#121): smooth, drift-free call-duration ticking (see the .active state case).
+    func startCallDurationTimer() {
+        callDurationTimer?.invalidate()
+        callDurationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            let elapsed = self.callDurationBase + (ProcessInfo.processInfo.systemUptime - self.callDurationBaseTime)
+            self.infoLabel.text = String(timeInterval: elapsed)
+        }
+    }
+
+    func stopCallDurationTimer() {
+        callDurationTimer?.invalidate()
+        callDurationTimer = nil
+    }
+
     func createGestureRecognizers() {
         let tapGR = UITapGestureRecognizer(target: self, action: #selector(CallActiveController.tapOnView))
         view.addGestureRecognizer(tapGR)
@@ -288,6 +339,22 @@ private extension CallActiveController {
         smallSpeakerButton = addButtonWithType(.speaker, buttonSize: .small, action: #selector(CallActiveController.speakerButtonPressed(_:)), container: smallContainerView)
         smallVideoButton = addButtonWithType(.video, buttonSize: .small, action: #selector(CallActiveController.videoButtonPressed(_:)), container: smallContainerView)
         smallDeclineButton = addButtonWithType(.decline, buttonSize: .small, action: #selector(CallActiveController.declineButtonPressed), container: smallContainerView)
+    }
+
+    func createDebugLabel() {
+        debugLabel = UILabel()
+        debugLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 11.0, weight: .medium)
+        debugLabel.textColor = .systemYellow
+        debugLabel.textAlignment = .center
+        debugLabel.numberOfLines = 0
+        debugLabel.text = debugVideoInfo
+        view.addSubview(debugLabel)
+        debugLabel.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(60.0)
+            $0.centerX.equalTo(view)
+            $0.leading.greaterThanOrEqualTo(view).offset(8.0)
+            $0.trailing.lessThanOrEqualTo(view).offset(-8.0)
+        }
     }
 
     func addButtonWithType(_ type: CallButton.ButtonType, buttonSize: CallButton.ButtonSize, action: Selector, container: UIView) -> CallButton {

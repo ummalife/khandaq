@@ -1,13 +1,91 @@
 <resources>
     <string name="app_name" translatable="false">Khandaq</string>
-    <string name="notification_app_title" translatable="false">Khandaq online</string>
+    <!-- KHANDAQ onboarding (Figma) -->
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_create_account">Create account</string>
+    <string name="onboarding_import_profile">Import profile</string>
+    <string name="onboarding_title_1">No phone number</string>
+    <string name="onboarding_desc_1">Sign up for the messenger without linking a phone number</string>
+    <string name="onboarding_title_2">Strong encryption</string>
+    <string name="onboarding_desc_2">All messages are encrypted with the Tox protocol and are accessible only to you and your contact</string>
+    <string name="onboarding_title_3">Only you and your contact</string>
+    <string name="onboarding_desc_3">Your messages are not stored on servers. Enjoy full decentralization</string>
+    <string name="onboarding_pw_title">Set password</string>
+    <string name="onboarding_pw_label">Password</string>
+    <string name="onboarding_pw_hint">Enter password</string>
+    <string name="onboarding_pw_helper">A password protects your data. At least 8 characters, letters and digits. Keep it safe — it cannot be recovered.</string>
+    <string name="onboarding_pw_confirm_label">Confirm password</string>
+    <string name="onboarding_pw_confirm_hint">Re-enter password</string>
+    <string name="onboarding_create">Create</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_login_title">Log in to profile</string>
+    <string name="onboarding_login_btn">Log in</string>
+    <string name="import_step_1">Send the .tox file to your device (via email, Dropbox, or another option)</string>
+    <string name="import_step_2">Tap “Open”</string>
+    <string name="import_step_3">Choose Khandaq from the list of available apps</string>
+    <string name="import_step_4">Check the new profile name and tap OK</string>
+    <string name="chat_action_search">Search</string>
+    <string name="chat_action_video">Video call</string>
+    <string name="profile_label_name">Name</string>
+    <string name="profile_label_status">Status</string>
+    <string name="profile_label_myid">MyID</string>
+    <string name="profile_label_capabilities">Tox Capabilities</string>
+    <string name="profile_show_qr">Show QR code</string>
+    <string name="settings_export_profile">Export profile</string>
+    <string name="settings_import_profile">Import profile</string>
+    <string name="settings_import_subtitle">Export or import a Tox profile (.tox). Only the Tox ID and contacts are transferred; chat history is not.</string>
+    <string name="settings_dark_theme">Dark theme</string>
+    <string name="settings_notif_preview">Notification preview</string>
+    <string name="settings_group_system">Group system messages</string>
+    <string name="settings_advanced">Advanced settings</string>
+    <string name="profile_logout">Log out</string>
+    <string name="profile_logout_confirm">Log out of this profile?</string>
+    <string name="profile_edit_save">Save changes</string>
+    <string name="profile_edit_name_hint">Your name</string>
+    <string name="profile_edit_status_hint">Your status</string>
+    <string name="profile_qr_modal_title">Your account MyID</string>
+    <string name="profile_qr_modal_desc">Friends can message you by scanning your QR code.</string>
+    <string name="settings_faq">FAQ</string>
+    <string name="settings_about_app">About</string>
+    <string name="settings_attachment_download">Attachment download</string>
+    <string name="settings_dl_never">Never</string>
+    <string name="settings_dl_wifi">Wi-Fi only</string>
+    <string name="settings_dl_always">Always</string>
+    <string name="main_header_connecting">Connecting…</string>
+    <string name="connection_warn_weak">Weak connection</string>
+    <string name="connection_good">Connection stable</string>
+    <string name="connection_quality_strong">Connection: good</string>
+    <string name="connection_quality_medium">Connection: stable</string>
+    <string name="connection_quality_weak">Connection: weak</string>
+    <string name="connection_quality_offline">Connection: offline</string>
+    <string name="connection_reconnect_toast">Reconnecting…</string>
+    <string name="message_tap_failed_to_retry">Tap the red icon to retry sending</string>
+    <string name="chat_date_today">Today</string>
+    <string name="chat_date_yesterday">Yesterday</string>
+    <string name="chat_reply_action">Reply</string>
+    <string name="chat_reply_cancel">Cancel reply</string>
+    <string name="chat_reply_header">In reply to %1$s</string>
+    <string name="chat_reply_self_name">You</string>
+    <string name="chat_reply_unknown_sender">Unknown</string>
+    <string name="notification_app_title" translatable="false">Khandaq</string>
+    <string name="notification_fgs_title" translatable="false">Khandaq</string>
+    <string name="notification_fgs_text">Running in background</string>
     <string name="notification_status_online">Online</string>
+    <string name="network_diag_title">Network diagnostics</string>
+    <string name="network_diag_summary">DHT status, relays, reconnect log</string>
+    <string name="network_diag_refresh">Refresh</string>
+    <string name="network_diag_export">Export log</string>
+    <string name="pref_title_network_diagnostics">Network diagnostics</string>
     <string name="notification_status_offline">Offline</string>
     <string name="notification_status_connecting">Connecting</string>
     <string name="notification_status_offline_manual">Offline (signed out)</string>
     <string name="notification_status_online_tor">Online (Tor)</string>
     <string name="notification_status_offline_tor">Offline (Tor)</string>
-    <string name="notification_channel_toxservice">Khandaq online</string>
+    <string name="notification_quality_medium">stable</string>
+    <string name="notification_quality_weak">weak signal</string>
+    <string name="notification_channel_toxservice">Background service</string>
+    <string name="notification_channel_toxservice_desc">Keeps Khandaq connected. No alerts.</string>
     <string name="notification_channel_fcm_wake">Push wake</string>
     <string name="notification_channel_fcm_wake_desc">Wakes Khandaq when a message arrives</string>
     <string name="notification_channel_message_sound">New message</string>
@@ -41,7 +119,7 @@
     <string name="title_activity_crash">Crash</string>
     <string name="title_activity_friendinfo">Friendinfo</string>
     <string name="title_activity_conferenceinfo">Conferenceinfo</string>
-    <string name="title_activity_groupinfo">Groupinfo</string>
+    <string name="title_activity_groupinfo">Group info</string>
     <string name="title_activity_conferencepeerinfo">Peerinfo</string>
     <string name="title_activity_grouppeerinfo">Group Peerinfo</string>
     <string name="title_activity_aboutpage">About</string>
@@ -64,6 +142,24 @@
     <!-- Strings related to Settings -->
     <!-- Strings related to Settings -->
     <string name="pref_header_general">General</string>
+    <string name="pref_header_profile_backup">Profile backup</string>
+    <string name="settings_backup_section_title">Backup</string>
+    <string name="settings_backup_export">Export</string>
+    <string name="settings_backup_import">Import</string>
+    <string name="settings_export_tox_profile">Export profile (.tox)</string>
+    <string name="settings_export_tox_profile_summary">Save Tox ID and contacts. Chat history is not included.</string>
+    <string name="settings_import_tox_profile">Import profile (.tox)</string>
+    <string name="settings_import_tox_profile_summary">Replace current profile. Wipes local chats and data.</string>
+    <string name="settings_import_tox_profile_pick_file">Choose file</string>
+    <string name="settings_import_tox_profile_picker_hint">In the file picker, open Downloads or your file manager and select a .tox profile file.</string>
+    <string name="settings_export_tox_profile_confirm_picker">Choose where to save your profile (for example, Downloads). Only Tox ID and contacts are included; chat history is not exported. The file will remain even if you uninstall the app.</string>
+    <string name="settings_export_tox_profile_confirm_yes">Export</string>
+    <string name="settings_export_tox_profile_done_persists">File saved:\n%1$s\n\nThis file will remain even if you uninstall the app.</string>
+    <string name="settings_export_tox_profile_failed">Could not export profile.</string>
+    <string name="settings_import_tox_profile_replace_warning">Your current profile, chats and local data will be replaced. Only Tox ID and contacts from the .tox file will remain. Chat history is not transferred.</string>
+    <string name="settings_import_tox_profile_invalid_file">The selected file does not look like a valid Tox profile (.tox).</string>
+    <string name="settings_import_tox_profile_failed">Could not import the selected profile file.</string>
+    <string name="layout___first_launch_import_profile_hint">Restore an existing Khandaq/Tox profile from a .tox file. Only your Tox ID and contacts are imported; chat history is not included.</string>
 
     <string-array name="pref_dark_mode_titles">
         <item>System default</item>
@@ -96,9 +192,9 @@
     <string name="pref_title_higher_video_quality">Video Quality</string>
     <string name="pref_description_higher_video_quality">Use better Video quality.\nChange needs RESTART!</string>
     <string-array name="pref_higher_video_quality_titles">
-        <item>low bandwidth\n(250 kb/s)</item>
-        <item>normal bandwidth\n(2500 kb/s)</item>
-        <item>high bandwidth\n(3500 kb/s)</item>
+        <item>data saver\n(800 kb/s, 480p)</item>
+        <item>normal\n(1500 kb/s, 720p)</item>
+        <item>high\n(3000+ kb/s, 1080p)</item>
     </string-array>
     <string-array name="pref_higher_video_quality_values">
         <item>0</item>
@@ -274,7 +370,7 @@
     <string name="pref_description_use_camera_x">!! Experimental !!\nUse CameraX and Remove background in Video Calls\nThis might not work fully yet, please be careful and do not depend on this to work always!</string>
 
     <string name="pref_title_allow_enable_ngc_features">NGC - New Group Chats</string>
-    <string name="pref_description_enable_ngc_features">!! Experimental !!\nThis is NOT fully working!!</string>
+    <string name="pref_description_enable_ngc_features">Enable next-generation group chats (NGC) with improved messaging, voice, and video.</string>
 
     <string name="pref_title_X_audio_play_buffer_custom">Audio play buffer</string>
     <string name="pref_description_X_audio_play_buffer_custom">!! Experimental !!\nAudio play buffer in bytes, set to "0" to disable custom setting</string>
@@ -380,9 +476,12 @@
     <string name="pref_title_new_message_notifications">New message notifications</string>
 
     <string name="pref_title_ringtone">Ringtone</string>
+    <string name="pref_title_notification_volume">Notification volume</string>
     <string name="pref_ringtone_silent">Silent</string>
 
     <string name="pref_title_vibrate">Vibrate</string>
+    <string name="pref_title_send_read_receipts">Send read receipts</string>
+    <string name="pref_description_send_read_receipts">Let contacts see when you have read their messages</string>
     <string name="pref_title_sound">Sound</string>
     <string name="add_friend_activity_help">Paste friend\'s ID in the text box above or tap the
     QR code button to scan friend\'s code with a camera.</string>
@@ -390,22 +489,64 @@
     <string name="add_group_activity_help">Create a new Private (invite only) Group with a given Group Name.</string>
     <string name="add_public_group_activity_help">Create a new Public Group with a given Group Name.</string>
     <string name="join_public_group_activity_help">Join a Public Group with the given Group ID.</string>
-    <string name="join_public_group_activity_warning">Warning:\njoining a Public Group via Group ID is not reliably working yet!!</string>
+    <string name="join_public_group_activity_warning">Enter the 64-character group ID to join. Connection may take a few seconds.</string>
     <string name="group_send_observer_role">You are an observer in this group and cannot send messages. Ask a moderator to change your role to User.</string>
-    <string name="group_send_not_connected">Group is not connected yet. Wait for the green status indicator and try again.</string>
+    <string name="group_send_not_connected">Group is not connected yet. Reconnecting — try again in a moment.</string>
     <string name="group_send_group_not_found">This group is not active in Tox. Leave and re-join the group.</string>
     <string name="group_send_left_group">You left this group.</string>
+    <string name="group_udp_blocked_hint">Can\'t connect to this group. Your network may be blocking peer discovery (common on mobile data or in some regions). Ask a member to add you as a contact and invite you into the group.</string>
+    <string name="group_share_invite_chooser">Share group invite</string>
+    <string name="group_share_invite_template">Join my Khandaq group.\n\nGroup ID:\n%1$s\n\nIf it does not connect (some networks block peer discovery), add me as a contact and I will invite you in.\n\nMy Tox ID:\n%2$s</string>
     <string name="group_send_too_long">Message is too long.</string>
+    <string name="group_sys_you_joined">You joined the group</string>
+    <string name="group_sys_peer_joined">%1$s joined the group</string>
+    <string name="group_sys_peer_left">%1$s left the group (%2$s)</string>
+    <string name="group_sys_peer_renamed">%1$s changed their name</string>
+    <string name="group_sys_peer_number">Peer %1$d</string>
+    <string name="group_sys_privacy_changed">Privacy changed to:</string>
+    <string name="group_sys_exit_quit">left voluntarily</string>
+    <string name="group_sys_exit_kick">was removed</string>
+    <string name="group_sys_exit_sync_error">connection error</string>
+    <string name="group_sys_exit_self_disconnected">disconnected</string>
     <string name="group_send_empty">Message is empty.</string>
     <string name="group_send_bad_type">Unsupported message type.</string>
     <string name="group_send_failed">Failed to send group message.</string>
+    <string name="dm_send_failed">Message not sent. Try again.</string>
+    <string name="dm_send_failed_friend">Contact not found. Re-open the chat and try again.</string>
+    <string name="dm_send_failed_not_ready">Messenger is still connecting. Wait a moment and try again.</string>
+    <string name="dm_send_failed_no_network">No network connection.</string>
+    <string name="dm_send_failed_pending_request">Waiting for friend request to be accepted.</string>
+    <string name="dm_send_failed_friend_offline">Contact is offline. The message will be delivered later.</string>
     <string name="group_invite_friend_success">Group invitation sent.</string>
+    <string name="group_invite_friend_queued">Contact is offline — invitation queued, will be sent when they reconnect.</string>
     <string name="group_invite_friend_failed">Failed to invite contact to group.</string>
     <string name="group_invite_friend_not_found">Contact is not available in Tox.</string>
     <string name="group_invite_friend_disconnected">Group is disconnected.</string>
     <string name="group_invite_friend_fail_send">Could not reach contact. Make sure they are online.</string>
     <string name="group_invite_friend_invite_fail">Failed to create group invitation.</string>
     <string name="group_invite_no_friends_available">No contacts available to invite.</string>
+    <string name="group_send_voice_confirm_title">Send voice message?</string>
+    <string name="group_send_voice_confirm_message">Send this voice message to the group?</string>
+    <string name="group_mention_notification_prefix">Mentioned you: </string>
+    <string name="group_peer_unknown">Unknown</string>
+    <string name="group_incoming_message_error">Could not process incoming group message.</string>
+    <string name="group_file_send_failed">Group file send failed.</string>
+    <string name="group_image_shrink_failed">Could not prepare image for sending.</string>
+    <string name="group_incoming_file_error">Could not process incoming group file.</string>
+    <string name="chat_file_too_large">File is too large.</string>
+    <string name="chat_file_empty">Cannot send an empty file.</string>
+    <string name="chat_incoming_file_too_large">Incoming file is too large.</string>
+    <string name="chat_opening_file_failed">Could not open file.</string>
+    <string name="chat_media_still_downloading">This file is still downloading. Please wait.</string>
+    <string name="chat_media_retry_download">Retry download</string>
+    <string name="group_file_too_large">File is too large for this group (max. %1$s).</string>
+    <string name="group_file_send_large_confirm_title">Send large file?</string>
+    <string name="group_file_send_large_confirm_message">This file (%1$s) may take a long time to transfer. Send anyway?</string>
+    <string name="group_file_prepare_failed">Could not prepare file for sending.</string>
+    <string name="group_video_join_title">Join group video?</string>
+    <string name="group_video_join_message">Send your video and audio to everyone in this group?</string>
+    <string name="group_video_join_confirm">Yes, start video</string>
+    <string name="group_video_join_decline">No</string>
     <string name="call_permission_mic_required">Microphone permission is required for calls.</string>
     <string name="call_permission_camera_required">Camera permission is required for video calls.</string>
     <string name="call_start_failed">Failed to start call.</string>
@@ -419,6 +560,13 @@
     <string name="join_group_activity_join">Join Group</string>
     <string name="cancel">Cancel</string>
     <string name="join_public_group_failed">Joining the Public Group failed</string>
+    <string name="join_public_group_failed_not_ready">Messenger is still connecting. Wait a few seconds and try again.</string>
+    <string name="join_public_group_failed_bad_id">Invalid Group ID. Copy all 64 hex characters.</string>
+    <string name="join_public_group_failed_network">Could not reach the group on the network. Check internet and try again.</string>
+    <string name="join_public_group_failed_password">This group requires a password.</string>
+    <string name="join_public_group_error_no_id">Enter a Group ID</string>
+    <string name="join_public_group_error_illegal_chars">Group ID contains invalid characters. Only A–F and 0–9 are allowed.</string>
+    <string name="join_public_group_error_length">Group ID must be 64 hexadecimal characters.</string>
     <string name="join_public_group_joined">You have joined the Public Group</string>
     <string name="add_public_group_failed">Creating a Public Group failed</string>
     <string name="add_public_group_success">You have created a Public Group</string>
@@ -439,12 +587,33 @@
     <string name="add_friend_already_in_contacts">Contact is already in your list</string>
     <string name="add_friend_success">You have added a new Friend</string>
     <string name="invite_friend_success">You have received a Friendrequest</string>
+    <string name="friend_request_dialog_title">Friend request</string>
+    <string name="friend_request_accept">Accept</string>
+    <string name="friend_request_decline">Decline</string>
+    <string name="group_password_placeholder">Group password (private groups only)</string>
+    <string name="group_password_set">Set group password</string>
+    <string name="group_topic_lock">Topic lock (founder only)</string>
+    <string name="group_privacy_set">Set privacy</string>
+    <string name="group_create_private_password">Optional group password</string>
+    <string name="delete_group_title">Delete group?</string>
+    <string name="delete_group_message">Delete this group and all messages?</string>
     <string name="invite_join_group_success">You have been invited to a Group</string>
     <string name="invite_join_conference_success">You have been invited to a Conference Group</string>
     <string name="FriendListHolder_toggle_notification_silent_title">toggle Notification</string>
     <string name="FriendListHolder_toggle_notification_silent_message">Do you want to toggle Notification Silence for this Friend?</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_title">cancel Filetransfer</string>
     <string name="MessageListHolder_file_incoming_cancel_ft_message">Do you want to cancel this Filetransfer?</string>
+    <string name="file_transfer_incomplete">Download incomplete</string>
+    <string name="file_transfer_incomplete_retry">Tap retry or ask the sender to resend.</string>
+    <string name="file_transfer_download_failed">Download failed</string>
+    <string name="file_transfer_upload_failed">Upload failed</string>
+    <string name="file_transfer_cancel">Cancel transfer</string>
+    <string name="file_transfer_retry">Retry transfer</string>
+    <string name="file_transfer_progress_format">%1$s / %2$s · %3$d%%</string>
+    <string name="file_transfer_progress_with_speed">%1$s / %2$s · %3$d%% · %4$s</string>
+    <string name="file_transfer_waiting_sender">Waiting for sender</string>
+    <string name="file_transfer_sender_offline">Sender is offline. The file will download when they reconnect.</string>
+    <string name="file_transfer_connection_issue">Connection issue — tap retry</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">cancel Filetransfer</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">Do you want to cancel this Filetransfer?</string>
     <!-- Strings related to Settings -->
@@ -456,6 +625,32 @@
     <!-- Java Source texts -->
     <!-- Java Source texts -->
     <string name="MainActivity_profile">Profile</string>
+    <string name="tab_contacts">Contacts</string>
+    <string name="tab_chats">Chats</string>
+    <string name="chat_filter_groups">Groups</string>
+    <string name="chat_filter_favorites">Favorites</string>
+    <string name="favorites_chat_title">Favorites</string>
+    <string name="favorites_chat_subtitle">Save messages and notes for yourself</string>
+    <string name="forward_to_favorites">Forward to Favorites</string>
+    <string name="forward_to_favorites_done">Saved to Favorites</string>
+    <string name="add_self_disabled_use_favorites">Use the Favorites chat at the top of your chat list</string>
+    <string name="chat_filter_add_favorite">Add to favorites</string>
+    <string name="chat_filter_remove_favorite">Remove from favorites</string>
+    <string name="empty_state_chats_title">No chats</string>
+    <string name="empty_state_chats_hint">Add a contact to start chatting</string>
+    <string name="empty_state_chats_action">Start chat</string>
+    <string name="empty_state_groups_title">No groups</string>
+    <string name="empty_state_groups_hint">Create or join a group to get started</string>
+    <string name="empty_state_groups_action">Create group</string>
+    <string name="empty_state_favorites_title">No favorites</string>
+    <string name="empty_state_favorites_hint">Pin chats from the chat menu to find them here quickly</string>
+    <string name="empty_state_contacts_title">No contacts</string>
+    <string name="empty_state_contacts_hint">You don\'t have any contacts yet — add some, or share your MyID with them</string>
+    <string name="empty_state_contacts_action">Copy MyID</string>
+    <string name="tab_settings">Settings</string>
+    <string name="tab_profile">Profile</string>
+    <string name="theme_toggle_accessibility">Toggle dark mode</string>
+    <string name="group_actions_menu_title">Group actions</string>
     <string name="MainActivity_settings">Settings</string>
     <string name="MainActivity_logout_login">Logout/Login</string>
     <string name="MainActivity_manually_logged_out_true">Go online</string>
@@ -475,7 +670,21 @@
     <string name="MainActivity_new_noti_token_dialog_text">New Notification Token received. Use this Token?</string>
     <string name="MainActivity_info_dialog_title">INFO</string>
     <string name="MainActivity_add_to_batt_opt">Please add Khandaq to the exception list for Batteryoptimization!</string>
-    <string name="MainActivity_friend_is_typing">friend is typing ...</string>
+    <string name="MainActivity_friend_is_typing">typing…</string>
+    <string name="chat_presence_online">online</string>
+    <string name="chat_presence_away">away</string>
+    <string name="chat_presence_busy">busy</string>
+    <string name="chat_presence_typing">typing</string>
+    <string name="chat_presence_last_seen_just_now">last seen just now</string>
+    <string name="chat_presence_last_seen_yesterday">last seen yesterday</string>
+    <string name="chat_presence_last_seen_at_time">last seen at %1$s</string>
+    <string name="chat_presence_last_seen_on_date">last seen on %1$s</string>
+    <string name="chat_presence_last_seen_unknown">last seen recently</string>
+    <string name="contact_list_presence_recently">last seen recently</string>
+    <plurals name="chat_presence_last_seen_minutes">
+        <item quantity="one">last seen %d minute ago</item>
+        <item quantity="other">last seen %d minutes ago</item>
+    </plurals>
     <string name="MainActivity_notification_new_message">new Message</string>
     <string name="MainActivity_notification_new_message2">new Message</string>
     <string name="MainActivity_button_ok">Ok</string>
@@ -491,9 +700,96 @@
     <string name="MainActivity_setup_push_tip_text">You have not installed the Push Notification App and setup Push Notification. Khandaq will fully work without Push Notification, but it needs to be online constantly to receive Messages.With Push Notification you can save Battery and Internetbandwidth.\n\nDo you want to see how you can Setup Push Notification now?</string>
 
     <string name="MessageListActivity_longpress_to_record_audiomsg">long press to record an Audio Message</string>
+    <string name="voice_recording_cancel">Cancel</string>
+    <string name="voice_recording_send">Send voice message</string>
     <string name="message_list_open_friend_profile">Open contact profile</string>
     <string name="main_profile_open">Open my profile</string>
     <string name="group_open_group_info">Open group info</string>
+    <string name="group_open_member_list">Members</string>
+    <string name="group_member_list_title">Members</string>
+    <string name="group_header_member_count">%1$d members · %2$d online</string>
+    <string name="group_header_discovering_peers">Discovering members…</string>
+    <string name="group_header_connecting_attempt">Connecting… (attempt %1$d/%2$d)</string>
+    <string name="group_header_reconnecting_peers">Reconnecting to peers…</string>
+    <string name="friend_info_status_unknown">No status saved</string>
+    <string name="friend_info_message_count">%1$d messages</string>
+    <string name="friend_info_send_message">Send message</string>
+    <string name="chat_list_search_hint">Search</string>
+    <string name="global_search_hint">Search all chats and messages</string>
+    <string name="global_search_section_chats">Chats and groups</string>
+    <string name="global_search_section_messages">Messages</string>
+    <string name="global_search_no_results">Nothing found</string>
+    <string name="chat_list_no_messages">No messages</string>
+    <string name="chat_list_preview_you">You: %1$s</string>
+    <string name="chat_list_preview_sender">%1$s: %2$s</string>
+    <string name="chat_list_preview_draft">Draft: %1$s</string>
+    <string name="chat_list_preview_file">File</string>
+    <string name="chat_list_preview_empty">Message</string>
+    <string name="chat_list_time_yesterday">yesterday</string>
+    <string name="group_info_members_empty">No members to show yet</string>
+    <string name="group_info_section_settings">Settings</string>
+    <string name="group_info_section_manage">Manage group</string>
+    <string name="group_info_group_name_hint">Group name</string>
+    <string name="group_info_your_name_hint">Your name in this group</string>
+    <string name="group_info_copy_id">Copy</string>
+    <string name="group_info_copy_invite">Copy group ID</string>
+    <string name="group_info_invite_short_id">Tap to copy · ID %1$s</string>
+    <string name="group_info_debug_section">Developer</string>
+    <string name="group_info_debug_dump_peers">Dump offline peers (debug)</string>
+    <string name="group_info_reconnect">Reconnect</string>
+    <string name="group_info_voice_state_set">Apply voice policy</string>
+    <string name="group_info_members_header_default">Members</string>
+    <string name="group_info_members_header">Members (%1$d)</string>
+    <string name="group_info_member_online">online</string>
+    <string name="group_info_member_offline">offline</string>
+    <string name="group_member_last_seen_just_now">last seen just now</string>
+    <string name="group_member_last_seen_long_ago">last seen a long time ago</string>
+    <plurals name="group_member_last_seen_minutes">
+        <item quantity="one">last seen %d minute ago</item>
+        <item quantity="other">last seen %d minutes ago</item>
+    </plurals>
+    <plurals name="group_member_last_seen_hours">
+        <item quantity="one">last seen %d hour ago</item>
+        <item quantity="other">last seen %d hours ago</item>
+    </plurals>
+    <string name="group_info_member_you">you</string>
+    <string name="group_info_connection_connected">Connected</string>
+    <string name="group_info_connection_connecting">Connecting…</string>
+    <string name="group_info_connection_disconnected">Disconnected</string>
+    <string name="group_info_role_founder">Founder</string>
+    <string name="group_info_role_moderator">Moderator</string>
+    <string name="group_info_role_observer">Observer</string>
+    <string name="group_info_role_user">Member</string>
+    <string name="group_info_privacy_public">Public group</string>
+    <string name="group_info_privacy_private">Private group</string>
+    <string name="group_info_privacy_unknown">Unknown privacy</string>
+    <string name="group_info_message_count_user">Messages: %1$d</string>
+    <string name="group_info_system_message_count">System messages: %1$d</string>
+    <string name="group_delete_system_msgs_title">Delete system messages</string>
+    <string name="group_delete_system_msgs_message">Delete all system messages (join/leave) in this group permanently?</string>
+    <string name="group_delete_system_msgs_confirm">Delete</string>
+    <string name="group_delete_system_msgs_progress">Deleting, please wait…</string>
+    <string name="group_delete_system_msgs_done">System messages deleted</string>
+    <string name="group_member_probable_bot_short">bot</string>
+    <string name="group_member_action_info">Info</string>
+    <string name="group_member_action_private_msg">Private group message</string>
+    <string name="group_member_action_private_msg_to">Message to %1$s</string>
+    <string name="group_member_action_private_msg_hint">Private message text</string>
+    <string name="group_member_action_send">Send</string>
+    <string name="group_member_action_private_msg_sent">Private message sent</string>
+    <string name="group_member_action_private_msg_failed">Failed to send</string>
+    <string name="group_member_action_open_chat">Open direct chat</string>
+    <string name="group_member_action_add_friend">Add friend</string>
+    <string name="group_member_action_copy_id">Copy ID</string>
+    <string name="group_member_action_copy_done">ID copied</string>
+    <string name="group_member_action_mute">Mute notifications</string>
+    <string name="group_member_action_unmute">Unmute notifications</string>
+    <string name="group_member_action_mute_done">Notifications muted</string>
+    <string name="group_member_action_unmute_done">Notifications unmuted</string>
+    <string name="group_member_action_kick">Remove from group</string>
+    <string name="group_member_action_bot_info">What is this bot?</string>
+    <string name="group_member_action_bot_info_title">Automated client</string>
+    <string name="group_member_action_bot_info_body">Not a human tester — a headless TRIfA/CI client in the public group. Names like Cameron Willis come from RandomNameGenerator in TRIfA. ID: %1$s</string>
     <string name="group_title_saved_toast">Group name updated</string>
     <string name="group_title_save_failed_toast">Could not update group name</string>
 
@@ -506,10 +802,12 @@
     <string name="profile_avatar_error_too_large">Image is too large (max 10 MB)</string>
     <string name="profile_avatar_error_unsupported">Unsupported or corrupted image format</string>
     <string name="profile_save_hint">Photo saves automatically when selected. Tap Save to apply nickname and status.</string>
+    <string name="profile_share_id_title">Your ID:</string>
+    <string name="profile_qr_content_description">QR code for your ID</string>
 
     <string name="Aboutpage_0">Khandaq Crashlog</string>
-    <string name="Aboutpage_2">send Crash report via Email</string>
-    <string name="Aboutpage_4">reading crash info ...</string>
+    <string name="Aboutpage_2">Send crash report</string>
+    <string name="Aboutpage_4">Reading crash info…</string>
     <string name="Aboutpage_5a">Khandaq Messenger</string>
     <string name="Aboutpage_5b">Version:</string>
     <string name="Aboutpage_6">What is Tox?</string>
@@ -517,13 +815,73 @@
     <string name="Aboutpage_license">License: GNU GPL v2+</string>
     <string name="Aboutpage_website">Website</string>
     <string name="Aboutpage_opensource">Open Source Licenses</string>
-    <string name="Aboutpage_upstream">Based on Khandaq (ToxAndroidRefImpl)</string>
-    <string name="Aboutpage_8">used libraries:</string>
+    <string name="Aboutpage_upstream">Based on TRIfA (ToxAndroidRefImpl)</string>
+    <string name="about_tagline">End-to-end encrypted messenger on the Tox network.</string>
+    <string name="about_version_format">Version %1$s · build %2$s</string>
+    <string name="about_section_support">Support</string>
+    <string name="about_section_legal">Legal &amp; info</string>
+    <string name="about_section_debug">Build details</string>
+    <string name="about_crash_report_subtitle">Attach logcat and last crash stack trace</string>
+    <string name="about_copy_diagnostics">Copy diagnostics</string>
+    <string name="about_copy_diagnostics_subtitle">Version, device, and protocol info</string>
+    <string name="about_copy_diagnostics_done">Diagnostics copied</string>
+    <string name="about_send_feedback">Send feedback</string>
+    <string name="about_feedback_subject">Khandaq feedback</string>
+    <string name="about_crash_report_unavailable">Open Khandaq from the chat list, then try again.</string>
+    <string name="about_debug_unlocked">Build details unlocked</string>
+    <string name="about_upstream_commit">Upstream TRIfA commit</string>
+    <string name="about_jni_commit">JNI commit</string>
+    <string name="about_toxcore_commit">c-toxcore commit</string>
 
     <string name="AddFriendActivity_3">incorrect ID</string>
     <string name="AddFriendActivity_4">No ID</string>
     <string name="add_id_dialog_title">add ID?</string>
     <string name="id_copied_to_clipboard">ID copied to Clipboard</string>
+    <string name="text_copied_to_clipboard">Copied to clipboard</string>
+    <string name="friend_not_online">Friend is not online</string>
+
+    <string name="maintenance_exporting">Exporting…</string>
+    <string name="maintenance_export_ready">Export complete</string>
+    <string name="maintenance_export_failed">Export failed</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:\n\n%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:\n\n%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:\n\n%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="set_password_setup_failed">Could not set password. Try again.</string>
+    <string name="power_charging_connected">Charger connected</string>
+    <string name="power_charging_disconnected">Charger disconnected</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="import_toxsave_in_progress">Importing profile…</string>
+    <string name="backup_password_button">Encrypted backup (password)</string>
+    <string name="backup_password_title">Encrypted backup</string>
+    <string name="backup_password_enter">Backup password</string>
+    <string name="backup_password_confirm">Repeat password</string>
+    <string name="backup_password_warning">This password protects your whole profile — messages, media and identity. If you lose it the backup cannot be opened; there is no recovery.</string>
+    <string name="backup_password_too_short">Password must be at least 8 characters</string>
+    <string name="backup_password_mismatch">Passwords do not match</string>
+    <string name="backup_in_progress">Creating encrypted backup…</string>
+    <string name="backup_done">Backup created.</string>
+    <string name="backup_failed">Backup failed:</string>
+    <string name="restore_password_button">Restore from backup (password)</string>
+    <string name="restore_password_title">Restore backup</string>
+    <string name="restore_password_enter">Backup password</string>
+    <string name="restore_confirm">This replaces your current profile — messages, media and identity — with the backup. Continue?</string>
+    <string name="restore_in_progress">Restoring backup…</string>
+    <string name="restore_failed">Restore failed:</string>
+    <string name="restore_too_new">This backup was made by a newer app version. Update the app first.</string>
+    <string name="files_exported_to">Files exported to:\n%1$s</string>
+
     <string name="share_id_label">ID:</string>
 
     <string name="CallingActivity_0">Video Delay:</string>
@@ -545,6 +903,12 @@
     <string name="chat_ft_status_sending">Sending…</string>
     <string name="chat_ft_status_waiting_friend_accept">Waiting for contact to accept…</string>
     <string name="voice_message_label">Voice message</string>
+    <string name="media_label_photo">Photo</string>
+    <string name="media_send_caption_hint">Add a caption…</string>
+    <string name="media_send_counter_format">%1$d / %2$d</string>
+    <string name="media_label_video">Video</string>
+    <string name="media_label_audio">Audio</string>
+    <string name="media_label_document">Document</string>
     <string name="chat_ft_generic_file">File</string>
     <string name="incoming_filetransfer_size_too_large">Incoming filesize too large. Only files up to 2 GBytes can be received.</string>
     <!-- Java Source texts -->
@@ -555,7 +919,20 @@
     <!-- Layout texts -->
     <!-- Layout texts -->
     <!-- Layout texts -->
-    <string name="layout___toxid">ID</string>
+    <string name="layout___toxid">Paste ID</string>
+    <string name="attach_option_title">Attach</string>
+    <string name="attach_option_camera_photo">Camera (photo)</string>
+    <string name="attach_option_camera_video">Record video</string>
+    <string name="attach_option_gallery">Gallery</string>
+    <string name="attach_no_camera">No camera available</string>
+    <string name="group_private_msg_label">Private message:</string>
+    <string name="group_private_msg_hint">Write a private message…</string>
+    <string name="group_private_msg_send">Send private message</string>
+    <string name="group_private_msg_sent">Private message sent</string>
+    <string name="group_private_msg_failed">Could not send private message</string>
+    <string name="peer_conn_direct_udp">Connection: direct (UDP) ⚡ fast</string>
+    <string name="peer_conn_relay_tcp">Connection: via relay (TCP) — slower</string>
+    <string name="peer_conn_offline">Connection: offline</string>
     <string name="friend_display_name_fallback">Contact</string>
     <string name="layout___group_name">Group Name</string>
     <string name="layout___group_id">Group ID</string>
@@ -634,6 +1011,7 @@
     <string name="layout___password_again">Password again</string>
     <string name="layout___set_password">Set Password</string>
     <string name="layout___skip">skip</string>
+    <string name="layout___or">or</string>
     <string name="layout___leave">Leave</string>
     <string name="layout___delete">Delete</string>
     <string name="layout___info">Info</string>

@@ -263,6 +263,16 @@
 		9CB44CD31B84DF46007FA7B6 /* OCTToxTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9CB44CAF1B84DF46007FA7B6 /* OCTToxTests.m */; };
 		9CF2F4091D5363420002E175 /* unencrypted-database.realm in Resources */ = {isa = PBXBuildFile; fileRef = 9CF2F4081D5363420002E175 /* unencrypted-database.realm */; };
 		9CF2F40A1D5363420002E175 /* unencrypted-database.realm in Resources */ = {isa = PBXBuildFile; fileRef = 9CF2F4081D5363420002E175 /* unencrypted-database.realm */; };
+		B2NGCDUAL000004 /* OCTToxGroupDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */; };
+		B2NGCDUAL000005 /* OCTToxGroupDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */; };
+		E1A2B3C4D5E6789012340004 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
+		E1A2B3C4D5E6789012340005 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
+		E1A2B3C4D5E6789012340006 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
+		E1A2B3C4D5E6789012340007 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
+		11B0A0121DC64D75000C1721 /* OCTGroupPeer.m in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0101C45229500DCE002 /* OCTGroupPeer.m */; };
+		11B0A0131C45BDB100E80A89 /* OCTGroupPeer.m in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0101C45229500DCE002 /* OCTGroupPeer.m */; };
+		11B0A0144E8FDC00A1ECB6 /* OCTGroupPeer.m in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0101C45229500DCE002 /* OCTGroupPeer.m */; };
+		11B0A0151B84DCFB007FA7B6 /* OCTGroupPeer.m in Sources */ = {isa = PBXBuildFile; fileRef = 11B0A0101C45229500DCE002 /* OCTGroupPeer.m */; };
 		E58B1AAF894CEF7C1E9D8364 /* libPods-OSXDemo.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4C1B17E748892445A436C846 /* libPods-OSXDemo.a */; };
 		F009D9AA1C195D77008243EF /* OCTMainWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = F009D9A91C195D77008243EF /* OCTMainWindowController.m */; };
 		F009D9AE1C195DBA008243EF /* OCTBootStrapViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = F009D9AC1C195DBA008243EF /* OCTBootStrapViewController.m */; };
@@ -486,11 +496,17 @@
 		ACBB7FE1C1F9FD951C5A5D6DFA12C7FC /* OCTFriend.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTFriend.m; sourceTree = "<group>"; };
 		AEAF02FD4B49A2DF3C13562D48C9FEA0 /* OCTManagerImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerImpl.m; sourceTree = "<group>"; };
 		B08EB0152D5B2993766DD654578C3493 /* OCTTox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTTox.m; sourceTree = "<group>"; };
+		B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTToxGroupDualIntegrationTests.m; sourceTree = "<group>"; };
 		B6D6D28CCB11A29144A37A53 /* libPods-iOSDemo.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iOSDemo.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2F358725E9EF3F392D73A1ABBDD3DAB /* OCTSubmanagerUserImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerUserImpl.m; sourceTree = "<group>"; };
 		CE5DBC12869590BEAD637C9DF06567EF /* OCTManagerConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerConstants.m; sourceTree = "<group>"; };
 		DC15169F1B57241E08B356608016D41A /* OCTSubmanagerUser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTSubmanagerUser.h; sourceTree = "<group>"; };
 		E02C2F73766CD67B62FDBB73841065AF /* OCTMessageText.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTMessageText.m; sourceTree = "<group>"; };
+		E1A2B3C4D5E6789012340001 /* OCTSubmanagerGroups.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTSubmanagerGroups.h; sourceTree = "<group>"; };
+		E1A2B3C4D5E6789012340002 /* OCTSubmanagerGroupsImpl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTSubmanagerGroupsImpl.h; sourceTree = "<group>"; };
+		E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerGroupsImpl.m; sourceTree = "<group>"; };
+		11B0A0101C45229500DCE002 /* OCTGroupPeer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTGroupPeer.m; sourceTree = "<group>"; };
+		11B0A0111C45229500DCE002 /* OCTGroupPeer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTGroupPeer.h; sourceTree = "<group>"; };
 		E81B002B36CF7385268F31A5263A10DF /* OCTFriendRequest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTFriendRequest.m; sourceTree = "<group>"; };
 		E9E579DEF80DD05B8F30CA2822233B2B /* OCTDefaultFileStorage.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTDefaultFileStorage.m; sourceTree = "<group>"; };
 		EEE0165339DE12FD2EE1821ACE3E19B8 /* OCTToxOptions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTToxOptions.h; sourceTree = "<group>"; };
@@ -662,6 +678,8 @@
 				11B4BAF31B11E29A0001A96A /* OCTSubmanagerFilesImpl.h */,
 				A61DE127803013E8229FED6D1DADFCBD /* OCTSubmanagerFriendsImpl.m */,
 				1F210739EBF632594BBF9C51E585A589 /* OCTSubmanagerFriendsImpl.h */,
+				E1A2B3C4D5E6789012340002 /* OCTSubmanagerGroupsImpl.h */,
+				E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */,
 				11D6C9911B3B251000E21A35 /* OCTSubmanagerObjectsImpl.m */,
 				11D6C9941B3B252300E21A35 /* OCTSubmanagerObjectsImpl.h */,
 				117D37CB1B72B284006E885C /* OCTSubmanagerProtocol.h */,
@@ -690,6 +708,7 @@
 				11B4BAEF1B11E2530001A96A /* OCTSubmanagerFiles.h */,
 				115B6FBF1C9DD46700C65334 /* OCTSubmanagerFilesProgressSubscriber.h */,
 				91FC63A06A08D2865DD4552BB2476EE8 /* OCTSubmanagerFriends.h */,
+				E1A2B3C4D5E6789012340001 /* OCTSubmanagerGroups.h */,
 				11D6C98E1B3B24F700E21A35 /* OCTSubmanagerObjects.h */,
 				DC15169F1B57241E08B356608016D41A /* OCTSubmanagerUser.h */,
 			);
@@ -720,6 +739,7 @@
 				11D650D71B89226800C3DD23 /* OCTCallTimer.h */,
 				11D650D81B89226800C3DD23 /* OCTCallTimer.m */,
 				72B2CBBB2987645B0CA4475581E7B86A /* OCTChat.m */,
+				11B0A0101C45229500DCE002 /* OCTGroupPeer.m */,
 				ACBB7FE1C1F9FD951C5A5D6DFA12C7FC /* OCTFriend.m */,
 				E81B002B36CF7385268F31A5263A10DF /* OCTFriendRequest.m */,
 				5309FB4CA1007014A575D75CB9387C5C /* OCTMessageAbstract.m */,
@@ -754,6 +774,7 @@
 			children = (
 				11D6510E1B8922C700C3DD23 /* OCTCall.h */,
 				9CB71FBC1B386B2F00E3C1EF /* OCTChat.h */,
+				11B0A0111C45229500DCE002 /* OCTGroupPeer.h */,
 				9CB71FBD1B386B2F00E3C1EF /* OCTFriend.h */,
 				9CB71FBE1B386B2F00E3C1EF /* OCTFriendRequest.h */,
 				9CB71FBF1B386B2F00E3C1EF /* OCTMessageAbstract.h */,
@@ -939,6 +960,7 @@
 				11D6512B1B89238900C3DD23 /* OCTToxAVTests.m */,
 				112779D31B9B6F0700E475B4 /* OCTToxEncryptSaveTests.m */,
 				9CB44CAF1B84DF46007FA7B6 /* OCTToxTests.m */,
+				B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */,
 				11D6512E1B89238F00C3DD23 /* OCTVideoEngineTests.m */,
 				F5BC99BC1C2A171D00425CE3 /* YUVPlanes */,
 			);
@@ -1044,8 +1066,6 @@
 				9CB44B5B1B84D8C1007FA7B6 /* Sources */,
 				9CB44B5C1B84D8C1007FA7B6 /* Frameworks */,
 				9CB44B5D1B84D8C1007FA7B6 /* Resources */,
-				1AE3FA2EF5896FAB63CEED26 /* [CP] Embed Pods Frameworks */,
-				27FAD714500DBB214100D6A9 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -1064,8 +1084,6 @@
 				9CB44B731B84D8C1007FA7B6 /* Sources */,
 				9CB44B741B84D8C1007FA7B6 /* Frameworks */,
 				9CB44B751B84D8C1007FA7B6 /* Resources */,
-				34BD33C231B0DC4C812E6CD4 /* [CP] Embed Pods Frameworks */,
-				F238569579B9956880F66E28 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -1085,8 +1103,6 @@
 				9CB44C2D1B84DCCC007FA7B6 /* Sources */,
 				9CB44C2E1B84DCCC007FA7B6 /* Frameworks */,
 				9CB44C2F1B84DCCC007FA7B6 /* Resources */,
-				8DACE7DE62FF348B30F0696F /* [CP] Embed Pods Frameworks */,
-				49819FDE533D3A05C392778B /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -1105,8 +1121,6 @@
 				9CB44C3F1B84DCCC007FA7B6 /* Sources */,
 				9CB44C401B84DCCC007FA7B6 /* Frameworks */,
 				9CB44C411B84DCCC007FA7B6 /* Resources */,
-				49814162CF2B25A0EF83F743 /* [CP] Embed Pods Frameworks */,
-				7BC9F17BA589F0241ED5F6C8 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -1218,88 +1232,16 @@
 			files = (
 			);
 			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
 			);
 			name = "[CP] Check Pods Manifest.lock";
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-iOSDemo-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		1AE3FA2EF5896FAB63CEED26 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-iOSDemo/Pods-iOSDemo-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		27FAD714500DBB214100D6A9 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-iOSDemo/Pods-iOSDemo-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		34BD33C231B0DC4C812E6CD4 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-iOSDemoTests/Pods-iOSDemoTests-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		49814162CF2B25A0EF83F743 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-OSXDemoTests/Pods-OSXDemoTests-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		49819FDE533D3A05C392778B /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-OSXDemo/Pods-OSXDemo-resources.sh\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		5939D0C49BC321A42C08BA49 /* [CP] Check Pods Manifest.lock */ = {
@@ -1308,43 +1250,16 @@
 			files = (
 			);
 			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
 			);
 			name = "[CP] Check Pods Manifest.lock";
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OSXDemo-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		7BC9F17BA589F0241ED5F6C8 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-OSXDemoTests/Pods-OSXDemoTests-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		8DACE7DE62FF348B30F0696F /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-OSXDemo/Pods-OSXDemo-frameworks.sh\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		B699B233074D6E44E9F6DD10 /* [CP] Check Pods Manifest.lock */ = {
@@ -1353,13 +1268,16 @@
 			files = (
 			);
 			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
 			);
 			name = "[CP] Check Pods Manifest.lock";
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-OSXDemoTests-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		E94B5F357EC3125CEB95827F /* [CP] Check Pods Manifest.lock */ = {
@@ -1368,28 +1286,16 @@
 			files = (
 			);
 			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
 			);
 			name = "[CP] Check Pods Manifest.lock";
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-iOSDemoTests-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_ROOT}/../Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [[ $? != 0 ]] ; then\n    cat << EOM\nerror: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\nEOM\n    exit 1\nfi\n";
-			showEnvVarsInLog = 0;
-		};
-		F238569579B9956880F66E28 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-iOSDemoTests/Pods-iOSDemoTests-resources.sh\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -1400,6 +1306,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9CB44BE61B84D9E1007FA7B6 /* OCTChat.m in Sources */,
+				11B0A0121DC64D75000C1721 /* OCTGroupPeer.m in Sources */,
 				11D6511E1B89233A00C3DD23 /* OCTTabBarControllerViewController.m in Sources */,
 				11D650EC1B89228C00C3DD23 /* OCTSubmanagerCallsImpl.m in Sources */,
 				9CB44B671B84D8C1007FA7B6 /* AppDelegate.m in Sources */,
@@ -1432,6 +1339,7 @@
 				9CB44B941B84D91C007FA7B6 /* OCTUserViewController.m in Sources */,
 				11D650E11B89226800C3DD23 /* OCTCallTimer.m in Sources */,
 				9CB44BF01B84D9E1007FA7B6 /* OCTSubmanagerChatsImpl.m in Sources */,
+				E1A2B3C4D5E6789012340004 /* OCTSubmanagerGroupsImpl.m in Sources */,
 				9CB44BE91B84D9E1007FA7B6 /* OCTMessageAbstract.m in Sources */,
 				11D650DD1B89226800C3DD23 /* OCTCall+Utilities.m in Sources */,
 				11D6510A1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,
@@ -1470,21 +1378,16 @@
 				11D650F81B89229B00C3DD23 /* OCTPixelBufferPool.m in Sources */,
 				9CB44C1A1B84DBA3007FA7B6 /* OCTSubmanagerFilesImpl.m in Sources */,
 				9CB44C0F1B84DBA3007FA7B6 /* OCTMessageFile.m in Sources */,
-				9CB44CD21B84DF46007FA7B6 /* OCTToxTests.m in Sources */,
+				B2NGCDUAL000004 /* OCTToxGroupDualIntegrationTests.m in Sources */,
 				11D650E71B89227300C3DD23 /* OCTMessageCall.m in Sources */,
-				112779D41B9B6F0700E475B4 /* OCTToxEncryptSaveTests.m in Sources */,
-				9CB44CD01B84DF46007FA7B6 /* OCTSubmanagerUserImplTests.m in Sources */,
-				11D651241B89236A00C3DD23 /* OCTAudioEngineTests.m in Sources */,
-				9CB44CC21B84DF46007FA7B6 /* OCTRealmTests.m in Sources */,
-				9CB44CC01B84DF46007FA7B6 /* OCTObjectTests.m in Sources */,
 				11BB6EAF1CC3930A00A531A8 /* OCTFileTools.m in Sources */,
-				9CB44CBC1B84DF46007FA7B6 /* OCTManagerImplTests.m in Sources */,
 				9CB44C131B84DBA3007FA7B6 /* OCTRealmManager.m in Sources */,
 				9CB44C171B84DBA3007FA7B6 /* OCTSubmanagerBootstrapImpl.m in Sources */,
 				1183BC7D1CA02755000CD310 /* OCTFilePathInput.m in Sources */,
 				11D650E21B89226800C3DD23 /* OCTCallTimer.m in Sources */,
 				9CB44C151B84DBA3007FA7B6 /* OCTSubmanagerObjectsImpl.m in Sources */,
 				9CB44C071B84DBA3007FA7B6 /* OCTChat.m in Sources */,
+				11B0A0131C45BDB100E80A89 /* OCTGroupPeer.m in Sources */,
 				1183BC961CA076BC000CD310 /* NSError+OCTFile.m in Sources */,
 				9CB1F95A1D5B671E00105858 /* OCTManagerFactory.m in Sources */,
 				9CB44C191B84DBA3007FA7B6 /* OCTSubmanagerFriendsImpl.m in Sources */,
@@ -1492,47 +1395,32 @@
 				11D650DE1B89226800C3DD23 /* OCTCall+Utilities.m in Sources */,
 				11D651071B8922AF00C3DD23 /* OCTToxAV.m in Sources */,
 				9CB44C1F1B84DBA3007FA7B6 /* OCTTox.m in Sources */,
-				F50269671C31CB0700E05351 /* OCTAudioQueueTests.m in Sources */,
 				11D650D11B89225400C3DD23 /* OCTAudioEngine.m in Sources */,
 				9CB44C121B84DBA3007FA7B6 /* OCTDefaultFileStorage.m in Sources */,
 				9CB44C0B1B84DBA3007FA7B6 /* OCTNode.m in Sources */,
 				9CB44C081B84DBA3007FA7B6 /* OCTFriend.m in Sources */,
-				11BB6EB31CC3932B00A531A8 /* OCTFileToolsTests.m in Sources */,
 				11AF89021C98C25A00AD1D9F /* OCTFileBaseOperation.m in Sources */,
-				9CB44CCC1B84DF46007FA7B6 /* OCTSubmanagerFriendsImplTests.m in Sources */,
 				11D650FC1B89229B00C3DD23 /* OCTVideoEngine.m in Sources */,
-				9CB44CB21B84DF46007FA7B6 /* OCTChatTests.m in Sources */,
-				9CB44CC61B84DF46007FA7B6 /* OCTSubmanagerBootstrapImplTests.m in Sources */,
 				9CB44C1D1B84DBA3007FA7B6 /* OCTToxConstants.m in Sources */,
 				9CB44C141B84DBA3007FA7B6 /* OCTSubmanagerChatsImpl.m in Sources */,
-				11D651261B89236A00C3DD23 /* OCTCallTimerTests.m in Sources */,
+				E1A2B3C4D5E6789012340005 /* OCTSubmanagerGroupsImpl.m in Sources */,
 				9CB44C1B1B84DBA3007FA7B6 /* OCTManagerImpl.m in Sources */,
-				11D6512C1B89238900C3DD23 /* OCTToxAVTests.m in Sources */,
-				11D6512F1B89238F00C3DD23 /* OCTVideoEngineTests.m in Sources */,
 				11D650ED1B89228C00C3DD23 /* OCTSubmanagerCallsImpl.m in Sources */,
 				1183BC6A1C9EBBE5000CD310 /* OCTFileUploadOperation.m in Sources */,
-				9CB44CC81B84DF46007FA7B6 /* OCTSubmanagerChatsImplTests.m in Sources */,
 				9CB44C1C1B84DBA3007FA7B6 /* OCTManagerConstants.m in Sources */,
 				9CB44C101B84DBA3007FA7B6 /* OCTManagerConfiguration.m in Sources */,
 				1183BC901CA036AA000CD310 /* OCTFileDataOutput.m in Sources */,
-				9CB44CBA1B84DF46007FA7B6 /* OCTManagerConfigurationTests.m in Sources */,
 				11D650DA1B89226800C3DD23 /* OCTCall.m in Sources */,
-				9CB44CCA1B84DF46007FA7B6 /* OCTSubmanagerFilesImplTests.m in Sources */,
 				1183BC8A1CA035CD000CD310 /* OCTFileDataInput.m in Sources */,
 				9CB44C091B84DBA3007FA7B6 /* OCTMessageAbstract.m in Sources */,
-				9CB44CBE1B84DF46007FA7B6 /* OCTMessageAbstractTests.m in Sources */,
 				11D651001B89229B00C3DD23 /* OCTVideoView.m in Sources */,
-				9CB44CB41B84DF46007FA7B6 /* OCTDefaultFileStorageTests.m in Sources */,
 				11AF88FC1C98976F00AD1D9F /* OCTFileDownloadOperation.m in Sources */,
-				9CB44CCE1B84DF46007FA7B6 /* OCTSubmanagerObjectsImplTests.m in Sources */,
 				11E80D841B98C647008DFC47 /* OCTSettingsStorageObject.m in Sources */,
 				9CB44C0C1B84DBA3007FA7B6 /* OCTObject.m in Sources */,
 				9CB44C0E1B84DBA3007FA7B6 /* OCTMessageText.m in Sources */,
 				113187621DD683E400E6FAA2 /* OCTSendMessageOperation.m in Sources */,
 				9CB44C0A1B84DBA3007FA7B6 /* OCTFriendRequest.m in Sources */,
 				1183BC841CA02AA9000CD310 /* OCTFilePathOutput.m in Sources */,
-				9CB44CB81B84DF46007FA7B6 /* OCTFriendRequestTests.m in Sources */,
-				11D651291B89237D00C3DD23 /* OCTSubmanagerCallsImplTests.m in Sources */,
 				119B13E61B9AF5A2006DA6FF /* OCTToxEncryptSave.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1557,6 +1445,7 @@
 				F09D0A461C1B9877008E74AF /* OCTUserViewController.m in Sources */,
 				1183BC851CA02AA9000CD310 /* OCTFilePathOutput.m in Sources */,
 				9CB44C541B84DCFB007FA7B6 /* OCTChat.m in Sources */,
+				11B0A0144E8FDC00A1ECB6 /* OCTGroupPeer.m in Sources */,
 				9CB44C371B84DCCC007FA7B6 /* AppDelegate.m in Sources */,
 				F07992DA1C2E5B1900B0D267 /* OCTCallsViewController.m in Sources */,
 				11D651081B8922AF00C3DD23 /* OCTToxAV.m in Sources */,
@@ -1572,6 +1461,7 @@
 				9CB44C5A1B84DCFB007FA7B6 /* OCTNode.m in Sources */,
 				9CB44C551B84DCFB007FA7B6 /* OCTFriend.m in Sources */,
 				9CB44C5E1B84DCFB007FA7B6 /* OCTSubmanagerChatsImpl.m in Sources */,
+				E1A2B3C4D5E6789012340006 /* OCTSubmanagerGroupsImpl.m in Sources */,
 				9CB44C571B84DCFB007FA7B6 /* OCTMessageAbstract.m in Sources */,
 				9CB44C4F1B84DCFB007FA7B6 /* OCTDefaultFileStorage.m in Sources */,
 				9CB44C631B84DCFB007FA7B6 /* OCTManagerImpl.m in Sources */,
@@ -1612,8 +1502,10 @@
 				11D650E91B89227300C3DD23 /* OCTMessageCall.m in Sources */,
 				112779D51B9B6F0B00E475B4 /* OCTToxEncryptSaveTests.m in Sources */,
 				9CB44C7A1B84DCFB007FA7B6 /* OCTChat.m in Sources */,
+				11B0A0151B84DCFB007FA7B6 /* OCTGroupPeer.m in Sources */,
 				11D651251B89236A00C3DD23 /* OCTAudioEngineTests.m in Sources */,
 				9CB44CD31B84DF46007FA7B6 /* OCTToxTests.m in Sources */,
+				B2NGCDUAL000005 /* OCTToxGroupDualIntegrationTests.m in Sources */,
 				9CB44CD11B84DF46007FA7B6 /* OCTSubmanagerUserImplTests.m in Sources */,
 				11BB6EB11CC3930A00A531A8 /* OCTFileTools.m in Sources */,
 				9CB44CC31B84DF46007FA7B6 /* OCTRealmTests.m in Sources */,
@@ -1667,6 +1559,7 @@
 				9CB44CCF1B84DF46007FA7B6 /* OCTSubmanagerObjectsImplTests.m in Sources */,
 				11E80D861B98C647008DFC47 /* OCTSettingsStorageObject.m in Sources */,
 				9CB44C841B84DCFB007FA7B6 /* OCTSubmanagerChatsImpl.m in Sources */,
+				E1A2B3C4D5E6789012340007 /* OCTSubmanagerGroupsImpl.m in Sources */,
 				9CB44C781B84DCFB007FA7B6 /* OCTRealmManager.m in Sources */,
 				9CB44C8A1B84DCFB007FA7B6 /* OCTManagerConstants.m in Sources */,
 				113187641DD683E400E6FAA2 /* OCTSendMessageOperation.m in Sources */,
@@ -1741,7 +1634,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				VALIDATE_PRODUCT = YES;
@@ -1753,6 +1646,8 @@
 			baseConfigurationReference = 6F97E8DCCDE81B906C0CCAFE /* Pods-iOSDemo.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
@@ -1760,34 +1655,12 @@
 				ENABLE_NS_ASSERTIONS = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				INFOPLIST_FILE = iOSDemo/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_NO_PIE = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
-					"-l\"Pods-iOSDemo-BlocksKit\"",
-					"-l\"Pods-iOSDemo-CocoaLumberjack\"",
-					"-l\"Pods-iOSDemo-Masonry\"",
-					"-l\"Pods-iOSDemo-Realm\"",
-					"-l\"Pods-iOSDemo-TPCircularBuffer\"",
-					"-l\"Pods-iOSDemo-libopus-patched-config\"",
-					"-l\"Pods-iOSDemo-libsodium\"",
-					"-l\"Pods-iOSDemo-toxcore\"",
-					"-l\"c++\"",
-					"-l\"realm-ios\"",
-					"-framework",
-					"\"AudioToolbox\"",
-					"-framework",
-					"\"Foundation\"",
-					"-framework",
-					"\"MessageUI\"",
-					"-framework",
-					"\"UIKit\"",
-					"-framework",
-					"\"vpx\"",
-					"-read_only_relocs",
-					suppress,
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1798,6 +1671,8 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 54FC7A218FD35DB03A172079 /* Pods-iOSDemoTests.release.xcconfig */;
 			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_IDENTITY = "-";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				FRAMEWORK_SEARCH_PATHS = (
@@ -1807,26 +1682,11 @@
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INFOPLIST_FILE = iOSDemoTests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
-					"-l\"Pods-iOSDemoTests-CocoaLumberjack\"",
-					"-l\"Pods-iOSDemoTests-OCMock\"",
-					"-l\"Pods-iOSDemoTests-Realm\"",
-					"-l\"Pods-iOSDemoTests-TPCircularBuffer\"",
-					"-l\"Pods-iOSDemoTests-libopus-patched-config\"",
-					"-l\"Pods-iOSDemoTests-libsodium\"",
-					"-l\"Pods-iOSDemoTests-toxcore\"",
-					"-l\"c++\"",
-					"-l\"realm-ios\"",
-					"-framework",
-					"\"AudioToolbox\"",
-					"-framework",
-					"\"vpx\"",
-					"-read_only_relocs",
-					suppress,
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

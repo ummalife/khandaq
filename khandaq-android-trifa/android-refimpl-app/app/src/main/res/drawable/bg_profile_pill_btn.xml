@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ profile MyID action (Figma: white pill on the #F2F4F6 card) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/onboarding_form_bg" />
+    <corners android:radius="22dp" />
+</shape>

@@ -18,6 +18,30 @@ class AvatarManager {
         self.cache = NSCache()
     }
 
+    // KHANDAQ design (Figma): vibrant solid-disc avatar palette (white initials sit on top).
+    private static let avatarColors: [UIColor] = [
+        UIColor(red: 0x02 / 255.0, green: 0x9B / 255.0, blue: 0x7D / 255.0, alpha: 1.0), // brand teal
+        UIColor(red: 0x2E / 255.0, green: 0x9B / 255.0, blue: 0xE6 / 255.0, alpha: 1.0), // blue
+        UIColor(red: 0xC7 / 255.0, green: 0x24 / 255.0, blue: 0xB1 / 255.0, alpha: 1.0), // magenta
+        UIColor(red: 0xE0 / 255.0, green: 0xA4 / 255.0, blue: 0x0C / 255.0, alpha: 1.0), // amber
+        UIColor(red: 0x6A / 255.0, green: 0x5A / 255.0, blue: 0xE0 / 255.0, alpha: 1.0), // indigo
+        UIColor(red: 0xE0 / 255.0, green: 0x52 / 255.0, blue: 0x4A / 255.0, alpha: 1.0), // red
+        UIColor(red: 0x16 / 255.0, green: 0xA0 / 255.0, blue: 0x85 / 255.0, alpha: 1.0), // green
+        UIColor(red: 0xEC / 255.0, green: 0x40 / 255.0, blue: 0x7B / 255.0, alpha: 1.0), // pink
+        UIColor(red: 0xF2 / 255.0, green: 0x7A / 255.0, blue: 0x1A / 255.0, alpha: 1.0), // orange
+        UIColor(red: 0x3D / 255.0, green: 0x6F / 255.0, blue: 0xD6 / 255.0, alpha: 1.0), // royal
+    ]
+
+    // Stable across launches (Swift's String.hashValue is per-run randomized — would reshuffle colours).
+    static func avatarColor(forString string: String) -> UIColor {
+        var hash = 5381
+        for byte in string.utf8 {
+            hash = (hash &* 33) &+ Int(byte)
+        }
+        let index = ((hash % avatarColors.count) + avatarColors.count) % avatarColors.count
+        return avatarColors[index]
+    }
+
     /**
         Returns round avatar created from string with a given diameter. Searches for an avatar in cache first,
         if not found creates it.
@@ -57,17 +81,19 @@ private extension AvatarManager {
         let avatarString = avatarStringFromString(string)
 
         let label = UILabel()
-        label.layer.borderWidth = 1.0
         label.layer.masksToBounds = true
         label.textAlignment = .center
         label.text = avatarString
 
         switch type {
             case .Normal:
-                label.backgroundColor = theme.colorForType(.NormalBackground)
-                label.layer.borderColor = theme.colorForType(.LinkText).cgColor
-                label.textColor = theme.colorForType(.LinkText)
+                // KHANDAQ design (Figma): solid colour disc keyed deterministically off the name, with
+                // white initials and no ring.
+                label.layer.borderWidth = 0.0
+                label.backgroundColor = AvatarManager.avatarColor(forString: string)
+                label.textColor = .white
             case .Call:
+                label.layer.borderWidth = 1.0
                 label.backgroundColor = .clear
                 label.layer.borderColor = theme.colorForType(.CallButtonIconColor).cgColor
                 label.textColor = theme.colorForType(.CallButtonIconColor)
@@ -86,7 +112,7 @@ private extension AvatarManager {
 
         let frame = CGRect(x: 0, y: 0, width: diameter, height: diameter)
 
-        label.font = UIFont.khandaqFontWithSize(fontSize * 0.6, weight: .light)
+        label.font = UIFont.systemFont(ofSize: fontSize * 0.62, weight: .medium)
         label.layer.cornerRadius = frame.size.width / 2
         label.frame = frame
 

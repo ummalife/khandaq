@@ -12,12 +12,14 @@
 
 #include "msi.h"
 #include "rtp.h"
+#include "toxav_hacks.h"
 
 #include "../toxcore/Messenger.h"
 #include "../toxcore/ccompat.h"
 #include "../toxcore/logger.h"
 #include "../toxcore/mono_time.h"
 #include "../toxcore/tox_struct.h"
+#include "../toxcore/tox_private.h"
 #include "../toxcore/util.h"
 
 // TODO(zoff99): don't hardcode this, let the application choose it
@@ -89,6 +91,7 @@ struct ToxAV {
     uint32_t calls_tail;
     uint32_t calls_head;
     pthread_mutex_t mutex[1];
+    pthread_mutex_t toxav_endcall_mutex[1];
 
     /* Call callback */
     toxav_call_cb *ccb;
@@ -128,7 +131,6 @@ static bool audio_bit_rate_invalid(uint32_t bit_rate);
 static bool video_bit_rate_invalid(uint32_t bit_rate);
 static bool invoke_call_state_callback(ToxAV *av, uint32_t friend_number, uint32_t state);
 static ToxAVCall *call_new(ToxAV *av, uint32_t friend_number, Toxav_Err_Call *error);
-static ToxAVCall *call_get(ToxAV *av, uint32_t friend_number);
 static ToxAVCall *call_remove(ToxAVCall *call);
 static bool call_prepare_transmission(ToxAVCall *call);
 static void call_kill_transmission(ToxAVCall *call);
@@ -156,11 +158,7 @@ ToxAV *toxav_new(Tox *tox, Toxav_Err_New *error)
         goto RETURN;
     }
 
-    // TODO(iphydf): Don't rely on toxcore internals.
-    Messenger *m;
-    m = tox->m;
-
-    if (m->msi_packet != nullptr) {
+    if (tox_get_av_object(tox) != nullptr) {
         rc = TOXAV_ERR_NEW_MULTIPLE;
         goto RETURN;
     }
@@ -168,21 +166,28 @@ ToxAV *toxav_new(Tox *tox, Toxav_Err_New *error)
     av = (ToxAV *)calloc(1, sizeof(ToxAV));
 
     if (av == nullptr) {
-        LOGGER_WARNING(m->log, "Allocation failed!");
+        LOGGER_API_WARNING(tox, "Allocation failed!");
         rc = TOXAV_ERR_NEW_MALLOC;
         goto RETURN;
     }
 
     if (create_recursive_mutex(av->mutex) != 0) {
-        LOGGER_WARNING(m->log, "Mutex creation failed!");
+        LOGGER_API_WARNING(tox, "Mutex creation failed!");
+        rc = TOXAV_ERR_NEW_MALLOC;
+        goto RETURN;
+    }
+
+    if (create_recursive_mutex(av->toxav_endcall_mutex) != 0) {
+        pthread_mutex_destroy(av->mutex);
+        LOGGER_API_WARNING(tox, "Endcall mutex creation failed!");
         rc = TOXAV_ERR_NEW_MALLOC;
         goto RETURN;
     }
 
     av->tox = tox;
-    av->m = m;
+    av->m = tox->m;
     av->toxav_mono_time = mono_time_new(nullptr, nullptr);
-    av->msi = msi_new(av->m);
+    av->msi = msi_new(av->tox);
 
     if (av->msi == nullptr) {
         pthread_mutex_destroy(av->mutex);
@@ -194,12 +199,16 @@ ToxAV *toxav_new(Tox *tox, Toxav_Err_New *error)
     init_decode_time_stats(&av->video_stats);
     av->msi->av = av;
 
-    msi_callback_invite(av->msi, callback_invite);
-    msi_callback_start(av->msi, callback_start);
-    msi_callback_end(av->msi, callback_end);
-    msi_callback_error(av->msi, callback_error);
-    msi_callback_peertimeout(av->msi, callback_error);
-    msi_callback_capabilities(av->msi, callback_capabilites);
+    tox_set_av_object(av->tox, (void *)av);
+    rtp_allow_receiving(av->tox);
+    bwc_allow_receiving(av->tox);
+
+    msi_register_callback(av->msi, callback_invite, MSI_ON_INVITE);
+    msi_register_callback(av->msi, callback_start, MSI_ON_START);
+    msi_register_callback(av->msi, callback_end, MSI_ON_END);
+    msi_register_callback(av->msi, callback_error, MSI_ON_ERROR);
+    msi_register_callback(av->msi, callback_error, MSI_ON_PEERTIMEOUT);
+    msi_register_callback(av->msi, callback_capabilites, MSI_ON_CAPABILITIES);
 
 RETURN:
 
@@ -208,6 +217,10 @@ RETURN:
     }
 
     if (rc != TOXAV_ERR_NEW_OK) {
+        if (av != nullptr) {
+            pthread_mutex_destroy(av->toxav_endcall_mutex);
+            pthread_mutex_destroy(av->mutex);
+        }
         free(av);
         av = nullptr;
     }
@@ -222,8 +235,11 @@ void toxav_kill(ToxAV *av)
 
     pthread_mutex_lock(av->mutex);
 
+    rtp_stop_receiving(av->tox);
+    bwc_stop_receiving(av->tox);
+
     /* To avoid possible deadlocks */
-    while (av->msi != nullptr && msi_kill(av->msi, av->m->log) != 0) {
+    while (av->msi != nullptr && msi_kill(av->tox, av->msi, av->m->log) != 0) {
         pthread_mutex_unlock(av->mutex);
         pthread_mutex_lock(av->mutex);
     }
@@ -239,10 +255,16 @@ void toxav_kill(ToxAV *av)
         }
     }
 
+    tox_set_av_object(av->tox, nullptr);
+
     mono_time_free(av->toxav_mono_time);
 
     pthread_mutex_unlock(av->mutex);
     pthread_mutex_destroy(av->mutex);
+
+    pthread_mutex_lock(av->toxav_endcall_mutex);
+    pthread_mutex_unlock(av->toxav_endcall_mutex);
+    pthread_mutex_destroy(av->toxav_endcall_mutex);
 
     free(av);
 }
@@ -1322,10 +1344,10 @@ RETURN:
     return call;
 }
 
-static ToxAVCall *call_get(ToxAV *av, uint32_t friend_number)
+ToxAVCall *call_get(ToxAV *av, uint32_t friend_number)
 {
     /* Assumes mutex locked */
-    if (av->calls == nullptr || av->calls_tail < friend_number) {
+    if (av == nullptr || av->calls == nullptr || av->calls_tail < friend_number) {
         return nullptr;
     }
 
@@ -1411,7 +1433,7 @@ static bool call_prepare_transmission(ToxAVCall *call)
     }
 
     /* Prepare bwc */
-    call->bwc = bwc_new(av->m, av->tox, call->friend_number, callback_bwc, call, av->toxav_mono_time);
+    call->bwc = bwc_new(av->tox, av->toxav_mono_time, call->friend_number, callback_bwc, call);
 
     if (call->bwc == nullptr) {
         LOGGER_ERROR(av->m->log, "Failed to create new bwc");
@@ -1426,7 +1448,7 @@ static bool call_prepare_transmission(ToxAVCall *call)
             goto FAILURE;
         }
 
-        call->audio_rtp = rtp_new(RTP_TYPE_AUDIO, av->m, av->tox, call->friend_number, call->bwc,
+        call->audio_rtp = rtp_new(RTP_TYPE_AUDIO, av->tox, av, call->friend_number, call->bwc,
                                   call->audio, ac_queue_message);
 
         if (call->audio_rtp == nullptr) {
@@ -1443,7 +1465,7 @@ static bool call_prepare_transmission(ToxAVCall *call)
             goto FAILURE;
         }
 
-        call->video_rtp = rtp_new(RTP_TYPE_VIDEO, av->m, av->tox, call->friend_number, call->bwc,
+        call->video_rtp = rtp_new(RTP_TYPE_VIDEO, av->tox, av, call->friend_number, call->bwc,
                                   call->video, vc_queue_message);
 
         if (call->video_rtp == nullptr) {
@@ -1457,11 +1479,11 @@ static bool call_prepare_transmission(ToxAVCall *call)
 
 FAILURE:
     bwc_kill(call->bwc);
-    rtp_kill(call->audio_rtp);
+    rtp_kill(av->tox, call->audio_rtp);
     ac_kill(call->audio);
     call->audio_rtp = nullptr;
     call->audio = nullptr;
-    rtp_kill(call->video_rtp);
+    rtp_kill(av->tox, call->video_rtp);
     vc_kill(call->video);
     call->video_rtp = nullptr;
     call->video = nullptr;
@@ -1488,16 +1510,63 @@ static void call_kill_transmission(ToxAVCall *call)
 
     bwc_kill(call->bwc);
 
-    rtp_kill(call->audio_rtp);
+    rtp_kill(call->av->tox, call->audio_rtp);
     ac_kill(call->audio);
     call->audio_rtp = nullptr;
     call->audio = nullptr;
 
-    rtp_kill(call->video_rtp);
+    rtp_kill(call->av->tox, call->video_rtp);
     vc_kill(call->video);
     call->video_rtp = nullptr;
     call->video = nullptr;
 
     pthread_mutex_destroy(call->mutex_audio);
     pthread_mutex_destroy(call->mutex_video);
+}
+
+RTPSession *rtp_session_get(ToxAVCall *call, int payload_type)
+{
+    if (call == nullptr) {
+        return nullptr;
+    }
+
+    if (payload_type == RTP_TYPE_VIDEO) {
+        return call->video_rtp;
+    }
+
+    if (payload_type == RTP_TYPE_AUDIO) {
+        return call->audio_rtp;
+    }
+
+    return nullptr;
+}
+
+MSISession *tox_av_msi_get(ToxAV *av)
+{
+    return av != nullptr ? av->msi : nullptr;
+}
+
+BWController *bwc_controller_get(ToxAVCall *call)
+{
+    return call != nullptr ? call->bwc : nullptr;
+}
+
+Mono_Time *toxav_get_av_mono_time(ToxAV *toxav)
+{
+    return toxav != nullptr ? toxav->toxav_mono_time : nullptr;
+}
+
+Logger *toxav_get_logger(ToxAV *toxav)
+{
+    return toxav != nullptr && toxav->m != nullptr ? toxav->m->log : nullptr;
+}
+
+pthread_mutex_t *call_mutex_get(ToxAVCall *call)
+{
+    return call != nullptr ? call->toxav_call_mutex : nullptr;
+}
+
+pthread_mutex_t *endcall_mutex_get(ToxAV *av)
+{
+    return av != nullptr ? av->toxav_endcall_mutex : nullptr;
 }

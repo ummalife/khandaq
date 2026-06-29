@@ -70,25 +70,30 @@ static const NSUInteger kEncryptedKeyLength = 64;
     dispatch_async(queue, ^{
         dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
 
+        NSError *error = decryptRealmError ?: decryptToxError;
+
+        if (error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (failureBlock) {
+                    failureBlock(error);
+                }
+            });
+            return;
+        }
+
+        OCTTox *tox = [self createToxWithOptions:configuration.options toxData:toxSave error:&error];
+
+        if (! tox) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (failureBlock) {
+                    failureBlock(error);
+                }
+            });
+            return;
+        }
+
+        // Realm is thread-confined; manager and all UI access must run on main.
         dispatch_async(dispatch_get_main_queue(), ^{
-            NSError *error = decryptRealmError ?: decryptToxError;
-
-            if (error) {
-                if (failureBlock) {
-                    failureBlock(error);
-                }
-                return;
-            }
-
-            OCTTox *tox = [self createToxWithOptions:configuration.options toxData:toxSave error:&error];
-
-            if (! tox) {
-                if (failureBlock) {
-                    failureBlock(error);
-                }
-                return;
-            }
-
             NSURL *databaseFileURL = [NSURL fileURLWithPath:configuration.fileStorage.pathForDatabase];
             OCTRealmManager *realmManager = [[OCTRealmManager alloc] initWithDatabaseFileURL:databaseFileURL encryptionKey:realmEncryptionKey];
 

@@ -45,11 +45,7 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     // See https://forums.developer.apple.com/thread/62230
 #if ! TARGET_OS_SIMULATOR
     _captureSession = [AVCaptureSession new];
-    _captureSession.sessionPreset = AVCaptureSessionPresetMedium;
-
-    if ([_captureSession canSetSessionPreset:AVCaptureSessionPreset640x480]) {
-        _captureSession.sessionPreset = AVCaptureSessionPreset640x480;
-    }
+    [self applyCapturePresetForPosition:AVCaptureDevicePositionFront];
 #endif
 
     _dataOutput = [AVCaptureVideoDataOutput new];
@@ -77,6 +73,7 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 - (BOOL)setupAndReturnError:(NSError **)error
 {
     OCTLogVerbose(@"setupAndReturnError");
+    self.receivedFrameCount = 0;
 #if TARGET_OS_IPHONE
     AVCaptureDevice *videoCaptureDevice = [self getDeviceForPosition:AVCaptureDevicePositionFront];
 #else
@@ -168,9 +165,39 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
     [self.captureSession addInput:videoInput];
 
+    [self applyCapturePresetForDevice:dev];
+
     [self orientationChanged];
 
     return YES;
+}
+
+- (void)applyCapturePresetForPosition:(AVCaptureDevicePosition)position
+{
+#if ! TARGET_OS_SIMULATOR
+    NSString *preset = AVCaptureSessionPreset1280x720;
+    if (position == AVCaptureDevicePositionBack) {
+        if ([self.captureSession canSetSessionPreset:AVCaptureSessionPreset1920x1080]) {
+            preset = AVCaptureSessionPreset1920x1080;
+        }
+    }
+    else if (! [self.captureSession canSetSessionPreset:AVCaptureSessionPreset1280x720]) {
+        preset = AVCaptureSessionPreset640x480;
+    }
+    if ([self.captureSession canSetSessionPreset:preset]) {
+        self.captureSession.sessionPreset = preset;
+    }
+#endif
+}
+
+- (void)applyCapturePresetForDevice:(AVCaptureDevice *)dev
+{
+#if ! TARGET_OS_SIMULATOR
+    if (dev == nil) {
+        return;
+    }
+    [self applyCapturePresetForPosition:dev.position];
+#endif
 }
 
 - (void)startSendingVideo
@@ -248,6 +275,9 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
                            vStride:(OCTToxAVStrideData)vStride
                       friendNumber:(OCTToxFriendNumber)friendNumber
 {
+    // KHANDAQ: count every frame the peer sends us, BEFORE any early-return, so the diagnostic
+    // reflects what actually arrives over the network regardless of whether the view is ready.
+    self.receivedFrameCount++;
 
     if (! self.videoView) {
         return;
@@ -335,7 +365,13 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
         CVPixelBufferRelease(bufferRef);
 
-        self.videoView.image = coreImage;
+        // KHANDAQ (remote-video fix): OCTVideoView is a GLKView whose -setImage: triggers a synchronous
+        // -display (drawRect + OpenGL ES). That MUST run on the main thread; invoked here from the
+        // background processingQueue, the incoming remote frames never actually rendered — which is why
+        // only the local self-preview (a separate AVCaptureVideoPreviewLayer) was visible during a call.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.videoView.image = coreImage;
+        });
     });
 }
 
@@ -463,16 +499,17 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 - (void)orientationChanged
 {
 #if TARGET_OS_IPHONE
-    UIDeviceOrientation deviceOrientation = [UIDevice currentDevice].orientation;
     AVCaptureConnection *conn = [self.dataOutput connectionWithMediaType:AVMediaTypeVideo];
+    if (! conn) {
+        return;
+    }
+
+    UIDeviceOrientation deviceOrientation = [UIDevice currentDevice].orientation;
     AVCaptureVideoOrientation orientation;
 
     switch (deviceOrientation) {
-        case UIInterfaceOrientationPortraitUpsideDown:
+        case UIDeviceOrientationPortraitUpsideDown:
             orientation = AVCaptureVideoOrientationPortraitUpsideDown;
-            break;
-        case UIDeviceOrientationPortrait:
-            orientation = AVCaptureVideoOrientationPortrait;
             break;
         /* Landscapes are reversed, otherwise for some reason the video will be upside down */
         case UIDeviceOrientationLandscapeLeft:
@@ -481,13 +518,47 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
         case UIDeviceOrientationLandscapeRight:
             orientation = AVCaptureVideoOrientationLandscapeLeft;
             break;
+        case UIDeviceOrientationPortrait:
         default:
-            return;
+            // KHANDAQ: the call UI is locked to portrait, and the device orientation is .unknown /
+            // .faceUp at call start — and we never call beginGeneratingDeviceOrientationNotifications,
+            // so it is effectively ALWAYS .unknown. The old `default: return` then left the capture
+            // connection at its sensor-native LANDSCAPE default, so the remote always saw a sideways
+            // video. Default to portrait to match the portrait-locked call UI.
+            orientation = AVCaptureVideoOrientationPortrait;
+            break;
     }
 
-    conn.videoOrientation = orientation;
-    self.previewLayer.connection.videoOrientation = orientation;
+    [self applyCaptureOrientation:orientation toConnection:conn];
+    if (self.previewLayer.connection) {
+        [self applyCaptureOrientation:orientation toConnection:self.previewLayer.connection];
+    }
 #endif
 }
+
+#if TARGET_OS_IPHONE
+- (void)applyCaptureOrientation:(AVCaptureVideoOrientation)orientation toConnection:(AVCaptureConnection *)conn
+{
+    // KHANDAQ: AVCaptureConnection.videoOrientation is deprecated on iOS 17+ (and can be ignored there).
+    // Use videoRotationAngle on iOS 17+ with Apple's documented orientation→angle mapping, and fall back
+    // to videoOrientation on older systems. Without this the capture stayed landscape on iOS 17/18/26.
+    if (@available(iOS 17.0, *)) {
+        CGFloat angle;
+        switch (orientation) {
+            case AVCaptureVideoOrientationPortrait:           angle = 90.0;  break;
+            case AVCaptureVideoOrientationPortraitUpsideDown: angle = 270.0; break;
+            case AVCaptureVideoOrientationLandscapeRight:     angle = 0.0;   break;
+            case AVCaptureVideoOrientationLandscapeLeft:      angle = 180.0; break;
+            default:                                          angle = 90.0;  break;
+        }
+        if ([conn isVideoRotationAngleSupported:angle]) {
+            conn.videoRotationAngle = angle;
+        }
+    }
+    else if (conn.supportsVideoOrientation) {
+        conn.videoOrientation = orientation;
+    }
+}
+#endif
 
 @end

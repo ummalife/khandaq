@@ -73,7 +73,16 @@
         glClearColor(0, 0.0, 0.0, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        CGRect destRect = AVMakeRectWithAspectRatioInsideRect(self.image.extent.size, rect);
+        // KHANDAQ: drawRect's `rect` is in POINTS, but the CIContext renders into this GLKView's
+        // renderbuffer, whose coordinate space is in PIXELS (points * contentScaleFactor). Drawing
+        // into the points-sized rect filled only a 1/scale corner of the buffer (bottom-left on
+        // Retina), so the remote video showed up as a tiny image in the corner. Draw into the full
+        // pixel-sized drawable instead so the feed fills the view (aspect-fit).
+        CGRect drawableRect = CGRectMake(0.0, 0.0, self.drawableWidth, self.drawableHeight);
+        if (CGRectIsEmpty(drawableRect)) {
+            drawableRect = rect;
+        }
+        CGRect destRect = AVMakeRectWithAspectRatioInsideRect(self.image.extent.size, drawableRect);
         [self.coreImageContext drawImage:self.image inRect:destRect fromRect:self.image.extent];
     }
 #else

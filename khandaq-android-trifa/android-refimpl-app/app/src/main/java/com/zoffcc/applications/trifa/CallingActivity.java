@@ -38,6 +38,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -66,6 +68,7 @@ import com.etiennelawlor.discreteslider.library.ui.DiscreteSlider;
 import com.google.speech.levelmeter.BarLevelDrawable;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
+import com.zoffcc.applications.sorm.FriendList;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -78,7 +81,10 @@ import static android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_aec_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_vu_in;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.get_vu_out;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_audio_play_volume_percent;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_call_playback_gain;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_aec_active;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.set_gainprocessing_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_rec_preset;
 import static com.zoffcc.applications.trifa.CameraWrapper.camera_preview_call_back_ts_first_frame;
 import static com.zoffcc.applications.trifa.CameraWrapper.getRotation;
@@ -87,8 +93,8 @@ import static com.zoffcc.applications.trifa.HeadsetStateReceiver.isBluetoothConn
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.format_timeduration_from_seconds;
-import static com.zoffcc.applications.trifa.HelperGeneric.get_vfs_image_filename_friend_avatar;
-import static com.zoffcc.applications.trifa.HelperGeneric.put_vfs_image_on_imageview_real;
+import static com.zoffcc.applications.trifa.HelperGeneric.applyActiveCallVideoBitrate;
+import static com.zoffcc.applications.trifa.HelperGeneric.applyCallStreamVolume;
 import static com.zoffcc.applications.trifa.HelperGeneric.reset_audio_mode;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_audio_to_ear;
 import static com.zoffcc.applications.trifa.HelperGeneric.set_audio_to_headset;
@@ -201,16 +207,16 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static View video_box_left_top_01 = null;
     static View video_box_right_top_01 = null;
     final static String MIME_TYPE = "video/avc";   // H.264 Advanced Video Coding
-    final static int FRAME_RATE = 20;              // ~ estimated fps
-    final static int IFRAME_INTERVAL = 1;          // n seconds between I-frames
-    final static int IFRAME_INTERVAL_START = 1;          // n seconds between I-frames
+    final static int FRAME_RATE = 30;
+    final static int IFRAME_INTERVAL = 2;
+    final static int IFRAME_INTERVAL_START = 2;
     private static MediaCodec.BufferInfo mBufferInfo;
     private static MediaCodec mEncoder;
     private static MediaPlayer mMediaPlayer = null;
     private static MediaFormat video_encoder_format = null;
     private static int video_encoder_width = 640; // start a dummy start value, DO NOT CHANGE
     private static int video_encoder_height = 480; // start a dummy start value, DO NOT CHANGE
-    private static int v_bitrate_bits_per_second = 20 * 1000; // video bitrate <n> bps, in bits per second
+    private static int v_bitrate_bits_per_second = 1500 * 1000;
     private static long encode_last_v_bitrate_change = -1;
     public static byte[] global_sps_pps_nal_unit_bytes = null;
     public static int send_sps_pps_every_x_frames_current = 0;
@@ -220,6 +226,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     private static float slider_alpha = 0.3f;
     static boolean camera_toggle_button_pressed = false;
     static boolean pendingCameraOpen = false;
+    private Runnable pendingCallPermissionAction = null;
     static byte[] arr_h264_enc = null;
 
     private static MediaCodec.BufferInfo mBufferInfo_h264_decoder;
@@ -236,7 +243,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     protected void onCreate(Bundle savedInstanceState)
     {
         // startActivity called from non-Activity context
-        Log.i(TAG, "onCreate:01");
+        HelperGeneric.logI(TAG, "onCreate:01");
 
         try
         {
@@ -270,7 +277,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         calling_activity_start_ms = System.currentTimeMillis();
 
-        Log.i(TAG, "onCreate:02");
+        HelperGeneric.logI(TAG, "onCreate:02");
 
         dh = new DetectHeadset(this);
 
@@ -278,9 +285,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         PREF__video_play_delay_ms = settings_cs1.getInt(GLOBAL_PLAY_DELAY_SETTING_NAME, GLOBAL_INIT_PLAY_DELAY);
-        Log.i(TAG, "pref:get:PREF__video_play_delay_ms=" + PREF__video_play_delay_ms);
+        HelperGeneric.logI(TAG, "pref:get:PREF__video_play_delay_ms=" + PREF__video_play_delay_ms);
         PREF__audio_play_volume_percent = settings_cs1.getInt("audio_play_volume_percent", 100);
-        Log.i(TAG, "pref:get:PREF__audio_play_volume_percent=" + PREF__audio_play_volume_percent);
+        HelperGeneric.logI(TAG, "pref:get:PREF__audio_play_volume_percent=" + PREF__audio_play_volume_percent);
 
         top_text_line = (TextView) findViewById(R.id.top_text_line);
         accept_button = (ImageButton) findViewById(R.id.accept_button);
@@ -347,7 +354,6 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         callactivity_handler_s = callactivity_handler;
 
         // set volume control -------------
-        System.out.println("AVCS:MUSIC:0");
         try
         {
             setVolumeControlStream(AudioManager.STREAM_VOICE_CALL);
@@ -388,7 +394,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public boolean onTouch(View v, MotionEvent event)
             {
-                // Log.i(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:action:" + event.getAction());
+                // HelperGeneric.logI(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:action:" + event.getAction());
 
                 if (event.getAction() == MotionEvent.ACTION_UP)
                 {
@@ -399,7 +405,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
                     }
                 }
                 else if ((event.getAction() == MotionEvent.ACTION_DOWN) ||
@@ -412,7 +418,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
                     }
                 }
                 return false;
@@ -430,6 +436,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     try
                     {
                         set_audio_play_volume_percent(PREF__audio_play_volume_percent);
+                        na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
                     }
                     catch (Exception ee)
                     {
@@ -441,12 +448,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                                 getApplicationContext());
                         settings_cs2.edit().putInt("audio_play_volume_percent",
                                                    PREF__audio_play_volume_percent).apply();
-                        Log.i(TAG, "pref:set:PREF__audio_play_volume_percent=" + PREF__audio_play_volume_percent);
+                        HelperGeneric.logI(TAG, "pref:set:PREF__audio_play_volume_percent=" + PREF__audio_play_volume_percent);
                     }
                     catch (Exception ee)
                     {
                         ee.printStackTrace();
-                        Log.i(TAG, "pref:set:PREF__audio_play_volume_percent:EE:" + ee.getMessage());
+                        HelperGeneric.logI(TAG, "pref:set:PREF__audio_play_volume_percent:EE:" + ee.getMessage());
                     }
                 }
             }
@@ -473,7 +480,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public boolean onTouch(View v, MotionEvent event)
             {
-                // Log.i(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:action:" + event.getAction());
+                // HelperGeneric.logI(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:action:" + event.getAction());
 
                 if (event.getAction() == MotionEvent.ACTION_UP)
                 {
@@ -484,7 +491,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
                     }
                 }
                 else if ((event.getAction() == MotionEvent.ACTION_DOWN) ||
@@ -497,7 +504,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "volume_slider_seekbar_01.setOnTouchListener:touch:001:EE:" + e.getMessage());
                     }
                 }
                 return false;
@@ -520,12 +527,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             int res = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                                        ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_DECODER_VIDEO_ADD_DELAY_MS.value,
                                                        -PREF__video_play_delay_ms);
-                            Log.i(TAG, "play_delay_ms=" + -PREF__video_play_delay_ms + ":res=" + res);
+                            HelperGeneric.logI(TAG, "play_delay_ms=" + -PREF__video_play_delay_ms + ":res=" + res);
                         }
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:EE:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:EE:" + e.getMessage());
                         }
 
                         try
@@ -533,13 +540,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             int res = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                                        ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_DECODER_VIDEO_BUFFER_MS.value,
                                                        GLOBAL_AV_BUFFER_MS);
-                            Log.i(TAG,
+                            HelperGeneric.logI(TAG,
                                   "TOXAV_DECODER_VIDEO_BUFFER_MS:001 set to ms=" + GLOBAL_AV_BUFFER_MS + ":res=" + res);
                         }
                         catch (Exception e)
                         {
                             e.printStackTrace();
-                            Log.i(TAG, "TOXAV_DECODER_VIDEO_BUFFER_MS:EE:" + e.getMessage());
+                            HelperGeneric.logI(TAG, "TOXAV_DECODER_VIDEO_BUFFER_MS:EE:" + e.getMessage());
                         }
 
                         video_add_delay_slider_infotext_01.setText(
@@ -549,7 +556,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                                 getApplicationContext());
 
                         settings_cs1.edit().putInt(GLOBAL_PLAY_DELAY_SETTING_NAME, PREF__video_play_delay_ms).apply();
-                        Log.i(TAG, "pref:set:PREF__video_play_delay_ms=" + PREF__video_play_delay_ms);
+                        HelperGeneric.logI(TAG, "pref:set:PREF__video_play_delay_ms=" + PREF__video_play_delay_ms);
 
                         if (PREF__video_play_delay_ms > 490)
                         {
@@ -564,7 +571,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception ee)
                     {
                         ee.printStackTrace();
-                        Log.i(TAG, "pref:set:PREF__video_play_delay_ms:EE:" + ee.getMessage());
+                        HelperGeneric.logI(TAG, "pref:set:PREF__video_play_delay_ms:EE:" + ee.getMessage());
                     }
                 }
             }
@@ -583,18 +590,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         try
         {
-            final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
-                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-            caller_avatar_view.setImageDrawable(d1);
-
-            String fname = get_vfs_image_filename_friend_avatar(
-                    tox_friend_by_public_key__wrapper(Callstate.friend_pubkey));
-
-            if (fname != null)
+            final FriendList friend = main_get_friend(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey));
+            String displayName = friend.name;
+            if (friend.alias_name != null && friend.alias_name.length() > 0)
             {
-                put_vfs_image_on_imageview_real(this, caller_avatar_view, d1, fname, false, true, main_get_friend(
-                        tox_friend_by_public_key__wrapper(Callstate.friend_pubkey)));
+                displayName = friend.alias_name;
             }
+            ChatBubbleUiHelper.fill_profile_peer_icon(caller_avatar_view, Callstate.friend_pubkey, displayName);
         }
         catch (Exception e1)
         {
@@ -662,12 +664,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                     getApplicationContext());
                             settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                            applyActiveCallVideoBitrate();
                         }
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "text_vq_low:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "text_vq_low:touch:001:EE:" + e.getMessage());
                     }
                 }
                 return true;
@@ -713,12 +716,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                     getApplicationContext());
                             settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                            applyActiveCallVideoBitrate();
                         }
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "text_vq_low:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "text_vq_low:touch:001:EE:" + e.getMessage());
                     }
                 }
                 return true;
@@ -764,12 +768,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                     getApplicationContext());
                             settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                            applyActiveCallVideoBitrate();
                         }
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "text_vq_low:touch:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "text_vq_high:touch:001:EE:" + e.getMessage());
                     }
                 }
                 return true;
@@ -788,9 +793,18 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             if (!dh._Detect())
             {
-                video_box_speaker_button.setText("Speaker: ON");
                 AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                set_audio_to_loudspeaker(manager);
+                if (Callstate.audio_speaker)
+                {
+                    video_box_speaker_button.setText("Speaker: ON");
+                    set_audio_to_loudspeaker(manager);
+                }
+                else
+                {
+                    video_box_speaker_button.setText("Speaker: OFF");
+                    set_audio_to_ear(manager);
+                }
+                applyCallAudioProcessing(Callstate.audio_speaker);
             }
             else
             {
@@ -832,11 +846,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         {
                             set_audio_to_loudspeaker(audio_manager_s);
                             video_box_speaker_button.setText("Speaker: ON");
+                            applyCallAudioProcessing(true);
                         }
                         else
                         {
                             set_audio_to_ear(audio_manager_s);
                             video_box_speaker_button.setText("Speaker: OFF");
+                            applyCallAudioProcessing(false);
                         }
                     }
                     catch (Exception e)
@@ -901,7 +917,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public void onPositionChanged(int position)
             {
-                Log.i(TAG, "setOnDiscreteSliderChangeListener:pos=" + position);
+                HelperGeneric.logI(TAG, "setOnDiscreteSliderChangeListener:pos=" + position);
                 final int prev_position = PREF__video_call_quality;
 
                 if (prev_position != position)
@@ -942,16 +958,17 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     int res = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                                ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_ENCODER_RC_MAX_QUANTIZER.value,
                                                value);
-                    Log.i(TAG, "setOnDiscreteSliderChangeListener:res:" + res);
+                    HelperGeneric.logI(TAG, "setOnDiscreteSliderChangeListener:res:" + res);
 
                     if (res != 0)
                     {
                         PREF__video_call_quality = position;
-                        Log.i(TAG, "setOnDiscreteSliderChangeListener:pos_NEW:" + quality_slider.getPosition());
+                        HelperGeneric.logI(TAG, "setOnDiscreteSliderChangeListener:pos_NEW:" + quality_slider.getPosition());
 
                         SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(
                                 getApplicationContext());
                         settings_cs1.edit().putString("video_call_quality", "" + PREF__video_call_quality).apply();
+                        applyActiveCallVideoBitrate();
                     }
                     else
                     {
@@ -965,12 +982,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                                     Thread.sleep(100);
                                     // set slide back to prev. position
                                     quality_slider.setPosition(prev_position);
-                                    Log.i(TAG, "setOnDiscreteSliderChangeListener:pos_revert:" +
+                                    HelperGeneric.logI(TAG, "setOnDiscreteSliderChangeListener:pos_revert:" +
                                                quality_slider.getPosition());
                                 }
                                 catch (Exception e)
                                 {
-                                    Log.i(TAG, "setOnDiscreteSliderChangeListener:001:EE:" + e.getMessage());
+                                    HelperGeneric.logI(TAG, "setOnDiscreteSliderChangeListener:001:EE:" + e.getMessage());
                                 }
                             }
                         };
@@ -1024,7 +1041,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             //        tox_friend_by_public_key__wrapper(Callstate.friend_pubkey), 0,
                             //        PREF__X_misc_button_msg);
                             //long res = result.msg_num;
-                            //Log.i(TAG, "tox_friend_send_message_wrapper:result=" + res);
+                            //HelperGeneric.logI(TAG, "tox_friend_send_message_wrapper:result=" + res);
                         }
                         catch (Exception e)
                         {
@@ -1104,7 +1121,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "setMicrophoneMute:001:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "setMicrophoneMute:001:EE:" + e.getMessage());
                     }
                 }
                 return true;
@@ -1149,14 +1166,14 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             final Drawable d5 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_front).backgroundColor(
                     Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
             camera_toggle_button.setImageDrawable(d5);
-            Log.i(TAG, "active_camera_type(5)=" + active_camera_type);
+            HelperGeneric.logI(TAG, "active_camera_type(5)=" + active_camera_type);
         }
         else
         {
             final Drawable d6 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(
                     Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
             camera_toggle_button.setImageDrawable(d6);
-            Log.i(TAG, "active_camera_type(6)=" + active_camera_type);
+            HelperGeneric.logI(TAG, "active_camera_type(6)=" + active_camera_type);
         }
 
         camera_toggle_button.setOnTouchListener(new View.OnTouchListener()
@@ -1167,7 +1184,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 if (event.getAction() != MotionEvent.ACTION_UP)
                 {
-                    Log.i(TAG, "active_camera_type(7)=" + active_camera_type);
+                    HelperGeneric.logI(TAG, "active_camera_type(7)=" + active_camera_type);
 
                     if (active_camera_type == FRONT_CAMERA_USED)
                     {
@@ -1186,7 +1203,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 }
                 else
                 {
-                    Log.i(TAG, "active_camera_type(8)=" + active_camera_type);
+                    HelperGeneric.logI(TAG, "active_camera_type(8)=" + active_camera_type);
 
                     if (active_camera_type == FRONT_CAMERA_USED)
                     {
@@ -1204,7 +1221,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     }
 
                     camera_toggle_button_pressed = true;
-                    Log.i(TAG, "camera_toggle_button_pressed[press start]=" + camera_toggle_button_pressed);
+                    HelperGeneric.logI(TAG, "camera_toggle_button_pressed[press start]=" + camera_toggle_button_pressed);
                     final Thread toggle_thread = new Thread()
                     {
                         @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -1221,7 +1238,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             }
                             toggle_camera();
                             camera_toggle_button_pressed = false;
-                            Log.i(TAG, "camera_toggle_button_pressed[press end]=" + camera_toggle_button_pressed);
+                            HelperGeneric.logI(TAG, "camera_toggle_button_pressed[press end]=" + camera_toggle_button_pressed);
                         }
                     };
                     toggle_thread.start();
@@ -1231,11 +1248,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             }
         });
 
-        Log.i(TAG, "start:0001");
+        HelperGeneric.logI(TAG, "start:0001");
         initUI();
-        Log.i(TAG, "start:0002");
+        HelperGeneric.logI(TAG, "start:0002");
         initViewParams();
-        Log.i(TAG, "start:0003");
+        HelperGeneric.logI(TAG, "start:0003");
 
         top_text_line_str1 = Callstate.friend_alias_name;
         top_text_line_str2 = "";
@@ -1248,85 +1265,27 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public boolean onTouch(View v, MotionEvent event)
             {
-                Log.i(TAG, "accept_button:onTouch:001");
+                HelperGeneric.logI(TAG, "accept_button:onTouch:001");
                 try
                 {
                     if (event.getAction() != MotionEvent.ACTION_UP)
                     {
-                        Log.i(TAG, "accept_button:onTouch:002");
+                        HelperGeneric.logI(TAG, "accept_button:onTouch:002");
                     }
                     else
                     {
-                        Log.i(TAG,
+                        HelperGeneric.logI(TAG,
                               "accept_button:onTouch:003 " + Callstate.accepted_call + " " + Callstate.friend_pubkey);
                         if (Callstate.accepted_call != 1)
                         {
-                            Log.i(TAG, "answer button pressed");
-                            Log.i(TAG, "accept_button:onTouch:004 " + Callstate.audio_call);
-
-                            if (Callstate.audio_call)
-                            {
-                                int res1 = toxav_answer(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
-                                                        GLOBAL_AUDIO_BITRATE, 0);
-
-                                Log.i(TAG, "accept_button:onTouch:004:001" + res1);
-                                if (res1 != 1)
-                                {
-                                    Log.i(TAG, "accept_button:onTouch:004:002");
-                                    return true;
-                                }
-                                Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_A.value;
-                                Log.i(TAG, "accept_button:onTouch:004:003");
-                            }
-                            else
-                            {
-                                int res2 = toxav_answer(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
-                                                        GLOBAL_AUDIO_BITRATE, GLOBAL_VIDEO_BITRATE);
-                                Log.i(TAG, "accept_button:onTouch:004:011: " + res2);
-
-                                if (res2 != 1)
-                                {
-                                    Log.i(TAG, "accept_button:onTouch:004:012");
-                                    return true;
-                                }
-
-                                Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_V.value;
-                                Log.i(TAG, "accept_button:onTouch:004:014");
-                            }
-
-                            Callstate.accepted_call = 1;
-                            Log.i(TAG, "accept_button:onTouch:005");
-
-                            caller_avatar_view.setVisibility(View.GONE);
-                            accept_button.setVisibility(View.GONE);
-                            camera_toggle_button.setVisibility(View.VISIBLE);
-                            mute_button.setVisibility(View.VISIBLE);
-
-                            Callstate.call_start_timestamp = System.currentTimeMillis();
-                            String a = "" +
-                                       (int) ((Callstate.call_start_timestamp - Callstate.call_init_timestamp) / 1000) +
-                                       "s";
-                            top_text_line_str2 = a;
-                            update_top_text_line();
-
-                            Log.i(TAG, "on_call_started_actions:01");
-                            on_call_started_actions();
-                            Log.i(TAG, "accept_button:onTouch:006");
-
-                            if (Callstate.audio_call)
-                            {
-                                Log.i(TAG, "accept_button:onTouch:006 " + Callstate.audio_call);
-
-                                toggle_osd_view_including_cam_preview(!Callstate.audio_call);
-                            }
-
+                            ensureCallPermissions(CallingActivity.this::performIncomingCallAcceptance);
                         }
                     }
                 }
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Log.i(TAG, "accept_button:onTouch:006:EE01:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "accept_button:onTouch:006:EE01:" + e.getMessage());
                 }
                 return true;
             }
@@ -1337,14 +1296,14 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public boolean onTouch(View v, MotionEvent event)
             {
-                Log.i(TAG, "decline_button_pressed:000");
+                HelperGeneric.logI(TAG, "decline_button_pressed:000");
 
                 try
                 {
                     if (event.getAction() == MotionEvent.ACTION_DOWN)
                     {
-                        Log.i(TAG, "decline_button_pressed:DOWN");
-                        Log.i(TAG, "decline_button_pressed:on_call_ended_actions");
+                        HelperGeneric.logI(TAG, "decline_button_pressed:DOWN");
+                        HelperGeneric.logI(TAG, "decline_button_pressed:on_call_ended_actions");
                         if (Callstate.incoming_one_on_one_call && Callstate.accepted_call != 1)
                         {
                             HelperCall.logCallEvent(Callstate.friend_pubkey, R.string.call_log_missed);
@@ -1361,9 +1320,90 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             }
         });
 
-        HelperCall.requestCallPermissions(this, Callstate.audio_call);
+        HelperGeneric.logI(TAG, "onCreate:99");
+    }
 
-        Log.i(TAG, "onCreate:99");
+    private void ensureCallPermissions(final Runnable onGranted)
+    {
+        if (HelperCall.hasRequiredCallPermissions(this, Callstate.audio_call))
+        {
+            if (onGranted != null)
+            {
+                onGranted.run();
+            }
+
+            return;
+        }
+
+        pendingCallPermissionAction = onGranted;
+        HelperCall.requestCallPermissions(this, Callstate.audio_call);
+    }
+
+    private void performIncomingCallAcceptance()
+    {
+        HelperGeneric.logI(TAG, "answer button pressed");
+        HelperGeneric.logI(TAG, "accept_button:onTouch:004 " + Callstate.audio_call);
+
+        if (Callstate.audio_call)
+        {
+            int res1 = toxav_answer(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
+                                    GLOBAL_AUDIO_BITRATE, 0);
+
+            HelperGeneric.logI(TAG, "accept_button:onTouch:004:001" + res1);
+            if (res1 != 1)
+            {
+                HelperGeneric.logI(TAG, "accept_button:onTouch:004:002");
+                return;
+            }
+            Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_A.value;
+            HelperGeneric.logI(TAG, "accept_button:onTouch:004:003");
+        }
+        else
+        {
+            int res2 = toxav_answer(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
+                                    GLOBAL_AUDIO_BITRATE, GLOBAL_VIDEO_BITRATE);
+            HelperGeneric.logI(TAG, "accept_button:onTouch:004:011: " + res2);
+
+            if (res2 != 1)
+            {
+                HelperGeneric.logI(TAG, "accept_button:onTouch:004:012");
+                return;
+            }
+
+            Callstate.tox_call_state = ToxVars.TOXAV_FRIEND_CALL_STATE.TOXAV_FRIEND_CALL_STATE_SENDING_V.value;
+            HelperGeneric.logI(TAG, "accept_button:onTouch:004:014");
+        }
+
+        Callstate.accepted_call = 1;
+        HelperGeneric.logI(TAG, "accept_button:onTouch:005");
+
+        caller_avatar_view.setVisibility(View.GONE);
+        accept_button.setVisibility(View.GONE);
+        camera_toggle_button.setVisibility(View.VISIBLE);
+        mute_button.setVisibility(View.VISIBLE);
+
+        Callstate.call_start_timestamp = System.currentTimeMillis();
+        String a = "" +
+                   (int) ((Callstate.call_start_timestamp - Callstate.call_init_timestamp) / 1000) +
+                   "s";
+        top_text_line_str2 = a;
+        update_top_text_line();
+
+        HelperGeneric.logI(TAG, "on_call_started_actions:01");
+        on_call_started_actions();
+        HelperGeneric.logI(TAG, "accept_button:onTouch:006");
+
+        if (Callstate.audio_call)
+        {
+            HelperGeneric.logI(TAG, "accept_button:onTouch:006 " + Callstate.audio_call);
+
+            toggle_osd_view_including_cam_preview(!Callstate.audio_call);
+        }
+
+        if (!Callstate.audio_call)
+        {
+            scheduleCameraOpen();
+        }
     }
 
     @Override
@@ -1380,7 +1420,17 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             HelperCall.showMissingPermissionToast(this, Callstate.audio_call);
             CallAudioService.stop_me(true);
+            pendingCallPermissionAction = null;
             finish();
+            return;
+        }
+
+        final Runnable action = pendingCallPermissionAction;
+        pendingCallPermissionAction = null;
+
+        if (action != null)
+        {
+            action.run();
             return;
         }
 
@@ -1443,7 +1493,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "openCameraOnUiThreadIfSurfaceReady:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "openCameraOnUiThreadIfSurfaceReady:EE:" + e.getMessage());
                     Callstate.camera_opened = true;
                     pendingCameraOpen = false;
                 }
@@ -1531,22 +1581,22 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
             int res = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                        ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_ENCODER_VIDEO_MAX_BITRATE.value, value1);
-            Log.i(TAG, "max_v_birate_set:res=" + res);
+            HelperGeneric.logI(TAG, "max_v_birate_set:res=" + res);
 
             int res2 = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                         ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_ENCODER_VIDEO_MIN_BITRATE.value, value2);
-            Log.i(TAG, "min_v_birate_set:res=" + res2);
+            HelperGeneric.logI(TAG, "min_v_birate_set:res=" + res2);
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            Log.i(TAG, "min_and_max_v_birate_set:EE:" + e.getMessage());
+            HelperGeneric.logI(TAG, "min_and_max_v_birate_set:EE:" + e.getMessage());
         }
     }
 
     public static void close_calling_activity()
     {
-        Log.i(TAG, "reset_values:001");
+        HelperGeneric.logI(TAG, "reset_values:001");
         Callstate.reset_values();
         // close calling activity --------
         if (ca != null && !ca.isFinishing())
@@ -1558,7 +1608,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
     synchronized public static void update_top_text_line()
     {
-        // Log.i(TAG, "update_top_text_line(1):top_text_line_str3=" + top_text_line_str3);
+        // HelperGeneric.logI(TAG, "update_top_text_line(1):top_text_line_str3=" + top_text_line_str3);
         update_top_text_line(top_text_line_str3, 3);
     }
 
@@ -1594,11 +1644,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
     synchronized public static void update_top_text_line(String text2, int linenum)
     {
-        // Log.i(TAG, "update_top_text_line(2):str=" + text2);
-        // Log.i(TAG, "update_top_text_line(2):top_text_line_str1=" + top_text_line_str1);
-        // Log.i(TAG, "update_top_text_line(2):top_text_line_str2=" + top_text_line_str2);
-        // Log.i(TAG, "update_top_text_line(2):top_text_line_str3=" + top_text_line_str3);
-        // Log.i(TAG, "update_top_text_line(2):top_text_line_str4=" + top_text_line_str4);
+        // HelperGeneric.logI(TAG, "update_top_text_line(2):str=" + text2);
+        // HelperGeneric.logI(TAG, "update_top_text_line(2):top_text_line_str1=" + top_text_line_str1);
+        // HelperGeneric.logI(TAG, "update_top_text_line(2):top_text_line_str2=" + top_text_line_str2);
+        // HelperGeneric.logI(TAG, "update_top_text_line(2):top_text_line_str3=" + top_text_line_str3);
+        // HelperGeneric.logI(TAG, "update_top_text_line(2):top_text_line_str4=" + top_text_line_str4);
 
         if (linenum == 3)
         {
@@ -1609,7 +1659,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             top_text_line_str4 = text2;
         }
 
-        // Log.i(TAG, "update_top_text_line(2b):top_text_line_str3=" + top_text_line_str3);
+        // HelperGeneric.logI(TAG, "update_top_text_line(2b):top_text_line_str3=" + top_text_line_str3);
 
         Runnable myRunnable = new Runnable()
         {
@@ -1618,7 +1668,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 try
                 {
-                    // Log.i(TAG, "update_top_text_line(2c):top_text_line_str3=" + top_text_line_str3);
+                    // HelperGeneric.logI(TAG, "update_top_text_line(2c):top_text_line_str3=" + top_text_line_str3);
 
                     if ((top_text_line_str3 != "") || (top_text_line_str4 != ""))
                     {
@@ -1661,7 +1711,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     }
                     catch (Exception e)
                     {
-                        Log.i(TAG, "set_debug_text:EE01:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "set_debug_text:EE01:" + e.getMessage());
                     }
                 }
             };
@@ -1669,7 +1719,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
         catch (Exception e2)
         {
-            Log.i(TAG, "set_debug_text:EE02:" + e2.getMessage());
+            HelperGeneric.logI(TAG, "set_debug_text:EE02:" + e2.getMessage());
         }
     }
 
@@ -1701,7 +1751,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     @Override
     protected void onResume()
     {
-        Log.i(TAG, "onResume:01");
+        HelperGeneric.logI(TAG, "onResume:01");
 
         super.onResume();
 
@@ -1740,7 +1790,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 if (isBluetoothConnected())
                 {
-                    Log.i(TAG, "AUDIOROUTE:startBluetoothSco");
+                    HelperGeneric.logI(TAG, "AUDIOROUTE:startBluetoothSco");
                     manager.startBluetoothSco();
                     // manager.setBluetoothScoOn(true);
                     Callstate.audio_device = 2;
@@ -1749,7 +1799,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 else
                 {
                     // headset plugged in
-                    Log.i(TAG, "AUDIOROUTE:onReceive:headset:plugged in");
+                    HelperGeneric.logI(TAG, "AUDIOROUTE:onReceive:headset:plugged in");
                     Callstate.audio_device = 1;
                     set_audio_to_headset(manager);
                     update_audio_device_icon();
@@ -1759,14 +1809,14 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             else
             {
                 audio_device_icon.setImageDrawable(null);
-                Log.i(TAG, "onReceive:headset:setImageDrawable:null1");
+                HelperGeneric.logI(TAG, "onReceive:headset:setImageDrawable:null1");
             }
         }
         catch (Exception ee)
         {
             ee.printStackTrace();
             audio_device_icon.setImageDrawable(null);
-            Log.i(TAG, "onReceive:headset:setImageDrawable:null2");
+            HelperGeneric.logI(TAG, "onReceive:headset:setImageDrawable:null2");
         }
         // ------ set audio device ------
         // ------ set audio device ------
@@ -1775,8 +1825,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         sensor_manager.registerListener(this, proximity_sensor, SensorManager.SENSOR_DELAY_NORMAL);
         sensor_manager.registerListener(this, accelerometer_sensor, SensorManager.SENSOR_DELAY_NORMAL);
 
-        Log.i(TAG, "restart_audio_system__normal_call:101");
+        HelperGeneric.logI(TAG, "restart_audio_system__normal_call:101");
         HelperGeneric.restart_audio_system();
+        requestAudioFocus();
+        applyCallAudioProcessing(Callstate.audio_speaker);
 
         // update call time every second -----------
         final Handler ha = new Handler();
@@ -1786,7 +1838,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public void run()
             {
-                // Log.i(TAG, "update_call_time -> call");
+                // HelperGeneric.logI(TAG, "update_call_time -> call");
                 update_call_time();
                 if (activity_state != 0)
                 {
@@ -1805,7 +1857,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public void run()
             {
-                // Log.i(TAG, "update_call_time -> call");
+                // HelperGeneric.logI(TAG, "update_call_time -> call");
                 update_call_audio_bars();
                 if (activity_state != 0)
                 {
@@ -1821,7 +1873,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
 
         // ------- start audio calling service and notification -------
-        Log.i(TAG, "call_audio_service:start");
+        HelperGeneric.logI(TAG, "call_audio_service:start");
         NotificationManager nmn3 = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
         {
@@ -1841,12 +1893,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
         catch (Exception e)
         {
-            Log.i(TAG, "call_audio_service:EE01:" + e.getMessage());
+            HelperGeneric.logI(TAG, "call_audio_service:EE01:" + e.getMessage());
             e.printStackTrace();
         }
         // ------- start audio calling service and notification -------
 
-        Log.i(TAG, "onResume:99");
+        HelperGeneric.logI(TAG, "onResume:99");
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -1872,20 +1924,20 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         CameraWrapper.camera_preview_size2 = null;
                         active_camera_type = BACK_CAMERA_USED;
-                        Log.i(TAG, "active_camera_type(8a)=" + active_camera_type);
+                        HelperGeneric.logI(TAG, "active_camera_type(8a)=" + active_camera_type);
                         CameraWrapper.getInstance().doOpenCamera(CallingActivity.this, false);
                     }
                     else
                     {
                         CameraWrapper.camera_preview_size2 = null;
                         active_camera_type = FRONT_CAMERA_USED;
-                        Log.i(TAG, "active_camera_type(8b)=" + active_camera_type);
+                        HelperGeneric.logI(TAG, "active_camera_type(8b)=" + active_camera_type);
                         CameraWrapper.getInstance().doOpenCamera(CallingActivity.this, true);
                     }
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "toggle_camera:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "toggle_camera:EE:" + e.getMessage());
                 }
             }
         });
@@ -1899,17 +1951,17 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         try
         {
-            Log.i(TAG, "active_camera_type(1)=" + active_camera_type);
+            HelperGeneric.logI(TAG, "active_camera_type(1)=" + active_camera_type);
             CameraWrapper.getInstance().doStopCamera();
-            Log.i(TAG, "active_camera_type(2)=" + active_camera_type);
+            HelperGeneric.logI(TAG, "active_camera_type(2)=" + active_camera_type);
             CameraWrapper.camera_preview_size2 = null;
-            Log.i(TAG, "active_camera_type(3)=" + active_camera_type);
+            HelperGeneric.logI(TAG, "active_camera_type(3)=" + active_camera_type);
             CameraWrapper.getInstance().doOpenCamera(c, true);
-            Log.i(TAG, "active_camera_type(4)=" + active_camera_type);
+            HelperGeneric.logI(TAG, "active_camera_type(4)=" + active_camera_type);
         }
         catch (Exception e)
         {
-            Log.i(TAG, "reinit_camera:EE01:" + e.getMessage());
+            HelperGeneric.logI(TAG, "reinit_camera:EE01:" + e.getMessage());
         }
     }
 
@@ -1938,7 +1990,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             }
             else
             {
-                Log.i(TAG, "restart_audio_system__normal_call:005:preset_TRUE");
+                HelperGeneric.logI(TAG, "restart_audio_system__normal_call:005:preset_TRUE");
                 HelperGeneric.restart_audio_system();
             }
         }
@@ -2002,7 +2054,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 if (isBluetoothConnected())
                 {
-                    Log.i(TAG, "AUDIOROUTE:stopBluetoothSco:2");
+                    HelperGeneric.logI(TAG, "AUDIOROUTE:stopBluetoothSco:2");
                     Callstate.audio_device = 0;
                     manager.stopBluetoothSco();
                     set_audio_to_loudspeaker(manager);
@@ -2021,7 +2073,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         tox_set_onion_active(1);
 
-        Log.i(TAG, "onPause:on_call_ended_actions");
+        HelperGeneric.logI(TAG, "onPause:on_call_ended_actions");
         on_call_ended_actions();
     }
 
@@ -2030,13 +2082,16 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     @Override
     protected void onStart()
     {
-        Log.i(TAG, "onStart:01");
+        HelperGeneric.logI(TAG, "onStart:01");
         org.khandaq.messenger.HelperCallNotification.cancel(this);
         super.onStart();
 
-        scheduleCameraOpen();
+        if (Callstate.accepted_call == 1)
+        {
+            ensureCallPermissions(this::scheduleCameraOpen);
+        }
 
-        Log.i(TAG, "onStart:99");
+        HelperGeneric.logI(TAG, "onStart:99");
     }
 
     private void initUI()
@@ -2069,7 +2124,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             @Override
             public void run()
             {
-                Log.i(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
+                HelperGeneric.logI(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
                 Callstate.camera_opened = true;
                 try
                 {
@@ -2079,12 +2134,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     }
 
                     SurfaceHolder holder = cameraSurfacePreview.getSurfaceHolder();
-                    Log.i(TAG, "cameraHasOpened:holder=" + holder);
+                    HelperGeneric.logI(TAG, "cameraHasOpened:holder=" + holder);
                     CameraWrapper.getInstance().doStartPreview(holder, mPreviewRate);
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "cameraHasOpened:EE01:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "cameraHasOpened:EE01:" + e.getMessage());
                 }
             }
         });
@@ -2125,7 +2180,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             e.printStackTrace();
         }
 
-        Log.i(TAG, "turn*ON*Screen");
+        HelperGeneric.logI(TAG, "turn*ON*Screen");
         Callstate.other_video_enabled = 1;
         Callstate.my_video_enabled = 1;
     }
@@ -2142,7 +2197,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             e.printStackTrace();
         }
 
-        Log.i(TAG, "turnOffScreen");
+        HelperGeneric.logI(TAG, "turnOffScreen");
         Callstate.other_video_enabled = 0;
         Callstate.my_video_enabled = 0;
     }
@@ -2167,7 +2222,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             e.printStackTrace();
         }
 
-        Log.i(TAG, "turn*ON*Screen");
+        HelperGeneric.logI(TAG, "turn*ON*Screen");
         Callstate.other_video_enabled = 1;
         Callstate.my_video_enabled = 1;
 
@@ -2212,7 +2267,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
 
 
-        Log.i(TAG, "turnOffScreen");
+        HelperGeneric.logI(TAG, "turnOffScreen");
         Callstate.other_video_enabled = 0;
         Callstate.my_video_enabled = 0;
 
@@ -2243,30 +2298,54 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         mContentView.setVisibility(View.INVISIBLE);
     }
 
-    private void requestAudioFocus()
+    static void requestAudioFocus()
     {
-        //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-        //        {
-        //            AudioAttributes playbackAttributes = new AudioAttributes.Builder().setUsage(
-        //                    AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(
-        //                    AudioAttributes.CONTENT_TYPE_SPEECH).build();
-        //            AudioFocusRequest focusRequest = new AudioFocusRequest.Builder(
-        //                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(
-        //                    playbackAttributes).setAcceptsDelayedFocusGain(true).setOnAudioFocusChangeListener(
-        //                    new AudioManager.OnAudioFocusChangeListener()
-        //                    {
-        //                        @Override
-        //                        public void onAudioFocusChange(int i)
-        //                        {
-        //                        }
-        //                    }).build();
-        //            audio_manager_s.requestAudioFocus(focusRequest);
-        //        }
-        //        else
-        //        {
-        //            audio_manager_s.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL,
-        //                                              AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-        //        }
+        if (audio_manager_s == null)
+        {
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
+            AudioAttributes playbackAttributes = new AudioAttributes.Builder().setUsage(
+                    AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(
+                    AudioAttributes.CONTENT_TYPE_SPEECH).build();
+            AudioFocusRequest focusRequest = new AudioFocusRequest.Builder(
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(
+                    playbackAttributes).setAcceptsDelayedFocusGain(true).setOnAudioFocusChangeListener(
+                    new AudioManager.OnAudioFocusChangeListener()
+                    {
+                        @Override
+                        public void onAudioFocusChange(int i)
+                        {
+                        }
+                    }).build();
+            audio_manager_s.requestAudioFocus(focusRequest);
+        }
+        else
+        {
+            audio_manager_s.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL,
+                                              AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+        }
+    }
+
+    static void applyCallAudioProcessing(boolean speaker)
+    {
+        try
+        {
+            set_gainprocessing_active(1);
+            set_aec_active((speaker || !Callstate.audio_call) ? 1 : 0);
+            na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
+            na_set_call_playback_gain(speaker ? 3 : 2);
+            if (audio_manager_s != null)
+            {
+                applyCallStreamVolume(audio_manager_s, speaker);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -2274,60 +2353,22 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         if (event.sensor.getType() == Sensor.TYPE_PROXIMITY)
         {
-            // Log.i(TAG, "onSensorChanged:value=" + event.values[0] + " max=" + proximity_sensor.getMaximumRange());
+            if (Callstate.audio_speaker)
+            {
+                if (event.values[0] >= proximity_sensor.getMaximumRange())
+                {
+                    turnOnScreen();
+                }
+                return;
+            }
+
             if (event.values[0] < proximity_sensor.getMaximumRange())
             {
-                // close to ear
-                if (Callstate.audio_speaker == true)
-                {
-                    Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> EAR");
-
-                    try
-                    {
-                        if (!dh._Detect())
-                        {
-                            set_aec_active(0);
-                            AudioManager manager = (AudioManager) context_s.getSystemService(Context.AUDIO_SERVICE);
-                            set_audio_to_ear(manager);
-                            Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> EAR:set_audio_to_ear()");
-                            turnOffScreen();
-                            Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> EAR:turnOffScreen()");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                    }
-                }
+                turnOffScreen();
             }
             else
             {
-                // away from ear
-                if (Callstate.audio_speaker == false)
-                {
-                    Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> speaker");
-
-                    try
-                    {
-                        if (!dh._Detect())
-                        {
-                            if (PREF__use_software_aec)
-                            {
-                                set_aec_active(0); // --ACTIVE--
-                            }
-                            else
-                            {
-                                set_aec_active(0);
-                            }
-                            AudioManager manager = (AudioManager) context_s.getSystemService(Context.AUDIO_SERVICE);
-                            set_audio_to_loudspeaker(manager);
-                            turnOnScreen();
-                            Log.i(TAG, "AUDIOROUTE:onSensorChanged:--> speaker:turnOnScreen()");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                    }
-                }
+                turnOnScreen();
             }
         }
         else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
@@ -2609,16 +2650,16 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 try
                 {
-                    Log.i(TAG, "update_audio_device_icon:enter");
+                    HelperGeneric.logI(TAG, "update_audio_device_icon:enter");
 
                     if (Callstate.audio_device == 0)
                     {
-                        Log.i(TAG, "update_audio_device_icon:clear");
+                        HelperGeneric.logI(TAG, "update_audio_device_icon:clear");
                         audio_device_icon.setImageDrawable(null);
                     }
                     else if (Callstate.audio_device == 1)
                     {
-                        Log.i(TAG, "update_audio_device_icon:headset");
+                        HelperGeneric.logI(TAG, "update_audio_device_icon:headset");
                         Drawable d4 = new IconicsDrawable(ca).icon(GoogleMaterial.Icon.gmd_headset).backgroundColor(
                                 Color.TRANSPARENT).color(ca.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(
                                 80);
@@ -2626,7 +2667,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     }
                     else if (Callstate.audio_device == 2)
                     {
-                        Log.i(TAG, "update_audio_device_icon:bluetooth");
+                        HelperGeneric.logI(TAG, "update_audio_device_icon:bluetooth");
                         Drawable d4 = new IconicsDrawable(ca).icon(
                                 GoogleMaterial.Icon.gmd_bluetooth_audio).backgroundColor(Color.TRANSPARENT).color(
                                 ca.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(80);
@@ -2634,13 +2675,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     }
                     else // audio_device == ??
                     {
-                        Log.i(TAG, "update_audio_device_icon:null");
+                        HelperGeneric.logI(TAG, "update_audio_device_icon:null");
                         audio_device_icon.setImageDrawable(null);
                     }
                 }
                 catch (Exception e)
                 {
-                    Log.i(TAG, "update_audio_device_icon:EE:" + e.getMessage());
+                    HelperGeneric.logI(TAG, "update_audio_device_icon:EE:" + e.getMessage());
                 }
             }
         };
@@ -2665,7 +2706,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "TOXAV_DECODER_VIDEO_ADD_DELAY_MS:EE:" + e.getMessage());
                     }
 
                     try
@@ -2673,13 +2714,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         int res = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                                    ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_DECODER_VIDEO_BUFFER_MS.value,
                                                    GLOBAL_AV_BUFFER_MS);
-                        Log.i(TAG,
+                        HelperGeneric.logI(TAG,
                               "TOXAV_DECODER_VIDEO_BUFFER_MS:002 set to ms=" + GLOBAL_AV_BUFFER_MS + ":res=" + res);
                     }
                     catch (Exception e)
                     {
                         e.printStackTrace();
-                        Log.i(TAG, "TOXAV_DECODER_VIDEO_BUFFER_MS:EE:" + e.getMessage());
+                        HelperGeneric.logI(TAG, "TOXAV_DECODER_VIDEO_BUFFER_MS:EE:" + e.getMessage());
                     }
 
                     video_add_delay_slider_infotext_01.setText(
@@ -2737,6 +2778,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 try
                 {
                     set_audio_play_volume_percent(PREF__audio_play_volume_percent);
+                    na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
                 }
                 catch (Exception ee)
                 {
@@ -2753,10 +2795,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static void on_call_started_actions()
     {
         set_min_and_max_video_bitrate();
+        applyActiveCallVideoBitrate();
         set_video_delay_ms();
         set_audio_play_volume();
         stop_ringtone();
         set_calling_audio_mode();
+        applyCallAudioProcessing(Callstate.audio_speaker);
+        requestAudioFocus();
 
         Runnable myRunnable = new Runnable()
         {
@@ -3106,11 +3151,22 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
             video_encoder_format.setInteger(MediaFormat.KEY_BIT_RATE, v_bitrate_bits_per_second);
 
-            //            video_encoder_format.setInteger(MediaFormat.KEY_BITRATE_MODE,
-            //                                            MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            {
+                video_encoder_format.setInteger(MediaFormat.KEY_BITRATE_MODE,
+                                                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+            }
 
             video_encoder_format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
             video_encoder_format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL_START);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            {
+                video_encoder_format.setInteger(MediaFormat.KEY_PROFILE,
+                                                MediaCodecInfo.CodecProfileLevel.AVCProfileHigh);
+                video_encoder_format.setInteger(MediaFormat.KEY_LEVEL,
+                                                MediaCodecInfo.CodecProfileLevel.AVCLevel31);
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
             {
@@ -3138,10 +3194,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 {
                     case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:
                         selectedColorFormat = format;
-                        Log.i(TAG, "prepareEncoder:1a:using format [" + i + "] " + format);
+                        HelperGeneric.logI(TAG, "prepareEncoder:1a:using format [" + i + "] " + format);
                         break;
                     default:
-                        Log.i(TAG, "prepareEncoder:1a:Unsupported color format [" + i + "] " + format);
+                        HelperGeneric.logI(TAG, "prepareEncoder:1a:Unsupported color format [" + i + "] " + format);
                         break;
                 }
             }
@@ -3153,10 +3209,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 {
                     case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible:
                         selectedColorFormat = format;
-                        Log.i(TAG, "prepareEncoder:1b:using format [" + i + "] " + format);
+                        HelperGeneric.logI(TAG, "prepareEncoder:1b:using format [" + i + "] " + format);
                         break;
                     default:
-                        Log.i(TAG, "prepareEncoder:1b:Unsupported color format [" + i + "] " + format);
+                        HelperGeneric.logI(TAG, "prepareEncoder:1b:Unsupported color format [" + i + "] " + format);
                         break;
                 }
             }
@@ -3172,10 +3228,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     case MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar:
                     case MediaCodecInfo.CodecCapabilities.COLOR_QCOM_FormatYUV420SemiPlanar:
                         selectedColorFormat = format;
-                        Log.i(TAG, "prepareEncoder:2:using format [" + i + "] " + format);
+                        HelperGeneric.logI(TAG, "prepareEncoder:2:using format [" + i + "] " + format);
                         break;
                     default:
-                        Log.i(TAG, "prepareEncoder:2:Unsupported color format [" + i + "] " + format);
+                        HelperGeneric.logI(TAG, "prepareEncoder:2:Unsupported color format [" + i + "] " + format);
                         break;
                 }
             }
@@ -3200,7 +3256,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             // *************** //
 
 
-            Log.i(TAG, "prepareEncoder:mEncoder.getName=" + mEncoder.getName());
+            HelperGeneric.logI(TAG, "prepareEncoder:mEncoder.getName=" + mEncoder.getName());
 
             mEncoder.configure(video_encoder_format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             mEncoder.start();

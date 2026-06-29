@@ -28,12 +28,27 @@ class StaticTableController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // KHANDAQ design (Figma): grouped screens use white inset cards on grey (.insetGrouped, iOS 13+).
+    static var insetGroupedStyle: UITableViewStyle {
+        if #available(iOS 13.0, *) {
+            return .insetGrouped
+        }
+        return .grouped
+    }
+
     override func loadView() {
         loadViewWithBackgroundColor(theme.colorForType(.NormalBackground))
 
         createTableView()
 
         installConstraints()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // KHANDAQ design (Figma): every pushed StaticTable sub-screen (Settings/Profile details, etc.)
+        // gets the grey circle back button; the helper skips tab roots (nav stack count == 1).
+        installKhandaqCircleBackButton(theme: theme)
     }
 
     func reloadTableView() {
@@ -81,8 +96,26 @@ extension StaticTableController: UITableViewDataSource {
             case .grouped:
                 cell.setBottomSeparatorHidden(isLastRow)
 
-        case .insetGrouped:
-            print("error")
+            case .insetGrouped:
+                // KHANDAQ design (Figma): white rounded inset card. The system grouped background
+                // configuration rounds the section's first/last cell corners automatically; we just
+                // supply the white fill and hide the separator under the last row of each section.
+                // The avatar cell stays on the plain grey backdrop (no card) — own-profile header.
+                cell.setBottomSeparatorHidden(isLastRow)
+                if cell is StaticTableAvatarCell {
+                    cell.backgroundColor = theme.colorForType(.SettingsBackground)
+                    cell.contentView.backgroundColor = .clear
+                } else if #available(iOS 14.0, *) {
+                    cell.automaticallyUpdatesBackgroundConfiguration = false
+                    var config = UIBackgroundConfiguration.listGroupedCell()
+                    // White (light) / elevated #2C2C2E (dark) so cards stand off the backdrop in both.
+                    config.backgroundColor = theme.colorForType(.ChatIncomingBubble)
+                    cell.backgroundConfiguration = config
+                    cell.contentView.backgroundColor = .clear
+                } else {
+                    cell.backgroundColor = theme.colorForType(.ChatIncomingBubble)
+                    cell.contentView.backgroundColor = .clear
+                }
         }
 
         return cell
@@ -129,7 +162,13 @@ extension StaticTableController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-        guard let text = footerText(for: section), footerContainsLink(text) else {
+        // KHANDAQ (#58): a section with no footer text must have ZERO footer height. Returning
+        // UITableViewAutomaticDimension made a .plain table render a default (light-grey) section-footer
+        // strip below the last row — visible against the dark theme on the Profile screen.
+        guard let text = footerText(for: section) else {
+            return 0
+        }
+        guard footerContainsLink(text) else {
             return UITableViewAutomaticDimension
         }
         let width = tableView.bounds.width - 32
@@ -185,14 +224,19 @@ private extension StaticTableController {
         tableView!.delegate = self
         tableView!.estimatedRowHeight = 44.0;
         tableView!.separatorStyle = .none;
+        // KHANDAQ: theme the table's own background. A grouped UITableView defaults to
+        // systemGroupedBackground, which showed as a stray gray band in the footer/below the last
+        // cell (e.g. the profile "Выйти" screen). Bind it to the theme so it matches the view.
+        tableView!.backgroundColor = theme.colorForType(.NormalBackground)
 
         switch tableViewStyle {
             case .plain:
                 tableView!.backgroundColor = theme.colorForType(.NormalBackground)
             case .grouped:
                 tableView!.backgroundColor = theme.colorForType(.SettingsBackground)
-        case .insetGrouped:
-            print("error")
+            case .insetGrouped:
+                // KHANDAQ design (Figma): grey backdrop, white inset cards (cells provide the fill).
+                tableView!.backgroundColor = theme.colorForType(.SettingsBackground)
         }
 
         view.addSubview(tableView!)

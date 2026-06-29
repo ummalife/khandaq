@@ -695,16 +695,12 @@ Tox *create_tox(int udp_enabled, int orbot_enabled, const char *proxy_host, uint
         options.udp_enabled = false; // set TCP as default mode for android !!
     }
 
-    if(local_discovery_enabled_ == 1)
-    {
-        options.local_discovery_enabled = true;
-    }
-    else
-    {
-        options.local_discovery_enabled = false;
-    }
+    // NGC public groups need UDP or connected TCP relay for DHT announce; UDP is more reliable.
+    options.udp_enabled = true;
+    options.local_discovery_enabled = true;
 
     options.hole_punching_enabled = true;
+    options.dht_announcements_enabled = true;
     // options.tcp_port = tcp_port;
     options.tcp_port = 0; // TCP relay is disabled !!
     // ------------------------------------------------------------
@@ -1106,6 +1102,8 @@ void init_tox_callbacks()
     tox_callback_friend_lossless_packet_per_pktid(tox_global, tox_utils_friend_lossless_packet_cb, 170);
     tox_callback_friend_lossless_packet_per_pktid(tox_global, friend_lossless_packet_cb, 176);
     tox_callback_friend_lossless_packet_per_pktid(tox_global, friend_lossless_packet_cb, 181);
+    tox_callback_friend_lossless_packet_per_pktid(tox_global, friend_lossless_packet_cb, 182);
+    tox_callback_friend_lossless_packet_per_pktid(tox_global, friend_lossless_packet_cb, 183);
     // ----------- custom packets -----------
     tox_utils_callback_file_recv_control(tox_global, file_recv_control_cb);
     tox_callback_file_recv_control(tox_global, tox_utils_file_recv_control_cb);
@@ -1699,10 +1697,20 @@ void android_tox_callback_friend_message_cb(uint32_t friend_number, TOX_MESSAGE_
             memset(message_copy + pos, 0, (length - new_length));
             // indicate that we need to free the allocated buffer later
             need_free = 1;
+            dbg(9, "friend_message_cb:msgV3 fn=%u text_len=%d ts=%u", friend_number, pos, msgV3_timestamp);
         }
     }
 
     jstring js1 = c_safe_string_from_java((char *)message_copy, new_length);
+    if (js1 == NULL)
+    {
+        dbg(9, "friend_message_cb:UTF-8 decode failed fn=%u len=%zu", friend_number, new_length);
+        if (need_free == 1)
+        {
+            free(message_copy);
+        }
+        return;
+    }
 
     (*jnienv2)->CallStaticVoidMethod(jnienv2, MainActivity,
                                      android_tox_callback_friend_message_cb_method,
@@ -1808,6 +1816,83 @@ jstring c_safe_string_from_java(const char *instr, size_t len)
     jstring js1 = (jstring)(*jnienv2)->CallStaticObjectMethod(jnienv2, TrifaToxService_class, safe_string_method, data);
     (*jnienv2)->DeleteLocalRef(jnienv2, data);
     return js1;
+}
+
+typedef struct
+{
+    jbyte *bytes;
+    jsize length;
+    jbyteArray array;
+} JavaUtf8Bytes;
+
+/*
+ * Get standard UTF-8 bytes from a Java String.
+ * GetStringUTFChars uses modified UTF-8 and corrupts emoji / supplementary characters on Android.
+ * Returns 0 on success, -1 on failure.
+ */
+static int jni_get_java_utf8_bytes(JNIEnv *env, jstring jstr, JavaUtf8Bytes *out)
+{
+    if (!env || !jstr || !out)
+    {
+        return -1;
+    }
+
+    memset(out, 0, sizeof(*out));
+
+    const jclass stringClass = (*env)->GetObjectClass(env, jstr);
+    if (stringClass == NULL)
+    {
+        return -1;
+    }
+
+    const jmethodID getBytes = (*env)->GetMethodID(env, stringClass, "getBytes", "(Ljava/lang/String;)[B");
+    (*env)->DeleteLocalRef(env, stringClass);
+    if (getBytes == NULL)
+    {
+        return -1;
+    }
+
+    const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+    if (charsetName == NULL)
+    {
+        return -1;
+    }
+
+    const jbyteArray stringJbytes = (jbyteArray)(*env)->CallObjectMethod(env, jstr, getBytes, charsetName);
+    (*env)->DeleteLocalRef(env, charsetName);
+    if (stringJbytes == NULL)
+    {
+        return -1;
+    }
+
+    out->length = (*env)->GetArrayLength(env, stringJbytes);
+    out->bytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+    out->array = stringJbytes;
+
+    if (out->bytes == NULL)
+    {
+        (*env)->DeleteLocalRef(env, stringJbytes);
+        memset(out, 0, sizeof(*out));
+        return -1;
+    }
+
+    return 0;
+}
+
+static void jni_release_java_utf8_bytes(JNIEnv *env, JavaUtf8Bytes *in)
+{
+    if (!env || !in || !in->array)
+    {
+        return;
+    }
+
+    if (in->bytes != NULL)
+    {
+        (*env)->ReleaseByteArrayElements(env, in->array, in->bytes, JNI_ABORT);
+    }
+
+    (*env)->DeleteLocalRef(env, in->array);
+    memset(in, 0, sizeof(*in));
 }
 
 void file_recv_cb(Tox *tox, uint32_t friend_number, uint32_t file_number, uint32_t kind, uint64_t file_size,
@@ -3527,6 +3612,36 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1get_1name(JNIEnv *e
 }
 
 JNIEXPORT jstring JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1get_1status_1message(JNIEnv *env, jobject thiz,
+        jlong friend_number)
+{
+    TRACE_LOGGER();
+    if(tox_global == NULL)
+    {
+        return NULL;
+    }
+
+    Tox_Err_Friend_Query error;
+    size_t length = tox_friend_get_status_message_size(tox_global, (uint32_t)friend_number, &error);
+    if (error != TOX_ERR_FRIEND_QUERY_OK)
+    {
+        return NULL;
+    }
+
+    char message[length + 1];
+    CLEAR(message);
+
+    tox_friend_get_status_message(tox_global, (uint32_t)friend_number, (uint8_t *)message, &error);
+    if (error != TOX_ERR_FRIEND_QUERY_OK)
+    {
+        return NULL;
+    }
+
+    jstring js1 = c_safe_string_from_java((char *)message, length);
+    return js1;
+}
+
+JNIEXPORT jstring JNICALL
 Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1get_1public_1key(JNIEnv *env, jobject thiz,
         jlong friend_number)
 {
@@ -4142,40 +4257,46 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1messagev3_1friend_1send_1me
 
 #else
 
-    const char *message_str = NULL;
-    // TODO: UTF-8
-    message_str = (*env)->GetStringUTFChars(env, message, NULL);
+    JavaUtf8Bytes utf8 = {0};
     TOX_ERR_FRIEND_SEND_MESSAGE error;
+    uint32_t res = 0;
 
-    if (strlen(message_str) > TOX_MSGV3_MAX_MESSAGE_LENGTH)
+    if (jni_get_java_utf8_bytes(env, (jstring)message, &utf8) != 0)
     {
-        (*env)->ReleaseStringUTFChars(env, message, message_str);
+        dbg(9, "tox_messagev3_friend_send_message:ERROR:UTF-8");
+        return (jlong)-5;
+    }
+
+    if ((size_t)utf8.length > TOX_MSGV3_MAX_MESSAGE_LENGTH)
+    {
+        jni_release_java_utf8_bytes(env, &utf8);
         dbg(9, "tox_friend_send_message:ERROR:TOX_ERR_FRIEND_SEND_MESSAGE_TOO_LONG:TOX_MSGV3_MAX_MESSAGE_LENGTH");
         return (jlong)-5;
     }
 
-    uint8_t *message_str_v3 = (uint8_t *)calloc(1, (size_t)(strlen(message_str) + TOX_MSGV3_GUARD + TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH));
+    uint8_t *message_str_v3 = (uint8_t *)calloc(1, (size_t)(utf8.length + TOX_MSGV3_GUARD + TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH));
     if (!message_str_v3)
     {
-        (*env)->ReleaseStringUTFChars(env, message, message_str);
+        jni_release_java_utf8_bytes(env, &utf8);
         dbg(9, "tox_friend_send_message:ERROR:TOX_MSGV3:can not allocate buffer");
         return (jlong)-5;
     }
 
     uint8_t* position = message_str_v3;
-    memcpy(position, message_str, (size_t)(strlen(message_str)));
-    position = position + strlen(message_str);
+    memcpy(position, utf8.bytes, (size_t)(utf8.length));
+    position = position + utf8.length;
     position = position + TOX_MSGV3_GUARD;
     memcpy(position, hash_buffer_c, (size_t)(TOX_MSGV3_MSGID_LENGTH));
     position = position + TOX_MSGV3_MSGID_LENGTH;
     memcpy(position, &timestamp_unix_buf, (size_t)(TOX_MSGV3_TIMESTAMP_LENGTH));
 
-    size_t new_len = strlen(message_str) + TOX_MSGV3_GUARD + TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH;
+    size_t new_len = (size_t)utf8.length + TOX_MSGV3_GUARD + TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH;
 
-    uint32_t res = tox_friend_send_message(tox_global, (uint32_t)friend_number, (int)type, (uint8_t *)message_str_v3,
-                                           new_len, &error);
+    res = tox_friend_send_message(tox_global, (uint32_t)friend_number, (int)type, (uint8_t *)message_str_v3,
+                                  new_len, &error);
 
     free(message_str_v3);
+    jni_release_java_utf8_bytes(env, &utf8);
 
 #endif
 
@@ -4258,13 +4379,19 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1send_1message(JNIEn
 
 #else
 
-    const char *message_str = NULL;
-    // TODO: UTF-8
-    message_str = (*env)->GetStringUTFChars(env, message, NULL);
+    JavaUtf8Bytes utf8 = {0};
     TOX_ERR_FRIEND_SEND_MESSAGE error;
-    uint32_t res = tox_friend_send_message(tox_global, (uint32_t)friend_number, (int)type, (uint8_t *)message_str,
-                                           (size_t)strlen(message_str), &error);
-    (*env)->ReleaseStringUTFChars(env, message, message_str);
+    uint32_t res = 0;
+
+    if (jni_get_java_utf8_bytes(env, (jstring)message, &utf8) != 0)
+    {
+        dbg(9, "tox_friend_send_message:ERROR:UTF-8");
+        return (jlong)-5;
+    }
+
+    res = tox_friend_send_message(tox_global, (uint32_t)friend_number, (int)type, (uint8_t *)utf8.bytes,
+                                  (size_t)utf8.length, &error);
+    jni_release_java_utf8_bytes(env, &utf8);
 
 #endif
 
@@ -4448,12 +4575,17 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1self_1set_1name(JNIEnv *env
 
 #else
 
-    const char *s = NULL;
-    // TODO: UTF-8
-    s = (*env)->GetStringUTFChars(env, name, NULL);
+    JavaUtf8Bytes utf8 = {0};
     TOX_ERR_SET_INFO error;
-    bool res = tox_self_set_name(tox_global, (uint8_t *)s, (size_t)strlen(s), &error);
-    (*env)->ReleaseStringUTFChars(env, name, s);
+    bool res = false;
+
+    if (jni_get_java_utf8_bytes(env, (jstring)name, &utf8) != 0)
+    {
+        return (jint)-1;
+    }
+
+    res = tox_self_set_name(tox_global, (uint8_t *)utf8.bytes, (size_t)utf8.length, &error);
+    jni_release_java_utf8_bytes(env, &utf8);
     return (jint)res;
 
 #endif
@@ -6738,36 +6870,47 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1self_1set_1name(JNIE
     Tox_Err_Group_Self_Name_Set error;
     bool res = false;
 
-#ifdef JAVA_LINUX
+    const jclass stringClass = (*env)->GetObjectClass(env, name);
+    if (stringClass == NULL)
+    {
+        return (jint)-21;
+    }
 
-    const jclass stringClass = (*env)->GetObjectClass(env, (jstring)name);
     const jmethodID getBytes = (*env)->GetMethodID(env, stringClass, "getBytes", "(Ljava/lang/String;)[B");
-    const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+    if (getBytes == NULL)
+    {
+        return (jint)-21;
+    }
 
-    const jbyteArray stringJbytes = (jbyteArray) (*env)->CallObjectMethod(env, (jstring)name, getBytes, charsetName);
+    const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+    if (charsetName == NULL)
+    {
+        return (jint)-21;
+    }
+
+    const jbyteArray stringJbytes = (jbyteArray)(*env)->CallObjectMethod(env, name, getBytes, charsetName);
+    (*env)->DeleteLocalRef(env, charsetName);
+
+    if (stringJbytes == NULL)
+    {
+        return (jint)-21;
+    }
+
     const jsize plength = (*env)->GetArrayLength(env, stringJbytes);
-    jbyte* pBytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+    jbyte *pBytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+    if (pBytes == NULL)
+    {
+        (*env)->DeleteLocalRef(env, stringJbytes);
+        return (jint)-21;
+    }
 
     res = tox_group_self_set_name(tox_global,
             (uint32_t)group_number,
             (uint8_t *)pBytes, (size_t)plength,
             &error);
 
-    (*env)->DeleteLocalRef(env, charsetName);
-
     (*env)->ReleaseByteArrayElements(env, stringJbytes, pBytes, JNI_ABORT);
     (*env)->DeleteLocalRef(env, stringJbytes);
-#else
-    const char *my_peer_name_str = NULL;
-    my_peer_name_str = (*env)->GetStringUTFChars(env, name, NULL);
-
-    res = tox_group_self_set_name(tox_global,
-            (uint32_t)group_number,
-            (uint8_t *)my_peer_name_str, (size_t)strlen(my_peer_name_str),
-            &error);
-
-    (*env)->ReleaseStringUTFChars(env, name, my_peer_name_str);
-#endif
 
     if(error != TOX_ERR_GROUP_SELF_NAME_SET_OK)
     {
@@ -6776,6 +6919,46 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1self_1set_1name(JNIE
     else
     {
         return (jint)res;
+    }
+#endif
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1self_1get_1name(JNIEnv *env, jobject thiz,
+        jlong group_number)
+{
+    TRACE_LOGGER();
+#ifndef HAVE_TOX_NGC
+    return (jstring)NULL;
+#else
+
+    if(tox_global == NULL)
+    {
+        return (jstring)NULL;
+    }
+
+    Tox_Err_Group_Self_Query error;
+    size_t length = tox_group_self_get_name_size(tox_global, (uint32_t)group_number, &error);
+
+    if(error != TOX_ERR_GROUP_SELF_QUERY_OK)
+    {
+        return (jstring)NULL;
+    }
+    else
+    {
+        char name[length + 1];
+        CLEAR(name);
+        bool res = tox_group_self_get_name(tox_global, (uint32_t)group_number, (uint8_t *)name, &error);
+
+        if(res == false)
+        {
+            return (*env)->NewStringUTF(env, "-1"); // C style string to Java String
+        }
+        else
+        {
+            jstring js1 = c_safe_string_from_java((char *)name, length);
+            return js1;
+        }
     }
 #endif
 }
@@ -7221,36 +7404,55 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1set_1topic(JNIEnv *e
     Tox_Err_Group_Topic_Set error;
     bool res = false;
 
-#ifdef JAVA_LINUX
+    // Always use standard UTF-8 bytes. GetStringUTFChars uses modified UTF-8 and
+    // corrupts emoji / supplementary characters on Android (crash or wrong topic).
+    const jclass stringClass = (*env)->GetObjectClass(env, topic);
+    if (stringClass == NULL)
+    {
+        return (jint)-21;
+    }
 
-    const jclass stringClass = (*env)->GetObjectClass(env, (jstring)topic);
     const jmethodID getBytes = (*env)->GetMethodID(env, stringClass, "getBytes", "(Ljava/lang/String;)[B");
-    const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+    if (getBytes == NULL)
+    {
+        return (jint)-21;
+    }
 
-    const jbyteArray stringJbytes = (jbyteArray) (*env)->CallObjectMethod(env, (jstring)topic, getBytes, charsetName);
+    const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+    if (charsetName == NULL)
+    {
+        return (jint)-21;
+    }
+
+    const jbyteArray stringJbytes = (jbyteArray)(*env)->CallObjectMethod(env, topic, getBytes, charsetName);
+    (*env)->DeleteLocalRef(env, charsetName);
+
+    if (stringJbytes == NULL)
+    {
+        return (jint)-21;
+    }
+
     const jsize plength = (*env)->GetArrayLength(env, stringJbytes);
-    jbyte* pBytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+    if (plength > 512)
+    {
+        (*env)->DeleteLocalRef(env, stringJbytes);
+        return (jint)-2;
+    }
+
+    jbyte *pBytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+    if (pBytes == NULL)
+    {
+        (*env)->DeleteLocalRef(env, stringJbytes);
+        return (jint)-21;
+    }
 
     res = tox_group_set_topic(tox_global,
             (uint32_t)group_number,
             (uint8_t *)pBytes, (size_t)plength,
             &error);
 
-    (*env)->DeleteLocalRef(env, charsetName);
-
     (*env)->ReleaseByteArrayElements(env, stringJbytes, pBytes, JNI_ABORT);
     (*env)->DeleteLocalRef(env, stringJbytes);
-#else
-    const char *topic_str = NULL;
-    topic_str = (*env)->GetStringUTFChars(env, topic, NULL);
-
-    res = tox_group_set_topic(tox_global,
-            (uint32_t)group_number,
-            (uint8_t *)topic_str, (size_t)strlen(topic_str),
-            &error);
-
-    (*env)->ReleaseStringUTFChars(env, topic, topic_str);
-#endif
 
     if(error != TOX_ERR_GROUP_TOPIC_SET_OK)
     {
@@ -7425,6 +7627,130 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1founder_1set_1peer_1
     {
         return (jint)res;
     }
+#endif
+}
+
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1founder_1set_1password(JNIEnv *env, jobject thiz, jlong group_number,
+        jstring password)
+{
+    TRACE_LOGGER();
+#ifndef HAVE_TOX_NGC
+    return (jint)-99;
+#else
+    if(tox_global == NULL)
+    {
+        return (jint)-99;
+    }
+
+    Tox_Err_Group_Founder_Set_Password error;
+    bool res = false;
+
+    if (password == NULL)
+    {
+        res = tox_group_founder_set_password(tox_global, (uint32_t)group_number, NULL, 0, &error);
+    }
+    else
+    {
+#ifdef JAVA_LINUX
+        const jclass stringClass = (*env)->GetObjectClass(env, password);
+        const jmethodID getBytes = (*env)->GetMethodID(env, stringClass, "getBytes", "(Ljava/lang/String;)[B");
+        const jstring charsetName = (*env)->NewStringUTF(env, "UTF-8");
+        const jbyteArray stringJbytes = (jbyteArray)(*env)->CallObjectMethod(env, password, getBytes, charsetName);
+        const jsize plength = (*env)->GetArrayLength(env, stringJbytes);
+        jbyte *pBytes = (*env)->GetByteArrayElements(env, stringJbytes, NULL);
+        res = tox_group_founder_set_password(tox_global, (uint32_t)group_number, (uint8_t *)pBytes, (size_t)plength, &error);
+        (*env)->DeleteLocalRef(env, charsetName);
+        (*env)->ReleaseByteArrayElements(env, stringJbytes, pBytes, JNI_ABORT);
+        (*env)->DeleteLocalRef(env, stringJbytes);
+#else
+        const char *password_str = (*env)->GetStringUTFChars(env, password, NULL);
+        size_t password_len = password_str ? strlen(password_str) : 0;
+        res = tox_group_founder_set_password(tox_global, (uint32_t)group_number, (uint8_t *)password_str, password_len, &error);
+        if (password_str != NULL)
+        {
+            (*env)->ReleaseStringUTFChars(env, password, password_str);
+        }
+#endif
+    }
+
+    if (error != TOX_ERR_GROUP_FOUNDER_SET_PASSWORD_OK)
+    {
+        return (jint)(-(error));
+    }
+    return (jint)res;
+#endif
+}
+
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1founder_1set_1topic_1lock(JNIEnv *env, jobject thiz, jlong group_number,
+        jint topic_lock)
+{
+    TRACE_LOGGER();
+#ifndef HAVE_TOX_NGC
+    return (jint)-99;
+#else
+    if(tox_global == NULL)
+    {
+        return (jint)-99;
+    }
+
+    Tox_Err_Group_Founder_Set_Topic_Lock error;
+    bool res = tox_group_founder_set_topic_lock(tox_global, (uint32_t)group_number, (Tox_Group_Topic_Lock)topic_lock, &error);
+
+    if (error != TOX_ERR_GROUP_FOUNDER_SET_TOPIC_LOCK_OK)
+    {
+        return (jint)(-(error));
+    }
+    return (jint)res;
+#endif
+}
+
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1founder_1set_1privacy_1state(JNIEnv *env, jobject thiz, jlong group_number,
+        jint privacy_state)
+{
+    TRACE_LOGGER();
+#ifndef HAVE_TOX_NGC
+    return (jint)-99;
+#else
+    if(tox_global == NULL)
+    {
+        return (jint)-99;
+    }
+
+    Tox_Err_Group_Founder_Set_Privacy_State error;
+    bool res = tox_group_founder_set_privacy_state(tox_global, (uint32_t)group_number,
+            (Tox_Group_Privacy_State)privacy_state, &error);
+
+    if (error != TOX_ERR_GROUP_FOUNDER_SET_PRIVACY_STATE_OK)
+    {
+        return (jint)(-(error));
+    }
+    return (jint)res;
+#endif
+}
+
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1get_1topic_1lock(JNIEnv *env, jobject thiz, jlong group_number)
+{
+    TRACE_LOGGER();
+#ifndef HAVE_TOX_NGC
+    return (jint)-99;
+#else
+    if(tox_global == NULL)
+    {
+        return (jint)-99;
+    }
+
+    Tox_Err_Group_State_Queries error;
+    Tox_Group_Topic_Lock res = tox_group_get_topic_lock(tox_global, (uint32_t)group_number, &error);
+
+    if (error != TOX_ERR_GROUP_STATE_QUERIES_OK)
+    {
+        return (jint)(-(error));
+    }
+    return (jint)res;
 #endif
 }
 
@@ -8022,11 +8348,11 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1send_1custom_1packet
 {
     TRACE_LOGGER();
 #ifndef HAVE_TOX_NGC
-    return (jint)-99;
+    return (jint)-100;
 #else
     if(tox_global == NULL)
     {
-        return (jint)-99;
+        return (jint)-101;
     }
 
     bool lossless_b = false;
@@ -8047,7 +8373,7 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1group_1send_1custom_1packet
 
     if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK)
     {
-        return (jint)(-99);
+        return (jint)(-100 - (jint)error);
     }
     else
     {

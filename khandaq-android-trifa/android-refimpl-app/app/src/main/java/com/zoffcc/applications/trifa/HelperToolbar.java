@@ -1,5 +1,7 @@
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.R;
+
 import android.util.TypedValue;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -33,6 +35,19 @@ public final class HelperToolbar
         {
             activity.getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             activity.getSupportActionBar().setDisplayShowHomeEnabled(true);
+        }
+    }
+
+    public static void setScreenTitle(AppCompatActivity activity, Toolbar toolbar, int titleResId)
+    {
+        enableUpNavigation(activity, toolbar);
+        if (activity.getSupportActionBar() != null)
+        {
+            activity.getSupportActionBar().setTitle(titleResId);
+        }
+        else
+        {
+            toolbar.setTitle(titleResId);
         }
     }
 }

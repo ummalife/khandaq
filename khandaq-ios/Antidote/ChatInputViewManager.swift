@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import AVFoundation
 import Foundation
 import MobileCoreServices
 import Photos
@@ -13,6 +14,8 @@ fileprivate struct Constants {
     static let inactivityTimeout = 4.0
 }
 
+fileprivate let videoSendQueue = DispatchQueue(label: "khandaq.video.send", qos: .userInitiated)
+
 /**
     Manager responsible for sending messages and files, updating typing notification,
     saving entered text in database.
@@ -20,6 +23,7 @@ fileprivate struct Constants {
 class ChatInputViewManager: NSObject {
     fileprivate var chat: OCTChat!
     fileprivate weak var inputView: ChatInputView?
+    fileprivate let theme: Theme
 
     fileprivate weak var submanagerChats: OCTSubmanagerChats!
     fileprivate weak var submanagerFiles: OCTSubmanagerFiles!
@@ -28,8 +32,17 @@ class ChatInputViewManager: NSObject {
     fileprivate weak var presentingViewController: UIViewController!
 
     fileprivate var inactivityTimer: Timer?
+    fileprivate var isVideoSendInProgress = false
+    fileprivate let voiceRecorder = GroupVoiceMessageRecorder()
+
+    var outgoingTextComposer: ((String) -> String)?
+
+    // KHANDAQ design (Figma): set by the chat controller to share the current location once from the
+    // "+" attachment menu. When nil (e.g. groups), the Геолокация item is hidden.
+    var onShareLocation: (() -> Void)?
 
     init(inputView: ChatInputView,
+         theme: Theme,
          chat: OCTChat,
          submanagerChats: OCTSubmanagerChats,
          submanagerFiles: OCTSubmanagerFiles,
@@ -37,6 +50,7 @@ class ChatInputViewManager: NSObject {
          presentingViewController: UIViewController) {
 
         self.chat = chat
+        self.theme = theme
         self.inputView = inputView
         self.submanagerChats = submanagerChats
         self.submanagerFiles = submanagerFiles
@@ -47,42 +61,63 @@ class ChatInputViewManager: NSObject {
 
         inputView.delegate = self
         inputView.text = chat.enteredText ?? ""
+        // KHANDAQ (#15): 1:1 chats get the same input bar as groups (attach + hold-to-record voice).
+        inputView.cameraButtonEnabled = true
+        inputView.voiceButtonEnabled = true
     }
 
     deinit {
+        VideoSendPreprocessor.shared.cancelActivePreparation()
+        VideoSendProgressOverlay.shared.hide()
         endUserInteraction()
     }
 }
 
 extension ChatInputViewManager: ChatInputViewDelegate {
     func chatInputViewCameraButtonPressed(_ view: ChatInputView, cameraView: UIView) {
-        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        alert.popoverPresentationController?.sourceView = cameraView
-        alert.popoverPresentationController?.sourceRect = CGRect(x: cameraView.frame.size.width / 2, y: cameraView.frame.size.height / 2, width: 1.0, height: 1.0)
+        // KHANDAQ design (Figma): a rounded popup anchored above the "+" (Галерея / Камера / Аудио /
+        // Геолокация) instead of a native bottom action sheet.
+        var items: [AttachmentMenuController.Item] = []
+
+        items.append(.init(title: String(localized: "attach_gallery"), systemImage: "photo.on.rectangle") { [weak self] in
+            self?.presentPhotoLibraryPicker()
+        })
 
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            alert.addAction(UIAlertAction(title: String(localized: "photo_from_camera"), style: .default) { [unowned self] _ in
-                MediaPermission.requestCameraAccess(from: self.presentingViewController) { granted in
-                    guard granted else {
-                        return
-                    }
-
-                    let controller = UIImagePickerController()
-                    controller.delegate = self
-                    controller.sourceType = .camera
-                    controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
-                    controller.videoQuality = .typeHigh
-                    self.presentingViewController.present(controller, animated: true, completion: nil)
-                }
+            items.append(.init(title: String(localized: "photo_from_camera"), systemImage: "camera") { [weak self] in
+                self?.presentCameraPicker()
             })
         }
 
-        alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ in
-            self.presentPhotoLibraryPicker()
+        // KHANDAQ (#135): the "Аудио" menu item must pick an existing audio FILE, not start a
+        // voice recording (hold-to-record on the voice button already covers voice notes).
+        items.append(.init(title: String(localized: "attach_audio"), systemImage: "music.note") { [weak self] in
+            self?.presentAudioFilePicker()
         })
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
-        presentingViewController.present(alert, animated: true, completion: nil)
+        if let shareLocation = onShareLocation {
+            items.append(.init(title: String(localized: "attach_location"), systemImage: "location") {
+                shareLocation()
+            })
+        }
+
+        let menu = AttachmentMenuController(theme: theme, items: items, sourceView: cameraView)
+        presentingViewController.present(menu, animated: true, completion: nil)
+    }
+
+    private func presentCameraPicker() {
+        MediaPermission.requestCameraAccess(from: presentingViewController) { [weak self] granted in
+            guard granted, let self = self else {
+                return
+            }
+
+            let controller = UIImagePickerController()
+            controller.delegate = self
+            controller.sourceType = .camera
+            controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
+            controller.videoQuality = .typeMedium
+            self.presentingViewController.present(controller, animated: true, completion: nil)
+        }
     }
 
     func chatInputViewSendButtonPressed(_ view: ChatInputView) {
@@ -91,8 +126,18 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             return
         }
 
+        let outgoing = outgoingTextComposer?(text) ?? text
+
+        // KHANDAQ: Saved Messages is a friend-less local chat — store, don't transfer over Tox.
+        if chat.isSavedMessages {
+            submanagerObjects.addSavedTextMessage(outgoing, to: chat)
+            view.text = ""
+            endUserInteraction()
+            return
+        }
+
         // HINT: call OCTSubmanagerChatsImpl.m -> sendMessageToChat()
-        submanagerChats.sendMessage(to: chat, text: text, type: .normal, successBlock: { _ in
+        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { _ in
             DispatchQueue.main.async {
                 view.text = ""
                 self.endUserInteraction()
@@ -120,6 +165,65 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             self?.endUserInteraction()
         }, repeats: false)
     }
+
+    // KHANDAQ (#15): hold-to-record voice for 1:1 chats (mirrors the group input bar).
+    func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {
+        requestMicrophoneAccess { [weak self] granted in
+            guard granted, let self = self else {
+                return
+            }
+
+            do {
+                try self.voiceRecorder.startRecording()
+            }
+            catch {
+                handleErrorWithType(.sendFileToFriend, error: error as NSError)
+            }
+        }
+    }
+
+    func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
+        guard let url = voiceRecorder.stopRecording(discard: cancelled) else {
+            return
+        }
+
+        if chat.isSavedMessages {
+            storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+
+        submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
+            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        }
+    }
+
+    func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {
+        UIAlertController.showWithTitle("",
+                                        message: String(localized: "group_voice_hold_to_record"),
+                                        retryBlock: nil)
+    }
+
+    func requestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
+        let session = AVAudioSession.sharedInstance()
+        let permission = session.recordPermission()
+
+        if permission == .granted {
+            completion(true)
+            return
+        }
+
+        if permission == .denied {
+            completion(false)
+            return
+        }
+
+        session.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                completion(granted)
+            }
+        }
+    }
 }
 
 extension ChatInputViewManager: UIImagePickerControllerDelegate {
@@ -131,12 +235,15 @@ extension ChatInputViewManager: UIImagePickerControllerDelegate {
             return
         }
 
-        if isImageMediaType(type) {
-            sendImage(imagePickerInfo: info)
-        } else if isMovieMediaType(type) {
-            sendMovie(imagePickerInfo: info)
-        } else {
-            showMediaPickFailed()
+        loadPreviewItems(fromImagePickerInfo: info, mediaType: type) { [weak self] items in
+            guard let self = self else {
+                return
+            }
+            if items.isEmpty {
+                self.showMediaPickFailed()
+                return
+            }
+            self.presentMediaPreview(items: items)
         }
     }
 
@@ -152,63 +259,72 @@ extension ChatInputViewManager: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         presentingViewController.dismiss(animated: true, completion: nil)
 
-        guard let provider = results.first?.itemProvider else {
+        guard !results.isEmpty else {
             return
         }
 
-        if provider.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
-            provider.loadFileRepresentation(forTypeIdentifier: kUTTypeMovie as String) { [weak self] url, _ in
-                guard let self = self, let url = url else {
-                    return
-                }
-
-                let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
-                let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
-                    .appendingPathComponent(UUID().uuidString)
-                    .appendingPathExtension(ext)
-
-                do {
-                    if FileManager.default.fileExists(atPath: tempURL.path) {
-                        try FileManager.default.removeItem(at: tempURL)
-                    }
-                    try FileManager.default.copyItem(at: url, to: tempURL)
-                } catch {
-                    DispatchQueue.main.async {
-                        self.showMediaPickFailed()
-                    }
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    self.sendMovieFile(at: tempURL)
-                }
+        loadPreviewItems(fromPickerResults: results) { [weak self] items in
+            guard let self = self else {
+                return
             }
-            return
-        }
-
-        if provider.canLoadObject(ofClass: UIImage.self) {
-            provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-                guard let self = self, let image = object as? UIImage else {
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    self.sendImageData(image, fileName: nil)
-                }
+            if items.isEmpty {
+                self.showMediaPickFailed()
+                return
             }
+            self.presentMediaPreview(items: items)
+        }
+    }
+}
+
+extension ChatInputViewManager {
+    func endUserInteraction() {
+        try? submanagerChats.setIsTyping(false, in: chat)
+        inactivityTimer?.invalidate()
+
+        if let inputView = inputView {
+            submanagerObjects.change(chat, enteredText: inputView.text)
+        }
+    }
+}
+
+extension ChatInputViewManager: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else {
             return
         }
 
-        showMediaPickFailed()
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        // KHANDAQ (#135): send the picked audio file. Saved Messages stores it locally.
+        if chat.isSavedMessages {
+            storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
+            return
+        }
+
+        submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
+            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        }
     }
 }
 
 fileprivate extension ChatInputViewManager {
+    // KHANDAQ (#135): pick an existing audio file (mp3/m4a/wav/…) and send it as a file.
+    func presentAudioFilePicker() {
+        let controller = UIDocumentPickerViewController(documentTypes: [kUTTypeAudio as String], in: .import)
+        controller.delegate = self
+        presentingViewController.present(controller, animated: true, completion: nil)
+    }
+
     func presentPhotoLibraryPicker() {
         if #available(iOS 14.0, *) {
             var configuration = PHPickerConfiguration()
             configuration.filter = .any(of: [.images, .videos])
-            configuration.selectionLimit = 1
+            configuration.selectionLimit = 10
 
             let controller = PHPickerViewController(configuration: configuration)
             controller.delegate = self
@@ -218,17 +334,8 @@ fileprivate extension ChatInputViewManager {
             controller.delegate = self
             controller.sourceType = .photoLibrary
             controller.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
-            controller.videoQuality = .typeHigh
+            controller.videoQuality = .typeMedium
             presentingViewController.present(controller, animated: true, completion: nil)
-        }
-    }
-
-    func endUserInteraction() {
-        try? submanagerChats.setIsTyping(false, in: chat)
-        inactivityTimer?.invalidate()
-
-        if let inputView = inputView {
-            submanagerObjects.change(chat, enteredText: inputView.text)
         }
     }
 
@@ -266,7 +373,7 @@ fileprivate extension ChatInputViewManager {
 
     func sendMovie(imagePickerInfo: [String : Any]) {
         if let url = imagePickerInfo[UIImagePickerControllerMediaURL] as? URL {
-            sendMovieFile(at: url)
+            enqueueVideoSend(from: url)
             return
         }
 
@@ -278,35 +385,110 @@ fileprivate extension ChatInputViewManager {
         showMediaPickFailed()
     }
 
-    func sendMovieFile(at url: URL) {
-        let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
-
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessing {
-                url.stopAccessingSecurityScopedResource()
-            }
+    func enqueueVideoSend(from sourceURL: URL, caption: String = "", completion: (() -> Void)? = nil) {
+        guard !isVideoSendInProgress else {
+            showVideoSendError(VideoSendError.busy, retryURL: sourceURL)
+            completion?()
+            return
         }
 
-        do {
-            if FileManager.default.fileExists(atPath: tempURL.path) {
-                try FileManager.default.removeItem(at: tempURL)
+        isVideoSendInProgress = true
+        VideoSendProgressOverlay.shared.show(on: presentingViewController,
+                                             message: String(localized: "video_send_preparing"),
+                                             onCancel: { [weak self] in
+            VideoSendPreprocessor.shared.cancelActivePreparation()
+            VideoSendProgressOverlay.shared.hide()
+            self?.isVideoSendInProgress = false
+        })
+
+        VideoSendPreprocessor.shared.prepareVideo(at: sourceURL, progress: { progress in
+            VideoSendProgressOverlay.shared.update(progress: progress)
+        }, completion: { [weak self] result in
+            DispatchQueue.main.async {
+                VideoSendProgressOverlay.shared.hide()
+
+                guard let self = self else {
+                    completion?()
+                    return
+                }
+
+                self.isVideoSendInProgress = false
+
+                switch result {
+                case .success(let preparedURL):
+                    self.sendPreparedVideo(at: preparedURL, caption: caption)
+                case .failure(let error):
+                    self.showVideoSendError(error, retryURL: sourceURL)
+                }
+
+                completion?()
             }
-            try FileManager.default.copyItem(at: url, to: tempURL)
-        } catch {
-            os_log("sendMovieFile:copy_failed %{public}@, trying direct path", error.localizedDescription)
-            submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { (error: Error) in
-                handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        })
+    }
+
+    func enqueueVideoSendSequence(_ urls: [URL], caption: String = "") {
+        guard !urls.isEmpty else {
+            if !caption.isEmpty {
+                sendCaptionMessage(caption)
             }
             return
         }
 
-        submanagerFiles.sendFile(atPath: tempURL.path, moveToUploads: true, to: chat) { (error: Error) in
-            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        var remaining = urls
+        func sendNext() {
+            guard !remaining.isEmpty else {
+                return
+            }
+            let url = remaining.removeFirst()
+            // The last video carries the caption so it lands right after that video's file message.
+            let itemCaption = remaining.isEmpty ? caption : ""
+            enqueueVideoSend(from: url, caption: itemCaption) {
+                sendNext()
+            }
         }
+        sendNext()
+    }
+
+    func sendPreparedVideo(at url: URL, caption: String = "") {
+        let path = url.path
+        videoSendQueue.async { [weak self] in
+            guard let self = self else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                if self.chat.isSavedMessages {
+                    self.storeSavedFileByCopying(atPath: path, fileName: url.lastPathComponent)
+                    if !trimmed.isEmpty, let message = self.submanagerObjects.addSavedTextMessage(trimmed, to: self.chat) {
+                        self.submanagerObjects.markMessage(asCaption: message)
+                    }
+                    return
+                }
+                // sendFile creates the file message synchronously, so the caption sent right after pairs.
+                self.submanagerFiles.sendFile(atPath: path, moveToUploads: true, to: self.chat) { error in
+                    handleErrorWithType(.sendFileToFriend, error: error as NSError)
+                }
+                if !trimmed.isEmpty {
+                    self.sendCaptionMessage(trimmed)
+                }
+            }
+        }
+    }
+
+    func showVideoSendError(_ error: Error, retryURL: URL?) {
+        let message = (error as? LocalizedError)?.errorDescription ?? String(localized: "video_send_preparation_failed")
+        let retryBlock: (() -> Void)? = retryURL.map { url in
+            { [weak self] in
+                self?.enqueueVideoSend(from: url)
+            }
+        }
+
+        UIAlertController.showErrorWithMessage(message, retryBlock: retryBlock)
+    }
+
+    func sendMovieFile(at url: URL) {
+        enqueueVideoSend(from: url)
     }
 
     func sendImageData(_ image: UIImage, fileName: String?) {
@@ -319,9 +501,45 @@ fileprivate extension ChatInputViewManager {
     }
 
     func sendFileData(_ data: Data, fileName: String) {
+        if chat.isSavedMessages {
+            guard let dir = Self.savedFilesDirectory() else { return }
+            let dest = dir.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+            guard (try? data.write(to: dest)) != nil else { return }
+            storeSavedFile(atPath: dest.path, fileName: fileName)
+            return
+        }
+
         submanagerFiles.send(data, withFileName: fileName, to: chat) { (error: Error) in
             handleErrorWithType(.sendFileToFriend, error: error as NSError)
         }
+    }
+
+    /// Persistent dir for files kept only in Saved Messages (no Tox transfer).
+    static func savedFilesDirectory() -> URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let dir = base.appendingPathComponent("KhandaqSaved", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        return dir
+    }
+
+    /// Copy `path` into the persistent saved dir and record a local file message. Returns true if stored.
+    @discardableResult
+    func storeSavedFileByCopying(atPath path: String, fileName: String) -> Bool {
+        guard let dir = Self.savedFilesDirectory() else { return false }
+        let dest = dir.appendingPathComponent("\(UUID().uuidString)_\(fileName)")
+        guard (try? FileManager.default.copyItem(atPath: path, toPath: dest.path)) != nil else { return false }
+        storeSavedFile(atPath: dest.path, fileName: fileName)
+        return true
+    }
+
+    private func storeSavedFile(atPath path: String, fileName: String) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)??.int64Value ?? 0
+        let uti = (fileName as NSString).pathExtension.isEmpty ? nil :
+            UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
+                                                  (fileName as NSString).pathExtension as CFString, nil)?.takeRetainedValue() as String?
+        submanagerObjects.addSavedFileMessage(withPath: path, fileName: fileName, fileSize: size, fileUTI: uti, to: chat)
     }
 
     func sendImageFromPHAsset(_ asset: PHAsset, fallbackFileName: String?) {
@@ -389,16 +607,16 @@ fileprivate extension ChatInputViewManager {
                 return
             }
 
-            DispatchQueue.main.async {
-                if let error = error {
-                    os_log("sendMovieFromPHAsset:export_failed %{public}@", error.localizedDescription)
-                    strongSelf.showMediaPickFailed()
-                    return
+            if let error = error {
+                os_log("sendMovieFromPHAsset:export_failed %{public}@", error.localizedDescription)
+                DispatchQueue.main.async {
+                    strongSelf.showVideoSendError(error, retryURL: nil)
                 }
+                return
+            }
 
-                strongSelf.submanagerFiles.sendFile(atPath: tempURL.path, moveToUploads: true, to: strongSelf.chat) { (error: Error) in
-                    handleErrorWithType(.sendFileToFriend, error: error as NSError)
-                }
+            DispatchQueue.main.async {
+                strongSelf.enqueueVideoSend(from: tempURL)
             }
         }
     }
@@ -409,11 +627,227 @@ fileprivate extension ChatInputViewManager {
 
     func isMovieMediaType(_ type: String) -> Bool {
         let cfType = type as CFString
-        return UTTypeConformsTo(cfType, kUTTypeMovie) || UTTypeConformsTo(cfType, kUTTypeVideo)
+        return UTTypeConformsTo(cfType, kUTTypeMovie)
+            || UTTypeConformsTo(cfType, kUTTypeVideo)
+            || UTTypeConformsTo(cfType, kUTTypeMPEG4)
+    }
+
+    func movieTypeIdentifiers() -> [String] {
+        [kUTTypeMovie as String, kUTTypeMPEG4 as String, kUTTypeVideo as String]
+    }
+
+    func stageVideoURL(_ sourceURL: URL, completion: @escaping (Result<URL, Error>) -> Void) {
+        videoSendQueue.async {
+            autoreleasepool {
+                do {
+                    let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: sourceURL)
+                    DispatchQueue.main.async {
+                        completion(.success(staged))
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        completion(.failure(error))
+                    }
+                }
+            }
+        }
     }
 
     func showMediaPickFailed() {
         UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
+    }
+
+    func presentMediaPreview(items: [MediaSendPreviewItem]) {
+        // KHANDAQ: dismiss the chat input keyboard before showing the media-send preview. Otherwise the
+        // still-active keyboard overlapped the preview / caption editor when sending video with a caption.
+        presentingViewController.view.endEditing(true)
+        let controller = MediaSendPreviewController(items: items)
+        controller.delegate = self
+        presentingViewController.present(controller, animated: true, completion: nil)
+    }
+
+    @available(iOS 14.0, *)
+    func loadPreviewItems(fromPickerResults results: [PHPickerResult], completion: @escaping ([MediaSendPreviewItem]) -> Void) {
+        var loaded: [MediaSendPreviewItem] = []
+        let group = DispatchGroup()
+
+        for result in results {
+            let provider = result.itemProvider
+            let movieType = movieTypeIdentifiers().first(where: { provider.hasItemConformingToTypeIdentifier($0) })
+
+            if let movieType = movieType {
+                group.enter()
+                provider.loadFileRepresentation(forTypeIdentifier: movieType) { url, _ in
+                    defer { group.leave() }
+                    guard let url = url else {
+                        return
+                    }
+
+                    do {
+                        let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
+                        loaded.append(.video(staged))
+                    } catch {
+                    }
+                }
+                continue
+            }
+
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                group.enter()
+                provider.loadObject(ofClass: UIImage.self) { object, _ in
+                    defer { group.leave() }
+                    if let image = object as? UIImage {
+                        loaded.append(.image(image, fileName: nil))
+                    }
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            completion(loaded)
+        }
+    }
+
+    func loadPreviewItems(fromImagePickerInfo info: [String: Any], mediaType: String, completion: @escaping ([MediaSendPreviewItem]) -> Void) {
+        var items: [MediaSendPreviewItem] = []
+
+        if isImageMediaType(mediaType) {
+            if let image = (info[UIImagePickerControllerEditedImage] ?? info[UIImagePickerControllerOriginalImage]) as? UIImage {
+                items.append(.image(image, fileName: fileNameFromImageInfo(info)))
+                completion(items)
+                return
+            }
+
+            if let imageURL = info[UIImagePickerControllerImageURL] as? URL {
+                let accessing = imageURL.startAccessingSecurityScopedResource()
+                defer {
+                    if accessing {
+                        imageURL.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                if let image = UIImage(contentsOfFile: imageURL.path) {
+                    items.append(.image(image, fileName: imageURL.lastPathComponent))
+                    completion(items)
+                    return
+                }
+            }
+
+            if let asset = info[UIImagePickerControllerPHAsset] as? PHAsset {
+                let options = PHImageRequestOptions()
+                options.deliveryMode = .highQualityFormat
+                options.isNetworkAccessAllowed = true
+                PHImageManager.default().requestImage(for: asset,
+                                                      targetSize: PHImageManagerMaximumSize,
+                                                      contentMode: .aspectFit,
+                                                      options: options) { image, _ in
+                    DispatchQueue.main.async {
+                        if let image = image {
+                            completion([.image(image, fileName: self.fileNameFromImageInfo(info))])
+                        } else {
+                            completion([])
+                        }
+                    }
+                }
+                return
+            }
+
+            completion([])
+            return
+        }
+
+        if isMovieMediaType(mediaType) {
+            if let url = info[UIImagePickerControllerMediaURL] as? URL {
+                stageVideoURL(url) { result in
+                    switch result {
+                    case .success(let staged):
+                        completion([.video(staged)])
+                    case .failure:
+                        completion([])
+                    }
+                }
+                return
+            }
+
+            if let asset = info[UIImagePickerControllerPHAsset] as? PHAsset, asset.mediaType == .video {
+                guard let resource = PHAssetResource.assetResources(for: asset).first(where: { $0.type == .video || $0.type == .fullSizeVideo }) else {
+                    completion([])
+                    return
+                }
+
+                let ext = (resource.originalFilename as NSString).pathExtension
+                let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(ext.isEmpty ? "mov" : ext)
+
+                let options = PHAssetResourceRequestOptions()
+                options.isNetworkAccessAllowed = true
+                PHAssetResourceManager.default().writeData(for: resource, toFile: tempURL, options: options) { error in
+                    DispatchQueue.main.async {
+                        if error == nil {
+                            completion([.video(tempURL)])
+                        } else {
+                            completion([])
+                        }
+                    }
+                }
+                return
+            }
+        }
+
+        completion([])
+    }
+
+    func sendConfirmedPreviewItems(_ items: [MediaSendPreviewItem], caption: String) {
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var videoURLs: [URL] = []
+        for item in items {
+            switch item {
+            case .image(let image, let fileName):
+                sendImageData(image, fileName: fileName)
+            case .video(let url):
+                videoURLs.append(url)
+            }
+        }
+
+        if videoURLs.isEmpty {
+            // Photos create their file message synchronously, so the caption now pairs with the last one.
+            if !trimmedCaption.isEmpty {
+                sendCaptionMessage(trimmedCaption)
+            }
+            return
+        }
+
+        // Video prep is async — let the LAST video carry the caption so it follows the video's file message.
+        enqueueVideoSendSequence(videoURLs, caption: trimmedCaption)
+    }
+
+    func sendCaptionMessage(_ text: String) {
+        let outgoing = outgoingTextComposer?(text) ?? text
+
+        // Saved Messages: friend-less local chat — store + flag locally, no Tox send.
+        if chat.isSavedMessages {
+            if let message = submanagerObjects.addSavedTextMessage(outgoing, to: chat) {
+                submanagerObjects.markMessage(asCaption: message)
+            }
+            return
+        }
+
+        submanagerChats.sendMessage(to: chat, text: outgoing, type: .normal, successBlock: { [weak self] message in
+            // Mark as caption so it renders merged into the preceding media bubble (Telegram-style).
+            if let message = message {
+                self?.submanagerObjects.markMessage(asCaption: message)
+            }
+        }, failureBlock: { error in
+            DispatchQueue.main.async {
+                if let error = error as NSError? {
+                    handleErrorWithType(.sendMessageToFriend, error: error)
+                } else {
+                    UIAlertController.showErrorWithMessage(String(localized: "error_internal_message"), retryBlock: nil)
+                }
+            }
+        })
     }
 
     func fileNameFromImageInfo(_ info: [String: Any]) -> String? {
@@ -460,5 +894,19 @@ fileprivate extension ChatInputViewManager {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         return "Photo_\(formatter.string(from: Date())).jpg"
+    }
+}
+
+extension ChatInputViewManager: MediaSendPreviewControllerDelegate {
+    func mediaSendPreviewControllerDidCancel(_ controller: MediaSendPreviewController) {
+        controller.dismiss(animated: true, completion: nil)
+    }
+
+    func mediaSendPreviewController(_ controller: MediaSendPreviewController,
+                                    didConfirm items: [MediaSendPreviewItem],
+                                    caption: String) {
+        controller.dismiss(animated: true) { [weak self] in
+            self?.sendConfirmedPreviewItems(items, caption: caption)
+        }
     }
 }

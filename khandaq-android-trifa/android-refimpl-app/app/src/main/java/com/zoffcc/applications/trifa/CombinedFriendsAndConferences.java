@@ -35,6 +35,7 @@ public class CombinedFriendsAndConferences
     final static int COMBINED_IS_FRIEND = 0;
     final static int COMBINED_IS_CONFERENCE = 1;
     final static int COMBINED_IS_GROUP = 2;
+    final static int COMBINED_IS_FAVORITES = 3;
 
     @Override
     public String toString()

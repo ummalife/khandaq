@@ -78,5 +78,8 @@ void ToxFile::setFilePath(QString path)
 
 bool ToxFile::open(bool write)
 {
-    return write ? file->open(QIODevice::ReadWrite) : file->open(QIODevice::ReadOnly);
+    // WriteOnly|Truncate: accept flow deletes the probe file first (tryRemoveFile), then
+    // must create a fresh destination. ReadWrite fails on a non-existent path on Windows.
+    return write ? file->open(QIODevice::WriteOnly | QIODevice::Truncate)
+                 : file->open(QIODevice::ReadOnly);
 }

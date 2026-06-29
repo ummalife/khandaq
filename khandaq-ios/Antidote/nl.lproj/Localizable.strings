@@ -413,3 +413,31 @@
 "chat_is_typing_text" = "aan het typen...";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Niet-bezorgde berichten worden verstuurd zodra jij en je vriend online zijn.";
+"group_live_audio_toggle" = "Live audio";
+"group_live_video_toggle" = "Live video";
+"group_live_video_quality_toggle" = "Videokwaliteit";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "Houd de microfoonknop ingedrukt om een spraakbericht op te nemen";
+"group_live_video_toggle_active" = "Live video actief";
+"group_live_video_toggle_incoming" = "Inkomende live video";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Join group video?";
+"group_video_join_message" = "Send your video and audio to everyone in this group?";
+"group_video_join_confirm" = "Yes, start video";
+"group_video_join_decline" = "No";
+"group_send_voice_confirm_title" = "Send voice message?";
+"group_send_voice_confirm_message" = "Send this voice message to the group?";
+"group_incoming_message_error" = "Could not process incoming group message.";
+"group_image_shrink_failed" = "Could not prepare image for sending.";
+"group_incoming_file_error" = "Could not process incoming group file.";
+"chat_file_too_large" = "File is too large.";
+"chat_incoming_file_too_large" = "Incoming file is too large.";
+"chat_opening_file_failed" = "Could not open file.";
+"group_file_prepare_failed" = "Could not prepare file for sending.";
+"group_peer_unknown" = "Unknown";
+"group_live_video_stream_unknown_peer" = "Onbekend";
+
+"microphone_access_denied_message" = "Microfoontoegang is uitgeschakeld. Sta microfoon toe in Instellingen om deze functie te gebruiken.";

@@ -56,7 +56,8 @@ class StaticTableDefaultCell: StaticTableBaseCell {
             userStatusViewHiddenConstraint.activate()
         }
 
-        titleLabel.textColor = theme.colorForType(.LinkText)
+        // KHANDAQ design (Figma): field captions (Имя/Статус/MyID…) are neutral grey, not accent green.
+        titleLabel.textColor = theme.colorForType(.ChatListCellMessage)
         valueLabel.textColor = theme.colorForType(.NormalText)
         rightButton.setTitleColor(theme.colorForType(.LinkText), for: UIControlState())
 
@@ -75,7 +76,9 @@ class StaticTableDefaultCell: StaticTableBaseCell {
                 checkmarkSelected = false
             case .arrow:
                 showRightImageView = true
-                rightImageView.image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
+                // KHANDAQ design (Figma): neutral grey disclosure chevron (template-tinted).
+                rightImageView.image = UIImage(named: "right-arrow")!.flippedToCorrectLayout().withRenderingMode(.alwaysTemplate)
+                rightImageView.tintColor = theme.colorForType(.ChatListCellMessage)
                 checkmarkSelected = false
             case .checkmark:
                 showRightImageView = true

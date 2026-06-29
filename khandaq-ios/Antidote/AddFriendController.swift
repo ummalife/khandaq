@@ -4,15 +4,12 @@
 
 import UIKit
 import SnapKit
+import CoreImage
+import MobileCoreServices
 
 private struct Constants {
     static let TextViewTopOffset = 5.0
     static let TextViewXOffset = 5.0
-    static let QrCodeBottomSpacerDeltaHeight = 70.0
-
-    static let SendAlertTextViewBottomOffset = -10.0
-    static let SendAlertTextViewXOffset = 5.0
-    static let SendAlertTextViewHeight = 70.0
 }
 
 protocol AddFriendControllerDelegate: class {
@@ -29,21 +26,22 @@ class AddFriendController: UIViewController {
 
     fileprivate let theme: Theme
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
+    fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate let ownToxAddress: String
 
+    fileprivate var myIdLabel: UILabel!
     fileprivate var idTextField: UITextField!
-
-    fileprivate var orTopSpacer: UIView!
-    fileprivate var qrCodeBottomSpacer: UIView!
-
     fileprivate var orLabel: UILabel!
+
     fileprivate var qrCodeButton: UIButton!
+    fileprivate var qrGalleryButton: UIButton!
 
     fileprivate var cachedMessage: String?
 
-    init(theme: Theme, submanagerFriends: OCTSubmanagerFriends, ownToxAddress: String) {
+    init(theme: Theme, submanagerFriends: OCTSubmanagerFriends, submanagerObjects: OCTSubmanagerObjects, ownToxAddress: String) {
         self.theme = theme
         self.submanagerFriends = submanagerFriends
+        self.submanagerObjects = submanagerObjects
         self.ownToxAddress = ownToxAddress.uppercased()
 
         super.init(nibName: nil, bundle: nil)
@@ -66,6 +64,11 @@ class AddFriendController: UIViewController {
 
         updateSendButton()
     }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        installKhandaqCircleBackButton(theme: theme)
+    }
 }
 
 extension AddFriendController {
@@ -79,67 +82,142 @@ extension AddFriendController {
         })
     }
 
+    @objc func qrGalleryButtonPressed() {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            return
+        }
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.delegate = self
+        present(picker, animated: true, completion: nil)
+    }
+
     @objc func sendButtonPressed() {
         idTextField.resignFirstResponder()
+        sanitizeIdFieldIfNeeded()
 
-        let messageView = UITextView()
-        messageView.text = cachedMessage
-        let placeholderstring = NSAttributedString.init(string: String(localized: "add_contact_default_message_text"))
-        messageView.attributedPlaceholder = placeholderstring
-        messageView.font = UIFont.systemFont(ofSize: 17.0)
-        messageView.layer.cornerRadius = 5.0
-        messageView.layer.masksToBounds = true
-
-        let alert = SDCAlertController(
-                title: String(localized: "add_contact_default_message_title"),
-                message: nil,
-                preferredStyle: .alert)!
-
-        alert.contentView.addSubview(messageView)
-        messageView.snp.makeConstraints {
-            $0.top.equalTo(alert.contentView)
-            $0.bottom.equalTo(alert.contentView).offset(Constants.SendAlertTextViewBottomOffset);
-            $0.leading.equalTo(alert.contentView).offset(Constants.SendAlertTextViewXOffset);
-            $0.trailing.equalTo(alert.contentView).offset(-Constants.SendAlertTextViewXOffset);
-            $0.height.equalTo(Constants.SendAlertTextViewHeight);
+        guard let address = validatedAddressFromIdField() else {
+            showInvalidIdFormatError()
+            return
         }
 
-        alert.addAction(SDCAlertAction(title: String(localized: "alert_cancel"), style: .default, handler: nil))
-        alert.addAction(SDCAlertAction(title: String(localized: "add_contact_send"), style: .recommended) { [unowned self] action in
-            self.cachedMessage = messageView.text
+        if isOwnToxAddress(address) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: String(localized: "add_contact_own_id_error"),
+                retryBlock: nil
+            )
+            return
+        }
 
-            let message = messageView.text.isEmpty ? KhandaqBranding.defaultStatusMessage : messageView.text
+        if let conflictMessage = existingContactConflictMessage(for: address) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: conflictMessage,
+                retryBlock: nil
+            )
+            return
+        }
 
-            do {
-                guard let address = normalizeAddressString(self.idTextField.text ?? "") else {
-                    UIAlertController.showWithTitle(
-                        String(localized: "error_title"),
-                        message: String(localized: "error_contact_request_bad_checksum"),
-                        retryBlock: nil
-                    )
-                    return
-                }
+        let hex = sanitizeAddressInput(idTextField.text ?? "")
+        if hex.count == Int(kOCTToxPublicKeyLength) {
+            let alert = UIAlertController(
+                title: String(localized: "error_title"),
+                message: String(localized: "add_contact_public_key_only_hint"),
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+            alert.addAction(UIAlertAction(title: String(localized: "add_contact_send"), style: .default) { [weak self] _ in
+                self?.presentMessageAlert(for: address)
+            })
+            present(alert, animated: true, completion: nil)
+            return
+        }
 
-                if self.isOwnToxAddress(address) {
-                    UIAlertController.showWithTitle(
-                        String(localized: "error_title"),
-                        message: String(localized: "add_contact_own_id_error"),
-                        retryBlock: nil
-                    )
-                    return
-                }
+        presentMessageAlert(for: address)
+    }
 
-                try self.submanagerFriends.sendFriendRequest(toAddress: address, message: message)
-            }
-            catch let error as NSError {
-                handleErrorWithType(.toxAddFriend, error: error)
+    func presentMessageAlert(for address: String) {
+        let alert = UIAlertController(
+            title: String(localized: "add_contact_default_message_title"),
+            message: nil,
+            preferredStyle: .alert
+        )
+
+        alert.addTextField { [weak self] textField in
+            textField.text = self?.cachedMessage
+            textField.placeholder = String(localized: "add_contact_default_message_text")
+            textField.autocorrectionType = .no
+            textField.spellCheckingType = .no
+        }
+
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "add_contact_send"), style: .default) { [weak self] _ in
+            guard let self = self else {
                 return
             }
 
+            let messageText = alert.textFields?.first?.text ?? ""
+            self.cachedMessage = messageText
+            let message = messageText.isEmpty ? KhandaqBranding.defaultStatusMessage : messageText
+            self.sendFriendRequest(to: address, message: message)
+        })
+
+        present(alert, animated: true, completion: nil)
+    }
+
+    func sendFriendRequest(to address: String, message: String) {
+        guard let normalizedAddress = normalizedToxAddress(from: address) else {
+            showInvalidIdFormatError()
+            return
+        }
+
+        if isOwnToxAddress(normalizedAddress) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: String(localized: "add_contact_own_id_error"),
+                retryBlock: nil
+            )
+            return
+        }
+
+        if let conflictMessage = existingContactConflictMessage(for: normalizedAddress) {
+            UIAlertController.showWithTitle(
+                String(localized: "error_title"),
+                message: conflictMessage,
+                retryBlock: nil
+            )
+            return
+        }
+
+        do {
+            try submanagerFriends.sendFriendRequest(toAddress: normalizedAddress, message: message)
+        }
+        catch let error as NSError {
+            handleErrorWithType(.toxAddFriend, error: error)
+            return
+        }
+
+        let toast = UIAlertController(
+            title: nil,
+            message: String(localized: "group_member_action_add_friend_sent"),
+            preferredStyle: .alert
+        )
+        toast.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
             self.delegate?.addFriendControllerDidFinish(self)
         })
 
-        alert.present(completion: nil)
+        if presentedViewController != nil {
+            dismiss(animated: true) { [weak self] in
+                self?.present(toast, animated: true, completion: nil)
+            }
+        }
+        else {
+            present(toast, animated: true, completion: nil)
+        }
     }
 }
 
@@ -199,14 +277,26 @@ extension AddFriendController: UITextFieldDelegate {
 
 private extension AddFriendController {
     func addNavigationButtons() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let send = UIBarButtonItem(
                 title: String(localized: "add_contact_send"),
                 style: .done,
                 target: self,
                 action: #selector(AddFriendController.sendButtonPressed))
+        // KHANDAQ design (Figma): the action button sits in a grey pill.
+        let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
+        send.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
+        send.setBackgroundImage(capsule, for: .disabled, barMetrics: .default)
+        navigationItem.rightBarButtonItem = send
     }
 
     func createViews() {
+        // KHANDAQ design (Figma): a "MyID пользователя" label above the field.
+        myIdLabel = UILabel()
+        myIdLabel.text = String(localized: "add_contact_myid_label")
+        myIdLabel.font = UIFont.systemFont(ofSize: 13.0)
+        myIdLabel.textColor = theme.colorForType(.FriendCellStatus)
+        view.addSubview(myIdLabel)
+
         // UITextField avoids UITextView+Placeholder crashes on iOS 17/26 when deleting pasted Tox IDs.
         idTextField = UITextField()
         idTextField.placeholder = String(localized: "add_contact_tox_id_placeholder")
@@ -217,7 +307,8 @@ private extension AddFriendController {
             idTextField.font = UIFont(name: "Menlo-Regular", size: 14) ?? UIFont.systemFont(ofSize: 14)
         }
         idTextField.textColor = theme.colorForType(.NormalText)
-        idTextField.backgroundColor = .clear
+        // KHANDAQ design (Figma): filled grey rounded field.
+        idTextField.backgroundColor = theme.colorForType(.ChatInputBackground)
         idTextField.returnKeyType = .done
         idTextField.adjustsFontSizeToFitWidth = false
         idTextField.autocapitalizationType = .allCharacters
@@ -225,64 +316,81 @@ private extension AddFriendController {
         idTextField.spellCheckingType = .no
         idTextField.keyboardType = .asciiCapable
         idTextField.clearButtonMode = .whileEditing
-        idTextField.layer.cornerRadius = 5.0
-        idTextField.layer.borderWidth = 0.5
-        idTextField.layer.borderColor = theme.colorForType(.SeparatorsAndBorders).cgColor
+        idTextField.layer.cornerRadius = 12.0
+        idTextField.layer.borderWidth = 0.0
         idTextField.layer.masksToBounds = true
         idTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 8, height: 1))
         idTextField.leftViewMode = .always
+        idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
         view.addSubview(idTextField)
 
-        orTopSpacer = createSpacer()
-        qrCodeBottomSpacer = createSpacer()
-
+        // KHANDAQ design (Figma): an "или" divider, then a filled grey "Добавить по QR-коду" row with
+        // a QR glyph. The gallery-scan row is kept (extra feature) in the same style.
         orLabel = UILabel()
         orLabel.text = String(localized: "add_contact_or_label")
-        orLabel.textColor = theme.colorForType(.NormalText)
-        orLabel.backgroundColor = .clear
+        orLabel.font = UIFont.systemFont(ofSize: 13.0)
+        orLabel.textColor = theme.colorForType(.FriendCellStatus)
+        orLabel.textAlignment = .center
         view.addSubview(orLabel)
 
-        qrCodeButton = UIButton(type: .system)
-        qrCodeButton.setTitle(String(localized: "add_contact_use_qr"), for: UIControlState())
-        qrCodeButton.titleLabel!.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
-        qrCodeButton.addTarget(self, action: #selector(AddFriendController.qrCodeButtonPressed), for: .touchUpInside)
-        view.addSubview(qrCodeButton)
+        qrCodeButton = makeQrRow(title: String(localized: "add_contact_use_qr"),
+                                 systemImage: "qrcode",
+                                 action: #selector(AddFriendController.qrCodeButtonPressed))
+        qrGalleryButton = makeQrRow(title: String(localized: "add_contact_use_qr_gallery"),
+                                    systemImage: "photo.on.rectangle",
+                                    action: #selector(AddFriendController.qrGalleryButtonPressed))
     }
 
-    func createSpacer() -> UIView {
-        let spacer = UIView()
-        spacer.backgroundColor = .clear
-        view.addSubview(spacer)
-
-        return spacer
+    func makeQrRow(title: String, systemImage: String, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle("  " + title, for: UIControlState())
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 16.0, weight: .medium)
+        button.setTitleColor(theme.colorForType(.NormalText), for: UIControlState())
+        button.tintColor = theme.colorForType(.NormalText)
+        button.contentHorizontalAlignment = .left
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)
+            button.setImage(UIImage(systemName: systemImage, withConfiguration: config), for: .normal)
+        }
+        // KHANDAQ design (Figma): filled grey rounded row (not a bordered button).
+        button.backgroundColor = theme.colorForType(.ChatInputBackground)
+        button.layer.cornerRadius = 12.0
+        button.layer.masksToBounds = true
+        button.contentEdgeInsets = UIEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        view.addSubview(button)
+        return button
     }
 
     func installConstraints() {
+        myIdLabel.snp.makeConstraints {
+            $0.top.equalTo(view).offset(16)
+            $0.leading.equalTo(view).offset(Constants.TextViewXOffset + 11)
+            $0.trailing.equalTo(view).offset(-(Constants.TextViewXOffset + 11))
+        }
+
         idTextField.snp.makeConstraints {
-            $0.top.equalTo(view).offset(Constants.TextViewTopOffset)
-            $0.leading.equalTo(view).offset(Constants.TextViewXOffset)
-            $0.trailing.equalTo(view).offset(-Constants.TextViewXOffset)
+            $0.top.equalTo(myIdLabel.snp.bottom).offset(8)
+            $0.leading.equalTo(myIdLabel)
+            $0.trailing.equalTo(myIdLabel)
             $0.height.equalTo(52)
         }
 
-        orTopSpacer.snp.makeConstraints {
-            $0.top.equalTo(idTextField.snp.bottom)
-        }
-
         orLabel.snp.makeConstraints {
-            $0.top.equalTo(orTopSpacer.snp.bottom)
-            $0.centerX.equalTo(view)
+            $0.top.equalTo(idTextField.snp.bottom).offset(12)
+            $0.leading.trailing.equalTo(idTextField)
         }
 
         qrCodeButton.snp.makeConstraints {
-            $0.top.equalTo(orLabel.snp.bottom)
-            $0.centerX.equalTo(view)
+            $0.top.equalTo(orLabel.snp.bottom).offset(12)
+            $0.leading.equalTo(idTextField)
+            $0.trailing.equalTo(idTextField)
         }
 
-        qrCodeBottomSpacer.snp.makeConstraints {
-            $0.top.equalTo(qrCodeButton.snp.bottom)
-            $0.bottom.equalTo(view)
-            $0.height.equalTo(orTopSpacer)
+        qrGalleryButton.snp.makeConstraints {
+            $0.top.equalTo(qrCodeButton.snp.bottom).offset(12)
+            $0.leading.equalTo(idTextField)
+            $0.trailing.equalTo(idTextField)
         }
     }
 
@@ -333,5 +441,109 @@ private extension AddFriendController {
         let ownPublicKey = String(own.prefix(64))
         let candidatePublicKey = String(normalized.prefix(64))
         return !ownPublicKey.isEmpty && ownPublicKey == candidatePublicKey
+    }
+
+    @objc func idTextFieldEditingChanged() {
+        sanitizeIdFieldIfNeeded()
+    }
+
+    func sanitizeIdFieldIfNeeded() {
+        let raw = idTextField.text ?? ""
+        let normalized = normalizedIdFieldText(from: raw)
+        if normalized != raw {
+            applyIdFieldText(normalized, cursorOffset: (normalized as NSString).length)
+        } else {
+            updateSendButton(with: normalized)
+        }
+    }
+
+    func validatedAddressFromIdField() -> String? {
+        return normalizedToxAddress(from: idTextField.text ?? "")
+    }
+
+    func existingContactConflictMessage(for address: String) -> String? {
+        guard let publicKey = toxPublicKeyPrefix(from: address) else {
+            return nil
+        }
+
+        let friends = submanagerObjects.friends(
+            predicate: NSPredicate(format: "publicKey ==[c] %@", publicKey)
+        )
+        if friends.count > 0 {
+            return String(localized: "add_contact_already_friend")
+        }
+
+        let pending = submanagerObjects.friendRequests(
+            predicate: NSPredicate(format: "publicKey ==[c] %@", publicKey)
+        )
+        if pending.count > 0 {
+            return String(localized: "add_contact_request_already_pending")
+        }
+
+        return nil
+    }
+
+    func showInvalidIdFormatError() {
+        UIAlertController.showWithTitle(
+            String(localized: "error_title"),
+            message: String(localized: "add_contact_invalid_id_format"),
+            retryBlock: nil
+        )
+    }
+}
+
+// KHANDAQ (#13): scan a friend's QR code from a saved photo (parity with Android). Reuses the same
+// validation/normalisation as the camera scanner.
+extension AddFriendController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String: Any]) {
+        picker.dismiss(animated: true) { [weak self] in
+            guard let self = self else {
+                return
+            }
+
+            guard let image = info[UIImagePickerControllerOriginalImage] as? UIImage,
+                  let decoded = self.decodeQRCode(from: image) else {
+                self.showWrongQRError()
+                return
+            }
+
+            let value = self.normalizedIdFieldText(from: decoded)
+            guard isAddressString(value) else {
+                self.showWrongQRError()
+                return
+            }
+
+            self.applyIdFieldText(value, cursorOffset: (value as NSString).length)
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true, completion: nil)
+    }
+
+    func decodeQRCode(from image: UIImage) -> String? {
+        guard let ciImage = CIImage(image: image) else {
+            return nil
+        }
+
+        let detector = CIDetector(ofType: CIDetectorTypeQRCode,
+                                  context: nil,
+                                  options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+        let features = detector?.features(in: ciImage) ?? []
+
+        for feature in features {
+            if let qr = feature as? CIQRCodeFeature, let message = qr.messageString, !message.isEmpty {
+                return message
+            }
+        }
+        return nil
+    }
+
+    func showWrongQRError() {
+        UIAlertController.showWithTitle(
+            String(localized: "error_title"),
+            message: String(localized: "add_contact_wrong_qr"),
+            retryBlock: nil
+        )
     }
 }

@@ -9,6 +9,7 @@
 #import "OCTChat.h"
 #import "OCTCall.h"
 #import "OCTMessageAbstract.h"
+#import "OCTGroupPeer.h"
 #import "OCTSettingsStorageObject.h"
 
 @implementation OCTSubmanagerObjectsImpl
@@ -29,6 +30,15 @@
 {
     OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
     return manager.settingsStorage.genericSettingsData;
+}
+
+- (void)setGroupShowSystemMessages:(BOOL)enabled
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+
+    [manager updateObject:manager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
+        object.groupShowSystemMessages = enabled;
+    }];
 }
 
 - (RLMResults *)objectsForType:(OCTFetchRequestType)type predicate:(NSPredicate *)predicate
@@ -97,7 +107,39 @@
             return [OCTCall class];
         case OCTFetchRequestTypeMessageAbstract:
             return [OCTMessageAbstract class];
+        case OCTFetchRequestTypeGroupPeer:
+            return [OCTGroupPeer class];
     }
+}
+
+#pragma mark -  Saved Messages (KHANDAQ)
+
+- (OCTChat *)getOrCreateSavedMessagesChat
+{
+    return [[self.dataSource managerGetRealmManager] getOrCreateSavedMessagesChat];
+}
+
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat
+{
+    return [[self.dataSource managerGetRealmManager] addSavedTextMessage:text toChat:chat];
+}
+
+- (OCTMessageAbstract *)addSavedFileMessageWithPath:(NSString *)filePath
+                                           fileName:(NSString *)fileName
+                                           fileSize:(OCTToxFileSize)fileSize
+                                            fileUTI:(nullable NSString *)fileUTI
+                                               toChat:(OCTChat *)chat
+{
+    return [[self.dataSource managerGetRealmManager] addSavedFileMessageWithPath:filePath
+                                                                        fileName:fileName
+                                                                        fileSize:fileSize
+                                                                         fileUTI:fileUTI
+                                                                          toChat:chat];
+}
+
+- (void)markMessageAsCaption:(OCTMessageAbstract *)message
+{
+    [[self.dataSource managerGetRealmManager] markMessageAsCaption:message];
 }
 
 @end

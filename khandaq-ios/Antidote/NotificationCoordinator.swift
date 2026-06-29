@@ -53,7 +53,15 @@ class NotificationCoordinator: NSObject {
         self.submanagerObjects = submanagerObjects
         self.avatarManager = AvatarManager(theme: theme)
 
-        let predicate = NSPredicate(format: "lastMessage.dateInterval > lastReadDateInterval")
+        // KHANDAQ (#41): a chat is "unread" for the tab/app badge only when its last message is a
+        // genuine INCOMING, non-system message newer than lastRead. The old date-only predicate also
+        // counted our own outgoing messages (badge stuck after you send) and "X joined" system notes.
+        // For groups both incoming & outgoing have senderUniqueIdentifier == nil, so incoming is
+        // distinguished by groupSenderPeerId > 0 (mirrors OCTMessageAbstract.isOutgoing).
+        let predicate = NSPredicate(format:
+            "lastMessage.dateInterval > lastReadDateInterval"
+            + " AND lastMessage.groupSystemMessage == NO"
+            + " AND (lastMessage.groupSenderPeerId > 0 OR lastMessage.senderUniqueIdentifier != nil)")
         self.chats = submanagerObjects.chats(predicate: predicate)
         self.requests = submanagerObjects.friendRequests()
 
@@ -77,6 +85,10 @@ class NotificationCoordinator: NSObject {
      */
     func toggleConnectingView(show: Bool, animated: Bool) {
         notificationWindow.showConnectingView(show, animated: animated)
+    }
+
+    func setConnectionState(_ state: NotificationWindow.ConnectionPillState, animated: Bool) {
+        notificationWindow.setConnectionState(state, animated: animated)
     }
 
     /**
@@ -161,7 +173,11 @@ extension NotificationCoordinator {
 private extension NotificationCoordinator {
     func addNotificationBlocks() {
         let messages = submanagerObjects.messages().sortedResultsUsingProperty("dateInterval", ascending: false)
-        messagesToken = messages.addNotificationBlock { [unowned self] change in
+        messagesToken = messages.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
@@ -183,7 +199,11 @@ private extension NotificationCoordinator {
             }
         }
 
-        chatsToken = chats.addNotificationBlock { [unowned self] change in
+        chatsToken = chats.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
@@ -194,7 +214,11 @@ private extension NotificationCoordinator {
             }
         }
 
-        requestsToken = requests.addNotificationBlock { [unowned self] change in
+        requestsToken = requests.addNotificationBlock { [weak self] change in
+            guard let self = self else {
+                return
+            }
+
             switch change {
                 case .initial:
                     break
@@ -216,7 +240,10 @@ private extension NotificationCoordinator {
     }
 
     func playSoundForMessageIfNeeded(_ message: OCTMessageAbstract) {
-        if message.isOutgoing() {
+        // KHANDAQ: incoming private (in-group direct) messages DO alert now — they are addressed
+        // personally to the recipient, so they should be surfaced, not silently filed in the per-peer
+        // thread. isOutgoing() still suppresses our own sent private messages.
+        if message.isOutgoing() || message.groupHistorySync || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return
         }
 
@@ -226,7 +253,9 @@ private extension NotificationCoordinator {
     }
 
     func shouldEnqueueMessage(_ message: OCTMessageAbstract) -> Bool {
-        if message.isOutgoing() {
+        // KHANDAQ: private (in-group direct) messages are notified like any incoming message so the
+        // recipient sees they were addressed personally (Android parity). Own sends stay filtered.
+        if message.isOutgoing() || message.groupHistorySync || message.groupSystemMessage || areNotificationsMuted(for: message) {
             return false
         }
 
@@ -271,23 +300,12 @@ private extension NotificationCoordinator {
     }
 
     func showInAppNotificationObject(_ object: NotificationObject, chatUniqueIdentifier: String?) {
-        var appId:String
-        
-        if chatUniqueIdentifier != nil {
-            appId = chatUniqueIdentifier!
-        } else {
-            appId = Bundle.main.bundleIdentifier!
+        // KHANDAQ: custom safe-area banner instead of LNNotificationsUI (which rendered under the
+        // Dynamic Island / notch and got clipped). Presented in the existing NotificationWindow.
+        notificationWindow.showBanner(title: object.title, body: object.body, icon: object.icon) { [weak self] in
+            self?.performAction(object.action)
         }
 
-        registerInAppNotificationAppId(appId, icon: object.icon)
-
-        let notification = LNNotification.init(message: object.body, title: object.title)
-        notification?.defaultAction = LNNotificationAction.init(title: nil, handler: { [weak self] _ in
-            self?.performAction(object.action)
-        })
-        
-        LNNotificationCenter.default().present(notification, forApplicationIdentifier: appId)
-        
         showNextNotification()
     }
 
@@ -322,8 +340,34 @@ private extension NotificationCoordinator {
     func notificationObjectFromMessage(_ message: OCTMessageAbstract) -> NotificationObject {
         let title: String
         var icon: UIImage?
+        let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
+        let isGroup = chat?.isGroup ?? false
+        let isGroupPrivate = isGroup && message.groupPrivateMessage
 
-        if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {
+        // Sender display name for a group peer (used both for the private-message title and the
+        // regular in-group peer prefix).
+        let groupPeerName: String = {
+            if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
+                return peerName
+            }
+            if message.groupSenderPeerId > 0 {
+                return "Peer \(message.groupSenderPeerId)"
+            }
+            return ""
+        }()
+
+        if isGroupPrivate {
+            // A direct (private) message sent to you inside a group — title it so it's unmistakably
+            // addressed to you personally, not a normal group post (Android parity).
+            let sender = groupPeerName.isEmpty
+                ? (chat?.groupName ?? String(localized: "group_chat_default_title"))
+                : groupPeerName
+            title = String(localized: "group_private_message_notification_title_format", sender)
+        }
+        else if isGroup {
+            title = chat?.groupName ?? String(localized: "group_chat_default_title")
+        }
+        else if let friend = submanagerObjects.object(withUniqueIdentifier: message.senderUniqueIdentifier, for: .friend) as? OCTFriend {
             title = friend.nickname
             icon = friendNotificationIcon(friend)
         }
@@ -333,12 +377,21 @@ private extension NotificationCoordinator {
 
         var body: String = ""
         let action = NotificationAction.openChat(chatUniqueIdentifier: message.chatUniqueIdentifier)
+        let peerPrefix: String = {
+            // Private messages already name the sender in the title, so no in-body peer prefix.
+            guard isGroup, !isGroupPrivate, !groupPeerName.isEmpty else {
+                return ""
+            }
+
+            return "\(groupPeerName): "
+        }()
 
         if let messageText = message.messageText {
             let defaultString = String(localized: "notification_new_message")
 
             if userDefaults.showNotificationPreview {
-                body = messageText.text ?? defaultString
+                let preview = GroupMentionHelper.notificationPreviewText(messageText.text)
+                body = peerPrefix + (preview.isEmpty ? defaultString : preview)
             }
             else {
                 body = defaultString
@@ -348,7 +401,7 @@ private extension NotificationCoordinator {
             let defaultString = String(localized: "notification_incoming_file")
 
             if userDefaults.showNotificationPreview {
-                body = messageFile.fileName ?? defaultString
+                body = peerPrefix + (messageFile.fileName ?? defaultString)
             }
             else {
                 body = defaultString
@@ -404,6 +457,28 @@ private extension NotificationCoordinator {
         delegate?.notificationCoordinator(self, updateFriendsBadge: requestsCount)
 
         UIApplication.shared.applicationIconBadgeNumber = chatsCount + requestsCount
+    }
+
+    func areNotificationsMuted(for message: OCTMessageAbstract) -> Bool {
+        guard let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat,
+              chat.isGroup else {
+            return false
+        }
+
+        if chat.groupNotificationsSilent {
+            return true
+        }
+
+        if message.groupSenderPeerId > 0 {
+            let peerKey = "\(chat.uniqueIdentifier):\(message.groupSenderPeerId)"
+
+            if let peer = submanagerObjects.object(withUniqueIdentifier: peerKey, for: .groupPeer) as? OCTGroupPeer,
+               peer.peerNotificationsSilent {
+                return true
+            }
+        }
+
+        return false
     }
 
     // func chatsBadge() -> Int {

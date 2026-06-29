@@ -113,6 +113,8 @@
     OCMStub([self.tox sendMessageWithFriendNumber:5
                                              type:OCTToxMessageTypeAction
                                           message:@"text"
+                                            msgv3HashHex:nil
+                                            msgv3tssec:0
                                             error:[OCMArg anyObjectRef]]).andReturn(7);
     OCMExpect([self.realmManager addMessageWithText:@"text"
                                                type:OCTToxMessageTypeAction
@@ -148,6 +150,8 @@
     OCMStub([self.tox sendMessageWithFriendNumber:5
                                              type:OCTToxMessageTypeAction
                                           message:@"text"
+                                            msgv3HashHex:nil
+                                            msgv3tssec:0
                                             error:[OCMArg setTo:error2]]).andReturn(0);
 
 
@@ -184,6 +188,8 @@
     OCMStub([self.tox sendMessageWithFriendNumber:5
                                              type:OCTToxMessageTypeAction
                                           message:@"text"
+                                            msgv3HashHex:nil
+                                            msgv3tssec:0
                                             error:[OCMArg setTo:error2]]).andReturn(0);
     OCMExpect([self.realmManager addMessageWithText:@"text"
                                                type:OCTToxMessageTypeAction
@@ -222,6 +228,8 @@
     OCMStub([self.tox sendMessageWithFriendNumber:5
                                              type:OCTToxMessageTypeAction
                                           message:@"text"
+                                            msgv3HashHex:nil
+                                            msgv3tssec:0
                                             error:[OCMArg setTo:error2]]).andReturn(0);
 
     XCTestExpectation *expectation = [self expectationWithDescription:@""];
@@ -296,11 +304,11 @@
     [self.realmManager.realm addObjects:messages2];
     [self.realmManager.realm commitWriteTransaction];
 
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"1" error:[OCMArg anyObjectRef]]).andReturn(101);
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"3" error:[OCMArg anyObjectRef]]).andReturn(103);
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"5" error:[OCMArg anyObjectRef]]).andReturn(105);
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"7" error:[OCMArg anyObjectRef]]).andReturn(107);
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"9" error:[OCMArg anyObjectRef]]).andReturn(109);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"1" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(101);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"3" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(103);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"5" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(105);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"7" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(107);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"9" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(109);
 
     [self.realmManager.realm beginWriteTransaction];
     friend1.connectionStatus = OCTToxConnectionStatusUDP;
@@ -359,8 +367,8 @@
         [self.realmManager.realm commitWriteTransaction];
     }
 
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"107" error:[OCMArg anyObjectRef]]).andReturn(207);
-    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"109" error:[OCMArg anyObjectRef]]).andReturn(209);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"107" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(207);
+    OCMStub([self.tox sendMessageWithFriendNumber:1 type:OCTToxMessageTypeNormal message:@"109" msgv3HashHex:nil msgv3tssec:0 error:[OCMArg anyObjectRef]]).andReturn(209);
 
     [self.notificationCenter postNotificationName:kOCTFriendConnectionStatusChangeNotification object:friend1];
 
@@ -402,7 +410,7 @@
     [self.realmManager.realm addObject:chat];
     [self.realmManager.realm commitWriteTransaction];
 
-    [self.submanager tox:nil friendMessage:@"message" type:OCTToxMessageTypeAction friendNumber:5];
+    [self.submanager tox:nil friendMessage:@"message" type:OCTToxMessageTypeAction friendNumber:5 msgv3HashHex:nil sendTimestamp:0];
 
     RLMResults *results = [OCTMessageAbstract allObjectsInRealm:self.realmManager.realm];
     XCTAssertEqual(results.count, 1);

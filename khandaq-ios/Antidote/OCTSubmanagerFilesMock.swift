@@ -24,7 +24,11 @@ class OCTSubmanagerFilesMock: NSObject, OCTSubmanagerFiles {
     func retrySendingFile(_ message: OCTMessageAbstract, failureBlock: ((Error) -> Void)? = nil) {
         // nop
     }
-    
+
+    func resendPendingOutgoingFilesToAllOnlineFriends() {
+        // nop
+    }
+
     func pauseFileTransfer(_ pause: Bool, message: OCTMessageAbstract) throws {
         // nop
     }

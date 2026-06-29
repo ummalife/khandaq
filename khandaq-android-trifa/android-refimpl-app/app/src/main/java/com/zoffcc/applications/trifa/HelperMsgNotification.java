@@ -77,8 +77,12 @@ public class HelperMsgNotification
         {
             final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(context);
             final String ringtone = settings.getString("notifications_new_message_ringtone", null);
-            if ((ringtone != null) && (!ringtone.isEmpty()))
+            if (ringtone != null)
             {
+                if (ringtone.isEmpty())
+                {
+                    return null;
+                }
                 return Uri.parse(ringtone);
             }
         }
@@ -272,12 +276,7 @@ public class HelperMsgNotification
         {
             return "";
         }
-        final String trimmed = text.trim().replace('\n', ' ');
-        if (trimmed.length() <= 160)
-        {
-            return trimmed;
-        }
-        return trimmed.substring(0, 157) + "...";
+        return ChatListUiHelper.truncate_preview(ChatListUiHelper.sanitize_preview_body(text));
     }
 
     static boolean is_viewing_friend_chat(final String friend_pubkey)
@@ -288,12 +287,8 @@ public class HelperMsgNotification
         }
         try
         {
-            final long friend_num = MainActivity.message_list_activity.get_current_friendnum();
-            if (friend_num < 0)
-            {
-                return false;
-            }
-            return friend_pubkey.equals(HelperFriend.tox_friend_get_public_key__wrapper(friend_num));
+            final String open_pk = MainActivity.message_list_activity.get_friend_pubkey();
+            return (open_pk != null) && friend_pubkey.equalsIgnoreCase(open_pk);
         }
         catch (Exception e)
         {
@@ -337,6 +332,14 @@ public class HelperMsgNotification
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
                     {
                         ringtone.setAudioAttributes(notification_sound_attributes());
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                    {
+                        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context_s);
+                        final int percent = prefs.getInt(
+                                NotificationRingtoneSettingsActivity.PREF_NOTIFICATION_VOLUME_PERCENT, 100);
+                        ringtone.setVolume(Math.max(0f, Math.min(1f, percent / 100f)));
                     }
 
                     if (!ringtone.isPlaying())

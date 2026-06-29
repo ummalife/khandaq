@@ -12,15 +12,21 @@ class ActiveSessionNavigationCoordinator: NSObject {
         self.theme = theme
         self.navigationController = UINavigationController()
         super.init()
+        ThemeChrome.apply(to: navigationController, theme: theme)
     }
 
     init(theme: Theme, navigationController: UINavigationController) {
         self.theme = theme
         self.navigationController = navigationController
         super.init()
+        ThemeChrome.apply(to: navigationController, theme: theme)
     }
 
     func startWithOptions(_ options: CoordinatorOptions?) {
         preconditionFailure("This method must be overridden")
+    }
+
+    func installRootViewController(_ controller: UIViewController) {
+        navigationController.setViewControllers([controller], animated: false)
     }
 }

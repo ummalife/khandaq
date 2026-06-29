@@ -865,6 +865,10 @@ so you can save the file on Windows.</source>
         <translation>Групповой чат %1</translation>
     </message>
     <message>
+        <source>New group</source>
+        <translation>Новая группа</translation>
+    </message>
+    <message>
         <source>Invalid Tox ID</source>
         <comment>Error while sending friend request</comment>
         <translation>Неверный Tox ID</translation>
@@ -1363,12 +1367,40 @@ instead of closing entirely.</source>
         <source>Group invites</source>
         <translation>Групповые приглашения</translation>
     </message>
+    <message>
+        <source>Join group by ID</source>
+        <translation>Присоединиться по ID группы</translation>
+    </message>
+    <message>
+        <source>Group ID may only contain A-F and 0-9.</source>
+        <translation>ID группы может содержать только A–F и 0–9.</translation>
+    </message>
+    <message>
+        <source>Group ID must be 64 hex characters (%1/64).</source>
+        <translation>ID группы должен содержать 64 hex-символа (%1/64).</translation>
+    </message>
+    <message>
+        <source>Could not join group. Check the Group ID and try again.</source>
+        <translation>Не удалось присоединиться к группе. Проверьте ID группы и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Присоединиться</translation>
+    </message>
 </context>
 <context>
     <name>GroupInviteWidget</name>
     <message>
         <source>Invited by %1 on %2 at %3.</source>
         <translation>Приглашён %1 %2 в %3.</translation>
+    </message>
+    <message>
+        <source>Invited by %1 to %2 on %3 at %4.</source>
+        <translation>%1 приглашает в %2, %3 в %4.</translation>
+    </message>
+    <message>
+        <source>a group</source>
+        <translation>группу</translation>
     </message>
     <message>
         <source>Join</source>
@@ -1393,6 +1425,10 @@ instead of closing entirely.</source>
         <source>Quit group</source>
         <comment>Menu to quit a groupchat</comment>
         <translation>Покинуть группу</translation>
+    </message>
+    <message>
+        <source>Copy Group ID</source>
+        <translation>Копировать ID группы</translation>
     </message>
     <message>
         <source>Set title...</source>
@@ -3012,6 +3048,34 @@ This ID includes the NoSpam code (in blue), and the checksum (in gray).</source>
     <message>
         <source>Create new group...</source>
         <translation>Создать новую группу...</translation>
+    </message>
+    <message>
+        <source>Join group by ID...</source>
+        <translation>Присоединиться по ID группы...</translation>
+    </message>
+    <message>
+        <source>Join group by ID</source>
+        <translation>Присоединиться по ID группы</translation>
+    </message>
+    <message>
+        <source>Enter the 64-character Group ID (hex):</source>
+        <translation>Введите 64-символьный ID группы (hex):</translation>
+    </message>
+    <message>
+        <source>Join group</source>
+        <translation>Присоединиться к группе</translation>
+    </message>
+    <message>
+        <source>Could not join group. Check the Group ID and try again.</source>
+        <translation>Не удалось присоединиться к группе. Проверьте ID группы и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Group invite</source>
+        <translation>Приглашение в группу</translation>
+    </message>
+    <message>
+        <source>Could not join the group.</source>
+        <translation>Не удалось присоединиться к группе.</translation>
     </message>
     <message>
         <source>Add new circle...</source>

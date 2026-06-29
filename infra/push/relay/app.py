@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import logging
 import os
 import time
@@ -22,6 +23,34 @@ FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")
 FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")  # legacy fallback
 RATE_LIMIT_PER_MIN = int(os.environ.get("PUSH_RATE_LIMIT_PER_MIN", "120"))
 PUSH_RELAY_AUTH_SECRET = os.environ.get("PUSH_RELAY_AUTH_SECRET", "")
+# Max allowed clock skew (seconds) for the request timestamp. Bounds the replay window.
+AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
+# Rollout gate. With a secret set but ENFORCE off (default), the relay runs in SOFT/MONITOR
+# mode: it still serves unsigned/invalid requests (so already-installed clients that lack the
+# secret keep working) but LOGS each one, so you can watch adoption. Flip to 1 (hard enforce,
+# 401 on bad auth) only once the logs show field clients are signing. This avoids a hard cutover
+# that would break every client that hasn't yet shipped + been updated with the secret.
+PUSH_AUTH_ENFORCE = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower() in ("1", "true", "yes", "on")
+# KHANDAQ (security NEW-4): only honour X-Real-IP when the direct connection comes from a trusted
+# reverse proxy. The relay binds to 127.0.0.1 behind nginx (and reaches it via the Docker bridge), so
+# by default we trust loopback + private/link-local source addresses; an externally-exposed port would
+# see public client IPs, which are NOT trusted (so X-Real-IP can't be spoofed to dodge rate limiting).
+# PUSH_TRUSTED_PROXIES (CSV of exact IPs) adds explicit entries on top.
+TRUSTED_PROXIES = {
+    p.strip() for p in os.environ.get("PUSH_TRUSTED_PROXIES", "").split(",") if p.strip()
+}
+
+
+def _is_trusted_proxy(addr: str) -> bool:
+    if not addr:
+        return False
+    if addr in TRUSTED_PROXIES:
+        return True
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
@@ -32,11 +61,16 @@ def _fcm_configured() -> bool:
 
 
 def _client_ip() -> str:
-    # Trust X-Real-IP only when set by nginx; never use spoofable X-Forwarded-For alone.
-    real_ip = request.headers.get("X-Real-IP", "").strip()
-    if real_ip:
-        return real_ip.split(",")[0].strip()
-    return (request.remote_addr or "?").strip()
+    # KHANDAQ (security NEW-4): X-Real-IP is only trustworthy when it comes FROM the trusted reverse
+    # proxy. Honour it only if the direct peer (remote_addr) is a trusted proxy; otherwise a client
+    # talking to the relay directly (if the port is ever exposed) could spoof X-Real-IP to dodge the
+    # per-IP rate limit. Trusted proxies default to loopback; override via PUSH_TRUSTED_PROXIES (CSV).
+    remote = (request.remote_addr or "").strip()
+    if _is_trusted_proxy(remote):
+        real_ip = request.headers.get("X-Real-IP", "").strip()
+        if real_ip:
+            return real_ip.split(",")[0].strip()
+    return remote or "?"
 
 
 def _rate_ok(client_ip: str) -> bool:
@@ -56,23 +90,56 @@ def _rate_ok(client_ip: str) -> bool:
 
 
 def _auth_ok() -> bool:
+    # Auth stays OFF until a secret is provisioned (current production state).
     if not PUSH_RELAY_AUTH_SECRET:
         return True
+
+    if _auth_signature_valid():
+        return True
+
+    # Secret set, but the request is unsigned/invalid.
+    if PUSH_AUTH_ENFORCE:
+        return False  # hard enforce -> caller returns 401
+
+    # Soft/monitor mode: allow it through but record it, so adoption can be measured
+    # before flipping PUSH_AUTH_ENFORCE=1. client_ip is best-effort here.
+    log.warning("push auth SOFT: unsigned/invalid request allowed from %s (set PUSH_AUTH_ENFORCE=1 after client adoption)", _client_ip())
+    return True
+
+
+def _auth_signature_valid() -> bool:
+    # KHANDAQ (security NEW-2): replay-resistant, request-bound auth.
+    # The old scheme signed a CONSTANT (HMAC(secret, "khandaq-push-relay")) → the same value
+    # forever, baked into every build, replayable without limit. Instead the sender signs the
+    # actual request (recipient token `id` + sender `from` + a unix timestamp `ts`), and we
+    # accept it only inside a small freshness window. The HMAC is per-request and time-bound, so
+    # even if it leaks (e.g. nginx logs) it is useless after AUTH_MAX_SKEW_SEC.
+    #   ts   = unix seconds (integer string)
+    #   msg  = id + "\n" + from + "\n" + ts   (raw, URL-decoded values, UTF-8)
+    #   auth = lowercase hex HMAC-SHA256(secret, msg)
+    # `auth` may come via ?auth= or "Authorization: Bearer"; `ts` via ?ts= or X-Khandaq-Ts.
     supplied = request.args.get("auth", "").strip()
     if not supplied:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.lower().startswith("bearer "):
             supplied = auth_header[7:].strip()
-    if not supplied:
+
+    ts = request.args.get("ts", "").strip() or request.headers.get("X-Khandaq-Ts", "").strip()
+    if not supplied or not ts:
         return False
-    return hmac.compare_digest(
-        supplied,
-        hmac.new(
-            PUSH_RELAY_AUTH_SECRET.encode("utf-8"),
-            b"khandaq-push-relay",
-            hashlib.sha256,
-        ).hexdigest(),
-    )
+
+    try:
+        ts_int = int(ts)
+    except ValueError:
+        return False
+    if abs(time.time() - ts_int) > AUTH_MAX_SKEW_SEC:
+        return False
+
+    token = request.args.get("id", "")
+    sender = request.args.get("from", "")
+    msg = (token + "\n" + sender + "\n" + ts).encode("utf-8")
+    expected = hmac.new(PUSH_RELAY_AUTH_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(supplied, expected)
 
 
 def _get_access_token() -> str:
@@ -199,6 +266,9 @@ def health():
         "fcm_configured": _fcm_configured(),
         "fcm_mode": mode,
         "auth_required": bool(PUSH_RELAY_AUTH_SECRET),
+        "auth_mode": (
+            "off" if not PUSH_RELAY_AUTH_SECRET else ("enforce" if PUSH_AUTH_ENFORCE else "soft")
+        ),
     })
 
 

@@ -4,7 +4,11 @@
 
 #import "DDLog.h"
 #undef LOG_LEVEL_DEF
+#if DEBUG
 #define LOG_LEVEL_DEF LOG_LEVEL_VERBOSE
+#else
+#define LOG_LEVEL_DEF LOG_LEVEL_WARN
+#endif
 
 #define OCTLogError(frmt, ...)   DDLogError((@"<%@ %p> " frmt), [self class], self, ## __VA_ARGS__)
 #define OCTLogWarn(frmt, ...)    DDLogWarn((@"<%@ %p> " frmt), [self class], self, ## __VA_ARGS__)

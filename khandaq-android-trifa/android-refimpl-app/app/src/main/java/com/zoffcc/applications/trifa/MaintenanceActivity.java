@@ -44,7 +44,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.gson.Gson;
-import com.yariksoffice.lingver.Lingver;
 import com.zoffcc.applications.sorm.ConferenceDB;
 import com.zoffcc.applications.sorm.ConferenceMessage;
 import com.zoffcc.applications.sorm.FriendList;
@@ -61,7 +60,6 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -69,6 +67,8 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -84,7 +84,6 @@ import static com.zoffcc.applications.trifa.BootstrapNodeEntryDB.insert_default_
 import static com.zoffcc.applications.trifa.BootstrapNodeEntryDB.insert_default_udp_nodes_into_db;
 import static com.zoffcc.applications.trifa.HelperGeneric.delete_vfs_file;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_trifa_build_str;
-import static com.zoffcc.applications.trifa.HelperGeneric.import_toxsave_file_unsecure;
 import static com.zoffcc.applications.trifa.HelperGeneric.long_date_time_format_for_filename;
 import static com.zoffcc.applications.trifa.HelperGeneric.touch;
 import static com.zoffcc.applications.trifa.IOBrowser.getFilesInDir;
@@ -119,11 +118,19 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_GITHUB_NEW_ISSUE_
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CONFERENCE_TYPE.TOX_CONFERENCE_TYPE_TEXT;
 import static com.zoffcc.applications.trifa.TrifaSetPatternActivity.filter_out_specials_from_filepath_stricter;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
+import static com.zoffcc.applications.trifa.ToxProfileImportHelper.ImportMode;
 import static com.zoffcc.applications.trifa.TrifaToxService.vfs;
 
 public class MaintenanceActivity extends AppCompatActivity implements StrongBuilder.Callback<OkHttpClient>
 {
     private static final String TAG = "trifa.MaintActy";
+
+    private ActivityResultLauncher<String[]> importProfileLauncher;
+    private ActivityResultLauncher<String> exportProfileLauncher;
+    private ActivityResultLauncher<String> backupCreateLauncher;
+    private char[] pendingBackupPassphrase;
+    private ActivityResultLauncher<String[]> backupRestoreLauncher;
+    private char[] pendingRestorePassphrase;
 
     Button button_clear_glide_cache;
     Button button_set_app_language;
@@ -141,6 +148,8 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
     Button button_export_encrypted_files;
     Button button_export_encrypted_chats;
     Button button_import_savedata;
+    Button button_backup_password;
+    Button button_restore_password;
     Button button_report_issue;
     Button reveal_passwords;
 
@@ -186,6 +195,8 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         button_export_encrypted_files = (Button) findViewById(R.id.button_export_encrypted_files);
         button_export_encrypted_chats = (Button) findViewById(R.id.button_export_encrypted_chats);
         button_import_savedata = (Button) findViewById(R.id.button_import_savedata);
+        button_backup_password = (Button) findViewById(R.id.button_backup_password);
+        button_restore_password = (Button) findViewById(R.id.button_restore_password);
         button_report_issue = (Button) findViewById(R.id.button_report_issue);
         reveal_passwords = (Button) findViewById(R.id.reveal_passwords);
         text_sqlstats = (TextView) findViewById(R.id.text_sqlstats);
@@ -501,11 +512,10 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                 try
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle("Report a bug");
-                    builder.setMessage(
-                            "This will open a webbrowser to github.com and let you report a bug or issue");
+                    builder.setTitle(R.string.maintenance_report_bug_title);
+                    builder.setMessage(R.string.maintenance_report_bug_message);
 
-                    builder.setPositiveButton("Yes, I want to report a bug", new DialogInterface.OnClickListener()
+                    builder.setPositiveButton(R.string.maintenance_report_bug_confirm, new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
@@ -536,7 +546,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                             v.getContext().startActivity(intent);
                         }
                     });
-                    builder.setNegativeButton("Cancel", null);
+                    builder.setNegativeButton(R.string.cancel, null);
 
                     AlertDialog dialog = builder.create();
                     dialog.show();
@@ -556,12 +566,11 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                 try
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle("Export Encrypted Files");
-                    builder.setMessage(
-                            "Your Encrypted received files will be exported unencrypted to this location:" + "\n\n" +
-                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_FILES_EXPORT_DIR);
+                    builder.setTitle(R.string.maintenance_export_encrypted_files_title);
+                    builder.setMessage(getString(R.string.maintenance_export_encrypted_files_message,
+                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_FILES_EXPORT_DIR));
 
-                    builder.setPositiveButton("Yes, I want to export", new DialogInterface.OnClickListener()
+                    builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
@@ -569,7 +578,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                             return;
                         }
                     });
-                    builder.setNegativeButton("Cancel", null);
+                    builder.setNegativeButton(R.string.cancel, null);
 
                     AlertDialog dialog = builder.create();
                     dialog.show();
@@ -589,11 +598,11 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                 try
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle("Export Encrypted Chats");
-                    builder.setMessage("Your Encrypted Chats will be exported unencrypted to this location:" + "\n\n" +
-                                       MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_CHATS_EXPORT_DIR);
+                    builder.setTitle(R.string.maintenance_export_encrypted_chats_title);
+                    builder.setMessage(getString(R.string.maintenance_export_encrypted_chats_message,
+                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_CHATS_EXPORT_DIR));
 
-                    builder.setPositiveButton("Yes, I want to export", new DialogInterface.OnClickListener()
+                    builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
@@ -601,7 +610,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                             return;
                         }
                     });
-                    builder.setNegativeButton("Cancel", null);
+                    builder.setNegativeButton(R.string.cancel, null);
 
                     AlertDialog dialog = builder.create();
                     dialog.show();
@@ -618,47 +627,42 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
             @Override
             public void onClick(View v)
             {
-                try
+                import_savedata_unsecure_prompt(this_context);
+            }
+        });
+
+        // KHANDAQ (#28): create an encrypted, password-protected backup of the whole profile.
+        button_backup_password.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                PasswordBackupHelper.promptForBackupPassphrase(MaintenanceActivity.this, passphrase ->
                 {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle("Import Tox Savedata");
-                    builder.setMessage("Tox Savedata File will be imported unencrypted from this location:" + "\n\n" +
-                                       MainActivity.SD_CARD_FILES_EXPORT_DIR + "/" + "I_WANT_TO_IMPORT_savedata.tox");
+                    pendingBackupPassphrase = passphrase;
+                    backupCreateLauncher.launch(PasswordBackupHelper.SUGGESTED_FILENAME);
+                });
+            }
+        });
 
-                    builder.setPositiveButton("Yes, I want to wipe all data and import",
-                                              new DialogInterface.OnClickListener()
-                                              {
-                                                  public void onClick(DialogInterface dialog, int id)
-                                                  {
-
-                                                      final Thread import_thread = new Thread()
-                                                      {
-                                                          @Override
-                                                          public void run()
-                                                          {
-                                                              try
-                                                              {
-                                                                  import_toxsave_file_unsecure(this_context);
-                                                              }
-                                                              catch (Exception ignored)
-                                                              {
-                                                              }
-                                                          }
-                                                      };
-                                                      import_thread.start();
-                                                      return;
-                                                  }
-                                              });
-                    builder.setNegativeButton("Cancel", null);
-
-                    // create and show the alert dialog
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
+        // KHANDAQ (#28): restore the whole profile from an encrypted backup (destructive — confirm first).
+        button_restore_password.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                new androidx.appcompat.app.AlertDialog.Builder(MaintenanceActivity.this)
+                        .setTitle(R.string.restore_password_title)
+                        .setMessage(R.string.restore_confirm)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(android.R.string.ok, (d, w) ->
+                                PasswordBackupHelper.promptPassphraseForRestore(MaintenanceActivity.this, passphrase ->
+                                {
+                                    pendingRestorePassphrase = passphrase;
+                                    backupRestoreLauncher.launch(new String[]{
+                                            PasswordBackupHelper.MIME_TYPE, "*/*"});
+                                }))
+                        .show();
             }
         });
 
@@ -670,10 +674,10 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                 try
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle("Show Passwords");
-                    builder.setMessage("This will show the Database and Tox passwords");
+                    builder.setTitle(R.string.maintenance_show_passwords_title);
+                    builder.setMessage(R.string.maintenance_show_passwords_message);
 
-                    builder.setPositiveButton("Yes, I really want to see the passwords in clear text",
+                    builder.setPositiveButton(R.string.maintenance_show_passwords_confirm,
                                               new DialogInterface.OnClickListener()
                                               {
                                                   public void onClick(DialogInterface dialog, int id)
@@ -683,7 +687,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                                                       startActivity(intent);
                                                   }
                                               });
-                    builder.setNegativeButton("Cancel", null);
+                    builder.setNegativeButton(R.string.cancel, null);
 
                     // create and show the alert dialog
                     AlertDialog dialog = builder.create();
@@ -976,7 +980,103 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                               "\nGroup Messages: " + num_groupmsgs + "\nFriends: " + num_dbfriends + "\nConferences: " +
                               num_dbconfs + "\nGroups: " + num_dbgroups + "\n\n" + vfs_size + "\n\n" + dbmain_size);
 
+        importProfileLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri ->
+        {
+            ToxProfileImportHelper.handlePickedUri(MaintenanceActivity.this, uri, ImportMode.REPLACE_EXISTING, null);
+        });
+
+        exportProfileLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("application/octet-stream"),
+                uri -> ToxProfileImportHelper.handleExportDestination(MaintenanceActivity.this, uri));
+
+        // KHANDAQ (#28): encrypted backup destination picker.
+        backupCreateLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument(PasswordBackupHelper.MIME_TYPE),
+                uri ->
+                {
+                    final char[] pp = pendingBackupPassphrase;
+                    pendingBackupPassphrase = null;
+                    if (uri != null && pp != null)
+                    {
+                        PasswordBackupHelper.performBackup(MaintenanceActivity.this, uri, pp);
+                    }
+                    else if (pp != null)
+                    {
+                        java.util.Arrays.fill(pp, '\0');   // picker cancelled
+                    }
+                });
+
+        // KHANDAQ (#28): restore-from-encrypted-backup picker.
+        backupRestoreLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri ->
+                {
+                    final char[] pp = pendingRestorePassphrase;
+                    pendingRestorePassphrase = null;
+                    if (uri != null && pp != null)
+                    {
+                        PasswordBackupHelper.performRestore(MaintenanceActivity.this, uri, pp);
+                    }
+                    else if (pp != null)
+                    {
+                        java.util.Arrays.fill(pp, '\0');
+                    }
+                });
+
+        if (getIntent().getBooleanExtra(ToxProfileImportHelper.EXTRA_OPEN_IMPORT_PICKER, false))
+        {
+            getWindow().getDecorView().post(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    promptImportSavedataWithPicker();
+                }
+            });
+        }
+
+        if (getIntent().getBooleanExtra(ToxProfileImportHelper.EXTRA_OPEN_EXPORT_PICKER, false))
+        {
+            getWindow().getDecorView().post(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    promptExportSavedataWithPicker();
+                }
+            });
+        }
+
         maint_handler_s = maint_handler;
+    }
+
+    private void promptImportSavedataWithPicker()
+    {
+        ToxProfileImportHelper.showReplaceImportConfirmation(this, new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                importProfileLauncher.launch(ToxProfileImportHelper.TOX_IMPORT_MIME_TYPES);
+            }
+        });
+    }
+
+    private void promptExportSavedataWithPicker()
+    {
+        ToxProfileImportHelper.promptExportSavedata(this, new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                exportProfileLauncher.launch(ToxProfileImportHelper.EXPORT_SUGGESTED_FILENAME);
+            }
+        });
+    }
+
+    void launchExportProfilePicker()
+    {
+        exportProfileLauncher.launch(ToxProfileImportHelper.EXPORT_SUGGESTED_FILENAME);
     }
 
     Handler maint_handler = new Handler()
@@ -1245,41 +1345,50 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
 
     public static void export_savedata_unsecure(final Context context)
     {
-        // create directory in case it does not exist yet
+        if (context instanceof MaintenanceActivity)
+        {
+            final MaintenanceActivity activity = (MaintenanceActivity) context;
+            ToxProfileImportHelper.promptExportSavedata(activity, new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    activity.launchExportProfilePicker();
+                }
+            });
+            return;
+        }
+
         try
         {
-            File export_dir = new File(SD_CARD_FILES_EXPORT_DIR + "/");
-            export_dir.mkdirs();
+            final Intent intent = new Intent(context, MaintenanceActivity.class);
+            intent.putExtra(ToxProfileImportHelper.EXTRA_OPEN_EXPORT_PICKER, true);
+            context.startActivity(intent);
         }
         catch (Exception e)
         {
+            e.printStackTrace();
         }
+    }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle("Export Tox Savedata");
-        builder.setMessage(
-                "Tox Savedata File will be exported unencrypted to this location:" + "\n\n" + SD_CARD_FILES_EXPORT_DIR +
-                "/" + "unsecure_export_savedata.tox");
-
-        builder.setPositiveButton("Yes, I want to export", new DialogInterface.OnClickListener()
+    public static void import_savedata_unsecure_prompt(final Context context)
+    {
+        try
         {
-            public void onClick(DialogInterface dialog, int id)
+            if (context instanceof MaintenanceActivity)
             {
-                try
-                {
-                    // passphrase is unused for now!
-                    export_savedata_file_unsecure("_", SD_CARD_FILES_EXPORT_DIR + "/" + "unsecure_export_savedata.tox");
-                }
-                catch(Exception ignored)
-                {
-                }
+                ((MaintenanceActivity) context).promptImportSavedataWithPicker();
+                return;
             }
-        });
-        builder.setNegativeButton("Cancel", null);
 
-        // create and show the alert dialog
-        AlertDialog dialog = builder.create();
-        dialog.show();
+            Intent intent = new Intent(context, MaintenanceActivity.class);
+            intent.putExtra(ToxProfileImportHelper.EXTRA_OPEN_IMPORT_PICKER, true);
+            context.startActivity(intent);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     public static void export_encrypted_chats_unsecure(final Context context)
@@ -1318,7 +1427,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         @Override
         protected void onPreExecute()
         {
-            dialog.setMessage("exporting ...");
+            dialog.setMessage(c.getString(R.string.maintenance_exporting));
             dialog.setCancelable(false);
             dialog.show();
         }
@@ -1482,7 +1591,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                 dialog.dismiss();
             }
 
-            Toast.makeText(c, "export ready", Toast.LENGTH_LONG).show();
+            Toast.makeText(c, R.string.maintenance_export_ready, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1500,7 +1609,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         @Override
         protected void onPreExecute()
         {
-            dialog.setMessage("exporting ...");
+            dialog.setMessage(c.getString(R.string.maintenance_exporting));
             dialog.setCancelable(false);
             dialog.show();
         }
@@ -1565,7 +1674,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                 dialog.dismiss();
             }
 
-            Toast.makeText(c, "export ready", Toast.LENGTH_LONG).show();
+            Toast.makeText(c, R.string.maintenance_export_ready, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1645,102 +1754,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                         if (result_lang.length() > 0)
                         {
                             Log.i(TAG, "onActivityResult:result_lang:" + result_lang);
-
-                            if (result_lang.compareTo("_default_") == 0)
-                            {
-                                Lingver.getInstance().setFollowSystemLocale(this);
-                            }
-                            else if (result_lang.compareTo("en") == 0)
-                            {
-                                Lingver.getInstance().setLocale(this, Locale.ENGLISH);
-                            }
-                            else if (result_lang.compareTo("de") == 0)
-                            {
-                                Lingver.getInstance().setLocale(this, Locale.GERMAN);
-                            }
-                            else if (result_lang.compareTo("zh-rCN") == 0)
-                            {
-                                Lingver.getInstance().setLocale(this, Locale.SIMPLIFIED_CHINESE);
-                            }
-                            // ------------------
-                            // ------------------
-                            // ------------------
-                            //else if (result_lang.compareTo("ar") == 0)
-                            //{
-                            //    // TODO: left to right languages corrupt the layout now
-                            //    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                            //}
-                            else if (result_lang.compareTo("es") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            //else if (result_lang.compareTo("fa") == 0)
-                            //{
-                            //    // TODO: left to right languages corrupt the layout now
-                            //    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                            //}
-                            else if (result_lang.compareTo("fr") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("hi") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("hu") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("it") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("kn") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("tr") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("sv") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            else if (result_lang.compareTo("ru") == 0)
-                            {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                                {
-                                    Lingver.getInstance().setLocale(this, Locale.forLanguageTag(result_lang));
-                                }
-                            }
-                            // ------------------
-                            // ------------------
-                            // ------------------
+                            AppLocaleHelper.applyLocaleAndRestart(this, result_lang);
                         }
                     }
                 }

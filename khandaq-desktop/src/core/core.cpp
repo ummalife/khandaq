@@ -26,8 +26,11 @@
 #include "src/core/dhtserver.h"
 #include "src/core/icoresettings.h"
 #include "src/core/toxlogger.h"
+#include "src/core/networkdiagnostics.h"
+#include "src/core/reconnectbackoff.h"
 #include "src/core/toxoptions.h"
 #include "src/core/toxstring.h"
+#include "src/core/khandaqlimits.h"
 #include "src/model/groupinvite.h"
 #include "src/model/status.h"
 #include "src/model/ibootstraplistgenerator.h"
@@ -38,10 +41,20 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <array>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QHash>
+#include <QVector>
+#include <QList>
+#include <QNetworkConfigurationManager>
+#include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QSet>
 #include <QString>
 #include <QStringBuilder>
-#include <QTimer>
+#include <QStandardPaths>
 
 #include <tox/tox.h>
 
@@ -50,6 +63,9 @@
 #include <chrono>
 #include <memory>
 #include <random>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 const QString Core::TOX_EXT = ".tox";
 
@@ -64,6 +80,21 @@ QList<DhtServer> shuffleBootstrapNodes(QList<DhtServer> bootstrapNodes)
     return bootstrapNodes;
 }
 
+QByteArray parseGroupChatIdHex(const QString& hexInput)
+{
+    QString hex = hexInput;
+    hex.remove(QRegularExpression(QStringLiteral(R"(\s)")));
+    hex.remove(QRegularExpression(QStringLiteral(R"([^a-fA-F0-9])")));
+    if (hex.size() != TOX_GROUP_CHAT_ID_SIZE * 2) {
+        return {};
+    }
+    const QByteArray bytes = QByteArray::fromHex(hex.toLatin1());
+    if (bytes.size() != TOX_GROUP_CHAT_ID_SIZE) {
+        return {};
+    }
+    return bytes;
+}
+
 } // namespace
 
 Core::Core(QThread* coreThread_, IBootstrapListGenerator& bootstrapListGenerator_, const ICoreSettings& settings_)
@@ -76,7 +107,7 @@ Core::Core(QThread* coreThread_, IBootstrapListGenerator& bootstrapListGenerator
     assert(toxTimer);
     // need to migrate Settings and History if this changes
     assert(ToxPk::size == tox_public_key_size());
-    assert(GroupId::size == tox_conference_id_size());
+    assert(GroupId::size == TOX_GROUP_CHAT_ID_SIZE);
     assert(ToxId::size == tox_address_size());
     toxTimer->setSingleShot(true);
     connect(toxTimer, &QTimer::timeout, this, &Core::process);
@@ -109,11 +140,16 @@ void Core::registerCallbacks(Tox* tox)
     tox_callback_friend_status(tox, onUserStatusChanged);
     tox_callback_friend_connection_status(tox, onConnectionStatusChanged);
     tox_callback_friend_read_receipt(tox, onReadReceiptCallback);
-    tox_callback_conference_invite(tox, onGroupInvite);
-    tox_callback_conference_message(tox, onGroupMessage);
-    tox_callback_conference_peer_list_changed(tox, onGroupPeerListChange);
-    tox_callback_conference_peer_name(tox, onGroupPeerNameChange);
-    tox_callback_conference_title(tox, onGroupTitleChange);
+    tox_callback_group_invite(tox, onGroupInvite);
+    tox_callback_group_message(tox, onGroupMessage);
+    tox_callback_group_peer_join(tox, onGroupPeerJoin);
+    tox_callback_group_peer_exit(tox, onGroupPeerExit);
+    tox_callback_group_peer_name(tox, onGroupPeerNameChange);
+    tox_callback_group_topic(tox, onGroupTopicChange);
+    tox_callback_group_self_join(tox, onGroupSelfJoin);
+    tox_callback_group_join_fail(tox, onGroupJoinFail);
+    tox_callback_group_custom_packet(tox, onGroupCustomPacket);
+    tox_callback_group_custom_private_packet(tox, onGroupCustomPrivatePacket);
     tox_callback_friend_lossless_packet(tox, onLosslessPacket);
 }
 
@@ -276,6 +312,14 @@ void Core::onStarted()
     loadFriends();
     loadGroups();
 
+    networkManager = new QNetworkConfigurationManager();
+    connect(networkManager, &QNetworkConfigurationManager::onlineStateChanged, this, &Core::onNetworkChanged);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 2, 0)
+    connect(networkManager, &QNetworkConfigurationManager::configurationChanged, this, &Core::onNetworkChanged);
+#endif
+
+    performKhandaqBootstrapBurst();
+
     process(); // starts its own timer
 }
 
@@ -338,6 +382,7 @@ void Core::process()
 
     tox_iterate(tox.get(), this);
     ext->process();
+    maintainGroups();
 
 #ifdef DEBUG
     // we want to see the debug messages immediately
@@ -346,8 +391,12 @@ void Core::process()
 
     // TODO(sudden6): recheck if this is still necessary
     if (checkConnection()) {
+        ReconnectBackoff::instance().reset();
         tolerance = CORE_DISCONNECT_TOLERANCE;
     } else if (!(--tolerance)) {
+        ReconnectBackoff::instance().noteAttempt(QStringLiteral("offline_periodic"), false);
+        NetworkDiagnostics::logEvent(QStringLiteral("bootstrap_dht"),
+                                     QStringLiteral("attempt=%1").arg(ReconnectBackoff::instance().currentAttempt()));
         bootstrapDht();
         tolerance = 3 * CORE_DISCONNECT_TOLERANCE;
     }
@@ -391,6 +440,52 @@ bool Core::checkConnection()
     return toxConnected;
 }
 
+void Core::performKhandaqBootstrapBurst()
+{
+    ASSERT_CORE_THREAD;
+
+    struct KhandaqNode
+    {
+        const char* host;
+        const char* publicKeyHex;
+    };
+
+    static const KhandaqNode khandaqNodes[] = {
+        {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
+        {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
+        {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
+    };
+    static const uint16_t tcpPorts[] = {33445, 3389};
+
+    for (const auto& node : khandaqNodes) {
+        ToxPk pk{QString::fromLatin1(node.publicKeyHex)};
+        const uint8_t* pkPtr = pk.getData();
+
+        tox_bootstrap(tox.get(), node.host, 33445, pkPtr, nullptr);
+        for (const auto tcpPort : tcpPorts) {
+            tox_add_tcp_relay(tox.get(), node.host, tcpPort, pkPtr, nullptr);
+        }
+    }
+}
+
+void Core::onNetworkChanged()
+{
+    ASSERT_CORE_THREAD;
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - lastNetworkRebootstrapMs < 500) {
+        return;
+    }
+    lastNetworkRebootstrapMs = now;
+
+    ReconnectBackoff::instance().noteAttempt(QStringLiteral("network_change"), true);
+    qInfo() << "Core: network changed, urgent rebootstrap";
+    NetworkDiagnostics::logEvent(QStringLiteral("network_changed"), QStringLiteral("urgent rebootstrap"));
+    tolerance = 0;
+    performKhandaqBootstrapBurst();
+    bootstrapDht();
+}
+
 /**
  * @brief Connects us to the Tox network
  */
@@ -398,6 +493,7 @@ void Core::bootstrapDht()
 {
     ASSERT_CORE_THREAD;
 
+    performKhandaqBootstrapBurst();
 
     auto const shuffledBootstrapNodes = shuffleBootstrapNodes(bootstrapListGenerator.getBootstrapNodes());
     if (shuffledBootstrapNodes.empty()) {
@@ -405,8 +501,7 @@ void Core::bootstrapDht()
         return;
     }
 
-    // i think the more we bootstrap, the more we jitter because the more we overwrite nodes
-    auto numNewNodes = 2;
+    auto numNewNodes = 6;
     for (int i = 0; i < numNewNodes && i < shuffledBootstrapNodes.size(); ++i) {
         const auto& dhtServer = shuffledBootstrapNodes.at(i);
         QByteArray address;
@@ -441,9 +536,14 @@ void Core::onFriendRequest(Tox* tox, const uint8_t* cFriendPk, const uint8_t* cM
                            size_t cMessageSize, void* core)
 {
     std::ignore = tox;
-    ToxPk friendPk(cFriendPk);
-    QString requestMessage = ToxString(cMessage, cMessageSize).getQString();
-    emit static_cast<Core*>(core)->friendRequestReceived(friendPk, requestMessage);
+    std::ignore = cMessage;
+    std::ignore = cMessageSize;
+    Core* corePtr = static_cast<Core*>(core);
+    const ToxPk friendPk(cFriendPk);
+    if (corePtr->hasFriendWithPublicKey(friendPk)) {
+        return;
+    }
+    corePtr->acceptFriendRequest(friendPk);
 }
 
 void Core::onFriendMessage(Tox* tox, uint32_t friendId, Tox_Message_Type type, const uint8_t* cMessage,
@@ -515,11 +615,13 @@ void Core::onConnectionStatusChanged(Tox* tox, uint32_t friendId, Tox_Connection
             friendStatus = Status::Status::Online;
             qDebug() << "Connected to friend" << friendId << "through a TCP relay";
             emit core->friendUsernameChanged(friendId, core->getFriendUsername(friendId));
+            core->resendPendingGroupInviteRequests(friendId);
             break;
         case TOX_CONNECTION_UDP:
             friendStatus = Status::Status::Online;
             qDebug() << "Connected to friend" << friendId << "directly with UDP";
             emit core->friendUsernameChanged(friendId, core->getFriendUsername(friendId));
+            core->resendPendingGroupInviteRequests(friendId);
             break;
         qWarning() << "tox_callback_friend_connection_status returned unknown enum!";
     }
@@ -532,46 +634,99 @@ void Core::onConnectionStatusChanged(Tox* tox, uint32_t friendId, Tox_Connection
     }
 }
 
-void Core::onGroupInvite(Tox* tox, uint32_t friendId, Tox_Conference_Type type,
-                         const uint8_t* cookie, size_t length, void* vCore)
+void Core::onGroupInvite(Tox* tox, uint32_t friendId, const uint8_t* inviteData, size_t length,
+                         const uint8_t* groupName, size_t groupNameLength, void* vCore)
 {
     std::ignore = tox;
     Core* core = static_cast<Core*>(vCore);
-    const QByteArray data(reinterpret_cast<const char*>(cookie), length);
-    const GroupInvite inviteInfo(friendId, type, data);
-    switch (type) {
-    case TOX_CONFERENCE_TYPE_TEXT:
-        qDebug() << QString("Text group invite by %1").arg(friendId);
-        emit core->groupInviteReceived(inviteInfo);
-        break;
-
-    case TOX_CONFERENCE_TYPE_AV:
-        qDebug() << QString("AV group invite by %1").arg(friendId);
-        emit core->groupInviteReceived(inviteInfo);
-        break;
-
-    default:
-        qWarning() << "Group invite with unknown type " << type;
+    const QByteArray data(reinterpret_cast<const char*>(inviteData), static_cast<int>(length));
+    const QString name = ToxString(groupName, groupNameLength).getQString();
+    const GroupInvite inviteInfo(friendId, data, name);
+    qDebug() << QString("NGC group invite by friend %1 (%2)").arg(friendId).arg(name);
+    if (core->autoAcceptRequestedGroupInvite(inviteInfo)) {
+        return; // we asked for this invite ourselves (friend-assisted join)
     }
+    emit core->groupInviteReceived(inviteInfo);
 }
 
 void Core::onGroupMessage(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Message_Type type,
-                          const uint8_t* cMessage, size_t length, void* vCore)
+                          const uint8_t* cMessage, size_t length, uint32_t messageId, void* vCore)
 {
     std::ignore = tox;
+    std::ignore = messageId;
     Core* core = static_cast<Core*>(vCore);
     bool isAction = type == TOX_MESSAGE_TYPE_ACTION;
     QString message = ToxString(cMessage, length).getQString();
     emit core->groupMessageReceived(groupId, peerId, message, isAction);
 }
 
-void Core::onGroupPeerListChange(Tox* tox, uint32_t groupId, void* vCore)
+void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vCore)
 {
     std::ignore = tox;
     const auto core = static_cast<Core*>(vCore);
-    qDebug() << QString("Group %1 peerlist changed").arg(groupId);
-    // no saveRequest, this callback is called on every connection to group peer, not just on brand new peers
+    qDebug() << QString("Group %1 peer %2 joined").arg(groupId).arg(peerId);
     emit core->groupPeerlistChanged(groupId);
+    // first peers bring the synced shared state — refresh the real group name
+    // (Group::setTitle ignores identical titles, so re-emitting is cheap)
+    const QString groupName = core->getGroupName(static_cast<int>(groupId));
+    if (!groupName.isEmpty()) {
+        emit core->groupTitleChanged(static_cast<int>(groupId), QString(), groupName);
+    }
+}
+
+void Core::onGroupPeerExit(Tox* tox, uint32_t groupId, uint32_t peerId, Tox_Group_Exit_Type exitType,
+                           const uint8_t* name, size_t nameLength, const uint8_t* partMessage,
+                           size_t partMessageLength, void* vCore)
+{
+    std::ignore = tox;
+    std::ignore = exitType;
+    std::ignore = name;
+    std::ignore = nameLength;
+    std::ignore = partMessage;
+    std::ignore = partMessageLength;
+    const auto core = static_cast<Core*>(vCore);
+    qDebug() << QString("Group %1 peer %2 left").arg(groupId).arg(peerId);
+    emit core->groupPeerlistChanged(groupId);
+}
+
+void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
+{
+    std::ignore = tox;
+    const auto core = static_cast<Core*>(vCore);
+    qDebug() << QString("Group %1 self joined").arg(groupId);
+    emit core->saveRequest();
+    // Do NOT kickstart here: we just successfully joined; a reconnect would
+    // tear the fresh connection down again and loop join/rejoin forever.
+    emit core->groupPeerlistChanged(groupId);
+    // shared state (incl. the real group name) has just been synced
+    const QString groupName = core->getGroupName(static_cast<int>(groupId));
+    if (!groupName.isEmpty()) {
+        emit core->groupTitleChanged(static_cast<int>(groupId), QString(), groupName);
+    }
+}
+
+void Core::onGroupJoinFail(Tox* tox, uint32_t groupId, Tox_Group_Join_Fail failType, void* vCore)
+{
+    std::ignore = tox;
+    const auto core = static_cast<Core*>(vCore);
+    qWarning() << QString("Group %1 join failed: %2").arg(groupId).arg(static_cast<int>(failType));
+    core->kickstartGroupConnection(groupId);
+}
+
+void Core::onGroupCustomPacket(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                               size_t length, void* vCore)
+{
+    std::ignore = tox;
+    auto core = static_cast<Core*>(vCore);
+    core->handleNgcFileTransferPacket(groupId, peerId, data, length, false);
+}
+
+void Core::onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerId,
+                                      const uint8_t* data, size_t length, void* vCore)
+{
+    std::ignore = tox;
+    auto core = static_cast<Core*>(vCore);
+    core->handleNgcFileTransferPacket(groupId, peerId, data, length, true);
 }
 
 void Core::onGroupPeerNameChange(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* name,
@@ -585,18 +740,22 @@ void Core::onGroupPeerNameChange(Tox* tox, uint32_t groupId, uint32_t peerId, co
     emit core->groupPeerNameChanged(groupId, peerPk, newName);
 }
 
-void Core::onGroupTitleChange(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* cTitle,
+void Core::onGroupTopicChange(Tox* tox, uint32_t groupId, uint32_t peerId, const uint8_t* topic,
                               size_t length, void* vCore)
 {
     std::ignore = tox;
     Core* core = static_cast<Core*>(vCore);
-    QString author;
-    // from tox.h: "If peer_number == UINT32_MAX, then author is unknown (e.g. initial joining the conference)."
-    if (peerId != std::numeric_limits<uint32_t>::max()) {
-        author = core->getGroupPeerName(groupId, peerId);
-    }
     emit core->saveRequest();
-    emit core->groupTitleChanged(groupId, author, ToxString(cTitle, length).getQString());
+    // The NGC group NAME (shared state) is the authoritative display title,
+    // matching the Android client. The topic must not hijack the title.
+    if (!core->getGroupName(static_cast<int>(groupId)).isEmpty()) {
+        return;
+    }
+    QString author;
+    if (peerId != 0) {
+        author = core->getGroupPeerName(groupId, static_cast<int>(peerId));
+    }
+    emit core->groupTitleChanged(groupId, author, ToxString(topic, length).getQString());
 }
 
 /**
@@ -607,12 +766,17 @@ void Core::onLosslessPacket(Tox* tox, uint32_t friendId,
 {
     std::ignore = tox;
     Core* core = static_cast<Core*>(vCore);
+    if (length > 0 && data[0] == 184 /* GROUP_INVITE_REQUEST_PACKET_ID */) {
+        core->handleGroupInviteRequestPacket(friendId, data, length);
+        return;
+    }
     core->ext->onLosslessPacket(friendId, data, length);
 }
 
 void Core::onReadReceiptCallback(Tox* tox, uint32_t friendId, uint32_t receipt, void* core)
 {
     std::ignore = tox;
+    qDebug() << "Core: friend_read_receipt friendId" << friendId << "messageId" << receipt;
     emit static_cast<Core*>(core)->receiptRecieved(friendId, ReceiptNum{receipt});
 }
 
@@ -647,11 +811,6 @@ QString Core::getFriendRequestErrorMessage(const ToxId& friendId, const QString&
         return tr("Invalid Tox ID", "Error while sending friend request");
     }
 
-    if (message.isEmpty()) {
-        return tr("You need to write a message with your request",
-                  "Error while sending friend request");
-    }
-
     if (ToxString(message).size() > tox_max_friend_request_length()) {
         return tr("Your message is too long!", "Error while sending friend request");
     }
@@ -668,14 +827,18 @@ void Core::requestFriendship(const ToxId& friendId, const QString& message)
     QMutexLocker ml{&coreLoopLock};
 
     ToxPk friendPk = friendId.getPublicKey();
-    QString errorMessage = getFriendRequestErrorMessage(friendId, message);
+    QString requestMessage = message.trimmed();
+    if (requestMessage.isEmpty()) {
+        requestMessage = QStringLiteral("Khandaq");
+    }
+    QString errorMessage = getFriendRequestErrorMessage(friendId, requestMessage);
     if (!errorMessage.isNull()) {
         emit failedToAddFriend(friendPk, errorMessage);
         emit saveRequest();
         return;
     }
 
-    ToxString cMessage(message);
+    ToxString cMessage(requestMessage);
     Tox_Err_Friend_Add error;
     uint32_t friendNumber =
         tox_friend_add(tox.get(), friendId.getBytes(), cMessage.data(), cMessage.size(), &error);
@@ -683,7 +846,7 @@ void Core::requestFriendship(const ToxId& friendId, const QString& message)
         qDebug() << "Requested friendship from " << friendNumber;
         emit saveRequest();
         emit friendAdded(friendNumber, friendPk);
-        emit requestSent(friendPk, message);
+        emit requestSent(friendPk, requestMessage);
         const QString username = getFriendUsername(friendNumber);
         if (!username.isEmpty()) {
             emit friendUsernameChanged(friendNumber, username);
@@ -743,6 +906,10 @@ void Core::sendGroupMessageWithType(int groupId, const QString& message, Tox_Mes
 {
     QMutexLocker ml{&coreLoopLock};
 
+    // Only revive a genuinely disconnected group; a full reconnect on every
+    // outgoing message would drop all peer connections each time we type.
+    reconnectGroupIfDisconnected(static_cast<uint32_t>(groupId));
+
     int size = message.toUtf8().size();
     auto maxSize = static_cast<int>(getMaxMessageSize());
     if (size > maxSize) {
@@ -752,8 +919,8 @@ void Core::sendGroupMessageWithType(int groupId, const QString& message, Tox_Mes
     }
 
     ToxString cMsg(message);
-    Tox_Err_Conference_Send_Message error;
-    tox_conference_send_message(tox.get(), groupId, type, cMsg.data(), cMsg.size(), &error);
+    Tox_Err_Group_Send_Message error;
+    tox_group_send_message(tox.get(), groupId, type, cMsg.data(), cMsg.size(), nullptr, &error);
     if (!PARSE_ERR(error)) {
         emit groupSentFailed(groupId);
         return;
@@ -779,8 +946,8 @@ void Core::changeGroupTitle(int groupId, const QString& title)
     QMutexLocker ml{&coreLoopLock};
 
     ToxString cTitle(title);
-    Tox_Err_Conference_Title error;
-    tox_conference_set_title(tox.get(), groupId, cTitle.data(), cTitle.size(), &error);
+    Tox_Err_Group_Topic_Set error;
+    tox_group_set_topic(tox.get(), groupId, cTitle.data(), cTitle.size(), &error);
     if (PARSE_ERR(error)) {
         emit saveRequest();
         emit groupTitleChanged(groupId, getUsername(), title);
@@ -806,20 +973,20 @@ void Core::removeGroup(int groupId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    Tox_Err_Conference_Delete error;
-    tox_conference_delete(tox.get(), groupId, &error);
+    Tox_Err_Group_Leave error;
+    tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
     if (PARSE_ERR(error)) {
         emit saveRequest();
-
-        /*
-         * TODO(sudden6): this is probably not (thread-)safe, but can be ignored for now since
-         * we don't change av at runtime.
-         */
-
-        if (av) {
-            av->leaveGroupCall(groupId);
-        }
     }
+}
+
+void Core::quitGroupChat(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Tox_Err_Group_Leave error;
+    tox_group_leave(tox.get(), groupId, nullptr, 0, &error);
+    PARSE_ERR(error);
 }
 
 /**
@@ -1033,37 +1200,40 @@ void Core::loadGroups()
 {
     QMutexLocker ml{&coreLoopLock};
 
-    const size_t groupCount = tox_conference_get_chatlist_size(tox.get());
+    const uint32_t groupCount = tox_group_get_number_groups(tox.get());
     if (groupCount == 0) {
         return;
     }
 
     std::vector<uint32_t> groupNumbers(groupCount);
-    tox_conference_get_chatlist(tox.get(), groupNumbers.data());
+    tox_group_get_grouplist(tox.get(), groupNumbers.data());
 
-    for (size_t i = 0; i < groupCount; ++i) {
-        Tox_Err_Conference_Title error;
+    for (uint32_t groupNumber : groupNumbers) {
+        Tox_Err_Group_State_Queries error;
         QString name;
-        const auto groupNumber = groupNumbers[i];
-        size_t titleSize = tox_conference_get_title_size(tox.get(), groupNumber, &error);
         const GroupId persistentId = getGroupPersistentId(groupNumber);
         const QString defaultName = tr("Groupchat %1").arg(persistentId.toString().left(8));
-        if (PARSE_ERR(error) || !titleSize) {
-            std::vector<uint8_t> nameBuf(titleSize);
-            tox_conference_get_title(tox.get(), groupNumber, nameBuf.data(), &error);
-            if (PARSE_ERR(error)) {
-                name = ToxString(nameBuf.data(), titleSize).getQString();
-            } else {
-                name = defaultName;
+
+        size_t topicSize = tox_group_get_topic_size(tox.get(), groupNumber, &error);
+        if (PARSE_ERR(error) && topicSize > 0) {
+            std::vector<uint8_t> topicBuf(topicSize);
+            if (tox_group_get_topic(tox.get(), groupNumber, topicBuf.data(), &error)) {
+                name = ToxString(topicBuf.data(), topicSize).getQString();
             }
-        } else {
+        }
+        if (name.isEmpty()) {
+            size_t nameSize = tox_group_get_name_size(tox.get(), groupNumber, &error);
+            if (PARSE_ERR(error) && nameSize > 0) {
+                std::vector<uint8_t> nameBuf(nameSize);
+                if (tox_group_get_name(tox.get(), groupNumber, nameBuf.data(), &error)) {
+                    name = ToxString(nameBuf.data(), nameSize).getQString();
+                }
+            }
+        }
+        if (name.isEmpty()) {
             name = defaultName;
         }
-        if (getGroupAvEnabled(groupNumber)) {
-            if (toxav_groupchat_enable_av(tox.get(), groupNumber, CoreAV::groupCallCallback, this)) {
-                qCritical() << "Failed to enable audio on loaded group" << groupNumber;
-            }
-        }
+        reconnectGroupIfDisconnected(groupNumber);
         emit emptyGroupCreated(groupNumber, persistentId, name);
     }
 }
@@ -1096,14 +1266,31 @@ GroupId Core::getGroupPersistentId(uint32_t groupNumber) const
 {
     QMutexLocker ml{&coreLoopLock};
 
-    std::vector<uint8_t> idBuff(TOX_CONFERENCE_UID_SIZE);
-    if (tox_conference_get_id(tox.get(), groupNumber,
-                              idBuff.data())) {
+    std::vector<uint8_t> idBuff(TOX_GROUP_CHAT_ID_SIZE);
+    Tox_Err_Group_State_Queries error;
+    if (tox_group_get_chat_id(tox.get(), groupNumber, idBuff.data(), &error)) {
         return GroupId{idBuff.data()};
-    } else {
-        qCritical() << "Failed to get conference ID of group" << groupNumber;
+    }
+    qCritical() << "Failed to get NGC chat ID of group" << groupNumber;
+    return {};
+}
+
+QVector<uint32_t> Core::getGroupPeerList(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Tox_Err_Group_Peer_Query error;
+    const uint32_t count = tox_group_peer_count(tox.get(), groupId, &error);
+    if (!PARSE_ERR(error) || count == 0) {
         return {};
     }
+
+    QVector<uint32_t> peers(static_cast<int>(count));
+    tox_group_get_peerlist(tox.get(), groupId, peers.data(), &error);
+    if (!PARSE_ERR(error)) {
+        return {};
+    }
+    return peers;
 }
 
 /**
@@ -1114,13 +1301,33 @@ uint32_t Core::getGroupNumberPeers(int groupId) const
 {
     QMutexLocker ml{&coreLoopLock};
 
-    Tox_Err_Conference_Peer_Query error;
-    uint32_t count = tox_conference_peer_count(tox.get(), groupId, &error);
+    Tox_Err_Group_Peer_Query error;
+    uint32_t count = tox_group_peer_count(tox.get(), groupId, &error);
     if (!PARSE_ERR(error)) {
         return std::numeric_limits<uint32_t>::max();
     }
 
     return count;
+}
+
+/**
+ * @brief Get the NGC group name (shared state set by the founder).
+ */
+QString Core::getGroupName(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Tox_Err_Group_State_Queries error;
+    const size_t nameSize = tox_group_get_name_size(tox.get(), groupId, &error);
+    if (error != TOX_ERR_GROUP_STATE_QUERIES_OK || nameSize == 0) {
+        return QString{};
+    }
+    std::vector<uint8_t> nameBuf(nameSize);
+    if (!tox_group_get_name(tox.get(), groupId, nameBuf.data(), &error)
+        || error != TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        return QString{};
+    }
+    return ToxString(nameBuf.data(), nameSize).getQString().trimmed();
 }
 
 /**
@@ -1130,15 +1337,14 @@ QString Core::getGroupPeerName(int groupId, int peerId) const
 {
     QMutexLocker ml{&coreLoopLock};
 
-    Tox_Err_Conference_Peer_Query error;
-    size_t length = tox_conference_peer_get_name_size(tox.get(), groupId, peerId, &error);
+    Tox_Err_Group_Peer_Query error;
+    size_t length = tox_group_peer_get_name_size(tox.get(), groupId, peerId, &error);
     if (!PARSE_ERR(error) || !length) {
         return QString{};
     }
 
     std::vector<uint8_t> nameBuf(length);
-    tox_conference_peer_get_name(tox.get(), groupId, peerId, nameBuf.data(), &error);
-    if (!PARSE_ERR(error)) {
+    if (!tox_group_peer_get_name(tox.get(), groupId, peerId, nameBuf.data(), &error)) {
         return QString{};
     }
 
@@ -1152,10 +1358,9 @@ ToxPk Core::getGroupPeerPk(int groupId, int peerId) const
 {
     QMutexLocker ml{&coreLoopLock};
 
-    uint8_t friendPk[TOX_PUBLIC_KEY_SIZE] = {0x00};
-    Tox_Err_Conference_Peer_Query error;
-    tox_conference_peer_get_public_key(tox.get(), groupId, peerId, friendPk, &error);
-    if (!PARSE_ERR(error)) {
+    uint8_t friendPk[TOX_GROUP_PEER_PUBLIC_KEY_SIZE] = {0x00};
+    Tox_Err_Group_Peer_Query error;
+    if (!tox_group_peer_get_public_key(tox.get(), groupId, peerId, friendPk, &error)) {
         return ToxPk{};
     }
 
@@ -1171,49 +1376,19 @@ QStringList Core::getGroupPeerNames(int groupId) const
 
     assert(tox != nullptr);
 
-    uint32_t nPeers = getGroupNumberPeers(groupId);
-    if (nPeers == std::numeric_limits<uint32_t>::max()) {
-        qWarning() << "getGroupPeerNames: Unable to get number of peers";
-        return {};
-    }
-
+    const QVector<uint32_t> peers = getGroupPeerList(groupId);
     QStringList names;
-    for (int i = 0; i < static_cast<int>(nPeers); ++i) {
-        Tox_Err_Conference_Peer_Query error;
-        size_t length = tox_conference_peer_get_name_size(tox.get(), groupId, i, &error);
-
-        if (!PARSE_ERR(error) || !length) {
-            names.append(QString());
-            continue;
-        }
-
-        std::vector<uint8_t> nameBuf(length);
-        tox_conference_peer_get_name(tox.get(), groupId, i, nameBuf.data(), &error);
-        if (PARSE_ERR(error)) {
-            names.append(ToxString(nameBuf.data(), length).getQString());
-        } else {
-            names.append(QString());
-        }
+    names.reserve(peers.size());
+    for (uint32_t peerId : peers) {
+        names.append(getGroupPeerName(groupId, static_cast<int>(peerId)));
     }
-
-    assert(names.size() == static_cast<int>(nPeers));
-
     return names;
 }
 
-/**
- * @brief Check, that group has audio or video stream
- * @param groupId Id of group to check
- * @return True for AV groups, false for text-only groups
- */
 bool Core::getGroupAvEnabled(int groupId) const
 {
-    QMutexLocker ml{&coreLoopLock};
-    Tox_Err_Conference_Get_Type error;
-    Tox_Conference_Type type = tox_conference_get_type(tox.get(), groupId, &error);
-    PARSE_ERR(error);
-    // would be nice to indicate to caller that we don't actually know..
-    return type == TOX_CONFERENCE_TYPE_AV;
+    std::ignore = groupId;
+    return false;
 }
 
 /**
@@ -1227,75 +1402,894 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
     QMutexLocker ml{&coreLoopLock};
 
     const uint32_t friendId = inviteInfo.getFriendId();
-    const uint8_t confType = inviteInfo.getType();
     const QByteArray invite = inviteInfo.getInvite();
-    const uint8_t* const cookie = reinterpret_cast<const uint8_t*>(invite.data());
-    const size_t cookieLength = invite.length();
-    uint32_t groupNum{std::numeric_limits<uint32_t>::max()};
-    switch (confType) {
-    case TOX_CONFERENCE_TYPE_TEXT: {
-        qDebug() << QString("Trying to accept invite for text group chat sent by friend %1").arg(friendId);
-        Tox_Err_Conference_Join error;
-        groupNum = tox_conference_join(tox.get(), friendId, cookie, cookieLength, &error);
-        if (!PARSE_ERR(error)) {
-            groupNum = std::numeric_limits<uint32_t>::max();
-        }
-        break;
+    const uint8_t* const inviteData = reinterpret_cast<const uint8_t*>(invite.constData());
+    const size_t inviteLength = static_cast<size_t>(invite.length());
+
+    QString selfName = getUsername();
+    if (selfName.isEmpty()) {
+        selfName = tr("User");
     }
-    case TOX_CONFERENCE_TYPE_AV: {
-        qDebug() << QString("Trying to join AV groupchat invite sent by friend %1").arg(friendId);
-        groupNum = toxav_join_av_groupchat(tox.get(), friendId, cookie, cookieLength,
-                                           CoreAV::groupCallCallback, this);
-        break;
+    ToxString cSelfName(selfName);
+
+    qDebug() << QString("Accepting NGC group invite from friend %1").arg(friendId);
+    Tox_Err_Group_Invite_Accept error;
+    const uint32_t groupNum = tox_group_invite_accept(tox.get(), friendId, inviteData, inviteLength,
+                                                      cSelfName.data(), cSelfName.size(), nullptr, 0, &error);
+    if (!PARSE_ERR(error) || groupNum == std::numeric_limits<uint32_t>::max()) {
+        return std::numeric_limits<uint32_t>::max();
     }
-    default:
-        qWarning() << "joinGroupchat: Unknown groupchat type " << confType;
-    }
-    if (groupNum != std::numeric_limits<uint32_t>::max()) {
-        emit saveRequest();
-        emit groupJoined(groupNum, getGroupPersistentId(groupNum));
+
+    // Fresh invite accept: toxcore is already handshaking with the inviter,
+    // forcing a reconnect here would abort that handshake.
+    emit saveRequest();
+    emit groupJoined(groupNum, getGroupPersistentId(groupNum));
+    // NGC invites carry the group name — show it right away instead of the
+    // "Groupchat #N" placeholder (shared state sync will confirm it later)
+    const QString inviteGroupName = inviteInfo.getGroupName().trimmed();
+    if (!inviteGroupName.isEmpty()) {
+        emit groupTitleChanged(static_cast<int>(groupNum), QString(), inviteGroupName);
     }
     return groupNum;
+}
+
+uint32_t Core::joinGroupByChatId(const QByteArray& chatId)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    if (chatId.size() != TOX_GROUP_CHAT_ID_SIZE) {
+        qWarning() << "joinGroupByChatId: invalid chat id size" << chatId.size();
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    Tox_Err_Group_State_Queries stateError;
+    const uint32_t existingNum =
+        tox_group_by_chat_id(tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
+    if (PARSE_ERR(stateError) && existingNum != std::numeric_limits<uint32_t>::max()) {
+        // Re-joining a group we already know: force a fresh lookup only when
+        // it is not already happily connected to other peers.
+        Tox_Err_Group_Is_Connected connError;
+        const int32_t conn = tox_group_is_connected(tox.get(), existingNum, &connError);
+        Tox_Err_Group_Peer_Query peerError;
+        const uint32_t peerCount = tox_group_peer_count(tox.get(), existingNum, &peerError);
+        if (!PARSE_ERR(connError) || conn != 1 || !PARSE_ERR(peerError) || peerCount <= 1) {
+            kickstartGroupConnection(existingNum);
+            requestGroupInviteFromFriends(chatId);
+        }
+        emit saveRequest();
+        emit groupJoined(existingNum, getGroupPersistentId(existingNum));
+        return existingNum;
+    }
+
+    QString selfName = getUsername();
+    if (selfName.isEmpty()) {
+        selfName = tr("User");
+    }
+    ToxString cSelfName(selfName);
+
+    Tox_Err_Group_Join error;
+    const uint32_t groupNum = tox_group_join(tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()),
+                                             cSelfName.data(), cSelfName.size(), nullptr, 0, &error);
+    if (!PARSE_ERR(error) || groupNum == std::numeric_limits<uint32_t>::max()) {
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    // Fresh tox_group_join already starts the DHT announce lookup; in parallel
+    // ask friends that may be group members to invite us in instantly.
+    requestGroupInviteFromFriends(chatId);
+    emit saveRequest();
+    emit groupJoined(groupNum, getGroupPersistentId(groupNum));
+    return groupNum;
+}
+
+uint32_t Core::joinGroupByChatIdHex(const QString& hexId)
+{
+    const QByteArray chatId = parseGroupChatIdHex(hexId);
+    if (chatId.isEmpty()) {
+        qWarning() << "joinGroupByChatIdHex: invalid hex group id";
+        return std::numeric_limits<uint32_t>::max();
+    }
+    return joinGroupByChatId(chatId);
+}
+
+void Core::reconnectGroupIfDisconnected(uint32_t groupNum) const
+{
+    // tox_group_is_connected (this fork): -1 = disconnected, 0 = connecting, 1 = connected.
+    // Only revive a genuinely disconnected group; reconnecting a CONNECTING one
+    // would abort the announce lookup that is already in progress.
+    Tox_Err_Group_Is_Connected connError;
+    const int32_t conn = tox_group_is_connected(tox.get(), groupNum, &connError);
+    if (!PARSE_ERR(connError) || conn != -1) {
+        return;
+    }
+
+    Tox_Err_Group_Reconnect recError;
+    tox_group_reconnect(tox.get(), groupNum, &recError);
+    PARSE_ERR(recError);
+}
+
+void Core::kickstartGroupConnection(uint32_t groupNum) const
+{
+    Tox_Err_Group_Reconnect recError;
+    tox_group_reconnect(tox.get(), groupNum, &recError);
+    PARSE_ERR(recError);
+}
+
+namespace {
+constexpr int64_t GROUP_KICKSTART_MIN_INTERVAL_MS = 20000;
+// A full tox_group_reconnect() tears down all peer connections and restarts the
+// onion announce lookup from scratch. The lookup itself needs 30-90+ seconds to
+// find peers, so kicking a *connected but lonely* group must be much rarer than
+// reconnecting a genuinely disconnected one.
+constexpr int64_t GROUP_LONELY_KICKSTART_MIN_INTERVAL_MS = 180000;
+std::unordered_map<uint32_t, int64_t> groupLastKickstartMs;
+// When a public group has been connected-but-peerless (or stuck CONNECTING)
+// continuously since this timestamp, we occasionally reset the announce
+// lookup backoff with a full reconnect.
+std::unordered_map<uint32_t, int64_t> groupStagnantSinceMs;
+
+// Friend-assisted group join: DHT announce lookups are slow (30-90+ s, can
+// back off to much longer), but a friend who is already inside the target
+// group can invite us over the existing friend connection instantly. On join
+// by chat id we broadcast a small "invite me to this group" packet to online
+// friends; a member that receives it replies with a normal NGC invite which
+// we auto-accept.
+constexpr uint8_t GROUP_INVITE_REQUEST_PACKET_ID = 184; // custom lossless range 160..191
+constexpr uint8_t GROUP_INVITE_REQUEST_VERSION = 1;
+constexpr int64_t GROUP_INVITE_REQUEST_TTL_MS = 10 * 60 * 1000;
+constexpr int64_t GROUP_INVITE_REQUEST_RESEND_MS = 30 * 1000;
+constexpr int64_t GROUP_INVITE_REPLY_MIN_INTERVAL_MS = 60 * 1000;
+// chat ids (raw 32 bytes) we asked friends to invite us to → request time
+std::unordered_map<std::string, int64_t> pendingFriendAssistedJoins;
+// receiver side: (friendId, groupNum) → last time we sent them an invite
+std::unordered_map<uint64_t, int64_t> lastGroupInviteReplyMs;
+// sender side: (friendId, chat id hash) → last time we sent the request
+std::unordered_map<uint64_t, int64_t> lastGroupInviteRequestMs;
+
+uint64_t friendGroupKey(uint32_t friendId, uint32_t groupPart)
+{
+    return (static_cast<uint64_t>(friendId) << 32) | groupPart;
+}
+
+uint32_t chatIdHash32(const uint8_t* chatId)
+{
+    uint32_t h = 0;
+    for (int i = 0; i < 4; ++i) {
+        h = (h << 8) | chatId[i];
+    }
+    return h;
+}
+
+// NGC file transfer (TRIfA-compatible wire protocol):
+// files inside NGC groups travel as lossless custom packets with this layout:
+//   magic(6) = 66 77 88 11 34 35, version(1) = 01, pkt_id(1),
+//   pkt 0x11 (live file, broadcast):  msg_id(32) create_ts(4) filename(255) data[1..36701]
+//   pkt 0x12 (chunked begin):         same header + total_size(8) chunk_size(4) total_chunks(4)
+//   pkt 0x13 (chunked data):            msg_id(32) chunk_index(4) chunk_size(4) data[...]
+//   pkt 0x03 (history-sync file, private): msg_id(32) orig_sender_pk(32) ts(4)
+//                                          peer_name(25) filename(255) data[1..36701]
+const uint8_t NGC_MAGIC[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
+constexpr uint8_t NGC_VERSION = 0x01;
+constexpr size_t NGC_SYNC_FILE_HEADER_SIZE = 6 + 1 + 1 + 32 + 32 + 4 + 25 + 255; // 356
+
+struct NgcIncomingAssembly {
+    QString fileName;
+    QString outPath;
+    uint64_t totalSize = 0;
+    uint32_t totalChunks = 0;
+    uint32_t chunkPayload = 0;
+    uint32_t receivedCount = 0;
+    QVector<bool> received;
+};
+
+QHash<QString, NgcIncomingAssembly> ngcIncomingAssemblies;
+
+QString ngcAssemblyKey(uint32_t groupId, const QByteArray& msgId)
+{
+    return QString::number(groupId) + QLatin1Char(':') + QString::fromLatin1(msgId.toHex());
+}
+
+void ngcPutMagic(uint8_t* p)
+{
+    memcpy(p, NGC_MAGIC, sizeof(NGC_MAGIC));
+    p[6] = NGC_VERSION;
+}
+
+void ngcPutFilename(uint8_t* p, const QString& fileName)
+{
+    const QByteArray nameUtf8 = fileName.toUtf8().left(254);
+    memset(p, 0, 255);
+    memcpy(p, nameUtf8.constData(), static_cast<size_t>(nameUtf8.size()));
+}
+
+void ngcPutU32Be(uint8_t* p, uint32_t v)
+{
+    p[0] = static_cast<uint8_t>((v >> 24) & 0xff);
+    p[1] = static_cast<uint8_t>((v >> 16) & 0xff);
+    p[2] = static_cast<uint8_t>((v >> 8) & 0xff);
+    p[3] = static_cast<uint8_t>(v & 0xff);
+}
+
+void ngcPutU64Be(uint8_t* p, uint64_t v)
+{
+    for (int i = 7; i >= 0; --i) {
+        p[i] = static_cast<uint8_t>(v & 0xff);
+        v >>= 8;
+    }
+}
+
+uint32_t ngcReadU32Be(const uint8_t* p)
+{
+    return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
+           | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+
+uint64_t ngcReadU64Be(const uint8_t* p)
+{
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) {
+        v = (v << 8) | p[i];
+    }
+    return v;
+}
+
+// dedupe incoming files by msg_id (live + sync copies of the same message)
+QSet<QByteArray> ngcSeenFileMsgIds;
+QList<QByteArray> ngcSeenFileMsgIdOrder;
+
+bool ngcFileMsgIdSeen(const QByteArray& msgId)
+{
+    if (ngcSeenFileMsgIds.contains(msgId)) {
+        return true;
+    }
+    ngcSeenFileMsgIds.insert(msgId);
+    ngcSeenFileMsgIdOrder.append(msgId);
+    while (ngcSeenFileMsgIdOrder.size() > 512) {
+        ngcSeenFileMsgIds.remove(ngcSeenFileMsgIdOrder.takeFirst());
+    }
+    return false;
+}
+
+QString ngcParseFilename(const uint8_t* field, size_t fieldLen)
+{
+    size_t len = 0;
+    while (len < fieldLen && field[len] != 0) {
+        ++len;
+    }
+    QString name = QString::fromUtf8(reinterpret_cast<const char*>(field), static_cast<int>(len)).trimmed();
+    // strip any path components a malicious sender could embed
+    name = QFileInfo(name).fileName();
+    if (name.isEmpty()) {
+        name = QStringLiteral("file.bin");
+    }
+    return name;
+}
+
+bool shouldRunGroupMaintenance(uint32_t groupNum, std::unordered_map<uint32_t, int64_t>& map, int64_t minIntervalMs)
+{
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+    const int64_t last = map[groupNum];
+    if (now - last < minIntervalMs) {
+        return false;
+    }
+    map[groupNum] = now;
+    return true;
+}
+} // namespace
+
+void Core::maintainGroups()
+{
+    const uint32_t groupCount = tox_group_get_number_groups(tox.get());
+    if (groupCount == 0) {
+        return;
+    }
+
+    std::vector<uint32_t> groupList(groupCount);
+    tox_group_get_grouplist(tox.get(), groupList.data());
+
+    for (uint32_t groupNum : groupList) {
+        Tox_Err_Group_State_Queries privacyError;
+        const auto privacy = tox_group_get_privacy_state(tox.get(), groupNum, &privacyError);
+        if (!PARSE_ERR(privacyError)) {
+            reconnectGroupIfDisconnected(groupNum);
+            continue;
+        }
+
+        Tox_Err_Group_Peer_Query peerError;
+        const uint32_t peerCount = tox_group_peer_count(tox.get(), groupNum, &peerError);
+        PARSE_ERR(peerError);
+
+        Tox_Err_Group_Is_Connected connError;
+        const int32_t conn = tox_group_is_connected(tox.get(), groupNum, &connError);
+        PARSE_ERR(connError);
+
+        if (privacy != TOX_GROUP_PRIVACY_STATE_PUBLIC) {
+            reconnectGroupIfDisconnected(groupNum);
+            continue;
+        }
+
+        // tox_group_is_connected: -1 = disconnected, 0 = connecting, 1 = connected
+        if (conn == -1) {
+            // Genuinely disconnected: retry quickly.
+            groupStagnantSinceMs.erase(groupNum);
+            if (shouldRunGroupMaintenance(groupNum, groupLastKickstartMs, GROUP_KICKSTART_MIN_INTERVAL_MS)) {
+                kickstartGroupConnection(groupNum);
+            }
+        } else if (peerCount <= 1) {
+            // Connecting, or connected but alone: the onion lookup is running
+            // and needs 30-90+ seconds; only reset its exponential backoff
+            // after the group stayed peerless for a long continuous stretch.
+            const int64_t now = QDateTime::currentMSecsSinceEpoch();
+            const auto it = groupStagnantSinceMs.find(groupNum);
+            if (it == groupStagnantSinceMs.end()) {
+                groupStagnantSinceMs[groupNum] = now;
+            } else if (now - it->second >= GROUP_LONELY_KICKSTART_MIN_INTERVAL_MS) {
+                it->second = now;
+                kickstartGroupConnection(groupNum);
+            }
+            // Independent of the slow DHT path: keep asking friends that are
+            // group members to invite us in over the friend connection. The
+            // per-friend rate limit (30 s) keeps the traffic negligible.
+            static std::unordered_map<uint32_t, int64_t> lastFriendAssistMs;
+            int64_t& lastAssist = lastFriendAssistMs[groupNum];
+            if (now - lastAssist >= 15000) {
+                lastAssist = now;
+                uint8_t chatIdBuf[TOX_GROUP_CHAT_ID_SIZE];
+                Tox_Err_Group_State_Queries chatIdError;
+                if (tox_group_get_chat_id(tox.get(), groupNum, chatIdBuf, &chatIdError)
+                    && chatIdError == TOX_ERR_GROUP_STATE_QUERIES_OK) {
+                    requestGroupInviteFromFriends(
+                        QByteArray(reinterpret_cast<const char*>(chatIdBuf), TOX_GROUP_CHAT_ID_SIZE));
+                }
+            }
+        } else {
+            groupStagnantSinceMs.erase(groupNum);
+        }
+    }
+
+    if (++groupMaintenanceTick >= 40) {
+        groupMaintenanceTick = 0;
+        for (uint32_t groupNum : groupList) {
+            Tox_Err_Group_State_Queries privacyError;
+            const auto privacy = tox_group_get_privacy_state(tox.get(), groupNum, &privacyError);
+            if (!PARSE_ERR(privacyError) || privacy != TOX_GROUP_PRIVACY_STATE_PUBLIC) {
+                continue;
+            }
+            emit groupPeerlistChanged(groupNum);
+        }
+    }
+
+    static std::unordered_map<uint32_t, int64_t> groupLastPeerSyncMs;
+    constexpr int64_t GROUP_PEER_SYNC_INTERVAL_MS = 30000;
+    for (uint32_t groupNum : groupList) {
+        if (shouldRunGroupMaintenance(groupNum, groupLastPeerSyncMs, GROUP_PEER_SYNC_INTERVAL_MS)) {
+            emit groupPeerlistChanged(groupNum);
+        }
+    }
 }
 
 void Core::groupInviteFriend(uint32_t friendId, int groupId)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    Tox_Err_Conference_Invite error;
-    tox_conference_invite(tox.get(), friendId, groupId, &error);
+    Tox_Err_Group_Invite_Friend error;
+    tox_group_invite_friend(tox.get(), groupId, friendId, &error);
     PARSE_ERR(error);
 }
 
-int Core::createGroup(uint8_t type)
+/**
+ * @brief Parse an incoming NGC custom packet; handle TRIfA-style file transfers.
+ * Live files (pkt 0x11) arrive as broadcast custom packets, history-sync files
+ * (pkt 0x03) as private custom packets from a peer that resyncs history to us.
+ */
+void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                       size_t length, bool isPrivate)
+{
+    if (length < 8 || memcmp(data, NGC_MAGIC, sizeof(NGC_MAGIC)) != 0 || data[6] != NGC_VERSION) {
+        return;
+    }
+    const uint8_t pktId = data[7];
+
+    if (pktId == NGC_PKT_FILE && !isPrivate) {
+        if (length <= NGC_FILE_HEADER_SIZE
+            || length > NGC_FILE_HEADER_SIZE + NGC_SINGLE_PKT_MAX_FILESIZE) {
+            return;
+        }
+        const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        if (ngcFileMsgIdSeen(msgId)) {
+            return;
+        }
+        const QString fileName = ngcParseFilename(data + 44, 255);
+        const QByteArray fileData(reinterpret_cast<const char*>(data + NGC_FILE_HEADER_SIZE),
+                                  static_cast<int>(length - NGC_FILE_HEADER_SIZE));
+        const ToxPk sender = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+        if (sender == getSelfPublicKey()) {
+            return;
+        }
+        qDebug() << "NGC file received: group" << groupId << "peer" << peerId << fileName
+                 << fileData.size() << "bytes";
+        emit groupFileReceived(static_cast<int>(groupId), sender, fileName, fileData,
+                               QDateTime::currentDateTime());
+        return;
+    }
+
+    if (pktId == NGC_PKT_FILE_BEGIN && !isPrivate) {
+        if (length < NGC_FILE_BEGIN_SIZE) {
+            return;
+        }
+        const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        const QString key = ngcAssemblyKey(groupId, msgId);
+        if (ngcIncomingAssemblies.contains(key)) {
+            return;
+        }
+        const QString fileName = ngcParseFilename(data + 44, 255);
+        const uint64_t totalSize = ngcReadU64Be(data + 299);
+        const uint32_t chunkPayload = ngcReadU32Be(data + 307);
+        const uint32_t totalChunks = ngcReadU32Be(data + 311);
+        if (totalSize == 0 || totalSize > KHANDAQ_MAX_FILE_TRANSFER_BYTES || totalChunks == 0
+            || chunkPayload == 0 || chunkPayload > NGC_CHUNK_PAYLOAD_MAX) {
+            return;
+        }
+
+        NgcIncomingAssembly asm_;
+        asm_.fileName = fileName;
+        asm_.totalSize = totalSize;
+        asm_.totalChunks = totalChunks;
+        asm_.chunkPayload = chunkPayload;
+        asm_.received = QVector<bool>(static_cast<int>(totalChunks), false);
+        asm_.outPath = QString(); // filled on complete via in-memory buffer write to temp - use settings path
+
+        const QString saveDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                                + QDir::separator() + QStringLiteral("ngc_files");
+        QDir().mkpath(saveDir);
+        asm_.outPath = saveDir + QDir::separator() + fileName;
+
+        QFile outFile(asm_.outPath);
+        if (!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            return;
+        }
+        if (totalSize > 0) {
+            outFile.resize(static_cast<qint64>(totalSize));
+        }
+        outFile.close();
+
+        ngcIncomingAssemblies.insert(key, asm_);
+        qDebug() << "NGC chunked file begin:" << fileName << totalSize << "bytes" << totalChunks << "chunks";
+        return;
+    }
+
+    if (pktId == NGC_PKT_FILE_CHUNK && !isPrivate) {
+        if (length < NGC_FILE_CHUNK_HEADER_SIZE + 1) {
+            return;
+        }
+        const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        const QString key = ngcAssemblyKey(groupId, msgId);
+        auto it = ngcIncomingAssemblies.find(key);
+        if (it == ngcIncomingAssemblies.end()) {
+            return;
+        }
+        NgcIncomingAssembly& asm_ = it.value();
+        const uint32_t chunkIndex = ngcReadU32Be(data + 40);
+        const uint32_t chunkSize = ngcReadU32Be(data + 44);
+        if (chunkIndex >= asm_.totalChunks || chunkSize == 0
+            || NGC_FILE_CHUNK_HEADER_SIZE + chunkSize > length) {
+            return;
+        }
+        if (asm_.received.at(static_cast<int>(chunkIndex))) {
+            return;
+        }
+
+        QFile outFile(asm_.outPath);
+        if (!outFile.open(QIODevice::ReadWrite)) {
+            return;
+        }
+        const qint64 offset = static_cast<qint64>(chunkIndex) * asm_.chunkPayload;
+        outFile.seek(offset);
+        outFile.write(reinterpret_cast<const char*>(data + NGC_FILE_CHUNK_HEADER_SIZE),
+                      static_cast<qint64>(chunkSize));
+        outFile.close();
+
+        asm_.received[static_cast<int>(chunkIndex)] = true;
+        ++asm_.receivedCount;
+
+        if (asm_.receivedCount < asm_.totalChunks) {
+            return;
+        }
+
+        const ToxPk sender = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+        ngcIncomingAssemblies.remove(key);
+        if (sender == getSelfPublicKey()) {
+            return;
+        }
+
+        QFile in(asm_.outPath);
+        if (!in.open(QIODevice::ReadOnly)) {
+            return;
+        }
+        const QByteArray fileData = in.readAll();
+        in.close();
+
+        if (ngcFileMsgIdSeen(msgId)) {
+            return;
+        }
+        qDebug() << "NGC chunked file complete:" << asm_.fileName << fileData.size() << "bytes";
+        emit groupFileReceived(static_cast<int>(groupId), sender, asm_.fileName, fileData,
+                               QDateTime::currentDateTime());
+        return;
+    }
+
+    if (pktId == NGC_PKT_SYNC_FILE && isPrivate) {
+        if (length <= NGC_SYNC_FILE_HEADER_SIZE
+            || length > NGC_SYNC_FILE_HEADER_SIZE + NGC_SINGLE_PKT_MAX_FILESIZE) {
+            return;
+        }
+        const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        if (ngcFileMsgIdSeen(msgId)) {
+            return;
+        }
+        const ToxPk origSender(QByteArray(reinterpret_cast<const char*>(data + 40), 32));
+        if (origSender == getSelfPublicKey()) {
+            return; // our own message echoed back via history sync
+        }
+        uint32_t ts = 0;
+        for (int i = 0; i < 4; ++i) {
+            ts = (ts << 8) | data[72 + i];
+        }
+        const QString fileName = ngcParseFilename(data + 101, 255);
+        const QByteArray fileData(reinterpret_cast<const char*>(data + NGC_SYNC_FILE_HEADER_SIZE),
+                                  static_cast<int>(length - NGC_SYNC_FILE_HEADER_SIZE));
+        QDateTime when = ts > 0 ? QDateTime::fromSecsSinceEpoch(ts) : QDateTime::currentDateTime();
+        qDebug() << "NGC sync file received: group" << groupId << "orig sender"
+                 << origSender.toString().left(8) << fileName << fileData.size() << "bytes";
+        emit groupFileReceived(static_cast<int>(groupId), origSender, fileName, fileData, when);
+        return;
+    }
+}
+
+/**
+ * @brief Send a file into an NGC group (single pkt 0x11 or chunked 0x12/0x13 for larger files).
+ */
+bool Core::sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
+                         const QByteArray& fileData)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    if (type == TOX_CONFERENCE_TYPE_TEXT) {
-        Tox_Err_Conference_New error;
-        uint32_t groupId = tox_conference_new(tox.get(), &error);
-        if (PARSE_ERR(error)) {
-            emit saveRequest();
-            emit emptyGroupCreated(groupId, getGroupPersistentId(groupId));
-            return groupId;
-        } else {
-            return std::numeric_limits<uint32_t>::max();
+    if (fileData.isEmpty()) {
+        return sendGroupFileFromPath(groupId, fileName, localPath);
+    }
+
+    if (static_cast<uint64_t>(fileData.size()) > KHANDAQ_MAX_FILE_TRANSFER_BYTES) {
+        qWarning() << "sendGroupFile: file too large" << fileData.size();
+        return false;
+    }
+
+    if (static_cast<size_t>(fileData.size()) > NGC_SINGLE_PKT_MAX_FILESIZE) {
+        return sendGroupFileFromPath(groupId, fileName, localPath);
+    }
+
+    QByteArray packet;
+    packet.resize(static_cast<int>(NGC_FILE_HEADER_SIZE) + fileData.size());
+    uint8_t* p = reinterpret_cast<uint8_t*>(packet.data());
+    memset(p, 0, NGC_FILE_HEADER_SIZE);
+    ngcPutMagic(p);
+    p[7] = NGC_PKT_FILE;
+
+    QByteArray msgId(32, 0);
+    QRandomGenerator::system()->fillRange(reinterpret_cast<quint32*>(msgId.data()), 8);
+    memcpy(p + 8, msgId.constData(), 32);
+    ngcPutFilename(p + 44, fileName);
+    memcpy(p + NGC_FILE_HEADER_SIZE, fileData.constData(), static_cast<size_t>(fileData.size()));
+
+    Tox_Err_Group_Send_Custom_Packet error;
+    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+                                 reinterpret_cast<const uint8_t*>(packet.constData()),
+                                 static_cast<size_t>(packet.size()), &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
+        qWarning() << "sendGroupFile: tox_group_send_custom_packet failed, error"
+                   << static_cast<int>(error);
+        return false;
+    }
+
+    ngcFileMsgIdSeen(msgId);
+    emit groupFileSent(groupId, fileName, localPath, fileData.size());
+    return true;
+}
+
+bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath)
+{
+    QFile in(localPath);
+    if (!in.open(QIODevice::ReadOnly)) {
+        qWarning() << "sendGroupFileFromPath: cannot open" << localPath;
+        return false;
+    }
+
+    QString wireName = fileName.trimmed();
+    if (wireName.isEmpty()) {
+        wireName = QFileInfo(localPath).fileName();
+    }
+
+    const qint64 fileSize = in.size();
+    if (fileSize <= 0 || static_cast<uint64_t>(fileSize) > KHANDAQ_MAX_FILE_TRANSFER_BYTES) {
+        qWarning() << "sendGroupFileFromPath: invalid size" << fileSize;
+        return false;
+    }
+
+    QByteArray msgId(32, 0);
+    QRandomGenerator::system()->fillRange(reinterpret_cast<quint32*>(msgId.data()), 8);
+
+    if (static_cast<uint64_t>(fileSize) <= NGC_SINGLE_PKT_MAX_FILESIZE) {
+        const QByteArray payload = in.readAll();
+        in.close();
+        return sendGroupFile(groupId, wireName, localPath, payload);
+    }
+
+    const uint32_t totalChunks =
+        static_cast<uint32_t>((static_cast<uint64_t>(fileSize) + NGC_CHUNK_PAYLOAD_MAX - 1)
+                              / NGC_CHUNK_PAYLOAD_MAX);
+
+    QByteArray beginPkt(static_cast<int>(NGC_FILE_BEGIN_SIZE), 0);
+    uint8_t* bp = reinterpret_cast<uint8_t*>(beginPkt.data());
+    ngcPutMagic(bp);
+    bp[7] = NGC_PKT_FILE_BEGIN;
+    memcpy(bp + 8, msgId.constData(), 32);
+    ngcPutFilename(bp + 44, wireName);
+    ngcPutU64Be(bp + 299, static_cast<uint64_t>(fileSize));
+    ngcPutU32Be(bp + 307, static_cast<uint32_t>(NGC_CHUNK_PAYLOAD_MAX));
+    ngcPutU32Be(bp + 311, totalChunks);
+
+    Tox_Err_Group_Send_Custom_Packet error;
+    tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+                                 reinterpret_cast<const uint8_t*>(beginPkt.constData()),
+                                 static_cast<size_t>(beginPkt.size()), &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
+        in.close();
+        return false;
+    }
+
+    std::array<char, NGC_CHUNK_PAYLOAD_MAX> buf{};
+    for (uint32_t idx = 0; idx < totalChunks; ++idx) {
+        const qint64 toRead = qMin(static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX),
+                                   fileSize - static_cast<qint64>(idx) * static_cast<qint64>(NGC_CHUNK_PAYLOAD_MAX));
+        const qint64 read = in.read(buf.data(), toRead);
+        if (read != toRead) {
+            in.close();
+            return false;
         }
-    } else if (type == TOX_CONFERENCE_TYPE_AV) {
-        // unlike tox_conference_new, toxav_add_av_groupchat does not have an error enum, so -1 group number is our
-        // only indication of an error
-        int groupId = toxav_add_av_groupchat(tox.get(), CoreAV::groupCallCallback, this);
-        if (groupId != -1) {
-            emit saveRequest();
-            emit emptyGroupCreated(groupId, getGroupPersistentId(groupId));
-        } else {
-            qCritical() << "Unknown error creating AV groupchat";
+
+        QByteArray chunkPkt(static_cast<int>(NGC_FILE_CHUNK_HEADER_SIZE + read), 0);
+        uint8_t* cp = reinterpret_cast<uint8_t*>(chunkPkt.data());
+        ngcPutMagic(cp);
+        cp[7] = NGC_PKT_FILE_CHUNK;
+        memcpy(cp + 8, msgId.constData(), 32);
+        ngcPutU32Be(cp + 40, idx);
+        ngcPutU32Be(cp + 44, static_cast<uint32_t>(read));
+        memcpy(cp + NGC_FILE_CHUNK_HEADER_SIZE, buf.data(), static_cast<size_t>(read));
+
+        tox_group_send_custom_packet(tox.get(), static_cast<uint32_t>(groupId), true,
+                                     reinterpret_cast<const uint8_t*>(chunkPkt.constData()),
+                                     static_cast<size_t>(chunkPkt.size()), &error);
+        if (error != TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK) {
+            in.close();
+            return false;
         }
-        return groupId;
-    } else {
-        qWarning() << "createGroup: Unknown type " << type;
+    }
+    in.close();
+
+    ngcFileMsgIdSeen(msgId);
+    emit groupFileSent(groupId, wireName, localPath, fileSize);
+    return true;
+}
+
+/**
+ * @brief Ask all online friends to send us an NGC invite for the given chat id.
+ * A friend that is a member of the group replies with a regular group invite,
+ * which joins us through the friend connection instantly instead of waiting
+ * for the slow DHT announce lookup.
+ */
+void Core::requestGroupInviteFromFriends(const QByteArray& chatId)
+{
+    if (chatId.size() != TOX_GROUP_CHAT_ID_SIZE) {
+        return;
+    }
+
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+    pendingFriendAssistedJoins[std::string(chatId.constData(), static_cast<size_t>(chatId.size()))] = now;
+
+    uint8_t packet[2 + TOX_GROUP_CHAT_ID_SIZE];
+    packet[0] = GROUP_INVITE_REQUEST_PACKET_ID;
+    packet[1] = GROUP_INVITE_REQUEST_VERSION;
+    memcpy(packet + 2, chatId.constData(), TOX_GROUP_CHAT_ID_SIZE);
+
+    const size_t friendCount = tox_self_get_friend_list_size(tox.get());
+    if (friendCount == 0) {
+        return;
+    }
+    std::vector<uint32_t> friendIds(friendCount);
+    tox_self_get_friend_list(tox.get(), friendIds.data());
+
+    const uint32_t idHash = chatIdHash32(reinterpret_cast<const uint8_t*>(chatId.constData()));
+    int sent = 0;
+    for (uint32_t friendId : friendIds) {
+        Tox_Err_Friend_Query connErr;
+        const Tox_Connection conn = tox_friend_get_connection_status(tox.get(), friendId, &connErr);
+        if (connErr != TOX_ERR_FRIEND_QUERY_OK || conn == TOX_CONNECTION_NONE) {
+            continue;
+        }
+        const uint64_t key = friendGroupKey(friendId, idHash);
+        const auto it = lastGroupInviteRequestMs.find(key);
+        if (it != lastGroupInviteRequestMs.end() && now - it->second < GROUP_INVITE_REQUEST_RESEND_MS) {
+            continue;
+        }
+        lastGroupInviteRequestMs[key] = now;
+        Tox_Err_Friend_Custom_Packet sendErr;
+        tox_friend_send_lossless_packet(tox.get(), friendId, packet, sizeof(packet), &sendErr);
+        if (sendErr == TOX_ERR_FRIEND_CUSTOM_PACKET_OK) {
+            ++sent;
+        }
+    }
+    if (sent > 0) {
+        qDebug() << "requestGroupInviteFromFriends: asked" << sent << "online friends for an invite";
+    }
+}
+
+/**
+ * @brief When a friend comes online, re-send them any still-pending
+ * friend-assisted join requests.
+ */
+void Core::resendPendingGroupInviteRequests(uint32_t friendId)
+{
+    std::ignore = friendId;
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+    std::vector<QByteArray> stillPending;
+    for (auto it = pendingFriendAssistedJoins.begin(); it != pendingFriendAssistedJoins.end();) {
+        if (now - it->second > GROUP_INVITE_REQUEST_TTL_MS) {
+            it = pendingFriendAssistedJoins.erase(it);
+            continue;
+        }
+        stillPending.emplace_back(it->first.data(), static_cast<int>(it->first.size()));
+        ++it;
+    }
+    for (const QByteArray& chatId : stillPending) {
+        // Skip requests for groups that already have peers.
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t groupNum =
+            tox_group_by_chat_id(tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK && groupNum != std::numeric_limits<uint32_t>::max()) {
+            Tox_Err_Group_Peer_Query peerError;
+            const uint32_t peerCount = tox_group_peer_count(tox.get(), groupNum, &peerError);
+            Tox_Err_Group_Is_Connected connError;
+            const int32_t conn = tox_group_is_connected(tox.get(), groupNum, &connError);
+            if (peerError == TOX_ERR_GROUP_PEER_QUERY_OK && connError == TOX_ERR_GROUP_IS_CONNECTED_OK
+                && conn == 1 && peerCount > 1) {
+                pendingFriendAssistedJoins.erase(
+                    std::string(chatId.constData(), static_cast<size_t>(chatId.size())));
+                continue;
+            }
+        }
+        requestGroupInviteFromFriends(chatId);
+    }
+}
+
+/**
+ * @brief A friend asks us to invite them into a group (custom packet 184).
+ */
+void Core::handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data, size_t length)
+{
+    if (length != 2 + TOX_GROUP_CHAT_ID_SIZE || data[1] != GROUP_INVITE_REQUEST_VERSION) {
+        return;
+    }
+
+    const uint8_t* chatId = data + 2;
+    Tox_Err_Group_State_Queries stateError;
+    const uint32_t groupNum = tox_group_by_chat_id(tox.get(), chatId, &stateError);
+    if (stateError != TOX_ERR_GROUP_STATE_QUERIES_OK || groupNum == std::numeric_limits<uint32_t>::max()) {
+        return; // we are not in that group — silently ignore
+    }
+
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+    const uint64_t key = friendGroupKey(friendId, groupNum);
+    const auto it = lastGroupInviteReplyMs.find(key);
+    if (it != lastGroupInviteReplyMs.end() && now - it->second < GROUP_INVITE_REPLY_MIN_INTERVAL_MS) {
+        return;
+    }
+    lastGroupInviteReplyMs[key] = now;
+
+    qDebug() << "handleGroupInviteRequestPacket: friend" << friendId
+             << "asked for an invite to group" << groupNum << "- sending invite";
+    Tox_Err_Group_Invite_Friend inviteError;
+    tox_group_invite_friend(tox.get(), groupNum, friendId, &inviteError);
+    PARSE_ERR(inviteError);
+}
+
+/**
+ * @brief Auto-accept an incoming NGC invite that we requested ourselves
+ * (friend-assisted join). Returns true if the invite was consumed.
+ */
+bool Core::autoAcceptRequestedGroupInvite(const GroupInvite& inviteInfo)
+{
+    const QByteArray& invite = inviteInfo.getInvite();
+    if (invite.size() < TOX_GROUP_CHAT_ID_SIZE) {
+        return false;
+    }
+    const std::string chatIdKey(invite.constData(), TOX_GROUP_CHAT_ID_SIZE);
+    const auto pending = pendingFriendAssistedJoins.find(chatIdKey);
+    if (pending == pendingFriendAssistedJoins.end()) {
+        return false;
+    }
+    const int64_t now = QDateTime::currentMSecsSinceEpoch();
+    if (now - pending->second > GROUP_INVITE_REQUEST_TTL_MS) {
+        pendingFriendAssistedJoins.erase(pending);
+        return false;
+    }
+
+    const uint8_t* chatId = reinterpret_cast<const uint8_t*>(invite.constData());
+    Tox_Err_Group_State_Queries stateError;
+    const uint32_t existingNum = tox_group_by_chat_id(tox.get(), chatId, &stateError);
+    if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK && existingNum != std::numeric_limits<uint32_t>::max()) {
+        Tox_Err_Group_Peer_Query peerError;
+        const uint32_t peerCount = tox_group_peer_count(tox.get(), existingNum, &peerError);
+        Tox_Err_Group_Is_Connected connError;
+        const int32_t conn = tox_group_is_connected(tox.get(), existingNum, &connError);
+        if (peerError == TOX_ERR_GROUP_PEER_QUERY_OK && connError == TOX_ERR_GROUP_IS_CONNECTED_OK
+            && conn == 1 && peerCount > 1) {
+            // DHT path already succeeded in the meantime — nothing to do.
+            pendingFriendAssistedJoins.erase(chatIdKey);
+            return true;
+        }
+        // A peerless instance from tox_group_join would clash with the invite
+        // accept (which creates a fresh instance) — drop it first. toxcore
+        // reuses the freed slot, so the accept normally gets the same number.
+        qDebug() << "autoAcceptRequestedGroupInvite: replacing stuck group instance" << existingNum;
+        Tox_Err_Group_Leave leaveError;
+        tox_group_leave(tox.get(), existingNum, nullptr, 0, &leaveError);
+        PARSE_ERR(leaveError);
+
+        const uint32_t newGroupNum = joinGroupchat(inviteInfo);
+        if (newGroupNum == std::numeric_limits<uint32_t>::max()) {
+            qWarning() << "autoAcceptRequestedGroupInvite: invite accept failed";
+            return true; // consumed anyway; don't show UI for a requested invite
+        }
+        if (newGroupNum != existingNum) {
+            qWarning() << "autoAcceptRequestedGroupInvite: group number changed" << existingNum
+                       << "->" << newGroupNum;
+        }
+        pendingFriendAssistedJoins.erase(chatIdKey);
+        return true;
+    }
+
+    const uint32_t newGroupNum = joinGroupchat(inviteInfo);
+    if (newGroupNum == std::numeric_limits<uint32_t>::max()) {
+        qWarning() << "autoAcceptRequestedGroupInvite: invite accept failed";
+        return true; // consumed anyway; don't show UI for a requested invite
+    }
+    pendingFriendAssistedJoins.erase(chatIdKey);
+    qDebug() << "autoAcceptRequestedGroupInvite: joined group" << newGroupNum << "via friend invite";
+    return true;
+}
+
+int Core::createGroup(Tox_Group_Privacy_State privacyState)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    const QString groupName = tr("New group");
+    QString selfName = getUsername();
+    if (selfName.isEmpty()) {
+        selfName = tr("User");
+    }
+    ToxString cGroupName(groupName);
+    ToxString cSelfName(selfName);
+
+    Tox_Err_Group_New error;
+    const uint32_t groupId = tox_group_new(tox.get(), privacyState, cGroupName.data(), cGroupName.size(),
+                                           cSelfName.data(), cSelfName.size(), &error);
+    if (!PARSE_ERR(error) || groupId == std::numeric_limits<uint32_t>::max()) {
         return -1;
     }
+
+    emit saveRequest();
+    reconnectGroupIfDisconnected(static_cast<uint32_t>(groupId));
+    emit emptyGroupCreated(groupId, getGroupPersistentId(groupId), groupName);
+    return static_cast<int>(groupId);
 }
 
 /**

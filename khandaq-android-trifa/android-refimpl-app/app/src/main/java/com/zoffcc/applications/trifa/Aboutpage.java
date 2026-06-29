@@ -5,29 +5,20 @@
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * version 2 as published by the Free Software Foundation.
- * <p>
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * <p>
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA  02110-1301, USA.
  */
 
 package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.BuildConfig;
-
+import org.khandaq.messenger.KhandaqSupport;
 import org.khandaq.messenger.R;
 
 import android.app.ProgressDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,7 +26,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 import android.view.View;
-import android.widget.ImageView;
+import android.widget.TextView;
 
 import com.zoffcc.applications.logging.Logging;
 
@@ -45,295 +36,252 @@ import java.util.Date;
 import java.util.Locale;
 
 import androidx.appcompat.app.AppCompatActivity;
-import mehdi.sakout.aboutpage.AboutPage;
-import mehdi.sakout.aboutpage.Element;
+import androidx.appcompat.widget.Toolbar;
 
-import static com.zoffcc.applications.trifa.HelperGeneric.dp2px;
+import static com.zoffcc.applications.trifa.HelperGeneric.display_toast_with_context;
 import static com.zoffcc.applications.trifa.HelperGeneric.get_trifa_build_str;
 import static com.zoffcc.applications.trifa.MainActivity.main_activity_s;
 
 public class Aboutpage extends AppCompatActivity implements Logging.AsyncResponse
 {
     private static final String TAG = "trifa.Aboutpage";
+    private static final int DEBUG_TAP_COUNT = 7;
+
     ProgressDialog progressDialog2 = null;
+    private int versionTapCount = 0;
+    private boolean debugSectionUnlocked = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_about);
 
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        HelperToolbar.enableUpNavigation(this, toolbar);
+
+        bindHeader();
+        bindActionRows();
+        configureDebugSection(BuildConfig.DEBUG);
+    }
+
+    private void bindHeader()
+    {
+        TextView versionView = findViewById(R.id.about_version);
+        String versionText = getString(R.string.about_version_format,
+                BuildConfig.VERSION_NAME,
+                get_trifa_build_str());
+        versionView.setText(versionText);
+        versionView.setOnClickListener(v -> onVersionTapped());
+    }
+
+    private void onVersionTapped()
+    {
+        versionTapCount++;
+        if (debugSectionUnlocked || versionTapCount < DEBUG_TAP_COUNT)
+        {
+            return;
+        }
+
+        debugSectionUnlocked = true;
+        configureDebugSection(true);
+        display_toast_with_context(this, getString(R.string.about_debug_unlocked), false, 0);
+    }
+
+    private void bindActionRows()
+    {
+        bindActionRow(findViewById(R.id.about_crash_report_row),
+                getString(R.string.Aboutpage_2),
+                getString(R.string.about_crash_report_subtitle),
+                this::sendCrashReport);
+
+        bindActionRow(findViewById(R.id.about_copy_diagnostics_row),
+                getString(R.string.about_copy_diagnostics),
+                getString(R.string.about_copy_diagnostics_subtitle),
+                this::copyDiagnostics);
+
+        bindActionRow(findViewById(R.id.about_feedback_row),
+                getString(R.string.about_send_feedback),
+                KhandaqSupport.FEEDBACK_EMAIL,
+                this::sendFeedbackEmail);
+
+        bindActionRow(findViewById(R.id.about_website_row),
+                getString(R.string.Aboutpage_website),
+                "khandaq.org",
+                () -> openUrl(KhandaqSupport.WEBSITE_URL));
+
+        bindActionRow(findViewById(R.id.about_licenses_row),
+                getString(R.string.Aboutpage_opensource),
+                null,
+                () -> openUrl(KhandaqSupport.LICENSES_URL));
+
+        bindActionRow(findViewById(R.id.about_tox_row),
+                getString(R.string.Aboutpage_6),
+                null,
+                () -> openUrl(KhandaqSupport.TOX_INFO_URL));
+
+        String gitHash = BuildConfig.GitHash;
+        bindActionRow(findViewById(R.id.about_upstream_row),
+                getString(R.string.about_upstream_commit),
+                gitHash,
+                () -> openUrl("https://github.com/zoff99/ToxAndroidRefImpl/commit/" + gitHash));
+
+        String jniHash = MainActivity.getNativeLibGITHASH();
+        bindActionRow(findViewById(R.id.about_jni_row),
+                getString(R.string.about_jni_commit),
+                jniHash,
+                () -> openUrl("https://github.com/zoff99/ToxAndroidRefImpl/commit/" + jniHash));
+
+        String toxcoreHash = MainActivity.getNativeLibTOXGITHASH();
+        bindActionRow(findViewById(R.id.about_toxcore_row),
+                getString(R.string.about_toxcore_commit),
+                toxcoreHash,
+                () -> openUrl("https://github.com/zoff99/c-toxcore/commit/" + toxcoreHash));
+    }
+
+    private void configureDebugSection(boolean visible)
+    {
+        View debugSection = findViewById(R.id.about_debug_section);
+        debugSection.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (!visible)
+        {
+            return;
+        }
+
+        TextView details = findViewById(R.id.about_debug_details);
+        details.setText(buildDiagnosticsText(true));
+    }
+
+    private void bindActionRow(View row, String title, String subtitle, Runnable action)
+    {
+        TextView titleView = row.findViewById(R.id.group_info_action_title);
+        TextView subtitleView = row.findViewById(R.id.group_info_action_subtitle);
+        titleView.setText(title);
+        if (subtitle == null || subtitle.isEmpty())
+        {
+            subtitleView.setVisibility(View.GONE);
+        }
+        else
+        {
+            subtitleView.setVisibility(View.VISIBLE);
+            subtitleView.setText(subtitle);
+        }
+        row.setOnClickListener(v -> action.run());
+    }
+
+    private void openUrl(String url)
+    {
         try
         {
-            AboutPage aboutPage = new AboutPage(this).
-                    isRTL(false).
-                    setImage(R.drawable.khandaq_logo).
-                    addWebsite("https://khandaq.org");
-
-            String abis = "??";
-            try
-            {
-                abis = Build.SUPPORTED_ABIS[0];
-            }
-            catch(Exception e)
-            {
-                try
-                {
-                    abis = Build.CPU_ABI;
-                }
-                catch(Exception e2)
-                {
-                }
-            }
-
-            String versionLabel = BuildConfig.VERSION_NAME;
-            aboutPage.setDescription(
-                    getString(R.string.Aboutpage_5a) + "\n" +
-                    getString(R.string.Aboutpage_5b) + " " + versionLabel + "\n\n" +
-                    getString(R.string.Aboutpage_protocol) + "\n" +
-                    getString(R.string.Aboutpage_license) + "\n\n" +
-                    getString(R.string.Aboutpage_upstream) + "\n" +
-                    "Build: " + get_trifa_build_str() + "\n" +
-                    "BuildType: " + BuildConfig.BUILD_TYPE + "\n" +
-                    "Source commit: " + BuildConfig.GitHash + "\n" +
-                    "JNI: " + com.zoffcc.applications.trifa.MainActivity.getNativeLibGITHASH() + "\n" +
-                    "c-toxcore: " + com.zoffcc.applications.trifa.MainActivity.getNativeLibTOXGITHASH() + "\n" +
-                    "Android API: " + Build.VERSION.SDK_INT + "\n" +
-                    "CPU ABI: " + abis);
-
-            Element tox_link = new Element();
-            tox_link.setTitle(getString(R.string.Aboutpage_6));
-            Intent tox_faq_page = new Intent(Intent.ACTION_VIEW, Uri.parse("https://tox.chat"));
-            tox_link.setIntent(tox_faq_page);
-            aboutPage.addItem(tox_link);
-
-            Element licenses = new Element();
-            licenses.setTitle(getString(R.string.Aboutpage_opensource));
-            licenses.setIntent(new Intent(Intent.ACTION_VIEW, Uri.parse("https://khandaq.org/legal/third-party")));
-            aboutPage.addItem(licenses);
-
-            /*
-            mehdi.sakout.aboutpage.Element e001 = new mehdi.sakout.aboutpage.Element();
-            e001.setTitle(getString(R.string.Aboutpage_2));
-            e001.setOnClickListener(new View.OnClickListener()
-            {
-                public void onClick(View v)
-                {
-                    try
-                    {
-                        progressDialog2 = ProgressDialog.show(Aboutpage.this, "", getString(
-                                R.string.Aboutpage_4));
-
-                        progressDialog2.setCanceledOnTouchOutside(false);
-                        progressDialog2.setOnCancelListener(new DialogInterface.OnCancelListener()
-                        {
-                            @Override
-                            public void onCancel(DialogInterface dialog)
-                            {
-                            }
-                        });
-
-                        // get logcat messages ----------------
-                        Logging x = new Logging();
-                        Logging.delegate = Aboutpage.this;
-                        x.new PopulateLogcatAsyncTask(Aboutpage.this.getApplicationContext()).execute();
-                        // get logcat messages ----------------
-
-                    }
-                    catch (Exception e)
-                    {
-                    }
-                }
-            });
-            aboutPage.addItem(e001);
-            */
-
-            Element trifa_commit = new Element();
-            trifa_commit.setTitle("Upstream TRIfA commit (GPL attribution)");
-            Intent trifa_commit_page = new Intent(Intent.ACTION_VIEW, Uri.parse(
-                    "https://github.com/zoff99/ToxAndroidRefImpl/commit/" + BuildConfig.GitHash));
-            trifa_commit.setIntent(trifa_commit_page);
-            aboutPage.addItem(trifa_commit);
-
-            Element jni_commit = new Element();
-            jni_commit.setTitle("JNI commit hash link");
-            Intent jni_commit_page = new Intent(Intent.ACTION_VIEW, Uri.parse(
-                    "https://github.com/zoff99/ToxAndroidRefImpl/commit/" + com.zoffcc.applications.trifa.MainActivity.getNativeLibGITHASH()));
-            jni_commit.setIntent(jni_commit_page);
-            aboutPage.addItem(jni_commit);
-
-            Element ct_commit = new Element();
-            ct_commit.setTitle("c-toxcore commit hash link");
-            Intent ct_commit_page = new Intent(Intent.ACTION_VIEW, Uri.parse(
-                    "https://github.com/zoff99/c-toxcore/commit/" + com.zoffcc.applications.trifa.MainActivity.getNativeLibTOXGITHASH()));
-            ct_commit.setIntent(ct_commit_page);
-            aboutPage.addItem(ct_commit);
-
-            //  --------------------------------
-            Element el2 = null;
-            Intent link2 = null;
-            //  --------------------------------
-            //  --------------------------------
-            //  --------------------------------
-            //  --------- used libs ------------
-            el2 = new Element();
-            el2.setTitle(getString(R.string.Aboutpage_8));
-            el2.setIconDrawable(R.drawable.about_icon_github);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.gfx.android.orma");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/gfx/Android-Orma"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("info.guardianproject.iocipher:IOCipher");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/guardianproject/IOCipher"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.l4digital.fastscroll:fastscroll");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/L4Digital/FastScroll"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.bumptech.glide");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bumptech/glide"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("info.guardianproject.netcipher");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/guardianproject/NetCipher"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.mikepenz:fontawesome-typeface");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/mikepenz/Android-Iconics"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.mikepenz:google-material-typeface");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/mikepenz/Android-Iconics"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.google.zxing:core");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/zxing/zxing"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.hotchemi:permissionsdispatcher");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/permissions-dispatcher/PermissionsDispatcher"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.angads25:filepicker");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Angads25/android-filepicker"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.vanniktech:emoji-google");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/vanniktech/Emoji"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.google.code.gson");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/google/gson"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.medyo:android-about-page");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/medyo/android-about-page"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("de.hdodenhof:circleimageview");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/hdodenhof/CircleImageView"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.armcha:AutoLinkTextView");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/armcha/AutoLinkTextView"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.github.chrisbanes:PhotoView");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/chrisbanes/PhotoView"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.squareup.okhttp3");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/square/okhttp"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------------------------------
-            el2 = new Element();
-            el2.setTitle("com.daimajia.numberprogressbar");
-            link2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/daimajia/NumberProgressBar"));
-            el2.setIntent(link2);
-            aboutPage.addItem(el2);
-            //  --------------------------------
-            //  --------- used libs ------------
-
-            setContentView(aboutPage.create());
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
         }
         catch (Exception e)
         {
-            e.printStackTrace();
-            Log.i(TAG, "onCreate:EE1:" + e.getMessage());
-        }
-
-        try
-        {
-            // find the large top icon in aboutpage layout
-            ImageView icon_big = (ImageView) findViewById(R.id.image);
-            Log.i(TAG, "onCreate:icon_big=" + icon_big);
-
-            final Bitmap bm1 = BitmapFactory.decodeResource(getResources(), R.drawable.khandaq_logo);
-            Log.i(TAG, "onCreate:bm1.getWidth()=" + bm1.getWidth() + " bm1.getHeight()=" +
-                       bm1.getHeight());
-            final Bitmap bm1_scaled = Bitmap.createScaledBitmap(bm1, (int) dp2px(200), (int) dp2px(200), true);
-            Log.i(TAG, "onCreate:dp2px(200)=" + dp2px(200));
-
-            icon_big.setImageBitmap(bm1_scaled);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i(TAG, "onCreate:EE2:" + e.getMessage());
+            Log.i(TAG, "openUrl:EE1:" + e.getMessage());
         }
     }
 
+    private void sendFeedbackEmail()
+    {
+        try
+        {
+            Intent emailIntent = new Intent(Intent.ACTION_SENDTO,
+                    Uri.fromParts("mailto", KhandaqSupport.FEEDBACK_EMAIL, null));
+            emailIntent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.about_feedback_subject));
+            startActivity(Intent.createChooser(emailIntent, getString(R.string.about_send_feedback)));
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "sendFeedbackEmail:EE1:" + e.getMessage());
+        }
+    }
+
+    private void sendCrashReport()
+    {
+        try
+        {
+            progressDialog2 = ProgressDialog.show(this, "", getString(R.string.Aboutpage_4));
+            progressDialog2.setCanceledOnTouchOutside(false);
+            progressDialog2.setOnCancelListener(new DialogInterface.OnCancelListener()
+            {
+                @Override
+                public void onCancel(DialogInterface dialog)
+                {
+                }
+            });
+
+            Logging x = new Logging();
+            Logging.delegate = Aboutpage.this;
+            x.new PopulateLogcatAsyncTask(getApplicationContext()).execute();
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "sendCrashReport:EE1:" + e.getMessage());
+        }
+    }
+
+    private void copyDiagnostics()
+    {
+        try
+        {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null)
+            {
+                return;
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("Khandaq diagnostics", buildDiagnosticsText(false)));
+            display_toast_with_context(this, getString(R.string.about_copy_diagnostics_done), false, 0);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "copyDiagnostics:EE1:" + e.getMessage());
+        }
+    }
+
+    private String buildDiagnosticsText(boolean includeCommits)
+    {
+        String abis = getPrimaryAbi();
+        StringBuilder sb = new StringBuilder();
+        sb.append(getString(R.string.Aboutpage_5a)).append('\n');
+        sb.append(getString(R.string.about_version_format, BuildConfig.VERSION_NAME, get_trifa_build_str())).append('\n');
+        sb.append(getString(R.string.Aboutpage_protocol)).append('\n');
+        sb.append(getString(R.string.Aboutpage_license)).append('\n');
+        sb.append("Android ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+        sb.append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
+        sb.append("CPU ABI: ").append(abis).append('\n');
+
+        if (includeCommits)
+        {
+            sb.append('\n');
+            sb.append("BuildType: ").append(BuildConfig.BUILD_TYPE).append('\n');
+            sb.append("Source commit: ").append(BuildConfig.GitHash).append('\n');
+            sb.append("JNI: ").append(MainActivity.getNativeLibGITHASH()).append('\n');
+            sb.append("c-toxcore: ").append(MainActivity.getNativeLibTOXGITHASH()).append('\n');
+            sb.append(getString(R.string.Aboutpage_upstream)).append('\n');
+        }
+
+        return sb.toString();
+    }
+
+    private static String getPrimaryAbi()
+    {
+        try
+        {
+            return Build.SUPPORTED_ABIS[0];
+        }
+        catch (Exception e)
+        {
+            try
+            {
+                return Build.CPU_ABI;
+            }
+            catch (Exception e2)
+            {
+                return "??";
+            }
+        }
+    }
 
     @Override
     public void processFinish(String output_part1)
@@ -341,9 +289,8 @@ public class Aboutpage extends AppCompatActivity implements Logging.AsyncRespons
         String output = output_part1 + System.getProperty("line.separator") + System.getProperty("line.separator") +
                         "LastStackTrace:" + System.getProperty("line.separator") +
                         MainApplication.last_stack_trace_as_string;
-        MainApplication.last_stack_trace_as_string = ""; // reset last stacktrace
+        MainApplication.last_stack_trace_as_string = "";
 
-        // String DATA_DEBUG_DIR = new File(getExternalFilesDir(null).getAbsolutePath() + "/crashes").toString();
         String DATA_DEBUG_DIR = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +
                                          "/trifa/crashes").toString();
 
@@ -362,7 +309,10 @@ public class Aboutpage extends AppCompatActivity implements Logging.AsyncRespons
                 @Override
                 public void run()
                 {
-                    progressDialog2.dismiss();
+                    if (progressDialog2 != null)
+                    {
+                        progressDialog2.dismiss();
+                    }
                 }
             });
         }
@@ -370,9 +320,25 @@ public class Aboutpage extends AppCompatActivity implements Logging.AsyncRespons
         {
         }
 
-        main_activity_s.sendEmailWithAttachment(this, "feedback@zanavi.cc", getString(R.string.Aboutpage_0) + " (a:" +
-                                                                            android.os.Build.VERSION.SDK + ")",
-                                                feedback_text, full_file_name,
-                                                full_file_name_suppl);
+        try
+        {
+            if (main_activity_s != null)
+            {
+                main_activity_s.sendEmailWithAttachment(this,
+                        KhandaqSupport.FEEDBACK_EMAIL,
+                        getString(R.string.Aboutpage_0) + " (a:" + Build.VERSION.SDK_INT + ")",
+                        feedback_text,
+                        full_file_name,
+                        full_file_name_suppl);
+            }
+            else
+            {
+                display_toast_with_context(this, getString(R.string.about_crash_report_unavailable), true, 0);
+            }
+        }
+        catch (Exception ee3)
+        {
+            Log.i(TAG, "processFinish:EE1:" + ee3.getMessage());
+        }
     }
 }

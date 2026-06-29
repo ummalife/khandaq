@@ -154,13 +154,12 @@ void Settings::loadGlobal()
         notifySound = s.value("notifySound", true).toBool();
         notifyHide = s.value("notifyHide", false).toBool();
         busySound = s.value("busySound", false).toBool();
-        autoSaveEnabled = s.value("autoSaveEnabled", false).toBool();
+        autoSaveEnabled = s.value("autoSaveEnabled", true).toBool();
         globalAutoAcceptDir = s.value("globalAutoAcceptDir",
-                                      QStandardPaths::locate(QStandardPaths::HomeLocation, QString(),
-                                                             QStandardPaths::LocateDirectory))
+                                      QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))
                                   .toString();
         autoAcceptMaxSize =
-            static_cast<size_t>(s.value("autoAcceptMaxSize", 20 << 20 /*20 MB*/).toLongLong());
+            static_cast<size_t>(s.value("autoAcceptMaxSize", 0).toLongLong());
         stylePreference = static_cast<StyleType>(s.value("stylePreference", 1).toInt());
     }
     s.endGroup();

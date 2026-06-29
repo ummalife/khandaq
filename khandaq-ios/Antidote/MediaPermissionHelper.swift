@@ -58,4 +58,35 @@ enum MediaPermission {
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
         presenter.present(alert, animated: true, completion: nil)
     }
+
+    static func requestMicrophoneAccess(from presenter: UIViewController?, completion: @escaping (Bool) -> Void) {
+        let session = AVAudioSession.sharedInstance()
+        let permission = session.recordPermission()
+
+        if permission == .granted {
+            completion(true)
+            return
+        }
+
+        if permission == .denied {
+            if let presenter = presenter {
+                showPermissionDeniedAlert(
+                    from: presenter,
+                    message: String(localized: "microphone_access_denied_message"))
+            }
+            completion(false)
+            return
+        }
+
+        session.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                if !granted, let presenter = presenter {
+                    showPermissionDeniedAlert(
+                        from: presenter,
+                        message: String(localized: "microphone_access_denied_message"))
+                }
+                completion(granted)
+            }
+        }
+    }
 }

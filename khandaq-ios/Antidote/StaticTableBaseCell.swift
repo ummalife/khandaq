@@ -29,6 +29,7 @@ class StaticTableBaseCell: BaseCell {
         super.setupWithTheme(theme, model: model)
 
         bottomSeparatorView.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+        ThemeChrome.applyCellBackground(theme, to: self, grouped: true)
     }
 
     /**

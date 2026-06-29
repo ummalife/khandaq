@@ -17,8 +17,13 @@
 
 set -euo pipefail
 
-OPENSSL_VERSION=1.1.1l
-OPENSSL_HASH=0b7a3e5e59c34827fe0c3a74b7ec8baef302b98fa80088d7f9153aa16fa76bd1
+# KHANDAQ (security): 1.1.1l (Aug 2021) was missing ~2 years of CVE fixes incl.
+# CVE-2022-0778 (DoS) and CVE-2023-0286 (X.400 type confusion). Bumped to the final
+# 1.1.1 release (1.1.1w, Sep 2023) — same API/build, no risk to the cross-compile.
+# TODO: migrate the Windows build to OpenSSL 3.x (Linux already uses 3.0.x) — needs a
+# Windows CI build to verify, so out of scope for this drop-in security bump.
+OPENSSL_VERSION=1.1.1w
+OPENSSL_HASH=cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

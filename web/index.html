@@ -31,6 +31,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -49,6 +50,7 @@
         <a href="#start">Get started</a>
         <a href="#open-source">Source</a>
         <a class="nav-cta" href="#download">Get the app</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">☾</button>
       </nav>
     </div>
   </header>
@@ -120,7 +122,7 @@
           <h3>Android</h3>
           <p>Sideload APK. Android 8+. Package <code>org.khandaq.messenger</code>.</p>
           <a class="btn btn-primary dl-android" href="#">Download APK</a>
-          <span class="meta">v0.2.5 · build 10295 · production-signed · GPL-3.0</span>
+          <span class="meta">v0.2.8 · build 10305 · production-signed · GPL-3.0</span>
         </article>
 
         <article class="card">
@@ -128,15 +130,15 @@
           <h3>iOS</h3>
           <p>Install via Apple TestFlight. Requires iOS 16+. Not distributed as a public IPA.</p>
           <a class="btn btn-primary" href="https://testflight.apple.com/join/4ppS8ZN5" rel="noopener noreferrer">Open TestFlight</a>
-          <span class="meta">v0.2.5 · TestFlight build 142824 · MPL-2.0</span>
+          <span class="meta">v0.2.8 · TestFlight build 142859 · MPL-2.0</span>
         </article>
 
         <article class="card">
           <div class="card-icon windows" aria-hidden="true"></div>
           <h3>Windows</h3>
-          <p>x64 installer for Windows 10 and 11. Portable zip also on GitHub Releases.</p>
-          <a class="btn btn-primary dl-windows" href="#">Download installer</a>
-          <span class="meta">v0.2.5 · GPL-3.0</span>
+          <p>x64 portable build for Windows 10 and 11. Unzip and run — no installer needed.</p>
+          <a class="btn btn-primary dl-windows" href="#">Download .zip</a>
+          <span class="meta">v0.2.8 release · desktop app 1.17.6 · security-patched libs · GPL-3.0</span>
         </article>
 
         <article class="card">
@@ -144,7 +146,7 @@
           <h3>macOS</h3>
           <p><code>khandaq.app</code> in a zip archive. Apple Silicon and Intel builds in one bundle.</p>
           <a class="btn btn-primary dl-macos" href="#">Download .zip</a>
-          <span class="meta">v0.2.5 · GPL-3.0</span>
+          <span class="meta">v0.2.8 release · desktop app 1.17.6 · GPL-3.0</span>
         </article>
 
         <article class="card">
@@ -153,7 +155,7 @@
           <p>Debian/Ubuntu: <code>.deb</code> package. Other distros: portable tarball with bundled libraries.</p>
           <a class="btn btn-primary dl-linux-deb" href="#">Download .deb</a>
           <a class="btn btn-secondary dl-linux" href="#" style="margin-top:0.35rem;">Portable .tar.gz</a>
-          <span class="meta">v0.2.5 · amd64 · GPL-3.0</span>
+          <span class="meta">v0.2.8 release · desktop app 1.17.6 · amd64 · GPL-3.0</span>
         </article>
       </div>
 
@@ -176,9 +178,9 @@
         <div class="panel">
           <h3>Recent beta improvements</h3>
           <ul>
-            <li><strong>Android:</strong> profile bar on home screen, tap chat header for contact info, group info from header, QR from gallery, password visibility toggle, clearer group role errors.</li>
-            <li><strong>iOS:</strong> stable add-contact field, safer message send flow, video attach fix, TestFlight pipeline.</li>
-            <li><strong>All platforms:</strong> open-source release on GitHub with documented network endpoints.</li>
+            <li><strong>Android (v0.2.8):</strong> delivery checkmarks on media &amp; voice, faster group connect, fixed profile import, reliable offline delivery, login-lockout fix, accurate group counts, and fewer freezes on older phones.</li>
+            <li><strong>iOS:</strong> delivery checkmark on 1:1 media, faster group reconnect on open, plus group/theme/share/login/crash-recovery fixes from tester reports — TestFlight build 142859.</li>
+            <li><strong>Desktop:</strong> Windows bundled media/crypto libraries updated past known CVEs (libvpx 1.14.0, OpenSSL 1.1.1w, FFmpeg 4.4.5), cross-platform delivery fix; portable Linux/macOS/Windows builds on GitHub.</li>
           </ul>
         </div>
       </div>
@@ -198,8 +200,8 @@
       <details class="install">
         <summary>Windows — SmartScreen warning</summary>
         <ol>
-          <li>If Windows shows a protection warning, click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
-          <li>The beta installer is not Authenticode-signed yet.</li>
+          <li>Unzip the archive, then run <code>Khandaq.exe</code>. If Windows shows a protection warning, click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
+          <li>The beta build is not Authenticode-signed yet.</li>
           <li>If antivirus blocks the file, verify SHA-256 and add an exception.</li>
         </ol>
       </details>
@@ -255,7 +257,7 @@
         <div class="panel">
           <h3>Public infrastructure</h3>
           <ul>
-            <li><a href="https://bootstrap.khandaq.org/nodes.json">bootstrap.khandaq.org</a> — node registry</li>
+            <li>Bootstrap: the public Tox DHT (nodes.tox.chat) — no self-hosted bootstrap nodes</li>
             <li><a href="https://push.khandaq.org">push.khandaq.org</a> — wake-only push relay (no message body)</li>
             <li>Desktop base: qTox · Android: TRIfA · iOS: Antidote (Zoxcore fork)</li>
           </ul>
@@ -309,7 +311,7 @@
 
   <script>
     (function () {
-      var release = 'v0.2.5';
+      var release = 'v0.2.8';
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
       var mirror = '/downloads/';
 
@@ -318,10 +320,10 @@
 
       var links = {
         '.dl-android': ['khandaq-android.apk', gh, mirror],
-        '.dl-windows': ['khandaq-windows-installer.exe', gh, mirror],
+        '.dl-windows': ['khandaq-windows-x86_64.zip', gh, mirror],
         '.dl-macos': ['khandaq-macos.zip', gh, mirror],
         '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror],
-        '.dl-linux-deb': ['khandaq-messenger_0.2.5_amd64.deb', gh, mirror]
+        '.dl-linux-deb': ['khandaq-messenger_amd64.deb', gh, mirror]
       };
 
       var debMirror = document.querySelector('.dl-linux-deb');
@@ -338,5 +340,6 @@
       });
     })();
   </script>
+  <script src="assets/theme.js" defer></script>
 </body>
 </html>

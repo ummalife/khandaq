@@ -7,6 +7,7 @@
 #import "OCTFileOutputProtocol.h"
 #import "OCTLogging.h"
 #import "NSError+OCTFile.h"
+#import <QuartzCore/QuartzCore.h>
 
 static const CFTimeInterval kDownloadStallTimeout = 90.0;
 
@@ -130,7 +131,11 @@ static const CFTimeInterval kDownloadStallTimeout = 90.0;
     [super operationStarted];
 
     if (! [self.output prepareToWrite]) {
+        // KHANDAQ (#48): MUST return — without it, execution fell through to the Resume control below
+        // and called finishWithError a SECOND time (finishWithError has no already-finished guard),
+        // double-firing the failure block.
         [self finishWithError:[NSError acceptFileErrorCannotWriteToFile]];
+        return;
     }
 
     NSError *error;

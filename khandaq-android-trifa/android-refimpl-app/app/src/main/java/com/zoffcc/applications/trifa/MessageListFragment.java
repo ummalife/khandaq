@@ -68,6 +68,30 @@ public class MessageListFragment extends Fragment
     static int count_messages_full = 0;
     static boolean faded_in = false;
     TextView scrollDateHeader = null;
+
+    private String query_friend_pubkey()
+    {
+        if (mla != null)
+        {
+            final String pk = mla.get_friend_pubkey();
+            if ((pk != null) && (pk.length() > 2))
+            {
+                return pk;
+            }
+        }
+        if (current_friendnum >= 0)
+        {
+            try
+            {
+                return tox_friend_get_public_key__wrapper(current_friendnum);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
     ConversationDateHeader conversationDateHeader = null;
     MessageListActivity mla = null;
     boolean is_data_loaded = false;
@@ -110,6 +134,7 @@ public class MessageListFragment extends Fragment
         mla = (MessageListActivity) (getActivity());
         if (mla != null)
         {
+            mla.resolve_friend_for_chat();
             current_friendnum = mla.get_current_friendnum();
         }
         // Log.i(TAG, "current_friendnum=" + current_friendnum);
@@ -123,10 +148,14 @@ public class MessageListFragment extends Fragment
             // reset "new" flags for messages -------
             if (orma != null)
             {
-                orma.updateMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
-                        is_new(false).
-                        execute();
+                final String fpk = query_friend_pubkey();
+                if (fpk != null)
+                {
+                    orma.updateMessage().
+                            tox_friendpubkeyEq(fpk).
+                            is_new(false).
+                            execute();
+                }
             }
             // reset "new" flags for messages -------
         }
@@ -220,6 +249,7 @@ public class MessageListFragment extends Fragment
         scrollDateHeader = (TextView) view.findViewById(R.id.scroll_date_header);
         scrollDateHeader.setText("");
         scrollDateHeader.setVisibility(View.INVISIBLE);
+        ChatDateSeparatorHelper.applyTheme(scrollDateHeader);
         conversationDateHeader = new ConversationDateHeader(view.getContext(), scrollDateHeader);
 
         final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getActivity());
@@ -407,13 +437,23 @@ public class MessageListFragment extends Fragment
         Log.i(TAG, "onResume");
         super.onResume();
 
+        if (mla != null)
+        {
+            mla.resolve_friend_for_chat();
+            current_friendnum = mla.get_current_friendnum();
+        }
+
         try
         {
             // reset "new" flags for messages -------
             if (orma != null)
             {
-                orma.updateMessage().tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).is_new(
-                        false).execute();
+                final String fpk = query_friend_pubkey();
+                if (fpk != null)
+                {
+                    orma.updateMessage().tox_friendpubkeyEq(fpk).is_new(
+                            false).execute();
+                }
                 // Log.i(TAG, "loading data:002");
             }
             // reset "new" flags for messages -------
@@ -423,7 +463,8 @@ public class MessageListFragment extends Fragment
             e.printStackTrace();
         }
 
-        update_all_messages(true, false, PREF__messageview_paging);
+        // KHANDAQ (#22): load off the UI thread so opening a busy chat doesn't freeze older phones.
+        update_all_messages_async(true);
 
         if (!is_data_loaded)
         {
@@ -452,39 +493,45 @@ public class MessageListFragment extends Fragment
         Log.i(TAG, "onPause");
         super.onPause();
 
-        // HINT: super ugly hack to find all audioplay recylerviews and stop any audio playing
-        // you have a better solution? let me hear it.
+        stopVisibleVoicePlayback();
+
+        global_showing_messageview = false;
+        MainActivity.message_list_fragment = null;
+    }
+
+    void stopVisibleVoicePlayback()
+    {
+        if (listingsView == null)
+        {
+            return;
+        }
+
         try
         {
-            View child;
             for (int i = 0; i < listingsView.getChildCount(); i++)
             {
-                child = listingsView.getChildAt(i);
+                final View child = listingsView.getChildAt(i);
                 try
                 {
-                    RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
+                    final RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
                     ((MessageListHolder_file_outgoing_state_cancel) vh).DetachedFromWindow(true);
                 }
-                catch(Exception e1)
+                catch (Exception ignored)
                 {
                 }
                 try
                 {
-                    RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
+                    final RecyclerView.ViewHolder vh = listingsView.getChildViewHolder(child);
                     ((MessageListHolder_file_incoming_state_cancel) vh).DetachedFromWindow(true);
                 }
-                catch(Exception e1)
+                catch (Exception ignored)
                 {
                 }
             }
         }
-        catch(Exception e2)
+        catch (Exception ignored)
         {
         }
-        // HINT: super ugly hack to find all audioplay recylerviews and stop any audio playing
-
-        global_showing_messageview = false;
-        MainActivity.message_list_fragment = null;
     }
 
     void reset_paging()
@@ -499,8 +546,12 @@ public class MessageListFragment extends Fragment
         try
         {
             // reset "new" flags for messages -------
-            orma.updateMessage().tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).is_new(
-                    false).execute();
+            final String fpk = query_friend_pubkey();
+            if (fpk != null)
+            {
+                orma.updateMessage().tox_friendpubkeyEq(fpk).is_new(
+                        false).execute();
+            }
             // reset "new" flags for messages -------
         }
         catch (Exception e)
@@ -564,13 +615,105 @@ public class MessageListFragment extends Fragment
 
     }
 
+    // KHANDAQ (#22): opening a chat read+sorted ALL its messages on the UI thread (onResume), which
+    // froze older phones on a busy chat. Do the heavy DB read off the UI thread and only touch the
+    // adapter on the main thread. A generation counter drops a stale load if the user re-enters or
+    // switches chats before it finishes. Used only for the open-chat path; other callers stay sync.
+    private static volatile int message_load_generation = 0;
+    private static final java.util.concurrent.ExecutorService message_load_executor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    void update_all_messages_async(final boolean from_resume_fragment)
+    {
+        final int loadGen = ++message_load_generation;
+        message_load_executor.execute(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                final List<com.zoffcc.applications.sorm.Message> ml;
+                try
+                {
+                    ml = get_messages();
+                }
+                catch (Exception e)
+                {
+                    return;
+                }
+
+                final Activity act = getActivity();
+                if (act == null)
+                {
+                    return;
+                }
+
+                act.runOnUiThread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        if (loadGen != message_load_generation)
+                        {
+                            return; // a newer load superseded this one
+                        }
+                        try
+                        {
+                            final int number_of_items_old = data_values.size();
+                            data_values.clear();
+                            adapter.add_list_clear(ml);
+
+                            if (from_resume_fragment && (number_of_items_old > 0) &&
+                                (data_values.size() > number_of_items_old))
+                            {
+                                if (is_at_bottom)
+                                {
+                                    is_at_bottom = false;
+                                }
+                                if (!faded_in)
+                                {
+                                    try
+                                    {
+                                        do_fade_anim_on_fab(unread_messages_notice_button, true, getClass().getName());
+                                        unread_messages_notice_button.setVisibility(View.VISIBLE);
+                                    }
+                                    catch (Exception ignored)
+                                    {
+                                    }
+                                }
+                                try
+                                {
+                                    unread_messages_notice_button.setSupportBackgroundTintList(
+                                            ContextCompat.getColorStateList(context_s,
+                                                    R.color.message_list_scroll_to_bottom_fab_bg_new_message));
+                                }
+                                catch (Exception ignored)
+                                {
+                                }
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     private List<com.zoffcc.applications.sorm.Message> get_messages()
     {
+        final String fpk = query_friend_pubkey();
+        if (fpk == null)
+        {
+            return new ArrayList<>();
+        }
+
         List<com.zoffcc.applications.sorm.Message> ml;
         if (show_only_files)
         {
             ml = orma.selectFromMessage().
-                    tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                    tox_friendpubkeyEq(fpk).
                     TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                     orderBySent_timestampAsc().
                     orderBySent_timestamp_msAsc().
@@ -581,7 +724,7 @@ public class MessageListFragment extends Fragment
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {
                 ml = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         toList();
@@ -598,7 +741,7 @@ public class MessageListFragment extends Fragment
                  the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
                  */
                 ml = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         textLike(get_sqlite_search_string(search_messages_text)).
@@ -610,11 +753,17 @@ public class MessageListFragment extends Fragment
 
     private int get_messages_count_full()
     {
+        final String fpk = query_friend_pubkey();
+        if (fpk == null)
+        {
+            return 0;
+        }
+
         int c = 0;
         if (show_only_files)
         {
             c = orma.selectFromMessage().
-                    tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                    tox_friendpubkeyEq(fpk).
                     TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
                     orderBySent_timestampAsc().
                     orderBySent_timestamp_msAsc().
@@ -625,7 +774,7 @@ public class MessageListFragment extends Fragment
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {
                 c = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         count();
@@ -642,7 +791,7 @@ public class MessageListFragment extends Fragment
                  the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
                  */
                 c = orma.selectFromMessage().
-                        tox_friendpubkeyEq(tox_friend_get_public_key__wrapper(current_friendnum)).
+                        tox_friendpubkeyEq(fpk).
                         orderBySent_timestampAsc().
                         orderBySent_timestamp_msAsc().
                         textLike(get_sqlite_search_string(search_messages_text)).
@@ -727,6 +876,20 @@ public class MessageListFragment extends Fragment
         if (main_handler_s != null)
         {
             main_handler_s.post(myRunnable);
+        }
+    }
+
+    public void scrollToReplyTarget(final MessageReplyHelper.ReplyMeta replyMeta)
+    {
+        if (adapter == null || listingsView == null || replyMeta == null)
+        {
+            return;
+        }
+
+        final int position = adapter.findPositionForReply(replyMeta);
+        if (position >= 0)
+        {
+            listingsView.smoothScrollToPosition(position);
         }
     }
 }

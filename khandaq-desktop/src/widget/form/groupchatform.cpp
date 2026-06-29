@@ -39,15 +39,24 @@
 #include "src/persistence/igroupsettings.h"
 #include "src/persistence/settings.h"
 
+#include <QBuffer>
+#include <QDir>
 #include <QDragEnterEvent>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QImageReader>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QRegularExpression>
 #include <QTimer>
 #include <QToolButton>
 #include <QPushButton>
+#include <QUrl>
 
 namespace
 {
+#include "src/core/khandaqlimits.h"
+
 const auto LABEL_PEER_TYPE_OUR = QVariant(QStringLiteral("our"));
 const auto LABEL_PEER_TYPE_MUTED = QVariant(QStringLiteral("muted"));
 const auto LABEL_PEER_PLAYING_AUDIO = QVariant(QStringLiteral("true"));
@@ -101,8 +110,10 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
 
     tabber = new TabCompleter(msgEdit, group);
 
-    fileButton->setEnabled(false);
-    fileButton->setProperty("state", "");
+    fileButton->setEnabled(true);
+    fileButton->setProperty("state", "green");
+    fileButton->setToolTip(tr("Send a file (up to %1 MB)")
+                               .arg(KHANDAQ_MAX_FILE_TRANSFER_BYTES / (1024 * 1024)));
     ChatFormHeader::Mode mode = ChatFormHeader::Mode::None;
     if (group->isAvGroupchat()) {
         mode = ChatFormHeader::Mode::Audio;
@@ -175,7 +186,102 @@ void GroupChatForm::onScreenshotClicked()
 
 void GroupChatForm::onAttachClicked()
 {
-    // Unsupported
+    const QStringList paths = QFileDialog::getOpenFileNames(Q_NULLPTR, tr("Send a file"),
+                                                            QDir::homePath(), QString(), nullptr);
+    sendFilesToGroup(paths);
+}
+
+/**
+ * @brief Send local files into the NGC group. NGC file transfers are a single
+ * custom packet limited to NGC_GROUP_FILE_MAX_BYTES, so images are recompressed
+ * to fit and oversized non-image files are rejected with an error popup.
+ */
+void GroupChatForm::sendFilesToGroup(const QStringList& paths)
+{
+    for (const QString& path : paths) {
+        const QFileInfo info(path);
+        if (!info.isFile() || !info.isReadable()) {
+            continue;
+        }
+
+        if (info.size() <= 0 || static_cast<quint64>(info.size()) > KHANDAQ_MAX_FILE_TRANSFER_BYTES) {
+            QMessageBox::warning(this, tr("Send a file"),
+                                 tr("\"%1\" is too large (max %2 MB).")
+                                     .arg(info.fileName())
+                                     .arg(KHANDAQ_MAX_FILE_TRANSFER_BYTES / (1024 * 1024)));
+            continue;
+        }
+
+        QString sendName = info.fileName();
+        QByteArray payload;
+
+        if (info.size() <= static_cast<qint64>(NGC_SINGLE_PKT_MAX_FILESIZE)) {
+            QFile in(path);
+            if (!in.open(QIODevice::ReadOnly)) {
+                continue;
+            }
+            payload = in.readAll();
+        } else {
+            if (!core.sendGroupFileFromPath(group->getId(), sendName, path)) {
+                QMessageBox::warning(this, tr("Send a file"),
+                                     tr("Could not send \"%1\" to the group.")
+                                         .arg(info.fileName()));
+            }
+            continue;
+        }
+
+        if (payload.isEmpty()) {
+            continue;
+        }
+
+        if (!core.sendGroupFile(group->getId(), sendName, path, payload)) {
+            QMessageBox::warning(this, tr("Send a file"),
+                                 tr("Could not send \"%1\" to the group. "
+                                    "Check that the group is connected and you have permission to send messages.")
+                                     .arg(info.fileName()));
+        }
+    }
+}
+
+/**
+ * @brief Recompress an image so the encoded size fits the NGC packet limit.
+ * Returns an empty array if the file is not a readable image or cannot be
+ * shrunk enough.
+ */
+QByteArray GroupChatForm::compressImageForGroup(const QString& path, QString* sendName) const
+{
+    QImageReader reader(path);
+    if (!reader.canRead()) {
+        return {};
+    }
+    QImage image = reader.read();
+    if (image.isNull()) {
+        return {};
+    }
+
+    const int dims[] = {1280, 960, 800, 640, 480, 320, 240};
+    const int qualities[] = {80, 70, 60, 50, 40, 30};
+
+    for (int dim : dims) {
+        QImage scaled = (image.width() > dim || image.height() > dim)
+                            ? image.scaled(dim, dim, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                            : image;
+        for (int quality : qualities) {
+            QByteArray out;
+            QBuffer buffer(&out);
+            buffer.open(QIODevice::WriteOnly);
+            if (!scaled.save(&buffer, "JPEG", quality)) {
+                return {};
+            }
+            if (out.size() <= static_cast<int>(NGC_SINGLE_PKT_MAX_FILESIZE)) {
+                if (sendName != nullptr) {
+                    *sendName = QFileInfo(path).completeBaseName() + QStringLiteral(".jpg");
+                }
+                return out;
+            }
+        }
+    }
+    return {};
 }
 
 /**
@@ -297,6 +403,14 @@ void GroupChatForm::peerAudioPlaying(ToxPk peerPk)
 
 void GroupChatForm::dragEnterEvent(QDragEnterEvent* ev)
 {
+    if (ev->mimeData()->hasUrls()) {
+        for (const QUrl& url : ev->mimeData()->urls()) {
+            if (url.isLocalFile()) {
+                ev->acceptProposedAction();
+                return;
+            }
+        }
+    }
     if (!ev->mimeData()->hasFormat("toxPk")) {
         return;
     }
@@ -308,6 +422,18 @@ void GroupChatForm::dragEnterEvent(QDragEnterEvent* ev)
 
 void GroupChatForm::dropEvent(QDropEvent* ev)
 {
+    if (ev->mimeData()->hasUrls()) {
+        QStringList paths;
+        for (const QUrl& url : ev->mimeData()->urls()) {
+            if (url.isLocalFile()) {
+                paths.append(url.toLocalFile());
+            }
+        }
+        if (!paths.isEmpty()) {
+            sendFilesToGroup(paths);
+            return;
+        }
+    }
     if (!ev->mimeData()->hasFormat("toxPk")) {
         return;
     }

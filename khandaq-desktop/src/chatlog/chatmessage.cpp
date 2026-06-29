@@ -252,9 +252,8 @@ void ChatMessage::markAsDelivered(const QDateTime& time)
 {
     QFont baseFont = settings.getChatMessageFont();
 
-    // remove the spinner and replace it by $time
-    replaceContent(2, new Timestamp(time, settings.getTimestampFormat(),
-        baseFont, documentCache, settings, style));
+    const QString stamp = time.toString(settings.getTimestampFormat()) + QString::fromUtf8("  ✓✓");
+    replaceContent(2, new Text(documentCache, settings, style, stamp, baseFont, false, stamp));
 }
 
 void ChatMessage::markAsBroken()

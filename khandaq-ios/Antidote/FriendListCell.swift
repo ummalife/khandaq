@@ -7,14 +7,17 @@ import SnapKit
 
 class FriendListCell: BaseCell {
     struct Constants {
-        static let AvatarSize = 30.0
-        static let AvatarLeftOffset = 10.0
-        static let AvatarRightOffset = 16.0
+        // KHANDAQ design (Figma contact cell 191:1270): compact 48pt row — 40pt avatar, 16pt side
+        // margin, 8pt gap, name + status tight.
+        static let AvatarSize = 40.0
+        static let AvatarLeftOffset = 16.0
+        static let AvatarRightOffset = 8.0
 
-        static let TopLabelHeight = 22.0
-        static let MinimumBottomLabelHeight = 15.0
+        static let TopLabelHeight = 20.0
+        static let MinimumBottomLabelHeight = 18.0
 
-        static let VerticalOffset = 3.0
+        static let VerticalOffset = 5.0
+        static let RightOffset = -16.0
     }
 
     fileprivate var avatarView: ImageViewWithStatus!
@@ -33,17 +36,19 @@ class FriendListCell: BaseCell {
         separatorInset.left = CGFloat(Constants.AvatarLeftOffset + Constants.AvatarSize + Constants.AvatarRightOffset)
 
         avatarView.imageView.image = friendModel.avatar
-        avatarView.userStatusView.theme = theme
-        avatarView.userStatusView.userStatus = friendModel.status
-        avatarView.userStatusView.connectionStatus = friendModel.connectionstatus
-        avatarView.userStatusView.isHidden = friendModel.hideStatus
+        avatarView.userStatusView.isHidden = true
 
         topLabel.text = friendModel.topText
         topLabel.textColor = theme.colorForType(.NormalText)
 
         bottomLabel.text = friendModel.bottomText
-        bottomLabel.textColor = theme.colorForType(.FriendCellStatus)
+        bottomLabel.textColor = friendModel.presenceIsOnline
+            ? theme.colorForType(.OnlineStatus)
+            : theme.colorForType(.FriendCellStatus)
         bottomLabel.numberOfLines = friendModel.multilineBottomtext ? 0 : 1
+
+        // KHANDAQ design (Figma): contact rows have no trailing chevron — avatar + name + status only.
+        arrowImageView.isHidden = true
 
         accessibilityLabel = friendModel.accessibilityLabel
         accessibilityValue = friendModel.accessibilityValue
@@ -56,11 +61,12 @@ class FriendListCell: BaseCell {
         contentView.addSubview(avatarView)
 
         topLabel = UILabel()
-        topLabel.font = UIFont.systemFont(ofSize: 18.0)
+        // KHANDAQ design (Figma): contact name is regular weight (the chat list uses semibold).
+        topLabel.font = UIFont.systemFont(ofSize: 16.0)
         contentView.addSubview(topLabel)
 
         bottomLabel = UILabel()
-        bottomLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
+        bottomLabel.font = UIFont.systemFont(ofSize: 14.0)
         contentView.addSubview(bottomLabel)
 
         let image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
@@ -80,6 +86,7 @@ class FriendListCell: BaseCell {
 
         topLabel.snp.makeConstraints {
             $0.leading.equalTo(avatarView.snp.trailing).offset(Constants.AvatarRightOffset)
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
             $0.top.equalTo(contentView).offset(Constants.VerticalOffset)
             $0.height.equalTo(Constants.TopLabelHeight)
         }
@@ -93,8 +100,7 @@ class FriendListCell: BaseCell {
 
         arrowImageView.snp.makeConstraints {
             $0.centerY.equalTo(contentView)
-            $0.leading.greaterThanOrEqualTo(topLabel.snp.trailing)
-            $0.trailing.equalTo(contentView)
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
         }
     }
 }

@@ -37,6 +37,11 @@ if [ "${SCRIPT_ARCH}" == "macos" ]; then
     patch -Np1 < "${SCRIPT_DIR}/patches/vpx-macos.patch"
 else
     patch -Np1 < "${SCRIPT_DIR}/patches/vpx-windows.patch"
+    # KHANDAQ (security D-7/8/9): libvpx 1.13+/1.14 hardcodes `NO_UNDEFINED := -Wl,-z,defs`
+    # in build/make/Makefile. `-z defs` is an ELF-only linker option; mingw's PE/COFF ld
+    # rejects it ("unrecognized option '-z'") and the libvpx.dll link fails. 1.11.0 used the
+    # mingw-friendly --no-undefined; restore that equivalent so the DLL links under mingw.
+    sed -i 's/^NO_UNDEFINED := -Wl,-z,defs/NO_UNDEFINED := -Wl,--no-undefined/' build/make/Makefile
 fi
 
 CFLAGS="${ARCH_FLAGS} ${CROSS_CFLAG}" \

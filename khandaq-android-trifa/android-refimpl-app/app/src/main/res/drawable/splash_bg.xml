@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ Splash (Figma 2031:9505/dark 9649): centered Khandaq wordmark on the form background.
+     Day/night handled by @color/onboarding_form_bg + drawable-night/khandaq_wordmark.
+     Used as windowBackground of the launcher (StartMainActivityWrapper) → shows during cold-start init. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/onboarding_form_bg" />
+    <item
+        android:width="210dp"
+        android:height="75dp"
+        android:gravity="center"
+        android:drawable="@drawable/khandaq_wordmark" />
+</layer-list>

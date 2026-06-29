@@ -43,7 +43,9 @@ class LoginCreateAccountController: LoginGenericCreateController {
 
         switch type {
             case .createAccount:
-                titleLabel.text = String(localized: "create_profile")
+                // KHANDAQ design (Figma): screen title "Создание профиля" (distinct from the login
+                // screen's "Создать профиль" action button).
+                titleLabel.text = String(localized: "create_account_screen_title")
             case .importProfile:
                 titleLabel.text = String(localized: "import_profile")
                 firstTextField.isHidden = true

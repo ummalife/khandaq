@@ -14,9 +14,11 @@
 #import "OCTSubmanagerChatsImpl.h"
 #import "OCTSubmanagerFilesImpl.h"
 #import "OCTSubmanagerFriendsImpl.h"
+#import "OCTSubmanagerGroupsImpl.h"
 #import "OCTSubmanagerObjectsImpl.h"
 #import "OCTSubmanagerUserImpl.h"
 #import "OCTRealmManager.h"
+#import "OCTLogging.h"
 
 @interface OCTManagerImpl () <OCTToxDelegate, OCTSubmanagerDataSource>
 
@@ -35,6 +37,7 @@
 @property (strong, nonatomic, readwrite) OCTSubmanagerChatsImpl *chats;
 @property (strong, nonatomic, readwrite) OCTSubmanagerFilesImpl *files;
 @property (strong, nonatomic, readwrite) OCTSubmanagerFriendsImpl *friends;
+@property (strong, nonatomic, readwrite) OCTSubmanagerGroupsImpl *groups;
 @property (strong, nonatomic, readwrite) OCTSubmanagerObjectsImpl *objects;
 @property (strong, nonatomic, readwrite) OCTSubmanagerUserImpl *user;
 
@@ -174,6 +177,11 @@
     return self.chats;
 }
 
+- (id<OCTSubmanagerFriends>)managerGetFriends
+{
+    return self.friends;
+}
+
 #pragma mark -  Private
 
 - (NSData *)getSavedDataFromPath:(NSString *)path
@@ -204,6 +212,7 @@
     _chats = [self createSubmanagerWithClass:[OCTSubmanagerChatsImpl class]];
     _files = [self createSubmanagerWithClass:[OCTSubmanagerFilesImpl class]];
     _friends = [self createSubmanagerWithClass:[OCTSubmanagerFriendsImpl class]];
+    _groups = [self createSubmanagerWithClass:[OCTSubmanagerGroupsImpl class]];
     _objects = [self createSubmanagerWithClass:[OCTSubmanagerObjectsImpl class]];
     _user = [self createSubmanagerWithClass:[OCTSubmanagerUserImpl class]];
 
@@ -220,6 +229,7 @@
     self.chats = nil;
     self.files = nil;
     self.friends = nil;
+    self.groups = nil;
     self.objects = nil;
     self.user = nil;
 }
@@ -261,6 +271,7 @@
         self.chats,
         self.files,
         self.friends,
+        self.groups,
         self.objects,
         self.user,
     ];
@@ -277,28 +288,18 @@
 - (void)saveTox
 {
     @synchronized(self.toxSaveFileLock) {
-        void (^throwException)(NSError *) = ^(NSError *error) {
-            NSDictionary *userInfo = nil;
-
-            if (error) {
-                userInfo = @{ @"NSError" : error };
-            }
-
-            @throw [NSException exceptionWithName:@"saveToxException" reason:error.debugDescription userInfo:userInfo];
-        };
-
         NSData *data = [self.tox save];
-
-        NSError *error;
+        NSError *error = nil;
 
         data = [self.encryptSave encryptData:data error:&error];
 
         if (! data) {
-            throwException(error);
+            OCTLogError(@"saveTox encrypt failed: %@", error);
+            return;
         }
 
         if (! [data writeToFile:self.currentConfiguration.fileStorage.pathForToxSaveFile options:NSDataWritingAtomic error:&error]) {
-            throwException(error);
+            OCTLogError(@"saveTox write failed: %@", error);
         }
     }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ onboarding (Figma): filled brand-accent capsule button (same #029B7D in light & dark) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/onboarding_accent" />
+    <corners android:radius="28dp" />
+</shape>

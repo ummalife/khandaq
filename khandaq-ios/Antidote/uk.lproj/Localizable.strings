@@ -1,1 +1,29 @@
 
+"group_live_audio_toggle" = "Живе аудіо";
+"group_live_video_toggle" = "Живе відео";
+"group_live_video_quality_toggle" = "Якість відео";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "Утримуйте кнопку мікрофона, щоб записати голосове повідомлення";
+"group_live_video_toggle_active" = "Живе відео активне";
+"group_live_video_toggle_incoming" = "Вхідне живе відео";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Приєднатися до групового відео?";
+"group_video_join_message" = "Надіслати своє відео та аудіо всім у групі?";
+"group_video_join_confirm" = "Так, почати відео";
+"group_video_join_decline" = "Ні";
+"group_send_voice_confirm_title" = "Надіслати голосове?";
+"group_send_voice_confirm_message" = "Надіслати це голосове повідомлення в групу?";
+"group_incoming_message_error" = "Не вдалося обробити вхідне групове повідомлення.";
+"group_image_shrink_failed" = "Не вдалося підготувати зображення до надсилання.";
+"group_incoming_file_error" = "Не вдалося обробити вхідний груповий файл.";
+"chat_file_too_large" = "Файл занадто великий.";
+"chat_incoming_file_too_large" = "Вхідний файл занадто великий.";
+"chat_opening_file_failed" = "Не вдалося відкрити файл.";
+"group_file_prepare_failed" = "Не вдалося підготувати файл до надсилання.";
+"group_peer_unknown" = "Невідомо";
+"group_live_video_stream_unknown_peer" = "Невідомо";
+
+"microphone_access_denied_message" = "Доступ до мікрофона вимкнено. Дозвольте мікрофон у Налаштуваннях, щоб використовувати цю функцію.";

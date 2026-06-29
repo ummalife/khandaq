@@ -26,6 +26,14 @@
 
 - (BOOL)isOutgoing
 {
+    if (self.groupSystemMessage) {
+        return NO;
+    }
+
+    if (self.groupSenderPeerId > 0) {
+        return NO;
+    }
+
     return (self.senderUniqueIdentifier == nil);
 }
 

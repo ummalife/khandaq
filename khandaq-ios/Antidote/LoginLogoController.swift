@@ -7,7 +7,9 @@ import SnapKit
 
 private struct PrivateConstants {
     static let LogoTopOffset = -200.0
-    static let LogoHeight = 100.0
+    // KHANDAQ design (Figma): the new wide wordmark lockup reads better a bit shorter than the old
+    // square badge.
+    static let LogoHeight = 64.0
 }
 
 class LoginLogoController: LoginBaseController {

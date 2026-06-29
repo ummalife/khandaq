@@ -27,7 +27,7 @@ class ProfileTabCoordinator: ActiveSessionNavigationCoordinator, UIAdaptivePrese
     override func startWithOptions(_ options: CoordinatorOptions?) {
         let controller = ProfileMainController(theme: theme, submanagerUser: toxManager.user)
         controller.delegate = self
-        navigationController.pushViewController(controller, animated: false)
+        installRootViewController(controller)
     }
 }
 
@@ -61,7 +61,7 @@ extension ProfileTabCoordinator: ProfileMainControllerDelegate {
     }
 
     func profileMainControllerChangeStatusMessage(_ controller: ProfileMainController) {
-        showTextEditController(title: String(localized: "status_message"), defaultValue: toxManager.user.userStatusMessage() ?? "") {
+        showTextEditController(title: String(localized: "status_message"), defaultValue: toxManager.user.userStatusMessage() ?? "", multiline: true) {
             newStatusMessage -> Void in
 
             do {
@@ -195,8 +195,8 @@ extension ProfileTabCoordinator: ChangePinTimeoutControllerDelegate {
 }
 
 private extension ProfileTabCoordinator {
-    func showTextEditController(title: String, defaultValue: String, setValueClosure: @escaping (String) -> Void) {
-        let controller = TextEditController(theme: theme, title: title, defaultValue: defaultValue, changeTextHandler: {
+    func showTextEditController(title: String, defaultValue: String, multiline: Bool = false, setValueClosure: @escaping (String) -> Void) {
+        let controller = TextEditController(theme: theme, title: title, defaultValue: defaultValue, multiline: multiline, changeTextHandler: {
             newName -> Void in
 
             setValueClosure(newName)

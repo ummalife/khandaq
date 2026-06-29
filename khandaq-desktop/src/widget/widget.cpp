@@ -22,15 +22,22 @@
 #include <cassert>
 
 #include <QClipboard>
+#include <QCryptographicHash>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDesktopWidget>
+#include <QDir>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QShortcut>
+#include <QStandardPaths>
 #include <QString>
 #include <QSvgRenderer>
+#include <QTime>
+#include <QUuid>
 #include <QWindow>
 #ifdef Q_OS_MAC
 #include <QMenuBar>
@@ -341,7 +348,7 @@ void Widget::init()
     connect(ui->statusLabel, &CroppingLabel::editFinished, this, &Widget::onStatusMessageChanged);
     connect(ui->mainSplitter, &QSplitter::splitterMoved, this, &Widget::onSplitterMoved);
     connect(addFriendForm, &AddFriendForm::friendRequested, this, &Widget::friendRequested);
-    connect(groupInviteForm, &GroupInviteForm::groupCreate, core, &Core::createGroup);
+    connect(groupInviteForm, &GroupInviteForm::groupCreate, this, [this]() { core->createGroup(); });
     connect(timer, &QTimer::timeout, this, &Widget::onUserAwayCheck);
     connect(timer, &QTimer::timeout, this, &Widget::onEventIconTick);
     connect(timer, &QTimer::timeout, this, &Widget::onTryCreateTrayIcon);
@@ -501,6 +508,8 @@ void Widget::init()
     connect(groupInviteForm, &GroupInviteForm::groupInvitesSeen, this, &Widget::groupInvitesClear);
     connect(groupInviteForm, &GroupInviteForm::groupInviteAccepted, this,
             &Widget::onGroupInviteAccepted);
+    connect(groupInviteForm, &GroupInviteForm::groupJoinFailed, this, &Widget::onGroupJoinFailed);
+    connect(groupInviteForm, &GroupInviteForm::groupJoinSucceeded, this, &Widget::onGroupJoinSucceeded);
 
     // settings
     connect(&settings, &Settings::showSystemTrayChanged, this, &Widget::onSetShowSystemTray);
@@ -743,6 +752,8 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::receiptRecieved, this, &Widget::onReceiptReceived);
     connect(core, &Core::groupInviteReceived, this, &Widget::onGroupInviteReceived);
     connect(core, &Core::groupMessageReceived, this, &Widget::onGroupMessageReceived);
+    connect(core, &Core::groupFileReceived, this, &Widget::onGroupFileReceived);
+    connect(core, &Core::groupFileSent, this, &Widget::onGroupFileSent);
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
@@ -1118,17 +1129,17 @@ void Widget::dispatchFile(ToxFile file)
     auto pk = f->getPublicKey();
 
     if (file.status == ToxFile::INITIALIZING && file.direction == ToxFile::RECEIVING) {
-        auto sender =
-            (file.direction == ToxFile::SENDING) ? core->getSelfPublicKey() : pk;
-
         QString autoAcceptDir = settings.getAutoAcceptDir(f->getPublicKey());
 
-        if (autoAcceptDir.isEmpty() && settings.getAutoSaveEnabled()) {
+        if (autoAcceptDir.isEmpty()) {
             autoAcceptDir = settings.getGlobalAutoAcceptDir();
         }
+        if (autoAcceptDir.isEmpty()) {
+            autoAcceptDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+        }
 
-        auto maxAutoAcceptSize = settings.getMaxAutoAcceptSize();
-        bool autoAcceptSizeCheckPassed =
+        const auto maxAutoAcceptSize = settings.getMaxAutoAcceptSize();
+        const bool autoAcceptSizeCheckPassed =
             maxAutoAcceptSize == 0 || maxAutoAcceptSize >= file.progress.getFileSize();
 
         if (!autoAcceptDir.isEmpty() && autoAcceptSizeCheckPassed) {
@@ -1438,7 +1449,10 @@ void Widget::onFriendMessageReceived(uint32_t friendnumber, const QString& messa
         return;
     }
 
-    friendMessageDispatchers[f->getPublicKey()]->onMessageReceived(isAction, message);
+    const auto dispatcher = friendMessageDispatchers.value(f->getPublicKey());
+    if (dispatcher) {
+        dispatcher->onMessageReceived(isAction, message);
+    }
 }
 
 void Widget::onReceiptReceived(int friendId, ReceiptNum receipt)
@@ -1449,7 +1463,10 @@ void Widget::onReceiptReceived(int friendId, ReceiptNum receipt)
         return;
     }
 
-    friendMessageDispatchers[f->getPublicKey()]->onReceiptReceived(receipt);
+    const auto dispatcher = friendMessageDispatchers.value(f->getPublicKey());
+    if (dispatcher) {
+        dispatcher->onReceiptReceived(receipt);
+    }
 }
 
 void Widget::onExtendedMessageSupport(uint32_t friendNumber, bool supported)
@@ -1466,13 +1483,19 @@ void Widget::onExtendedMessageSupport(uint32_t friendNumber, bool supported)
 void Widget::onFriendExtMessageReceived(uint32_t friendNumber, const QString& message)
 {
     const auto& friendKey = friendList->id2Key(friendNumber);
-    friendMessageDispatchers[friendKey]->onExtMessageReceived(message);
+    const auto dispatcher = friendMessageDispatchers.value(friendKey);
+    if (dispatcher) {
+        dispatcher->onExtMessageReceived(message);
+    }
 }
 
 void Widget::onExtReceiptReceived(uint32_t friendNumber, uint64_t receiptId)
 {
     const auto& friendKey = friendList->id2Key(friendNumber);
-    friendMessageDispatchers[friendKey]->onExtReceiptReceived(receiptId);
+    const auto dispatcher = friendMessageDispatchers.value(friendKey);
+    if (dispatcher) {
+        dispatcher->onExtReceiptReceived(receiptId);
+    }
 }
 
 void Widget::addFriendDialog(const Friend* frnd, ContentDialog* dialog)
@@ -1736,14 +1759,8 @@ bool Widget::newMessageAlert(QWidget* currentWindow, bool isActive, bool sound, 
 
 void Widget::onFriendRequestReceived(const ToxPk& friendPk, const QString& message)
 {
-    if (addFriendForm->addFriendRequest(friendPk.toString(), message)) {
-        friendRequestsUpdate();
-        newMessageAlert(window(), isActiveWindow(), true, true);
-#if DESKTOP_NOTIFICATIONS
-        auto notificationData = notificationGenerator->friendRequestNotification(friendPk, message);
-        notifier.notifyMessage(notificationData);
-#endif
-    }
+    Q_UNUSED(friendPk);
+    Q_UNUSED(message);
 }
 
 void Widget::onFileReceiveRequested(const ToxFile& file)
@@ -2001,26 +2018,20 @@ void Widget::onGroupInviteReceived(const GroupInvite& inviteInfo)
     const Friend* f = friendList->findFriend(friendPk);
     updateFriendActivity(*f);
 
-    const uint8_t confType = inviteInfo.getType();
-    if (confType == TOX_CONFERENCE_TYPE_TEXT || confType == TOX_CONFERENCE_TYPE_AV) {
-        if (settings.getAutoGroupInvite(f->getPublicKey())) {
-            onGroupInviteAccepted(inviteInfo);
-        } else {
-            if (!groupInviteForm->addGroupInvite(inviteInfo)) {
-                return;
-            }
-
-            ++unreadGroupInvites;
-            groupInvitesUpdate();
-            newMessageAlert(window(), isActiveWindow(), true, true);
-#if DESKTOP_NOTIFICATIONS
-            auto notificationData = notificationGenerator->groupInvitationNotification(f);
-            notifier.notifyMessage(notificationData);
-#endif
-        }
+    if (settings.getAutoGroupInvite(f->getPublicKey())) {
+        onGroupInviteAccepted(inviteInfo);
     } else {
-        qWarning() << "onGroupInviteReceived: Unknown groupchat type:" << confType;
-        return;
+        if (!groupInviteForm->addGroupInvite(inviteInfo)) {
+            return;
+        }
+
+        ++unreadGroupInvites;
+        groupInvitesUpdate();
+        newMessageAlert(window(), isActiveWindow(), true, true);
+#if DESKTOP_NOTIFICATIONS
+        auto notificationData = notificationGenerator->groupInvitationNotification(f);
+        notifier.notifyMessage(notificationData);
+#endif
     }
 }
 
@@ -2029,7 +2040,32 @@ void Widget::onGroupInviteAccepted(const GroupInvite& inviteInfo)
     const uint32_t groupId = core->joinGroupchat(inviteInfo);
     if (groupId == std::numeric_limits<uint32_t>::max()) {
         qWarning() << "onGroupInviteAccepted: Unable to accept group invite";
+        QMessageBox::warning(this, tr("Group invite"), tr("Could not join the group."));
+    }
+}
+
+void Widget::onGroupJoinFailed(const QString& reason)
+{
+    QMessageBox::warning(this, tr("Join group"), reason);
+}
+
+void Widget::onGroupJoinSucceeded()
+{
+    // groupJoined signal from Core opens the group chat
+}
+
+void Widget::onGroupJoinByIdPrompt()
+{
+    bool ok = false;
+    const QString id = QInputDialog::getMultiLineText(this, tr("Join group by ID"),
+                                                      tr("Enter the 64-character Group ID (hex):"), QString(), &ok);
+    if (!ok || id.trimmed().isEmpty()) {
         return;
+    }
+
+    const uint32_t groupNum = core->joinGroupByChatIdHex(id);
+    if (groupNum == std::numeric_limits<uint32_t>::max()) {
+        QMessageBox::warning(this, tr("Join group"), tr("Could not join group. Check the Group ID and try again."));
     }
 }
 
@@ -2050,6 +2086,121 @@ void Widget::onGroupPeerlistChanged(uint32_t groupnumber)
     Group* g = groupList->findGroup(groupId);
     assert(g);
     g->regeneratePeerList();
+}
+
+namespace {
+QString sanitizeGroupFileName(const QString& fileName)
+{
+    QString name = QFileInfo(fileName).fileName();
+    name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+    if (name.isEmpty() || name == QLatin1String(".") || name == QLatin1String("..")) {
+        name = QStringLiteral("file.bin");
+    }
+    return name;
+}
+
+QString uniqueFilePath(const QDir& dir, const QString& fileName)
+{
+    QString candidate = dir.filePath(fileName);
+    if (!QFile::exists(candidate)) {
+        return candidate;
+    }
+    const QFileInfo info(fileName);
+    const QString base = info.completeBaseName();
+    const QString suffix = info.suffix().isEmpty() ? QString() : QLatin1String(".") + info.suffix();
+    for (int i = 1; i < 1000; ++i) {
+        candidate = dir.filePath(QStringLiteral("%1 (%2)%3").arg(base).arg(i).arg(suffix));
+        if (!QFile::exists(candidate)) {
+            return candidate;
+        }
+    }
+    return dir.filePath(fileName);
+}
+} // namespace
+
+QDir Widget::groupDownloadDir(const Group* g) const
+{
+    QString base = settings.getGlobalAutoAcceptDir();
+    if (base.isEmpty()) {
+        base = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    }
+    QString groupPart = g->getName().trimmed();
+    groupPart.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+    if (groupPart.isEmpty()) {
+        groupPart = g->getPersistentId().toString().left(16);
+    }
+    QDir dir(base + QDir::separator() + QStringLiteral("Khandaq Groups") + QDir::separator() + groupPart);
+    if (!dir.exists()) {
+        QDir().mkpath(dir.absolutePath());
+    }
+    return dir;
+}
+
+void Widget::dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender,
+                                        ToxFile file)
+{
+    auto chatLogIt = groupChatLogs.find(groupId);
+    if (chatLogIt == groupChatLogs.end()) {
+        return;
+    }
+    auto chatHistory = std::static_pointer_cast<ChatHistory>(chatLogIt.value());
+
+    // INITIALIZING creates the history record, FINISHED marks it complete and
+    // makes the widget render the final state (preview + open buttons).
+    file.status = ToxFile::INITIALIZING;
+    chatHistory->onFileUpdated(sender, file);
+    file.status = ToxFile::FINISHED;
+    chatHistory->onFileUpdated(sender, file);
+}
+
+void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
+                                 const QByteArray& fileData, const QDateTime& timestamp)
+{
+    std::ignore = timestamp;
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    Group* g = groupList->findGroup(groupId);
+    if (g == nullptr) {
+        return;
+    }
+
+    const QDir dir = groupDownloadDir(g);
+    const QString safeName = sanitizeGroupFileName(fileName);
+    const QString filePath = uniqueFilePath(dir, safeName);
+
+    QFile out(filePath);
+    if (!out.open(QIODevice::WriteOnly)) {
+        qWarning() << "onGroupFileReceived: cannot write" << filePath;
+        return;
+    }
+    out.write(fileData);
+    out.close();
+
+    static uint32_t groupFileNum = 700000;
+    ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,
+                 static_cast<uint64_t>(fileData.size()), ToxFile::RECEIVING);
+    file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
+    file.resumeFileId = QCryptographicHash::hash(fileData, QCryptographicHash::Sha256);
+
+    dispatchGroupFileToChatLog(groupId, sender, file);
+
+    newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+}
+
+void Widget::onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
+                             qint64 fileSize)
+{
+    const GroupId& groupId = groupList->id2Key(groupnumber);
+    if (!groupList->findGroup(groupId)) {
+        return;
+    }
+
+    static uint32_t groupFileNum = 800000;
+    ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), sanitizeGroupFileName(fileName),
+                 localPath, static_cast<uint64_t>(fileSize), ToxFile::SENDING);
+    file.progress.addSample(file.progress.getFileSize(), QTime::currentTime());
+    file.resumeFileId = QUuid::createUuid().toRfc4122();
+
+    dispatchGroupFileToChatLog(groupId, core->getSelfPublicKey(), file);
 }
 
 void Widget::onGroupPeerNameChanged(uint32_t groupnumber, const ToxPk& peerPk, const QString& newName)
@@ -2161,11 +2312,23 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
 
     Group* g = groupList->findGroup(groupId);
     if (g) {
-        qWarning() << "Group already exists";
+        // Same persistent group rejoined: the tox group number may have
+        // changed (friend-assisted rejoin replaces the instance), rebind it.
+        groupList->updateGroupNumber(groupnumber, groupId);
+        g->setToxGroupNum(static_cast<int>(groupnumber));
+        const QString realName = core->getGroupName(static_cast<int>(groupnumber));
+        if (!realName.isEmpty()) {
+            g->setTitle(QString(), realName);
+        }
         return g;
     }
 
-    const auto groupName = tr("Groupchat #%1").arg(groupnumber);
+    // prefer the real NGC group name; "Groupchat #N" is only a fallback until
+    // the shared state arrives
+    QString groupName = core->getGroupName(static_cast<int>(groupnumber));
+    if (groupName.isEmpty()) {
+        groupName = tr("Groupchat #%1").arg(groupnumber);
+    }
     const bool enabled = core->getGroupAvEnabled(groupnumber);
     Group* newgroup =
         groupList->addGroup(*core, groupnumber, groupId, groupName, enabled, core->getUsername(),
@@ -2634,6 +2797,7 @@ void Widget::friendListContextMenu(const QPoint& pos)
 {
     QMenu menu(this);
     QAction* createGroupAction = menu.addAction(tr("Create new group..."));
+    QAction* joinGroupAction = menu.addAction(tr("Join group by ID..."));
     QAction* addCircleAction = menu.addAction(tr("Add new circle..."));
     QAction* chosenAction = menu.exec(ui->friendList->mapToGlobal(pos));
 
@@ -2641,30 +2805,15 @@ void Widget::friendListContextMenu(const QPoint& pos)
         chatListWidget->addCircleWidget();
     } else if (chosenAction == createGroupAction) {
         core->createGroup();
+    } else if (chosenAction == joinGroupAction) {
+        onGroupJoinByIdPrompt();
     }
 }
 
 void Widget::friendRequestsUpdate()
 {
-    unsigned int unreadFriendRequests = settings.getUnreadFriendRequests();
-
-    if (unreadFriendRequests == 0) {
-        delete friendRequestsButton;
-        friendRequestsButton = nullptr;
-    } else if (!friendRequestsButton) {
-        friendRequestsButton = new QPushButton(this);
-        friendRequestsButton->setObjectName("green");
-        ui->statusLayout->insertWidget(2, friendRequestsButton);
-
-        connect(friendRequestsButton, &QPushButton::released, [this]() {
-            onAddClicked();
-            addFriendForm->setMode(AddFriendForm::Mode::FriendRequest);
-        });
-    }
-
-    if (friendRequestsButton) {
-        friendRequestsButton->setText(tr("%n new friend request(s)", "", unreadFriendRequests));
-    }
+    delete friendRequestsButton;
+    friendRequestsButton = nullptr;
 }
 
 void Widget::groupInvitesUpdate()

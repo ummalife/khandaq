@@ -413,3 +413,31 @@
 "chat_pending_faux_offline_messages" = "سيتم إرسال الرسائل التي لم يتم تسليمها عندما تكون أنت وصديقك متصلين بالإنترنت.";
 /* Message shown on chat list when contact is typing */
 "chat_is_typing_text" = "يكتب...";
+"group_live_audio_toggle" = "صوت مباشر";
+"group_live_video_toggle" = "فيديو مباشر";
+"group_live_video_quality_toggle" = "جودة الفيديو";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "اضغط مع الاستمرار على زر الميكروفون لتسجيل رسالة صوتية";
+"group_live_video_toggle_active" = "فيدio مباشر نشط";
+"group_live_video_toggle_incoming" = "فيدio مباشر وارد";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "الانضمام إلى فيديو المجموعة؟";
+"group_video_join_message" = "إرسال الفيديو والصوت إلى الجميع في هذه المجموعة؟";
+"group_video_join_confirm" = "نعم، بدء الفيديو";
+"group_video_join_decline" = "لا";
+"group_send_voice_confirm_title" = "إرسال رسالة صوتية؟";
+"group_send_voice_confirm_message" = "إرسال هذه الرسالة الصوتية إلى المجموعة؟";
+"group_incoming_message_error" = "تعذّر معالجة رسالة المجموعة الواردة.";
+"group_image_shrink_failed" = "تعذّر تحضير الصورة للإرسال.";
+"group_incoming_file_error" = "تعذّر معالجة ملف المجموعة الوارد.";
+"chat_file_too_large" = "الملف كبير جداً.";
+"chat_incoming_file_too_large" = "الملف الوارد كبير جداً.";
+"chat_opening_file_failed" = "تعذّر فتح الملف.";
+"group_file_prepare_failed" = "تعذّر تحضير الملف للإرسال.";
+"group_peer_unknown" = "غير معروف";
+"group_live_video_stream_unknown_peer" = "غير معروف";
+
+"microphone_access_denied_message" = "الوصول إلى الميكروفون معطل. اسمح بالميكروفون في الإعدادات لاستخدام هذه الميزة.";

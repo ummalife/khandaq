@@ -25,7 +25,9 @@ class BaseCell: UITableViewCell {
     /**
         Override this method in subclass.
      */
-    func setupWithTheme(_ theme: Theme, model: BaseCellModel) {}
+    func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
+        ThemeChrome.applyCellBackground(theme, to: self)
+    }
 
     /**
         Override this method in subclass.

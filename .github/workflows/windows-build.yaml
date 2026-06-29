@@ -1,0 +1,50 @@
+# KHANDAQ (security D-7/8/9): rebuild the Windows desktop binary with the bumped, patched
+# bundled libraries (libvpx 1.14.0, OpenSSL 1.1.1w, FFmpeg 4.4.5). The desktop's own CI lives
+# under khandaq-desktop/.github and is inactive in this monorepo (GitHub only runs root-level
+# workflows), so the Windows cross-build never ran here. Manual trigger; produces the installer
+# + zip + their SHA256 as artifacts. (Cross-build is impractical on an arm64 Mac → run in CI.)
+name: Windows build (security D-7/8/9)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-x86_64:
+    name: Cross-compile Windows x86_64 (Release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    defaults:
+      run:
+        working-directory: khandaq-desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      # NB: build with plain `docker build` (not docker compose / bake) — docker compose v2 trips a
+      # false "cycle detected" on the dotted service name `windows_builder.i686` in docker-compose.yml.
+      # Context is ./buildscripts (matches the compose `context: ./buildscripts`).
+      - name: Build windows_builder image (cross-toolchain + patched deps)
+        run: >
+          docker build -f buildscripts/docker/Dockerfile.windows_builder
+          --build-arg ARCH=x86_64 --build-arg WINEARCH=win64
+          -t qtox_windows_builder:latest buildscripts
+
+      - name: Cross-compile Khandaq desktop for Windows
+        run: >
+          docker run --rm -v "$PWD:/qtox" -w /qtox qtox_windows_builder:latest
+          ./windows/cross-compile/build.sh --arch x86_64 --build-type Release --src-dir /qtox
+
+      - name: Checksums
+        if: always()
+        run: |
+          ls -la package-prefix install-prefix 2>/dev/null || true
+          [ -f package-prefix/setup-qtox.exe ] && sha256sum package-prefix/setup-qtox.exe || true
+
+      - name: Upload Windows artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khandaq-windows-x86_64-release
+          path: |
+            khandaq-desktop/package-prefix/setup-qtox.exe
+            khandaq-desktop/install-prefix/*.zip
+          if-no-files-found: warn

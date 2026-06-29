@@ -48,6 +48,7 @@ private slots:
     // Debug
     void on_btnCopyDebug_clicked();
     void on_btnExportLog_clicked();
+    void on_btnRefreshNetworkDiag_clicked();
     // Connection
     void on_cbEnableIPv6_stateChanged();
     void on_cbEnableUDP_stateChanged();
@@ -62,6 +63,7 @@ private:
 
 private:
     Ui::AdvancedSettings* bodyUI;
+    class QTextEdit* networkDiagText = nullptr;
     Settings& settings;
     IMessageBoxManager& messageBoxManager;
 };

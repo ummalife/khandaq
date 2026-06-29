@@ -18,6 +18,7 @@
 */
 
 #include "chatform.h"
+#include "src/core/khandaqlimits.h"
 #include "src/chatlog/chatlinecontentproxy.h"
 #include "src/chatlog/chatwidget.h"
 #include "src/chatlog/chatmessage.h"
@@ -308,6 +309,13 @@ void ChatForm::sendLocalFiles(const QStringList& paths)
         }
 
         const qint64 filesize = file.size();
+        if (filesize <= 0 || static_cast<quint64>(filesize) > KHANDAQ_MAX_FILE_TRANSFER_BYTES) {
+            QMessageBox::warning(this, tr("Send a file"),
+                                 tr("\"%1\" is too large (max %2 MB).")
+                                     .arg(fileName)
+                                     .arg(KHANDAQ_MAX_FILE_TRANSFER_BYTES / (1024 * 1024)));
+            continue;
+        }
         core.getCoreFile()->sendFile(f->getId(), fileName, path, filesize);
     }
 }

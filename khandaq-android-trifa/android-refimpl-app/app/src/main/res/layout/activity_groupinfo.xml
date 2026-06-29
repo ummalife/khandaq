@@ -1,386 +1,394 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/tg_chat_bg"
     android:orientation="vertical">
 
-    <androidx.appcompat.widget.Toolbar xmlns:app="http://schemas.android.com/apk/res-auto"
+    <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar" />
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingBottom="24dp">
 
+            <!-- Legacy summary (hidden; kept for compatibility) -->
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
-                android:id="@+id/group_id_text_header"
+                android:id="@+id/group_info_summary_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="start"
-                android:layout_marginLeft="20dp"
-                android:layout_weight="0"
-                android:paddingLeft="4dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="15dp"
-                android:text="@string/layout___group_id2"
-                android:textAlignment="textStart"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/group_id_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:paddingTop="12dp"
-                android:paddingBottom="15dp"
-                android:text="TOXID94583458340958309458093850934805830583085389053095DUMMY"
-                android:textIsSelectable="true"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:typeface="monospace" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
-                android:id="@+id/group_privacy_status_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:text="\?\? Unknown Group Privacy State \?\?"
-                android:textIsSelectable="false"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
-                android:id="@+id/group_myrole_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:text="\?\? Unknown Group Role \?\?"
-                android:textIsSelectable="false"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
-                android:id="@+id/group_connection_status_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:text="\?\? Unknown Group Connection State \?\?"
-                android:textIsSelectable="false"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
+            <!-- Header -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:orientation="horizontal"
-                android:visibility="visible">
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="24dp"
+                android:paddingTop="20dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="16dp">
 
-                <androidx.appcompat.widget.AppCompatSpinner
-                    android:id="@+id/group_voicestate_select"
+                <TextView
+                    android:id="@+id/group_info_header_title"
                     android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="left"
-                    android:layout_weight="80"
-                    android:textSize="13sp" />
-
-                <androidx.appcompat.widget.AppCompatButton
-                    android:id="@+id/group_voicestate_set_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="right"
-                    android:layout_weight="10"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
                     android:gravity="center"
-                    android:text="Set new Voice State"
-                    android:textAllCaps="false"
+                    android:maxLines="2"
+                    android:textColor="@color/tg_chat_title"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/group_info_header_subtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center"
+                    android:textColor="@color/tg_chat_preview"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/group_info_header_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:textColor="@color/tg_chat_preview"
                     android:textSize="13sp" />
 
             </LinearLayout>
 
-            <TextView
+            <View
                 android:layout_width="match_parent"
-                android:layout_height="20dp" />
+                android:layout_height="8dp"
+                android:background="@color/tg_chat_bg_deep" />
 
-            <Button
-                android:id="@+id/group_reconnect_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="reconnect" />
-
+            <!-- Members -->
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <Button
-                android:id="@+id/group_dumpofflinepeers_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="DEBUG: dump saved offline peers" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
+                android:id="@+id/group_info_members_header"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="start"
-                android:layout_marginLeft="20dp"
-                android:layout_weight="0"
-                android:paddingLeft="4dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="15dp"
-                android:text="@string/layout___group_peerlimit2"
-                android:textAlignment="textStart"
-                android:textSize="16sp"
+                android:paddingStart="16dp"
+                android:paddingTop="14dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp"
+                android:text="@string/group_info_members_header_default"
+                android:textColor="@color/tg_chat_title"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
-            <LinearLayout
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/group_info_members_list"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginBottom="20dp">
-
-                    <EditText
-                        android:id="@+id/peer_limit_text"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginLeft="20dp"
-                        android:layout_marginRight="20dp"
-                        android:hint="@string/layout___group_peerlimit"
-                        android:imeOptions="flagNoPersonalizedLearning"
-                        android:inputType="number"
-                        android:maxLines="1"
-                        android:singleLine="true"
-                        android:textColor="@color/text_on_light_surface" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-            </LinearLayout>
-
+                android:nestedScrollingEnabled="false"
+                android:overScrollMode="never"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp" />
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-
-            <LinearLayout
+                android:id="@+id/group_info_members_empty"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:gravity="center"
+                android:padding="16dp"
+                android:text="@string/group_info_members_empty"
+                android:textColor="@color/tg_chat_preview"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_marginTop="8dp"
+                android:background="@color/tg_chat_bg_deep" />
+
+            <!-- User settings -->
+            <LinearLayout
+                android:id="@+id/group_info_settings_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/group_info_section_bg"
+                android:orientation="vertical"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="4dp"
+                    android:text="@string/group_info_section_settings"
+                    android:textAllCaps="true"
+                    android:textColor="@color/tg_chat_preview"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginBottom="20dp">
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:hint="@string/group_info_group_name_hint">
 
                     <EditText
                         android:id="@+id/group_name_text"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginLeft="20dp"
-                        android:layout_marginRight="20dp"
-                        android:hint="@string/layout___group_name2"
                         android:imeOptions="flagNoPersonalizedLearning"
-                        android:inputType="text"
+                        android:inputType="textCapSentences"
                         android:maxLines="1"
                         android:singleLine="true"
                         android:textColor="@color/text_on_light_surface" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
-            </LinearLayout>
-
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
-                android:id="@+id/group_mypubkey_text_header"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="start"
-                android:layout_marginLeft="20dp"
-                android:layout_weight="0"
-                android:paddingLeft="4dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="15dp"
-                android:text="@string/layout___group_mypubjkey2"
-                android:textAlignment="textStart"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/group_mypubkey_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:paddingTop="12dp"
-                android:paddingBottom="15dp"
-                android:text="TOXID94583458340958309458093850934805830583085389053095DUMMY"
-                android:textIsSelectable="true"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:typeface="monospace" />
-
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginBottom="20dp">
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:hint="@string/group_info_your_name_hint">
 
                     <EditText
                         android:id="@+id/group_myname_text"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginLeft="20dp"
-                        android:layout_marginRight="20dp"
-                        android:hint="@string/layout___group_myname2"
                         android:imeOptions="flagNoPersonalizedLearning"
-                        android:inputType="text"
+                        android:inputType="textCapSentences"
                         android:maxLines="1"
                         android:singleLine="true" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <LinearLayout
+                    android:id="@+id/group_info_full_id_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="8dp">
+
+                    <TextView
+                        android:id="@+id/group_id_text_header"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingBottom="4dp"
+                        android:text="@string/layout___group_id2"
+                        android:textColor="@color/tg_chat_preview"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/group_id_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/message_bubble_text"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp"
+                        android:typeface="monospace" />
+
+                    <androidx.appcompat.widget.AppCompatButton
+                        android:id="@+id/group_copy_id_button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:paddingStart="0dp"
+                        android:text="@string/group_info_copy_id"
+                        android:textAllCaps="false" />
+
+                </LinearLayout>
+
             </LinearLayout>
 
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
-
-            <TextView
+            <!-- Founder controls -->
+            <LinearLayout
+                android:id="@+id/group_info_founder_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="start"
-                android:layout_marginLeft="20dp"
-                android:layout_weight="0"
-                android:paddingLeft="4dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="15dp"
-                android:text="@string/layout___group_message_stats"
-                android:textAlignment="textStart"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:orientation="vertical"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/group_num_msgs_text"
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:background="@color/tg_chat_bg_deep" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingTop="14dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="8dp"
+                    android:text="@string/group_info_section_manage"
+                    android:textAllCaps="true"
+                    android:textColor="@color/tg_chat_preview"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/group_info_peer_limit_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp">
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/layout___group_peerlimit">
+
+                        <EditText
+                            android:id="@+id/peer_limit_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:imeOptions="flagNoPersonalizedLearning"
+                            android:inputType="number"
+                            android:maxLines="1"
+                            android:singleLine="true"
+                            android:textColor="@color/text_on_light_surface" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <androidx.appcompat.widget.AppCompatSpinner
+                        android:id="@+id/group_voicestate_select"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <androidx.appcompat.widget.AppCompatButton
+                        android:id="@+id/group_voicestate_set_button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/group_info_voice_state_set"
+                        android:textAllCaps="false" />
+
+                </LinearLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:hint="@string/group_password_placeholder">
+
+                    <EditText
+                        android:id="@+id/group_password_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="flagNoPersonalizedLearning"
+                        android:inputType="textPassword"
+                        android:maxLines="1"
+                        android:singleLine="true" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/group_password_set_button"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:text="@string/group_password_set"
+                    android:textAllCaps="false" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/group_topic_lock_switch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:text="@string/group_topic_lock" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <androidx.appcompat.widget.AppCompatSpinner
+                        android:id="@+id/group_privacy_select"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <androidx.appcompat.widget.AppCompatButton
+                        android:id="@+id/group_privacy_set_button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/group_privacy_set"
+                        android:textAllCaps="false" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Legacy state carriers (not shown in UI) -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:paddingTop="12dp"
-                android:paddingBottom="15dp"
-                android:text="Non System Messages: ..."
-                android:textIsSelectable="true"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:typeface="monospace" />
+                android:orientation="vertical"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/group_num_system_msgs_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:paddingTop="12dp"
-                android:paddingBottom="15dp"
-                android:text="System Messages: ..."
-                android:textIsSelectable="true"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:typeface="monospace" />
+                <TextView
+                    android:id="@+id/group_privacy_status_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
+                <TextView
+                    android:id="@+id/group_myrole_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
 
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/group_del_sysmsgs_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:background="@drawable/rounded_red_dark_bg"
-                android:layout_marginRight="20dp"
-                android:layout_marginTop="10dp"
-                android:textColor="@android:color/white"
-                android:textAllCaps="false"
-                android:text="@string/layout___delete_group_system_msgs"
-                android:textSize="16sp"/>
+                <TextView
+                    android:id="@+id/group_connection_status_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="20dp" />
+            </LinearLayout>
 
         </LinearLayout>
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

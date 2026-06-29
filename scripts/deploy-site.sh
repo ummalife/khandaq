@@ -23,6 +23,7 @@ APK_SRC="${KHANDAQ_ANDROID_APK:-$ROOT/dist/android/khandaq-release.apk}"
 [[ -f "$APK_SRC" ]] || APK_SRC="$ROOT/dist/android/trifa-release.apk"
 [[ -f "$APK_SRC" ]] || { echo "Missing Android APK at dist/android/"; exit 1; }
 cp -f "$APK_SRC" "$DL/khandaq-android.apk"
+cp -f "$APK_SRC" "$DL/khandaq-release.apk"
 
 echo "==> Package desktop/mobile mirrors (optional — skip missing)"
 if [[ -d "$ROOT/dist/macos/khandaq.app" ]]; then
@@ -30,15 +31,20 @@ if [[ -d "$ROOT/dist/macos/khandaq.app" ]]; then
   ditto -c -k --keepParent "$ROOT/dist/macos/khandaq.app" "$DL/khandaq-macos.zip"
 fi
 if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "$ROOT/dist/linux/lib" ]]; then
+  # Only ship the -portable name; the bare khandaq-linux-x86_64.tar.gz was an
+  # unreferenced byte-identical duplicate (removed from the mirror).
   rm -f "$DL/khandaq-linux-x86_64.tar.gz" "$DL/khandaq-linux-x86_64-portable.tar.gz"
   tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" \
     khandaq khandaq.bin lib plugins khandaq.desktop org.khandaq.messenger.appdata.xml INSTALL.txt 2>/dev/null \
     || tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" khandaq khandaq.bin lib INSTALL.txt
-  cp -f "$DL/khandaq-linux-x86_64-portable.tar.gz" "$DL/khandaq-linux-x86_64.tar.gz"
 fi
-DEB="$(ls -1 "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | head -1)"
+DEB="$(ls -1t "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | head -1)"
 if [[ -n "$DEB" && -f "$DEB" ]]; then
+  DEB_VER="$(basename "$DEB" | sed -n 's/khandaq-messenger_\(.*\)_amd64\.deb/\1/p')"
   cp -f "$DEB" "$DL/khandaq-messenger_amd64.deb"
+  if [[ -n "$DEB_VER" ]]; then
+    cp -f "$DEB" "$DL/khandaq-messenger_${DEB_VER}_amd64.deb"
+  fi
 fi
 WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
 [[ -f "$WIN_EXE" ]] || WIN_EXE="$ROOT/dist/windows/x86_64/Khandaq-installer.exe"

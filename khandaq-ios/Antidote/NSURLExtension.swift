@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import Foundation
-import MobileCoreServices
 
 extension URL {
     func isToxURL() -> Bool {
@@ -11,19 +10,17 @@ extension URL {
             return false
         }
 
-        let request = URLRequest(url: self, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 0.1)
-        var response: URLResponse? = nil
-
-        _ = try? NSURLConnection.sendSynchronousRequest(request, returning: &response)
-
-        guard let mimeType = response?.mimeType else {
+        // KHANDAQ: a Tox profile save is an opaque binary blob. The previous probe sniffed the
+        // MIME type via NSURLConnection.sendSynchronousRequest — deprecated since iOS 9 and it
+        // returns nil on modern iOS (26), so isToxURL() always returned false and every
+        // share-sheet import was silently rejected before the "Create profile" alert appeared.
+        // iOS only routes files matching our declared document type (public.data) here, so accept
+        // a `.tox` extension (or an extension-less legacy save) for any readable file.
+        let ext = pathExtension.lowercased()
+        guard ext == "tox" || ext.isEmpty else {
             return false
         }
 
-        guard let identifier = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, mimeType as CFString, nil)?.takeRetainedValue() else {
-            return false
-        }
-
-        return UTTypeEqual(identifier, kUTTypeData)
+        return FileManager.default.isReadableFile(atPath: path)
     }
 }

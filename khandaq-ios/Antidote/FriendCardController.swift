@@ -16,6 +16,7 @@ class FriendCardController: StaticTableController {
 
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
 
+    fileprivate let cardTheme: Theme
     fileprivate let friend: OCTFriend
 
     fileprivate let avatarManager: AvatarManager
@@ -31,6 +32,7 @@ class FriendCardController: StaticTableController {
 
     init(theme: Theme, friend: OCTFriend, submanagerObjects: OCTSubmanagerObjects) {
         self.submanagerObjects = submanagerObjects
+        self.cardTheme = theme
         self.friend = friend
 
         self.avatarManager = AvatarManager(theme: theme)
@@ -75,6 +77,8 @@ class FriendCardController: StaticTableController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // (Circle back button installed centrally by StaticTableController.viewDidLoad.)
+
         let predicate = NSPredicate(format: "uniqueIdentifier == %@", friend.uniqueIdentifier)
         let results = submanagerObjects.friends(predicate: predicate)
         friendToken = results.addNotificationBlock { [unowned self] change in
@@ -93,7 +97,9 @@ class FriendCardController: StaticTableController {
 
 private extension FriendCardController {
     func updateModels() {
-        title = friend.nickname
+        // KHANDAQ design (Figma): the header reads "Профиль"; the contact's display name sits under
+        // the avatar instead of in the navigation title.
+        title = String(localized: "profile_title")
 
         if let data = friend.avatarData {
             avatarModel.avatar = UIImage(data: data)
@@ -103,6 +109,7 @@ private extension FriendCardController {
                     friend.nickname,
                     diameter: StaticTableAvatarCellModel.Constants.AvatarImageSize)
         }
+        avatarModel.name = friend.nickname
         avatarModel.userInteractionEnabled = false
 
         chatButtonsModel.chatButtonHandler = { [unowned self] in

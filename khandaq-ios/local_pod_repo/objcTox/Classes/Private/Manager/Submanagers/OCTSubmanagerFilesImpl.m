@@ -88,6 +88,25 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                               OCTMessageFileTypeWaitingConfirmation, OCTMessageFileTypeLoading, OCTMessageFileTypePaused];
 
     [realmManager updateObjectsWithClass:[OCTMessageFile class] predicate:predicate updateBlock:^(OCTMessageFile *file) {
+        // KHANDAQ (#81): a fully-downloaded NGC group file can be persisted as Loading (a lingering
+        // BEGIN bubble whose COMPLETE finalized a sibling row, or a progress row not yet flipped to
+        // Ready). The blanket cancel below then turned an already-downloaded & played group video into
+        // "Загрузка не удалась" after every restart. If the bytes are actually complete on disk,
+        // finalize it to Ready instead of cancelling. Only applies to group files (groupMsgIdHashHex);
+        // genuinely interrupted 1:1 transfers (and incomplete group temp files) still cancel.
+        if (file.groupMsgIdHashHex.length > 0 && file.fileSize > 0) {
+            NSString *onDiskPath = [file filePath];
+            if (onDiskPath.length > 0) {
+                NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:onDiskPath error:nil];
+                if (attrs && [attrs fileSize] >= file.fileSize) {
+                    file.fileType = OCTMessageFileTypeReady;
+                    file.groupTransferProgress = 1.0f;
+                    OCTLogInfo(@"salvaging completed group file %@", file);
+                    return;
+                }
+            }
+        }
+
         file.fileType = OCTMessageFileTypeCanceled;
         OCTLogInfo(@"cancelling file %@", file);
     }];
@@ -748,6 +767,21 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     }
 }
 
+// KHANDAQ: periodic safety net (driven by the app's MessageDeliveryWatchdog) so files/voice queued
+// while the recipient was offline actually deliver once they reconnect — the one-shot
+// friendConnectionStatusChangeNotification: above can miss files added around the status flip.
+// Reuses the proven per-friend resend; retrySendingFile only acts on WaitingConfirmation files with
+// a failed file number, so this is idempotent and safe to call every tick.
+- (void)resendPendingOutgoingFilesToAllOnlineFriends
+{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"connectionStatus != %d", OCTToxConnectionStatusNone];
+    RLMResults *onlineFriends = [self.dataSource.managerGetRealmManager objectsWithClass:[OCTFriend class] predicate:predicate];
+
+    for (OCTFriend *friend in onlineFriends) {
+        [self resendPendingOutgoingFilesToFriend:friend];
+    }
+}
+
 - (void)userAvatarWasUpdatedNotification
 {
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"connectionStatus != %d", OCTToxConnectionStatusNone];
@@ -813,8 +847,19 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
             __block BOOL exists = NO;
 
             dispatch_sync(dispatch_get_main_queue(), ^{
-                NSPredicate *predicate = [NSPredicate predicateWithFormat:@"internalFilePath == %@",
-                                          [path stringByAbbreviatingWithTildeInPath]];
+                // KHANDAQ (#125): a file is "bounded" if ANY message still references it. The stored
+                // internalFilePath can be in three historical formats — container-relative
+                // ("Documents/.../name"), tilde ("~/Documents/.../name"), or a legacy absolute path.
+                // The old exact tilde-match stopped matching once paths were stored container-relative
+                // (the #44 re-rooting fix), so cleanup wrongly treated every still-referenced upload as
+                // unbounded and DELETED it — outgoing photos/videos/voice notes vanished on the next
+                // launch and only an icon was left on re-entry. Match on the unique on-disk file name,
+                // which all three formats share and which is immune to container-UUID drift; biasing
+                // toward "keep" here is correct (an orphan wastes space, a false delete loses data).
+                NSString *name = [path lastPathComponent];
+                NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                          @"internalFilePath ENDSWITH %@ OR internalFilePath == %@",
+                                          [@"/" stringByAppendingString:name], name];
 
                 OCTRealmManager *realmManager = strongSelf.dataSource.managerGetRealmManager;
                 RLMResults *results = [realmManager objectsWithClass:[OCTMessageFile class] predicate:predicate];
@@ -1076,6 +1121,11 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                                    fileUTI:[self fileUTIFromFileName:fileName]
                                       chat:chat
                                     sender:friend];
+    // KHANDAQ: do NOT auto-accept here. The "Загрузка вложений" setting (Never / Wi-Fi / Always) is an
+    // app-layer policy enforced by AutomationCoordinator, which observes new incoming file messages and
+    // accepts them only when the setting allows. Unconditionally accepting at the submanager level
+    // bypassed that, so every incoming 1:1 file downloaded even with "Never" selected. Leaving the
+    // message as WaitingConfirmation lets the user (or the policy) start the download.
 }
 
 - (void)avatarFileReceiveForFileNumber:(OCTToxFileNumber)fileNumber

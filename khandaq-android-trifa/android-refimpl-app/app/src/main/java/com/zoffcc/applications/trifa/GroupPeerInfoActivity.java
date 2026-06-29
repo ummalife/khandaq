@@ -82,6 +82,7 @@ public class GroupPeerInfoActivity extends AppCompatActivity
     String peer_pubkey = null;
     TextView group_peerrole_text = null;
     TextView peer_first_join_text = null;
+    TextView peer_connection_type_text = null;
     AppCompatButton group_kickpeer_button = null;
     TextView group_kickpeer_hint = null;
     AppCompatButton group_notification_silent_button = null;
@@ -116,6 +117,31 @@ public class GroupPeerInfoActivity extends AppCompatActivity
         group_peerrole_select = findViewById(R.id.group_peerrole_select);
         group_peerrole_set_button = findViewById(R.id.group_peerrole_set_button);
         peer_first_join_text = findViewById(R.id.peer_first_join_text);
+        peer_connection_type_text = findViewById(R.id.peer_connection_type_text);
+
+        // KHANDAQ (#15): explicit Send button for the private (in-group direct) message, instead of the
+        // old behaviour of only firing on onPause (which the user couldn't discover).
+        final View send_private_btn = findViewById(R.id.group_send_private_message_button);
+        if (send_private_btn != null)
+        {
+            send_private_btn.setOnClickListener(v ->
+            {
+                final String text = group_send_private_message.getText().toString();
+                if (text == null || text.trim().length() == 0)
+                {
+                    return;
+                }
+                if (send_private_message_text(text))
+                {
+                    group_send_private_message.setText("");
+                    Toast.makeText(GroupPeerInfoActivity.this, R.string.group_private_msg_sent, Toast.LENGTH_SHORT).show();
+                }
+                else
+                {
+                    Toast.makeText(GroupPeerInfoActivity.this, R.string.group_private_msg_failed, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
 
         this.tox_ngc_group_role_items = new String[]{"---", "MODERATOR", "USER", "OBSERVER"};
         ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
@@ -262,6 +288,37 @@ public class GroupPeerInfoActivity extends AppCompatActivity
         {
         }
 
+        // KHANDAQ (#18A): show whether this peer is reached directly (UDP) or via a TCP relay server.
+        // Group file transfers run over these per-peer NGC connections, so this tells you why a
+        // transfer with this peer is fast (direct) or slow (relayed).
+        if (peer_connection_type_text != null)
+        {
+            try
+            {
+                final long pid = MainActivity.tox_group_peer_by_public_key(group_num, peer_pubkey);
+                final int conn = (pid >= 0) ? MainActivity.tox_group_peer_get_connection_status(group_num, pid)
+                                            : ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value;
+                final int key;
+                if (conn == ToxVars.TOX_CONNECTION.TOX_CONNECTION_UDP.value)
+                {
+                    key = R.string.peer_conn_direct_udp;
+                }
+                else if (conn == ToxVars.TOX_CONNECTION.TOX_CONNECTION_TCP.value)
+                {
+                    key = R.string.peer_conn_relay_tcp;
+                }
+                else
+                {
+                    key = R.string.peer_conn_offline;
+                }
+                peer_connection_type_text.setText(getString(key));
+            }
+            catch (Exception e)
+            {
+                peer_connection_type_text.setText("");
+            }
+        }
+
         try
         {
             final String self_pubkey = tox_group_self_get_public_key(group_num);
@@ -342,45 +399,63 @@ public class GroupPeerInfoActivity extends AppCompatActivity
     {
         super.onPause();
 
+        // KHANDAQ (#15): if the user typed a private message but left without tapping Send, still
+        // send it so nothing is lost. The Send button clears the field, so this never double-sends.
         try
         {
-            String private_message_text = group_send_private_message.getText().toString();
-            if (private_message_text != null)
+            final String text = group_send_private_message.getText().toString();
+            if (text != null && text.length() > 0)
             {
-                if (private_message_text.length() > 0)
-                {
-                    int res = tox_group_send_private_message_by_peerpubkey(tox_group_by_groupid__wrapper(group_id),
-                                                                           peer_pubkey, 0, private_message_text);
-                    Log.i(TAG, "onPause:tox_group_send_private_message_by_peerpubkey:res=" + res);
-
-                    if (res == 0)
-                    {
-                        GroupMessage m = new GroupMessage();
-                        m.is_new = false; // own messages are always "not new"
-                        m.tox_group_peer_pubkey = tox_group_self_get_public_key(
-                                tox_group_by_groupid__wrapper(group_id)).toUpperCase();
-                        m.direction = 1; // msg sent
-                        m.TOX_MESSAGE_TYPE = 0;
-                        m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
-                        m.tox_group_peername = null;
-                        m.sent_privately_to_tox_group_peer_pubkey = peer_pubkey;
-                        m.private_message = 1;
-                        m.group_identifier = group_id;
-                        m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
-                        m.sent_timestamp = System.currentTimeMillis();
-                        m.rcvd_timestamp = System.currentTimeMillis(); // since we do not have anything better assume "now"
-                        m.text = private_message_text;
-                        m.was_synced = false;
-                        m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
-
-                        insert_into_group_message_db(m, true);
-                    }
-                }
+                send_private_message_text(text);
+                group_send_private_message.setText("");
             }
         }
         catch (Exception ignored)
         {
         }
+    }
+
+    // KHANDAQ (#15): send a private (in-group direct) message to this peer. Returns true on success.
+    private boolean send_private_message_text(final String private_message_text)
+    {
+        if (private_message_text == null || private_message_text.length() == 0)
+        {
+            return false;
+        }
+        try
+        {
+            int res = tox_group_send_private_message_by_peerpubkey(tox_group_by_groupid__wrapper(group_id),
+                                                                   peer_pubkey, 0, private_message_text);
+            Log.i(TAG, "send_private_message_text:res=" + res);
+
+            if (res == 0)
+            {
+                GroupMessage m = new GroupMessage();
+                m.is_new = false; // own messages are always "not new"
+                m.tox_group_peer_pubkey = tox_group_self_get_public_key(
+                        tox_group_by_groupid__wrapper(group_id)).toUpperCase();
+                m.direction = 1; // msg sent
+                m.TOX_MESSAGE_TYPE = 0;
+                m.read = true; // !!!! there is not "read status" with conferences in Tox !!!!
+                m.tox_group_peername = null;
+                m.sent_privately_to_tox_group_peer_pubkey = peer_pubkey;
+                m.private_message = 1;
+                m.group_identifier = group_id;
+                m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_TYPE_TEXT.value;
+                m.sent_timestamp = System.currentTimeMillis();
+                m.rcvd_timestamp = System.currentTimeMillis();
+                m.text = private_message_text;
+                m.was_synced = false;
+                m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+
+                insert_into_group_message_db(m, true);
+                return true;
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return false;
     }
 
     @Override

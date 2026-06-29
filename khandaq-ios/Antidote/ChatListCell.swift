@@ -7,25 +7,32 @@ import SnapKit
 
 class ChatListCell: BaseCell {
     struct Constants {
-        static let AvatarSize = 40.0
-        static let AvatarLeftOffset = 10.0
-        static let AvatarRightOffset = 16.0
+        // KHANDAQ design (Figma): 56pt avatar, 16pt side margin, 12pt gap to text.
+        static let AvatarSize = 56.0
+        static let AvatarLeftOffset = 16.0
+        static let AvatarRightOffset = 12.0
 
-        static let NicknameLabelHeight = 22.0
-        static let MessageLabelHeight = 22.0
+        static let NicknameLabelHeight = 20.0
+        static let PresenceLabelHeight = 16.0
+        static let MessageLabelHeight = 18.0
 
         static let NicknameToDateMinOffset = 5.0
         static let DateToArrowOffset = 5.0
 
-        static let RightOffset = -7.0
-        static let VerticalOffset = 3.0
+        static let RightOffset = -16.0
+        static let VerticalOffset = 8.0
     }
 
     fileprivate var avatarView: ImageViewWithStatus!
     fileprivate var nicknameLabel: UILabel!
+    fileprivate var presenceLabel: UILabel!
     fileprivate var messageLabel: UILabel!
     fileprivate var dateLabel: UILabel!
     fileprivate var arrowImageView: UIImageView!
+    // KHANDAQ (#30): numeric unread-count badge (Telegram-style pill) on the message row.
+    fileprivate var unreadBadge: PaddedLabel!
+    // KHANDAQ design: collapses to 0 height for chat rows (name + message only).
+    fileprivate var presenceHeightConstraint: Constraint?
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
         super.setupWithTheme(theme, model: model)
@@ -38,29 +45,40 @@ class ChatListCell: BaseCell {
         separatorInset.left = CGFloat(Constants.AvatarLeftOffset + Constants.AvatarSize + Constants.AvatarRightOffset)
 
         avatarView.imageView.image = chatModel.avatar
-        avatarView.userStatusView.theme = theme
-        avatarView.userStatusView.userStatus = chatModel.status
-        avatarView.userStatusView.connectionStatus = chatModel.connectionstatus
+        avatarView.userStatusView.isHidden = true
 
         nicknameLabel.text = chatModel.nickname
         nicknameLabel.textColor = theme.colorForType(.NormalText)
 
+        // KHANDAQ design (Figma): a chat row is exactly two lines — name + last message. The online /
+        // last-seen presence is shown in Контакты, not here, so the presence line is always collapsed.
+        presenceLabel.text = nil
+        presenceLabel.isHidden = true
+        presenceHeightConstraint?.update(offset: 0.0)
+
         messageLabel.text = chatModel.message
-        messageLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        messageLabel.textColor = chatModel.isDraft
+            ? theme.colorForType(.BusyStatus)
+            : theme.colorForType(.ChatListCellMessage)
 
         dateLabel.text = chatModel.dateText
         dateLabel.textColor = theme.colorForType(.ChatListCellMessage)
 
-        backgroundColor = chatModel.isUnread ? theme.colorForType(.ChatListCellUnreadBackground) : .clear
+        // KHANDAQ design (Figma): rows have no unread tint and no trailing chevron — the green count
+        // badge alone marks an unread chat.
+        backgroundColor = .clear
+        arrowImageView.isHidden = true
 
-        if (chatModel.isUnread) {
-            arrowImageView.backgroundColor = theme.colorForType(.ChatListCellUnreadArrowBackground)
+        // KHANDAQ (#30): numeric unread badge (caps at 99+).
+        let unread = chatModel.unreadCount
+        if unread > 0 {
+            unreadBadge.isHidden = false
+            unreadBadge.text = unread > 99 ? "99+" : "\(unread)"
+            unreadBadge.backgroundColor = theme.colorForType(.ChatListCellUnreadArrowBackground)
         } else {
-            arrowImageView.backgroundColor = .clear
+            unreadBadge.isHidden = true
+            unreadBadge.text = nil
         }
-
-        // HINT: make the arrow image view a nice circle shape
-        arrowImageView.layer.cornerRadius = arrowImageView.frame.height / 2
     }
 
     override func createViews() {
@@ -70,15 +88,19 @@ class ChatListCell: BaseCell {
         contentView.addSubview(avatarView)
 
         nicknameLabel = UILabel()
-        nicknameLabel.font = UIFont.systemFont(ofSize: 18.0)
+        nicknameLabel.font = UIFont.systemFont(ofSize: 16.0, weight: .semibold)
         contentView.addSubview(nicknameLabel)
 
+        presenceLabel = UILabel()
+        presenceLabel.font = UIFont.systemFont(ofSize: 14.0)
+        contentView.addSubview(presenceLabel)
+
         messageLabel = UILabel()
-        messageLabel.font = UIFont.systemFont(ofSize: 12.0)
+        messageLabel.font = UIFont.systemFont(ofSize: 14.0)
         contentView.addSubview(messageLabel)
 
         dateLabel = UILabel()
-        dateLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
+        dateLabel.font = UIFont.systemFont(ofSize: 12.0)
         contentView.addSubview(dateLabel)
 
         let image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
@@ -86,6 +108,16 @@ class ChatListCell: BaseCell {
         arrowImageView = UIImageView(image: image)
         arrowImageView.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
         contentView.addSubview(arrowImageView)
+
+        unreadBadge = PaddedLabel()
+        unreadBadge.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        unreadBadge.textColor = .white
+        unreadBadge.textAlignment = .center
+        unreadBadge.layer.masksToBounds = true
+        unreadBadge.layer.cornerRadius = 9.0
+        unreadBadge.isHidden = true
+        unreadBadge.setContentCompressionResistancePriority(UILayoutPriority.required, for: .horizontal)
+        contentView.addSubview(unreadBadge)
     }
 
     override func installConstraints() {
@@ -106,13 +138,20 @@ class ChatListCell: BaseCell {
         messageLabel.snp.makeConstraints {
             $0.leading.equalTo(nicknameLabel)
             $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
-            $0.top.equalTo(nicknameLabel.snp.bottom)
+            $0.top.equalTo(presenceLabel.snp.bottom).offset(4.0)
             $0.bottom.equalTo(contentView).offset(-Constants.VerticalOffset)
             $0.height.equalTo(Constants.MessageLabelHeight)
         }
 
+        presenceLabel.snp.makeConstraints {
+            $0.leading.trailing.equalTo(nicknameLabel)
+            $0.top.equalTo(nicknameLabel.snp.bottom)
+            presenceHeightConstraint = $0.height.equalTo(Constants.PresenceLabelHeight).constraint
+        }
+
         dateLabel.snp.makeConstraints {
             $0.leading.greaterThanOrEqualTo(nicknameLabel.snp.trailing).offset(Constants.NicknameToDateMinOffset)
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
             $0.top.equalTo(nicknameLabel)
             $0.height.equalTo(nicknameLabel)
         }
@@ -121,6 +160,14 @@ class ChatListCell: BaseCell {
             $0.centerY.equalTo(dateLabel)
             $0.leading.greaterThanOrEqualTo(dateLabel.snp.trailing).offset(Constants.DateToArrowOffset)
             $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
+        }
+
+        // KHANDAQ (#30): unread pill pinned to the trailing edge of the message row.
+        unreadBadge.snp.makeConstraints {
+            $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
+            $0.centerY.equalTo(messageLabel)
+            $0.height.equalTo(18)
+            $0.width.greaterThanOrEqualTo(18)
         }
     }
 }
@@ -137,7 +184,9 @@ extension ChatListCell {
     override var accessibilityLabel: String? {
         get {
             var label = nicknameLabel.text ?? ""
-            label += ", " + avatarView.userStatusView.userStatus.toString()
+            if let presence = presenceLabel.text, !presence.isEmpty {
+                label += ", " + presence
+            }
 
             return label
         }
@@ -156,5 +205,19 @@ extension ChatListCell {
                 return UIAccessibilityTraitSelected
         }
         set {}
+    }
+}
+
+/// KHANDAQ (#30): UILabel with horizontal padding so the unread pill looks right for 2+ digits / "99+".
+private class PaddedLabel: UILabel {
+    private let hPad: CGFloat = 6.0
+
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.insetBy(dx: hPad, dy: 0))
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: size.width + hPad * 2, height: size.height)
     }
 }

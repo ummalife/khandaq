@@ -1,23 +1,72 @@
 :root {
+  color-scheme: dark;
   --bg: #0b0f0e;
   --bg-elevated: #111816;
   --surface: #141a18;
   --surface-hover: #1a2320;
   --border: #24332c;
-  --green: #0f3d2e;
-  --green-light: #1a5a44;
-  --green-glow: rgba(26, 90, 68, 0.35);
-  --gold: #c9a227;
-  --gold-soft: #e8c96a;
+  /* Brand accent — Khandaq teal (matches the app / Figma). Token names kept for compatibility. */
+  --green: #029B7D;
+  --green-light: #10B98F;
+  --green-glow: rgba(16, 185, 143, 0.35);
+  --gold: #10B98F;
+  --gold-soft: #7fe9d2;
   --text: #f5f5f0;
   --muted: #9aa8a2;
   --muted-2: #6d7a74;
+  --header-bg: rgba(11, 15, 14, 0.82);
+  --page-glow-1: #0c3a30;
+  --page-glow-2: #0a2e28;
   --radius: 16px;
   --radius-sm: 10px;
   --shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Sora", var(--font-body);
   --max: 1120px;
+}
+
+/* Light theme — follows the OS by default; the header toggle can force either mode. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #eef5f3;
+    --bg-elevated: #ffffff;
+    --surface: #ffffff;
+    --surface-hover: #f1f7f4;
+    --border: #d8e6e0;
+    --green: #029B7D;
+    --green-light: #10B98F;
+    --green-glow: rgba(2, 155, 125, 0.22);
+    --gold: #029B7D;
+    --gold-soft: #057a64;
+    --text: #15201c;
+    --muted: #5c6b66;
+    --muted-2: #8a968f;
+    --header-bg: rgba(255, 255, 255, 0.85);
+    --page-glow-1: #cdeee4;
+    --page-glow-2: #e4f3ee;
+    --shadow: 0 24px 48px rgba(20, 50, 40, 0.12);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef5f3;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #f1f7f4;
+  --border: #d8e6e0;
+  --green: #029B7D;
+  --green-light: #10B98F;
+  --green-glow: rgba(2, 155, 125, 0.22);
+  --gold: #029B7D;
+  --gold-soft: #057a64;
+  --text: #15201c;
+  --muted: #5c6b66;
+  --muted-2: #8a968f;
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --page-glow-1: #cdeee4;
+  --page-glow-2: #e4f3ee;
+  --shadow: 0 24px 48px rgba(20, 50, 40, 0.12);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -28,8 +77,8 @@ body {
   margin: 0;
   font-family: var(--font-body);
   background:
-    radial-gradient(1200px 640px at 8% -12%, #163d2e 0%, transparent 58%),
-    radial-gradient(900px 520px at 92% 0%, #2a2410 0%, transparent 52%),
+    radial-gradient(1200px 640px at 8% -12%, var(--page-glow-1) 0%, transparent 58%),
+    radial-gradient(900px 520px at 92% 0%, var(--page-glow-2) 0%, transparent 52%),
     var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -64,8 +113,8 @@ a:hover { text-decoration: underline; }
   top: 0;
   z-index: 50;
   backdrop-filter: blur(12px);
-  background: rgba(11, 15, 14, 0.82);
-  border-bottom: 1px solid rgba(36, 51, 44, 0.7);
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
 }
 
 .header-inner {
@@ -88,6 +137,24 @@ a:hover { text-decoration: underline; }
 }
 
 .brand:hover { text-decoration: none; color: var(--text); }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-left: 4px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.theme-toggle:hover { background: var(--surface-hover); border-color: var(--green-light); }
 
 .nav {
   display: flex;
@@ -113,7 +180,7 @@ a:hover { text-decoration: underline; }
 .nav-cta {
   color: var(--text) !important;
   background: linear-gradient(135deg, var(--green-light), var(--green));
-  border: 1px solid rgba(201, 162, 39, 0.45);
+  border: 1px solid var(--green-glow);
   font-weight: 600;
 }
 .nav-cta:hover {
@@ -188,7 +255,7 @@ h1 {
 .btn-primary {
   background: linear-gradient(135deg, var(--green-light), var(--green));
   color: var(--text);
-  border-color: rgba(201, 162, 39, 0.5);
+  border-color: var(--green-glow);
   box-shadow: 0 8px 24px var(--green-glow);
 }
 .btn-primary:hover {
@@ -559,7 +626,7 @@ details.install ol {
   grid-template-columns: 20px 1fr;
   gap: 0 0.85rem;
   padding: 1rem 0;
-  border-bottom: 1px solid rgba(36, 51, 44, 0.6);
+  border-bottom: 1px solid var(--border);
 }
 .cl-entry:last-child { border-bottom: none; }
 .cl-entry-marker { padding-top: 0.45rem; }

@@ -17,24 +17,41 @@
 "create_account" = "Создать аккаунт";
 /* Login screen text */
 "import_profile" = "Импорт профиля";
+"import_step_1" = "Отправьте файл .tox на ваше устройство (используя почту, Dropbox, или другой вариант)";
+"import_step_2" = "Нажмите «Открыть»";
+"import_step_3" = "Выберите Khandaq в списке доступных приложений";
+"import_step_4" = "Проверьте имя нового профиля и нажмите ОК";
+/* Onboarding walkthrough (Figma) */
+"onboarding_no_number_title" = "Без номера телефона";
+"onboarding_no_number_subtitle" = "Регистрируйтесь в мессенджере без необходимости привязки к номеру телефона";
+"onboarding_encryption_title" = "Надежное шифрование";
+"onboarding_encryption_subtitle" = "Все сообщения шифруются протоколом Tox и недоступны никому кроме вас и собеседника";
+"onboarding_decentralized_title" = "Только Вы и собеседник";
+"onboarding_decentralized_subtitle" = "Ваши сообщения не хранятся на серверах. Наслаждайтесь полной децентрализацией";
+"onboarding_next" = "Далее";
+"onboarding_create_account" = "Создать аккаунт";
+"contacts_copy_myid" = "Копировать MyID";
+"chat_encryption_badge" = "Tox protocol";
+"chat_encryption_info" = "Все данные в чатах защищены протоколом сквозного шифрования Tox и недоступны никому кроме вас и вашего собеседника";
 /* Password field */
 "password" = "Пароль";
 /* Login button */
 "log_in" = "Войти";
 /* Login screen text */
 "create_profile" = "Создать профиль";
+"create_account_screen_title" = "Создание профиля";
 /* Login screen text */
 "import_to_khandaq" = "Импорт профиля";
 /* Login screen text */
-"create_account_username_title" = "Как показывать контакты?";
+"create_account_username_title" = "Имя";
 /* Login screen text */
-"create_account_username_placeholder" = "Имя";
+"create_account_username_placeholder" = "Введите ваше имя";
 /* Login screen text */
-"create_account_profile_title" = "Название профиля?";
+"create_account_profile_title" = "Название профиля";
 /* Login screen text */
-"create_account_profile_placeholder" = "Профиль";
+"create_account_profile_placeholder" = "Укажите название профиля";
 /* Login screen text */
-"create_account_profile_hint" = "напр. Home, iPhone";
+"create_account_profile_hint" = "Например: Home, Phone";
 /* Login screen text */
 "set_password_title" = "Установить пароль";
 /* Login screen text */
@@ -86,11 +103,32 @@
 
 /* Label shown when connecting to Tox network */
 "connecting_label" = "Соединение...";
+"conn_state_offline" = "Нет соединения";
+"conn_state_connected" = "В сети";
+"conn_state_weak" = "Слабое соединение";
+"conn_state_stable" = "Связь стабильна";
+"conn_quality_strong" = "сильное";
+"conn_quality_medium" = "среднее";
+"conn_quality_weak" = "слабое";
+"conn_quality_offline" = "нет сети";
 
 /* Tab name and screen name */
 "contacts_title" = "Контакты";
 /* Tab name and screen name */
 "chats_title" = "Чаты";
+"chat_filter_groups" = "Группы";
+"chat_filter_favorites" = "Избранное";
+"chat_filter_add_favorite" = "В избранное";
+"chat_filter_remove_favorite" = "Убрать из избранного";
+"theme_toggle_accessibility" = "Переключить тёмную тему";
+"voice_recording_cancel" = "Отмена";
+"voice_recording_send" = "Отправить голосовое сообщение";
+"voice_recording_slide_to_cancel" = "‹ сдвиньте для отмены";
+"voice_recording_release_to_cancel" = "Отпустите для отмены";
+"global_search_placeholder" = "Поиск";
+"global_search_section_chats" = "Чаты и группы";
+"global_search_section_messages" = "Сообщения";
+"global_search_no_results" = "Ничего не найдено";
 /* Tab name and screen name */
 "settings_title" = "Настройки";
 /* Tab name and screen name */
@@ -129,16 +167,23 @@
 "add_contact_send" = "Отправить";
 /* Add contat placeholder text */
 "add_contact_tox_id_placeholder" = "Введите MyID";
+"add_contact_myid_label" = "MyID пользователя";
 /* Add contat placeholder text */
 "add_contact_or_label" = "или";
 /* Add contat button */
-"add_contact_use_qr" = "Сканировать QR-код";
+"add_contact_use_qr" = "Добавить по QR-коду";
+"add_contact_use_qr_gallery" = "QR-код из галереи";
+"add_contact_help_text" = "Вставьте ID друга в поле выше или нажмите кнопку QR-кода для сканирования камерой.";
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Сообщение";
 /* Add contat default text sended to contact */
 "add_contact_default_message_text" = "Мир тебе! Пожалуйста, добавьте меня в список своих контактов?";
 /* Add contat error */
 "add_contact_wrong_qr" = "QR-код должен содержать MyID";
+"add_contact_invalid_id_format" = "Неверный формат ID";
+"add_contact_already_friend" = "Этот контакт уже есть в списке.";
+"add_contact_request_already_pending" = "Запрос этому контакту уже отправлен.";
+"add_contact_public_key_only_hint" = "Введён только публичный ключ. Запрос уйдёт с nospam=0 и может не дойти до адресата — нужен полный MyID из 76 символов из профиля.";
 
 /* User name text */
 "name" = "Имя";
@@ -150,6 +195,9 @@
 "status_title" = "Статус подключения";
 /* User Tox ID text */
 "my_tox_id" = "MyID";
+"qr_screen_title" = "Сканирование QR";
+"qr_my_id_heading" = "MyID вашего аккаунта";
+"qr_my_id_subtitle" = "Друзья могут написать вам, отсканировав ваш QR-код";
 /* User public key text */
 "public_key" = "Публичный ключ";
 /* Share Tox ID text */
@@ -163,7 +211,7 @@
 "qr_close_button" = "Закрыть";
 
 /* Chat screen placeholder */
-"chat_no_chats" = "Нет чатов";
+"chat_no_chats" = "Здесь будут ваши диалоги. Напишите первым или ответьте на сообщение, чтобы начать общение.";
 /* Chats screen message text */
 "chat_outgoing_file" = "Исходящий файл:";
 /* Chats screen message text */
@@ -186,7 +234,11 @@
 /* Status message */
 "status_offline" = "Не в сети";
 /* Status message */
-"status_online" = "В сети";
+"status_online" = "онлайн";
+"status_last_seen_just_now" = "был(-а) только что";
+"status_last_seen_minutes_ago" = "был(-а) %d мин. назад";
+"status_last_seen_hours_ago" = "был(-а) %d ч. назад";
+"status_last_seen_long_ago" = "был(-а) давно";
 /* Status message */
 "status_away" = "Отсутствую";
 /* Status message */
@@ -221,8 +273,13 @@
 "settings_autodownload_images" = "Загрузка вложений";
 /* Settings screen menu */
 "settings_autodownload_images_description" = "Автоматически загружать входящие изображения.";
+"settings_profile_backup_description" = "Экспорт или импорт профиля Tox (.tox). Переносятся только Tox ID и контакты; история чатов не переносится.";
+"settings_import_profile_invalid_file" = "Выбранный файл не является профилем Tox (.tox).";
 /* Settings screen menu */
+"settings_dark_theme" = "Тёмная тема";
 "settings_notifications_message_preview" = "Превью уведомлений";
+"settings_group_system_messages" = "Системные сообщения групп";
+"settings_group_system_messages_description" = "Показывать join/leave и другие системные строки в групповых чатах.";
 /* Settings screen menu */
 "settings_notifications_description" = "Вы будете получать уведомления в течении 10 минут после сворачивания Khandaq.";
 /* Settings screen menu */
@@ -269,11 +326,20 @@
 "photo_from_camera" = "Камера";
 /* Source of photo to take */
 "photo_from_photo_library" = "Медиатека";
+/* Attachment menu items (Figma) */
+"attach_gallery" = "Галерея";
+"attach_audio" = "Аудио";
+"attach_location" = "Геолокация";
 /* Error while converting avatar image */
 "change_avatar_error_convert_image" = "Ошибка конвертации изображения";
 
 /* Alert text when sending file to contacts */
 "file_send_to_contact" = "Отправить контакту";
+"file_send_to_group" = "Отправить в группу";
+"group_select_no_groups" = "Групп пока нет";
+"share_extension_preparing" = "Подготовка…";
+"share_extension_open_app" = "Открываем Khandaq…";
+"share_extension_failed" = "Не удалось поделиться через Khandaq";
 
 /* Profile menu item */
 "export_profile" = "Экспорт профиля";
@@ -295,6 +361,7 @@
 
 /* File message text */
 "chat_file_cancelled" = "Отменено";
+"chat_file_download_failed" = "Загрузка не удалась";
 /* File message text */
 "chat_waiting" = "Ожидание...";
 /* File message text */
@@ -316,6 +383,9 @@
 "alert_delete" = "Удалить";
 /* Delete button */
 "alert_cancel" = "Отмена";
+"alert_create" = "Создать";
+/* OK button */
+"alert_ok" = "OK";
 
 /* Error while creating new profile */
 "login_enter_username_and_profile" = "Имя и профиль должны быть заданы.";
@@ -334,6 +404,16 @@
 "error_too_many_files" = "Слишком много активных загрузок";
 /* Error */
 "error_internal_message" = "Внутренняя ошибка";
+"video_send_preparing" = "Подготовка видео…";
+"video_send_preparation_failed" = "Не удалось подготовить видео к отправке.";
+"video_send_too_large" = "Видео слишком большое (макс. 500 МБ).";
+"video_send_busy" = "Другое видео ещё обрабатывается. Подождите.";
+"video_send_too_long" = "Видео слишком длинное (макс. 10 минут).";
+"video_send_cancel" = "Отмена";
+"file_transfer_stalled" = "Передача файла зависла. Отмените и попробуйте снова.";
+"media_send_button" = "Отправить";
+"media_send_caption_hint" = "Добавить подпись…";
+"media_send_counter_format" = "%1$d / %2$d";
 /* Error */
 "error_wrong_password_title" = "Неверный пароль";
 /* Error */
@@ -405,6 +485,7 @@
 "call_error_microphone_denied" = "Для ответа на звонок нужен доступ к микрофону";
 "permission_denied_title" = "Нужен доступ";
 "camera_access_denied_message" = "Доступ к камере запрещён. Разрешите камеру в Настройках, чтобы использовать эту функцию.";
+"microphone_access_denied_message" = "Доступ к микрофону запрещён. Разрешите микрофон в Настройках, чтобы использовать эту функцию.";
 "open_settings" = "Настройки";
 
 /* Error while using color theme */
@@ -438,5 +519,219 @@
 "accessibility_outgoing_message_label" = "Ваше сообщение";
 /* Message shown on chat list when contact is typing */
 "chat_is_typing_text" = "печатает...";
+"chat_draft_prefix" = "Черновик: %@";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Сообщения и файлы будут доставлены, когда контакт появится в сети. Ему отправлено push-уведомление для пробуждения.";
+
+"group_add_button" = "Добавить группу";
+"group_create_public" = "Создать публичную группу";
+"group_create_private" = "Создать приватную группу";
+"group_create_private_hint" = "Задайте пароль — без него войти смогут только приглашённые.";
+"group_create_private_failed" = "Не удалось создать приватную группу.";
+"group_join_by_id" = "Войти по ID чата";
+"group_name_placeholder" = "Название группы";
+"group_chat_id_placeholder" = "64-символьный ID чата";
+"group_join_hint" = "Вставьте ID группы с другого устройства.";
+"group_join_clipboard_prompt" = "В буфере обмена найден ID группы. Вступить в группу?";
+"group_join_action" = "Войти";
+"group_join_invalid_id" = "ID чата должен содержать 64 hex-символа.";
+"group_create_failed" = "Не удалось создать группу.";
+"group_create_in_progress" = "Создание группы…";
+"launch_loading" = "Загрузка…";
+"group_join_failed" = "Не удалось войти в группу.";
+"group_join_fail_peer_limit" = "Группа заполнена. Достигнут лимит участников.";
+"group_join_fail_invalid_password" = "Неверный пароль группы.";
+"group_join_password_hint" = "Введите пароль группы, если требуется.";
+"group_join_invalid_qr" = "QR-код не содержит корректный ID группы.";
+"group_scan_qr" = "Сканировать QR группы";
+"group_chat_default_title" = "Группа";
+"group_chat_list_subtitle" = "Групповой чат";
+"group_chat_list_private" = "Приватная";
+"group_chat_list_disconnected" = "Подключение…";
+"group_chat_list_private_unread_format" = "%d личных непрочит.";
+"group_disconnected_banner" = "Подключение к группе… Сообщения отправятся после соединения.";
+"group_connecting_banner_format" = "Подключение к группе… (попытка %d)";
+"group_member_count_format" = "%d участников";
+"group_member_online_count_format" = "%d участников · %d онлайн";
+"group_send_observer_role" = "Вы наблюдатель в этой группе и не можете отправлять сообщения. Попросите модератора сменить вашу роль на «Участник».";
+"group_my_peer_name_header" = "Ваше имя в группе";
+"group_my_peer_name_placeholder" = "Введите отображаемое имя";
+"group_my_peer_name_set_failed" = "Не удалось обновить имя в группе.";
+"group_system_peer_renamed" = "%@ сменил имя";
+"group_system_privacy_changed" = "Приватность изменена: %@";
+"group_system_privacy_public" = "Публичная";
+"group_system_privacy_private" = "Приватная";
+"group_info_button" = "Инфо";
+"group_info_title" = "О группе";
+"group_chat_id_header" = "ID чата";
+"group_chat_id_footer" = "Поделитесь этим ID, чтобы другие могли войти в группу.";
+"group_chat_id_loading" = "Загрузка…";
+"group_members_header" = "Участники";
+"group_members_header_format" = "Участники (%d)";
+"group_members_header_online_format" = "Участников: %1$d · %2$d онлайн";
+"group_members_empty" = "Пока нет участников";
+"group_member_list_title" = "Участники";
+"group_member_status_offline" = "Не в сети";
+"group_member_action_private_msg" = "Личное сообщение в группе";
+"group_member_action_open_chat" = "Открыть личку";
+"group_member_action_add_friend" = "Добавить в друзья";
+"group_member_action_add_friend_sent" = "Запрос в друзья отправлен.";
+"group_member_action_copy_id" = "Копировать ID";
+"group_member_action_copy_done" = "ID скопирован";
+"group_messages_search_placeholder" = "Поиск сообщений";
+"group_messages_quote_action" = "Цитировать";
+"chat_reply_action" = "Ответить";
+"chat_forward_action" = "Переслать";
+"chat_forwarded_from_format" = "↪ Переслано от %@";
+"saved_messages_title" = "Избранное";
+"chat_reply_cancel" = "Отменить ответ";
+"chat_reply_header" = "В ответ %@";
+"chat_reply_self_name" = "Вы";
+"chat_reply_unknown_sender" = "Неизвестно";
+"group_messages_select_action" = "Выбрать сообщения";
+"group_messages_copy_action" = "Копировать";
+"network_connections_title" = "Сетевые подключения";
+"network_connections_summary" = "DHT, реле, журнал переподключений";
+"network_connections_loading" = "Загрузка сетевого статуса…";
+"network_connections_beta_notice" = "Журнал событий и метрики качества соединения. Полный дамп UDP/TCP на iOS пока недоступен.";
+"group_peer_fallback_format" = "Участник %d";
+"group_error_disconnected" = "Группа ещё не подключена. Подождите и попробуйте снова.";
+"group_error_not_found" = "Сессия группы потеряна. Откройте группу заново или войдите по ID.";
+"group_error_permissions" = "У вас нет прав отправлять сообщения в этой группе.";
+"group_error_send_failed" = "Не удалось отправить сообщение.";
+"group_error_password" = "Неверный пароль группы.";
+"group_invite_alert_title" = "Приглашение в группу";
+"group_invite_alert_message_format" = "%@ приглашает вас в «%@».";
+"group_invite_accept" = "Войти";
+"group_invite_accept_failed" = "Не удалось войти в группу.";
+"group_invite_accept_bad_invite" = "Приглашение недействительно или устарело.";
+"group_invite_unknown_friend" = "Контакт";
+"group_invite_friend_action" = "Пригласить друга";
+"group_invite_friend_success" = "Приглашение отправлено.";
+"group_invite_friend_failed" = "Не удалось пригласить друга.";
+"group_invite_friend_not_found" = "Друг не найден.";
+"group_invite_friends_empty" = "Нет подключённых друзей для приглашения.";
+"group_file_attach" = "Файл";
+"group_share_location" = "Поделиться геопозицией";
+"group_live_audio_toggle" = "Живое аудио";
+"group_live_video_toggle" = "Живое видео";
+"group_live_video_quality_toggle" = "Качество видео";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_live_video_toggle_active" = "Живое видео активно";
+"group_live_video_toggle_incoming" = "Входящее живое видео";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu\n%@";
+"group_video_join_title" = "Присоединиться к групповому видео?";
+"group_video_join_message" = "Отправить своё видео и аудио всем в группе?";
+"group_video_join_confirm" = "Да, начать видео";
+"group_video_join_decline" = "Нет";
+"group_send_voice_confirm_title" = "Отправить голосовое?";
+"group_send_voice_confirm_message" = "Отправить это голосовое сообщение в группу?";
+"group_incoming_message_error" = "Не удалось обработать входящее групповое сообщение.";
+"group_image_shrink_failed" = "Не удалось подготовить изображение к отправке.";
+"group_incoming_file_error" = "Не удалось обработать входящий групповой файл.";
+"chat_file_too_large" = "Файл слишком большой.";
+"chat_incoming_file_too_large" = "Входящий файл слишком большой.";
+"chat_opening_file_failed" = "Не удалось открыть файл.";
+"group_file_prepare_failed" = "Не удалось подготовить файл к отправке.";
+"group_peer_unknown" = "Неизвестно";
+"group_live_video_stream_unknown_peer" = "Неизвестно";
+"group_live_media_not_connected" = "Группа не подключена. Дождитесь подключения и попробуйте снова.";
+"group_live_media_start_failed" = "Не удалось запустить live-медиа в этой группе.";
+"group_live_video_simulator_unavailable" = "Групповое видео недоступно в симуляторе. Используйте реальное устройство.";
+"group_live_video_camera_denied" = "Для группового видео нужен доступ к камере.";
+"group_live_video_no_camera" = "На устройстве нет доступной камеры.";
+"group_live_audio_codec_unavailable" = "Live-аудио недоступно на этом устройстве.";
+"group_live_audio_simulator_unavailable" = "Групповое live-аудио недоступно в симуляторе. Используйте реальное устройство.";
+"group_voice_hold_to_record" = "Удерживайте кнопку микрофона, чтобы записать голосовое сообщение";
+"voice_message_label" = "Голосовое сообщение";
+"group_file_too_large" = "Файл слишком большой (макс. 200 МБ).";
+"group_file_send_failed" = "Не удалось отправить файл.";
+"group_notifications_header" = "Уведомления";
+"group_notifications_mute" = "Без звука для группы";
+"group_peer_notifications_mute" = "Без звука от участника";
+"group_peer_notifications_unmute" = "Включить уведомления от участника";
+"group_peer_notifications_muted" = "Без звука";
+"group_peer_kick" = "Исключить из группы";
+"group_peer_kick_confirm_format" = "Исключить %@ из группы?";
+"group_peer_kick_failed" = "Не удалось исключить участника.";
+"group_peer_kick_not_found" = "Участник не найден в группе.";
+"group_leave_action" = "Выйти из группы";
+"group_leave_confirm_message" = "Вы покинете группу, и чат будет удалён из списка.";
+"group_leave_part_message_placeholder" = "Прощальное сообщение (необязательно)";
+"group_leave_footer" = "Позже можно снова войти по ID чата.";
+"group_leave_failed" = "Не удалось выйти из группы.";
+"group_clear_history_action" = "Очистить историю";
+"group_clear_history_confirm_message" = "Все сообщения группы будут удалены на этом устройстве. Вы останетесь в группе.";
+"group_delete_chat_title" = "Удалить групповой чат";
+"group_delete_chat_message" = "Очистить локальные сообщения или полностью выйти из группы?";
+"group_danger_header" = "Действия с чатом";
+"group_danger_footer" = "Очистка истории удаляет сообщения локально. Выход убирает чат из списка; можно вернуться по ID чата.";
+"group_danger_footer_with_system_format" = "Очистка истории удаляет сообщения локально. Можно отдельно удалить %ld системных сообщений.";
+"group_delete_system_msgs_action" = "Удалить системные сообщения";
+"group_delete_system_msgs_count_format" = "%ld сообщ.";
+"group_delete_system_msgs_title" = "Удалить системные сообщения";
+"group_delete_system_msgs_message" = "Удалить все системные сообщения (вход/выход) в этой группе навсегда?";
+"group_delete_system_msgs_confirm" = "Удалить";
+"group_info_member_online" = "онлайн";
+"group_member_last_seen_just_now" = "Был(-а) только что";
+"group_member_last_seen_minutes_format" = "Был(-а) %d мин назад";
+"group_member_last_seen_hours_format" = "Был(а) %d ч назад";
+"group_member_last_seen_long_ago" = "Давно не был(а) в сети";
+"group_system_peer_joined" = "%@ вошёл в группу";
+"group_system_peer_left" = "%@ вышел из группы";
+"group_system_peer_kicked" = "%@ исключён из группы";
+"group_system_group_created" = "Группа создана";
+"group_system_you_joined" = "Вы вошли в группу";
+"group_role_founder" = "Основатель";
+"group_role_moderator" = "Модератор";
+"group_role_user" = "Участник";
+"group_role_observer" = "Наблюдатель";
+"group_role_make_moderator" = "Сделать модератором";
+"group_role_make_user" = "Сделать участником";
+"group_role_make_observer" = "Сделать наблюдателем";
+"group_role_set_failed" = "Не удалось изменить роль.";
+"group_role_set_invalid" = "Недопустимая роль для этого участника.";
+"group_role_set_self" = "Нельзя изменить свою роль.";
+"group_topic_header" = "Тема группы";
+"group_topic_placeholder" = "Введите тему";
+"group_topic_footer" = "Видна всем. Сохраняется после подтверждения.";
+"group_topic_footer_locked" = "Тема заблокирована. Обычные участники не могут её менять.";
+"group_topic_footer_locked_moderator" = "Тема заблокирована. Вы можете менять её как модератор.";
+"group_topic_footer_no_permission" = "Только основатель и модераторы могут менять тему.";
+"group_peer_private_unread_format" = "%d непр. ЛС";
+"group_private_message_unread_action_format" = "Личное сообщение (%d непр.)";
+"group_topic_set_failed" = "Не удалось обновить тему.";
+"group_topic_too_long" = "Тема слишком длинная.";
+"group_password_header" = "Пароль группы";
+"group_password_placeholder" = "Задать или изменить пароль";
+"group_password_footer" = "Только основатель. Пусто — удалить пароль.";
+"group_password_set_failed" = "Не удалось обновить пароль.";
+"group_password_too_long" = "Пароль слишком длинный.";
+"group_topic_lock_header" = "Блокировка темы";
+"group_topic_lock_label" = "Только основатель и модераторы могут менять тему";
+"group_topic_lock_footer" = "Если включено, обычные участники не смогут изменить тему группы.";
+"group_topic_lock_set_failed" = "Не удалось обновить блокировку темы.";
+"group_peer_limit_header" = "Лимит участников";
+"group_peer_limit_label" = "Максимум участников";
+"group_peer_limit_value_format" = "Лимит: %d";
+"group_peer_limit_placeholder" = "100";
+"group_peer_limit_footer" = "Только основатель. Максимальное число участников в группе.";
+"group_peer_limit_at_capacity_footer" = "Группа достигла лимита участников. Новые участники могут не войти.";
+"group_peer_limit_set_failed" = "Не удалось обновить лимит участников.";
+"group_privacy_header" = "Приватность";
+"group_privacy_private_label" = "Приватная группа";
+"group_privacy_footer" = "Для входа в приватную группу нужен пароль.";
+"group_privacy_set_failed" = "Не удалось обновить режим приватности.";
+"group_voice_header" = "Голосовые сообщения";
+"group_voice_footer" = "Кто может отправлять голосовые сообщения в группе.";
+"group_voice_all" = "Все участники";
+"group_voice_moderator" = "Модераторы и основатель";
+"group_voice_founder" = "Только основатель";
+"group_voice_set_failed" = "Не удалось обновить голосовой режим.";
+"group_show_invite_qr" = "Показать QR-приглашение";
+"group_peer_limit_invalid" = "Введите число больше нуля.";
+"group_private_message_action" = "Личное сообщение";
+"group_private_message_failed" = "Не удалось отправить личное сообщение.";
+"group_private_message_notification_title_format" = "🔒 %@ (личное)";

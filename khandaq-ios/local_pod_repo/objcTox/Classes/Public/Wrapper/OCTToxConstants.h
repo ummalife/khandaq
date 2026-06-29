@@ -555,3 +555,219 @@ typedef NS_ENUM(NSInteger, OCTToxErrorFileSendChunk) {
      */
     OCTToxErrorFileSendChunkWrongPosition,
 };
+
+typedef uint32_t OCTToxGroupNumber;
+typedef uint32_t OCTToxGroupMessageId;
+
+extern const OCTToxGroupNumber kOCTToxGroupNumberFailure;
+
+extern const NSUInteger kOCTToxGroupChatIdLength;
+extern const NSUInteger kOCTToxGroupChatIdHexLength;
+extern const NSUInteger kOCTToxGroupMaxMessageLength;
+extern const NSUInteger kOCTToxGroupMaxGroupNameLength;
+extern const NSUInteger kOCTToxGroupMaxPartLength;
+
+typedef NS_ENUM(NSInteger, OCTToxGroupPrivacyState) {
+    OCTToxGroupPrivacyStatePublic,
+    OCTToxGroupPrivacyStatePrivate,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxGroupExitType) {
+    OCTToxGroupExitTypeQuit,
+    OCTToxGroupExitTypeTimeout,
+    OCTToxGroupExitTypeDisconnected,
+    OCTToxGroupExitTypeSelfDisconnected,
+    OCTToxGroupExitTypeKick,
+    OCTToxGroupExitTypeSyncError,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxGroupRole) {
+    OCTToxGroupRoleFounder,
+    OCTToxGroupRoleModerator,
+    OCTToxGroupRoleUser,
+    OCTToxGroupRoleObserver,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxGroupTopicLock) {
+    OCTToxGroupTopicLockEnabled,
+    OCTToxGroupTopicLockDisabled,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxGroupVoiceState) {
+    OCTToxGroupVoiceStateAll,
+    OCTToxGroupVoiceStateModerator,
+    OCTToxGroupVoiceStateFounder,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxGroupJoinFail) {
+    OCTToxGroupJoinFailPeerLimit,
+    OCTToxGroupJoinFailInvalidPassword,
+    OCTToxGroupJoinFailUnknown,
+};
+
+FOUNDATION_EXPORT const int32_t kOCTDefaultGroupPeerLimit;
+
+typedef NS_ENUM(NSInteger, OCTToxGroupModEvent) {
+    OCTToxGroupModEventKick,
+    OCTToxGroupModEventObserver,
+    OCTToxGroupModEventUser,
+    OCTToxGroupModEventModerator,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupNew) {
+    OCTToxErrorGroupNewUnknown,
+    OCTToxErrorGroupNewTooLong,
+    OCTToxErrorGroupNewEmpty,
+    OCTToxErrorGroupNewInit,
+    OCTToxErrorGroupNewState,
+    OCTToxErrorGroupNewAnnounce,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupJoin) {
+    OCTToxErrorGroupJoinUnknown,
+    OCTToxErrorGroupJoinInit,
+    OCTToxErrorGroupJoinBadChatId,
+    OCTToxErrorGroupJoinEmpty,
+    OCTToxErrorGroupJoinTooLong,
+    OCTToxErrorGroupJoinPassword,
+    OCTToxErrorGroupJoinCore,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupLeave) {
+    OCTToxErrorGroupLeaveUnknown,
+    OCTToxErrorGroupLeaveGroupNotFound,
+    OCTToxErrorGroupLeaveTooLong,
+    OCTToxErrorGroupLeaveFailSend,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupSendMessage) {
+    OCTToxErrorGroupSendMessageUnknown,
+    OCTToxErrorGroupSendMessageGroupNotFound,
+    OCTToxErrorGroupSendMessageTooLong,
+    OCTToxErrorGroupSendMessageEmpty,
+    OCTToxErrorGroupSendMessageBadType,
+    OCTToxErrorGroupSendMessagePermissions,
+    OCTToxErrorGroupSendMessageFailSend,
+    OCTToxErrorGroupSendMessageDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupStateQueries) {
+    OCTToxErrorGroupStateQueriesUnknown,
+    OCTToxErrorGroupStateQueriesGroupNotFound,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupKickPeer) {
+    OCTToxErrorGroupKickPeerUnknown,
+    OCTToxErrorGroupKickPeerGroupNotFound,
+    OCTToxErrorGroupKickPeerPeerNotFound,
+    OCTToxErrorGroupKickPeerPermissions,
+    OCTToxErrorGroupKickPeerFailSend,
+    OCTToxErrorGroupKickPeerDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupSetRole) {
+    OCTToxErrorGroupSetRoleUnknown,
+    OCTToxErrorGroupSetRoleGroupNotFound,
+    OCTToxErrorGroupSetRolePeerNotFound,
+    OCTToxErrorGroupSetRolePermissions,
+    OCTToxErrorGroupSetRoleAssignment,
+    OCTToxErrorGroupSetRoleFailAction,
+    OCTToxErrorGroupSetRoleSelf,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupTopicSet) {
+    OCTToxErrorGroupTopicSetUnknown,
+    OCTToxErrorGroupTopicSetGroupNotFound,
+    OCTToxErrorGroupTopicSetTooLong,
+    OCTToxErrorGroupTopicSetPermissions,
+    OCTToxErrorGroupTopicSetFailCreate,
+    OCTToxErrorGroupTopicSetFailSend,
+    OCTToxErrorGroupTopicSetDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupFounderSetPassword) {
+    OCTToxErrorGroupFounderSetPasswordUnknown,
+    OCTToxErrorGroupFounderSetPasswordGroupNotFound,
+    OCTToxErrorGroupFounderSetPasswordPermissions,
+    OCTToxErrorGroupFounderSetPasswordTooLong,
+    OCTToxErrorGroupFounderSetPasswordFailSend,
+    OCTToxErrorGroupFounderSetPasswordMalloc,
+    OCTToxErrorGroupFounderSetPasswordDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupFounderSetTopicLock) {
+    OCTToxErrorGroupFounderSetTopicLockUnknown,
+    OCTToxErrorGroupFounderSetTopicLockGroupNotFound,
+    OCTToxErrorGroupFounderSetTopicLockInvalid,
+    OCTToxErrorGroupFounderSetTopicLockPermissions,
+    OCTToxErrorGroupFounderSetTopicLockFailSet,
+    OCTToxErrorGroupFounderSetTopicLockFailSend,
+    OCTToxErrorGroupFounderSetTopicLockDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupFounderSetPeerLimit) {
+    OCTToxErrorGroupFounderSetPeerLimitUnknown,
+    OCTToxErrorGroupFounderSetPeerLimitGroupNotFound,
+    OCTToxErrorGroupFounderSetPeerLimitPermissions,
+    OCTToxErrorGroupFounderSetPeerLimitFailSet,
+    OCTToxErrorGroupFounderSetPeerLimitFailSend,
+    OCTToxErrorGroupFounderSetPeerLimitDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupFounderSetVoiceState) {
+    OCTToxErrorGroupFounderSetVoiceStateUnknown,
+    OCTToxErrorGroupFounderSetVoiceStateGroupNotFound,
+    OCTToxErrorGroupFounderSetVoiceStatePermissions,
+    OCTToxErrorGroupFounderSetVoiceStateFailSet,
+    OCTToxErrorGroupFounderSetVoiceStateFailSend,
+    OCTToxErrorGroupFounderSetVoiceStateDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupFounderSetPrivacyState) {
+    OCTToxErrorGroupFounderSetPrivacyStateUnknown,
+    OCTToxErrorGroupFounderSetPrivacyStateGroupNotFound,
+    OCTToxErrorGroupFounderSetPrivacyStatePermissions,
+    OCTToxErrorGroupFounderSetPrivacyStateFailSet,
+    OCTToxErrorGroupFounderSetPrivacyStateFailSend,
+    OCTToxErrorGroupFounderSetPrivacyStateDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupSendPrivateMessage) {
+    OCTToxErrorGroupSendPrivateMessageUnknown,
+    OCTToxErrorGroupSendPrivateMessageGroupNotFound,
+    OCTToxErrorGroupSendPrivateMessageTooLong,
+    OCTToxErrorGroupSendPrivateMessageEmpty,
+    OCTToxErrorGroupSendPrivateMessageBadType,
+    OCTToxErrorGroupSendPrivateMessagePeerNotFound,
+    OCTToxErrorGroupSendPrivateMessageFailSend,
+    OCTToxErrorGroupSendPrivateMessageDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupInviteAccept) {
+    OCTToxErrorGroupInviteAcceptUnknown,
+    OCTToxErrorGroupInviteAcceptBadInvite,
+    OCTToxErrorGroupInviteAcceptInitFailed,
+    OCTToxErrorGroupInviteAcceptTooLong,
+    OCTToxErrorGroupInviteAcceptEmpty,
+    OCTToxErrorGroupInviteAcceptPassword,
+    OCTToxErrorGroupInviteAcceptCore,
+    OCTToxErrorGroupInviteAcceptFailSend,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupInviteFriend) {
+    OCTToxErrorGroupInviteFriendUnknown,
+    OCTToxErrorGroupInviteFriendGroupNotFound,
+    OCTToxErrorGroupInviteFriendFriendNotFound,
+    OCTToxErrorGroupInviteFriendInviteFail,
+    OCTToxErrorGroupInviteFriendFailSend,
+    OCTToxErrorGroupInviteFriendDisconnected,
+};
+
+typedef NS_ENUM(NSInteger, OCTToxErrorGroupSendCustomPacket) {
+    OCTToxErrorGroupSendCustomPacketUnknown,
+    OCTToxErrorGroupSendCustomPacketGroupNotFound,
+    OCTToxErrorGroupSendCustomPacketTooLong,
+    OCTToxErrorGroupSendCustomPacketEmpty,
+    OCTToxErrorGroupSendCustomPacketPermissions,
+    OCTToxErrorGroupSendCustomPacketDisconnected,
+};

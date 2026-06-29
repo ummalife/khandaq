@@ -15,7 +15,7 @@
         android:layout_marginTop="0dp"
         android:layout_marginRight="0dp"
         android:layout_marginBottom="0dp"
-        android:background="@android:color/transparent"
+        android:background="@color/tg_chat_bg"
         android:divider="@null"
         android:dividerHeight="0dp"
         android:paddingLeft="0dp"
@@ -30,6 +30,13 @@
         app:hideScrollbar="true"
         app:showTrack="false"
         app:trackColor="@color/fast_scroller_color" />
+
+    <include
+        android:id="@+id/list_empty_state"
+        layout="@layout/list_empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true" />
 
     <!--<include layout="@layout/floating_action_button"/>-->
 
@@ -68,7 +75,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:gravity="center"
-                    android:text="Please wait ..."
+                    android:text=""
                     android:textSize="20sp" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>

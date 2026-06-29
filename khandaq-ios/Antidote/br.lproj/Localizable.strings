@@ -413,3 +413,31 @@
 "chat_is_typing_text" = "zo o skrivañ...";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Kaset e vo ar c'hemennadennoù digas pa viot kevreet a-gevret gant ho mignon.";
+"group_live_audio_toggle" = "Son en direct";
+"group_live_video_toggle" = "Video en direct";
+"group_live_video_quality_toggle" = "Kalite video";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "Mantennit ar bouton mikro troet evit enrollañ ur gemennadenn vokal";
+"group_live_video_toggle_active" = "Video en direct ober";
+"group_live_video_toggle_incoming" = "Video en direct o tont";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Join group video?";
+"group_video_join_message" = "Send your video and audio to everyone in this group?";
+"group_video_join_confirm" = "Yes, start video";
+"group_video_join_decline" = "No";
+"group_send_voice_confirm_title" = "Send voice message?";
+"group_send_voice_confirm_message" = "Send this voice message to the group?";
+"group_incoming_message_error" = "Could not process incoming group message.";
+"group_image_shrink_failed" = "Could not prepare image for sending.";
+"group_incoming_file_error" = "Could not process incoming group file.";
+"chat_file_too_large" = "File is too large.";
+"chat_incoming_file_too_large" = "Incoming file is too large.";
+"chat_opening_file_failed" = "Could not open file.";
+"group_file_prepare_failed" = "Could not prepare file for sending.";
+"group_peer_unknown" = "Unknown";
+"group_live_video_stream_unknown_peer" = "Dianav";
+
+"microphone_access_denied_message" = "An aotre ar c'hroñs-labour zo lazhet. Aotreit ar c'hroñs-labour e Arventennoù evit implijout an arc'hweladenn-mañ.";

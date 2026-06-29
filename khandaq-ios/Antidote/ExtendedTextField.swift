@@ -6,8 +6,9 @@ import UIKit
 import SnapKit
 
 private struct Constants {
-    static let TextFieldHeight = 40.0
-    static let VerticalOffset = 5.0
+    // KHANDAQ design (Figma): taller filled field + a touch more breathing room under the label.
+    static let TextFieldHeight = 52.0
+    static let VerticalOffset = 8.0
 }
 
 protocol ExtendedTextFieldDelegate: class {
@@ -104,7 +105,8 @@ extension ExtendedTextField: UITextFieldDelegate {
     }
 
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-        let resultText = (textField.text! as NSString).replacingCharacters(in: range, with: string)
+        let currentText = textField.text ?? ""
+        let resultText = (currentText as NSString).replacingCharacters(in: range, with: string)
 
         if resultText.lengthOfBytes(using: String.Encoding.utf8) <= maxTextUTF8Length {
             return true
@@ -172,7 +174,6 @@ private extension ExtendedTextField {
         textField = UITextField()
         textField.delegate = self
         textField.borderStyle = .roundedRect
-        textField.autocapitalizationType = .sentences
         textField.enablesReturnKeyAutomatically = true
         addSubview(textField)
 
@@ -182,23 +183,41 @@ private extension ExtendedTextField {
             case .login:
                 textColor = theme.colorForType(.NormalText)
 
-                textField.layer.borderColor = theme.colorForType(.LoginButtonBackground).cgColor
-                textField.layer.borderWidth = 0.5
+                textField.autocapitalizationType = .none
+                textField.autocorrectionType = .no
+                textField.spellCheckingType = .no
+                if #available(iOS 11.0, *) {
+                    textField.smartInsertDeleteType = .no
+                }
+
+                // KHANDAQ design (Figma): filled grey rounded field (no green hairline border), 12pt
+                // radius, with horizontal padding since the borderless style has none of its own.
+                textField.borderStyle = .none
+                textField.backgroundColor = theme.colorForType(.ChatInputBackground)
+                textField.layer.borderWidth = 0.0
                 textField.layer.masksToBounds = true
-                textField.layer.cornerRadius = 6.0
+                textField.layer.cornerRadius = 12.0
+                let leftPad = UIView(frame: CGRect(x: 0, y: 0, width: 14, height: 1))
+                textField.leftView = leftPad
+                textField.leftViewMode = .always
+                let rightPad = UIView(frame: CGRect(x: 0, y: 0, width: 14, height: 1))
+                textField.rightView = rightPad
+                textField.rightViewMode = .always
             case .normal:
                 textColor = theme.colorForType(.NormalText)
+                textField.autocapitalizationType = .sentences
         }
 
         titleLabel = UILabel()
         titleLabel.textColor = textColor
-        titleLabel.font = UIFont.systemFont(ofSize: 18.0)
+        // KHANDAQ design: compact field label above the input.
+        titleLabel.font = UIFont.systemFont(ofSize: 15.0, weight: .medium)
         titleLabel.backgroundColor = .clear
         addSubview(titleLabel)
 
         hintLabel = UILabel()
-        hintLabel.textColor = textColor
-        hintLabel.font = UIFont.khandaqFontWithSize(14.0, weight: .light)
+        hintLabel.textColor = theme.colorForType(.FriendCellStatus)
+        hintLabel.font = UIFont.systemFont(ofSize: 13.0)
         hintLabel.numberOfLines = 0
         hintLabel.backgroundColor = .clear
         addSubview(hintLabel)

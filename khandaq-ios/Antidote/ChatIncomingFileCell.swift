@@ -18,10 +18,21 @@ class ChatIncomingFileCell: ChatGenericFileCell {
         loadingView.bottomLabel.isHidden = true
     }
 
+    func setVideoPlayOverlay() {
+        loadingView.centerImageView.image = UIImage.templateNamed("chat-file-play-big")
+    }
+
+    func setVideoDurationLabel(_ text: String) {
+        loadingView.bottomLabel.isHidden = false
+        loadingView.bottomLabel.text = text
+    }
+
     override func createViews() {
         super.createViews()
 
         contentView.addSubview(loadingView)
+        contentView.addSubview(captionLabel)
+        contentView.addSubview(voiceMessageView)
         contentView.addSubview(cancelButton)
         contentView.addSubview(retryButton)
     }
@@ -32,8 +43,22 @@ class ChatIncomingFileCell: ChatGenericFileCell {
         loadingView.snp.makeConstraints {
             $0.leading.equalTo(contentView).offset(Constants.BigOffset)
             $0.top.equalTo(contentView).offset(Constants.SmallOffset)
+            // KHANDAQ (#15): size comes from LoadingImageView (square by default, aspect for media).
+        }
+
+        captionLabel.snp.makeConstraints {
+            captionTopConstraint = $0.top.equalTo(loadingView.snp.bottom).constraint
+            $0.leading.equalTo(loadingView)
+            $0.trailing.equalTo(loadingView)
             $0.bottom.equalTo(contentView).offset(-Constants.SmallOffset)
-            $0.size.equalTo(Constants.ImageButtonSize)
+        }
+
+        voiceMessageView.snp.makeConstraints {
+            $0.leading.equalTo(contentView).offset(Constants.BigOffset)
+            $0.trailing.lessThanOrEqualTo(contentView).offset(-Constants.BigOffset)
+            $0.top.equalTo(contentView).offset(Constants.SmallOffset)
+            $0.bottom.equalTo(contentView).offset(-Constants.SmallOffset)
+            $0.width.equalTo(260)
         }
 
         cancelButton.snp.makeConstraints {
@@ -72,11 +97,18 @@ class ChatIncomingFileCell: ChatGenericFileCell {
                 loadingView.centerImageView.image = UIImage.templateNamed("chat-file-download-big")
                 cancelButton.isHidden = true
                 retryButton.isHidden = false
-                loadingView.bottomLabel.text = String(localized: "chat_file_cancelled")
+                loadingView.bottomLabel.text = String(localized: "chat_file_download_failed")
             case .done:
                 cancelButton.isHidden = true
                 loadingView.topLabel.isHidden = true
-                loadingView.bottomLabel.text = fileModel.fileName
+                if fileModel.isVoiceMessage {
+                    loadingView.bottomLabel.isHidden = true
+                    voiceMessageView.isHidden = false
+                    loadingView.isHidden = true
+                }
+                else {
+                    loadingView.bottomLabel.text = fileModel.fileName
+                }
         }
     }
 
@@ -91,7 +123,12 @@ class ChatIncomingFileCell: ChatGenericFileCell {
             case .cancelled:
                 retryHandle?()
             case .done:
-                openHandle?()
+                if !voiceMessageView.isHidden {
+                    voiceMessageView.onPlayTapped?()
+                }
+                else {
+                    openHandle?()
+                }
         }
     }
 }

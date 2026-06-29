@@ -14,6 +14,7 @@ class LoginGenericCreateController: LoginBaseController {
     fileprivate var containerView: IncompressibleView!
     fileprivate var containerViewTopConstraint: Constraint!
 
+    var logoImageView: UIImageView!
     var titleLabel: UILabel!
     var firstTextField: ExtendedTextField!
     var secondTextField: ExtendedTextField!
@@ -24,6 +25,7 @@ class LoginGenericCreateController: LoginBaseController {
 
         createGestureRecognizers()
         createContainerView()
+        createLogoImageView()
         createTitleLabel()
         createExtendedTextFields()
         createGoButton()
@@ -36,17 +38,16 @@ class LoginGenericCreateController: LoginBaseController {
         if containerView.frame.isEmpty {
             return
         }
+        let keyboardFrameInView = view.convert(frame, from: nil)
         let underFormHeight = containerView.frame.size.height - secondTextField.frame.maxY
 
-        let offset = min(0.0, underFormHeight - frame.height)
+        let offset = min(0.0, underFormHeight - keyboardFrameInView.height)
 
         containerViewTopConstraint.update(offset: offset)
-        view.layoutIfNeeded()
     }
 
     override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
         containerViewTopConstraint.update(offset: 0.0)
-        view.layoutIfNeeded()
     }
 
     func configureViews() {
@@ -88,10 +89,20 @@ private extension LoginGenericCreateController {
         view.addSubview(containerView)
     }
 
+    func createLogoImageView() {
+        // KHANDAQ design (Figma): brand logo centered above the screen title.
+        logoImageView = UIImageView(image: UIImage(named: "login-logo"))
+        logoImageView.contentMode = .scaleAspectFit
+        containerView.addSubview(logoImageView)
+    }
+
     func createTitleLabel() {
         titleLabel = UILabel()
-        titleLabel.textColor = theme.colorForType(.LoginButtonBackground)
-        titleLabel.font = UIFont.khandaqFontWithSize(26.0, weight: .light)
+        // KHANDAQ design (Figma): screen title is primary-colour, bold and left-aligned (was a centered
+        // light green heading).
+        titleLabel.textColor = theme.colorForType(.NormalText)
+        titleLabel.font = UIFont.systemFont(ofSize: 28.0, weight: .bold)
+        titleLabel.textAlignment = .left
         titleLabel.backgroundColor = .clear
         containerView.addSubview(titleLabel)
     }
@@ -124,9 +135,15 @@ private extension LoginGenericCreateController {
             $0.height.equalTo(view)
         }
 
-        titleLabel.snp.makeConstraints {
+        logoImageView.snp.makeConstraints {
             $0.top.equalTo(containerView).offset(PrivateConstants.VerticalOffset)
             $0.centerX.equalTo(containerView)
+            $0.height.equalTo(56.0)
+        }
+
+        titleLabel.snp.makeConstraints {
+            $0.top.equalTo(logoImageView.snp.bottom).offset(PrivateConstants.VerticalOffset)
+            $0.leading.trailing.equalTo(containerView)
         }
 
         firstTextField.snp.makeConstraints {

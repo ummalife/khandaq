@@ -45,6 +45,7 @@ if [[ -f "${RELEASE_KS:-}" && -n "$RELEASE_STORE_PASS" && -n "$BT" && -x "$BT/ap
     --out "$OUT" "$UNSIGNED"
   cp -f "$OUT" "$DIST/trifa-release.apk"
   echo "Signed with PRODUCTION keystore -> $OUT"
+  echo "Share with team as: $OUT (or khandaq-release.apk from dist/android/)"
   SIGN_MODE="production"
 elif [[ -f "${ANDROID_DEBUG_KEYSTORE:-$HOME/.android/debug.keystore}" && -n "$BT" && -x "$BT/apksigner" ]]; then
   KS="${ANDROID_DEBUG_KEYSTORE:-$HOME/.android/debug.keystore}"

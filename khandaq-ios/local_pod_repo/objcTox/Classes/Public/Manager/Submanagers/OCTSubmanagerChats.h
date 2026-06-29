@@ -91,4 +91,9 @@
  */
 - (BOOL)setIsTyping:(BOOL)isTyping inChat:(OCTChat *)chat error:(NSError **)error;
 
+/**
+ * Retry stale undelivered direct messages (watchdog tick, ~5s cadence).
+ */
+- (void)tickDeliveryWatchdog;
+
 @end

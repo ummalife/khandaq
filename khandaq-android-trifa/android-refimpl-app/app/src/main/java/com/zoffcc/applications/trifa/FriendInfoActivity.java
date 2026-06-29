@@ -23,7 +23,6 @@ import org.khandaq.messenger.R;
 
 import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.Html;
 import android.text.Spannable;
@@ -33,34 +32,32 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.mikepenz.google_material_typeface_library.GoogleMaterial;
-import com.mikepenz.iconics.IconicsDrawable;
 import com.zoffcc.applications.sorm.FriendList;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
+import static com.zoffcc.applications.trifa.HelperFriend.count_friend_messages;
 import static com.zoffcc.applications.trifa.HelperFriend.get_friend_capabilities_from_pubkey;
+import static com.zoffcc.applications.trifa.HelperFriend.lookup_friend_in_db;
 import static com.zoffcc.applications.trifa.HelperFriend.main_get_friend;
-import static com.zoffcc.applications.trifa.HelperFriend.set_friend_avatar_update;
+import static com.zoffcc.applications.trifa.HelperFriend.resolve_friend_profile_name;
+import static com.zoffcc.applications.trifa.HelperFriend.resolve_friend_profile_status;
+import static com.zoffcc.applications.trifa.HelperFriend.resolve_friend_public_key;
+import static com.zoffcc.applications.trifa.HelperFriend.sync_friend_profile_from_tox;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
-import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_get_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.darkenColor;
-import static com.zoffcc.applications.trifa.HelperGeneric.get_vfs_image_filename_friend_avatar;
 import static com.zoffcc.applications.trifa.HelperGeneric.is_nightmode_active;
-import static com.zoffcc.applications.trifa.HelperGeneric.put_vfs_image_on_imageview_real;
 import static com.zoffcc.applications.trifa.HelperRelay.get_pushurl_for_friend;
 import static com.zoffcc.applications.trifa.HelperRelay.get_relay_for_friend;
 import static com.zoffcc.applications.trifa.HelperRelay.is_valid_pushurl_for_friend_with_whitelist;
 import static com.zoffcc.applications.trifa.HelperRelay.remove_friend_pushurl_in_db;
 import static com.zoffcc.applications.trifa.HelperRelay.remove_friend_relay_in_db;
-import static com.zoffcc.applications.trifa.Identicon.create_avatar_identicon_for_pubkey;
 import static com.zoffcc.applications.trifa.MainActivity.friend_list_fragment;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
-import static com.zoffcc.applications.trifa.MainActivity.tox_friend_get_connection_ip;
-import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CAPABILITY_DECODE;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_CAPABILITY_DECODE_TO_STRING;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
@@ -76,8 +73,8 @@ public class FriendInfoActivity extends AppCompatActivity
     TextView fi_relay_pubkey_textview = null;
     TextView fi_toxcapabilities_textview = null;
     TextView fi_relay_text = null;
-    TextView fi_ipaddr_text = null;
     TextView friend_num_msgs_text = null;
+    LinearLayout fi_message_stats_section = null;
     Button remove_friend_relay_button = null;
     TextView fi_pushurl_textview = null;
     TextView fi_pushurl_text = null;
@@ -92,9 +89,13 @@ public class FriendInfoActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_friendinfo);
 
-        Intent intent = getIntent();
+        final Intent intent = getIntent();
         friendnum = intent.getLongExtra("friendnum", -1);
-        friend_pubkey = tox_friend_get_public_key__wrapper(friendnum);
+        friend_pubkey = resolve_friend_public_key(friendnum, intent.getStringExtra("friend_pubkey"));
+        if (friendnum < 0 && friend_pubkey != null)
+        {
+            friendnum = tox_friend_by_public_key__wrapper(friend_pubkey);
+        }
 
         profile_icon = (de.hdodenhof.circleimageview.CircleImageView) findViewById(R.id.fi_profile_icon);
         mytoxid = (TextView) findViewById(R.id.fi_toxprvkey_textview);
@@ -103,54 +104,49 @@ public class FriendInfoActivity extends AppCompatActivity
         alias_text = (EditText) findViewById(R.id.fi_alias_text);
         fi_relay_pubkey_textview = (TextView) findViewById(R.id.fi_relay_pubkey_textview);
         fi_relay_text = (TextView) findViewById(R.id.fi_relay_text);
-        fi_ipaddr_text = (TextView) findViewById(R.id.fi_ipaddr_text);
         remove_friend_relay_button = (Button) findViewById(R.id.remove_friend_relay_button);
+
+        // KHANDAQ (#56): open the 1:1 chat from the contact profile (parity with iOS).
+        final Button fi_message_button = (Button) findViewById(R.id.fi_message_button);
+        if (fi_message_button != null)
+        {
+            fi_message_button.setOnClickListener(v ->
+            {
+                if (friend_pubkey != null)
+                {
+                    FriendListHolder.show_messagelist_acticvity_for_friend(FriendInfoActivity.this, friend_pubkey);
+                }
+            });
+        }
+
         fi_pushurl_textview = (TextView) findViewById(R.id.fi_pushurl_textview);
         fi_pushurl_text = (TextView) findViewById(R.id.fi_pushurl_text);
         remove_friend_pushurl_button = (Button) findViewById(R.id.remove_friend_pushurl_button);
         fi_toxcapabilities_textview = (TextView) findViewById(R.id.fi_toxcapabilities_textview);
         friend_num_msgs_text = (TextView) findViewById(R.id.friend_num_msgs_text);
+        fi_message_stats_section = (LinearLayout) findViewById(R.id.fi_message_stats_section);
+
+        final View ip_section = findViewById(R.id.fi_ipaddr_section);
+        if (ip_section != null)
+        {
+            ip_section.setVisibility(View.GONE);
+        }
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         HelperToolbar.enableUpNavigation(this, toolbar);
 
-        mytoxid.setText("*error*");
-        mynick.setText("*error*");
-        mystatus_message.setText("*error*");
-
         alias_text.setText("");
-
-        fi_ipaddr_text.setText("");
-        try
-        {
-            final String ip_str = tox_friend_get_connection_ip(tox_friend_by_public_key__wrapper(friend_pubkey));
-            final String f_ip_str = ip_str.replaceAll("\0", "");
-            fi_ipaddr_text.setText(f_ip_str);
-        }
-        catch(Exception ignored)
-        {
-        }
-
-        try
-        {
-            alias_text.setText(orma.selectFromFriendList().
-                    tox_public_key_stringEq(friend_pubkey).
-                    toList().get(0).alias_name);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
+        populate_friend_profile_from_cache();
+        schedule_friend_profile_refresh();
 
         String msgv3_single_cap = "";
 
         try
         {
-            final FriendList f = (FriendList) orma.selectFromFriendList().tox_public_key_stringEq(
-                    friend_pubkey).toList().get(0);
+            final FriendList f = lookup_friend_in_db(friend_pubkey);
 
-            if (f.msgv3_capability == 1)
+            if (f != null && f.msgv3_capability == 1)
             {
                 msgv3_single_cap = " MSGV3-lite";
             }
@@ -159,11 +155,14 @@ public class FriendInfoActivity extends AppCompatActivity
         {
         }
 
-        fi_toxcapabilities_textview.setText(TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(
-                get_friend_capabilities_from_pubkey(friend_pubkey))) +
-                                            msgv3_single_cap);
+        if (friend_pubkey != null)
+        {
+            fi_toxcapabilities_textview.setText(TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(
+                    get_friend_capabilities_from_pubkey(friend_pubkey))) +
+                                                msgv3_single_cap);
+        }
 
-        String friend_relay_pubkey = get_relay_for_friend(friend_pubkey);
+        String friend_relay_pubkey = friend_pubkey != null ? get_relay_for_friend(friend_pubkey) : null;
 
         fi_relay_pubkey_textview.setText("");
 
@@ -199,7 +198,6 @@ public class FriendInfoActivity extends AppCompatActivity
                             e.printStackTrace();
                         }
 
-                        // update friendlist on screen
                         try
                         {
                             friend_list_fragment.add_all_friends_clear(0);
@@ -219,7 +217,7 @@ public class FriendInfoActivity extends AppCompatActivity
             e.printStackTrace();
         }
 
-        String pushurl_for_friend = get_pushurl_for_friend(friend_pubkey);
+        String pushurl_for_friend = friend_pubkey != null ? get_pushurl_for_friend(friend_pubkey) : null;
 
         fi_pushurl_textview.setText("");
 
@@ -290,91 +288,21 @@ public class FriendInfoActivity extends AppCompatActivity
             e.printStackTrace();
         }
 
-        final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_face).color(
-                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(200);
-        profile_icon.setImageDrawable(d1);
-
         try
         {
-            final long friendnum_ = friendnum;
-            Thread t = new Thread()
+            FriendList f = lookup_friend_in_db(friend_pubkey);
+            if (f == null && friendnum >= 0)
             {
-                @Override
-                public void run()
-                {
-                    try
-                    {
-                        final FriendList f = (FriendList) orma.selectFromFriendList().tox_public_key_stringEq(
-                                tox_friend_get_public_key__wrapper(friendnum_)).toList().get(0);
-
-                        Runnable myRunnable = new Runnable()
-                        {
-                            @Override
-                            public void run()
-                            {
-                                try
-                                {
-                                    String pubkey_temp = f.tox_public_key_string;
-                                    String color_pkey = "<font color=\"#331bc5\">";
-                                    String ec = "</font>";
-
-                                    if (is_nightmode_active(getApplicationContext()))
-                                    {
-                                        color_pkey = "<font color=\"#8affffff\">";
-                                    }
-
-                                    mytoxid.setText(Html.fromHtml(color_pkey + pubkey_temp + ec));
-
-                                    mynick.setText(f.name);
-                                    mystatus_message.setText(f.status_message);
-                                }
-                                catch (Exception e)
-                                {
-                                    e.printStackTrace();
-                                    Log.i(TAG, "CALL:start:EE:" + e.getMessage());
-                                }
-                            }
-                        };
-                        main_handler_s.post(myRunnable);
-                    }
-                    catch (Exception e2)
-                    {
-                        e2.printStackTrace();
-                    }
-                }
-            };
-            t.start();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-
-
-        try
-        {
-            String fname = get_vfs_image_filename_friend_avatar(friendnum);
-            // Log.i(TAG, "fname=" + fname);
-            if (fname != null)
-            {
-                put_vfs_image_on_imageview_real(this, profile_icon, d1, fname, false, true, main_get_friend(friendnum));
+                f = main_get_friend(friendnum);
             }
-            else
+            if (f != null)
             {
-                // Log.i(TAG, "indenticon:001");
-
-                final FriendList f = (FriendList) orma.selectFromFriendList().
-                        tox_public_key_stringEq(friend_pubkey).
-                        toList().get(0);
-
-                create_avatar_identicon_for_pubkey(f.tox_public_key_string);
-                set_friend_avatar_update(friend_pubkey, true);
-
-                String fname3 = get_vfs_image_filename_friend_avatar(friendnum);
-                if (fname3 != null)
+                String displayName = f.name;
+                if (f.alias_name != null && f.alias_name.length() > 0)
                 {
-                    put_vfs_image_on_imageview_real(this, profile_icon, d1, fname3, false, true, f);
+                    displayName = f.alias_name;
                 }
+                ChatBubbleUiHelper.fill_profile_peer_avatar(this, friend_pubkey, displayName, profile_icon);
             }
         }
         catch (Exception e)
@@ -385,45 +313,98 @@ public class FriendInfoActivity extends AppCompatActivity
 
     }
 
-    @Override
-    protected void onResume()
+    void populate_friend_profile_from_cache()
     {
-        super.onResume();
+        FriendList f = lookup_friend_in_db(friend_pubkey);
+        if (f == null && friendnum >= 0)
+        {
+            f = main_get_friend(friendnum);
+        }
 
-        Thread t = new Thread()
+        if (f != null && friend_pubkey == null)
+        {
+            friend_pubkey = f.tox_public_key_string;
+        }
+
+        apply_friend_profile_to_ui(f);
+    }
+
+    void apply_friend_profile_to_ui(final FriendList f)
+    {
+        if (friend_pubkey != null)
+        {
+            String color_pkey = "<font color=\"#331bc5\">";
+            String ec = "</font>";
+            if (is_nightmode_active(getApplicationContext()))
+            {
+                color_pkey = "<font color=\"#8affffff\">";
+            }
+            mytoxid.setText(Html.fromHtml(color_pkey + friend_pubkey + ec));
+        }
+        else if (f != null && f.tox_public_key_string != null)
+        {
+            String color_pkey = "<font color=\"#331bc5\">";
+            String ec = "</font>";
+            if (is_nightmode_active(getApplicationContext()))
+            {
+                color_pkey = "<font color=\"#8affffff\">";
+            }
+            mytoxid.setText(Html.fromHtml(color_pkey + f.tox_public_key_string + ec));
+        }
+        else
+        {
+            mytoxid.setText("—");
+        }
+
+        mynick.setText(resolve_friend_profile_name(f, friendnum));
+        mystatus_message.setText(resolve_friend_profile_status(f, friendnum));
+
+        try
+        {
+            if (f != null && f.alias_name != null)
+            {
+                alias_text.setText(f.alias_name);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    void schedule_friend_profile_refresh()
+    {
+        if (friend_pubkey == null && friendnum < 0)
+        {
+            return;
+        }
+
+        final long friendnum_local = friendnum;
+        final String friend_pubkey_local = friend_pubkey;
+        final Thread t = new Thread()
         {
             @Override
             public void run()
             {
-                String num_str1 = "*ERROR*";
-                try
+                FriendList f = lookup_friend_in_db(friend_pubkey_local);
+                if (f == null && friendnum_local >= 0)
                 {
-                    num_str1 = "" + orma.selectFromMessage().
-                    tox_friendpubkeyEq(friend_pubkey).count();
+                    f = main_get_friend(friendnum_local);
                 }
-                catch (Exception e)
+                if (f != null && friendnum_local >= 0)
                 {
-                    e.printStackTrace();
+                    sync_friend_profile_from_tox(friendnum_local, f);
                 }
 
-                final String num_str_1 = num_str1;
-
+                final FriendList f_final = f;
                 Runnable myRunnable = new Runnable()
                 {
                     @Override
                     public void run()
                     {
-                        try
-                        {
-                            friend_num_msgs_text.setText("Messages: " + num_str_1);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
+                        apply_friend_profile_to_ui(f_final);
                     }
                 };
-
                 if (main_handler_s != null)
                 {
                     main_handler_s.post(myRunnable);
@@ -434,14 +415,75 @@ public class FriendInfoActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onResume()
+    {
+        super.onResume();
+        populate_friend_profile_from_cache();
+        schedule_friend_profile_refresh();
+        refresh_friend_message_count();
+    }
+
+    void refresh_friend_message_count()
+    {
+        if (friend_pubkey == null || fi_message_stats_section == null)
+        {
+            return;
+        }
+
+        final String friend_pubkey_local = friend_pubkey;
+        final Thread t = new Thread()
+        {
+            @Override
+            public void run()
+            {
+                final long count = count_friend_messages(friend_pubkey_local);
+                if (count < 0L)
+                {
+                    if (main_handler_s != null)
+                    {
+                        main_handler_s.post(() ->
+                        {
+                            if (fi_message_stats_section != null)
+                            {
+                                fi_message_stats_section.setVisibility(View.GONE);
+                            }
+                        });
+                    }
+                    return;
+                }
+
+                final String count_text = getString(R.string.friend_info_message_count, count);
+                if (main_handler_s != null)
+                {
+                    main_handler_s.post(() ->
+                    {
+                        if (fi_message_stats_section != null)
+                        {
+                            fi_message_stats_section.setVisibility(View.VISIBLE);
+                        }
+                        if (friend_num_msgs_text != null)
+                        {
+                            friend_num_msgs_text.setText(count_text);
+                        }
+                    });
+                }
+            }
+        };
+        t.start();
+    }
+
+    @Override
     protected void onPause()
     {
         super.onPause();
-        // TODO dirty hack, just write "alias"
 
         try
         {
             String alias_name = alias_text.getText().toString();
+            if (friend_pubkey == null)
+            {
+                return;
+            }
             if (alias_name != null)
             {
                 if (alias_name.length() > 0)
@@ -467,16 +509,6 @@ public class FriendInfoActivity extends AppCompatActivity
         catch (Exception e)
         {
             e.printStackTrace();
-            try
-            {
-            }
-            catch (Exception e1)
-            {
-                e1.printStackTrace();
-                orma.updateFriendList().
-                        tox_public_key_stringEq(friend_pubkey).
-                        alias_name("").execute();
-            }
         }
     }
 }

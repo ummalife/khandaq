@@ -35,9 +35,11 @@ import com.zoffcc.applications.sorm.GroupDB;
 import java.util.Iterator;
 import java.util.List;
 
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_CONFERENCE;
+import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_FAVORITES;
 import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_FRIEND;
 import static com.zoffcc.applications.trifa.CombinedFriendsAndConferences.COMBINED_IS_GROUP;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__compact_friendlist;
@@ -55,6 +57,54 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
 
         this.friendlistitems = items;
         this.context = context;
+        setHasStableIds(true);
+    }
+
+    @Override
+    public long getItemId(int position)
+    {
+        try
+        {
+            final CombinedFriendsAndConferences item = this.friendlistitems.get(position);
+            if (item.is_friend == COMBINED_IS_GROUP && item.group_item != null
+                    && item.group_item.group_identifier != null)
+            {
+                return stableId("g", item.group_item.group_identifier);
+            }
+            if (item.is_friend == COMBINED_IS_FRIEND && item.friend_item != null
+                    && item.friend_item.tox_public_key_string != null)
+            {
+                return stableId("f", item.friend_item.tox_public_key_string);
+            }
+            if (item.is_friend == COMBINED_IS_CONFERENCE && item.conference_item != null
+                    && item.conference_item.conference_identifier != null)
+            {
+                return stableId("c", item.conference_item.conference_identifier);
+            }
+            if (item.is_friend == COMBINED_IS_FAVORITES)
+            {
+                return stableId("fav", "favorites");
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return position;
+    }
+
+    private static long stableId(final String prefix, final String key)
+    {
+        return ((long) (prefix + key).hashCode()) & 0x00000000ffffffffL;
+    }
+
+    public void replaceAllItems(final List<CombinedFriendsAndConferences> newItems)
+    {
+        this.friendlistitems.clear();
+        if (newItems != null)
+        {
+            this.friendlistitems.addAll(newItems);
+        }
+        notifyDataSetChanged();
     }
 
     @Override
@@ -62,50 +112,27 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
     {
         // Log.i(TAG, "onCreateViewHolder");
 
-        View view = null;
+        View view;
         switch (viewType)
         {
             case CombinedFriendsAndConferences_model.ITEM_IS_FRIEND:
-                if (PREF__compact_friendlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_entry_compact, parent,
-                                                                            false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_entry, parent, false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
                 return new FriendListHolder(view, this.context);
 
             case CombinedFriendsAndConferences_model.ITEM_IS_GROUP:
-                if (PREF__compact_friendlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry, parent,
-                                                                            false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
                 return new GroupListHolder(view, this.context);
 
             case CombinedFriendsAndConferences_model.ITEM_IS_CONFERENCE:
-                if (PREF__compact_friendlist)
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry_compact,
-                                                                            parent, false);
-                }
-                else
-                {
-                    view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_conf_entry, parent,
-                                                                            false);
-                }
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
                 return new ConferenceListHolder(view, this.context);
+
+            case CombinedFriendsAndConferences_model.ITEM_IS_FAVORITES:
+                view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
+                return new FavoritesListHolder(view, this.context);
         }
 
-        // TODO: should never get here!?
-        view = LayoutInflater.from(parent.getContext()).inflate(R.layout.friend_list_entry, parent, false);
+        view = LayoutInflater.from(parent.getContext()).inflate(R.layout.chat_list_item, parent, false);
         return new FriendListHolder(view, this.context);
     }
 
@@ -121,6 +148,10 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
         else if (my_item.is_friend == COMBINED_IS_GROUP)
         {
             return CombinedFriendsAndConferences_model.ITEM_IS_GROUP;
+        }
+        else if (my_item.is_friend == COMBINED_IS_FAVORITES)
+        {
+            return CombinedFriendsAndConferences_model.ITEM_IS_FAVORITES;
         }
         else // is conference
         {
@@ -154,6 +185,9 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
                 case CombinedFriendsAndConferences_model.ITEM_IS_GROUP:
                     // Log.i(TAG, "onBindViewHolder:ITEM_IS_GROUP");
                     ((GroupListHolder) holder).bindFriendList(fl2.group_item);
+                    break;
+                case CombinedFriendsAndConferences_model.ITEM_IS_FAVORITES:
+                    ((FavoritesListHolder) holder).bind();
                     break;
             }
         }
@@ -225,8 +259,12 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
                         {
                             found_item = true;
                             int pos = this.friendlistitems.indexOf(f_combined);
+                            final boolean rowChanged = !ChatListRefreshHelper.friendListDbRowEquals(f, new_item);
                             this.friendlistitems.set(pos, new_item_combined);
-                            this.notifyItemChanged(pos);
+                            if (rowChanged)
+                            {
+                                this.notifyItemChanged(pos);
+                            }
                             break;
                         }
                     }
@@ -242,10 +280,25 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
                         {
                             found_item = true;
                             int pos = this.friendlistitems.indexOf(f_combined);
+                            final boolean rowChanged = !ChatListRefreshHelper.groupListDbRowEquals(f, new_item);
                             this.friendlistitems.set(pos, new_item_combined);
-                            this.notifyItemChanged(pos);
+                            if (rowChanged)
+                            {
+                                this.notifyItemChanged(pos);
+                            }
                             break;
                         }
+                    }
+                }
+                else if (is_friend == COMBINED_IS_FAVORITES)
+                {
+                    if (f_combined.is_friend == COMBINED_IS_FAVORITES)
+                    {
+                        found_item = true;
+                        int pos = this.friendlistitems.indexOf(f_combined);
+                        this.friendlistitems.set(pos, new_item_combined);
+                        this.notifyItemChanged(pos);
+                        break;
                     }
                 }
                 else // is conference
@@ -274,6 +327,157 @@ public class FriendlistAdapter extends RecyclerView.Adapter implements FastScrol
         }
 
         return found_item;
+    }
+
+    public boolean remove_item(final CombinedFriendsAndConferences item_combined, final int is_friend)
+    {
+        boolean removed_item = false;
+
+        try
+        {
+            int pos = 0;
+            final Iterator it = this.friendlistitems.iterator();
+            while (it.hasNext())
+            {
+                final CombinedFriendsAndConferences f_combined = (CombinedFriendsAndConferences) it.next();
+
+                if (is_friend == COMBINED_IS_FRIEND)
+                {
+                    if (f_combined.is_friend == COMBINED_IS_FRIEND)
+                    {
+                        final FriendList f = f_combined.friend_item;
+                        final FriendList remove_item = item_combined.friend_item;
+
+                        if (f != null && remove_item != null &&
+                            f.tox_public_key_string.compareTo(remove_item.tox_public_key_string) == 0)
+                        {
+                            it.remove();
+                            this.notifyItemRemoved(pos);
+                            removed_item = true;
+                            break;
+                        }
+                    }
+                }
+                else if (is_friend == COMBINED_IS_GROUP)
+                {
+                    if (f_combined.is_friend == COMBINED_IS_GROUP)
+                    {
+                        final GroupDB f = f_combined.group_item;
+                        final GroupDB remove_item = item_combined.group_item;
+
+                        if (f != null && remove_item != null &&
+                            f.group_identifier.compareTo(remove_item.group_identifier) == 0)
+                        {
+                            it.remove();
+                            this.notifyItemRemoved(pos);
+                            removed_item = true;
+                            break;
+                        }
+                    }
+                }
+                else if (is_friend == COMBINED_IS_FAVORITES)
+                {
+                    if (f_combined.is_friend == COMBINED_IS_FAVORITES)
+                    {
+                        it.remove();
+                        this.notifyItemRemoved(pos);
+                        removed_item = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    if (f_combined.is_friend == COMBINED_IS_CONFERENCE)
+                    {
+                        final ConferenceDB f = f_combined.conference_item;
+                        final ConferenceDB remove_item = item_combined.conference_item;
+
+                        if (f != null && remove_item != null &&
+                            f.conference_identifier.compareTo(remove_item.conference_identifier) == 0)
+                        {
+                            it.remove();
+                            this.notifyItemRemoved(pos);
+                            removed_item = true;
+                            break;
+                        }
+                    }
+                }
+
+                pos++;
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            Log.i(TAG, "remove_item:EE:" + e.getMessage());
+        }
+
+        return removed_item;
+    }
+
+    public int indexOfGroup(final String groupIdentifier)
+    {
+        if (groupIdentifier == null)
+        {
+            return -1;
+        }
+        for (int i = 0; i < friendlistitems.size(); i++)
+        {
+            final CombinedFriendsAndConferences item = friendlistitems.get(i);
+            if (item.is_friend == COMBINED_IS_GROUP && item.group_item != null
+                    && item.group_item.group_identifier != null
+                    && item.group_item.group_identifier.equalsIgnoreCase(groupIdentifier))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public void notifyGroupRowChanged(final String groupIdentifier)
+    {
+        final int pos = indexOfGroup(groupIdentifier);
+        if (pos >= 0)
+        {
+            notifyItemChanged(pos);
+        }
+    }
+
+    public boolean remove_group_item(@Nullable String group_identifier)
+    {
+        if (group_identifier == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            int pos = 0;
+            Iterator it = this.friendlistitems.iterator();
+
+            while (it.hasNext())
+            {
+                CombinedFriendsAndConferences item = (CombinedFriendsAndConferences) it.next();
+
+                if (item.is_friend == COMBINED_IS_GROUP && item.group_item != null &&
+                    item.group_item.group_identifier != null &&
+                    item.group_item.group_identifier.equalsIgnoreCase(group_identifier))
+                {
+                    it.remove();
+                    this.notifyItemRemoved(pos);
+                    return true;
+                }
+
+                pos++;
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            Log.i(TAG, "remove_group_item:EE:" + e.getMessage());
+        }
+
+        return false;
     }
 
     @Override

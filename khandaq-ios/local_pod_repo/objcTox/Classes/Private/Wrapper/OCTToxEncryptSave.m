@@ -66,6 +66,12 @@
 
 + (BOOL)isDataEncrypted:(nonnull NSData *)data
 {
+    static const NSUInteger kToxEncSaveMagicLength = 8;
+
+    if (data.length < kToxEncSaveMagicLength) {
+        return NO;
+    }
+
     return tox_is_data_encrypted(data.bytes);
 }
 

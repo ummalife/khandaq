@@ -13,12 +13,10 @@
         android:summary="@string/pref_description_notification_show_content"
         android:title="@string/pref_title_notification_show_content" />
 
-    <RingtonePreference
-        android:defaultValue="content://settings/system/notification_sound"
+    <Preference
         android:dependency="notifications_new_message"
         android:key="notifications_new_message_ringtone"
-        android:ringtoneType="notification"
-        android:title="@string/pref_title_ringtone"/>
+        android:title="@string/pref_title_ringtone" />
 
     <SwitchPreference
         android:defaultValue="true"
@@ -28,8 +26,8 @@
 
     <SwitchPreference
         android:defaultValue="true"
-        android:dependency="notifications_new_message"
-        android:key="notifications_new_message_vibrate"
-        android:title="@string/pref_title_vibrate"/>
+        android:key="pref_send_read_receipts"
+        android:summary="@string/pref_description_send_read_receipts"
+        android:title="@string/pref_title_send_read_receipts" />
 
 </PreferenceScreen>

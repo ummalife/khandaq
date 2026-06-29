@@ -1,7 +1,8 @@
 lib_LTLIBRARIES += libtoxcore.la
 
 libtoxcore_la_include_HEADERS = \
-                        ../toxcore/tox.h
+                        ../toxcore/tox.h \
+                        ../toxutil/toxutil.h
 
 libtoxcore_la_includedir = $(includedir)/tox
 
@@ -61,6 +62,8 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/Messenger.c \
                         ../toxcore/ping.h \
                         ../toxcore/ping.c \
+                        ../toxcore/shared_key_cache.h \
+                        ../toxcore/shared_key_cache.c \
                         ../toxcore/state.h \
                         ../toxcore/state.c \
                         ../toxcore/tox.h \
@@ -79,6 +82,19 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/util.c \
                         ../toxcore/group.h \
                         ../toxcore/group.c \
+                        ../toxcore/group_announce.h \
+                        ../toxcore/group_announce.c \
+                        ../toxcore/group_onion_announce.c \
+                        ../toxcore/group_onion_announce.h \
+                        ../toxcore/group_chats.h \
+                        ../toxcore/group_chats.c \
+                        ../toxcore/group_common.h \
+                        ../toxcore/group_connection.c \
+                        ../toxcore/group_connection.h \
+                        ../toxcore/group_pack.c \
+                        ../toxcore/group_pack.h \
+                        ../toxcore/group_moderation.c \
+                        ../toxcore/group_moderation.h \
                         ../toxcore/onion.h \
                         ../toxcore/onion.c \
                         ../toxcore/logger.h \
@@ -100,7 +116,8 @@ libtoxcore_la_SOURCES = ../third_party/cmp/cmp.c \
                         ../toxcore/TCP_connection.h \
                         ../toxcore/TCP_connection.c \
                         ../toxcore/list.c \
-                        ../toxcore/list.h
+                        ../toxcore/list.h \
+                        ../toxutil/toxutil.c
 
 libtoxcore_la_CFLAGS =  -I$(top_srcdir) \
                         -I$(top_srcdir)/toxcore \

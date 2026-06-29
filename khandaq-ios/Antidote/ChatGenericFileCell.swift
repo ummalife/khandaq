@@ -7,8 +7,34 @@ import SnapKit
 
 class ChatGenericFileCell: ChatMovableDateCell {
     var loadingView: LoadingImageView!
+    var voiceMessageView: ChatVoiceMessageView!
     var cancelButton: UIButton!
     var retryButton: UIButton!
+    // KHANDAQ: Telegram-style caption shown directly under the media, inside the same cell.
+    var captionLabel: UILabel!
+    var captionTopConstraint: Constraint?
+
+    // KHANDAQ (#36): remembered after a full voice configure so a lightweight player-state refresh
+    // (timer/notification driven) can update the play/pause icon + progress WITHOUT rebuilding the
+    // model — rebuilding would drop `onPlayTapped` and kill the button after the first tick.
+    private var voicePlaybackMessageId: String?
+    private var voicePlaybackDuration: TimeInterval = 0
+    private var voicePlaybackEnabled = false
+
+    static let captionFont = UIFont.systemFont(ofSize: 15)
+    static let captionTopSpacing: CGFloat = 5.0
+
+    static func captionHeight(for text: String, width: CGFloat) -> CGFloat {
+        guard !text.isEmpty, width > 0 else {
+            return 0
+        }
+        let bounding = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: captionFont],
+            context: nil)
+        return ceil(bounding.height) + captionTopSpacing
+    }
 
     var progressObject: ChatProgressProtocol? {
         didSet {
@@ -24,6 +50,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
     }
 
     var state: ChatGenericFileCellModel.State = .waitingConfirmation
+    private var transferBytesTotal: Int64 = 0
 
     var startLoadingHandle: (() -> Void)?
     var cancelHandle: (() -> Void)?
@@ -35,23 +62,22 @@ class ChatGenericFileCell: ChatMovableDateCell {
         This method should be called after setupWithTheme:model:
      */
     func setButtonImage(_ image: UIImage) {
-        let square: UIImage
-
         canBeCopied = true
 
-        if image.size.width == image.size.height {
-            square = image
-        }
-        else {
-            let side = min(image.size.width, image.size.height)
-            let x = (image.size.width - side) / 2
-            let y = (image.size.height - side) / 2
-            let rect = CGRect(x: x, y: y, width: side, height: side)
+        // KHANDAQ (#15): show the photo preview aspect-FILLED in the square preview box. The old code
+        // center-cropped the source to a square and set it as a button BACKGROUND image, which UIKit
+        // then STRETCHED to the button bounds — producing a distorted wide/short strip. Using the
+        // button's imageView with scaleAspectFill keeps the aspect ratio (cropped, not squished).
+        loadingView.imageButton.setBackgroundImage(nil, for: UIControlState())
+        loadingView.imageButton.imageView?.contentMode = .scaleAspectFill
+        loadingView.imageButton.imageView?.clipsToBounds = true
+        loadingView.imageButton.contentHorizontalAlignment = .fill
+        loadingView.imageButton.contentVerticalAlignment = .fill
+        loadingView.imageButton.setImage(image, for: UIControlState())
 
-            square = image.cropWithRect(rect)
-        }
-
-        loadingView.imageButton.setBackgroundImage(square, for: UIControlState())
+        // KHANDAQ (#15): shape the bubble to the photo/video aspect ratio (the box now matches the
+        // image, so scaleAspectFill neither crops nor stretches).
+        loadingView.setPreviewSize(image.size)
 
         if state == .waitingConfirmation || state == .done {
             loadingView.centerImageView.image = nil
@@ -66,12 +92,32 @@ class ChatGenericFileCell: ChatMovableDateCell {
             return
         }
 
+        // KHANDAQ (#15): reset to the square box; setButtonImage() re-sizes to aspect for media.
+        loadingView.resetPreviewSize()
+
         state = fileModel.state
+        transferBytesTotal = fileModel.fileSizeBytes
         startLoadingHandle = fileModel.startLoadingHandle
         cancelHandle = fileModel.cancelHandle
         retryHandle = fileModel.retryHandle
         pauseOrResumeHandle = fileModel.pauseOrResumeHandle
         openHandle = fileModel.openHandle
+
+        configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+
+        // Merged caption (Telegram-style). Hidden for voice notes and when there is no caption.
+        let captionText = fileModel.isVoiceMessage ? nil : fileModel.caption
+        if let captionText = captionText, !captionText.isEmpty {
+            captionLabel.text = captionText
+            captionLabel.textColor = theme.colorForType(.NormalText)
+            captionLabel.isHidden = false
+            captionTopConstraint?.update(offset: ChatGenericFileCell.captionTopSpacing)
+        }
+        else {
+            captionLabel.text = nil
+            captionLabel.isHidden = true
+            captionTopConstraint?.update(offset: 0)
+        }
 
         canBeCopied = false
 
@@ -120,6 +166,17 @@ class ChatGenericFileCell: ChatMovableDateCell {
         loadingView = LoadingImageView()
         loadingView.pressedHandle = loadingViewPressed
 
+        captionLabel = UILabel()
+        captionLabel.font = ChatGenericFileCell.captionFont
+        captionLabel.numberOfLines = 0
+        captionLabel.isHidden = true
+
+        voiceMessageView = ChatVoiceMessageView()
+        voiceMessageView.isHidden = true
+        voiceMessageView.onPlayTapped = { [weak self] in
+            self?.voicePlayTogglePressed()
+        }
+
         let cancelImage = UIImage.templateNamed("chat-file-cancel")
 
         cancelButton = UIButton()
@@ -143,13 +200,39 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
     func updateProgress(_ progress: CGFloat) {
         loadingView.progressView.progress = progress
+
+        guard state == .loading, progress > 0.001 else {
+            return
+        }
+
+        loadingView.bottomLabel.isHidden = false
+        let pct = Int(progress * 100)
+
+        if transferBytesTotal > 0 {
+            let done = Int64(Double(transferBytesTotal) * Double(progress))
+            let doneStr = ByteCountFormatter.string(fromByteCount: done, countStyle: .file)
+            let totalStr = ByteCountFormatter.string(fromByteCount: transferBytesTotal, countStyle: .file)
+            loadingView.bottomLabel.text = "\(doneStr) / \(totalStr) · \(pct)%"
+        }
+        else {
+            loadingView.bottomLabel.text = "\(pct)%"
+        }
     }
 
     func updateEta(_ eta: String) {
-        loadingView.bottomLabel.text = eta
+        loadingView.topLabel.isHidden = false
+        loadingView.topLabel.text = eta
     }
 
-    func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {}
+    func updateBytesPerSecond(_ bytesPerSecond: OCTToxFileSize) {
+        guard state == .loading, bytesPerSecond > 0 else {
+            return
+        }
+
+        let speed = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
+        loadingView.topLabel.isHidden = false
+        loadingView.topLabel.text = speed
+    }
 
     @objc func cancelButtonPressed() {
         cancelHandle?()
@@ -164,6 +247,92 @@ class ChatGenericFileCell: ChatMovableDateCell {
 
     /// Override in subclass
     func loadingViewPressed() {}
+
+    func voicePlayTogglePressed() {
+        // Subclasses wire model.voicePlayToggleHandle
+    }
+
+    func configureVoiceMessagePresentation(fileModel: ChatGenericFileCellModel, theme: Theme) {
+        let showVoice = fileModel.isVoiceMessage
+        voiceMessageView.isHidden = !showVoice
+        loadingView.isHidden = showVoice
+        // KHANDAQ (#15): the cancel/retry (⊗) buttons belong to the file box; hide them for voice
+        // notes so they don't overlap the player's timer.
+        if showVoice {
+            cancelButton.isHidden = true
+            retryButton.isHidden = true
+        }
+
+        guard showVoice else {
+            return
+        }
+
+        let enabled = fileModel.state == .done
+        voiceMessageView.apply(theme: theme, enabled: enabled)
+        voiceMessageView.onPlayTapped = fileModel.voicePlayToggleHandle
+
+        // KHANDAQ (#36): remember for the lightweight, handle-preserving state refresh.
+        voicePlaybackMessageId = fileModel.voiceMessageId
+        voicePlaybackDuration = fileModel.voiceDuration
+        voicePlaybackEnabled = enabled
+
+        if let messageId = fileModel.voiceMessageId,
+           let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
+            voiceMessageView.update(
+                isPlaying: state.isPlaying,
+                progress: state.progress,
+                currentTime: state.currentTime,
+                duration: state.duration,
+                enabled: enabled
+            )
+        }
+        else {
+            voiceMessageView.update(
+                isPlaying: false,
+                progress: fileModel.state == .loading ? fileModel.voiceTransferProgress : 0,
+                currentTime: 0,
+                duration: fileModel.voiceDuration,
+                enabled: enabled
+            )
+        }
+    }
+
+    func refreshVoiceMessagePresentation(theme: Theme, fileModel: ChatGenericFileCellModel) {
+        guard fileModel.isVoiceMessage else {
+            return
+        }
+
+        configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
+    }
+
+    /// KHANDAQ (#36): update ONLY the play/pause icon + progress from the shared player, reusing the
+    /// already-configured `onPlayTapped`. Driven by the player's timer/notifications. Rebuilding the
+    /// model here (the old path) reset `onPlayTapped` to nil, so the button died after the first tick
+    /// and a finished/paused note could only be replayed by leaving and re-entering the chat.
+    func refreshVoicePlaybackState(theme: Theme) {
+        guard !voiceMessageView.isHidden, let messageId = voicePlaybackMessageId else {
+            return
+        }
+
+        if let state = ChatVoiceMessagePlayer.shared.state(for: messageId) {
+            voiceMessageView.update(
+                isPlaying: state.isPlaying,
+                progress: state.progress,
+                currentTime: state.currentTime,
+                duration: state.duration,
+                enabled: voicePlaybackEnabled
+            )
+        }
+        else {
+            voiceMessageView.update(
+                isPlaying: false,
+                progress: 0,
+                currentTime: 0,
+                duration: voicePlaybackDuration,
+                enabled: voicePlaybackEnabled
+            )
+        }
+    }
 }
 
 // ChatEditable

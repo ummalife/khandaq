@@ -42,6 +42,44 @@
 @property (nullable) NSString *fileUTI;
 
 /**
+ * NGC group file message id (32-byte hash as hex). Used for dedup and progress tracking.
+ */
+@property (nullable) NSString *groupMsgIdHashHex;
+
+/**
+ * Transfer progress for NGC group files (0.0 – 1.0). Meaningful while fileType is Loading.
+ */
+@property float groupTransferProgress;
+
+/**
+ * KHANDAQ (#82): frozen sender display name for incoming NGC group FILE messages, resolved by
+ * STABLE pubkey at receipt (mirrors OCTMessageText.groupPeerName). Without it the sender label was
+ * resolved from the volatile groupSenderPeerId at render time and changed after peers reshuffled on
+ * reconnect/restart. nil for outgoing/legacy rows.
+ */
+@property (nullable) NSString *groupPeerName;
+
+/**
+ * KHANDAQ (#82): stable LOWERCASE pubkey hex of the file sender, frozen at receipt. Allows
+ * re-resolving the name later if the roster is known, and keys identity across volatile peer-id reuse.
+ */
+@property (nullable) NSString *groupSenderPubkey;
+
+/**
+ * Indicate if message is delivered. Actual only for outgoing group files (after send completes).
+ */
+@property BOOL isDelivered;
+
+/**
+ * Count of hist-sync confirmations for outgoing group files.
+ */
+@property int32_t groupSyncConfirmations;
+
+@property (nullable) NSString *groupSyncPeerKey1;
+@property (nullable) NSString *groupSyncPeerKey2;
+@property (nullable) NSString *groupSyncPeerKey3;
+
+/**
  * Path of file on disk. If you need fileName to show to user please use
  * `fileName` property. filePath has it's own random fileName.
  *

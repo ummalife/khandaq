@@ -9,6 +9,7 @@ protocol LoginFormControllerDelegate: class {
     func loginFormControllerLogin(_ controller: LoginFormController, profileName: String, password: String?)
     func loginFormControllerCreateAccount(_ controller: LoginFormController)
     func loginFormControllerImportProfile(_ controller: LoginFormController)
+    func loginFormControllerDeleteProfile(_ controller: LoginFormController, profileName: String)
 
     func loginFormController(_ controller: LoginFormController, isProfileEncrypted profile: String) -> Bool
 }
@@ -30,6 +31,7 @@ class LoginFormController: LoginLogoController {
     fileprivate var profileFakeTextField: UITextField!
     fileprivate var profileButton: UIButton!
     fileprivate var passwordField: UITextField!
+    fileprivate var passwordVisibilityButton: UIButton!
 
     fileprivate var loginButton: RoundedButton!
 
@@ -68,6 +70,11 @@ class LoginFormController: LoginLogoController {
         updateFormAnimated(false)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        LaunchRecovery.markLaunchCompleted()
+    }
+
     override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
         guard navigationController?.topViewController == self else {
             return
@@ -77,15 +84,14 @@ class LoginFormController: LoginLogoController {
             contentContainerView.frame.origin.y -
             loginButton.frame.maxY
 
-        let offset = min(0.0, underLoginHeight - frame.height)
+        let keyboardFrameInView = view.convert(frame, from: nil)
+        let offset = min(0.0, underLoginHeight - keyboardFrameInView.height)
 
         mainContainerViewTopConstraint?.update(offset: offset)
-        view.layoutIfNeeded()
     }
 
     override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
         mainContainerViewTopConstraint?.update(offset: 0.0)
-        view.layoutIfNeeded()
     }
 }
 
@@ -96,10 +102,32 @@ extension LoginFormController {
 
         let picker = FullscreenPicker(theme: theme, strings: profileNames, selectedIndex: selectedIndex)
         picker.delegate = self
+        picker.onDelete = { [weak self] row in
+            self?.confirmDeleteProfile(at: row)
+        }
 
         contentContainerView.accessibilityElementsHidden = true
         picker.showAnimatedInView(view)
 }
+
+    private func confirmDeleteProfile(at row: Int) {
+        guard profileNames.indices.contains(row) else {
+            return
+        }
+        let name = profileNames[row]
+        let alert = UIAlertController(
+            title: String(localized: "delete_profile_confirmation_title_1"),
+            message: "\(name)\n\n\(String(localized: "delete_profile_confirmation_message"))",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            self.delegate?.loginFormControllerDeleteProfile(self, profileName: name)
+        })
+        present(alert, animated: true, completion: nil)
+    }
 
     @objc func loginButtonPressed() {
         let isEmpty = (passwordField.text == nil) || passwordField.text!.isEmpty
@@ -158,13 +186,21 @@ private extension LoginFormController {
         profileFakeTextField = UITextField()
         profileFakeTextField.leftViewMode = .always
         profileFakeTextField.leftView = iconContainerWithImageName("login-profile-icon")
-        profileFakeTextField.borderStyle = .roundedRect
-        profileFakeTextField.layer.borderColor = theme.colorForType(.LoginButtonBackground).cgColor
-        profileFakeTextField.layer.borderWidth = 0.5
+        // KHANDAQ design (Figma): filled grey rounded field (was a green hairline border).
+        profileFakeTextField.borderStyle = .none
+        profileFakeTextField.backgroundColor = theme.colorForType(.ChatInputBackground)
+        profileFakeTextField.textColor = theme.colorForType(.NormalText)
+        profileFakeTextField.layer.borderWidth = 0.0
         profileFakeTextField.layer.masksToBounds = true
-        profileFakeTextField.layer.cornerRadius = 6.0
+        profileFakeTextField.layer.cornerRadius = 12.0
         profileFakeTextField.isAccessibilityElement = false
         profileFakeTextField.accessibilityElementsHidden = true
+        // KHANDAQ (#4): expose the selected profile name as the "username" half of a login form.
+        // iOS / the password manager only reliably offers and fills the saved password when it can
+        // pair a username field (textContentType = .username) with the password field — a lone
+        // password field falls back to fragile heuristics and often won't autofill via Face ID.
+        profileFakeTextField.textContentType = .username
+        profileFakeTextField.text = profileNames.indices.contains(selectedIndex) ? profileNames[selectedIndex] : nil
         formView.addSubview(profileFakeTextField)
 
         profileButton = UIButton()
@@ -176,15 +212,51 @@ private extension LoginFormController {
         passwordField.delegate = self
         passwordField.placeholder = String(localized:"password")
         passwordField.isSecureTextEntry = true
+        // KHANDAQ (#4): mark as a password field so iOS / the password manager reliably offers and
+        // fills the saved credential via Face ID (without this, autofill relied on heuristics).
+        passwordField.textContentType = .password
         passwordField.returnKeyType = .go
-        passwordField.borderStyle = .roundedRect
+        passwordField.borderStyle = .none
         passwordField.leftViewMode = .always
         passwordField.leftView = iconContainerWithImageName("login-password-icon")
-        passwordField.layer.borderColor = theme.colorForType(.LoginButtonBackground).cgColor
-        passwordField.layer.borderWidth = 0.5
+        passwordField.backgroundColor = theme.colorForType(.ChatInputBackground)
+        passwordField.textColor = theme.colorForType(.NormalText)
+        passwordField.layer.borderWidth = 0.0
         passwordField.layer.masksToBounds = true
-        passwordField.layer.cornerRadius = 6.0
+        passwordField.layer.cornerRadius = 12.0
+
+        // KHANDAQ: classic show/hide-password eye on the right of the field.
+        passwordVisibilityButton = UIButton(type: .system)
+        passwordVisibilityButton.tintColor = theme.colorForType(.NormalText).withAlphaComponent(0.55)
+        passwordVisibilityButton.frame = CGRect(x: 0, y: 0, width: 44.0, height: 44.0)
+        passwordVisibilityButton.addTarget(self, action: #selector(LoginFormController.togglePasswordVisibility), for: .touchUpInside)
+        updatePasswordVisibilityIcon()
+        passwordField.rightView = passwordVisibilityButton
+        passwordField.rightViewMode = .always
+
         formView.addSubview(passwordField)
+    }
+
+    @objc func togglePasswordVisibility() {
+        let savedText = passwordField.text
+        passwordField.isSecureTextEntry.toggle()
+        // Toggling isSecureTextEntry mid-edit drops the text on the next keystroke; re-assert it.
+        if passwordField.isFirstResponder {
+            passwordField.text = nil
+            passwordField.text = savedText
+        }
+        updatePasswordVisibilityIcon()
+    }
+
+    private func updatePasswordVisibilityIcon() {
+        // Icon reflects the current state: crossed-out eye = hidden, open eye = visible.
+        let symbolName = passwordField.isSecureTextEntry ? "eye.slash" : "eye"
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .regular)
+            passwordVisibilityButton.setImage(UIImage(systemName: symbolName, withConfiguration: config), for: .normal)
+        } else {
+            passwordVisibilityButton.setTitle(passwordField.isSecureTextEntry ? "👁" : "🙈", for: .normal)
+        }
     }
 
     func createLoginButton() {

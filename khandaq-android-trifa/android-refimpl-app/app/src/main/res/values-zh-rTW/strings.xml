@@ -27,4 +27,57 @@
     <string name="title_activity_friendinfo">對方信息</string>
     <string name="title_activity_conferenceinfo">會議信息</string>
     <string name="settings_toolbar_title">設定</string>
+    <string name="group_password_placeholder">群組密碼（僅私密群組）</string>
+    <string name="group_password_set">設定群組密碼</string>
+    <string name="group_topic_lock">話題鎖定（僅創辦人）</string>
+    <string name="group_privacy_set">設定隱私</string>
+    <string name="group_create_private_password">選填群組密碼</string>
+
+    <string name="group_video_join_title">加入群組視訊？</string>
+    <string name="group_video_join_message">向群組中的所有人傳送您的視訊和音訊？</string>
+    <string name="group_video_join_confirm">是，開始視訊</string>
+    <string name="group_video_join_decline">否</string>
+    <string name="group_send_voice_confirm_title">傳送語音訊息？</string>
+    <string name="group_send_voice_confirm_message">將此語音訊息傳送到群組？</string>
+    <string name="group_peer_unknown">未知</string>
+    <string name="group_incoming_message_error">無法處理收到的群組訊息。</string>
+    <string name="group_file_send_failed">群組檔案傳送失敗。</string>
+    <string name="group_image_shrink_failed">無法準備要傳送的圖片。</string>
+    <string name="group_incoming_file_error">無法處理收到的群組檔案。</string>
+    <string name="chat_file_too_large">檔案太大。</string>
+    <string name="chat_incoming_file_too_large">收到的檔案太大。</string>
+    <string name="chat_opening_file_failed">無法開啟檔案。</string>
+    <string name="group_file_too_large">檔案對此群組來說太大。</string>
+    <string name="group_file_prepare_failed">無法準備要傳送的檔案。</string>
+    <string name="add_group_failed_empty_name">請輸入群組名稱。</string>
+    <string name="maintenance_exporting">正在匯出…</string>
+    <string name="maintenance_export_ready">匯出完成</string>
+    <string name="maintenance_export_failed">匯出失敗</string>
+    <string name="set_password_setup_failed">無法設定密碼。請再試一次。</string>
+    <string name="power_charging_connected">充電器已連接</string>
+    <string name="power_charging_disconnected">充電器已中斷</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

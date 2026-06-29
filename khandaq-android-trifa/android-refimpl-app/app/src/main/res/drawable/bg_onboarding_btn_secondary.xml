@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ onboarding (Figma): secondary "Импорт профиля" — iOS "Bordered - Secondary":
+     solid light-gray capsule, dark label (no stroke). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/onboarding_btn_secondary_bg" />
+    <corners android:radius="28dp" />
+</shape>

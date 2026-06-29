@@ -827,6 +827,32 @@ bool toxav_groupchat_av_enabled(Tox *tox, uint32_t groupnumber);
 
 /** @} */
 
+/**
+ * NGC Group Audio (Opus over custom packets, Khandaq/Android compatible).
+ */
+void *toxav_ngc_audio_init(int32_t bit_rate, int32_t sampling_rate, int32_t channel_count);
+void toxav_ngc_audio_kill(void *angc);
+bool toxav_ngc_audio_encode(void *angc, const int16_t *pcm, int32_t sample_count_per_frame,
+                            uint8_t *encoded_frame_bytes, uint32_t *encoded_frame_size_bytes);
+int32_t toxav_ngc_audio_decode(void *angc, const uint8_t *encoded_frame_bytes,
+                               uint32_t encoded_frame_size_bytes,
+                               int16_t *pcm_decoded);
+
+/**
+ * NGC Group Video (H264 over custom packets, Khandaq/Android compatible).
+ */
+void *toxav_ngc_video_init(uint16_t v_bitrate, uint16_t max_quantizer);
+void toxav_ngc_video_kill(void *vngc);
+bool toxav_ngc_video_encode(void *vngc, uint16_t vbitrate, uint32_t max_quantizer,
+                            uint16_t width, uint16_t height,
+                            const uint8_t *y, const uint8_t *u, const uint8_t *v,
+                            uint8_t *encoded_frame_bytes, uint32_t *encoded_frame_size_bytes);
+bool toxav_ngc_video_decode(void *vngc, uint8_t *encoded_frame_bytes, uint32_t encoded_frame_size_bytes,
+                            uint16_t width, uint16_t height,
+                            uint8_t *y, uint8_t *u, uint8_t *v,
+                            int32_t *ystride, int32_t *ustride, int32_t *vstride,
+                            uint8_t flush_decoder);
+
 #ifdef __cplusplus
 }
 #endif

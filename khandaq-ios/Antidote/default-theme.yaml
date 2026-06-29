@@ -22,17 +22,28 @@ colors:
   red: E94F42
   palered: C56258
   rust: B7410E
+  # KHANDAQ design system (Figma): brand accent + neutral text scale
+  accent: "029B7D"
+  accent_pressed: "027A63"
+  text_secondary: "7C7C7C"
+  text_tertiary: "A4A4A4"
+  stroke_light: E6E6E6
+  bubble_outgoing: BFE3A3
+  chat_bg: E9F1E4
+  fill_tertiary: EDEDED
 
 values:
   login-background: white
-  login-gradient: lightblue
-  login-tox-logo: simpleblue
+  # KHANDAQ design (Figma): onboarding has a plain white backdrop (no blue bottom fade).
+  login-gradient: white
+  login-tox-logo: accent
   login-button-text: white
-  login-button-background: simpleblue
+  login-button-background: accent
   login-description-label: white
   login-form-background: white
   login-form-text: black
-  login-link-color: white
+  # KHANDAQ: green (accent), like the "или" separator — was `white`, invisible on the light login bg.
+  login-link-color: accent
 
   # Color used for fullscreen translucent views background, e.g. fullscreen picker
   translucent-background: transparent_white
@@ -40,34 +51,38 @@ values:
   # normal background color used all over application
   normal-background: white
   normal-text: black
-  link-text: simpleblue
-  connecting-background: simpleblue
+  link-text: accent
+  connecting-background: accent
   connecting-text: white
-  separators-and-borders: gray
+  separators-and-borders: stroke_light
   rounded-button-text: white
-  rounded-positive-button-background: simpleblue
+  rounded-positive-button-background: accent
   rounded-negative-button-background: gray
   offline-status: color_offline_status
-  online-status: green_bright
+  online-status: accent
   away-status: yellow
   busy-status: palered
   status-background: white
-  friend-cell-status: darkgray2
-  chat-list-cell-message: darkgray
+  friend-cell-status: text_secondary
+  destructive-text: red
+  chat-list-cell-message: text_secondary
   chat-list-cell-unread-background: lightgrayblue
-  chat-input-background: lightgrayblue
-  chat-incoming-bubble: lightgrayblue
-  chat-outgoing-bubble: purple
-  chat-outgoing-unread-bubble: rust
-  chat-outgoing-sentpush-bubble: pushyellow
+  # KHANDAQ design (Figma): neutral grey input/field fill (was a bluish tint).
+  chat-input-background: fill_tertiary
+  chat-background: chat_bg
+  chat-incoming-bubble: white
+  chat-outgoing-bubble: bubble_outgoing
+  chat-outgoing-unread-bubble: bubble_outgoing
+  chat-outgoing-sentpush-bubble: bubble_outgoing
   chat-information-text: darkgray2
   tab-badge-background: palered
   tab-badge-text: white
-  tab-item-active: simpleblue
+  tab-item-active: accent
   tab-item-inactive: darkgray2
+  tab-selection: fill_tertiary
   notification-background: transparent_dark_gray
   notification-text: white
-  settings-background: lightgraypink
+  settings-background: fill_tertiary
   call-text-color: white
   call-decline-button-background: red
   call-answer-button-background: green
@@ -83,4 +98,4 @@ values:
   file-image-cancel-button-tint: black
   lock-gradient-top: mediumblue
   lock-gradient-bottom: purple
-  chat-list-cell-arrow-unread-background: red
+  chat-list-cell-arrow-unread-background: accent

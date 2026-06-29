@@ -8,6 +8,9 @@ import SnapKit
 private struct Constants {
     static let StatusViewLeftOffset: CGFloat = 5.0
     static let StatusViewSize: CGFloat = 10.0
+    // KHANDAQ design (Figma): contact avatar to the left of the name in the chat header.
+    static let AvatarSize: CGFloat = 30.0
+    static let AvatarGap: CGFloat = 8.0
 }
 
 class ChatPrivateTitleView: UIView {
@@ -28,9 +31,23 @@ class ChatPrivateTitleView: UIView {
         }
         set {
             statusView.userStatus = newValue
-            statusLabel.text = newValue.toString()
-
             updateFrame()
+        }
+    }
+
+    var presenceText: String {
+        get {
+            return statusLabel.text ?? ""
+        }
+        set {
+            statusLabel.text = newValue
+            updateFrame()
+        }
+    }
+
+    var presenceIsOnline: Bool = false {
+        didSet {
+            updatePresenceColor()
         }
     }
 
@@ -45,13 +62,27 @@ class ChatPrivateTitleView: UIView {
         }
     }
 
+    var avatar: UIImage? {
+        get {
+            return avatarView.image
+        }
+        set {
+            avatarView.image = newValue
+            avatarView.isHidden = newValue == nil
+            updateFrame()
+        }
+    }
+
+    fileprivate var avatarView: UIImageView!
     fileprivate var nameLabel: UILabel!
     fileprivate var statusView: UserStatusView!
     fileprivate var statusLabel: UILabel!
+    fileprivate var theme: Theme!
 
     init(theme: Theme) {
         super.init(frame: CGRect.zero)
 
+        self.theme = theme
         backgroundColor = .clear
 
         createViews(theme)
@@ -64,6 +95,13 @@ class ChatPrivateTitleView: UIView {
 
 private extension ChatPrivateTitleView {
     func createViews(_ theme: Theme) {
+        avatarView = UIImageView()
+        avatarView.contentMode = .scaleAspectFill
+        avatarView.layer.cornerRadius = Constants.AvatarSize / 2.0
+        avatarView.layer.masksToBounds = true
+        avatarView.isHidden = true
+        addSubview(avatarView)
+
         nameLabel = UILabel()
         nameLabel.textAlignment = .center
         nameLabel.textColor = theme.colorForType(.NormalText)
@@ -73,6 +111,7 @@ private extension ChatPrivateTitleView {
         statusView = UserStatusView()
         statusView.showExternalCircle = false
         statusView.theme = theme
+        statusView.isHidden = true
         addSubview(statusView)
 
         statusLabel = UILabel()
@@ -81,9 +120,15 @@ private extension ChatPrivateTitleView {
         statusLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
         addSubview(statusLabel)
 
+        avatarView.snp.makeConstraints {
+            $0.leading.equalTo(self)
+            $0.centerY.equalTo(self)
+            $0.size.equalTo(Constants.AvatarSize)
+        }
+
         nameLabel.snp.makeConstraints {
             $0.top.equalTo(self)
-            $0.leading.equalTo(self)
+            $0.leading.equalTo(avatarView.snp.trailing).offset(Constants.AvatarGap)
         }
 
         statusView.snp.makeConstraints {
@@ -99,13 +144,28 @@ private extension ChatPrivateTitleView {
             $0.trailing.equalTo(nameLabel)
             $0.bottom.equalTo(self)
         }
+
+        updatePresenceColor()
+    }
+
+    func updatePresenceColor() {
+        guard let theme = theme else {
+            return
+        }
+
+        statusLabel.textColor = presenceIsOnline
+            ? theme.colorForType(.OnlineStatus)
+            : theme.colorForType(.NormalText)
     }
 
     func updateFrame() {
         nameLabel.sizeToFit()
         statusLabel.sizeToFit()
 
-        frame.size.width = max(nameLabel.frame.size.width, statusLabel.frame.size.width) + Constants.StatusViewLeftOffset + Constants.StatusViewSize
-        frame.size.height = nameLabel.frame.size.height + statusLabel.frame.size.height
+        let textWidth = max(nameLabel.frame.size.width, statusLabel.frame.size.width)
+        let avatarWidth = avatarView.isHidden ? 0 : (Constants.AvatarSize + Constants.AvatarGap)
+        let textHeight = nameLabel.frame.size.height + statusLabel.frame.size.height
+        frame.size.width = avatarWidth + textWidth
+        frame.size.height = max(textHeight, avatarView.isHidden ? 0 : Constants.AvatarSize)
     }
 }

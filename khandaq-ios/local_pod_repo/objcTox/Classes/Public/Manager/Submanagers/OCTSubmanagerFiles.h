@@ -121,4 +121,12 @@
                  forFileTransfer:(nonnull OCTMessageAbstract *)message
                            error:(NSError *__nullable *__nullable)error;
 
+/**
+ * KHANDAQ: periodically retry every pending outgoing file (left WaitingConfirmation because the
+ * recipient was offline at send time) for all currently-connected friends. Mirrors the text
+ * delivery watchdog so voice notes / photos queued offline actually deliver once the peer returns,
+ * instead of relying solely on the one-shot friend-connection-status notification (which races).
+ */
+- (void)resendPendingOutgoingFilesToAllOnlineFriends;
+
 @end

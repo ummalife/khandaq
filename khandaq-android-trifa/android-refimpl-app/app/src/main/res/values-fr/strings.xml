@@ -382,6 +382,14 @@
     <string name="join_public_group_activity_help">Rejoindre un groupe public avec l\'ID de groupe donné.</string>
     <string name="join_group_activity_join">Rejoindre le groupe</string>
     <string name="join_public_group_failed">Échec de l’adhésion au groupe public</string>
+    <string name="join_public_group_failed_not_ready">Le messager se connecte encore. Attendez quelques secondes et réessayez.</string>
+    <string name="join_public_group_failed_bad_id">ID de groupe invalide. Copiez les 64 caractères hexadécimaux.</string>
+    <string name="join_public_group_failed_network">Impossible d\'atteindre le groupe sur le réseau. Vérifiez Internet et réessayez.</string>
+    <string name="join_public_group_failed_password">Ce groupe nécessite un mot de passe.</string>
+    <string name="join_public_group_error_no_id">Saisissez un ID de groupe</string>
+    <string name="join_public_group_error_illegal_chars">L\'ID de groupe contient des caractères invalides. Seuls A–F et 0–9 sont autorisés.</string>
+    <string name="join_public_group_error_length">L\'ID de groupe doit comporter 64 caractères hexadécimaux.</string>
+
     <string name="join_public_group_joined">Vous avez rejoint le groupe public</string>
     <string name="add_friend_failed">l\'ajout d\'un ami a échoué</string>
     <string name="layout___group_id">ID du groupe</string>
@@ -394,6 +402,12 @@
     <string name="add_public_group_failed">La création d\'un groupe public a échoué</string>
     <string name="add_public_group_success">Vous avez créé un groupe public</string>
     <string name="add_private_group_failed">La création d\'un groupe privé a échoué</string>
+    <string name="group_password_placeholder">Mot de passe du groupe (groupes privés uniquement)</string>
+    <string name="group_password_set">Définir le mot de passe</string>
+    <string name="group_topic_lock">Verrouillage du sujet (fondateur uniquement)</string>
+    <string name="group_privacy_set">Définir la confidentialité</string>
+    <string name="group_create_private_password">Mot de passe de groupe optionnel</string>
+
     <string name="add_private_group_success">Vous avez créé un groupe privé</string>
     <string name="add_friend_success">Vous avez ajouté un nouvel ami</string>
     <string name="layout___group_myname2">mon nom dans le groupe :</string>
@@ -450,4 +464,51 @@
     <string name="pref_title_rnnoise_active">Bruit de fond</string>
     <string name="pref_description_rnnoise_active">Supprimer le bruit de fond avec RNNoise</string>
     <string name="layout___reveal_passwords">révéler les mots de passe et les exporter</string>
+    <string name="group_file_too_large">Fichier trop volumineux pour ce groupe.</string>
+    <string name="group_file_prepare_failed">Impossible de préparer le fichier pour l\'envoi.</string>
+    <string name="group_video_join_title">Rejoindre la vidéo de groupe ?</string>
+    <string name="group_video_join_message">Envoyer votre vidéo et audio à tout le groupe ?</string>
+    <string name="group_video_join_confirm">Oui, démarrer la vidéo</string>
+    <string name="group_video_join_decline">Non</string>
+    <string name="group_send_voice_confirm_title">Envoyer un message vocal ?</string>
+    <string name="group_send_voice_confirm_message">Envoyer ce message vocal au groupe ?</string>
+    <string name="group_peer_unknown">Inconnu</string>
+    <string name="group_incoming_message_error">Impossible de traiter le message de groupe entrant.</string>
+    <string name="group_file_send_failed">Échec de l\'envoi du fichier au groupe.</string>
+    <string name="group_image_shrink_failed">Impossible de préparer l\'image pour l\'envoi.</string>
+    <string name="group_incoming_file_error">Impossible de traiter le fichier de groupe entrant.</string>
+    <string name="chat_file_too_large">Fichier trop volumineux.</string>
+    <string name="chat_incoming_file_too_large">Fichier entrant trop volumineux.</string>
+    <string name="chat_opening_file_failed">Impossible d\'ouvrir le fichier.</string>
+    <string name="add_group_failed_empty_name">Saisissez un nom de groupe.</string>
+    <string name="maintenance_exporting">Exportation…</string>
+    <string name="maintenance_export_ready">Exportation terminée</string>
+    <string name="maintenance_export_failed">Échec de l’exportation</string>
+    <string name="set_password_setup_failed">Impossible de définir le mot de passe. Réessayez.</string>
+    <string name="power_charging_connected">Chargeur connecté</string>
+    <string name="power_charging_disconnected">Chargeur déconnecté</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

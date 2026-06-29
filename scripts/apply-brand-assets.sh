@@ -8,7 +8,9 @@ EXTRACT="$ROOT/brand/_pack"
 ANDROID_RES="$ROOT/khandaq-android-trifa/android-refimpl-app/app/src/main/res"
 IOS_ICON="$ROOT/khandaq-ios/Antidote/Images.xcassets/AppIcon.appiconset"
 DESKTOP_ICONS="$ROOT/khandaq-desktop/img/icons"
-WEB="$ROOT/web/messenger"
+# Live site root (the standalone web/messenger/ site was retired). Brand assets and
+# the favicon patch must land on the published site under web/assets + web/index.html.
+WEB="$ROOT/web"
 
 [[ -f "$ZIP" ]] || { echo "Missing brand zip: $ZIP"; exit 1; }
 

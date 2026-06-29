@@ -73,6 +73,7 @@ import static com.zoffcc.applications.trifa.HelperConference.tox_conference_by_c
 import static com.zoffcc.applications.trifa.HelperFriend.resolve_name_for_pubkey;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.do_fade_anim_on_fab;
+import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperMsgNotification.change_msg_notification;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__X_battery_saving_mode;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
@@ -118,7 +119,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
     ImageView ml_status_icon = null;
     ImageButton ml_phone_icon = null;
     ImageButton ml_button_01 = null;
-    static boolean attachemnt_instead_of_send = true;
+    ImageButton ml_button_recaudio = null;
     static ActionMode amode = null;
     static MenuItem amode_save_menu_item = null;
     static MenuItem amode_info_menu_item = null;
@@ -239,7 +240,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
         rootView = (ViewGroup) findViewById(R.id.emoji_bar);
         ml_new_conf_message = (com.vanniktech.emoji.EmojiEditText) findViewById(R.id.ml_new_message);
-        HelperGeneric.apply_chat_input_typography(ml_new_conf_message);
+        HelperGeneric.apply_chat_input_field_style(ml_new_conf_message);
 
         messageSearchView = (SearchView) findViewById(R.id.conf_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
@@ -274,6 +275,9 @@ public class ConferenceMessageListActivity extends AppCompatActivity
         ml_status_icon = (ImageView) findViewById(R.id.ml_status_icon);
         ml_phone_icon = (ImageButton) findViewById(R.id.ml_phone_icon);
         ml_button_01 = (ImageButton) findViewById(R.id.ml_button_01);
+        ml_button_01.setVisibility(View.GONE);
+        ml_button_recaudio = (ImageButton) findViewById(R.id.ml_button_recaudio);
+        ml_button_recaudio.setBackgroundColor(Color.TRANSPARENT);
 
         ml_phone_icon.setVisibility(View.GONE);
         ml_status_icon.setVisibility(View.INVISIBLE);
@@ -381,9 +385,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
         // final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_attachment).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(80);
         final Drawable send_message_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_send).color(
                 getResources().getColor(R.color.icon_colors)).sizeDp(80);
-
-        attachemnt_instead_of_send = true;
-        ml_button_01.setImageDrawable(send_message_icon);
+        final Drawable mic_icon = getResources().getDrawable(R.drawable.baseline_keyboard_voice_24);
 
         final Drawable d2 = new IconicsDrawable(this).icon(FontAwesome.Icon.faw_phone).color(
                 getResources().getColor(R.color.icon_colors)).sizeDp(80);
@@ -404,6 +406,19 @@ public class ConferenceMessageListActivity extends AppCompatActivity
             // prevent screenshots and also dont show the window content in recent activity screen
             initializeScreenshotSecurity(this);
         }
+
+        ChatInputBarHelper.bindMicSendTextWatcher(ml_new_conf_message, ml_button_recaudio, mic_icon, send_message_icon);
+
+        ml_button_recaudio.setOnClickListener(v -> {
+            if (ChatInputBarHelper.isSendMode((ImageButton) v))
+            {
+                send_message_onclick(null);
+            }
+            else
+            {
+                display_toast(getString(R.string.MessageListActivity_longpress_to_record_audiomsg), false, 0);
+            }
+        });
 
         set_peer_count_header();
         set_peer_names_and_avatars();
@@ -536,6 +551,12 @@ public class ConferenceMessageListActivity extends AppCompatActivity
     {
         Log.i(TAG, "onPause");
         super.onPause();
+
+        if (ml_button_recaudio != null)
+        {
+            ChatInputBarHelper.resetMicSendIcon(ml_button_recaudio,
+                    getResources().getDrawable(R.drawable.baseline_keyboard_voice_24));
+        }
 
         MainActivity.conference_message_list_fragment = null;
         MainActivity.conference_message_list_activity = null;
@@ -733,13 +754,13 @@ public class ConferenceMessageListActivity extends AppCompatActivity
         {
             if (is_conference_active(conf_id))
             {
-                final String raw_msg = ml_new_conf_message.getText().toString().trim();
-                if (raw_msg.isEmpty())
+                final String normalized = HelperGeneric.normalize_chat_input_text(ml_new_conf_message.getText().toString());
+                if (normalized.isEmpty())
                 {
                     return;
                 }
 
-                msg = raw_msg.substring(0, (int) Math.min(tox_max_message_length(), raw_msg.length()));
+                msg = normalized.substring(0, (int) Math.min(tox_max_message_length(), normalized.length()));
 
                 try
                 {
@@ -769,7 +790,11 @@ public class ConferenceMessageListActivity extends AppCompatActivity
                     {
                         // message was sent OK
                         insert_into_conference_message_db(m, true);
-                        ml_new_conf_message.setText("");
+                        HelperGeneric.clear_chat_input_field(ml_new_conf_message);
+                        if (emojiPopup != null)
+                        {
+                            emojiPopup.dismiss();
+                        }
                     }
                 }
                 catch (Exception e)

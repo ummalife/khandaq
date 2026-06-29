@@ -17,7 +17,7 @@ public final class KhandaqPush {
     /** Full-screen incoming audio/video call alerts. */
     public static final String INCOMING_CALL_CHANNEL_ID = "khandaq_incoming_call";
 
-    /** Append sender pubkey and optional relay auth to a push wake URL. */
+    /** Append sender pubkey and a replay-resistant relay auth to a push wake URL. */
     public static String withWakeParams(String pushUrl, String senderPubkeyHex)
     {
         if (pushUrl == null || pushUrl.isEmpty())
@@ -33,29 +33,60 @@ public final class KhandaqPush {
             sb.append("from=").append(senderPubkeyHex);
         }
 
-        final String auth = relayAuthParam();
-        if (!auth.isEmpty() && pushUrl.contains("push.khandaq.org"))
+        // KHANDAQ (security NEW-2): request-bound, time-limited auth instead of a constant HMAC.
+        // The sender signs the recipient token (id) + sender (from) + a unix timestamp (ts), so the
+        // value differs per request and expires — it cannot be replayed or reused for another push.
+        // Dormant until a secret is provisioned (BuildConfig.PUSH_RELAY_AUTH_SECRET empty = no-op).
+        final String url = sb.toString();
+        final String secret = BuildConfig.PUSH_RELAY_AUTH_SECRET;
+        if (secret != null && !secret.isEmpty() && url.contains("push.khandaq.org") && !url.contains("auth="))
         {
-            sb.append(sb.indexOf("?") >= 0 ? '&' : '?');
-            sb.append("auth=").append(auth);
+            final String id = queryValue(url, "id");
+            final String from = queryValue(url, "from");
+            final String ts = Long.toString(System.currentTimeMillis() / 1000L);
+            // must match the server byte-for-byte: msg = id + "\n" + from + "\n" + ts
+            final String auth = hmacSha256Hex(secret, id + "\n" + from + "\n" + ts);
+            if (!auth.isEmpty())
+            {
+                sb.append('&').append("ts=").append(ts).append("&auth=").append(auth);
+            }
         }
 
         return sb.toString();
     }
 
-    public static String relayAuthParam()
+    /** Extract the URL-decoded value of a query parameter (to match the server's request.args view). */
+    private static String queryValue(final String url, final String key)
     {
-        final String secret = BuildConfig.PUSH_RELAY_AUTH_SECRET;
-        if (secret == null || secret.isEmpty())
+        try
         {
-            return "";
+            final int q = url.indexOf('?');
+            if (q < 0)
+            {
+                return "";
+            }
+            for (final String pair : url.substring(q + 1).split("&"))
+            {
+                final int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).equals(key))
+                {
+                    return java.net.URLDecoder.decode(pair.substring(eq + 1), "UTF-8");
+                }
+            }
         }
+        catch (Exception ignored)
+        {
+        }
+        return "";
+    }
 
+    private static String hmacSha256Hex(final String secret, final String message)
+    {
         try
         {
             final Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
-            final byte[] raw = mac.doFinal("khandaq-push-relay".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            final byte[] raw = mac.doFinal(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             final StringBuilder hex = new StringBuilder(raw.length * 2);
             for (byte b : raw)
             {

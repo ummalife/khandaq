@@ -19,6 +19,7 @@ class ProfileMainController: StaticTableController {
     weak var delegate: ProfileMainControllerDelegate?
 
     fileprivate weak var submanagerUser: OCTSubmanagerUser!
+    fileprivate let profileTheme: Theme
     fileprivate let avatarManager: AvatarManager
 
     fileprivate let avatarModel = StaticTableAvatarCellModel()
@@ -26,16 +27,20 @@ class ProfileMainController: StaticTableController {
     fileprivate let statusMessageModel = StaticTableDefaultCellModel()
     // fileprivate let userStatusModel = StaticTableDefaultCellModel()
     fileprivate let toxIdModel = StaticTableDefaultCellModel()
+    fileprivate let copyMyIdModel = StaticTableButtonCellModel()
+    fileprivate let showQrModel = StaticTableButtonCellModel()
     fileprivate let capabilitiesModel = StaticTableDefaultCellModel()
+    fileprivate let networkConnectionsModel = StaticTableDefaultCellModel()
     fileprivate let profileDetailsModel = StaticTableDefaultCellModel()
     fileprivate let logoutModel = StaticTableButtonCellModel()
 
     init(theme: Theme, submanagerUser: OCTSubmanagerUser) {
         self.submanagerUser = submanagerUser
+        self.profileTheme = theme
 
         avatarManager = AvatarManager(theme: theme)
 
-        super.init(theme: theme, style: .plain, model: [
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: [
             [
                 avatarModel,
             ],
@@ -48,9 +53,13 @@ class ProfileMainController: StaticTableController {
             //],
             [
                 toxIdModel,
+                showQrModel,
             ],
             [
                 capabilitiesModel,
+            ],
+            [
+                networkConnectionsModel,
             ],
             [
                 profileDetailsModel,
@@ -129,6 +138,7 @@ private extension ProfileMainController {
                     diameter: StaticTableAvatarCellModel.Constants.AvatarImageSize)
         }
         avatarModel.didTapOnAvatar = performAvatarAction
+        avatarModel.showCameraBadge = true
 
         userNameModel.title = String(localized: "name")
         userNameModel.value = submanagerUser.userName()
@@ -150,10 +160,20 @@ private extension ProfileMainController {
 
         toxIdModel.title = String(localized: "my_tox_id")
         toxIdModel.value = sanitizeAddressInput(submanagerUser.userAddress)
-        toxIdModel.rightButton = String(localized: "show_qr")
-        toxIdModel.rightButtonHandler = showToxIdQR
-        toxIdModel.userInteractionEnabled = false
+        // KHANDAQ (#117): tap the MyID row to copy it (with a toast) — the separate "Копировать MyID"
+        // button was redundant and bulky and is removed; long-press still works via canCopyValue.
+        toxIdModel.userInteractionEnabled = true
         toxIdModel.canCopyValue = true
+        toxIdModel.didSelectHandler = { [weak self] _ in
+            guard let self = self else { return }
+            UIPasteboard.general.string = self.submanagerUser.userAddress
+            self.showCopiedHUD(String(localized: "group_member_action_copy_done"))
+        }
+
+        showQrModel.title = String(localized: "show_qr_code")
+        showQrModel.didSelectHandler = { [weak self] _ in
+            self?.showToxIdQR()
+        }
         // for debugging print own ToxID ----------------
         // print("TOXID: \(submanagerUser.userAddress)")
         // for debugging print own ToxID ----------------
@@ -162,11 +182,17 @@ private extension ProfileMainController {
         capabilitiesModel.value = capabilitiesToString(submanagerUser.capabilities as NSNumber)
         capabilitiesModel.userInteractionEnabled = false
 
+        networkConnectionsModel.title = String(localized: "network_connections_title")
+        networkConnectionsModel.value = String(localized: "network_connections_summary")
+        networkConnectionsModel.rightImageType = .arrow
+        networkConnectionsModel.didSelectHandler = showNetworkConnections
+
         profileDetailsModel.value = String(localized: "profile_details")
         profileDetailsModel.didSelectHandler = showProfileDetails
         profileDetailsModel.rightImageType = .arrow
 
         logoutModel.title = String(localized: "logout_button")
+        logoutModel.destructive = true
         logoutModel.didSelectHandler = logout
     }
 
@@ -346,5 +372,10 @@ private extension ProfileMainController {
 
     func showProfileDetails(_: StaticTableBaseCell) {
         delegate?.profileMainControllerShowProfileDetails(self)
+    }
+
+    func showNetworkConnections(_: StaticTableBaseCell) {
+        let controller = NetworkDiagnosticsDetailController(theme: profileTheme)
+        navigationController?.pushViewController(controller, animated: true)
     }
 }

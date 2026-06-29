@@ -28,7 +28,7 @@ We aim to acknowledge reports within **72 hours**.
 **In scope:**
 
 - Khandaq client source in this repository
-- Documented public endpoints (`bootstrap.khandaq.org`, `push.khandaq.org`)
+- Documented public endpoints (`push.khandaq.org` wake relay; clients bootstrap from the public Tox DHT — the self-hosted `bootstrap*.khandaq.org` nodes have been retired)
 - Build and release integrity (checksums, supply chain)
 
 **Out of scope:**

@@ -18,7 +18,7 @@ class SettingsAboutController: StaticTableController {
     fileprivate let acknowledgementsModel = StaticTableDefaultCellModel()
 
     init(theme: Theme) {
-        super.init(theme: theme, style: .grouped, model: [
+        super.init(theme: theme, style: StaticTableController.insetGroupedStyle, model: [
             [
                 khandaqVersionModel,
                 khandaqBuildModel,

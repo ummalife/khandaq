@@ -381,11 +381,25 @@
     <string name="layout___create_new_public_group">Yeni Herkese Açık Grup Oluştur</string>
     <string name="join_public_group_joined">Herkese açık gruba katıldınız</string>
     <string name="add_private_group_failed">Özel grup oluşturulamadı</string>
+    <string name="group_password_placeholder">Grup parolası (yalnızca özel gruplar)</string>
+    <string name="group_password_set">Grup parolasını ayarla</string>
+    <string name="group_topic_lock">Konu kilidi (yalnızca kurucu)</string>
+    <string name="group_privacy_set">Gizliliği ayarla</string>
+    <string name="group_create_private_password">İsteğe bağlı grup parolası</string>
+
     <string name="add_private_group_success">Özel bir grup oluşturdunuz</string>
     <string name="layout___group_mypubjkey2">Ortak Anahtarım:</string>
     <string name="layout___group_name2">Grup Adı:</string>
     <string name="title_activity_groupinfo">Grup bilgisi</string>
     <string name="join_public_group_failed">Herkese açık gruba katılma başarısız oldu</string>
+    <string name="join_public_group_failed_not_ready">Mesajlaşma uygulaması hâlâ bağlanıyor. Birkaç saniye bekleyip tekrar deneyin.</string>
+    <string name="join_public_group_failed_bad_id">Geçersiz grup kimliği. 64 onaltılık karakterin tamamını kopyalayın.</string>
+    <string name="join_public_group_failed_network">Gruba ağ üzerinden ulaşılamadı. İnterneti kontrol edip tekrar deneyin.</string>
+    <string name="join_public_group_failed_password">Bu grup bir parola gerektiriyor.</string>
+    <string name="join_public_group_error_no_id">Grup kimliği girin</string>
+    <string name="join_public_group_error_illegal_chars">Grup kimliği geçersiz karakterler içeriyor. Yalnızca A–F ve 0–9 kullanılabilir.</string>
+    <string name="join_public_group_error_length">Grup kimliği 64 onaltılık karakter olmalıdır.</string>
+
     <string name="add_public_group_failed">Herkese açık grup oluşturulamadı</string>
     <string name="add_friend_success">Yeni bir arkadaş eklediniz</string>
     <string name="layout___group_id2">Grup Kimliği:</string>
@@ -405,8 +419,7 @@
     <string name="pref_title_allow_enable_ngc_features">NGC - Yeni Grup Sohbetleri</string>
     <string name="pref_title_allow_push_server_ntfy">ntfy.sh Sunucusuna İzin Ver</string>
     <string name="pref_description_allow_push_server_ntfy">UYARI: Anlık bildirimler için ntfy.sh sunucusuna izin verin. Bu, bir arkadaşınız anlık bildirim belirtecinizle abone olursa, anlık bildirimler aldığınızda zaman damgalarının üst verilerini sızdırabilir. ntfy.sh parola ve kimlik doğrulamasına sahip DEĞİLDİR. Uyarıldınız.</string>
-    <string name="pref_description_enable_ngc_features">!! Deneysel !!
-\nBu tam olarak çalışmıyor!!</string>
+    <string name="pref_description_enable_ngc_features">Geliştirilmiş mesajlaşma, ses ve video ile yeni grup sohbetleri (NGC).</string>
     <string name="incoming_filetransfer_size_too_large">Gelen dosya boyutu çok büyük. Yalnızca 2 GByte\'a kadar olan dosyalar alınabilir.</string>
     <string name="pref_title_message_paging_num_msgs_per_page">Mesaj Sayfalama</string>
     <string name="pref_description_message_paging_num_msgs_per_page">Sayfa başına gösterilecek mesaj sayısını ayarlayın. 0, sayfalama yok anlamına gelir</string>
@@ -434,4 +447,51 @@
     <string name="MainActivity_manually_logged_out_true">etkinleştir</string>
     <string name="MainActivity_manually_logged_out_false">oturumu kapat</string>
     <string name="MessageListActivity_longpress_to_record_audiomsg">Sesli mesaj kaydetmek için uzun basın</string>
+    <string name="group_video_join_title">Grup videosuna katıl?</string>
+    <string name="group_video_join_message">Videonuzu ve sesinizi gruptaki herkese gönder?</string>
+    <string name="group_video_join_confirm">Evet, videoyu başlat</string>
+    <string name="group_video_join_decline">Hayır</string>
+    <string name="group_send_voice_confirm_title">Sesli mesaj gönder?</string>
+    <string name="group_send_voice_confirm_message">Bu sesli mesajı gruba gönder?</string>
+    <string name="group_peer_unknown">Bilinmiyor</string>
+    <string name="group_incoming_message_error">Gelen grup mesajı işlenemedi.</string>
+    <string name="group_file_send_failed">Grup dosyası gönderilemedi.</string>
+    <string name="group_image_shrink_failed">Görüntü gönderime hazırlanamadı.</string>
+    <string name="group_incoming_file_error">Gelen grup dosyası işlenemedi.</string>
+    <string name="chat_file_too_large">Dosya çok büyük.</string>
+    <string name="chat_incoming_file_too_large">Gelen dosya çok büyük.</string>
+    <string name="chat_opening_file_failed">Dosya açılamadı.</string>
+    <string name="group_file_too_large">Dosya bu grup için çok büyük.</string>
+    <string name="group_file_prepare_failed">Dosya gönderime hazırlanamadı.</string>
+    <string name="add_group_failed_empty_name">Bir grup adı girin.</string>
+    <string name="maintenance_exporting">Dışa aktarılıyor…</string>
+    <string name="maintenance_export_ready">Dışa aktarma tamamlandı</string>
+    <string name="maintenance_export_failed">Dışa aktarma başarısız</string>
+    <string name="set_password_setup_failed">Parola ayarlanamadı. Tekrar deneyin.</string>
+    <string name="power_charging_connected">Şarj cihazı bağlandı</string>
+    <string name="power_charging_disconnected">Şarj cihazı çıkarıldı</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

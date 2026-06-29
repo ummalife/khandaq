@@ -14,5 +14,10 @@ class ChatListCellModel: BaseCellModel {
     var status: UserStatus = .offline
     var connectionstatus: ConnectionStatus = .none
 
+    var presenceText: String = ""
+    var presenceIsOnline: Bool = false
+
     var isUnread: Bool = false
+    var unreadCount: Int = 0
+    var isDraft: Bool = false
 }

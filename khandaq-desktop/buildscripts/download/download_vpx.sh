@@ -17,8 +17,10 @@
 
 set -euo pipefail
 
-VPX_VERSION=1.11.0
-VPX_HASH=965e51c91ad9851e2337aebcc0f517440c637c506f3a03948062e3d5ea129a83
+# KHANDAQ (security): 1.11.0 was vulnerable to CVE-2023-5217 (VP8 heap overflow,
+# exploited in the wild; fixed in 1.13.1). Bumped to 1.14.0 to match the Linux build.
+VPX_VERSION=1.14.0
+VPX_HASH=5f21d2db27071c8a46f1725928a10227ae45c5cd1cad3727e4aafbe476e321fa
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

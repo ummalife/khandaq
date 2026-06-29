@@ -4,8 +4,8 @@ includedir=${prefix}/include
 
 Name: toxcore
 Description: Tox protocol library
-Requires.private: libsodium opus vpx
-Version: 0.2.18
+Requires.private: libsodium opus vpx x264 libavcodec libavutil
+Version: 0.2.19
 Libs: -L${libdir} -ltoxcore
 Libs.private: 
 Cflags: -I${includedir}

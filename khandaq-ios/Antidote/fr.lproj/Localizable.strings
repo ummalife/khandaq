@@ -413,3 +413,31 @@
 "chat_is_typing_text" = "écrit…";
 /* Text shown in chat when there are undelivered faux offline messages */
 "chat_pending_faux_offline_messages" = "Les messages non distribués seront envoyés lorsque vous et votre ami(e) serez en ligne.";
+"group_live_audio_toggle" = "Audio en direct";
+"group_live_video_toggle" = "Vidéo en direct";
+"group_live_video_quality_toggle" = "Qualité vidéo";
+"group_live_video_quality_low" = "SD";
+"group_live_video_quality_high" = "HD";
+"group_voice_hold_to_record" = "Maintenez le bouton du microphone pour enregistrer un message vocal";
+"group_live_video_toggle_active" = "Vidéo en direct active";
+"group_live_video_toggle_incoming" = "Vidéo en direct entrante";
+"group_live_video_streams_empty" = "streams:0";
+"group_live_video_streams_format" = "streams:%llu
+%@";
+"group_video_join_title" = "Rejoindre la vidéo de groupe ?";
+"group_video_join_message" = "Envoyer votre vidéo et audio à tout le groupe ?";
+"group_video_join_confirm" = "Oui, démarrer la vidéo";
+"group_video_join_decline" = "Non";
+"group_send_voice_confirm_title" = "Envoyer un message vocal ?";
+"group_send_voice_confirm_message" = "Envoyer ce message vocal au groupe ?";
+"group_incoming_message_error" = "Impossible de traiter le message de groupe entrant.";
+"group_image_shrink_failed" = "Impossible de préparer l'image pour l'envoi.";
+"group_incoming_file_error" = "Impossible de traiter le fichier de groupe entrant.";
+"chat_file_too_large" = "Fichier trop volumineux.";
+"chat_incoming_file_too_large" = "Fichier entrant trop volumineux.";
+"chat_opening_file_failed" = "Impossible d'ouvrir le fichier.";
+"group_file_prepare_failed" = "Impossible de préparer le fichier pour l'envoi.";
+"group_peer_unknown" = "Inconnu";
+"group_live_video_stream_unknown_peer" = "Inconnu";
+
+"microphone_access_denied_message" = "L'accès au micro est désactivé. Autorisez le micro dans Réglages pour utiliser cette fonctionnalité.";

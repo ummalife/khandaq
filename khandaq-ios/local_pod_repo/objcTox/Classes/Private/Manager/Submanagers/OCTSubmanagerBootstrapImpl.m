@@ -87,10 +87,28 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     NSString *file = [[self objcToxBundle] pathForResource:@"nodes" ofType:@"json"];
     NSData *data = [NSData dataWithContentsOfFile:file];
 
-    NSDictionary *dictionary = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    NSAssert(dictionary, @"Nodes json file is corrupted.");
+    if (data.length == 0) {
+        OCTLogWarn(@"Bootstrap: nodes.json missing or empty at %@", file ?: @"(nil)");
+        return;
+    }
 
-    for (NSDictionary *node in dictionary[@"nodes"]) {
+    NSError *jsonError = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    if (! [parsed isKindOfClass:[NSDictionary class]]) {
+        OCTLogWarn(@"Bootstrap: nodes.json parse failed: %@", jsonError.localizedDescription ?: @"invalid root");
+        return;
+    }
+    NSDictionary *dictionary = (NSDictionary *)parsed;
+    NSArray *nodes = dictionary[@"nodes"];
+    if (! [nodes isKindOfClass:[NSArray class]]) {
+        OCTLogWarn(@"Bootstrap: nodes.json missing \"nodes\" array");
+        return;
+    }
+
+    for (NSDictionary *node in nodes) {
+        if (! [node isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
         NSUInteger lastPing = [node[@"last_ping"] unsignedIntegerValue];
 
         if (lastPing == 0) {
@@ -112,9 +130,12 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
             ipv6 = nil;
         }
 
-        NSAssert(ipv4, @"Nodes json file is corrupted");
-        NSAssert(udpPort > 0, @"Nodes json file is corrupted");
-        NSAssert(publicKey, @"Nodes json file is corrupted");
+        if (ipv4.length <= 2 && ipv6.length <= 2) {
+            continue;
+        }
+        if (udpPort == 0 || publicKey.length == 0) {
+            continue;
+        }
 
         [self addNodeWithIpv4Host:ipv4 ipv6Host:ipv6 udpPort:udpPort tcpPorts:tcpPorts publicKey:publicKey];
     }
@@ -133,14 +154,19 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
 {
     OCTTox *tox = [self.dataSource managerGetTox];
 
-    NSArray<NSDictionary<NSString *, NSString *> *> *khandaqNodes = @[
-        @{ @"host": @"bootstrap1.khandaq.org", @"key": @"74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D" },
-        @{ @"host": @"bootstrap2.khandaq.org", @"key": @"5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B" },
-        @{ @"host": @"bootstrap3.khandaq.org", @"key": @"A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665" },
+    // KHANDAQ: fast-connect burst to PROVEN PUBLIC Tox DHT nodes (parity with the Android client, which
+    // also dropped the self-hosted bootstrap*.khandaq.org nodes). We no longer depend on our own
+    // bootstrap nodes for joining the network. NB: this is the DHT bootstrap — push.khandaq.org (the FCM
+    // wake relay) is a separate service and is unaffected.
+    NSArray<NSDictionary<NSString *, NSString *> *> *publicNodes = @[
+        @{ @"host": @"tox.abilinski.com", @"key": @"10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E" },
+        @{ @"host": @"tox1.mf-net.eu",    @"key": @"B3E5FA80DC8EBD1149AD2AB35ED8B85BD546DEDE261CA593234C619249419506" },
+        @{ @"host": @"tox2.mf-net.eu",    @"key": @"70EA214FDE161E7432530605213F18F7427DC773E276B3E317A07531F548545F" },
+        @{ @"host": @"tox.initramfs.io",  @"key": @"3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25" },
     ];
 
     [tox performBlockOnToxQueue:^{
-        for (NSDictionary<NSString *, NSString *> *node in khandaqNodes) {
+        for (NSDictionary<NSString *, NSString *> *node in publicNodes) {
             NSString *host = node[@"host"];
             NSString *key = node[@"key"];
             NSError *error = nil;

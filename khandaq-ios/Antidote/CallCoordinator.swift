@@ -14,6 +14,10 @@ protocol CallCoordinatorDelegate: class {
 
 private struct Constants {
     static let DeclineAfterInterval = 1.5
+    // KHANDAQ: number of consecutive call-update ticks (~1s each) with NO new video frames before we
+    // detach the remote feed. The cumulative frame count never decreases, so we detect a stopped
+    // stream by frames no longer arriving — a short grace avoids flicker on a brief network stall.
+    static let NoVideoFrameTicksToDetach = 2
 }
 
 private class ActiveCall {
@@ -50,10 +54,23 @@ class CallCoordinator: NSObject {
     fileprivate var toxAnswerInProgress = false
     fileprivate var toxAnswerCompleted = false
 
+    // KHANDAQ: track remote-video liveness by frame-count delta (see activeCallWasUpdated).
+    fileprivate var lastReceivedVideoFrameCount = 0
+    fileprivate var noNewVideoFrameTicks = Constants.NoVideoFrameTicksToDetach
+
+    // KHANDAQ: the speaker default (on for video, earpiece for audio) is applied ONCE per call, not on
+    // every update tick — otherwise the user's manual speaker toggle was clobbered ~1s later.
+    fileprivate var appliedInitialSpeakerRoute = false
+
     fileprivate var activeCall: ActiveCall? {
         didSet {
             switch (oldValue, activeCall) {
                 case (.none, .some):
+                    // KHANDAQ: fresh call — reset remote-video frame tracking so a previous call's
+                    // cumulative count doesn't leave the feed attached (last frame frozen) on this one.
+                    lastReceivedVideoFrameCount = 0
+                    noNewVideoFrameTicks = Constants.NoVideoFrameTicksToDetach
+                    appliedInitialSpeakerRoute = false
                     delegate?.callCoordinatorDidStartCall(self)
                 case (.some, .none):
                     delegate?.callCoordinatorDidFinishCall(self)
@@ -88,7 +105,17 @@ class CallCoordinator: NSObject {
                 handleErrorWithType(.callToChat)
                 return
             }
-            self.startCallToChat(chat, enableVideo: enableVideo)
+            // KHANDAQ (#112): a video call also needs camera access. Without this gate the camera was
+            // opened blind and AVCaptureDeviceInput failed with a generic "Внутренняя ошибка" when
+            // access was denied/not-yet-granted. Request it up front, then start the video call.
+            guard enableVideo else {
+                self.startCallToChat(chat, enableVideo: false)
+                return
+            }
+            MediaPermission.requestCameraAccess(from: self.presentingController) { [weak self] cameraGranted in
+                guard let self = self, cameraGranted else { return }
+                self.startCallToChat(chat, enableVideo: true)
+            }
         }
     }
 
@@ -211,12 +238,32 @@ extension CallCoordinator: CallActiveControllerDelegate {
             return
         }
 
+        // KHANDAQ (#112): turning the camera ON mid-call needs camera access first — the video engine
+        // otherwise fails and surfaces a generic "Внутренняя ошибка". Turning it OFF needs no permission.
+        if outgoingVideo {
+            MediaPermission.requestCameraAccess(from: controller) { [weak self] granted in
+                guard let self = self else { return }
+                guard granted else {
+                    controller.outgoingVideo = false
+                    return
+                }
+                do {
+                    try submanagerCalls.enableVideoSending(true, for: activeCall.call)
+                }
+                catch {
+                    handleErrorWithType(.enableVideoSending)
+                    controller.outgoingVideo = false
+                }
+            }
+            return
+        }
+
         do {
-            try submanagerCalls.enableVideoSending(outgoingVideo, for: activeCall.call)
+            try submanagerCalls.enableVideoSending(false, for: activeCall.call)
         }
         catch {
             handleErrorWithType(.enableVideoSending)
-            controller.outgoingVideo = !outgoingVideo
+            controller.outgoingVideo = true
         }
     }
 
@@ -388,14 +435,19 @@ extension CallCoordinator {
     private func configureAudioSessionForAnswer(enableVideo: Bool) {
         let session = AVAudioSession.sharedInstance()
         let mode = enableVideo ? AVAudioSessionModeVideoChat : AVAudioSessionModeVoiceChat
+        var options: AVAudioSessionCategoryOptions = [.allowBluetooth]
+        if enableVideo {
+            options.insert(.defaultToSpeaker)
+        }
         do {
             try session.setCategory(
                 AVAudioSessionCategoryPlayAndRecord,
-                with: [.allowBluetooth, .defaultToSpeaker]
+                with: options
             )
             try session.setMode(mode)
             try session.setPreferredSampleRate(48000)
             try session.setPreferredIOBufferDuration(0.005)
+            try session.overrideOutputAudioPort(enableVideo ? .speaker : .none)
             try session.setActive(true)
         } catch {
             print("cc:controler:configureAudioSessionForAnswer:error \(error)")
@@ -470,6 +522,14 @@ extension CallCoordinator {
         }
 
         activeController!.outgoingVideo = activeCall.call.videoIsEnabled
+        // KHANDAQ: apply the speaker default (on for video, earpiece for audio) only ONCE, when the call
+        // first goes active. Re-applying it on every update tick reset the user's manual speaker toggle
+        // about a second after they pressed it ("кнопка сбрасывается автоматически").
+        if activeCall.call.status == .active && !appliedInitialSpeakerRoute {
+            appliedInitialSpeakerRoute = true
+            activeController!.speaker = activeCall.call.videoIsEnabled
+            try? submanagerCalls.routeAudio(toSpeaker: activeCall.call.videoIsEnabled)
+        }
         if activeCall.call.videoIsEnabled {
             if activeController!.videoPreviewLayer == nil {
                 submanagerCalls.getVideoCallPreview { [weak activeController] layer in
@@ -483,7 +543,23 @@ extension CallCoordinator {
             }
         }
 
-        if activeCall.call.friendSendingVideo {
+        // KHANDAQ: decide remote-feed attachment by whether frames are ACTUALLY still arriving, using
+        // the frame-count delta between ticks. The earlier `frameCount > 0` test was wrong: the count
+        // is cumulative and never decreases, so once a single frame arrived the feed stayed attached
+        // forever — the last frame froze on screen after the peer turned their camera off or the call
+        // went audio-only. friendSendingVideo can attach a touch sooner but must NOT keep the feed
+        // alive on its own (toxav's SENDING_V flag lags / can stay stale).
+        let frameCount = Int(submanagerCalls.receivedVideoFrameCount())
+        if frameCount > lastReceivedVideoFrameCount {
+            noNewVideoFrameTicks = 0
+        }
+        else {
+            noNewVideoFrameTicks += 1
+        }
+        lastReceivedVideoFrameCount = frameCount
+
+        let videoLive = noNewVideoFrameTicks < Constants.NoVideoFrameTicksToDetach
+        if videoLive {
             if activeController!.videoFeed == nil {
                 activeController!.videoFeed = submanagerCalls.videoFeed()
             }
@@ -492,6 +568,15 @@ extension CallCoordinator {
             if activeController!.videoFeed != nil {
                 activeController!.videoFeed = nil
             }
+        }
+
+        // KHANDAQ (remote-video diagnostic): surface the incoming-frame count + flags on the call
+        // screen during a video call so a screenshot pinpoints the break (rx:0 = peer not transmitting).
+        if activeCall.call.videoIsEnabled || activeCall.call.friendSendingVideo || frameCount > 0 {
+            activeController!.debugVideoInfo = "rx:\(frameCount) sendV:\(activeCall.call.friendSendingVideo ? 1 : 0) feed:\(activeController!.videoFeed != nil ? 1 : 0)"
+        }
+        else {
+            activeController!.debugVideoInfo = ""
         }
     }
 }

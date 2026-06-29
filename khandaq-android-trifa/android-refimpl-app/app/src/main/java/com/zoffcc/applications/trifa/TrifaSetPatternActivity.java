@@ -79,7 +79,24 @@ public class TrifaSetPatternActivity extends SetPatternActivity
         try
         {
             // Strip path separators and control chars; keep unicode letters in filenames.
-            return path.replaceAll("[\\\\/:*?\"<>|\\x00-\\x1f]", "_");
+            String cleaned = path.replaceAll("[\\\\/:*?\"<>|\\x00-\\x1f]", "_");
+
+            // KHANDAQ (security D-3): separators are already gone above; also neutralise a bare "."/".."
+            // and any leading dots, so a crafted file/group name can never reference a parent directory
+            // or a hidden file (belt-and-suspenders for 1:1 and NGC group file transfers).
+            if (cleaned.equals(".") || cleaned.equals(".."))
+            {
+                cleaned = "_";
+            }
+            while (cleaned.startsWith("."))
+            {
+                cleaned = "_" + cleaned.substring(1);
+            }
+            if (cleaned.isEmpty())
+            {
+                cleaned = "_";
+            }
+            return cleaned;
         }
         catch (Exception e)
         {

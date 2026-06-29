@@ -28,20 +28,18 @@ Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure provi
 
 ## Download pre-built clients
 
-All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.5)** (not in git):
+All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.8)** (not in git):
 
 | Platform | Download |
 |----------|----------|
-| Android | [khandaq-android.apk](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-android.apk) |
-| Windows | [khandaq-windows-installer.exe](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-windows-installer.exe) |
-| macOS | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-macos.zip) |
-| Linux x86_64 (portable) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-linux-x86_64-portable.tar.gz) |
-| Debian / Ubuntu (.deb) | [khandaq-messenger_0.2.5_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-messenger_0.2.5_amd64.deb) |
-| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (not distributed as IPA here) |
+| Android | [khandaq-android.apk](https://github.com/ummalife/khandaq/releases/download/v0.2.8/khandaq-android.apk) |
+| Windows | [khandaq-windows-x86_64.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.8/khandaq-windows-x86_64.zip) |
+| macOS | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.8/khandaq-macos.zip) |
+| Linux x86_64 (portable) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.8/khandaq-linux-x86_64-portable.tar.gz) |
+| Debian / Ubuntu (.deb) | [khandaq-messenger_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.8/khandaq-messenger_amd64.deb) |
+| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 142852; not distributed as IPA here) |
 
-Windows portable zip: [khandaq-x86_64-Release.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.5/khandaq-x86_64-Release.zip)
-
-Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.5/SHA256SUMS.txt).
+Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.8/SHA256SUMS.txt).
 
 ---
 
@@ -51,13 +49,13 @@ These URLs are embedded in client builds and configuration files:
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| Bootstrap registry | https://bootstrap.khandaq.org/nodes.json | Khandaq + public Tox bootstrap list |
+| Bootstrap | _public Tox DHT_ | Clients bootstrap from the public Tox DHT (nodes.tox.chat — tox.abilinski.com, mf-net.eu, tox.initramfs.io, …). The self-hosted `bootstrap*.khandaq.org` nodes have been retired. |
 | Push wake relay | https://push.khandaq.org/toxfcm/fcm.php | FCM/APNs wake only (no message body; see PUSH_RELAY.md) |
 | Main site | https://khandaq.org | Project website |
 
 Source of truth: [`config/khandaq_bootstrap_nodes.json`](config/khandaq_bootstrap_nodes.json), [`config/khandaq_push.json`](config/khandaq_push.json).
 
-See [docs/NETWORK.md](docs/NETWORK.md) and [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md).
+See [docs/NETWORK.md](docs/NETWORK.md).
 
 ---
 

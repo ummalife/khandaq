@@ -76,6 +76,7 @@
         android:supportsRtl="true"
         android:requestLegacyExternalStorage="false"
         android:theme="@style/AppTheme"
+        android:localeConfig="@xml/locales_config"
         tools:replace="android:allowBackup,android:fullBackupContent,android:label">
 
         <meta-data
@@ -86,6 +87,7 @@
             android:name="com.zoffcc.applications.trifa.StartMainActivityWrapper"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:launchMode="singleTask"
+            android:theme="@style/SplashTheme"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -103,6 +105,11 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:label="@string/add_friend_activity_name">
         </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.ProfileFieldEditActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name="com.zoffcc.applications.trifa.QrScanActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
@@ -129,6 +136,7 @@
         <activity
             android:name="com.zoffcc.applications.trifa.MessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTop"
             android:label="@string/message_list_activity_name">
         </activity>
         <activity
@@ -139,8 +147,16 @@
         <activity
             android:name="com.zoffcc.applications.trifa.GroupMessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTop"
             android:label="@string/group_message_list_activity_name">
         </activity>
+        <!-- KHANDAQ (#34): global search across all chats/groups + messages -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.GlobalSearchActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
         <activity
             android:name="com.zoffcc.applications.trifa.ConferenceAudioActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
@@ -193,7 +209,7 @@
         <activity
             android:name="com.zoffcc.applications.trifa.GroupInfoActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:label="@string/title_activity_conferenceinfo">
+            android:label="@string/title_activity_groupinfo">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ConferencePeerInfoActivity"
@@ -214,12 +230,34 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
         </activity>
         <activity
+            android:name="com.zoffcc.applications.trifa.MediaViewerActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:theme="@style/Theme.AppCompat.NoActionBar">
+        </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.MediaSendPreviewActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:theme="@style/Theme.AppCompat.NoActionBar">
+        </activity>
+        <activity
             android:name="com.zoffcc.applications.trifa.TrifaSetPatternActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaCheckPatternActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
+        </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.OnboardingActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme">
+        </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.ImportProfileInfoActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.SetPasswordActivity"
@@ -242,6 +280,11 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">
         </activity>
         <activity
+            android:name="com.zoffcc.applications.trifa.NotificationRingtoneSettingsActivity"
+            android:exported="false"
+            android:label="@string/pref_title_ringtone"
+            android:theme="@style/SettingsTheme" />
+        <activity
             android:name="com.zoffcc.applications.trifa.SettingsActivity"
             android:label="@string/title_activity_settings"
             android:theme="@style/SettingsTheme">
@@ -254,6 +297,10 @@
             android:name="com.zoffcc.applications.trifa.MaintenanceActivity"
             android:label="@string/title_activity_maintenance">
         </activity>
+        <activity
+            android:name="com.zoffcc.applications.trifa.NetworkDiagnosticsActivity"
+            android:label="@string/network_diag_title"
+            android:exported="false" />
         <activity
             android:name="com.zoffcc.applications.trifa.ExportActivity"
             android:label="@string/title_activity_export">
@@ -289,6 +336,14 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
 
                 <data android:scheme="tox"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+
+                <data android:scheme="khandaq"/>
             </intent-filter>
         </activity>
 
@@ -393,14 +448,18 @@
         </receiver>
 
         <receiver android:name="com.zoffcc.applications.trifa.WakeupAlarmReceiver" android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.zoffcc.applications.trifa.TOXSERVICE_ALARM">
                 </action>
             </intent-filter>
         </receiver>
 
-        <receiver android:name="com.zoffcc.applications.trifa.MyExternReceiver" android:enabled="true" android:exported="true">
+        <!-- KHANDAQ (security): exported="false". The alarm is delivered via an explicit-component
+             PendingIntent (no external delivery needed); MyExternReceiver has no internal sender and,
+             when exported, let any app broadcast EXTERN_RECV to hold wakelocks + raise a fake
+             full-screen "Incoming Message" + launch the app (battery-drain / spoof vector). -->
+        <receiver android:name="com.zoffcc.applications.trifa.MyExternReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
                 <action android:name="com.zoffcc.applications.trifa.EXTERN_RECV" />
             </intent-filter>
@@ -431,7 +490,7 @@
 
         <provider
             android:name="com.zoffcc.applications.trifa.StdContentProvider"
-            android:authorities="com.zoffcc.applications.trifa.std_fileprovider"
+            android:authorities="${applicationId}.std_fileprovider"
             android:grantUriPermissions="true"
             android:exported="false">
             <meta-data
@@ -441,7 +500,7 @@
 
         <provider
             android:name="com.zoffcc.applications.trifa.Ext2ContentProvider"
-            android:authorities="com.zoffcc.applications.trifa.ext2_provider"
+            android:authorities="${applicationId}.ext2_provider"
             android:grantUriPermissions="true"
             android:exported="false">
             <meta-data
@@ -451,7 +510,7 @@
 
         <provider
             android:name="com.zoffcc.applications.trifa.IOCipherContentProvider"
-            android:authorities="com.zoffcc.applications.trifa.ext1_fileprovider"
+            android:authorities="${applicationId}.ext1_fileprovider"
             android:grantUriPermissions="true"
             android:exported="false">
         </provider>

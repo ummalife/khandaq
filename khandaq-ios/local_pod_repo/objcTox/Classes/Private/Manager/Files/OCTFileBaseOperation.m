@@ -223,7 +223,12 @@ static const CFTimeInterval kMinUpdateEtaInterval = 1.0;
 
     CFTimeInterval deltaTime = time - self.lastUpdateProgressTime;
 
-    if (deltaTime <= kMinUpdateProgressInterval) {
+    // KHANDAQ: throttle intermediate updates, but ALWAYS deliver the final (100%) update. The last
+    // chunk's progress usually arrives right after the previous tick, so the throttle dropped it and
+    // the sender's bar froze just below 100% even though every byte was sent (and the peer already
+    // had the file — "файл ещё не прогружен, а собеседник уже получил").
+    BOOL isFinal = (self.fileSize > 0) && (bytesDone >= self.fileSize);
+    if (deltaTime <= kMinUpdateProgressInterval && ! isFinal) {
         return;
     }
 
@@ -235,7 +240,11 @@ static const CFTimeInterval kMinUpdateEtaInterval = 1.0;
     OCTLogInfo(@"progress %.2f, bytes per second %lld, eta %.0f seconds", self.progress, self.bytesPerSecond, self.eta);
 
     if (self.progressBlock) {
-        self.progressBlock(self);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.progressBlock) {
+                self.progressBlock(self);
+            }
+        });
     }
 }
 
@@ -279,7 +288,11 @@ static const CFTimeInterval kMinUpdateEtaInterval = 1.0;
     }
 
     if (self.etaUpdateBlock) {
-        self.etaUpdateBlock(self);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.etaUpdateBlock) {
+                self.etaUpdateBlock(self);
+            }
+        });
     }
 }
 

@@ -39,7 +39,8 @@
     <!-- emoji values -->
 
     <dimen name="message_entry_padding">0dp</dimen>
-    <dimen name="message_entry_datetime_bottom_padding">10dp</dimen>
+    <dimen name="message_entry_datetime_bottom_padding">16dp</dimen>
+    <dimen name="message_peer_name_bottom_padding">6dp</dimen>
     <dimen name="message_entry_datetime_bottom_padding_small">0dp</dimen>
 
     <!-- Calling Activity -->
@@ -72,5 +73,8 @@
     <dimen name="chat_input_text_size">17sp</dimen>
     <dimen name="chat_input_field_padding_v">6dp</dimen>
     <dimen name="chat_input_field_padding_h">12dp</dimen>
+    <dimen name="list_empty_state_icon_size">88dp</dimen>
+    <dimen name="profile_avatar_size">88dp</dimen>
+    <dimen name="profile_qr_code_size">168dp</dimen>
     <dimen name="chat_input_actions_width">84dp</dimen>
 </resources>

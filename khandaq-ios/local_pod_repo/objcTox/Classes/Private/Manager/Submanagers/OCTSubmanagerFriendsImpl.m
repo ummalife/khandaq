@@ -5,10 +5,16 @@
 #import "OCTSubmanagerFriendsImpl.h"
 #import "OCTLogging.h"
 #import "OCTTox.h"
+#import "OCTTox+Private.h"
 #import "OCTFriend.h"
 #import "OCTFriendRequest.h"
 #import "OCTRealmManager.h"
-#import "Firebase.h"
+#if __has_include(<Firebase/Firebase.h>)
+#import <Firebase/Firebase.h>
+#define OCTHasFirebase 1
+#else
+#define OCTHasFirebase 0
+#endif
 
 @interface OCTSubmanagerFriendsImpl ()
 
@@ -35,6 +41,7 @@ static NSString *OCTShortPublicKeyLabel(NSString *publicKey)
 
 static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
 {
+#if OCTHasFirebase
     if ([FIRApp defaultApp] == nil) {
         return;
     }
@@ -55,6 +62,7 @@ static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
     if (! result) {
         NSLog(@"push URL send failed for friendNumber %d: %@", friendNumber, error);
     }
+#endif
 }
 
 static BOOL OCTIsGenericDefaultFriendName(NSString *name)
@@ -81,13 +89,59 @@ static BOOL OCTIsGenericDefaultFriendName(NSString *name)
 
 static void OCTApplyFriendName(OCTFriend *friend, NSString *name, NSString *publicKey)
 {
+    // KHANDAQ (#97): preserve a user-chosen nickname. Only keep the nickname tracking the friend's
+    // name when the user hasn't set a custom alias (nickname empty, still equal to the previous name,
+    // or still the auto-derived public-key label). This helper runs on friend load/connect/refresh, so
+    // without the guard a restart or reconnect clobbers the alias back to the name.
+    BOOL nicknameTracksName = (friend.nickname.length == 0)
+        || [friend.nickname isEqualToString:friend.name]
+        || [friend.nickname isEqualToString:OCTShortPublicKeyLabel(publicKey)];
+
     friend.name = name ?: @"";
 
-    if (!OCTIsGenericDefaultFriendName(name)) {
-        friend.nickname = name;
-    } else {
-        friend.nickname = OCTShortPublicKeyLabel(publicKey);
+    if (nicknameTracksName) {
+        if (!OCTIsGenericDefaultFriendName(name)) {
+            friend.nickname = name;
+        } else {
+            friend.nickname = OCTShortPublicKeyLabel(publicKey);
+        }
     }
+}
+
+static NSError *OCTFriendAddAlreadySentError(void)
+{
+    return [NSError errorWithDomain:kOCTToxErrorDomain
+                               code:OCTToxErrorFriendAddAlreadySent
+                           userInfo:@{
+                               NSLocalizedDescriptionKey: @"Cannot add friend",
+                               NSLocalizedFailureReasonErrorKey: @"This contact is already in your list or a request was already sent.",
+                           }];
+}
+
+static BOOL OCTIsValidFriendAddAddress(NSString *address, NSError **error)
+{
+    NSString *normalized = [[address stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+
+    if (normalized.length != kOCTToxAddressLength) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorFriendAddBadChecksum
+                                     description:@"Cannot add friend"
+                                   failureReason:@"Address must be exactly 76 hex characters"];
+        }
+        return NO;
+    }
+
+    NSCharacterSet *nonHex = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789ABCDEF"] invertedSet];
+    if ([normalized rangeOfCharacterFromSet:nonHex].location != NSNotFound) {
+        if (error) {
+            *error = [OCTTox createErrorWithCode:OCTToxErrorFriendAddBadChecksum
+                                     description:@"Cannot add friend"
+                                   failureReason:@"Address contains non-hex characters"];
+        }
+        return NO;
+    }
+
+    return YES;
 }
 
 static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFriendNumber friendNumber)
@@ -107,15 +161,31 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 - (BOOL)sendFriendRequestToAddress:(NSString *)address message:(NSString *)message error:(NSError **)error
 {
     NSParameterAssert(address);
-    NSParameterAssert(message);
 
+    if (!OCTIsValidFriendAddAddress(address, error)) {
+        return NO;
+    }
+
+    NSString *normalizedAddress = [[address stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+    NSString *publicKey = [normalizedAddress substringToIndex:kOCTToxPublicKeyLength];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTFriend *existingFriend = [realmManager friendWithPublicKey:publicKey];
+
+    if (existingFriend && existingFriend.connectionStatus != OCTToxConnectionStatusNone) {
+        if (error) {
+            *error = OCTFriendAddAlreadySentError();
+        }
+        return NO;
+    }
+
+    NSString *requestMessage = message.length > 0 ? message : @"Khandaq";
     OCTTox *tox = [self.dataSource managerGetTox];
 
-    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:address message:message error:error];
+    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:normalizedAddress message:requestMessage error:error];
 
     if (friendNumber == kOCTToxFriendNumberFailure) {
         if (error && ((*error).code == OCTToxErrorFriendAddAlreadySent || (*error).code == OCTToxErrorFriendAddSetNewNospam)) {
-            return [self resendFriendRequestToAddress:address message:message error:error];
+            return [self resendFriendRequestToAddress:normalizedAddress message:message error:error];
         }
 
         return NO;
@@ -128,16 +198,20 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 
 - (BOOL)resendFriendRequestToAddress:(NSString *)address message:(NSString *)message error:(NSError **)error
 {
-    if (address.length < kOCTToxPublicKeyLength) {
+    if (!OCTIsValidFriendAddAddress(address, error)) {
         return NO;
     }
 
-    NSString *publicKey = [[address substringToIndex:kOCTToxPublicKeyLength] uppercaseString];
+    NSString *normalizedAddress = [[address stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+    NSString *publicKey = [normalizedAddress substringToIndex:kOCTToxPublicKeyLength];
     OCTTox *tox = [self.dataSource managerGetTox];
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     OCTFriend *existingFriend = [realmManager friendWithPublicKey:publicKey];
 
     if (existingFriend && existingFriend.connectionStatus != OCTToxConnectionStatusNone) {
+        if (error) {
+            *error = OCTFriendAddAlreadySentError();
+        }
         return NO;
     }
 
@@ -160,11 +234,49 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     [self.dataSource managerSaveTox];
 
     NSError *retryError = nil;
-    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:address message:message error:&retryError];
+    NSString *requestMessage = message.length > 0 ? message : @"Khandaq";
+    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:normalizedAddress message:requestMessage error:&retryError];
 
     if (error) {
         *error = retryError;
     }
+
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return NO;
+    }
+
+    [self.dataSource managerSaveTox];
+
+    return [self createFriendWithFriendNumber:friendNumber error:error];
+}
+
+- (BOOL)addFriendByPublicKey:(NSString *)publicKey error:(NSError **)error
+{
+    // KHANDAQ (#15): add an NGC group peer by their 64-hex public key (tox_friend_add_norequest).
+    // Group peers have no full Tox ID, so the classic sendFriendRequestToAddress: path rejects them.
+    NSString *normalizedKey = [[publicKey stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+
+    // Guard the length up front: addFriendWithNoRequestWithPublicKey: asserts on a wrong-length key,
+    // which would crash instead of returning an error.
+    if (normalizedKey.length != kOCTToxPublicKeyLength) {
+        if (error) {
+            *error = OCTFriendAddAlreadySentError();
+        }
+        return NO;
+    }
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTFriend *existingFriend = [realmManager friendWithPublicKey:normalizedKey];
+
+    if (existingFriend) {
+        if (error) {
+            *error = OCTFriendAddAlreadySentError();
+        }
+        return NO;
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxFriendNumber friendNumber = [tox addFriendWithNoRequestWithPublicKey:normalizedKey error:error];
 
     if (friendNumber == kOCTToxFriendNumberFailure) {
         return NO;
@@ -307,6 +419,34 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     [self resyncAllFriendConnectionStatuses];
 }
 
+- (void)refreshConnectionStatuses
+{
+    [self resyncAllFriendConnectionStatuses];
+}
+
+- (OCTFriend *)ensureFriendForFriendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSString *publicKey = [tox publicKeyFromFriendNumber:friendNumber error:nil];
+
+    if (publicKey.length == 0) {
+        return nil;
+    }
+
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+
+    if (friend) {
+        return friend;
+    }
+
+    if (! [self createFriendWithFriendNumber:friendNumber error:nil]) {
+        return nil;
+    }
+
+    return [realmManager friendWithPublicKey:publicKey];
+}
+
 - (void)resyncAllFriendConnectionStatuses
 {
     OCTTox *tox = [self.dataSource managerGetTox];
@@ -352,13 +492,11 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"publicKey == %@", publicKey];
     RLMResults *results = [realmManager objectsWithClass:[OCTFriendRequest class] predicate:predicate];
     if (results.count > 0) {
-        // friendRequest already exists
         return;
     }
 
     results = [realmManager objectsWithClass:[OCTFriend class] predicate:predicate];
     if (results.count > 0) {
-        // friend with such publicKey already exists
         return;
     }
 
@@ -384,13 +522,8 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     }
 
     [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
-        theFriend.name = name;
-
-        if (!OCTIsGenericDefaultFriendName(name)) {
-            theFriend.nickname = name;
-        } else {
-            theFriend.nickname = OCTShortPublicKeyLabel(publicKey);
-        }
+        // KHANDAQ (#97): apply via the shared helper, which preserves a user-chosen nickname.
+        OCTApplyFriendName(theFriend, name, publicKey);
     }];
 }
 
@@ -500,9 +633,11 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
             theFriend.capabilities2 = cap_string;
 
             NSString *token = nil;
+#if OCTHasFirebase
             if ([FIRApp defaultApp] != nil) {
                 token = [FIRMessaging messaging].FCMToken;
             }
+#endif
             if (token.length > 0)
             {
                 OCTSendPushURLToFriend(tox, friendNumber);
@@ -527,52 +662,83 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 - (BOOL)createFriendWithFriendNumber:(OCTToxFriendNumber)friendNumber error:(NSError **)userError
 {
     OCTTox *tox = [self.dataSource managerGetTox];
-    NSError *error;
-
     OCTFriend *friend = [OCTFriend new];
-
     friend.friendNumber = friendNumber;
 
-    friend.publicKey = [tox publicKeyFromFriendNumber:friendNumber error:&error];
-    if ([self checkForError:error andAssignTo:userError]) {
-        return NO;
-    }
+    __block NSError *error = nil;
+    __block BOOL toxReadsSucceeded = YES;
 
-    friend.name = [tox friendNameWithFriendNumber:friendNumber error:&error];
-    if ([self checkForError:error andAssignTo:userError]) {
-        return NO;
-    }
+    [tox performSyncBlockOnToxQueue:^{
+        friend.publicKey = [tox publicKeyFromFriendNumber:friendNumber error:&error];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
 
-    friend.statusMessage = [tox friendStatusMessageWithFriendNumber:friendNumber error:&error];
-    if ([self checkForError:error andAssignTo:userError]) {
-        return NO;
-    }
+        friend.name = [tox friendNameWithFriendNumber:friendNumber error:&error];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
 
-    friend.status = [tox friendStatusWithFriendNumber:friendNumber error:&error];
-    if ([self checkForError:error andAssignTo:userError]) {
-        return NO;
-    }
+        friend.statusMessage = [tox friendStatusMessageWithFriendNumber:friendNumber error:&error];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
 
-    friend.connectionStatus = [tox friendConnectionStatusWithFriendNumber:friendNumber error:&error];
-    if ([self checkForError:error andAssignTo:userError]) {
-        return NO;
-    }
+        friend.status = [tox friendStatusWithFriendNumber:friendNumber error:&error];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
 
-    NSDate *lastSeenOnline = [tox friendGetLastOnlineWithFriendNumber:friendNumber error:&error];
-    friend.lastSeenOnlineInterval = [lastSeenOnline timeIntervalSince1970];
-    if ([self checkForError:error andAssignTo:userError]) {
-        return NO;
-    }
+        friend.connectionStatus = [tox friendConnectionStatusWithFriendNumber:friendNumber error:&error];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
 
-    friend.isTyping = [tox isFriendTypingWithFriendNumber:friendNumber error:&error];
-    if ([self checkForError:error andAssignTo:userError]) {
+        NSDate *lastSeenOnline = [tox friendGetLastOnlineWithFriendNumber:friendNumber error:&error];
+        friend.lastSeenOnlineInterval = [lastSeenOnline timeIntervalSince1970];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
+
+        friend.isTyping = [tox isFriendTypingWithFriendNumber:friendNumber error:&error];
+        if ([self checkForError:error andAssignTo:userError]) {
+            toxReadsSucceeded = NO;
+            return;
+        }
+    }];
+
+    if (! toxReadsSucceeded) {
         return NO;
     }
 
     friend.isConnected = (friend.connectionStatus != OCTToxConnectionStatusNone);
     OCTApplyFriendName(friend, friend.name, friend.publicKey);
 
-    [[self.dataSource managerGetRealmManager] addObject:friend];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTFriend *existingFriend = [realmManager friendWithPublicKey:friend.publicKey];
+
+    if (existingFriend) {
+        [realmManager updateObject:existingFriend withBlock:^(OCTFriend *theFriend) {
+            theFriend.friendNumber = friend.friendNumber;
+            theFriend.name = friend.name;
+            theFriend.nickname = friend.nickname;
+            theFriend.statusMessage = friend.statusMessage;
+            theFriend.status = friend.status;
+            theFriend.connectionStatus = friend.connectionStatus;
+            theFriend.isConnected = friend.isConnected;
+            theFriend.lastSeenOnlineInterval = friend.lastSeenOnlineInterval;
+            theFriend.isTyping = friend.isTyping;
+        }];
+        friend = existingFriend;
+    } else {
+        [realmManager addObject:friend];
+    }
 
     if (friend.isConnected) {
         OCTSendPushURLToFriend(tox, friendNumber);

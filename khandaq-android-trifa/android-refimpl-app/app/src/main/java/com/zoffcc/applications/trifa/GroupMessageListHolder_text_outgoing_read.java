@@ -95,6 +95,13 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
     {
         message_ = m;
 
+        if (!GroupMessageLayoutHelper.isRenderableMessage(context, m))
+        {
+            GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container,
+                    GroupMessageLayoutHelper.hiddenRowLayout());
+            return;
+        }
+
         String message__text = m.text;
 
         if (m.private_message == 1)
@@ -174,15 +181,6 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         layout_message_container.setOnClickListener(onclick_listener);
         layout_message_container.setOnLongClickListener(onlongclick_listener);
 
-        textView.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                layout_message_container.performClick();
-            }
-        });
-
         textView.setOnLongClickListener(new View.OnLongClickListener()
         {
             @Override
@@ -193,140 +191,37 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
             }
         });
 
+        // textView.setText("#" + m.id + ":" + message__text);
         textView.setCustomRegex(TOXURL_PATTERN);
-        textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,
-                                 AutoLinkMode.MODE_MENTION, AutoLinkMode.MODE_CUSTOM);
 
-        if (com.vanniktech.emoji.EmojiUtils.isOnlyEmojis(message__text))
-        {
-            // text consits only of emojis -> increase size
-            textView.setEmojiSize((int) dp2px(MESSAGE_EMOJI_ONLY_EMOJI_SIZE[PREF__global_font_size]));
-        }
-        else
-        {
-            textView.setEmojiSize((int) dp2px(MESSAGE_EMOJI_SIZE[PREF__global_font_size]));
-        }
-
-        if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
-        {
-            textView.setAutoLinkText(message__text);
-        }
-        else
-        {
-            textView.setAutoLinkTextHighlight(message__text, group_search_messages_text);
-        }
-
-        date_time.setText(long_date_time_format(m.sent_timestamp));
-
-        if (!m.read)
-        {
-            // not yet read
-            imageView.setImageResource(R.drawable.circle_red);
-        }
-        else
-        {
-            // msg read by other party
-            imageView.setImageResource(R.drawable.circle_green);
-        }
-
-
-        // textView.setHashtagModeColor(ContextCompat.getColor(this.context, android.R.color.holo_blue_dark));
-        // textView.setPhoneModeColor(ContextCompat.getColor(this.context, android.R.color.holo_red_dark));
-        // textView.setCustomModeColor(ContextCompat.getColor(this.context, android.R.color.holo_orange_dark));
-        // textView.setUrlModeColor(ContextCompat.getColor(this.context, android.R.color.holo_green_dark));
-        // textView.setMentionModeColor(ContextCompat.getColor(this.context, android.R.color.holo_green_light));
-        // textView.setEmailModeColor(ContextCompat.getColor(this.context, android.R.color.holo_blue_bright));
-        // textView.setSelectedStateColor(ContextCompat.getColor(this.context, android.R.color.holo_blue_dark));
-        // textView.enableUnderLine();
-
-        textView.setAutoLinkOnClickListener(new AutoLinkOnClickListener()
-        {
-            @Override
-            public void onAutoLinkTextClick(AutoLinkMode autoLinkMode, String matchedText)
-            {
-                if (autoLinkMode == AutoLinkMode.MODE_URL)
-                {
-                    showDialog_url(context, "open URL?", matchedText.replaceFirst("^\\s", ""));
-                }
-                else if (autoLinkMode == AutoLinkMode.MODE_EMAIL)
-                {
-                    showDialog_email(context, "send Email?", matchedText.replaceFirst("^\\s", ""));
-                }
-                else if (autoLinkMode == AutoLinkMode.MODE_MENTION)
-                {
-                    showDialog_url(context, "open URL?", "https://twitter.com/" +
-                                                         matchedText.replaceFirst("^\\s", "").replaceFirst("^@", ""));
-                }
-                else if (autoLinkMode == AutoLinkMode.MODE_HASHTAG)
-                {
-                    showDialog_url(context, "open URL?", "https://twitter.com/hashtag/" +
-                                                         matchedText.replaceFirst("^\\s", "").replaceFirst("^#", ""));
-                }
-                else if (autoLinkMode == AutoLinkMode.MODE_CUSTOM) // tox: urls
-                {
-                    showDialog_tox(context, context.getString(R.string.add_id_dialog_title), matchedText.replaceFirst("^\\s", ""));
-                }
-            }
-        });
+        final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(message__text);
+        GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
+                group_search_messages_text);
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
+        img_avatar.setVisibility(View.GONE);
 
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        date_time.setVisibility(View.GONE);
-        int my_position = this.getAdapterPosition();
-        if (my_position != RecyclerView.NO_POSITION)
+        final int layoutPosition = this.getAdapterPosition();
+        if (MainActivity.group_message_list_fragment != null
+                && MainActivity.group_message_list_fragment.adapter != null)
         {
-            try
-            {
-                if (MainActivity.group_message_list_fragment.adapter != null)
-                {
-                    if (my_position < 1)
-                    {
-                        date_time.setVisibility(View.VISIBLE);
-                    }
-                    else
-                    {
-                        final GroupMessagelistAdapter.DateTime_in_out peer_cur = MainActivity.group_message_list_fragment.adapter.getDateTime(
-                                my_position);
-                        final GroupMessagelistAdapter.DateTime_in_out peer_prev = MainActivity.group_message_list_fragment.adapter.getDateTime(
-                                my_position - 1);
-                        if ((peer_cur == null) || (peer_prev == null))
-                        {
-                            date_time.setVisibility(View.VISIBLE);
-                        }
-                        // else if (peer_cur.direction != peer_prev.direction)
-                        // {
-                        //     date_time.setVisibility(View.VISIBLE);
-                        // }
-                        // else if (!peer_cur.pk.equals(peer_prev.pk))
-                        // {
-                        //     date_time.setVisibility(View.VISIBLE);
-                        // }
-                        else
-                        {
-                            // if message is within 20 seconds of previous message and same direction and same peer
-                            // then do not show timestamp
-                            if (peer_cur.timestamp > peer_prev.timestamp + (MESSAGES_TIMEDELTA_NO_TIMESTAMP_MS))
-                            {
-                                date_time.setVisibility(View.VISIBLE);
-                            }
-                        }
+            ChatDateSeparatorHelper.bindInlineDateHeader(itemView, layoutPosition,
+                    MainActivity.group_message_list_fragment.adapter);
+        }
 
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-            }
-        }
-        else
-        {
-        }
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
-        // --------- timestamp (show only if different from previous message) ---------
+        final GroupMessageLayoutHelper.RowLayout rowLayout =
+                GroupMessageLayoutHelper.layoutFor(m, layoutPosition, context);
+        GroupMessageLayoutHelper.applyRowVisibility(itemView, layout_message_container, rowLayout);
+        GroupMessageLayoutHelper.applyTopMargin(itemView, rowLayout);
+        img_avatar.setVisibility(View.GONE);
+
+        ChatBubbleUiHelper.bind_text_message_bubble(text_block_group, textView, true, parsedGroup.bodyText,
+                PREF__global_font_size, parsedGroup.reply != null, false);
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                HelperGeneric.format_group_message_time(m, true), true);
+        ChatBubbleUiHelper.bind_outgoing_delivery_status(imageView, m);
+        ChatBubbleUiHelper.bind_reply_quote(text_block_group, parsedGroup.reply,
+                meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));
 
         HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
     }

@@ -356,8 +356,7 @@
     <string name="pref_title_allow_push_server_ntfy">ntfy.sh Server zulassen</string>
     <string name="pref_title_allow_open_encrypted_file_via_intent">Öffnen von Dateien aus verschlüsseltem Speicher</string>
     <string name="pref_title_allow_enable_ngc_features">NGC - Neue Gruppenchats</string>
-    <string name="pref_description_enable_ngc_features">!! Experimentell !!
-\nDies funktioniert NICHT vollständig!!</string>
+    <string name="pref_description_enable_ngc_features">Neue Gruppenchats (NGC) mit verbesserten Nachrichten, Sprache und Video.</string>
     <string name="join_public_activity_name">Öffentliche Gruppe beitreten</string>
     <string name="group_message_list_activity_name">Gruppe</string>
     <string name="title_activity_groupinfo">Gruppeninfo</string>
@@ -373,6 +372,14 @@
     <string name="join_public_group_activity_warning">Warnung:
 \nDer Beitritt zu einer öffentlichen Gruppe über die Gruppen-ID funktioniert noch nicht zuverlässig!!</string>
     <string name="join_public_group_failed">Der Beitritt zur öffentlichen Gruppe ist fehlgeschlagen</string>
+    <string name="join_public_group_failed_not_ready">Der Messenger verbindet sich noch. Warten Sie einige Sekunden und versuchen Sie es erneut.</string>
+    <string name="join_public_group_failed_bad_id">Ungültige Gruppen-ID. Kopieren Sie alle 64 Hex-Zeichen.</string>
+    <string name="join_public_group_failed_network">Die Gruppe konnte im Netzwerk nicht erreicht werden. Prüfen Sie die Internetverbindung.</string>
+    <string name="join_public_group_failed_password">Diese Gruppe erfordert ein Passwort.</string>
+    <string name="join_public_group_error_no_id">Gruppen-ID eingeben</string>
+    <string name="join_public_group_error_illegal_chars">Die Gruppen-ID enthält ungültige Zeichen. Nur A–F und 0–9 sind erlaubt.</string>
+    <string name="join_public_group_error_length">Die Gruppen-ID muss 64 Hexadezimalzeichen lang sein.</string>
+
     <string name="add_public_group_success">Sie haben eine öffentliche Gruppe erstellt</string>
     <string name="invite_friend_success">Sie haben eine Freundschaftsanfrage erhalten</string>
     <string name="FriendListHolder_toggle_notification_silent_message">Möchten Sie die Benachrichtigungsstummschaltung für diesen Freund umschalten\?</string>
@@ -385,6 +392,12 @@
     <string name="add_public_group_failed">Fehler beim Erstellen einer öffentlichen Gruppe</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">Dateiübertragung abbrechen</string>
     <string name="add_private_group_failed">Erstellen einer privaten Gruppe fehlgeschlagen</string>
+    <string name="group_password_placeholder">Gruppenpasswort (nur private Gruppen)</string>
+    <string name="group_password_set">Gruppenpasswort setzen</string>
+    <string name="group_topic_lock">Themensperre (nur Gründer)</string>
+    <string name="group_privacy_set">Privatsphäre setzen</string>
+    <string name="group_create_private_password">Optionales Gruppenpasswort</string>
+
     <string name="MessageListHolder_file_incoming_cancel_ft_title">Dateiübertragung abbrechen</string>
     <string name="add_group_activity_help">Erstellen Sie eine neue private Gruppe (nur auf Einladung) mit einem bestimmten Gruppennamen.</string>
     <string name="join_public_group_activity_help">Tritt einer öffentlichen Gruppe mit der angegebenen Gruppen-ID bei.</string>
@@ -420,4 +433,51 @@
     <string name="layout___ipaddress">IP:</string>
     <string name="MainActivity_manually_logged_out_true">aktivieren</string>
     <string name="MainActivity_manually_logged_out_false">Ausloggen</string>
+    <string name="group_file_too_large">Datei ist für diese Gruppe zu groß.</string>
+    <string name="group_file_prepare_failed">Datei konnte nicht zum Senden vorbereitet werden.</string>
+    <string name="group_video_join_title">Gruppenvideo beitreten?</string>
+    <string name="group_video_join_message">Video und Audio an alle in dieser Gruppe senden?</string>
+    <string name="group_video_join_confirm">Ja, Video starten</string>
+    <string name="group_video_join_decline">Nein</string>
+    <string name="group_send_voice_confirm_title">Sprachnachricht senden?</string>
+    <string name="group_send_voice_confirm_message">Diese Sprachnachricht an die Gruppe senden?</string>
+    <string name="group_peer_unknown">Unbekannt</string>
+    <string name="group_incoming_message_error">Eingehende Gruppennachricht konnte nicht verarbeitet werden.</string>
+    <string name="group_file_send_failed">Datei konnte nicht an die Gruppe gesendet werden.</string>
+    <string name="group_image_shrink_failed">Bild konnte nicht zum Senden vorbereitet werden.</string>
+    <string name="group_incoming_file_error">Eingehende Gruppendatei konnte nicht verarbeitet werden.</string>
+    <string name="chat_file_too_large">Datei ist zu groß.</string>
+    <string name="chat_incoming_file_too_large">Eingehende Datei ist zu groß.</string>
+    <string name="chat_opening_file_failed">Datei konnte nicht geöffnet werden.</string>
+    <string name="add_group_failed_empty_name">Geben Sie einen Gruppennamen ein.</string>
+    <string name="maintenance_exporting">Export wird durchgeführt…</string>
+    <string name="maintenance_export_ready">Export abgeschlossen</string>
+    <string name="maintenance_export_failed">Export fehlgeschlagen</string>
+    <string name="set_password_setup_failed">Passwort konnte nicht gesetzt werden. Versuchen Sie es erneut.</string>
+    <string name="power_charging_connected">Ladegerät angeschlossen</string>
+    <string name="power_charging_disconnected">Ladegerät getrennt</string>
+    <string name="maintenance_report_bug_title">Report a bug</string>
+    <string name="maintenance_report_bug_message">This will open a web browser on GitHub so you can report a bug or issue.</string>
+    <string name="maintenance_report_bug_confirm">Yes, report a bug</string>
+    <string name="maintenance_export_encrypted_files_title">Export encrypted files</string>
+    <string name="maintenance_export_encrypted_files_message">Received encrypted files will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
+    <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:
+
+%1$s</string>
+    <string name="maintenance_export_all_files_title">Export all encrypted files</string>
+    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
+
+%1$s</string>
+    <string name="maintenance_export_confirm">Export</string>
+    <string name="maintenance_show_passwords_title">Show passwords</string>
+    <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>
+    <string name="maintenance_show_passwords_confirm">Yes, show passwords in clear text</string>
+    <string name="profile_nospam_regenerated">New random anti-spam value generated</string>
+    <string name="import_toxsave_ok_title">Profile imported</string>
+    <string name="import_toxsave_ok_message">Import complete. The app will restart now.</string>
+    <string name="files_exported_to">Files exported to:
+%1$s</string>
 </resources>

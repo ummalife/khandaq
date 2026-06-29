@@ -11,6 +11,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     let gcmMessageIDKey = "gcm.message_id"
     var coordinator: AppCoordinator!
+    private var pendingOpenURL: URL?
     let callManager = CallManager()
     lazy var providerDelegate: ProviderDelegate = ProviderDelegate(callManager: self.callManager)
     var backgroundTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
@@ -44,9 +45,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
            let runcoord = coordinator?.activeCoordinator as? RunningCoordinator,
            let session = runcoord.activeSessionCoordinator,
            let toxManager = session.toxManager {
+            toxManager.friends.refreshConnectionStatuses()
             toxManager.chats.sendOwnPush()
             toxManager.chats.broadcastOwnPushURLToConnectedFriends()
+            QaCommandHandler.consumePendingCommands(coordinator: session)
         }
+
+        coordinator?.processPendingShareIfNeeded()
 
         gps_was_stopped_by_forground = true
         let gps = LocationManager.shared
@@ -60,25 +65,48 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         os_log("AppDelegate:applicationWillEnterForeground:DidEnterBackground:2:END")
     }
 
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
-        window = UIWindow(frame:UIScreen.main.bounds)
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        coordinator?.processPendingShareIfNeeded()
+    }
 
-        print("didFinishLaunchingWithOptions")
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
+        window = UIWindow(frame: UIScreen.main.bounds)
+        window?.backgroundColor = ThemeAppearance.placeholderBackgroundColor
+
+        let launchPlaceholder = UIStoryboard(name: "LaunchPlaceholderBoard", bundle: Bundle.main)
+            .instantiateViewController(withIdentifier: "LaunchPlaceholderController")
+        window?.rootViewController = launchPlaceholder
+        window?.makeKeyAndVisible()
+
+        // iOS keeps the launch screen until this method returns — defer heavy init
+        // so the placeholder (logo + spinner) appears immediately.
+        DispatchQueue.main.async { [weak self] in
+            self?.finishApplicationLaunch(application, launchOptions: launchOptions)
+        }
+
+        return true
+    }
+
+    private func finishApplicationLaunch(_ application: UIApplication,
+                                         launchOptions: [UIApplicationLaunchOptionsKey: Any]?) {
+        LaunchRecovery.prepareForLaunch()
+        log("didFinishLaunchingWithOptions")
         os_log("AppDelegate:didFinishLaunchingWithOptions:start")
 
         configureLoggingStuff()
 
-        // Must run before any coordinator / KhandaqPushManager / FIRMessaging usage.
-        FirebaseApp.configure()
-        Messaging.messaging().delegate = self
-
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
             // Speeding up animations for UI tests.
-            window!.layer.speed = 1000
+            window?.layer.speed = 1000
         }
 
         coordinator = AppCoordinator(window: window!)
         coordinator.startWithOptions(nil)
+
+        if let url = pendingOpenURL {
+            pendingOpenURL = nil
+            coordinator.handleInboxURL(url)
+        }
 
         if let notification = launchOptions?[UIApplicationLaunchOptionsKey.localNotification] as? UILocalNotification {
             coordinator.handleLocalNotification(notification)
@@ -88,44 +116,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             coordinator.handleNotificationUserInfo(remoteNotification)
         }
 
-        window?.backgroundColor = UIColor.white
-        window?.makeKeyAndVisible()
-
-        if #available(iOS 10.0, *) {
-          UNUserNotificationCenter.current().delegate = self
-
-          let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
-          UNUserNotificationCenter.current().requestAuthorization(
-            options: authOptions,
-            completionHandler: { _, _ in }
-          )
-        } else {
-          let settings: UIUserNotificationSettings =
-            UIUserNotificationSettings(types: [.alert, .badge, .sound], categories: nil)
-          application.registerUserNotificationSettings(settings)
+        // Firebase + push registration block the main thread; defer until login UI is up.
+        DispatchQueue.main.async { [weak self] in
+            self?.configureFirebaseAndNotifications(application)
         }
-
-        application.registerForRemoteNotifications()
         // HINT: try to go online every 47 minutes
         let bgfetchInterval: TimeInterval = 47 * 60
-        application.setMinimumBackgroundFetchInterval(bgfetchInterval);
+        application.setMinimumBackgroundFetchInterval(bgfetchInterval)
         os_log("AppDelegate:didFinishLaunchingWithOptions:end")
-
-        return true
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        print("WillTerminate")
+        log("WillTerminate")
         os_log("AppDelegate:applicationWillTerminate")
     }
 
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
-        print("DidReceiveMemoryWarning")
+        log("DidReceiveMemoryWarning")
         os_log("AppDelegate:applicationDidReceiveMemoryWarning")
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        print("DidEnterBackground")
+        log("DidEnterBackground")
         os_log("AppDelegate:applicationDidEnterBackground:start")
 
         if ToxOptionsRestartScheduler.isRestartInProgress {
@@ -171,7 +183,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         gps_was_stopped_by_forground = false
         let gps = LocationManager.shared
-        if gps.isHasAccess() {
+        // KHANDAQ (#14): the background location keepalive must only run when the user explicitly
+        // enabled "Longer Background Mode" (same gate as sendOwnPush above). Otherwise location started
+        // on every background once permission was ever granted and the status-bar location indicator
+        // stayed on / never turned off.
+        if UserDefaultsManager().LongerbgMode == true && gps.isHasAccess() {
             AppDelegate.lastStartGpsTS = Date().millisecondsSince1970
             gps.startMonitoring()
             os_log("AppDelegate:applicationDidEnterBackground:gps:START")
@@ -215,14 +231,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
 
-        print("performFetchWithCompletionHandler:start")
+        log("performFetchWithCompletionHandler:start")
         os_log("AppDelegate:performFetchWithCompletionHandler:start")
-        // HINT: we have 30 seconds here. use 25 of those 30 seconds to be on the safe side
-        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
-            completionHandler(UIBackgroundFetchResult.newData)
-            print("performFetchWithCompletionHandler:end")
-            os_log("AppDelegate:performFetchWithCompletionHandler:end")
+
+        if let runcoord = coordinator?.activeCoordinator as? RunningCoordinator,
+           let session = runcoord.activeSessionCoordinator {
+            NetworkDiagnosticsLog.log("background_fetch", detail: "rebootstrap")
+            ConnectionQualityMonitor.shared.onBootstrapStarted()
+            session.toxManager.bootstrap.rebootstrapOnNetworkChange()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                completionHandler(.newData)
+                log("performFetchWithCompletionHandler:end")
+                os_log("AppDelegate:performFetchWithCompletionHandler:end")
+            }
+            return
         }
+
+        completionHandler(.noData)
     }
 
     func application(_ application: UIApplication, didReceive notification: UILocalNotification) {
@@ -230,15 +255,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any]) -> Bool {
-        coordinator.handleInboxURL(url)
-
+        handleIncomingURL(url)
         return true
     }
 
     func application(_ application: UIApplication, open url: URL, sourceApplication: String?, annotation: Any) -> Bool {
-        coordinator.handleInboxURL(url)
-
+        handleIncomingURL(url)
         return true
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        guard let coordinator = coordinator else {
+            pendingOpenURL = url
+            return
+        }
+        coordinator.handleInboxURL(url)
     }
 
   // Device received notification (legacy callback)
@@ -246,7 +277,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   func application(_ application: UIApplication,
                    didReceiveRemoteNotification userInfo: [AnyHashable: Any]) {
     if let messageID = userInfo[gcmMessageIDKey] {
-      print("Message ID: \(messageID)")
+      log("Message ID: \(messageID)")
     }
   }
 
@@ -258,7 +289,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult)
                      -> Void) {
     if let messageID = userInfo[gcmMessageIDKey] {
-      print("Message ID: \(messageID)")
+      log("Message ID: \(messageID)")
     }
 
     os_log("AppDelegate:didReceiveRemoteNotification:start")
@@ -273,12 +304,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   //
   func application(_ application: UIApplication,
                    didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    print("Unable to register for remote notifications: \(error.localizedDescription)")
+    log("Unable to register for remote notifications: \(error.localizedDescription)")
   }
 
   func application(_ application: UIApplication,
                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    print("APNs token retrieved: \(deviceToken)")
+    log("APNs token retrieved: \(deviceToken)")
     os_log("AppDelegate:didRegisterForRemoteNotificationsWithDeviceToken")
   }
 }
@@ -296,7 +327,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     let userInfo = notification.request.content.userInfo
 
     if let messageID = userInfo[gcmMessageIDKey] {
-      print("Message ID: \(messageID)")
+      log("Message ID: \(messageID)")
     }
     if UIApplication.shared.applicationState == .active {
       completionHandler([.sound])
@@ -316,7 +347,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     let userInfo = response.notification.request.content.userInfo
 
     if let messageID = userInfo[gcmMessageIDKey] {
-      print("Message ID: \(messageID)")
+      log("Message ID: \(messageID)")
     }
     coordinator.handleNotificationUserInfo(userInfo)
     completionHandler()
@@ -329,11 +360,41 @@ private extension AppDelegate {
         DDLog.add(DDASLLogger.sharedInstance())
         // DDLog.add(DDTTYLogger.sharedInstance())
     }
+
+    func configureFirebaseAndNotifications(_ application: UIApplication) {
+        guard FirebaseApp.app() == nil else {
+            return
+        }
+
+        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            log("Firebase: GoogleService-Info.plist missing, skipping")
+            return
+        }
+
+        FirebaseApp.configure()
+        Messaging.messaging().delegate = self
+
+        if #available(iOS 10.0, *) {
+            UNUserNotificationCenter.current().delegate = self
+
+            let authOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
+            UNUserNotificationCenter.current().requestAuthorization(
+                options: authOptions,
+                completionHandler: { _, _ in }
+            )
+        } else {
+            let settings: UIUserNotificationSettings =
+                UIUserNotificationSettings(types: [.alert, .badge, .sound], categories: nil)
+            application.registerUserNotificationSettings(settings)
+        }
+
+        application.registerForRemoteNotifications()
+    }
 }
 
 extension AppDelegate: MessagingDelegate {
   func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-    print("Firebase registration token: \(String(describing: fcmToken))")
+    log("Firebase registration token: \(String(describing: fcmToken))")
 
     let dataDict: [String: String] = ["token": fcmToken ?? ""]
     NotificationCenter.default.post(

@@ -6,6 +6,7 @@ import Foundation
 
 private struct Constants {
     static let ActiveAccountDataService = "org.khandaq.messenger.KeychainManager.ActiveAccountDataService"
+    static let FallbackStoragePrefix = "org.khandaq.messenger.KeychainManager.fallback."
 
     static let toxPasswordForActiveAccount = "toxPasswordForActiveAccount"
     static let failedPinAttemptsNumber = "failedPinAttemptsNumber"
@@ -45,11 +46,17 @@ private extension KeychainManager {
             return nil
         }
 
-        guard let number = NSKeyedUnarchiver.unarchiveObject(with: data) as? NSNumber else {
-            return nil
+        if data.count == MemoryLayout<Int>.size {
+            return data.withUnsafeBytes { rawBuffer in
+                rawBuffer.load(as: Int.self)
+            }
         }
 
-        return number.intValue
+        if let number = NSKeyedUnarchiver.unarchiveObject(with: data) as? NSNumber {
+            return number.intValue
+        }
+
+        return nil
     }
 
     func setInt(_ value: Int?, forKey key: String) {
@@ -58,9 +65,8 @@ private extension KeychainManager {
             return
         }
 
-        let number = NSNumber(value: value)
-
-        let data = NSKeyedArchiver.archivedData(withRootObject: number)
+        var bytes = value
+        let data = Data(bytes: &bytes, count: MemoryLayout<Int>.size)
         setData(data, forKey: key)
     }
 
@@ -100,7 +106,18 @@ private extension KeychainManager {
         setData(data, forKey: key)
     }
 
+    func fallbackStorageKey(_ key: String) -> String {
+        return Constants.FallbackStoragePrefix + key
+    }
+
     func getDataForKey(_ key: String) -> Data? {
+        if let data = readKeychainData(forKey: key) {
+            return data
+        }
+        return UserDefaults.standard.data(forKey: fallbackStorageKey(key))
+    }
+
+    func readKeychainData(forKey key: String) -> Data? {
         var query = genericQueryWithKey(key)
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         query[kSecReturnData as String] = kCFBooleanTrue
@@ -127,46 +144,55 @@ private extension KeychainManager {
         return data
     }
 
+    func writeFallbackData(_ newData: Data?, forKey key: String) {
+        let fallbackKey = fallbackStorageKey(key)
+        if let newData = newData {
+            UserDefaults.standard.set(newData, forKey: fallbackKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: fallbackKey)
+        }
+    }
+
     func setData(_ newData: Data?, forKey key: String) {
-        let oldData = getDataForKey(key)
+        let oldKeychainData = readKeychainData(forKey: key)
+        var keychainOk = true
 
-        switch (oldData, newData) {
+        switch (oldKeychainData, newData) {
             case (.some(_), .some(let data)):
-                // Update
                 let query = genericQueryWithKey(key)
-
                 var attributesToUpdate = [String : AnyObject]()
                 attributesToUpdate[kSecValueData as String] = data as AnyObject?
-
                 let status = SecItemUpdate(query as CFDictionary, attributesToUpdate as CFDictionary)
-                guard status == noErr else {
+                if status != noErr {
                     log("Error when updating keychain data for key \(key), status \(status)")
-                    return
+                    keychainOk = false
                 }
 
             case (.some(_), .none):
-                // Delete
                 let query = genericQueryWithKey(key)
                 let status = SecItemDelete(query as CFDictionary)
-                guard status == noErr else {
-                    log("Error when updating keychain data for key \(key), status \(status)")
-                    return
+                if status != noErr {
+                    log("Error when deleting keychain data for key \(key), status \(status)")
+                    keychainOk = false
                 }
 
             case (.none, .some(let data)):
-                // Add
                 var query = genericQueryWithKey(key)
                 query[kSecValueData as String] = data as AnyObject?
-
                 let status = SecItemAdd(query as CFDictionary, nil)
-                guard status == noErr else {
+                if status != noErr {
                     log("Error when setting keychain data for key \(key), status \(status)")
-                    return
+                    keychainOk = false
                 }
 
             case (.none, .none):
-                // Nothing to do here, no changes
                 break
+        }
+
+        if keychainOk {
+            writeFallbackData(nil, forKey: key)
+        } else {
+            writeFallbackData(newData, forKey: key)
         }
     }
 

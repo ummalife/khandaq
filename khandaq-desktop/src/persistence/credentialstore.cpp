@@ -66,7 +66,10 @@ bool CredentialStore::save(const QString& profile, const QString& password)
     const std::wstring targetW = targetName(profile).toStdWString();
     std::vector<wchar_t> target(targetW.begin(), targetW.end());
     target.push_back(L'\0');
+    // KHANDAQ: UserName must be NUL-terminated — the 7-char "account" copy had no terminator, so
+    // CredWriteW read past the buffer for the user name.
     std::vector<wchar_t> user(L"account", L"account" + 7);
+    user.push_back(L'\0');
     std::vector<wchar_t> secret(password.toStdWString().begin(), password.toStdWString().end());
 
     CREDENTIALW cred = {};

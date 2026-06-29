@@ -32,7 +32,11 @@ class OCTSubmanagerCallsMock: NSObject, OCTSubmanagerCalls {
     func videoFeed() -> UIView? {
         return nil
     }
-    
+
+    func receivedVideoFrameCount() -> UInt {
+        return 0
+    }
+
     func getVideoCallPreview(_ completionBlock: @escaping (CALayer?) -> Void) {
         // nop
     }

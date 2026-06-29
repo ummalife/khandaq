@@ -19,4 +19,9 @@
  */
 @property NSData *genericSettingsData;
 
+/**
+ * When NO, local group system lines (join/leave/create) are not inserted into chat history.
+ */
+@property BOOL groupShowSystemMessages;
+
 @end

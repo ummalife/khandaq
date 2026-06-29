@@ -18,6 +18,7 @@
 #include "mono_time.h"
 #include "network.h"
 #include "ping.h"
+#include "shared_key_cache.h"
 #include "state.h"
 #include "util.h"
 
@@ -43,6 +44,13 @@
 /** Number of get node requests to send to quickly find close nodes. */
 #define MAX_BOOTSTRAP_TIMES 5
 
+// TODO(sudden6): find out why we need multiple callbacks and if we really need 32
+#define DHT_FRIEND_MAX_LOCKS 32
+
+/* Settings for the shared key cache */
+#define MAX_KEYS_PER_SLOT 4
+#define KEYS_TIMEOUT 600
+
 typedef struct DHT_Friend_Callback {
     dht_ip_cb *ip_callback;
     void *data;
@@ -61,7 +69,8 @@ struct DHT_Friend {
     /* Symmetric NAT hole punching stuff. */
     NAT         nat;
 
-    uint16_t lock_count;
+    /* Each set bit represents one installed callback */
+    uint32_t lock_flags;
     DHT_Friend_Callback callbacks[DHT_FRIEND_MAX_LOCKS];
 
     Node_format to_bootstrap[MAX_SENT_NODES];
@@ -70,6 +79,8 @@ struct DHT_Friend {
 
 static const DHT_Friend empty_dht_friend = {{0}};
 const Node_format empty_node_format = {{0}};
+
+static_assert(sizeof (empty_dht_friend.lock_flags) * 8 == DHT_FRIEND_MAX_LOCKS, "Bitfield size and number of locks don't match");
 
 typedef struct Cryptopacket_Handler {
     cryptopacket_handler_cb *function;
@@ -101,8 +112,8 @@ struct DHT {
     uint32_t       loaded_num_nodes;
     unsigned int   loaded_nodes_index;
 
-    Shared_Keys shared_keys_recv;
-    Shared_Keys shared_keys_sent;
+    Shared_Key_Cache *shared_keys_recv;
+    Shared_Key_Cache *shared_keys_sent;
 
     struct Ping   *ping;
     Ping_Array    *dht_ping_array;
@@ -250,73 +261,21 @@ unsigned int bit_by_bit_cmp(const uint8_t *pk1, const uint8_t *pk2)
 }
 
 /**
- * Shared key generations are costly, it is therefore smart to store commonly used
- * ones so that they can be re-used later without being computed again.
- *
- * If a shared key is already in shared_keys, copy it to shared_key.
- * Otherwise generate it into shared_key and copy it to shared_keys
- */
-void get_shared_key(const Mono_Time *mono_time, Shared_Keys *shared_keys, uint8_t *shared_key,
-                    const uint8_t *secret_key, const uint8_t *public_key)
-{
-    uint32_t num = -1;
-    uint32_t curr = 0;
-
-    for (uint32_t i = 0; i < MAX_KEYS_PER_SLOT; ++i) {
-        const int index = public_key[30] * MAX_KEYS_PER_SLOT + i;
-        Shared_Key *const key = &shared_keys->keys[index];
-
-        if (key->stored) {
-            if (pk_equal(public_key, key->public_key)) {
-                memcpy(shared_key, key->shared_key, CRYPTO_SHARED_KEY_SIZE);
-                ++key->times_requested;
-                key->time_last_requested = mono_time_get(mono_time);
-                return;
-            }
-
-            if (num != 0) {
-                if (mono_time_is_timeout(mono_time, key->time_last_requested, KEYS_TIMEOUT)) {
-                    num = 0;
-                    curr = index;
-                } else if (num > key->times_requested) {
-                    num = key->times_requested;
-                    curr = index;
-                }
-            }
-        } else if (num != 0) {
-            num = 0;
-            curr = index;
-        }
-    }
-
-    encrypt_precompute(public_key, secret_key, shared_key);
-
-    if (num != UINT32_MAX) {
-        Shared_Key *const key = &shared_keys->keys[curr];
-        key->stored = true;
-        key->times_requested = 1;
-        memcpy(key->public_key, public_key, CRYPTO_PUBLIC_KEY_SIZE);
-        memcpy(key->shared_key, shared_key, CRYPTO_SHARED_KEY_SIZE);
-        key->time_last_requested = mono_time_get(mono_time);
-    }
-}
-
-/**
  * Copy shared_key to encrypt/decrypt DHT packet from public_key into shared_key
  * for packets that we receive.
  */
-void dht_get_shared_key_recv(DHT *dht, uint8_t *shared_key, const uint8_t *public_key)
+const uint8_t *dht_get_shared_key_recv(DHT *dht, const uint8_t *public_key)
 {
-    get_shared_key(dht->mono_time, &dht->shared_keys_recv, shared_key, dht->self_secret_key, public_key);
+    return shared_key_cache_lookup(dht->shared_keys_recv, public_key);
 }
 
 /**
  * Copy shared_key to encrypt/decrypt DHT packet from public_key into shared_key
  * for packets that we send.
  */
-void dht_get_shared_key_sent(DHT *dht, uint8_t *shared_key, const uint8_t *public_key)
+const uint8_t *dht_get_shared_key_sent(DHT *dht, const uint8_t *public_key)
 {
-    get_shared_key(dht->mono_time, &dht->shared_keys_sent, shared_key, dht->self_secret_key, public_key);
+    return shared_key_cache_lookup(dht->shared_keys_sent, public_key);
 }
 
 #define CRYPTO_SIZE (1 + CRYPTO_PUBLIC_KEY_SIZE * 2 + CRYPTO_NONCE_SIZE)
@@ -648,8 +607,8 @@ int pack_nodes(const Logger *logger, uint8_t *data, uint16_t length, const Node_
 
 #ifndef NDEBUG
         const uint32_t increment = ipp_size + CRYPTO_PUBLIC_KEY_SIZE;
-#endif
         assert(increment == PACKED_NODE_SIZE_IP4 || increment == PACKED_NODE_SIZE_IP6);
+#endif
     }
 
     return packed_length;
@@ -687,8 +646,8 @@ int unpack_nodes(Node_format *nodes, uint16_t max_num_nodes, uint16_t *processed
 
 #ifndef NDEBUG
         const uint32_t increment = ipp_size + CRYPTO_PUBLIC_KEY_SIZE;
-#endif
         assert(increment == PACKED_NODE_SIZE_IP4 || increment == PACKED_NODE_SIZE_IP6);
+#endif
     }
 
     if (processed_data_len != nullptr) {
@@ -856,23 +815,30 @@ static bool client_or_ip_port_in_list(const Logger *log, const Mono_Time *mono_t
 bool add_to_list(Node_format *nodes_list, uint32_t length, const uint8_t *pk, const IP_Port *ip_port,
                  const uint8_t *cmp_pk)
 {
+    uint8_t pk_cur[CRYPTO_PUBLIC_KEY_SIZE];
+    memcpy(pk_cur, pk, CRYPTO_PUBLIC_KEY_SIZE);
+    IP_Port ip_port_cur = *ip_port;
+
+    bool inserted = false;
+
     for (uint32_t i = 0; i < length; ++i) {
-        if (id_closest(cmp_pk, nodes_list[i].public_key, pk) == 2) {
+        Node_format *node = &nodes_list[i];
+
+        if (id_closest(cmp_pk, node->public_key, pk_cur) == 2) {
             uint8_t pk_bak[CRYPTO_PUBLIC_KEY_SIZE];
-            memcpy(pk_bak, nodes_list[i].public_key, CRYPTO_PUBLIC_KEY_SIZE);
-            const IP_Port ip_port_bak = nodes_list[i].ip_port;
-            memcpy(nodes_list[i].public_key, pk, CRYPTO_PUBLIC_KEY_SIZE);
-            nodes_list[i].ip_port = *ip_port;
+            memcpy(pk_bak, node->public_key, CRYPTO_PUBLIC_KEY_SIZE);
+            const IP_Port ip_port_bak = node->ip_port;
 
-            if (i != length - 1) {
-                add_to_list(nodes_list, length, pk_bak, &ip_port_bak, cmp_pk);
-            }
+            memcpy(node->public_key, pk_cur, CRYPTO_PUBLIC_KEY_SIZE);
+            node->ip_port = ip_port_cur;
 
-            return true;
+            memcpy(pk_cur, pk_bak, CRYPTO_PUBLIC_KEY_SIZE);
+            ip_port_cur = ip_port_bak;
+            inserted = true;
         }
     }
 
-    return false;
+    return inserted;
 }
 
 /**
@@ -1057,8 +1023,7 @@ static bool send_announce_ping(DHT *dht, const uint8_t *public_key, const IP_Por
                                             public_key, CRYPTO_PUBLIC_KEY_SIZE);
     memcpy(plain + CRYPTO_PUBLIC_KEY_SIZE, &ping_id, sizeof(ping_id));
 
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-    dht_get_shared_key_sent(dht, shared_key, public_key);
+    const uint8_t *shared_key = dht_get_shared_key_sent(dht, public_key);
 
     uint8_t request[1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + sizeof(plain) + CRYPTO_MAC_SIZE];
 
@@ -1086,8 +1051,7 @@ static int handle_data_search_response(void *object, const IP_Port *source,
 
     VLA(uint8_t, plain, plain_len);
     const uint8_t *public_key = packet + 1;
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-    dht_get_shared_key_recv(dht, shared_key, public_key);
+    const uint8_t *shared_key = dht_get_shared_key_recv(dht, public_key);
 
     if (decrypt_data_symmetric(shared_key,
                                packet + 1 + CRYPTO_PUBLIC_KEY_SIZE,
@@ -1419,8 +1383,9 @@ uint32_t addto_lists(DHT *dht, const IP_Port *ip_port, const uint8_t *public_key
         return used;
     }
 
-    for (uint32_t i = 0; i < friend_foundip->lock_count; ++i) {
-        if (friend_foundip->callbacks[i].ip_callback != nullptr) {
+    for (uint32_t i = 0; i < DHT_FRIEND_MAX_LOCKS; ++i) {
+        const bool has_lock = (friend_foundip->lock_flags & (UINT32_C(1) << i)) > 0;
+        if (has_lock && friend_foundip->callbacks[i].ip_callback != nullptr) {
             friend_foundip->callbacks[i].ip_callback(friend_foundip->callbacks[i].data,
                     friend_foundip->callbacks[i].number, &ipp_copy);
         }
@@ -1515,14 +1480,11 @@ bool dht_getnodes(DHT *dht, const IP_Port *ip_port, const uint8_t *public_key, c
     memcpy(plain, client_id, CRYPTO_PUBLIC_KEY_SIZE);
     memcpy(plain + CRYPTO_PUBLIC_KEY_SIZE, &ping_id, sizeof(ping_id));
 
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-    dht_get_shared_key_sent(dht, shared_key, public_key);
+    const uint8_t *shared_key = dht_get_shared_key_sent(dht, public_key);
 
     const int len = dht_create_packet(dht->rng,
                                       dht->self_public_key, shared_key, NET_PACKET_GET_NODES,
                                       plain, sizeof(plain), data, sizeof(data));
-
-    crypto_memzero(shared_key, sizeof(shared_key));
 
     if (len != sizeof(data)) {
         LOGGER_ERROR(dht->log, "getnodes packet encryption failed");
@@ -1598,9 +1560,7 @@ static int handle_getnodes(void *object, const IP_Port *source, const uint8_t *p
     }
 
     uint8_t plain[CRYPTO_NODE_SIZE];
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-
-    dht_get_shared_key_recv(dht, shared_key, packet + 1);
+    const uint8_t *shared_key = dht_get_shared_key_recv(dht, packet + 1);
     const int len = decrypt_data_symmetric(
                         shared_key,
                         packet + 1 + CRYPTO_PUBLIC_KEY_SIZE,
@@ -1609,15 +1569,12 @@ static int handle_getnodes(void *object, const IP_Port *source, const uint8_t *p
                         plain);
 
     if (len != CRYPTO_NODE_SIZE) {
-        crypto_memzero(shared_key, sizeof(shared_key));
         return 1;
     }
 
     sendnodes_ipv6(dht, source, packet + 1, plain, plain + CRYPTO_PUBLIC_KEY_SIZE, sizeof(uint64_t), shared_key);
 
     ping_add(dht->ping, packet + 1, source);
-
-    crypto_memzero(shared_key, sizeof(shared_key));
 
     return 0;
 }
@@ -1663,16 +1620,13 @@ static bool handle_sendnodes_core(void *object, const IP_Port *source, const uin
     }
 
     VLA(uint8_t, plain, 1 + data_size + sizeof(uint64_t));
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-    dht_get_shared_key_sent(dht, shared_key, packet + 1);
+    const uint8_t *shared_key = dht_get_shared_key_sent(dht, packet + 1);
     const int len = decrypt_data_symmetric(
                         shared_key,
                         packet + 1 + CRYPTO_PUBLIC_KEY_SIZE,
                         packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE,
                         1 + data_size + sizeof(uint64_t) + CRYPTO_MAC_SIZE,
                         plain);
-
-    crypto_memzero(shared_key, sizeof(shared_key));
 
     if ((unsigned int)len != SIZEOF_VLA(plain)) {
         return false;
@@ -1745,34 +1699,74 @@ static int handle_sendnodes_ipv6(void *object, const IP_Port *source, const uint
 /*----------------------------------------------------------------------------------*/
 /*------------------------END of packet handling functions--------------------------*/
 
-non_null(1) nullable(2, 3, 5)
-static void dht_friend_lock(DHT_Friend *const dht_friend, dht_ip_cb *ip_callback,
-                            void *data, int32_t number, uint16_t *lock_count)
+non_null(1) nullable(2, 3)
+static uint32_t dht_friend_lock(DHT_Friend *const dht_friend, dht_ip_cb *ip_callback,
+                            void *data, int32_t number)
 {
-    const uint16_t lock_num = dht_friend->lock_count;
-    ++dht_friend->lock_count;
+    // find first free slot
+    uint8_t lock_num;
+    uint32_t lock_token = 0;
+    for (lock_num = 0; lock_num < DHT_FRIEND_MAX_LOCKS; ++lock_num) {
+        lock_token = UINT32_C(1) << lock_num;
+        if ((dht_friend->lock_flags & lock_token) == 0) {
+            break;
+        }
+    }
+
+    // One of the conditions would be enough, but static analyzers don't get that
+    if (lock_token == 0 || lock_num == DHT_FRIEND_MAX_LOCKS) {
+        return 0;
+    }
+
+    // Claim that slot
+    dht_friend->lock_flags |= lock_token;
+
     dht_friend->callbacks[lock_num].ip_callback = ip_callback;
     dht_friend->callbacks[lock_num].data = data;
     dht_friend->callbacks[lock_num].number = number;
 
-    if (lock_count != nullptr) {
-        *lock_count = lock_num + 1;
+    return lock_token;
+}
+
+non_null()
+static void dht_friend_unlock(DHT_Friend *const dht_friend, uint32_t lock_token)
+{
+    // If this triggers, there was a double free
+    assert((lock_token & dht_friend->lock_flags) > 0);
+
+    // find used slot
+    uint8_t lock_num;
+    for (lock_num = 0; lock_num < DHT_FRIEND_MAX_LOCKS; ++lock_num) {
+        if (((UINT32_C(1) << lock_num) & lock_token) > 0) {
+            break;
+        }
     }
+
+    if (lock_num == DHT_FRIEND_MAX_LOCKS) {
+        // Gracefully handle double unlock
+        return;
+    }
+
+    // Clear the slot
+    dht_friend->lock_flags &= ~lock_token;
+
+    dht_friend->callbacks[lock_num].ip_callback = nullptr;
+    dht_friend->callbacks[lock_num].data = nullptr;
+    dht_friend->callbacks[lock_num].number = 0;
 }
 
 int dht_addfriend(DHT *dht, const uint8_t *public_key, dht_ip_cb *ip_callback,
-                  void *data, int32_t number, uint16_t *lock_count)
+                  void *data, int32_t number, uint32_t *lock_token)
 {
     const uint32_t friend_num = index_of_friend_pk(dht->friends_list, dht->num_friends, public_key);
 
     if (friend_num != UINT32_MAX) { /* Is friend already in DHT? */
         DHT_Friend *const dht_friend = &dht->friends_list[friend_num];
+        const uint32_t tmp_lock_token = dht_friend_lock(dht_friend, ip_callback, data, number);
 
-        if (dht_friend->lock_count == DHT_FRIEND_MAX_LOCKS) {
+        if (tmp_lock_token == 0) {
             return -1;
         }
-
-        dht_friend_lock(dht_friend, ip_callback, data, number, lock_count);
 
         return 0;
     }
@@ -1791,7 +1785,8 @@ int dht_addfriend(DHT *dht, const uint8_t *public_key, dht_ip_cb *ip_callback,
     dht_friend->nat.nat_ping_id = random_u64(dht->rng);
     ++dht->num_friends;
 
-    dht_friend_lock(dht_friend, ip_callback, data, number, lock_count);
+    *lock_token = dht_friend_lock(dht_friend, ip_callback, data, number);
+    assert(*lock_token != 0); // Friend was newly allocated
 
     dht_friend->num_to_bootstrap = get_close_nodes(dht, dht_friend->public_key, dht_friend->to_bootstrap, net_family_unspec(),
                                    true, false);
@@ -1799,7 +1794,7 @@ int dht_addfriend(DHT *dht, const uint8_t *public_key, dht_ip_cb *ip_callback,
     return 0;
 }
 
-int dht_delfriend(DHT *dht, const uint8_t *public_key, uint16_t lock_count)
+int dht_delfriend(DHT *dht, const uint8_t *public_key, uint32_t lock_token)
 {
     const uint32_t friend_num = index_of_friend_pk(dht->friends_list, dht->num_friends, public_key);
 
@@ -1808,13 +1803,9 @@ int dht_delfriend(DHT *dht, const uint8_t *public_key, uint16_t lock_count)
     }
 
     DHT_Friend *const dht_friend = &dht->friends_list[friend_num];
-    --dht_friend->lock_count;
-
-    if (dht_friend->lock_count > 0 && lock_count > 0) { /* DHT friend is still in use.*/
-        --lock_count;
-        dht_friend->callbacks[lock_count].ip_callback = nullptr;
-        dht_friend->callbacks[lock_count].data = nullptr;
-        dht_friend->callbacks[lock_count].number = 0;
+    dht_friend_unlock(dht_friend, lock_token);
+    if (dht_friend->lock_flags > 0) {
+        /* DHT friend is still in use.*/
         return 0;
     }
 
@@ -1855,7 +1846,7 @@ int dht_getfriendip(const DHT *dht, const uint8_t *public_key, IP_Port *ip_port)
     const DHT_Friend *const frnd = &dht->friends_list[friend_index];
     const uint32_t client_index = index_of_client_pk(frnd->client_list, MAX_FRIEND_CLIENTS, public_key);
 
-    if (client_index == -1) {
+    if (client_index == UINT32_MAX) {
         return 0;
     }
 
@@ -2206,7 +2197,7 @@ static uint32_t foreach_ip_port(const DHT *dht, const DHT_Friend *dht_friend,
 
             /* If ip is not zero and node is good. */
             if (!ip_isset(&assoc->ret_ip_port.ip)
-                    && !mono_time_is_timeout(dht->mono_time, assoc->ret_timestamp, BAD_NODE_TIMEOUT)) {
+                    || mono_time_is_timeout(dht->mono_time, assoc->ret_timestamp, BAD_NODE_TIMEOUT)) {
                 continue;
             }
 
@@ -2752,6 +2743,15 @@ DHT *new_dht(const Logger *log, const Random *rng, const Network *ns, Mono_Time 
 
     crypto_new_keypair(rng, dht->self_public_key, dht->self_secret_key);
 
+    dht->shared_keys_recv = shared_key_cache_new(mono_time, dht->self_secret_key, KEYS_TIMEOUT, MAX_KEYS_PER_SLOT);
+    dht->shared_keys_sent = shared_key_cache_new(mono_time, dht->self_secret_key, KEYS_TIMEOUT, MAX_KEYS_PER_SLOT);
+
+    if (dht->shared_keys_recv == nullptr || dht->shared_keys_sent == nullptr) {
+        kill_dht(dht);
+        return nullptr;
+    }
+
+
     dht->dht_ping_array = ping_array_new(DHT_PING_ARRAY_SIZE, PING_TIMEOUT);
 
     if (dht->dht_ping_array == nullptr) {
@@ -2765,7 +2765,8 @@ DHT *new_dht(const Logger *log, const Random *rng, const Network *ns, Mono_Time 
 
         crypto_new_keypair(rng, random_public_key_bytes, random_secret_key_bytes);
 
-        if (dht_addfriend(dht, random_public_key_bytes, nullptr, nullptr, 0, nullptr) != 0) {
+        uint32_t token; // We don't intend to delete these ever, but need to pass the token
+        if (dht_addfriend(dht, random_public_key_bytes, nullptr, nullptr, 0, &token) != 0) {
             kill_dht(dht);
             return nullptr;
         }
@@ -2813,12 +2814,12 @@ void kill_dht(DHT *dht)
     networking_registerhandler(dht->net, NET_PACKET_LAN_DISCOVERY, nullptr, nullptr);
     cryptopacket_registerhandler(dht, CRYPTO_PACKET_NAT_PING, nullptr, nullptr);
 
+    shared_key_cache_free(dht->shared_keys_recv);
+    shared_key_cache_free(dht->shared_keys_sent);
     ping_array_kill(dht->dht_ping_array);
     ping_kill(dht->ping);
     free(dht->friends_list);
     free(dht->loaded_nodes_list);
-    crypto_memzero(&dht->shared_keys_recv, sizeof(dht->shared_keys_recv));
-    crypto_memzero(&dht->shared_keys_sent, sizeof(dht->shared_keys_sent));
     crypto_memzero(dht->self_secret_key, sizeof(dht->self_secret_key));
     free(dht);
 }

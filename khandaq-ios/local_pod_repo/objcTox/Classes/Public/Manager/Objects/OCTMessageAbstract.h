@@ -40,9 +40,60 @@
 @property (nullable) NSString *senderUniqueIdentifier;
 
 /**
+ * NGC sender peer id. Zero for outgoing group messages; non-zero for incoming group messages.
+ */
+@property int32_t groupSenderPeerId;
+
+/**
+ * YES for messages inserted via NGC history sync (suppresses notification noise).
+ */
+@property BOOL groupHistorySync;
+
+/**
+ * YES for local system lines (join/leave/create) shown centered in the group timeline.
+ */
+@property BOOL groupSystemMessage;
+
+/**
+ * YES for outgoing group text queued while disconnected; flushed when the group connects.
+ */
+@property BOOL groupPendingSend;
+
+/**
+ * YES for NGC private messages between peers (hidden from main group timeline).
+ */
+@property BOOL groupPrivateMessage;
+
+/**
+ * Counterparty peer id for private group messages.
+ */
+@property int32_t groupPrivatePeerId;
+
+/**
+ * KHANDAQ (#55): stable LOWERCASE pubkey hex of the counterparty (the OTHER peer in a private
+ * thread). The thread/identity is keyed by this so it survives volatile NGC peer-id reuse. nil for
+ * legacy rows or when unresolved (group offline) — callers then fall back to groupPrivatePeerId.
+ */
+@property (nullable) NSString *groupPrivatePeerPubkey;
+
+/**
+ * KHANDAQ (#60): the message's STABLE original timestamp, used ONLY for cross-path duplicate
+ * detection — kept independent of `dateInterval`, which is clamped to "not in the future" for
+ * display/unread so a clock-skewed sender's future-dated synced message can't keep a read chat
+ * marked unread. 0 = unset (legacy rows / live messages fall back to dateInterval for dedup).
+ */
+@property NSTimeInterval groupSyncDedupTimestamp;
+
+/**
  * The chat message message belongs to.
  */
 @property (nonnull) NSString *chatUniqueIdentifier;
+
+/**
+ * KHANDAQ: YES for a text message that is the caption of the immediately-preceding file message.
+ * Local-only display hint (Telegram-style merged media+caption); not transmitted over Tox.
+ */
+@property BOOL isCaption;
 
 /**
  * Message has one of the following properties.

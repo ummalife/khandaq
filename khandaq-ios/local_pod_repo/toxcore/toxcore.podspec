@@ -9,7 +9,7 @@
 
 Pod::Spec.new do |s|
   s.name             = "toxcore"
-  s.version          = "0.2.18"
+  s.version          = "0.2.19"
   s.summary          = "Cocoapods wrapper for toxcore"
   s.homepage         = "https://github.com/Zoxcore/toxcore"
   s.license          = 'GPLv3'
@@ -29,11 +29,13 @@ Pod::Spec.new do |s|
   # Preserve the layout of headers in the toxcore directory
   s.header_mappings_dir = 'toxcore'
 
-  s.source_files = 'toxcore/toxcore/*.{m,h}', 'toxcore/toxencryptsave/*.{m,h}', 'toxcore/toxav/*.{m,h}', 'toxcore/toxcore/events/*.{m,h}'
+  s.source_files = 'toxcore/toxcore/*.{m,h}', 'toxcore/toxencryptsave/*.{m,h}', 'toxcore/toxav/*.{m,h}', 'toxcore/toxcore/events/*.{m,h}', 'toxcore/toxutil/*.{m,h}'
+  s.dependency 'cmp', '~> 20.0.0'
 
   # s.dependency 'libopus-patched-config', '1.1'
   s.dependency 'libopus-static', '1.3.1'
   s.dependency 'libsodium', '~> 1.0.12'
+  s.frameworks = 'VideoToolbox', 'CoreMedia', 'CoreVideo'
   # s.dependency 'msgpack-c'
 
   s.ios.vendored_frameworks = 'ios/vpx.framework'

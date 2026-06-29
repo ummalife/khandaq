@@ -7,135 +7,147 @@
     android:orientation="vertical"
     tools:context="com.zoffcc.applications.trifa.MessageListActivity">
 
+    <!-- KHANDAQ: single-row chat header (Figma): back(nav) + avatar + name/status + call icons +
+         filter + search. Layout-only restructure — all ids/onClick preserved; search is now an
+         expandable icon (iconifiedByDefault). -->
     <androidx.appcompat.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:app="http://schemas.android.com/apk/res-auto"
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
-
-        <TextView
-            android:layout_width="10dp"
-            android:layout_height="match_parent"
-            android:background="@null"
-            android:text="" />
-
-        <com.zoffcc.applications.trifa.CustomSpinner
-            android:id="@+id/spinner_filter_msgs"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:contentDescription="@string/chat_filter_spinner_description"
-            android:layout_marginLeft="0dp"
-            android:paddingLeft="0dp" />
-
-        <androidx.appcompat.widget.SearchView
-            android:id="@+id/search_view_messages"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:focusable="false"
-            app:iconifiedByDefault="false"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-    </androidx.appcompat.widget.Toolbar>
-
-    <LinearLayout
-        android:id="@+id/ml_container_001"
-        android:layout_width="match_parent"
-        android:layout_height="55dp"
-        android:orientation="horizontal">
+        app:contentInsetStartWithNavigation="0dp"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar">
 
         <LinearLayout
-            android:id="@+id/ml_header_profile_tap"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:contentDescription="@string/message_list_open_friend_profile"
-            android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <de.hdodenhof.circleimageview.CircleImageView
-                android:id="@+id/ml_avatar"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="4dip"
-                android:layout_marginRight="4dip"
-                android:src="@drawable/circle_red"
-                android:visibility="gone" />
-
-            <ImageView
-                android:id="@+id/ml_icon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="6dip"
-                android:layout_marginRight="1dip"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/circle_red" />
-
-            <ImageView
-                android:id="@+id/ml_status_icon"
-                android:layout_width="12dp"
-                android:layout_height="12dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="1dip"
-                android:layout_marginRight="6dip"
-                android:padding="2dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/circle_green" />
-
-            <TextView
-                android:id="@+id/ml_maintext"
+            <LinearLayout
+                android:id="@+id/ml_header_profile_tap"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_gravity="center_vertical"
                 android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:clickable="true"
+                android:contentDescription="@string/message_list_open_friend_profile"
+                android:focusable="true"
                 android:gravity="center_vertical"
-                android:paddingStart="4dp"
-                android:paddingEnd="10dp"
-                android:text="@string/layout___name"
-                android:textColor="@color/md_black_1000"
-                android:textSize="15sp" />
+                android:orientation="horizontal">
+
+                <de.hdodenhof.circleimageview.CircleImageView
+                    android:id="@+id/ml_avatar"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginLeft="0dip"
+                    android:layout_marginRight="4dip"
+                    android:src="@drawable/circle_red"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/ml_icon"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/ml_status_icon"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp">
+
+                    <TextView
+                        android:id="@+id/ml_maintext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/layout___name"
+                        android:textColor="@color/tg_chat_header_title"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/ml_presence_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text=""
+                        android:textColor="@color/tg_chat_header_subtitle"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/ml_phone_icon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:onClick="start_audio_call_to_friend"
+                android:padding="7dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/circle_orange" />
+
+            <!-- video call moved to the ⋮ overflow (Figma); kept for refs, hidden in the row -->
+            <ImageButton
+                android:id="@+id/ml_video_icon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="2dp"
+                android:layout_marginEnd="2dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:onClick="start_call_to_friend"
+                android:padding="7dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/circle_orange"
+                android:visibility="gone" />
+
+            <!-- search opens from the ⋮ overflow; fills the row when revealed -->
+            <androidx.appcompat.widget.SearchView
+                android:id="@+id/search_view_messages"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:focusable="false"
+                android:visibility="gone"
+                app:iconifiedByDefault="false" />
+
+            <!-- filter driven from the ⋮ overflow; kept for its selection logic, hidden in the row -->
+            <com.zoffcc.applications.trifa.CustomSpinner
+                android:id="@+id/spinner_filter_msgs"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="center_vertical"
+                android:contentDescription="@string/chat_filter_spinner_description"
+                android:layout_marginLeft="0dp"
+                android:paddingLeft="0dp"
+                android:visibility="gone" />
 
         </LinearLayout>
-
-        <ImageButton
-            android:id="@+id/ml_phone_icon"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="center_vertical"
-            android:layout_margin="15dp"
-            android:layout_weight="0"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:onClick="start_audio_call_to_friend"
-            android:padding="7dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/circle_orange" />
-
-        <ImageButton
-            android:id="@+id/ml_video_icon"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="center_vertical"
-            android:layout_margin="7dp"
-            android:layout_weight="0"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:onClick="start_call_to_friend"
-            android:padding="7dp"
-            android:scaleType="centerInside"
-            android:src="@drawable/circle_orange" />
-
-
-    </LinearLayout>
+    </androidx.appcompat.widget.Toolbar>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -150,36 +162,6 @@
             android:layout_weight="1"
             tools:layout="@layout/message_list_layout" />
 
-        <LinearLayout
-            android:id="@+id/audio_rec_popup_container"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_gravity="center"
-            android:gravity="center_vertical"
-            android:layout_margin="10dp"
-            android:background="@drawable/rounded_red_dark_bg"
-            android:visibility="gone"
-            android:orientation="vertical">
-            <ImageButton
-                android:id="@+id/audio_rec_popup_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="100dp"
-                android:background="@drawable/rounded_red_dark_bg"
-                android:scaleType="fitCenter"
-                app:srcCompat="@drawable/baseline_keyboard_voice_24"
-                tools:ignore="ContentDescription" />
-            <TextView
-                android:id="@+id/audio_rec_popup_time"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="30dp"
-                android:gravity="center"
-                android:textSize="35sp"
-                android:text="1:20"
-                android:textColor="#E0E0E0"/>
-        </LinearLayout>
-
     </FrameLayout>
 
     <LinearLayout
@@ -187,7 +169,8 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_weight="0"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/ml_friend_typing"
@@ -202,7 +185,9 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <LinearLayout
+    <include layout="@layout/chat_reply_preview_bar" />
+
+    <FrameLayout
         android:id="@+id/emoji_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -212,12 +197,17 @@
         android:layout_marginBottom="@dimen/chat_input_bar_margin_bottom"
         android:layout_weight="0"
         android:background="@drawable/bg_chat_input_bar"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
         android:paddingStart="@dimen/chat_input_bar_padding_h"
         android:paddingTop="@dimen/chat_input_bar_padding_v"
         android:paddingEnd="@dimen/chat_input_bar_padding_h"
         android:paddingBottom="@dimen/chat_input_bar_padding_v">
+
+        <LinearLayout
+            android:id="@+id/emoji_bar_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
         <ImageButton
             android:id="@+id/insert_emoji"
@@ -229,21 +219,29 @@
             android:padding="@dimen/chat_input_icon_padding"
             android:scaleType="fitCenter"
             app:srcCompat="@drawable/i_emoji_google_category_people"
+            app:tint="@color/tg_chat_input_icon"
             tools:ignore="ContentDescription" />
 
-        <com.vanniktech.emoji.EmojiEditText
-            android:id="@+id/ml_new_message"
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
             android:layout_weight="1"
-            android:background="@drawable/bg_chat_message_field"
+            android:background="@drawable/bg_chat_message_field">
+
+        <com.vanniktech.emoji.EmojiEditText
+            android:id="@+id/ml_new_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:background="@android:color/transparent"
+            android:backgroundTint="@null"
             android:cursorVisible="true"
             android:ellipsize="end"
             android:gravity="center_vertical"
             android:imeOptions="flagNoPersonalizedLearning|actionSend"
             android:includeFontPadding="false"
-            android:inputType="textMultiLine"
+            android:inputType="textCapSentences|textMultiLine"
             android:maxLines="5"
             android:paddingStart="@dimen/chat_input_field_padding_h"
             android:paddingTop="@dimen/chat_input_field_padding_v"
@@ -251,44 +249,42 @@
             android:paddingBottom="@dimen/chat_input_field_padding_v"
             android:singleLine="false"
             android:text=""
-            android:textColor="@color/chat_input_text"
-            android:textColorHint="@color/gray"
+            android:textColor="@color/tg_chat_input_text"
+            android:textColorHint="@color/tg_chat_input_hint"
             android:textSize="@dimen/chat_input_text_size" />
 
-        <LinearLayout
-            android:layout_width="@dimen/chat_input_actions_width"
-            android:layout_height="wrap_content"
+        </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/ml_button_01"
+            android:layout_width="@dimen/chat_input_icon_size"
+            android:layout_height="@dimen/chat_input_icon_size"
             android:layout_gravity="center_vertical"
-            android:orientation="horizontal">
+            android:layout_margin="@dimen/chat_input_icon_margin"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:padding="@dimen/chat_input_icon_padding"
+            android:scaleType="fitCenter"
+            app:tint="@color/tg_chat_input_icon"
+            tools:ignore="ContentDescription" />
 
-            <ImageButton
-                android:id="@+id/ml_button_01"
-                android:layout_width="@dimen/chat_input_icon_size"
-                android:layout_height="@dimen/chat_input_icon_size"
-                android:layout_gravity="center_vertical"
-                android:layout_margin="@dimen/chat_input_icon_margin"
-                android:layout_weight="0"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:onClick="send_message_onclick"
-                android:padding="@dimen/chat_input_icon_padding"
-                android:scaleType="fitCenter"
-                android:src="@android:drawable/ic_menu_send" />
+        <ImageButton
+            android:id="@+id/ml_button_recaudio"
+            android:layout_width="@dimen/chat_input_icon_size"
+            android:layout_height="@dimen/chat_input_icon_size"
+            android:layout_gravity="center_vertical"
+            android:layout_margin="@dimen/chat_input_icon_margin"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="@dimen/chat_input_icon_padding"
+            android:scaleType="fitCenter"
+            app:tint="@color/tg_chat_input_icon"
+            android:src="@drawable/baseline_keyboard_voice_24" />
 
-            <ImageButton
-                android:id="@+id/ml_button_recaudio"
-                android:layout_width="@dimen/chat_input_icon_size"
-                android:layout_height="@dimen/chat_input_icon_size"
-                android:layout_gravity="center_vertical"
-                android:layout_margin="@dimen/chat_input_icon_margin"
-                android:layout_weight="0"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="@dimen/chat_input_icon_padding"
-                android:scaleType="fitCenter"
-                android:src="@drawable/baseline_keyboard_voice_24" />
         </LinearLayout>
 
-    </LinearLayout>
+        <include layout="@layout/chat_voice_recording_bar" />
+
+    </FrameLayout>
 
 </LinearLayout>
 

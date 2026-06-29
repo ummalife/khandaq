@@ -9,9 +9,9 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -37,6 +37,21 @@
                 android:src="@mipmap/ic_launcher_round"
                 app:civ_border_color="#40000000"
                 app:civ_border_width="2dp" />
+
+            <!-- KHANDAQ (#56): open the 1:1 chat from the contact profile (parity with iOS). -->
+            <Button
+                android:id="@+id/fi_message_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginLeft="15dp"
+                android:layout_marginRight="15dp"
+                android:layout_marginBottom="15dp"
+                android:drawableStart="@android:drawable/ic_dialog_email"
+                android:drawablePadding="8dp"
+                android:paddingLeft="20dp"
+                android:paddingRight="20dp"
+                android:text="@string/friend_info_send_message" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -116,9 +131,11 @@
 
 
             <LinearLayout
+                android:id="@+id/fi_ipaddr_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:visibility="gone">
 
                 <TextView
                     android:id="@+id/fi_ipaddr_text_header"
@@ -324,35 +341,43 @@
                 android:textStyle="bold"
                 android:typeface="monospace" />
 
-            <TextView
+            <LinearLayout
+                android:id="@+id/fi_message_stats_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="start"
-                android:layout_marginLeft="20dp"
-                android:layout_weight="0"
-                android:paddingLeft="4dp"
-                android:paddingRight="2dp"
-                android:paddingBottom="15dp"
-                android:text="@string/layout___friend_message_stats"
-                android:textAlignment="textStart"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/friend_num_msgs_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="20dp"
-                android:layout_marginRight="20dp"
-                android:fontFamily="monospace"
-                android:gravity="center_horizontal"
-                android:paddingTop="12dp"
-                android:paddingBottom="15dp"
-                android:text="Messages: ..."
-                android:textIsSelectable="true"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:typeface="monospace" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="start"
+                    android:layout_marginLeft="20dp"
+                    android:layout_weight="0"
+                    android:paddingLeft="4dp"
+                    android:paddingRight="2dp"
+                    android:paddingBottom="15dp"
+                    android:text="@string/layout___friend_message_stats"
+                    android:textAlignment="textStart"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/friend_num_msgs_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="20dp"
+                    android:layout_marginRight="20dp"
+                    android:fontFamily="monospace"
+                    android:gravity="center_horizontal"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="15dp"
+                    android:text="Messages: ..."
+                    android:textIsSelectable="true"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:typeface="monospace" />
+
+            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"

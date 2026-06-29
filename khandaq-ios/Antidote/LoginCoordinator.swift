@@ -47,7 +47,9 @@ extension LoginCoordinator: TopCoordinatorProtocol {
     func startWithOptions(_ options: CoordinatorOptions?) {
         let profileNames = ProfileManager().allProfileNames
 
-        let controller: UIViewController = (profileNames.count > 0) ? createFormController() : createChoiceController()
+        // KHANDAQ design (Figma): first launch (no profile yet) opens the intro walkthrough; existing
+        // users go straight to the login form.
+        let controller: UIViewController = (profileNames.count > 0) ? createFormController() : createWalkthroughController()
 
         navigationController.pushViewController(controller, animated: false)
         window.rootViewController = navigationController
@@ -103,6 +105,27 @@ extension LoginCoordinator: LoginFormControllerDelegate {
         showImportProfileController()
     }
 
+    func loginFormControllerDeleteProfile(_ controller: LoginFormController, profileName: String) {
+        do {
+            try ProfileManager().deleteProfileWithName(profileName)
+        }
+        catch let error as NSError {
+            handleErrorWithType(.deleteProfile, error: error)
+            return
+        }
+
+        // Clear the remembered active profile if it was the one we just deleted, then rebuild the
+        // login screen with the updated list (or the walkthrough when no profiles remain).
+        let userDefaults = UserDefaultsManager()
+        if userDefaults.lastActiveProfile == profileName {
+            userDefaults.lastActiveProfile = nil
+        }
+
+        let profileNames = ProfileManager().allProfileNames
+        let newController: UIViewController = (profileNames.count > 0) ? createFormController() : createWalkthroughController()
+        navigationController.setViewControllers([newController], animated: false)
+    }
+
     func loginFormController(_ controller: LoginFormController, isProfileEncrypted profile: String) -> Bool {
         return isProfileEncrypted(profile)
     }
@@ -114,6 +137,16 @@ extension LoginCoordinator: LoginChoiceControllerDelegate {
     }
 
     func loginChoiceControllerImportProfile(_ controller: LoginChoiceController) {
+        showImportProfileController()
+    }
+}
+
+extension LoginCoordinator: WalkthroughControllerDelegate {
+    func walkthroughControllerCreateAccount(_ controller: WalkthroughController) {
+        showCreateAccountController()
+    }
+
+    func walkthroughControllerImportProfile(_ controller: WalkthroughController) {
         showImportProfileController()
     }
 }
@@ -169,6 +202,13 @@ private extension LoginCoordinator {
         return controller
     }
 
+    func createWalkthroughController() -> WalkthroughController {
+        let controller = WalkthroughController(theme: theme)
+        controller.delegate = self
+
+        return controller
+    }
+
     func showCreateAccountController() {
         let coordinator = LoginCreateAccountCoordinator(theme: theme,
                                                         navigationController: navigationController,
@@ -180,12 +220,8 @@ private extension LoginCoordinator {
     }
 
     func showImportProfileController() {
-        let controller = TextViewController(
-                resourceName: "import-profile",
-                backgroundColor: theme.colorForType(.LoginBackground),
-                titleColor: theme.colorForType(.NormalText),
-                textColor: theme.colorForType(.NormalText))
-
+        // KHANDAQ design (Figma): card-based instructions screen (was an HTML TextViewController).
+        let controller = ImportInstructionsController(theme: theme)
         navigationController.pushViewController(controller, animated: true)
     }
 
@@ -227,7 +263,13 @@ private extension LoginCoordinator {
         }
 
         let path = ProfileManager().pathForProfileWithName(profile)
-        let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(path)!
+        guard let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(path) else {
+            let error = NSError(domain: "LoginCoordinator", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Invalid profile configuration",
+            ])
+            errorClosure?(error)
+            return
+        }
 
         let hud = JGProgressHUD(style: .dark)!
         hud.show(in: self.navigationController.view)
@@ -235,12 +277,23 @@ private extension LoginCoordinator {
         ToxFactory.createToxWithConfiguration(configuration, encryptPassword: password, successBlock: { [weak self] manager -> Void in
             hud.dismiss()
 
+            guard let self = self else {
+                return
+            }
+
             configurationClosure?(manager)
 
             let userDefaults = UserDefaultsManager()
             userDefaults.lastActiveProfile = profile
 
-            self?.delegate?.loginCoordinatorDidLogin(self!, manager: manager, password: password)
+            // KHANDAQ (#15): ensure the Tox self-name is set. Profiles created without an explicit
+            // username had an empty self-name, so NGC groups published the "Khandaq" default as our
+            // peer name and friends/invites showed "(null)". Seed it from the profile name once.
+            if (manager.user.userName() ?? "").isEmpty {
+                _ = try? manager.user.setUserName(profile)
+            }
+
+            self.delegate?.loginCoordinatorDidLogin(self, manager: manager, password: password)
 
         }, failureBlock: { error -> Void in
             hud.dismiss()
@@ -303,14 +356,17 @@ private extension LoginCoordinator {
     func isProfileEncrypted(_ profile: String) -> Bool {
         let profilePath = ProfileManager().pathForProfileWithName(profile)
 
-        let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(profilePath)!
+        guard let configuration = OCTManagerConfiguration.configurationWithBaseDirectory(profilePath) else {
+            return false
+        }
         let dataPath = configuration.fileStorage.pathForToxSaveFile
 
         guard FileManager.default.fileExists(atPath: dataPath) else {
             return false
         }
 
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: dataPath)) else {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: dataPath)),
+              data.count >= 8 else {
             return false
         }
 

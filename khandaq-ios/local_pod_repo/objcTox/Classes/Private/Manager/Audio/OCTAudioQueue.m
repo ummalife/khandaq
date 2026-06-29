@@ -23,6 +23,8 @@ const int kFramesPerOutputBuffer_incoming_audio = kSampleCount_incoming_audio / 
 const int kFramesPerOutputBuffer_outgoing_audio = kSampleCount_outgoing_audio / 4;
 const int kBytesPerSample = sizeof(SInt16);
 const int kNumberOfAudioQueueBuffers = 8;
+// Tox PCM is often quiet; boost playback without clipping.
+const float kCallOutputGain = 2.5f;
 
 OSStatus (*_AudioQueueAllocateBuffer)(AudioQueueRef inAQ,
                                       UInt32 inBufferByteSize,
@@ -53,6 +55,9 @@ OSStatus (*_AudioQueueSetProperty)(AudioQueueRef inAQ,
                                    AudioQueuePropertyID inID,
                                    const void *inData,
                                    UInt32 inDataSize) = AudioQueueSetProperty;
+OSStatus (*_AudioQueueSetParameter)(AudioQueueRef inAQ,
+                                    AudioQueueParameterID inParameterID,
+                                    Float32 inValue) = AudioQueueSetParameter;
 OSStatus (*_AudioQueueStart)(AudioQueueRef inAQ,
                              const AudioTimeStamp *inStartTime) = AudioQueueStart;
 OSStatus (*_AudioQueueStop)(AudioQueueRef inAQ,
@@ -237,6 +242,11 @@ static NSString *OCTGetSystemAudioDevice(AudioObjectPropertySelector sel, NSErro
     }
 
     OCTLogVerbose(@"Allocated buffers; starting now!");
+
+    if (self.isOutput) {
+        _AudioQueueSetParameter(self.audioQueue, kAudioQueueParam_Volume, 1.0f);
+    }
+
     OSStatus res = _AudioQueueStart(self.audioQueue, NULL);
     if (res != 0) {
         if (error) {
@@ -393,6 +403,20 @@ static void InputAvailable(OCTAudioQueue *__unsafe_unretained context,
     _AudioQueueEnqueueBuffer(inAQ, inBuffer, 0, NULL);
 }
 
+static void OCTApplyCallOutputGain(SInt16 *samples, int32_t sampleCount)
+{
+    for (int32_t i = 0; i < sampleCount; ++i) {
+        float amplified = (float)samples[i] * kCallOutputGain;
+        if (amplified > 32767.0f) {
+            amplified = 32767.0f;
+        }
+        else if (amplified < -32768.0f) {
+            amplified = -32768.0f;
+        }
+        samples[i] = (SInt16)amplified;
+    }
+}
+
 static void FillOutputBuffer(OCTAudioQueue *__unsafe_unretained context,
                              AudioQueueRef inAQ,
                              AudioQueueBufferRef inBuffer)
@@ -408,8 +432,13 @@ static void FillOutputBuffer(OCTAudioQueue *__unsafe_unretained context,
         memcpy(targetBuffer, buffer, cpy);
         TPCircularBufferConsume(&context->_buffer, cpy);
 
+        int32_t sampleCount = (int32_t)(cpy / (int32_t)sizeof(SInt16));
+        if (sampleCount > 0) {
+            OCTApplyCallOutputGain(targetBuffer, sampleCount);
+        }
+
         if (cpy != targetBufferSize) {
-            memset(targetBuffer + cpy, 0, targetBufferSize - cpy);
+            memset(((uint8_t *)targetBuffer) + cpy, 0, targetBufferSize - cpy);
             OCTLogCCWarn(@"warning not enough frames!!!");
         }
         inBuffer->mAudioDataByteSize = targetBufferSize;

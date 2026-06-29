@@ -315,6 +315,10 @@ public class GroupMessageListActivity extends AppCompatActivity
     static ScriptIntrinsicYuvToRGB ngc_own_yuvToRgb = null;
     static boolean attachemnt_instead_of_send = true;
     static final int MEDIAPICK_ID_001 = 8004;
+    // KHANDAQ: group attach now mirrors the 1:1 sheet (camera + media grid).
+    static final int CAMERA_PHOTO_ID = 8026;
+    static final int CAMERA_VIDEO_ID = 8027;
+    private Uri pending_camera_capture_uri = null;
 
     private boolean mediaPreviewResultHandled = false;
     static ActionMode amode = null;
@@ -2295,20 +2299,168 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     public void send_attatchment(View view)
     {
+        // KHANDAQ (Figma attachments 2031:13703): mirror the 1:1 attach sheet — teal camera/video/gallery
+        // chips + a grid of recent device media — but route everything to the GROUP send flow.
+        final com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        final View content = getLayoutInflater().inflate(R.layout.bottomsheet_attach, null);
+        ((ImageView) content.findViewById(R.id.attach_chip_camera_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_camera).color(Color.WHITE).sizeDp(26));
+        ((ImageView) content.findViewById(R.id.attach_chip_video_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_videocam).color(Color.WHITE).sizeDp(26));
+        ((ImageView) content.findViewById(R.id.attach_chip_gallery_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_library).color(Color.WHITE).sizeDp(26));
+        content.findViewById(R.id.attach_chip_camera).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_group_camera_capture(false);
+        });
+        content.findViewById(R.id.attach_chip_video).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_group_camera_capture(true);
+        });
+        content.findViewById(R.id.attach_chip_gallery).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_group_gallery_picker();
+        });
+
+        final androidx.recyclerview.widget.RecyclerView grid = content.findViewById(R.id.attach_media_grid);
+        final android.widget.Button sendSelected = content.findViewById(R.id.attach_send_selected);
+        final java.util.ArrayList<Uri> recentMedia = MediaSendPreviewHelper.queryRecentMedia(this, 60);
+        if (!recentMedia.isEmpty())
+        {
+            grid.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 4));
+            grid.setAdapter(new MediaGridAdapter(recentMedia,
+                    uri ->
+                    {
+                        sheet.dismiss();
+                        sendPickedMediaToGroup(java.util.Collections.singletonList(uri));
+                    },
+                    selectedList ->
+                    {
+                        if (selectedList.isEmpty())
+                        {
+                            sendSelected.setVisibility(View.GONE);
+                            sendSelected.setTag(null);
+                        }
+                        else
+                        {
+                            sendSelected.setText(getString(R.string.attach_send_selected, selectedList.size()));
+                            sendSelected.setTag(new java.util.ArrayList<>(selectedList));
+                            sendSelected.setVisibility(View.VISIBLE);
+                        }
+                    }));
+            sendSelected.setOnClickListener(v ->
+            {
+                final Object tag = sendSelected.getTag();
+                if (tag instanceof java.util.List)
+                {
+                    @SuppressWarnings("unchecked")
+                    final java.util.List<Uri> sel = (java.util.List<Uri>) tag;
+                    if (!sel.isEmpty())
+                    {
+                        sheet.dismiss();
+                        sendPickedMediaToGroup(sel);
+                    }
+                }
+            });
+            grid.setVisibility(View.VISIBLE);
+        }
+        else if (!MediaSendPreviewHelper.hasMediaReadPermission(this))
+        {
+            try
+            {
+                final String[] perms = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        ? new String[]{android.Manifest.permission.READ_MEDIA_IMAGES,
+                        android.Manifest.permission.READ_MEDIA_VIDEO}
+                        : new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE};
+                requestPermissions(perms, 9100);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        sheet.setContentView(content);
+        sheet.show();
+    }
+
+    private void open_group_gallery_picker()
+    {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
         {
             intent.putExtra(Intent.EXTRA_MIME_TYPES, "*/*");
         }
-
         MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
-
         mediaPreviewResultHandled = false;
         startActivityForResult(intent, MEDIAPICK_ID_001);
+    }
+
+    private void open_group_camera_capture(final boolean video)
+    {
+        try
+        {
+            final java.io.File dir = new java.io.File(getExternalFilesDir(null), "tmpdir");
+            if (!dir.exists())
+            {
+                dir.mkdirs();
+            }
+            final String name = (video ? "VID_" : "IMG_") + System.currentTimeMillis() + (video ? ".mp4" : ".jpg");
+            final java.io.File outFile = new java.io.File(dir, name);
+            final Uri outUri = androidx.core.content.FileProvider.getUriForFile(
+                    this, KhandaqProviders.STD_FILE_PROVIDER, outFile);
+            pending_camera_capture_uri = outUri;
+
+            final Intent intent = new Intent(video
+                    ? android.provider.MediaStore.ACTION_VIDEO_CAPTURE
+                    : android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, outUri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            if (intent.resolveActivity(getPackageManager()) == null)
+            {
+                android.widget.Toast.makeText(this, R.string.attach_no_camera, android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+            mediaPreviewResultHandled = false;
+            startActivityForResult(intent, video ? CAMERA_VIDEO_ID : CAMERA_PHOTO_ID);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "open_group_camera_capture:EE:" + e.getMessage());
+        }
+    }
+
+    /** Route 1..N picked media Uris into the existing GROUP send preview / send flow. */
+    private void sendPickedMediaToGroup(final java.util.List<Uri> uris)
+    {
+        if (uris == null || uris.isEmpty())
+        {
+            return;
+        }
+        final Intent picked = new Intent();
+        if (uris.size() == 1)
+        {
+            picked.setData(uris.get(0));
+        }
+        else
+        {
+            android.content.ClipData clip = android.content.ClipData.newRawUri("media", uris.get(0));
+            for (int i = 1; i < uris.size(); i++)
+            {
+                clip.addItem(new android.content.ClipData.Item(uris.get(i)));
+            }
+            picked.setClipData(clip);
+        }
+        mediaPreviewResultHandled = false;
+        if (!MediaSendPreviewHelper.launchPreviewIfNeeded(this, picked,
+                MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true))
+        {
+            MediaSendPreviewHelper.dispatchAttachments(this, uris,
+                    MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
+        }
     }
 
     void open_group_info_activity()
@@ -4822,6 +4974,17 @@ public class GroupMessageListActivity extends AppCompatActivity
             catch (Exception e)
             {
                 Log.w(TAG, "onActivityResult:invite_friend_to_group:EE:" + e.getMessage());
+            }
+        }
+        else if ((requestCode == CAMERA_PHOTO_ID || requestCode == CAMERA_VIDEO_ID)
+                && resultCode == Activity.RESULT_OK)
+        {
+            final Uri captured = pending_camera_capture_uri;
+            pending_camera_capture_uri = null;
+            if (captured != null)
+            {
+                MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(captured),
+                        MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
             }
         }
         else if (requestCode == MEDIAPICK_ID_001 && resultCode == Activity.RESULT_OK)

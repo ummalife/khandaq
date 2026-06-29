@@ -38,14 +38,14 @@
 
     <color name="colorPrimary">@color/khandaq_primary</color>
     <color name="colorPrimaryDark">@color/khandaq_primary_deep</color>
-    <color name="colorAccent">@color/khandaq_emerald</color>
+    <color name="colorAccent">@color/khandaq_teal</color>
 
     <color name="black_overlay">#66000000</color>
 
     <color name="colorTextPrimary">#505050</color>
 
-    <color name="textblock_link_color_for_blue">@android:color/holo_orange_dark</color>
-    <color name="textblock_link_color_for_orange">@android:color/holo_blue_dark</color>
+    <color name="textblock_link_color_for_blue">@color/khandaq_teal</color>
+    <color name="textblock_link_color_for_orange">@color/khandaq_teal</color>
     <color name="textblock_link_color_for_red">@android:color/holo_blue_bright</color>
 
     <color name="date_bg_color">@color/tg_date_separator_bg</color>

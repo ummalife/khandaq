@@ -540,6 +540,8 @@
     <string name="attach_option_camera_photo">Камера (фото)</string>
     <string name="attach_option_camera_video">Снять видео</string>
     <string name="attach_option_gallery">Галерея</string>
+    <string name="attach_chip_camera">Камера</string>
+    <string name="attach_chip_video">Видео</string>
     <string name="attach_no_camera">Камера недоступна</string>
     <string name="group_private_msg_label">Личное сообщение:</string>
     <string name="group_private_msg_hint">Написать личное сообщение…</string>

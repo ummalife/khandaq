@@ -1690,29 +1690,31 @@ public class MessageListActivity extends AppCompatActivity
         HelperGeneric.logI(TAG, "send_attatchment:---start");
         stop_self_typing_indicator_s();
 
-        // KHANDAQ (#17): offer the camera (photo/video) alongside the gallery so the user can shoot
-        // and send media right away, instead of only picking an existing file.
-        final CharSequence[] options = {
-                getString(R.string.attach_option_camera_photo),
-                getString(R.string.attach_option_camera_video),
-                getString(R.string.attach_option_gallery)
-        };
-
-        new android.app.AlertDialog.Builder(this).setTitle(R.string.attach_option_title).setItems(options, (dialog, which) ->
-        {
-            switch (which)
-            {
-                case 0:
-                    open_camera_capture(false);
-                    break;
-                case 1:
-                    open_camera_capture(true);
-                    break;
-                default:
-                    open_gallery_picker();
-                    break;
-            }
-        }).show();
+        // KHANDAQ (#17 + Figma attachments 2031:13703): teal-circle attachment chips (camera / video /
+        // gallery) in a bottom sheet, replacing the plain text-list dialog. Same actions, on-brand look.
+        final com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        final View content = getLayoutInflater().inflate(R.layout.bottomsheet_attach, null);
+        ((ImageView) content.findViewById(R.id.attach_chip_camera_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_camera).color(Color.WHITE).sizeDp(26));
+        ((ImageView) content.findViewById(R.id.attach_chip_video_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_videocam).color(Color.WHITE).sizeDp(26));
+        ((ImageView) content.findViewById(R.id.attach_chip_gallery_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_library).color(Color.WHITE).sizeDp(26));
+        content.findViewById(R.id.attach_chip_camera).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_camera_capture(false);
+        });
+        content.findViewById(R.id.attach_chip_video).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_camera_capture(true);
+        });
+        content.findViewById(R.id.attach_chip_gallery).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_gallery_picker();
+        });
+        sheet.setContentView(content);
+        sheet.show();
     }
 
     private void open_gallery_picker()

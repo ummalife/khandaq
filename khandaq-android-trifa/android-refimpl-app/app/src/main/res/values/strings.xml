@@ -932,6 +932,8 @@
     <string name="attach_option_camera_photo">Camera (photo)</string>
     <string name="attach_option_camera_video">Record video</string>
     <string name="attach_option_gallery">Gallery</string>
+    <string name="attach_chip_camera">Camera</string>
+    <string name="attach_chip_video">Video</string>
     <string name="attach_no_camera">No camera available</string>
     <string name="group_private_msg_label">Private message:</string>
     <string name="group_private_msg_hint">Write a private message…</string>

@@ -608,7 +608,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         // KHANDAQ (#120): incoming media not downloaded yet because the attachment policy forbids
         // auto-download (and no explicit request). Show a clear download icon instead of an endless
         // spinner; the touch listener (openGroupMessageMedia) turns a tap into the explicit fetch.
-        final boolean needs_manual_download = (message_.direction == 0) && (is_image || is_video)
+        final boolean needs_manual_download = (message_.direction == 0) && (is_image || is_video || is_audio)
                 && !HelperFiletransfer.isGroupMessageMediaReady(message_, null)
                 && !HelperGroup.ngc_incoming_download_allowed(message_.group_identifier, message_.msg_id_hash);
 
@@ -718,7 +718,17 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
             if (ft_audio_player != null)
             {
-                HelperFiletransfer.safeRefreshAudioPlayer(ft_audio_player, message_.filename_fullpath);
+                // KHANDAQ (#126): only attach the player to a fully-assembled voice. A still-downloading
+                // chunked voice would otherwise render a dead "play / 00:00:00" control; keep it GONE so the
+                // transfer-progress overlay shows real download progress instead, then flips to the player.
+                if (HelperFiletransfer.isGroupMessageMediaReady(message_, null))
+                {
+                    HelperFiletransfer.safeRefreshAudioPlayer(ft_audio_player, message_.filename_fullpath);
+                }
+                else
+                {
+                    ft_audio_player.setVisibility(View.GONE);
+                }
             }
         }
         else // ---- not an image or a video ----

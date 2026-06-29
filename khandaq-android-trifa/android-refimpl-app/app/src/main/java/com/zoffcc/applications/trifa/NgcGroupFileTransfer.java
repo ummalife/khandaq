@@ -464,7 +464,9 @@ public final class NgcGroupFileTransfer
                 HelperGeneric.logI(TAG, "send:unicast " + sendTargets.describe());
                 for (final long peerId : sendTargets.peerIds)
                 {
-                    waitForPeerOnline(groupNum, peerId, PEER_SEND_CONN_WAIT_MS);
+                    // KHANDAQ (#126): best-effort 2s nudge only — the real reachability test is the
+                    // private-send return code in sendChunkWithRetry; don't burn 15s/peer on a NONE status.
+                    waitForPeerOnline(groupNum, peerId, 2000L);
                 }
             }
             else
@@ -1685,11 +1687,12 @@ public final class NgcGroupFileTransfer
             }
 
             int okCount = 0;
-            if (senderPeerId >= 0L
-                    && HelperGroup.is_group_peer_online(
-                            tox_group_peer_get_connection_status(groupNum, senderPeerId)))
+            if (senderPeerId >= 0L)
             {
-                waitForPeerOnline(groupNum, senderPeerId, PEER_SEND_CONN_WAIT_MS);
+                // KHANDAQ (#126): do NOT gate on is_group_peer_online — NGC status reads NONE for reachable
+                // peers and would suppress the one correct lossless recovery target (the actual sender). The
+                // private-send return code is the real reachability signal.
+                waitForPeerOnline(groupNum, senderPeerId, 2000L);
                 final int res = tox_group_send_custom_private_packet(
                         groupNum, senderPeerId, 1, requestPkt, requestPkt.length);
                 HelperGeneric.logI(TAG, "sendFileResendRequest:private msg="
@@ -1700,21 +1703,27 @@ public final class NgcGroupFileTransfer
                 }
             }
 
-            final long[] onlinePeers = HelperGroup.pickChunkedFileUnicastPeerIds(groupNum);
-            for (final long peerId : onlinePeers)
+            // KHANDAQ (#126): only spray other peers when the sender-targeted send failed — non-senders ignore
+            // a sprayed NACK anyway (self-pubkey check in handleIncomingFileRequest), so spraying on success is
+            // pure transport waste during the flapping scenario.
+            if (okCount == 0)
             {
-                if (peerId == senderPeerId)
+                final long[] onlinePeers = HelperGroup.pickChunkedFileUnicastPeerIds(groupNum);
+                for (final long peerId : onlinePeers)
                 {
-                    continue;
-                }
-                waitForPeerOnline(groupNum, peerId, PEER_SEND_CONN_WAIT_MS);
-                final int res = tox_group_send_custom_private_packet(
-                        groupNum, peerId, 1, requestPkt, requestPkt.length);
-                HelperGeneric.logI(TAG, "sendFileResendRequest:private msg="
-                        + message.msg_id_hash.substring(0, 8) + " peer=" + peerId + " res=" + res);
-                if (HelperGroup.is_ngc_custom_packet_send_ok(res))
-                {
-                    okCount++;
+                    if (peerId == senderPeerId)
+                    {
+                        continue;
+                    }
+                    waitForPeerOnline(groupNum, peerId, 2000L);
+                    final int res = tox_group_send_custom_private_packet(
+                            groupNum, peerId, 1, requestPkt, requestPkt.length);
+                    HelperGeneric.logI(TAG, "sendFileResendRequest:private msg="
+                            + message.msg_id_hash.substring(0, 8) + " peer=" + peerId + " res=" + res);
+                    if (HelperGroup.is_ngc_custom_packet_send_ok(res))
+                    {
+                        okCount++;
+                    }
                 }
             }
 

@@ -2015,6 +2015,10 @@ public class HelperGroup
      * All other online peers in the group — chunked FT uses private fan-out to every one
      * (ghost/stale peer ids are common; picking a single lowest id often misses the real peer).
      */
+    // KHANDAQ (#126): when per-peer NGC status reads NONE for everyone, unicast to all peers only if the group
+    // is this small — protects large groups from a blind lossless fan-out to dozens of members.
+    private static final int MAX_UNICAST_FANOUT_WHEN_STATUS_UNKNOWN = 8;
+
     static long[] pickChunkedFileUnicastPeerIds(final long groupNum)
     {
         if (groupNum < 0)
@@ -2030,17 +2034,39 @@ public class HelperGroup
                 return new long[0];
             }
             final java.util.ArrayList<Long> online = new java.util.ArrayList<>();
+            final java.util.ArrayList<Long> reachable = new java.util.ArrayList<>();
             for (final long peerId : peers)
             {
                 if (peerId < 0 || peerId == selfPeerId)
                 {
                     continue;
                 }
+                reachable.add(peerId);
                 if (!is_group_peer_online(tox_group_peer_get_connection_status(groupNum, peerId)))
                 {
                     continue;
                 }
                 online.add(peerId);
+            }
+            // KHANDAQ (#126): NGC per-peer connection status frequently reads NONE even for reachable peers
+            // (packets route via the group mesh), which leaves 'online' empty -> the sender latches onto a
+            // ghost id / empty target and the receiver gets ~0 chunks on the first pass, limping along on slow
+            // NACK recovery. When the GROUP itself is connected and SMALL, unicast to every real peer regardless
+            // of cached per-peer status (a private send self-verifies via its return code). Bounded to small
+            // groups so large groups keep the status-gated selection (no blind lossless fan-out to dozens).
+            if (online.isEmpty() && !reachable.isEmpty()
+                    && reachable.size() <= MAX_UNICAST_FANOUT_WHEN_STATUS_UNKNOWN
+                    && tox_group_is_connected(groupNum)
+                            == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
+            {
+                java.util.Collections.sort(reachable);
+                final long[] out = new long[reachable.size()];
+                for (int i = 0; i < reachable.size(); i++)
+                {
+                    out[i] = reachable.get(i);
+                }
+                HelperGeneric.logI(TAG, "pickChunkedFileUnicastPeerIds:status-blind fallback peers=" + reachable.size());
+                return out;
             }
             java.util.Collections.sort(online);
             final long[] out = new long[online.size()];
@@ -5460,7 +5486,7 @@ public class HelperGroup
     // until the user manually tapped "retry". Tick fast, but only actually NACK when no new chunk has
     // arrived for NGC_NACK_STALL_MS — a normally-progressing transfer is never disturbed.
     private static final long NGC_NACK_RETRY_MS = 3_500L;
-    private static final long NGC_NACK_STALL_MS = 4_000L;
+    private static final long NGC_NACK_STALL_MS = 2_000L; // KHANDAQ (#126): first NACK at ~3.5s, not ~7s
 
     static float ngc_file_transfer_speed_bps(final String groupId, final String msgIdHash, final long bytesDone)
     {

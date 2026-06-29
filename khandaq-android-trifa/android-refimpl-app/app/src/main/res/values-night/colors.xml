@@ -55,7 +55,9 @@
     <color name="gray">#838383</color>
     <color name="icon_colors">#8AFFFFFF</color>
     <color name="tg_chat_input_icon">#AAB2B8</color>
-    <color name="text_on_blue_color">#000000</color>
+    <!-- KHANDAQ: maintenance stats panel sits on tg_bubble_outgoing (dark green #1A4D3A in night) — black
+         text was unreadable there in dark; use light text in night (light theme keeps black on pale green). -->
+    <color name="text_on_blue_color">#FFFFFF</color>
 
     <!--reds-->
     <color name="md_red_50">#FFEBEE</color>

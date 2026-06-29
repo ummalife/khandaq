@@ -21,4 +21,13 @@
         android:layout_margin="4dp"
         android:contentDescription="@null"
         android:visibility="gone" />
+
+    <!-- Tap this corner circle to (de)select for multi-send; tap the thumbnail body = quick single send. -->
+    <ImageView
+        android:id="@+id/media_grid_select"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_gravity="top|end"
+        android:padding="5dp"
+        android:contentDescription="@null" />
 </FrameLayout>

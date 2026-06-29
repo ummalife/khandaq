@@ -1718,27 +1718,45 @@ public class MessageListActivity extends AppCompatActivity
         // Tapping a thumbnail routes the content Uri into the existing send preview. If the media-read
         // permission is missing the grid stays hidden and the Галерея chip (system picker) is the fallback.
         final androidx.recyclerview.widget.RecyclerView grid = content.findViewById(R.id.attach_media_grid);
+        final android.widget.Button sendSelected = content.findViewById(R.id.attach_send_selected);
         final java.util.ArrayList<Uri> recentMedia = MediaSendPreviewHelper.queryRecentMedia(this, 60);
         if (!recentMedia.isEmpty())
         {
             grid.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 4));
-            grid.setAdapter(new MediaGridAdapter(recentMedia, uri ->
+            grid.setAdapter(new MediaGridAdapter(recentMedia,
+                    uri ->
+                    {   // quick single send (no selection active)
+                        sheet.dismiss();
+                        sendPickedMediaToPreview(java.util.Collections.singletonList(uri));
+                    },
+                    selectedList ->
+                    {   // selection changed -> update the "Отправить (N)" button
+                        if (selectedList.isEmpty())
+                        {
+                            sendSelected.setVisibility(View.GONE);
+                            sendSelected.setTag(null);
+                        }
+                        else
+                        {
+                            sendSelected.setText(getString(R.string.attach_send_selected, selectedList.size()));
+                            sendSelected.setTag(new java.util.ArrayList<>(selectedList));
+                            sendSelected.setVisibility(View.VISIBLE);
+                        }
+                    }));
+            sendSelected.setOnClickListener(v ->
             {
-                sheet.dismiss();
-                final long fn = get_current_friendnum();
-                final Intent picked = new Intent();
-                picked.setData(uri);
-                if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, picked,
-                        MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true))
+                final Object tag = sendSelected.getTag();
+                if (tag instanceof java.util.List)
                 {
-                    outgoingMediaPickerActive = true;
+                    @SuppressWarnings("unchecked")
+                    final java.util.List<Uri> sel = (java.util.List<Uri>) tag;
+                    if (!sel.isEmpty())
+                    {
+                        sheet.dismiss();
+                        sendPickedMediaToPreview(sel);
+                    }
                 }
-                else
-                {
-                    MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(uri),
-                            MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true);
-                }
-            }));
+            });
             grid.setVisibility(View.VISIBLE);
         }
         else if (!MediaSendPreviewHelper.hasMediaReadPermission(this))
@@ -1758,6 +1776,40 @@ public class MessageListActivity extends AppCompatActivity
 
         sheet.setContentView(content);
         sheet.show();
+    }
+
+    /** KHANDAQ (Figma attach grid): route 1..N picked media Uris into the existing send preview / send flow. */
+    private void sendPickedMediaToPreview(final List<Uri> uris)
+    {
+        if (uris == null || uris.isEmpty())
+        {
+            return;
+        }
+        final long fn = get_current_friendnum();
+        final Intent picked = new Intent();
+        if (uris.size() == 1)
+        {
+            picked.setData(uris.get(0));
+        }
+        else
+        {
+            android.content.ClipData clip = android.content.ClipData.newRawUri("media", uris.get(0));
+            for (int i = 1; i < uris.size(); i++)
+            {
+                clip.addItem(new android.content.ClipData.Item(uris.get(i)));
+            }
+            picked.setClipData(clip);
+        }
+        if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, picked,
+                MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true))
+        {
+            outgoingMediaPickerActive = true;
+        }
+        else
+        {
+            MediaSendPreviewHelper.dispatchAttachments(this, uris,
+                    MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true);
+        }
     }
 
     private void open_gallery_picker()

@@ -3,6 +3,13 @@
     <!-- KHANDAQ onboarding (Figma) -->
     <string name="onboarding_next">Далее</string>
     <string name="onboarding_create_account">Создать аккаунт</string>
+    <string name="create_profile_title">Создание профиля</string>
+    <string name="create_profile_name_label">Имя</string>
+    <string name="create_profile_name_hint">Введите ваше имя</string>
+    <string name="create_profile_label_label">Название профиля</string>
+    <string name="create_profile_label_hint">Укажите название профиля</string>
+    <string name="create_profile_label_example">Например: Home, Phone</string>
+    <string name="create_profile_next">Далее</string>
     <string name="onboarding_import_profile">Импорт профиля</string>
     <string name="onboarding_title_1">Без номера телефона</string>
     <string name="onboarding_desc_1">Регистрируйтесь в мессенджере без необходимости привязки к номеру телефона</string>

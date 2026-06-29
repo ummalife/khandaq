@@ -266,6 +266,11 @@
             android:launchMode="singleTask">
         </activity>
         <activity
+            android:name="com.zoffcc.applications.trifa.CreateProfileActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name="com.zoffcc.applications.trifa.CheckPasswordActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:label="@string/title_activity_check_password"

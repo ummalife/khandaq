@@ -1145,9 +1145,18 @@ public class TrifaToxService extends Service
                 }
                 else
                 {
-                    final String default_name = default_self_display_name(my_tox_id_local);
-                    tox_self_set_name(default_name);
-                    global_my_name = default_name;
+                    // KHANDAQ: new profile — use the name typed on the "Создание профиля" onboarding step
+                    // (one-shot pref), else fall back to the auto display name.
+                    final android.content.SharedPreferences onb_prefs =
+                            android.preference.PreferenceManager.getDefaultSharedPreferences(context_s);
+                    final String onboarding_name = onb_prefs.getString(
+                            CreateProfileActivity.PREF_ONBOARDING_DISPLAY_NAME, "");
+                    final String new_name = (onboarding_name != null && onboarding_name.trim().length() > 0)
+                            ? onboarding_name.trim()
+                            : default_self_display_name(my_tox_id_local);
+                    tox_self_set_name(new_name);
+                    global_my_name = new_name;
+                    onb_prefs.edit().remove(CreateProfileActivity.PREF_ONBOARDING_DISPLAY_NAME).apply();
                     HelperGeneric.logI(TAG, "AAA:005");
                 }
 

@@ -3,6 +3,13 @@
     <!-- KHANDAQ onboarding (Figma) -->
     <string name="onboarding_next">Next</string>
     <string name="onboarding_create_account">Create account</string>
+    <string name="create_profile_title">Create profile</string>
+    <string name="create_profile_name_label">Name</string>
+    <string name="create_profile_name_hint">Enter your name</string>
+    <string name="create_profile_label_label">Profile name</string>
+    <string name="create_profile_label_hint">Set a profile name</string>
+    <string name="create_profile_label_example">For example: Home, Phone</string>
+    <string name="create_profile_next">Next</string>
     <string name="onboarding_import_profile">Import profile</string>
     <string name="onboarding_title_1">No phone number</string>
     <string name="onboarding_desc_1">Sign up for the messenger without linking a phone number</string>

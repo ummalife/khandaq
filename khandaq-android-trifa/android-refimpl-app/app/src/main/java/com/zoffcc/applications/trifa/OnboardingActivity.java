@@ -123,7 +123,7 @@ public class OnboardingActivity extends AppCompatActivity
     {
         Intent intent = startImport
                 ? new Intent(this, ImportProfileInfoActivity.class)
-                : new Intent(this, SetPasswordActivity.class);
+                : new Intent(this, CreateProfileActivity.class);
         startActivity(intent);
         finish();
     }

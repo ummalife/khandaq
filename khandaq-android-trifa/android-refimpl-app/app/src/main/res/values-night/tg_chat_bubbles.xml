@@ -21,8 +21,8 @@
     <color name="tg_chat_header_presence_online">@color/khandaq_emerald</color>
     <color name="tg_chat_header_icon">@color/khandaq_emerald</color>
     <color name="tg_voice_recording_dot">#FF453A</color>
-    <color name="tg_voice_recording_action">#2AABEE</color>
-    <color name="tg_voice_recording_send_bg">#2AABEE</color>
+    <color name="tg_voice_recording_action">@color/khandaq_teal</color>
+    <color name="tg_voice_recording_send_bg">@color/khandaq_teal</color>
     <color name="tg_reply_preview_bg">#1A243036</color>
     <color name="tg_reply_preview_header">@color/khandaq_emerald</color>
     <color name="tg_reply_preview_text">#94A3B8</color>

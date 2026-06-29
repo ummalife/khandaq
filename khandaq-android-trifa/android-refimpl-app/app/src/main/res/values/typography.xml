@@ -53,7 +53,7 @@
         <item name="android:textSize">15sp</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:minHeight">48dp</item>
-        <item name="backgroundTint">@color/khandaq_primary</item>
+        <item name="backgroundTint">@color/khandaq_teal</item>
         <item name="android:textColor">@android:color/white</item>
     </style>
 

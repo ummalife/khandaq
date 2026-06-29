@@ -127,13 +127,13 @@
                         android:layout_height="wrap_content"
                         android:visibility="gone"
                         app:enableVisualizer="true"
-                        app:playPauseBackgroundColor="#ff7700"
+                        app:playPauseBackgroundColor="@color/khandaq_teal"
                         app:playPauseCornerRadius="100"
-                        app:playProgressbarColor="#ff7700"
+                        app:playProgressbarColor="@color/khandaq_teal"
                         app:progressTimeColor="#000000"
                         app:seekBarProgressColor="#000000"
-                        app:seekBarThumbColor="#FFC107"
-                        app:shareBackgroundColor="#ff7700"
+                        app:seekBarThumbColor="@color/khandaq_teal"
+                        app:shareBackgroundColor="@color/khandaq_teal"
                         app:shareCornerRadius="100"
                         app:shareText="SHARE ME"
                         app:showShareButton="false"
@@ -142,7 +142,7 @@
                         app:viewBackground="@android:color/transparent"
                         app:viewCornerRadius="10"
                         app:visualizationNotPlayedColor="#000"
-                        app:visualizationPlayedColor="#ff7700" />
+                        app:visualizationPlayedColor="@color/khandaq_teal" />
 
                     <ImageButton
                         android:id="@+id/ft_preview_image"

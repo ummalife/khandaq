@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:background="@color/md_amber_600"
+    android:background="@android:color/transparent"
     android:gravity="center_horizontal"
     android:orientation="horizontal"
     android:layout_height="wrap_content"

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="tg_chat_screen_bg">@color/khandaq_background</color>
+    <color name="tg_chat_screen_bg">#1e1e1e</color>
     <color name="tg_bubble_incoming">@color/khandaq_gunmetal</color>
     <color name="tg_bubble_incoming_stroke">@color/khandaq_gunmetal</color>
     <color name="tg_bubble_outgoing">#1A4D3A</color>

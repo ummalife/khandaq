@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ group chat header overflow (Figma: only ⋮; search/members/add/video live inside). -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_group_search"
+        android:title="@string/chat_action_search"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_group_members"
+        android:title="@string/group_open_member_list"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_group_add"
+        android:title="@string/layout___add_friend"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_group_video"
+        android:title="@string/chat_action_video"
+        app:showAsAction="never" />
+</menu>

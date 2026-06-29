@@ -527,13 +527,18 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         messageSearchView = (SearchView) findViewById(R.id.group_search_view_messages);
         messageSearchView.setQueryHint(getString(R.string.messages_search_default_text));
-        messageSearchView.setIconifiedByDefault(true);
+        // KHANDAQ: search lives in the ⋮ overflow now; it is hidden until revealed (enterGroupSearchMode).
+        messageSearchView.setIconifiedByDefault(false);
+        messageSearchView.setOnCloseListener(() ->
+        {
+            exitGroupSearchMode();
+            return false;
+        });
 
         try
         {
             // reset search and filter flags
             messageSearchView.setQuery("", false);
-            messageSearchView.setIconified(true);
             group_search_messages_text = null;
         }
         catch (Exception e)
@@ -1057,6 +1062,14 @@ public class GroupMessageListActivity extends AppCompatActivity
             groupHeaderTap.setOnClickListener(v -> open_group_info_activity());
         }
 
+        // KHANDAQ (Figma single-row header): group avatar = teal circle + white group glyph.
+        final de.hdodenhof.circleimageview.CircleImageView groupAvatar = findViewById(R.id.ml_group_avatar);
+        if (groupAvatar != null)
+        {
+            groupAvatar.setImageDrawable(new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_group)
+                                                 .color(android.graphics.Color.WHITE).sizeDp(22));
+        }
+
         final ImageButton membersIcon = (ImageButton) findViewById(R.id.ml_members_icon);
         if (membersIcon != null)
         {
@@ -1515,7 +1528,7 @@ public class GroupMessageListActivity extends AppCompatActivity
     {
         ChatBubbleUiHelper.apply_chat_header_theme(
                 (Toolbar) findViewById(R.id.toolbar),
-                findViewById(R.id.ml_header_bar),
+                (android.view.View) null,
                 findViewById(R.id.ml_header_group_info_tap),
                 ml_maintext,
                 ml_phone_icon,
@@ -3417,6 +3430,91 @@ public class GroupMessageListActivity extends AppCompatActivity
         intent.putExtra("group_id", group_id);
         intent.putExtra("offline", 1);
         startActivityForResult(intent, SelectFriendSingleActivity_ID);
+    }
+
+    // KHANDAQ (Figma single-row header): search / members / add / video moved to the ⋮ overflow.
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu)
+    {
+        getMenuInflater().inflate(R.menu.menu_group_chat_header, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item)
+    {
+        final int id = item.getItemId();
+        if (id == R.id.action_group_search)
+        {
+            enterGroupSearchMode();
+            return true;
+        }
+        else if (id == R.id.action_group_members)
+        {
+            toggleMembersDrawer();
+            return true;
+        }
+        else if (id == R.id.action_group_add)
+        {
+            show_add_friend_group(findViewById(R.id.toolbar));
+            return true;
+        }
+        else if (id == R.id.action_group_video)
+        {
+            toggle_group_video(findViewById(R.id.toolbar));
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void toggleMembersDrawer()
+    {
+        try
+        {
+            if (group_message_drawer != null)
+            {
+                if (group_message_drawer.isDrawerOpen())
+                {
+                    group_message_drawer.closeDrawer();
+                }
+                else
+                {
+                    group_message_drawer.openDrawer();
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void enterGroupSearchMode()
+    {
+        final View infoTap = findViewById(R.id.ml_header_group_info_tap);
+        if (infoTap != null)
+        {
+            infoTap.setVisibility(View.GONE);
+        }
+        if (messageSearchView != null)
+        {
+            messageSearchView.setVisibility(View.VISIBLE);
+            messageSearchView.setIconified(false);
+            messageSearchView.requestFocus();
+        }
+    }
+
+    private void exitGroupSearchMode()
+    {
+        if (messageSearchView != null)
+        {
+            messageSearchView.setVisibility(View.GONE);
+        }
+        final View infoTap = findViewById(R.id.ml_header_group_info_tap);
+        if (infoTap != null)
+        {
+            infoTap.setVisibility(View.VISIBLE);
+        }
     }
 
     public void openCamera()

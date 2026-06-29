@@ -1587,7 +1587,7 @@ public class MessageListActivity extends AppCompatActivity
     {
         ChatBubbleUiHelper.apply_chat_header_theme(
                 (Toolbar) findViewById(R.id.toolbar),
-                findViewById(R.id.ml_header_bar),
+                (android.view.View) null,
                 findViewById(R.id.ml_header_profile_tap),
                 ml_maintext,
                 ml_phone_icon,

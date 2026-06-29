@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <script>try{var t=localStorage.getItem('kq-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body class="changelog-body">
@@ -29,6 +30,7 @@
         <a href="/#download">Download</a>
         <a href="/changelog" aria-current="page">Changelog</a>
         <a class="nav-cta" href="/#download">Get the app</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">☾</button>
       </nav>
     </div>
   </header>
@@ -224,5 +226,6 @@
         });
     })();
   </script>
+  <script src="/assets/theme.js" defer></script>
 </body>
 </html>

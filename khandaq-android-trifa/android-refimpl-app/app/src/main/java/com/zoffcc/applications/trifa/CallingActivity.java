@@ -1003,7 +1003,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             misc_button_pad.setVisibility(View.VISIBLE);
 
             Drawable d8 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_touch_app).backgroundColor(
-                    Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                    Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
             misc_button.setImageDrawable(d8);
 
             misc_button.setOnTouchListener(new View.OnTouchListener()
@@ -1031,7 +1031,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         {
                             Drawable d2a = new IconicsDrawable(v.getContext()).icon(
                                     GoogleMaterial.Icon.gmd_touch_app).backgroundColor(Color.TRANSPARENT).color(
-                                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                                    android.graphics.Color.WHITE).sizeDp(50);
                             misc_button.setImageDrawable(d2a);
 
                             // send misc. message to friend, and do NOT save to DB
@@ -1061,7 +1061,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
 
         final Drawable d1 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_mic).backgroundColor(
-                Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
         mute_button.setImageDrawable(d1);
         mute_button.setOnTouchListener(new View.OnTouchListener()
         {
@@ -1104,7 +1104,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             trifa_is_MicrophoneMute = false;
                             Drawable d2a = new IconicsDrawable(v.getContext()).icon(
                                     GoogleMaterial.Icon.gmd_mic).backgroundColor(Color.TRANSPARENT).color(
-                                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                                    android.graphics.Color.WHITE).sizeDp(50);
                             mute_button.setImageDrawable(d2a);
                         }
                         else
@@ -1113,7 +1113,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             trifa_is_MicrophoneMute = true;
                             Drawable d2a = new IconicsDrawable(v.getContext()).icon(
                                     GoogleMaterial.Icon.gmd_mic_off).backgroundColor(Color.TRANSPARENT).color(
-                                    getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                                    android.graphics.Color.WHITE).sizeDp(50);
                             mute_button.setImageDrawable(d2a);
                             audio_bar_in_v.setLevel(0);
                         }
@@ -1164,14 +1164,14 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         if (active_camera_type == FRONT_CAMERA_USED)
         {
             final Drawable d5 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_front).backgroundColor(
-                    Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                    Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
             camera_toggle_button.setImageDrawable(d5);
             HelperGeneric.logI(TAG, "active_camera_type(5)=" + active_camera_type);
         }
         else
         {
             final Drawable d6 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(
-                    Color.TRANSPARENT).color(getResources().getColor(R.color.colorPrimaryDark)).sizeDp(50);
+                    Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(50);
             camera_toggle_button.setImageDrawable(d6);
             HelperGeneric.logI(TAG, "active_camera_type(6)=" + active_camera_type);
         }
@@ -1209,14 +1209,14 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         Drawable d2a = new IconicsDrawable(v.getContext()).icon(
                                 GoogleMaterial.Icon.gmd_camera_rear).backgroundColor(Color.TRANSPARENT).color(
-                                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(7);
+                                android.graphics.Color.WHITE).sizeDp(7);
                         camera_toggle_button.setImageDrawable(d2a);
                     }
                     else
                     {
                         Drawable d2a = new IconicsDrawable(v.getContext()).icon(
                                 GoogleMaterial.Icon.gmd_camera_front).backgroundColor(Color.TRANSPARENT).color(
-                                getResources().getColor(R.color.colorPrimaryDark)).sizeDp(7);
+                                android.graphics.Color.WHITE).sizeDp(7);
                         camera_toggle_button.setImageDrawable(d2a);
                     }
 
@@ -2661,7 +2661,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         HelperGeneric.logI(TAG, "update_audio_device_icon:headset");
                         Drawable d4 = new IconicsDrawable(ca).icon(GoogleMaterial.Icon.gmd_headset).backgroundColor(
-                                Color.TRANSPARENT).color(ca.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(
+                                Color.TRANSPARENT).color(android.graphics.Color.WHITE).sizeDp(
                                 80);
                         audio_device_icon.setImageDrawable(d4);
                     }
@@ -2670,7 +2670,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         HelperGeneric.logI(TAG, "update_audio_device_icon:bluetooth");
                         Drawable d4 = new IconicsDrawable(ca).icon(
                                 GoogleMaterial.Icon.gmd_bluetooth_audio).backgroundColor(Color.TRANSPARENT).color(
-                                ca.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(80);
+                                android.graphics.Color.WHITE).sizeDp(80);
                         audio_device_icon.setImageDrawable(d4);
                     }
                     else // audio_device == ??

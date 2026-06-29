@@ -17,7 +17,8 @@
     <color name="tg_chat_input_text">@color/khandaq_graphite</color>
     <color name="tg_chat_input_hint">@color/khandaq_text_muted</color>
     <color name="tg_date_separator_text">@color/khandaq_graphite</color>
-    <color name="tg_date_separator_bg">#CCFFFFFF</color>
+    <color name="tg_date_separator_bg">#F0FFFFFF</color> <!-- KHANDAQ #155: opaque enough so the floating date pill stays readable over dark images -->
+
     <color name="tg_date_separator_line">#CCE0E0E0</color>
     <color name="tg_chat_header_bg">@color/tg_chat_bg</color>
     <color name="tg_chat_header_title">@color/khandaq_graphite</color>

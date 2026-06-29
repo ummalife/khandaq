@@ -682,6 +682,41 @@ public final class NgcGroupFileTransfer
                 }
             }
 
+            // KHANDAQ (#120): the sender broadcasts (pushes) file chunks to all online peers. When the
+            // attachment-download policy forbids auto-download (and the user has not tapped to fetch this
+            // file), record a not-downloaded message so it shows with a download affordance, but do NOT
+            // create an assembly — the pushed chunks then have no target and are dropped. A later manual
+            // tap sets the bypass marker and re-requests the file (sender re-emits BEGIN), which downloads.
+            if (!HelperGroup.ngc_incoming_download_allowed(groupId, msgIdHex))
+            {
+                if (dbMessage == null)
+                {
+                    final IncomingAssembly meta = new IncomingAssembly();
+                    meta.displayFilename = displayFilename;
+                    meta.filename = get_incoming_filetransfer_local_filename(displayFilename, groupId);
+                    meta.totalSize = totalSize;
+                    meta.totalChunks = totalChunks;
+                    meta.chunkPayload = chunkPayload;
+                    meta.outPath = VFS_PREFIX + VFS_FILE_DIR + "/" + groupId + "/" + meta.filename;
+                    meta.msgId = msgId;
+                    meta.groupId = groupId;
+                    meta.groupNumber = groupNumber;
+                    meta.peerId = peerId;
+                    try
+                    {
+                        meta.senderPubkey = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                    HelperGroup.handle_incoming_group_file_begin(groupNumber, peerId, groupId, msgId, meta);
+                    // handle_incoming_group_file_begin seeds progress=0 ("0% downloading"); undo it so the
+                    // row renders as not-downloaded (snapshot pct<0 → FAILED → download affordance).
+                    HelperGroup.clear_ngc_file_transfer_progress(groupId, msgIdHex);
+                }
+                return;
+            }
+
             final IncomingAssembly asm = createAssembly(groupNumber, peerId, groupId, msgId, msgIdHex,
                     displayFilename, totalSize, chunkPayload, totalChunks, dbMessage);
             if (asm == null)
@@ -747,6 +782,13 @@ public final class NgcGroupFileTransfer
                     final String groupId = groupIdRaw.toLowerCase(Locale.ROOT);
                     final String msgIdHex = bytebuffer_to_hexstring(ByteBuffer.wrap(msgId), true);
                     if (isReceiveAlreadyComplete(groupId, msgIdHex))
+                    {
+                        return;
+                    }
+                    // KHANDAQ (#120): drop pushed chunks for files the user has not opted to download
+                    // (policy = Никогда / Wi-Fi-only off Wi-Fi). Do NOT restore an assembly from the DB
+                    // record here, or the broadcast would silently resume the download.
+                    if (!HelperGroup.ngc_incoming_download_allowed(groupId, msgIdHex))
                     {
                         return;
                     }

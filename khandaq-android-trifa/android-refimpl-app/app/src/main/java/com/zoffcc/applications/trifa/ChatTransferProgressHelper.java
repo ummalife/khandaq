@@ -284,6 +284,16 @@ final class ChatTransferProgressHelper
                 return new Snapshot(Phase.PENDING, 0L, total, 0, 0f, false, media);
             }
 
+            // KHANDAQ (#120): respect the attachment-download policy. When the file has not started and the
+            // policy forbids auto-download (and the user has not tapped to fetch it), do NOT kick off a pull;
+            // render the manual download affordance instead (FAILED → retry button → onRetry).
+            if (!isGroupMessageMediaReady(message, null)
+                    && pct < 0
+                    && !HelperGroup.ngc_incoming_download_allowed(message.group_identifier, message.msg_id_hash))
+            {
+                return new Snapshot(Phase.FAILED, 0L, total, 0, 0f, false, media);
+            }
+
             if (NgcGroupFileTransfer.shouldUseChunkedTransfer(total)
                     && !isGroupMessageMediaReady(message, null)
                     && pct < 0
@@ -799,6 +809,8 @@ final class ChatTransferProgressHelper
                 }
                 else
                 {
+                    // KHANDAQ (#120): explicit user request → bypass the attachment-download policy for this file.
+                    HelperGroup.mark_ngc_manual_download_requested(message.group_identifier, message.msg_id_hash);
                     HelperGroup.retry_group_incoming_file_download(message);
                 }
             }

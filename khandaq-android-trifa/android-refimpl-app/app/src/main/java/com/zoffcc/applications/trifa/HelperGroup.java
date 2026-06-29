@@ -2213,6 +2213,13 @@ public class HelperGroup
         {
             return;
         }
+        // KHANDAQ (#120): respect the attachment-download policy for the auto-retry callers (peer-online
+        // resume, stall watchdog, scheduler). The manual onRetry path sets the bypass marker before
+        // calling, so a user-initiated download is never blocked here.
+        if (!ngc_incoming_download_allowed(message.group_identifier, message.msg_id_hash))
+        {
+            return;
+        }
 
         clear_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash);
 
@@ -5438,6 +5445,10 @@ public class HelperGroup
 
     private static final ConcurrentHashMap<String, Long> ngc_transfer_start_ts = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> ngc_transfer_last_progress_ts = new ConcurrentHashMap<>();
+    // KHANDAQ (#120): incoming group files the user EXPLICITLY tapped to download. Lets the per-file
+    // download bypass the global attachment-download policy (Никогда / Wi-Fi-only) for that file only.
+    private static final java.util.Set<String> ngc_manual_download_requested =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final ConcurrentHashMap<String, Runnable> ngc_outgoing_file_timeout_tasks = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Runnable> ngc_incoming_file_timeout_tasks = new ConcurrentHashMap<>();
 
@@ -5666,6 +5677,44 @@ public class HelperGroup
         clear_ngc_file_transfer_failed(groupId, msgIdHash);
     }
 
+    // KHANDAQ (#120): mark that the user explicitly asked to download this incoming group file
+    // (tap on the download/retry affordance), so the attachment-download policy is bypassed for it.
+    static void mark_ngc_manual_download_requested(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        ngc_manual_download_requested.add(ngc_file_progress_key(groupId, msgIdHash));
+    }
+
+    static void clear_ngc_manual_download_requested(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        ngc_manual_download_requested.remove(ngc_file_progress_key(groupId, msgIdHash));
+    }
+
+    // KHANDAQ (#120): the single chokepoint deciding whether we may pull/save an incoming group file
+    // right now. True when the global policy permits auto-download (Всегда, or Wi-Fi-only on Wi-Fi),
+    // OR the user explicitly tapped download for this specific file.
+    static boolean ngc_incoming_download_allowed(final String groupId, final String msgIdHash)
+    {
+        return HelperFiletransfer.attachment_auto_download_allowed()
+                || is_ngc_manual_download_requested(groupId, msgIdHash);
+    }
+
+    static boolean is_ngc_manual_download_requested(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return false;
+        }
+        return ngc_manual_download_requested.contains(ngc_file_progress_key(groupId, msgIdHash));
+    }
+
     static void touch_ngc_transfer_progress(final String groupId, final String msgIdHash)
     {
         if (groupId == null || msgIdHash == null)
@@ -5717,6 +5766,12 @@ public class HelperGroup
             return;
         }
         if (is_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash))
+        {
+            return;
+        }
+        // KHANDAQ (#120): never auto-pull when the attachment-download policy forbids it; a manual tap
+        // sets the bypass marker first, so explicit downloads still proceed.
+        if (!ngc_incoming_download_allowed(message.group_identifier, message.msg_id_hash))
         {
             return;
         }
@@ -5801,7 +5856,7 @@ public class HelperGroup
         }
     }
 
-    private static void clear_ngc_file_transfer_progress(final String groupId, final String msgIdHash)
+    static void clear_ngc_file_transfer_progress(final String groupId, final String msgIdHash)
     {
         if (groupId == null || msgIdHash == null)
         {
@@ -6110,6 +6165,7 @@ public class HelperGroup
             clear_ngc_file_transfer_progress(asm.groupId, msgIdHex);
             disarm_ngc_incoming_file_timeout(asm.groupId, msgIdHex);
             clear_ngc_file_transfer_failed(asm.groupId, msgIdHex);
+            clear_ngc_manual_download_requested(asm.groupId, msgIdHex); // KHANDAQ #120: one-shot bypass consumed
 
             final String displayName = (asm.displayFilename != null && !asm.displayFilename.isEmpty())
                     ? asm.displayFilename : asm.filename;
@@ -8870,10 +8926,10 @@ public class HelperGroup
             info.guardianproject.iocipher.File f2 = new info.guardianproject.iocipher.File(f1.getParent());
             f2.mkdirs();
 
-            // KHANDAQ (#120 / Figma "Загрузка вложений"): only auto-save the group file when the global
-            // policy allows (Всегда, or Только Wi-Fi on Wi-Fi). On Никогда the message is still inserted
-            // (shown as not-downloaded) so the user can fetch it manually.
-            if (HelperFiletransfer.attachment_auto_download_allowed())
+            // KHANDAQ (#120 / Figma "Загрузка вложений"): only auto-save the group file when policy allows
+            // (Всегда, or Только Wi-Fi on Wi-Fi) OR the user explicitly tapped download for it. On Никогда
+            // the message is still inserted (shown as not-downloaded) so a later manual tap re-fetches it.
+            if (ngc_incoming_download_allowed(group_id, m.msg_id_hash))
             {
                 save_group_incoming_file(m.path_name, m.file_name, data, header, file_size);
             }

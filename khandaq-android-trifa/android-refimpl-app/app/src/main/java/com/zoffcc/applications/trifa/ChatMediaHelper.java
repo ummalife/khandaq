@@ -206,6 +206,20 @@ public final class ChatMediaHelper
 
         final GroupMessage fresh = HelperFiletransfer.reloadGroupMessageFromDb(message);
 
+        // KHANDAQ (#120): an incoming group file that has not been downloaded yet (attachment policy =
+        // Никогда / Wi-Fi-only off Wi-Fi, so the broadcast chunks were dropped) renders as a loading
+        // placeholder. A tap is an explicit "download it now" — set the per-file bypass marker and kick
+        // off the fetch instead of silently doing nothing; progress then replaces the placeholder.
+        if ((fresh != null) && (fresh.direction == 0)
+                && !HelperFiletransfer.isGroupMessageMediaReady(fresh, null)
+                && !HelperGroup.ngc_incoming_download_allowed(fresh.group_identifier, fresh.msg_id_hash))
+        {
+            HelperGroup.mark_ngc_manual_download_requested(fresh.group_identifier, fresh.msg_id_hash);
+            HelperGroup.retry_group_incoming_file_download(fresh);
+            HelperGeneric.display_toast(context.getString(R.string.file_transfer_downloading), false, 0);
+            return;
+        }
+
         if (!ensureGroupMessageMediaOpenable(context, fresh, exportPath))
         {
             return;

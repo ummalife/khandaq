@@ -621,6 +621,7 @@
     <string name="file_transfer_waiting_sender">Waiting for sender</string>
     <string name="file_transfer_sender_offline">Sender is offline. The file will download when they reconnect.</string>
     <string name="file_transfer_connection_issue">Connection issue — tap retry</string>
+    <string name="file_transfer_downloading">Downloading…</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">cancel Filetransfer</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">Do you want to cancel this Filetransfer?</string>
     <!-- Strings related to Settings -->

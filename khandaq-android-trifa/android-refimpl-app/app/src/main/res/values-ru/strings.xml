@@ -877,6 +877,7 @@
     <string name="file_transfer_waiting_sender">Ожидание отправителя</string>
     <string name="file_transfer_sender_offline">Отправитель не в сети. Файл будет загружен, когда отправитель подключится.</string>
     <string name="file_transfer_connection_issue">Проблема с соединением — нажмите «Повторить»</string>
+    <string name="file_transfer_downloading">Загрузка…</string>
     <string name="file_transfer_progress_format">%1$s / %2$s · %3$d%%</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">Отменить передачу</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">Вы хотите отменить передачу этого файла?</string>

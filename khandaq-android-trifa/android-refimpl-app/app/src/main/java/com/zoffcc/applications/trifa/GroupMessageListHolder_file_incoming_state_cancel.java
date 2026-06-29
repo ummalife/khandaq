@@ -605,10 +605,36 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
             ft_preview_image.setTag(R.id.ft_preview_image, previewSig);
         }
 
-        if (is_image)
+        // KHANDAQ (#120): incoming media not downloaded yet because the attachment policy forbids
+        // auto-download (and no explicit request). Show a clear download icon instead of an endless
+        // spinner; the touch listener (openGroupMessageMedia) turns a tap into the explicit fetch.
+        final boolean needs_manual_download = (message_.direction == 0) && (is_image || is_video)
+                && !HelperFiletransfer.isGroupMessageMediaReady(message_, null)
+                && !HelperGroup.ngc_incoming_download_allowed(message_.group_identifier, message_.msg_id_hash);
+
+        if (needs_manual_download)
         {
             ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
             textView.setVisibility(View.GONE);
+            try
+            {
+                GlideApp.with(context).clear(ft_preview_image);
+            }
+            catch (Exception ignored)
+            {
+            }
+            ft_preview_image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            ft_preview_image.setImageDrawable(new IconicsDrawable(context).
+                    icon(GoogleMaterial.Icon.gmd_file_download).color(Color.WHITE).sizeDp(48));
+            ft_preview_image.setTag(R.id.ft_preview_image,
+                    "dl:" + (message_.msg_id_hash != null ? message_.msg_id_hash : ""));
+            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null));
+        }
+        else if (is_image)
+        {
+            ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
+            textView.setVisibility(View.GONE);
+            ft_preview_image.setScaleType(ImageView.ScaleType.CENTER_CROP);
 
             ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null));
 

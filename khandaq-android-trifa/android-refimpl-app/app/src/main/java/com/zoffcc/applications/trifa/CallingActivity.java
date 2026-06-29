@@ -296,6 +296,92 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         v.setLayoutParams(lp);
     }
 
+    // KHANDAQ (#130): Picture-in-Picture. Pressing Home during a call shrinks the call into a floating
+    // window (the remote video keeps rendering + the call stays alive while using other apps); the control
+    // chrome (sliders, buttons, status/overlay boxes, self-preview) is hidden in PiP and restored on exit.
+    private final java.util.HashMap<View, Integer> pip_hidden_views = new java.util.HashMap<>();
+    private static final int[] PIP_HIDE_IDS = {
+            R.id.quality_slider_container, R.id.bottom, R.id.top_text_line,
+            R.id.calling_friend_online_status, R.id.video_box_self_preview_01,
+            R.id.video_box_left_top_01, R.id.video_box_right_top_01, R.id.video_box_aec,
+            R.id.video_speaker_aec, R.id.video_box_right_volumeslider_01,
+            R.id.video_box_right_video_add_delay_slider_01,
+            R.id.audio_bar_in_v, R.id.audio_bar_out_v, R.id.debug001, R.id.caller_avatar_view
+    };
+
+    @Override
+    public void onUserLeaveHint()
+    {
+        super.onUserLeaveHint();
+        enterPipIfPossible();
+    }
+
+    private void enterPipIfPossible()
+    {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O)
+        {
+            return;
+        }
+        try
+        {
+            if (!getPackageManager().hasSystemFeature(
+                    android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE))
+            {
+                return;
+            }
+            final android.app.PictureInPictureParams params = new android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(new android.util.Rational(9, 16))
+                    .build();
+            enterPictureInPictureMode(params);
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "enterPipIfPossible:EE:" + e.getMessage());
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode,
+                                              android.content.res.Configuration newConfig)
+    {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        setControlsHiddenForPip(isInPictureInPictureMode);
+    }
+
+    private void setControlsHiddenForPip(final boolean hide)
+    {
+        try
+        {
+            if (hide)
+            {
+                for (final int id : PIP_HIDE_IDS)
+                {
+                    final View v = findViewById(id);
+                    if (v != null && !pip_hidden_views.containsKey(v))
+                    {
+                        pip_hidden_views.put(v, v.getVisibility());
+                        v.setVisibility(View.GONE);
+                    }
+                }
+            }
+            else
+            {
+                for (final java.util.Map.Entry<View, Integer> e : pip_hidden_views.entrySet())
+                {
+                    if (e.getKey() != null)
+                    {
+                        e.getKey().setVisibility(e.getValue());
+                    }
+                }
+                pip_hidden_views.clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.w(TAG, "setControlsHiddenForPip:EE:" + ex.getMessage());
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {

@@ -25,17 +25,13 @@
 
             <de.hdodenhof.circleimageview.CircleImageView xmlns:app="http://schemas.android.com/apk/res-auto"
                 android:id="@+id/fi_profile_icon"
-                android:layout_width="match_parent"
-                android:layout_height="300dp"
-                android:layout_gravity="center"
-                android:layout_marginLeft="15dp"
-                android:layout_marginTop="10dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginBottom="20dp"
-                android:paddingTop="2dp"
-                android:paddingBottom="2dp"
+                android:layout_width="110dp"
+                android:layout_height="110dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="16dp"
                 android:src="@mipmap/ic_launcher_round"
-                app:civ_border_color="#40000000"
+                app:civ_border_color="@color/khandaq_teal"
                 app:civ_border_width="2dp" />
 
             <!-- KHANDAQ (#56): open the 1:1 chat from the contact profile (parity with iOS). -->
@@ -44,14 +40,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginLeft="15dp"
-                android:layout_marginRight="15dp"
-                android:layout_marginBottom="15dp"
-                android:drawableStart="@android:drawable/ic_dialog_email"
-                android:drawablePadding="8dp"
-                android:paddingLeft="20dp"
-                android:paddingRight="20dp"
-                android:text="@string/friend_info_send_message" />
+                android:layout_marginBottom="20dp"
+                android:background="@drawable/bg_onboarding_btn"
+                android:minHeight="48dp"
+                android:paddingLeft="28dp"
+                android:paddingRight="28dp"
+                android:text="@string/friend_info_send_message"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white" />
 
             <LinearLayout
                 android:layout_width="match_parent"

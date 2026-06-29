@@ -206,6 +206,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static View video_box_self_preview_01 = null;
     static View video_box_left_top_01 = null;
     static View video_box_right_top_01 = null;
+    // KHANDAQ (#130): self-view enlarge toggle state. Base sizes (dp) from activity_calling.xml.
+    static boolean self_view_enlarged = false;
+    private static final float SELF_VIEW_ENLARGE_FACTOR = 2.2f;
+    private static final float SELF_VIEW_CONTAINER_W_DP = 125f;
+    private static final float SELF_VIEW_CONTAINER_H_DP = 166f;
+    private static final float SELF_VIEW_INNER_W_DP = 120f;
+    private static final float SELF_VIEW_INNER_H_DP = 160f;
     final static String MIME_TYPE = "video/avc";   // H.264 Advanced Video Coding
     final static int FRAME_RATE = 30;
     final static int IFRAME_INTERVAL = 2;
@@ -238,6 +245,56 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     private static int BUFFER_DEQUEUE_FEEDER_TIMEOUT_US = 0; // "us" feed raw data to encoder
 
     static Object VIDEO_ROTATION_LOCK = new Object();
+
+    // KHANDAQ (#130): toggle the self-camera preview between its normal corner size and ~2.2x so the user
+    // can see themselves bigger during a video call. Scales the container + inner border frame + the camera
+    // drawing overlay (camera_surfaceview is 0dp; the overlay does the rendering and rescales to its bounds).
+    static void toggleSelfViewEnlarged()
+    {
+        try
+        {
+            if (video_box_self_preview_01 == null)
+            {
+                return;
+            }
+            self_view_enlarged = !self_view_enlarged;
+            final float f = self_view_enlarged ? SELF_VIEW_ENLARGE_FACTOR : 1.0f;
+            setSelfViewSizeDp(video_box_self_preview_01, SELF_VIEW_CONTAINER_W_DP * f, SELF_VIEW_CONTAINER_H_DP * f);
+            if (video_box_self_preview_01 instanceof ViewGroup)
+            {
+                final ViewGroup container = (ViewGroup) video_box_self_preview_01;
+                if (container.getChildCount() > 0)
+                {
+                    setSelfViewSizeDp(container.getChildAt(0), SELF_VIEW_INNER_W_DP * f, SELF_VIEW_INNER_H_DP * f);
+                }
+            }
+            final View overlay = video_box_self_preview_01.findViewById(R.id.camera_drawing_overlay);
+            if (overlay != null)
+            {
+                setSelfViewSizeDp(overlay, SELF_VIEW_INNER_W_DP * f, SELF_VIEW_INNER_H_DP * f);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "toggleSelfViewEnlarged:EE:" + e.getMessage());
+        }
+    }
+
+    private static void setSelfViewSizeDp(final View v, final float wDp, final float hDp)
+    {
+        if (v == null)
+        {
+            return;
+        }
+        final ViewGroup.LayoutParams lp = v.getLayoutParams();
+        if (lp == null)
+        {
+            return;
+        }
+        lp.width = (int) HelperGeneric.dp2px(wDp);
+        lp.height = (int) HelperGeneric.dp2px(hDp);
+        v.setLayoutParams(lp);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -379,6 +436,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         video_box_self_preview_01.setVisibility(View.INVISIBLE);
         video_box_left_top_01.setVisibility(View.INVISIBLE);
         video_box_right_top_01.setVisibility(View.INVISIBLE);
+
+        // KHANDAQ (#130): tap your own camera preview to enlarge it (small <-> ~2.2x, corner-anchored),
+        // so you can see yourself bigger during a video call; tap again to restore.
+        self_view_enlarged = false;
+        video_box_self_preview_01.setOnClickListener(v -> toggleSelfViewEnlarged());
 
         volume_slider_seekbar_01 = (SeekBar) findViewById(R.id.volume_slider_seekbar);
         video_add_delay_slider_seekbar_01 = (SeekBar) findViewById(R.id.video_add_delay_slider_seekbar);

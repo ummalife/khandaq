@@ -527,6 +527,26 @@ public class SettingsActivity extends AppCompatPreferenceActivity
                     return true;
                 }
             });
+
+            // KHANDAQ: developer-only categories (network / ! unsafe ! / ! eXperimental !) expose raw
+            // bootstrap & experimental toggles not meant for end users. Hidden in release builds (kept
+            // in debug). Done at the END of onCreate so the findPreference setup above still runs.
+            if (!org.khandaq.messenger.BuildConfig.DEBUG)
+            {
+                final android.preference.PreferenceScreen prefScreen = getPreferenceScreen();
+                if (prefScreen != null)
+                {
+                    for (final String catKey : new String[]{"cat_dev_network", "cat_dev_unsafe",
+                                                            "cat_dev_experimental"})
+                    {
+                        final Preference devCat = findPreference(catKey);
+                        if (devCat != null)
+                        {
+                            prefScreen.removePreference(devCat);
+                        }
+                    }
+                }
+            }
         }
     }
 

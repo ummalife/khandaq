@@ -252,14 +252,14 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="network">
+    <PreferenceCategory android:key="cat_dev_network" android:title="network">
         <Preference
             android:key="custom_bootstrap_nodes"
             android:summary="__"
             android:title="@string/pref_title_custom_bootstrap_nodes" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="! unsafe !">
+    <PreferenceCategory android:key="cat_dev_unsafe" android:title="! unsafe !">
 
         <SwitchPreference
             android:defaultValue="false"
@@ -270,7 +270,7 @@
     </PreferenceCategory>
 
 
-    <PreferenceCategory android:title="! eXperimental !">
+    <PreferenceCategory android:key="cat_dev_experimental" android:title="! eXperimental !">
 
         <EditTextPreference
             android:defaultValue="80"

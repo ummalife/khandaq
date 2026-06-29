@@ -337,7 +337,9 @@
     <color name="md_grey_800">#424242</color>
     <color name="md_grey_900">#FFFFFF</color>
     <color name="md_black_1000">#8AFFFFFF</color>
-    <color name="text_on_light_surface">#DE000000</color>
+    <!-- KHANDAQ: the "light surface" (tg_chat_bg group-info cards / conf rows) actually goes DARK in night,
+         so this text must be light in dark theme — was #DE000000 (black) → invisible group name in dark. -->
+    <color name="text_on_light_surface">#DEFFFFFF</color>
     <color name="text_on_dark_surface">#E2E8F0</color>
     <color name="chat_input_text">@color/tg_chat_input_text</color>
     <color name="message_bubble_text">#FFFFFF</color>

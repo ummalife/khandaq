@@ -1,0 +1,57 @@
+{
+  "version": "0.2.10",
+  "date": "2026-06-29",
+  "title": "Android — full Figma redesign: new headers, chat wallpaper, redesigned profile & settings, attachment-download control",
+  "summary": "The Android app gets the new Khandaq look across the board — onboarding, the chats list, conversations, contacts, settings and profile — with single-row chat headers, brand-teal accents, grouped setting cards and a proper light/dark theme. Conversations now show the Khandaq doodle wallpaper. Profile gains full-screen Name/Status editing and a MyID QR pop-up; Settings adds an Attachment download control (Never / Wi-Fi only / Always) and a dark-theme switch; Contacts gets an add button, a restyled add screen and a 'share your MyID' empty state; group chats get the same clean single-row header (avatar + member count + ⋮ menu). Also fixes the header theme toggle that flipped straight back to its previous mode.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Android — full visual redesign to the new Khandaq look",
+      "description": "Onboarding, the chats list, conversations, contacts, settings and profile have been restyled to the new design: single-row chat headers, brand-teal accents, grouped cards and consistent light/dark theming. Secondary screens (group create/info, maintenance, share, about and more) now use the same clean light headers.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Android — the header theme toggle now sticks",
+      "description": "Tapping the sun/moon icon in the header switched the theme but flipped straight back a moment later. The dark-mode switch's saved state was re-firing the toggle on screen recreation; it no longer does, so light/dark switching is reliable.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Android — control how attachments download",
+      "description": "A new Settings → 'Attachment download' option lets you choose Never, Wi-Fi only or Always. It applies to both 1:1 and group chats, so incoming group files follow your choice instead of always downloading.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — chat wallpaper",
+      "description": "Conversations (1:1, group and conference) now show the Khandaq doodle wallpaper behind messages, matching the design.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — redesigned profile",
+      "description": "A card layout with avatar, full-screen Name and Status editing, a MyID card with copy-ID and a 'Show QR code' pop-up, the Tox capabilities row, and a Log out action.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — redesigned settings",
+      "description": "Grouped cards with brand-teal switches (dark theme, notification preview, group system messages), profile export/import and the new attachment-download control.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — redesigned contacts",
+      "description": "An add-contact button, a brand-aligned add-contact screen (with QR scan kept), and a 'you have no contacts yet' empty state that lets you copy your MyID or show your QR code so others can add you.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — group chat single-row header",
+      "description": "Group chats now use the same clean one-row header as 1:1 chats: back, group avatar, name with member count, and a ⋮ menu holding search, members, add person and video.",
+      "platforms": ["android"]
+    }
+  ]
+}

@@ -48,6 +48,72 @@ public final class MediaSendPreviewHelper
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
     }
 
+    /** KHANDAQ (Figma attachments grid): is the device media-read permission granted? */
+    public static boolean hasMediaReadPermission(final Context context)
+    {
+        if (context == null)
+        {
+            return false;
+        }
+        final String perm = (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+                ? android.Manifest.permission.READ_MEDIA_IMAGES
+                : android.Manifest.permission.READ_EXTERNAL_STORAGE;
+        return context.checkSelfPermission(perm) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Recent device images + videos (newest first), as content Uris, for the in-app attach grid. */
+    public static ArrayList<Uri> queryRecentMedia(final Context context, final int limit)
+    {
+        final ArrayList<Uri> out = new ArrayList<>();
+        if (context == null || !hasMediaReadPermission(context))
+        {
+            return out;
+        }
+        android.database.Cursor c = null;
+        try
+        {
+            final Uri collection = android.provider.MediaStore.Files.getContentUri("external");
+            final String[] projection = {
+                    android.provider.MediaStore.Files.FileColumns._ID,
+                    android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE
+            };
+            final String selection = android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE + "=? OR "
+                    + android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE + "=?";
+            final String[] args = {
+                    String.valueOf(android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE),
+                    String.valueOf(android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
+            };
+            final String sort = android.provider.MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC";
+            c = context.getContentResolver().query(collection, projection, selection, args, sort);
+            if (c != null)
+            {
+                final int idCol = c.getColumnIndexOrThrow(android.provider.MediaStore.Files.FileColumns._ID);
+                final int typeCol = c.getColumnIndexOrThrow(android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE);
+                while (c.moveToNext() && out.size() < limit)
+                {
+                    final long id = c.getLong(idCol);
+                    final int type = c.getInt(typeCol);
+                    final Uri base = (type == android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO)
+                            ? android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                            : android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                    out.add(android.content.ContentUris.withAppendedId(base, id));
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "queryRecentMedia:EE:" + e.getMessage());
+        }
+        finally
+        {
+            if (c != null)
+            {
+                try { c.close(); } catch (Exception ignored) { }
+            }
+        }
+        return out;
+    }
+
     /** @return true if preview activity was started */
     public static boolean launchPreviewIfNeeded(final Activity activity, final Intent data,
                                                 final String target, final long friendnum,

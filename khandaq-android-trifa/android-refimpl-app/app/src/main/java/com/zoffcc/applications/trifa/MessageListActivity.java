@@ -1713,6 +1713,49 @@ public class MessageListActivity extends AppCompatActivity
             sheet.dismiss();
             open_gallery_picker();
         });
+
+        // KHANDAQ (Figma attachments 2031:13703): in-app grid of recent device media above the chips.
+        // Tapping a thumbnail routes the content Uri into the existing send preview. If the media-read
+        // permission is missing the grid stays hidden and the Галерея chip (system picker) is the fallback.
+        final androidx.recyclerview.widget.RecyclerView grid = content.findViewById(R.id.attach_media_grid);
+        final java.util.ArrayList<Uri> recentMedia = MediaSendPreviewHelper.queryRecentMedia(this, 60);
+        if (!recentMedia.isEmpty())
+        {
+            grid.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 4));
+            grid.setAdapter(new MediaGridAdapter(recentMedia, uri ->
+            {
+                sheet.dismiss();
+                final long fn = get_current_friendnum();
+                final Intent picked = new Intent();
+                picked.setData(uri);
+                if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, picked,
+                        MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true))
+                {
+                    outgoingMediaPickerActive = true;
+                }
+                else
+                {
+                    MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(uri),
+                            MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true);
+                }
+            }));
+            grid.setVisibility(View.VISIBLE);
+        }
+        else if (!MediaSendPreviewHelper.hasMediaReadPermission(this))
+        {
+            try
+            {
+                final String[] perms = (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+                        ? new String[]{android.Manifest.permission.READ_MEDIA_IMAGES,
+                        android.Manifest.permission.READ_MEDIA_VIDEO}
+                        : new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE};
+                requestPermissions(perms, 9100);
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
         sheet.setContentView(content);
         sheet.show();
     }

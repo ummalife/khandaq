@@ -25,6 +25,17 @@
         android:textSize="18sp"
         android:textStyle="bold" />
 
+    <!-- Figma attachments grid: recent device media; tap routes into the send preview. -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/attach_media_grid"
+        android:layout_width="match_parent"
+        android:layout_height="232dp"
+        android:layout_marginBottom="14dp"
+        android:clipToPadding="false"
+        android:paddingStart="3dp"
+        android:paddingEnd="3dp"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

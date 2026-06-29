@@ -97,6 +97,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:background="@drawable/bg_onboarding_btn"
+                android:minWidth="120dp"
+                android:minHeight="44dp"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
                 android:text="@string/group_member_action_send" />
         </LinearLayout>
     </LinearLayout>

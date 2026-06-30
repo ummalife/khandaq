@@ -315,3 +315,57 @@ QCheckBox::indicator:checked
 {
     image: url("@getImagePath(window/switch_on.png)");
 }
+
+/* KHANDAQ (Figma): self-profile (ProfileForm root = #IdentitySettings) — grouped cards, inset value fields, rounded buttons */
+QWidget#IdentitySettings QGroupBox
+{
+    background-color: @themeMedium;
+    border: none;
+    border-radius: 12px;
+    margin-top: 24px;
+    padding: 16px;
+}
+QWidget#IdentitySettings QGroupBox::title
+{
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 4px;
+    bottom: 6px;
+    color: @groundExtra;
+}
+QWidget#IdentitySettings QLineEdit
+{
+    background: @groundBase;
+    border: 1px solid @themeMediumDark;
+    border-radius: 10px;
+    padding: 9px 12px;
+    color: @mainText;
+}
+QWidget#IdentitySettings QLineEdit:focus
+{
+    border: 1px solid @action;
+}
+QWidget#IdentitySettings QLabel#toxId
+{
+    background: @groundBase;
+    border: 1px solid @themeMediumDark;
+    border-radius: 10px;
+    padding: 12px;
+    color: @mainText;
+}
+QWidget#IdentitySettings QPushButton
+{
+    background: @themeMediumDark;
+    color: @mainText;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+QWidget#IdentitySettings QPushButton:hover
+{
+    background: @themeLight;
+}
+QWidget#IdentitySettings QPushButton:pressed
+{
+    background: @groundBase;
+}

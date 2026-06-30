@@ -43,12 +43,17 @@ LoginScreen::LoginScreen(Settings& settings_, Style& style,
 {
     ui->setupUi(this);
 
-    constexpr int logoW = 130;
-    constexpr int logoH = 37;
-    ui->label_7->setPixmap(style.scaleSvgImage(QStringLiteral(":/resources/khandaq/logo.svg"),
-        static_cast<uint32_t>(logoW), static_cast<uint32_t>(logoH)));
+    // KHANDAQ (Figma onboarding): centered wordmark (shield + "Khandaq"), theme-aware text colour.
+    constexpr int logoW = 210;
+    constexpr int logoH = 76;
+    const bool darkTheme = Style::getThemePath(settings).contains(QStringLiteral("dark"));
+    const QString wordmark = darkTheme ? QStringLiteral(":/resources/khandaq/wordmark_dark.png")
+                                       : QStringLiteral(":/resources/khandaq/wordmark_light.png");
+    QPixmap logoPix(wordmark);
+    ui->label_7->setPixmap(logoPix.scaled(logoW, logoH, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     ui->label_7->setScaledContents(false);
     ui->label_7->setFixedSize(logoW, logoH);
+    ui->label_7->setAlignment(Qt::AlignCenter);
 
     // permanently disables maximize button https://github.com/qTox/qTox/issues/1973
     setWindowFlags(windowFlags() & ~Qt::WindowMaximizeButtonHint);
@@ -98,6 +103,8 @@ void LoginScreen::reset(const QString& initialProfileName)
 
     if (allProfileNames.isEmpty()) {
         ui->stackedWidget->setCurrentIndex(0);
+        ui->newProfilePgbtn->setVisible(false);
+        ui->loginPgbtn->setVisible(true);
         ui->newUsername->setFocus();
     } else {
         for (const QString& profileName : allProfileNames) {
@@ -106,6 +113,8 @@ void LoginScreen::reset(const QString& initialProfileName)
 
         ui->loginUsernames->setCurrentText(initialProfileName);
         ui->stackedWidget->setCurrentIndex(1);
+        ui->newProfilePgbtn->setVisible(true);
+        ui->loginPgbtn->setVisible(false);
         ui->autoLoginCB->setChecked(settings.getAutoLogin());
         onLoginUsernameSelected(ui->loginUsernames->currentText());
         ui->loginPassword->setFocus();
@@ -148,11 +157,16 @@ bool LoginScreen::event(QEvent* event)
 void LoginScreen::onNewProfilePageClicked()
 {
     ui->stackedWidget->setCurrentIndex(0);
+    // KHANDAQ: only show the link that switches to the OTHER page.
+    ui->newProfilePgbtn->setVisible(false);
+    ui->loginPgbtn->setVisible(true);
 }
 
 void LoginScreen::onLoginPageClicked()
 {
     ui->stackedWidget->setCurrentIndex(1);
+    ui->newProfilePgbtn->setVisible(true);
+    ui->loginPgbtn->setVisible(false);
 }
 
 void LoginScreen::onCreateNewProfile()

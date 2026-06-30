@@ -1,68 +1,162 @@
-#LoginScreen
+/* KHANDAQ login / onboarding (Figma "Регистрация") — clean light look:
+   white surface, rounded pill fields, teal primary buttons, teal links. */
+
+#LoginScreen,
+#stackedWidget,
+#stackedWidget > QWidget
 {
-    background-color: #1c1c1c;
+    background-color: #ffffff;
 }
 
 #line
 {
-     color: #757575;
+    color: #e4e8ea;
+    background-color: #e4e8ea;
 }
 
-#stackedWidget
-{
-    background-color: #d6d2Cf;
-}
-
+/* old qTox angled section labels — neutralised + reused as clean bold titles */
 #labelNewProfile,
 #labelLoadProfile
 {
-    border-style: solid;
-    border-width: 15px 0 15px 15px;
-    border-color: #d6d2cf #d6d2cf #d6d2cf #1c1c1c;
-}
-#labelNewProfile
-{
-    margin-top:125px;
-    margin-bottom:45px;
-}
-#labelLoadProfile
-{
-    margin-top:165px;
-    margin-bottom:5px;
-}
-
-LoginScreen > QPushButton,
-QStackedWidget QPushButton
-{
-    background: transparent;
     border: none;
-    color: white;
-    font-size: 9pt;
+    margin: 0;
+    padding: 0;
+    color: #1f1f1f;
+    font-size: 18pt;
     font-weight: bold;
 }
 
-#loginButton,
-#importButton,
-#createAccountButton
+QLabel,
+QCheckBox
 {
-    border-radius:5px;
-    padding:5px;
-    background-color:#42a33a;
-}
-
-#loginButton:hover,
-#importButton:hover,
-#createAccountButton:hover
-{
-    background: #0c530d;
-}
-
-QLabel, QCheckBox, QProgressBar
-{
-    color: black;
+    color: #1f1f1f;
+    background: transparent;
 }
 
 QCheckBox:disabled
 {
-    color: gray;
+    color: #a4a4a4;
+}
+
+/* form field labels are smaller / muted */
+#label,
+#label_2,
+#label_8,
+#userNameLabel,
+#loginPasswordLabel
+{
+    color: #6f6f6f;
+    font-weight: bold;
+    font-size: 9pt;
+}
+
+/* rounded pill input fields */
+QLineEdit,
+PasswordEdit,
+QComboBox
+{
+    background-color: #f2f4f6;
+    border: 1px solid #f2f4f6;
+    border-radius: 14px;
+    padding: 9px 14px;
+    min-height: 20px;
+    color: #1f1f1f;
+    selection-background-color: #029b7d;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus,
+PasswordEdit:focus,
+QComboBox:focus,
+QComboBox:on
+{
+    border: 1px solid #029b7d;
+    background-color: #ffffff;
+}
+
+QComboBox::drop-down
+{
+    border: none;
+    width: 28px;
+}
+
+QComboBox QAbstractItemView
+{
+    background-color: #ffffff;
+    border: 1px solid #e4e8ea;
+    border-radius: 8px;
+    selection-background-color: #029b7d;
+    selection-color: #ffffff;
+    color: #1f1f1f;
+    outline: none;
+}
+
+/* primary buttons = teal pills */
+#createAccountButton,
+#loginButton
+{
+    background-color: #029b7d;
+    color: #ffffff;
+    border: none;
+    border-radius: 16px;
+    padding: 11px 16px;
+    min-height: 24px;
+    font-size: 10pt;
+    font-weight: bold;
+}
+
+#createAccountButton:hover,
+#loginButton:hover
+{
+    background-color: #02795f;
+}
+
+#createAccountButton:pressed,
+#loginButton:pressed
+{
+    background-color: #016b54;
+}
+
+#createAccountButton:disabled,
+#loginButton:disabled
+{
+    background-color: #b9d8d0;
+    color: #eafaf5;
+}
+
+/* secondary / link buttons = teal text */
+#importButton,
+#newProfilePgbtn,
+#loginPgbtn
+{
+    background: transparent;
+    border: none;
+    color: #029b7d;
+    font-size: 10pt;
+    font-weight: bold;
+    padding: 6px 8px;
+}
+
+#importButton:hover,
+#newProfilePgbtn:hover,
+#loginPgbtn:hover
+{
+    color: #02795f;
+}
+
+/* password strength meter */
+QProgressBar
+{
+    background-color: #f2f4f6;
+    border: none;
+    border-radius: 4px;
+    max-height: 6px;
+    text-align: center;
+    color: transparent;
+}
+
+QProgressBar::chunk
+{
+    background-color: #029b7d;
+    border-radius: 4px;
 }

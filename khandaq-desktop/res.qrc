@@ -16,6 +16,8 @@
         <file>img/icons/khandaq.svg</file>
         <file>resources/khandaq/icon.svg</file>
         <file>resources/khandaq/logo.svg</file>
+        <file>resources/khandaq/wordmark_light.png</file>
+        <file>resources/khandaq/wordmark_dark.png</file>
         <file>resources/khandaq/theme.qss</file>
         <file>resources/khandaq/login.qss</file>
         <file>resources/khandaq/checkmark.svg</file>

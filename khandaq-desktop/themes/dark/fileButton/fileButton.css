@@ -1,10 +1,10 @@
 QPushButton
 {
-    background-color: #10b98f;
+    background-color: transparent;
     background-image: url("@getImagePath(fileButton/fileButton.svg)");
     background-repeat: none;
     background-position: center;
-    border-bottom-right-radius: 5px;
+    border-radius: 18px;
     border: none;
     width: 24px;
     height: 24px;

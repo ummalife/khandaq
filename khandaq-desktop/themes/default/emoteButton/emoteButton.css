@@ -1,10 +1,10 @@
 QPushButton
 {
-    background-color: #029b7d;
+    background-color: transparent;
     background-image: url("@getImagePath(emoteButton/emoteButton.svg)");
     background-repeat: none;
     background-position: center;
-    border-top-right-radius: 5px;
+    border-radius: 18px;
     border: none;
     width: 24px;
     height: 24px;

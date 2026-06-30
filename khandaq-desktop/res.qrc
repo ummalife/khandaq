@@ -103,6 +103,10 @@
         <file>themes/dark/window/profile.css</file>
         <file>themes/dark/window/statusPanel.css</file>
         <file>themes/dark/window/window.css</file>
+        <file>themes/dark/window/switch_off.svg</file>
+        <file>themes/dark/window/switch_on.svg</file>
+        <file>themes/dark/window/switch_off.png</file>
+        <file>themes/dark/window/switch_on.png</file>
         <file>themes/dark/chatArea/info.svg</file>
         <file>themes/dark/chatArea/spinner.svg</file>
         <file>themes/dark/chatArea/typing.svg</file>
@@ -170,6 +174,10 @@
         <file>themes/default/window/profile.css</file>
         <file>themes/default/window/statusPanel.css</file>
         <file>themes/default/window/window.css</file>
+        <file>themes/default/window/switch_off.svg</file>
+        <file>themes/default/window/switch_on.svg</file>
+        <file>themes/default/window/switch_off.png</file>
+        <file>themes/default/window/switch_on.png</file>
         <file>themes/default/chatArea/info.svg</file>
         <file>themes/default/chatArea/spinner.svg</file>
         <file>themes/default/chatArea/typing.svg</file>

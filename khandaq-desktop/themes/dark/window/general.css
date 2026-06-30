@@ -68,34 +68,9 @@ QCheckBox
     color: @mainText;
 }
 
-QCheckBox::indicator {
-    width: 12px;
-    height: 12px;
-    border: 2px solid #514f4f;
-    border-radius: 2px;
-}
-
-QCheckBox::indicator:checked {
-    image: url("@getImagePath(settings/checkboxChecked.svg)");
-}
-
-QCheckBox::indicator:checked:pressed,
-QCheckBox::indicator:unchecked:pressed {
-    background: #514f4f;
-}
-
 QCheckBox:disabled
 {
     color: grey;
-}
-
-QCheckBox:indicator:disabled {
-    border: 2px solid #373535;
-    border-radius: 2px;
-}
-
-QCheckBox:indicator:checked:disabled {
-    image: url("@getImagePath(settings/checkboxCheckedDisabled.svg)");
 }
 
 QSpinBox, QDoubleSpinBox
@@ -321,4 +296,22 @@ QLabel#unstableVersion
 {
     color: black;
     background-color: @yellow;
+}
+
+/* KHANDAQ (Figma): Telegram-style toggle switches instead of plain checkboxes (settings etc.). */
+QCheckBox::indicator
+{
+    width: 38px;
+    height: 22px;
+    border: none;
+    border-radius: 0px;
+    background: transparent;
+}
+QCheckBox::indicator:unchecked
+{
+    image: url("@getImagePath(window/switch_off.png)");
+}
+QCheckBox::indicator:checked
+{
+    image: url("@getImagePath(window/switch_on.png)");
 }

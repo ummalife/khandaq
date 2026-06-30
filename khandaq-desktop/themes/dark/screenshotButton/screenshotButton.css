@@ -4,7 +4,7 @@ QPushButton
     background-image: url("@getImagePath(screenshotButton/screenshotButton.svg)");
     background-repeat: none;
     background-position: center;
-    border-top-left-radius: 5px;
+    border-radius: 18px;
     border: none;
     width: 24px;
     height: 24px;

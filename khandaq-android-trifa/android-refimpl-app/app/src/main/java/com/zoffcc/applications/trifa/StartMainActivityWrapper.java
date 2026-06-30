@@ -79,6 +79,23 @@ public class StartMainActivityWrapper extends AppCompatActivity
             Log.i(TAG, "change_msg_notification:EE01:" + e.getMessage());
         }
 
+        // KHANDAQ (Профиль → Детали → Удалить профиль): a pending wipe deletes the encrypted DB here,
+        // in this fresh process (no open file handles), before any DB/VFS resolution → onboarding.
+        try
+        {
+            final SharedPreferences wprefs = PreferenceManager.getDefaultSharedPreferences(this);
+            if (wprefs.getBoolean(ProfileDetailsActivity.PREF__pending_profile_wipe, false))
+            {
+                Log.i(TAG, "pending_profile_wipe: wiping profile");
+                wprefs.edit().remove(ProfileDetailsActivity.PREF__pending_profile_wipe).commit();
+                DbSecretKeyStorage.wipeUserProfile(this);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "pending_profile_wipe:EE:" + e.getMessage());
+        }
+
         boolean already_mounted = false;
 
         Log.i(TAG, "0001");

@@ -48,6 +48,36 @@ public final class MediaSendPreviewHelper
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
     }
 
+    /**
+     * KHANDAQ (Figma attachments — no Video/Photos/Audio tabs): build the cleanest media picker the
+     * device offers — the modern system Photo Picker on Android 13+ (single clean grid, no tabs),
+     * otherwise a media-only document picker (image/* + video/*, no Audio/Files tabs). Results come
+     * back the same way (single = getData, multi = getClipData), so onActivityResult is unchanged.
+     */
+    public static Intent buildMediaPickerIntent(final Context context)
+    {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+        {
+            final Intent intent = new Intent(android.provider.MediaStore.ACTION_PICK_IMAGES);
+            try
+            {
+                intent.putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX,
+                        android.provider.MediaStore.getPickImagesMaxLimit());
+            }
+            catch (Throwable ignored)
+            {
+            }
+            return intent;
+        }
+        final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        return intent;
+    }
+
     /** KHANDAQ (Figma attachments grid): is the device media-read permission granted? */
     public static boolean hasMediaReadPermission(final Context context)
     {

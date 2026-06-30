@@ -2386,15 +2386,9 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     private void open_group_gallery_picker()
     {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
-        {
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, "*/*");
-        }
-        MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
+        // KHANDAQ (Figma): clean media picker — modern Photo Picker (no Video/Photos/Audio tabs) on
+        // Android 13+, else a media-only document picker. onActivityResult handling is unchanged.
+        Intent intent = MediaSendPreviewHelper.buildMediaPickerIntent(this);
         mediaPreviewResultHandled = false;
         startActivityForResult(intent, MEDIAPICK_ID_001);
     }

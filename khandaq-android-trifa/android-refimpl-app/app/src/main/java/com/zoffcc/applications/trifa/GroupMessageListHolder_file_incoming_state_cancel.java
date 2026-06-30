@@ -43,7 +43,10 @@ import android.widget.TextView;
 
 import com.amulyakhare.textdrawable.TextDrawable;
 import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.MultiTransformation;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.load.resource.bitmap.FitCenter;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.request.RequestOptions;
 import com.luseen.autolinklibrary.AutoLinkMode;
@@ -634,14 +637,19 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         {
             ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
             textView.setVisibility(View.GONE);
-            ft_preview_image.setScaleType(ImageView.ScaleType.CENTER_CROP);
 
             ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null));
 
             final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(message_);
+            // KHANDAQ (Figma): rounded photo bubble that HUGS the image at a sane size (override +
+            // FitCenter) instead of filling the row full-width.
+            ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_container);
+            ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_image);
             final RequestOptions glide_options = new RequestOptions().
-                    centerCrop().
-                    optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
+                    override(ChatBubbleUiHelper.media_thumb_max_w_px(context),
+                            ChatBubbleUiHelper.media_thumb_max_h_px(context)).
+                    transform(new MultiTransformation<>(new FitCenter(),
+                            new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
             // KHANDAQ (#67): always (re)issue the load so a recycled/cleared preview is repopulated
             // (served from Glide memory cache on repeat = no flicker); only the spinner reset is gated.

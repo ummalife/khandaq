@@ -44,7 +44,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.MultiTransformation;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.resource.bitmap.FitCenter;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.request.RequestOptions;
 import com.luseen.autolinklibrary.AutoLinkMode;
@@ -338,15 +340,21 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
                     {
                         // Log.i(TAG, "glide:img:001");
 
-                        final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                                new RoundedCorners((int) dp2px(20)));
-                        // apply(glide_options).
+                        // KHANDAQ (Figma): rounded photo bubble that HUGS the image at a sane size —
+                        // .override(max W/H) + FitCenter makes the bitmap the final fitted size, and the
+                        // preview view wraps to it (no full-width letterbox). RoundedCorners 16dp.
+                        ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_container);
+                        ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_image);
+                        final RequestOptions glide_options = new RequestOptions().
+                                override(ChatBubbleUiHelper.media_thumb_max_w_px(context),
+                                        ChatBubbleUiHelper.media_thumb_max_h_px(context)).
+                                transform(new MultiTransformation<>(new FitCenter(),
+                                        new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
-                        // loadImageFromUri(context, Uri.fromFile(new File(message2.filename_fullpath)), ft_preview_image,
-                        //                  true);
                         GlideApp.
                                 with(context).
                                 load(f2).
+                                apply(glide_options).
                                 diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                                 skipMemoryCache(false).
                                 priority(Priority.LOW).

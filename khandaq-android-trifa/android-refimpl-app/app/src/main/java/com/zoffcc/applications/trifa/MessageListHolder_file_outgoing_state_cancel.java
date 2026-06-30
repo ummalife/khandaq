@@ -38,6 +38,8 @@ import android.widget.TextView;
 
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.MultiTransformation;
+import com.bumptech.glide.load.resource.bitmap.FitCenter;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.request.RequestOptions;
 import com.luseen.autolinklibrary.AutoLinkMode;
@@ -289,12 +291,19 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                 {
                     try
                     {
-                        final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                                new RoundedCorners((int) dp2px(20)));
+                        // KHANDAQ (Figma): rounded photo bubble that HUGS the image (override + FitCenter).
+                        ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_container);
+                        ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_image);
+                        final RequestOptions glide_options = new RequestOptions().
+                                override(ChatBubbleUiHelper.media_thumb_max_w_px(context),
+                                        ChatBubbleUiHelper.media_thumb_max_h_px(context)).
+                                transform(new MultiTransformation<>(new FitCenter(),
+                                        new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
                         GlideApp.
                                 with(context).
                                 load(Uri.parse(message.filename_fullpath)).
+                                apply(glide_options).
                                 diskCacheStrategy(DiskCacheStrategy.NONE).
                                 skipMemoryCache(true).
                                 priority(Priority.LOW).
@@ -311,12 +320,19 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                     java.io.File f2 = new java.io.File(message.filename_fullpath);
                     try
                     {
-                        final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                                new RoundedCorners((int) dp2px(20)));
+                        // KHANDAQ (Figma): rounded photo bubble that HUGS the image (override + FitCenter).
+                        ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_container);
+                        ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_image);
+                        final RequestOptions glide_options = new RequestOptions().
+                                override(ChatBubbleUiHelper.media_thumb_max_w_px(context),
+                                        ChatBubbleUiHelper.media_thumb_max_h_px(context)).
+                                transform(new MultiTransformation<>(new FitCenter(),
+                                        new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
                         GlideApp.
                                 with(context).
                                 load(f2).
+                                apply(glide_options).
                                 diskCacheStrategy(DiskCacheStrategy.NONE).
                                 skipMemoryCache(true).
                                 priority(Priority.LOW).

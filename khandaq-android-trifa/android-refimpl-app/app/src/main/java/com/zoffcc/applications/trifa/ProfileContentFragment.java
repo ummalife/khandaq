@@ -485,6 +485,14 @@ public class ProfileContentFragment extends Fragment
             showQrButton.setOnClickListener(v -> showQrModal());
         }
 
+        // KHANDAQ: "Детали" (Figma) — PIN / смена пароля / удаление профиля.
+        final View detailsRow = view.findViewById(R.id.profile_details_row);
+        if (detailsRow != null)
+        {
+            detailsRow.setOnClickListener(v -> startActivity(
+                    new Intent(requireContext(), ProfileDetailsActivity.class)));
+        }
+
         // KHANDAQ: "Выйти" (Figma) — confirm, then log out and return to the login screen.
         final View logoutRow = view.findViewById(R.id.profile_logout_row);
         if (logoutRow != null)
@@ -926,24 +934,11 @@ public class ProfileContentFragment extends Fragment
                 my_tox_id_temp = "76518406F6A9F2217E8DC487CC783C25CC16A15EB36FF32E335A235342C48A39218F515C39A6";
             }
 
-            String my_pk_key_temp = my_tox_id_temp.substring(0, 64);
-            String my_nospam_temp = my_tox_id_temp.substring(64, 72);
-            String my_chksum_temp = my_tox_id_temp.substring(72, my_tox_id_temp.length());
-            String color_pkey = "<font color=\"#331bc5\">";
-            String color_nospam = "<font color=\"#990d45\">";
-            String color_chksum = "<font color=\"#006600\">";
-            String ec = "</font>";
-
-            if (is_nightmode_active(requireContext()))
-            {
-                color_pkey = "<font color=\"#8affffff\">";
-            }
-
+            // KHANDAQ (Figma): MyID = uniform muted monospace (textColor @color/onboarding_desc),
+            // no per-segment pkey/nospam/checksum coloring.
             if (mytoxid_textview != null)
             {
-                mytoxid_textview.setText(Html.fromHtml(
-                        color_pkey + my_pk_key_temp + ec + color_nospam + my_nospam_temp + ec + color_chksum +
-                        my_chksum_temp + ec));
+                mytoxid_textview.setText(my_tox_id_temp);
             }
         }
         catch (WriterException e)

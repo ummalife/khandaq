@@ -36,7 +36,9 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.MultiTransformation;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.load.resource.bitmap.FitCenter;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.request.RequestOptions;
 import com.luseen.autolinklibrary.AutoLinkMode;
@@ -299,12 +301,15 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
             {
                 try
                 {
-                    @SuppressWarnings("unused") final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                            new RoundedCorners((int) dp2px(20)));
+                    // KHANDAQ (Figma): rounded photo bubble (FitCenter + RoundedCorners combined).
+                    final RequestOptions glide_options = new RequestOptions().transform(
+                            new MultiTransformation<>(new FitCenter(),
+                                    new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
                     GlideApp.
                             with(context).
                             load(Uri.parse(message.filename_fullpath)).
+                            apply(glide_options).
                             diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                             skipMemoryCache(false).
                             priority(Priority.LOW).
@@ -321,12 +326,15 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
                 java.io.File f2 = new java.io.File(message2.filename_fullpath);
                 try
                 {
-                    @SuppressWarnings("unused") final RequestOptions glide_options = new RequestOptions().fitCenter().optionalTransform(
-                            new RoundedCorners((int) dp2px(20)));
+                    // KHANDAQ (Figma): rounded photo bubble (FitCenter + RoundedCorners combined).
+                    final RequestOptions glide_options = new RequestOptions().transform(
+                            new MultiTransformation<>(new FitCenter(),
+                                    new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
                     GlideApp.
                             with(context).
                             load(f2).
+                            apply(glide_options).
                             diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                             skipMemoryCache(false).
                             priority(Priority.LOW).

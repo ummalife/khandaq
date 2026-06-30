@@ -398,6 +398,92 @@ public final class DbSecretKeyStorage
         return dbFile.isFile() && dbFile.length() > 512;
     }
 
+    /**
+     * KHANDAQ (Профиль → Детали → Удалить профиль): erase the encrypted user DB and ALL key
+     * material. MUST run in a fresh process, before the DB/VFS is opened — see
+     * {@link StartMainActivityWrapper} which calls this when the pending-wipe flag is set.
+     */
+    static void wipeUserProfile(final Context context)
+    {
+        if (context == null)
+        {
+            return;
+        }
+        // 1) delete the encrypted DB directory (main.db, files.db, -wal, -journal, ...)
+        try
+        {
+            deleteRecursive(context.getDir("dbs", Context.MODE_PRIVATE));
+        }
+        catch (Exception ignored)
+        {
+        }
+        // 2) clear all stored key material + the onboarding gate from default prefs
+        try
+        {
+            PreferenceManager.getDefaultSharedPreferences(context).edit()
+                    .remove(PREFS_AUTO_KEY)
+                    .remove(PREFS_MIGRATED)
+                    .remove(PREFS_ENC_BLOB)
+                    .remove(PREFS_ENC_IV)
+                    .remove(PREFS_AUTO_KEY_LEGACY_BACKUP)
+                    .remove(PREFS_LAST_WORKING_ENC)
+                    .remove(PREFS_LAST_WORKING_IV)
+                    .remove(PREFS_DEVICE_BACKUP_ENC)
+                    .remove(PREFS_DEVICE_BACKUP_IV)
+                    .putBoolean("PW_SET_SCREEN_DONE", false)
+                    .commit();
+        }
+        catch (Exception ignored)
+        {
+        }
+        // 3) drop the Android Keystore aliases used to wrap the DB key
+        try
+        {
+            final KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            if (ks.containsAlias(KEYSTORE_ALIAS))
+            {
+                ks.deleteEntry(KEYSTORE_ALIAS);
+            }
+            if (ks.containsAlias(KEYSTORE_LAST_WORKING_ALIAS))
+            {
+                ks.deleteEntry(KEYSTORE_LAST_WORKING_ALIAS);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        // 4) reset the in-memory password hash global
+        try
+        {
+            PREF__DB_secrect_key__user_hash = "";
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    private static void deleteRecursive(final File f)
+    {
+        if (f == null || !f.exists())
+        {
+            return;
+        }
+        if (f.isDirectory())
+        {
+            final File[] kids = f.listFiles();
+            if (kids != null)
+            {
+                for (final File k : kids)
+                {
+                    deleteRecursive(k);
+                }
+            }
+        }
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+    }
+
     static void persistLastWorkingDbSecretKey(final Context context, final String dbSecretKey)
     {
         if (context == null || TextUtils.isEmpty(dbSecretKey))

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (iOS #9): soft translucent teal halo behind the big record mic -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/tg_voice_recording_halo" />
+</shape>

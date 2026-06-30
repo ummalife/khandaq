@@ -1,19 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ voice recording bar (iOS #9 look): smiley + red dot + timer | "Отмена" (centered) |
+     big teal mic with a translucent halo. Opaque, overlays the input row; the real mic button sits
+     underneath and keeps the hold gesture (see ChatVoiceRecordingUiHelper / MessageListActivity). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/voice_recording_bar"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
+    android:background="@color/tg_chat_input_bar_bg"
+    android:clickable="false"
     android:gravity="center_vertical"
     android:minHeight="@dimen/chat_input_icon_size"
     android:orientation="horizontal"
     android:visibility="gone"
     tools:visibility="visible">
 
+    <ImageView
+        android:id="@+id/voice_recording_emoji"
+        android:layout_width="@dimen/chat_input_icon_size"
+        android:layout_height="@dimen/chat_input_icon_size"
+        android:layout_marginEnd="6dp"
+        android:padding="@dimen/chat_input_icon_padding"
+        android:scaleType="fitCenter"
+        app:srcCompat="@drawable/i_emoji_google_category_people"
+        app:tint="@color/tg_chat_input_icon"
+        android:importantForAccessibility="no" />
+
     <View
         android:id="@+id/voice_recording_dot"
-        android:layout_width="8dp"
-        android:layout_height="8dp"
+        android:layout_width="9dp"
+        android:layout_height="9dp"
         android:layout_marginEnd="8dp"
         android:background="@drawable/bg_voice_recording_dot"
         android:importantForAccessibility="no" />
@@ -44,18 +61,32 @@
         android:paddingBottom="8dp"
         android:text="@string/voice_recording_cancel"
         android:textColor="@color/tg_voice_recording_action"
-        android:textSize="@dimen/chat_input_text_size" />
+        android:textSize="@dimen/chat_input_text_size"
+        android:textStyle="bold" />
 
-    <ImageButton
-        android:id="@+id/voice_recording_send"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <FrameLayout
+        android:layout_width="52dp"
+        android:layout_height="52dp"
         android:layout_marginStart="4dp"
-        android:background="@drawable/bg_voice_recording_send"
-        android:contentDescription="@string/voice_recording_send"
-        android:padding="8dp"
-        android:scaleType="centerInside"
-        android:src="@drawable/baseline_arrow_upward_24"
-        android:tint="@android:color/white" />
+        android:background="@drawable/bg_voice_record_halo">
+
+        <ImageButton
+            android:id="@+id/voice_recording_send"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_voice_recording_send"
+            android:contentDescription="@string/voice_recording_send"
+            android:padding="11dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/baseline_keyboard_voice_24"
+            android:tint="@android:color/white" />
+
+    </FrameLayout>
 
 </LinearLayout>

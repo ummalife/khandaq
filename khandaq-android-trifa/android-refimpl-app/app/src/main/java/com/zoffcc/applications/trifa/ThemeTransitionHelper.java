@@ -40,8 +40,11 @@ final class ThemeTransitionHelper
         captureSnapshot(activity);
         final SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(activity);
         settings.edit().putString("dark_mode_pref", darkModePrefValue).apply();
+        // KHANDAQ: AppCompatDelegate.setDefaultNightMode() already recreates the started activity
+        // (MainActivity does NOT handle uiMode in configChanges). The previous explicit
+        // activity.recreate() ran a SECOND recreate → the slow/janky double-rebuild. Let night-mode
+        // do the single recreate; scheduleCrossfadeAfterCreate() still plays the crossfade after it.
         MainApplication.applyDarkModeFromPref(darkModePrefValue);
-        activity.recreate();
     }
 
     static void scheduleCrossfadeAfterCreate(@NonNull final Activity activity)

@@ -110,6 +110,7 @@ public class MainApplication extends Application
         // KHANDAQ: media-codec warm-up is kicked off from attachBaseContext() (earliest entry point)
         // to maximise its head start before any chat with media is opened. See warmUpMediaCodecsAsync().
         DbSecretKeyStorage.onApplicationStart(this);
+        AppLockHelper.register(this);
         ensureFcmNotificationChannel();
         HelperToxNotification.ensureChannel(this);
         org.khandaq.messenger.HelperCallNotification.ensureChannel(this);

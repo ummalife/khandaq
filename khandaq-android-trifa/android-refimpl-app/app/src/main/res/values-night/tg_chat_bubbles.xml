@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="tg_chat_screen_bg">#1e1e1e</color>
+    <!-- KHANDAQ: matches the dark Figma chat wallpaper background (drawable-night-nodpi/chat_wallpaper.png) -->
+    <color name="tg_chat_screen_bg">#101319</color>
     <color name="tg_bubble_incoming">@color/khandaq_gunmetal</color>
     <color name="tg_bubble_incoming_stroke">@color/khandaq_gunmetal</color>
     <color name="tg_bubble_outgoing">#1A4D3A</color>
@@ -24,6 +25,8 @@
     <color name="tg_voice_recording_dot">#FF453A</color>
     <color name="tg_voice_recording_action">@color/khandaq_teal</color>
     <color name="tg_voice_recording_send_bg">@color/khandaq_teal</color>
+    <!-- KHANDAQ (iOS #9): translucent teal halo behind the big record mic -->
+    <color name="tg_voice_recording_halo">#3310B98F</color>
     <color name="tg_reply_preview_bg">#1A243036</color>
     <color name="tg_reply_preview_header">@color/khandaq_emerald</color>
     <color name="tg_reply_preview_text">#94A3B8</color>

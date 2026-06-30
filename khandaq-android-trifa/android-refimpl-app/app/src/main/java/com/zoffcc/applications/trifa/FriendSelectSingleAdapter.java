@@ -71,6 +71,7 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
         LayoutInflater layoutInflater = LayoutInflater.from(context);
         View view = layoutInflater.inflate(resource, null, false);
         TextView textViewName = view.findViewById(R.id.textViewName);
+        TextView textViewStatus = view.findViewById(R.id.textViewStatus);
         de.hdodenhof.circleimageview.CircleImageView avatar = (de.hdodenhof.circleimageview.CircleImageView) view.findViewById(
                 R.id.f_avatar_icon);
         ImageView f_status_icon = (ImageView) view.findViewById(R.id.f_status_icon);
@@ -84,6 +85,16 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
             // ------ now fill with data ------
             textViewName.setText(friend_entry.getName());
             ChatBubbleUiHelper.fill_friend_list_avatar(context, fl.tox_public_key_string, friend_entry.getName(), avatar);
+
+            // KHANDAQ (Figma): presence as green "в сети" / grey "не в сети" text, not colored dots.
+            if (textViewStatus != null)
+            {
+                final boolean online = fl.TOX_CONNECTION_real != TOX_CONNECTION_NONE.value;
+                textViewStatus.setText(online ? R.string.group_info_member_online : R.string.group_info_member_offline);
+                textViewStatus.setTextColor(context.getResources().getColor(
+                        online ? R.color.khandaq_teal : R.color.tg_chat_preview));
+                textViewStatus.setVisibility(View.VISIBLE);
+            }
 
             f_status_icon.setVisibility(View.VISIBLE);
             f_relay_icon.setVisibility(View.INVISIBLE);
@@ -168,7 +179,10 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
         {
             f_status_icon.setVisibility(View.INVISIBLE);
             f_relay_icon.setVisibility(View.INVISIBLE);
-            avatar.setBorderColor(Color.parseColor("#40000000"));
+            if (textViewStatus != null)
+            {
+                textViewStatus.setVisibility(View.GONE);
+            }
             textViewName.setText(friend_entry.getName());
         }
 

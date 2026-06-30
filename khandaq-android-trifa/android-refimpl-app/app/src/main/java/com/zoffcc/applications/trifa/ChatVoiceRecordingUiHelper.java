@@ -108,13 +108,22 @@ final class ChatVoiceRecordingUiHelper
 
     void show()
     {
-        if (inputBar != null)
-        {
-            inputBar.setVisibility(View.GONE);
-        }
+        // KHANDAQ (iOS hold-to-record): the recording bar is OPAQUE and overlays the input row on
+        // top — we do NOT hide the input bar, so the mic button stays alive UNDER the overlay and
+        // keeps the touch gesture it captured on ACTION_DOWN (release = send, slide = cancel).
         if (recordingBar != null)
         {
             recordingBar.setVisibility(View.VISIBLE);
+            final View dot = recordingBar.findViewById(R.id.voice_recording_dot);
+            if (dot != null)
+            {
+                final android.view.animation.AlphaAnimation blink =
+                        new android.view.animation.AlphaAnimation(1f, 0.2f);
+                blink.setDuration(600);
+                blink.setRepeatMode(android.view.animation.Animation.REVERSE);
+                blink.setRepeatCount(android.view.animation.Animation.INFINITE);
+                dot.startAnimation(blink);
+            }
         }
         setTimerText("0:00");
     }
@@ -123,6 +132,11 @@ final class ChatVoiceRecordingUiHelper
     {
         if (recordingBar != null)
         {
+            final View dot = recordingBar.findViewById(R.id.voice_recording_dot);
+            if (dot != null)
+            {
+                dot.clearAnimation();
+            }
             recordingBar.setVisibility(View.GONE);
         }
         if (inputBar != null)

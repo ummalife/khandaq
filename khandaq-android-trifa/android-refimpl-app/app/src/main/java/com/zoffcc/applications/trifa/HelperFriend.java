@@ -2658,10 +2658,11 @@ public class HelperFriend
     @Nullable
     static String dm_send_precheck_failure_reason(@Nullable final String friend_pubkey)
     {
-        if (is_dm_friend_request_pending(friend_pubkey))
-        {
-            return context_s.getString(R.string.dm_send_failed_pending_request);
-        }
+        // KHANDAQ: do NOT block on a "friend request pending" heuristic. Once the peer accepts,
+        // toxcore establishes the friendship but our capability/online heuristics only flip AFTER
+        // the first connection — so a freshly-accepted friend was wrongly blocked with
+        // "Ожидание принятия запроса в друзья". Let the message queue: it is stored + resent on
+        // connect (toxcore delivers once both peers are online). Only genuine blockers remain.
         if (!is_tox_started)
         {
             return context_s.getString(R.string.dm_send_failed_not_ready);
@@ -2752,6 +2753,13 @@ public class HelperFriend
         {
             return context_s.getString(R.string.dm_send_failed_no_network);
         }
+        // KHANDAQ: prefer the concrete "offline" reason over the "pending request" heuristic — a
+        // freshly-accepted friend that just isn't connected yet should read as offline/queued, not
+        // as an unaccepted request. The message is stored and resent when the peer comes online.
+        if (msg_num == -3)
+        {
+            return context_s.getString(R.string.dm_send_failed_friend_offline);
+        }
         if (is_dm_friend_request_pending(friend_pubkey))
         {
             return context_s.getString(R.string.dm_send_failed_pending_request);
@@ -2759,10 +2767,6 @@ public class HelperFriend
         if (msg_num == -2)
         {
             return context_s.getString(R.string.dm_send_failed_friend);
-        }
-        if (msg_num == -3)
-        {
-            return context_s.getString(R.string.dm_send_failed_friend_offline);
         }
         if (msg_num == -99)
         {

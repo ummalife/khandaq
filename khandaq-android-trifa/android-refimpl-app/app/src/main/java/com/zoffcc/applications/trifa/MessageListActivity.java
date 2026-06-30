@@ -201,6 +201,15 @@ public class MessageListActivity extends AppCompatActivity
     static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
     static boolean ml_is_recording = false;
     static boolean ml_is_rec_ok = false;
+    // KHANDAQ (iOS hold-to-record): mic ACTION_DOWN starts, ACTION_UP sends, slide-left cancels.
+    private float voice_rec_down_x = 0f;
+    private long voice_rec_down_ms = 0L;
+    private boolean voice_rec_cancelled = false;
+    // set when the finger is lifted before the (async) recording thread has even started → the
+    // thread self-aborts so a too-fast tap can't leave recording stuck running.
+    static boolean voice_rec_abort = false;
+    private static final float VOICE_REC_SLIDE_CANCEL_PX = 220f;
+    private static final long VOICE_REC_MIN_MS = 700L;
     static int global_typing = 0;
     Thread typing_flag_thread = null;
     final static int TYPING_FLAG_DEACTIVATE_DELAY_IN_MILLIS = 1000; // 1 second
@@ -847,7 +856,7 @@ public class MessageListActivity extends AppCompatActivity
                                 return;
                             }
 
-                            while (ml_is_recording)
+                            while (ml_is_recording && !voice_rec_abort)
                             {
                                 try
                                 {
@@ -858,6 +867,12 @@ public class MessageListActivity extends AppCompatActivity
                                 }
 
                                 set_recording_pop_text_s(seconds_time_format_or_empty(mAudioRecorder.progress()));
+                            }
+                            // KHANDAQ: lifted before the thread started → discard (no send).
+                            if (voice_rec_abort)
+                            {
+                                ml_is_recording = false;
+                                ml_is_rec_ok = false;
                             }
                             set_recording_pop_visibilty_s(false);
                             int rec_result = mAudioRecorder.stopRecord();
@@ -939,6 +954,59 @@ public class MessageListActivity extends AppCompatActivity
 
                 // Tap starts recording too (tap = start, tap again = stop & send); long-press still works.
                 v.performLongClick();
+            }
+        });
+
+        // KHANDAQ (iOS hold-to-record): hold the mic to record, release to send, slide left to cancel.
+        ml_button_recaudio.setOnTouchListener(new View.OnTouchListener()
+        {
+            @Override
+            public boolean onTouch(final View v, final android.view.MotionEvent ev)
+            {
+                // text present → the mic is a SEND button; let the click listener send the text.
+                if (ChatInputBarHelper.isSendMode((ImageButton) v))
+                {
+                    return false;
+                }
+                switch (ev.getActionMasked())
+                {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        voice_rec_cancelled = false;
+                        voice_rec_abort = false;
+                        voice_rec_down_x = ev.getRawX();
+                        voice_rec_down_ms = System.currentTimeMillis();
+                        if (!ml_is_recording && !ml_is_rec_ok)
+                        {
+                            v.performLongClick(); // starts the (async) recording thread
+                        }
+                        return true;
+                    case android.view.MotionEvent.ACTION_MOVE:
+                        if (ml_is_recording && !voice_rec_cancelled
+                                && (voice_rec_down_x - ev.getRawX()) > VOICE_REC_SLIDE_CANCEL_PX)
+                        {
+                            voice_rec_cancelled = true;
+                            display_toast(getString(R.string.voice_recording_cancel), false, 0);
+                        }
+                        return true;
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        if (ml_is_recording)
+                        {
+                            final boolean tooShort =
+                                    (System.currentTimeMillis() - voice_rec_down_ms) < VOICE_REC_MIN_MS;
+                            ml_is_rec_ok = !voice_rec_cancelled && !tooShort; // loop sends iff rec_ok
+                            ml_is_recording = false;                          // stops the rec loop
+                            set_recording_pop_visibilty_s(false);
+                        }
+                        else
+                        {
+                            // lifted before the async thread started → make it self-abort
+                            voice_rec_abort = true;
+                        }
+                        return true;
+                    default:
+                        return false;
+                }
             }
         });
 
@@ -1814,18 +1882,9 @@ public class MessageListActivity extends AppCompatActivity
 
     private void open_gallery_picker()
     {
-        // ACTION_OPEN_DOCUMENT is the intent to choose a file via the system's file browser.
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
-        {
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, "*/*");
-        }
-
-        MediaSendPreviewHelper.configureGalleryPickerIntent(intent);
+        // KHANDAQ (Figma): clean media picker — modern Photo Picker (no Video/Photos/Audio tabs) on
+        // Android 13+, else a media-only document picker. onActivityResult handling is unchanged.
+        Intent intent = MediaSendPreviewHelper.buildMediaPickerIntent(this);
 
         mediaPreviewResultHandled = false;
         outgoingMediaPickerActive = true;

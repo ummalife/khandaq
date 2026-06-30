@@ -13,6 +13,9 @@
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <!-- KHANDAQ: status bar matches toolbar (neutral), not off-brand green colorPrimaryDark -->
+        <item name="android:statusBarColor">@color/tg_chat_header_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
         <item name="colorAccent">@color/colorAccent</item>
         <item name="drawerArrowStyle">@style/DrawerArrowStyle</item>
         <item name="patternViewStyle">@style/PatternView</item>

@@ -28,9 +28,9 @@
     <string name="onboarding_back">Back</string>
     <string name="onboarding_login_title">Log in to profile</string>
     <string name="onboarding_login_btn">Log in</string>
-    <string name="import_step_1">Send the .tox file to your device (via email, Dropbox, or another option)</string>
-    <string name="import_step_2">Tap “Open”</string>
-    <string name="import_step_3">Choose Khandaq from the list of available apps</string>
+    <string name="import_step_1">Save your .tox profile file to this device (e.g. in Downloads, or from email or a messenger)</string>
+    <string name="import_step_2">Tap the “Import profile” button below</string>
+    <string name="import_step_3">Pick the .tox file in the file picker — your profile will be imported</string>
     <string name="import_step_4">Check the new profile name and tap OK</string>
     <string name="chat_action_search">Search</string>
     <string name="chat_action_video">Video call</string>
@@ -48,6 +48,20 @@
     <string name="settings_advanced">Advanced settings</string>
     <string name="profile_logout">Log out</string>
     <string name="profile_logout_confirm">Log out of this profile?</string>
+    <!-- Profile → Details (PIN / change password / delete) -->
+    <string name="profile_details">Details</string>
+    <string name="pd_lock_title">App lock</string>
+    <string name="pd_lock_summary">Ask for the password when opening the app</string>
+    <string name="pd_lock_no_password">Set a password first to enable app lock</string>
+    <string name="pd_timeout_title">Lock timeout</string>
+    <string name="pd_timeout_now">Immediately</string>
+    <string name="pd_timeout_1m">After 1 minute</string>
+    <string name="pd_timeout_5m">After 5 minutes</string>
+    <string name="pd_timeout_30m">After 30 minutes</string>
+    <string name="pd_change_password">Change password</string>
+    <string name="pd_delete_profile">Delete profile</string>
+    <string name="pd_delete_confirm">Delete profile? All data, chats and contacts will be permanently erased from this device. This cannot be undone.</string>
+    <string name="pd_delete_now">Delete</string>
     <string name="profile_edit_save">Save changes</string>
     <string name="profile_edit_name_hint">Your name</string>
     <string name="profile_edit_status_hint">Your status</string>
@@ -1013,7 +1027,7 @@
     <string name="layout___own_pushurl">Push URL:</string>
     <string name="layout___new_random_nospam">new Random NOSPAM</string>
     <string name="layout___own_pubkey">Own ID:</string>
-    <string name="layout___copy_toxid">copy ID</string>
+    <string name="layout___copy_toxid">Copy MyID</string>
     <string name="layout___your_toxidenticon">Your ID icon</string>
     <string name="layout___active_network_connections">active Network Connections:</string>
     <string name="layout___error_getting_active_network_connections">*error getting active network connections*</string>

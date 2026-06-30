@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
-    <item
-        android:id="@+id/item_theme_toggle"
-        android:title="@string/theme_toggle_accessibility"
-        app:showAsAction="always" />
+    <!-- KHANDAQ: theme toggle removed from the header (Settings has the dark-theme switch). -->
     <item
         android:id="@+id/item_addfriend"
         android:title="@string/layout___add_friend"

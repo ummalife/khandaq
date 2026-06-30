@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Messenger UX metrics (Telegram-like layout). Colors = Khandaq identity only. -->
 <resources>
-    <color name="tg_chat_screen_bg">@color/khandaq_canvas_light</color>
+    <!-- KHANDAQ: matches the light Figma chat wallpaper background (drawable-nodpi/chat_wallpaper.png) -->
+    <color name="tg_chat_screen_bg">#DFEBE4</color>
     <color name="tg_bubble_incoming">@color/khandaq_bubble_in_light</color>
     <color name="tg_bubble_incoming_stroke">@color/khandaq_stroke_light</color>
     <color name="tg_bubble_outgoing">@color/khandaq_bubble_out_light</color>
@@ -28,6 +29,8 @@
     <color name="tg_voice_recording_dot">#FF3B30</color>
     <color name="tg_voice_recording_action">@color/khandaq_teal</color>
     <color name="tg_voice_recording_send_bg">@color/khandaq_teal</color>
+    <!-- KHANDAQ (iOS #9): translucent teal halo behind the big record mic -->
+    <color name="tg_voice_recording_halo">#33029B7D</color>
     <dimen name="tg_bubble_radius">16dp</dimen>
     <dimen name="tg_bubble_tail_radius">4dp</dimen>
     <dimen name="tg_bubble_padding_h">12dp</dimen>

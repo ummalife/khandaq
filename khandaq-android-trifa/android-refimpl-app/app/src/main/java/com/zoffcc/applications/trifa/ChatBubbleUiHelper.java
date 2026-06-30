@@ -228,6 +228,43 @@ final class ChatBubbleUiHelper
         return (int) context.getResources().getDimension(R.dimen.tg_bubble_radius);
     }
 
+    // KHANDAQ (Figma): photo/video bubbles hug the media at a sane size instead of filling the row
+    // full-width with letterbox. Glide loads with .override(these) + FitCenter so the bitmap is the
+    // final fitted size (≤ max), and the preview view wraps to it.
+    static final int MEDIA_THUMB_MAX_W_DP = 244;
+    static final int MEDIA_THUMB_MAX_H_DP = 320;
+
+    static int media_thumb_max_w_px(final Context context)
+    {
+        return (int) (context.getResources().getDisplayMetrics().density * MEDIA_THUMB_MAX_W_DP);
+    }
+
+    static int media_thumb_max_h_px(final Context context)
+    {
+        return (int) (context.getResources().getDisplayMetrics().density * MEDIA_THUMB_MAX_H_DP);
+    }
+
+    /** Make a media preview hug its bitmap (wrap_content + FitCenter), not the full row width. */
+    static void apply_media_thumb_wrap(final View preview)
+    {
+        if (preview == null)
+        {
+            return;
+        }
+        final ViewGroup.LayoutParams lp = preview.getLayoutParams();
+        if (lp != null)
+        {
+            lp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            preview.setLayoutParams(lp);
+        }
+        if (preview instanceof ImageView)
+        {
+            ((ImageView) preview).setScaleType(ImageView.ScaleType.FIT_CENTER);
+            ((ImageView) preview).setAdjustViewBounds(true);
+        }
+    }
+
     static void apply_message_text_style(final EmojiTextViewLinks textView, final boolean outgoing)
     {
         if (textView == null)

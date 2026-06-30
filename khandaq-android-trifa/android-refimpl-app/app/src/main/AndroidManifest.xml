@@ -197,6 +197,10 @@
             android:label="@string/title_activity_profile">
         </activity>
         <activity
+            android:name="com.zoffcc.applications.trifa.ProfileDetailsActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:theme="@style/AppTheme" />
+        <activity
             android:name="com.zoffcc.applications.trifa.CrashActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:label="@string/title_activity_crash">

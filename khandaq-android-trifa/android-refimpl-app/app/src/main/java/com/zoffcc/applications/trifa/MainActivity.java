@@ -2810,7 +2810,6 @@ public class MainActivity extends AppCompatActivity
             final boolean contactsOrChatsTab = (currentMainTab == R.id.bottom_nav_contacts)
                     || (currentMainTab == R.id.bottom_nav_chats);
             final MenuItem addFriendItem = menu.findItem(R.id.item_addfriend);
-            final MenuItem themeItem = menu.findItem(R.id.item_theme_toggle);
             final MenuItem groupMenuItem = menu.findItem(R.id.item_group_menu);
 
             if (addFriendItem != null)
@@ -2832,10 +2831,6 @@ public class MainActivity extends AppCompatActivity
                 {
                     updateGroupMenuIcon(groupMenuItem);
                 }
-            }
-            if (themeItem != null)
-            {
-                updateThemeToggleMenuIcon(themeItem);
             }
             tint_main_options_menu_icons(menu);
         }
@@ -2902,9 +2897,6 @@ public class MainActivity extends AppCompatActivity
     {
         switch (item.getItemId())
         {
-            case R.id.item_theme_toggle:
-                toggleDarkModeFromToolbar();
-                break;
             case R.id.item_addfriend:
                 final Intent intent = new Intent(this, AddFriendActivity.class);
                 startActivityForResult(intent, AddFriendActivity_ID);

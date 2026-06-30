@@ -126,7 +126,7 @@ ProfileForm::ProfileForm(IProfileInfo* profileInfo_, Settings& settings_,
 
     bodyUI->qrLabel->setWordWrap(true);
 
-    profilePicture = new MaskablePixmapWidget(this, QSize(64, 64), ":/img/avatar_mask.svg");
+    profilePicture = new MaskablePixmapWidget(this, QSize(96, 96), ":/img/avatar_mask.svg");
     profilePicture->setPixmap(QPixmap(":/img/contact_dark.svg"));
     profilePicture->setContextMenuPolicy(Qt::CustomContextMenu);
     profilePicture->setClickable(true);
@@ -139,9 +139,13 @@ ProfileForm::ProfileForm(IProfileInfo* profileInfo_, Settings& settings_,
     connect(profilePicture, &MaskablePixmapWidget::customContextMenuRequested,
             this, &ProfileForm::showProfilePictureContextMenu);
 
-    QHBoxLayout* publicGrouplayout = qobject_cast<QHBoxLayout*>(bodyUI->publicGroup->layout());
-    publicGrouplayout->insertWidget(0, profilePicture);
-    publicGrouplayout->insertSpacing(1, 7);
+    // KHANDAQ (Figma): big self-avatar centered in the header instead of inside the public-data card
+    bodyUI->imgLabel->hide();
+    bodyUI->nameLabel->hide();
+    bodyUI->line->hide(); // Figma: no divider under the avatar
+    bodyUI->header->insertStretch(0);
+    bodyUI->header->insertWidget(1, profilePicture, 0, Qt::AlignHCenter);
+    bodyUI->header->addStretch();
 
     timer.setInterval(750);
     timer.setSingleShot(true);

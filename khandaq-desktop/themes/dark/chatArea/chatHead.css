@@ -9,7 +9,7 @@ QLineEdit
 {
     color: @mainText;
     font: @mediumBold;
-    font-size:12px;
+    font-size:14px;
 }
 
 #statusLabel
@@ -28,7 +28,7 @@ QLineEdit
 
 QLabel[peerType="our"]
 {
-    color: green;
+    color: #10b98f;
 }
 
 QLabel[peerType="muted"]

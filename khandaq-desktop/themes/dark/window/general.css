@@ -24,12 +24,13 @@ QTabWidget
 QTabBar::tab:selected
 {
     background: @themeMedium;
-    color: @mainText;
+    color: @action;
+    border-bottom: 2px solid @action;
 }
 
 QTabBar::tab:!selected
 {
-    background: #444242;
+    background: @themeMediumDark;
     color: #8e8e8e;
 }
 
@@ -119,17 +120,30 @@ QGroupBox
 QComboBox
 {
     color: @mainText;
-    background-color: @groundBase;
+    background-color: @themeMedium;
+    border: none;
+    border-radius: 12px;
+    padding: 6px 10px;
 }
 
 QComboBox QAbstractItemView {
-    background-color: @groundBase;
+    background-color: @themeMedium;
 }
 
 QLineEdit
 {
-    background: @groundBase;
+    background: @themeMedium;
     color: @mainText;
+    border: 1px solid @themeMedium;
+    border-radius: 12px;
+    padding: 6px 10px;
+    selection-background-color: @action;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus
+{
+    border: 1px solid @action;
 }
 
 QLineEdit:disabled
@@ -165,12 +179,12 @@ QScrollBar:vertical
 /* using last is a bit of a hack, but QTabBar otherwise doesn't allow selecting single tabs */
 QTabBar::tab:last:!selected[update-available=true]
 {
-    background-color: #115508;
+    background-color: #10b98f;
 }
 
 QPushButton#updateAvailableButton
 {
-    background-color: #115508;
+    background-color: #10b98f;
 }
 
 QScrollBar::handle:vertical

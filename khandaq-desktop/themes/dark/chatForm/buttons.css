@@ -139,7 +139,7 @@ QAbstractButton:focus
 
 QAbstractButton[state="green"]
 {
-    background-color: #529449;
+    background-color: #10b98f;
 }
 
 QAbstractButton[state="green"]:hover

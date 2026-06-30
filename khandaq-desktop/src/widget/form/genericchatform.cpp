@@ -203,6 +203,7 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     fileLayout->setMargin(0);
 
     msgEdit->setFrameStyle(QFrame::NoFrame);
+    msgEdit->setPlaceholderText(tr("Сообщение"));
 
     bodySplitter = new QSplitter(Qt::Vertical, this);
     QWidget* contentWidget = new QWidget(this);
@@ -214,17 +215,16 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
 
     setLayout(mainLayout);
 
-    QVBoxLayout* footButtonsSmall = new QVBoxLayout();
-    footButtonsSmall->setSpacing(FOOT_BUTTONS_SPACING);
-    footButtonsSmall->addWidget(emoteButton);
-    footButtonsSmall->addWidget(fileButton);
-
+    // KHANDAQ (Figma): single horizontal input bar — emote (left) + msgEdit + file/paperclip + send
+    // (right), instead of the old stacked emote/file column. Pure re-parenting via addWidget; every
+    // button's connect() above (onEmoteButtonClicked / onAttachClicked / onSendTriggered) is unchanged.
     QHBoxLayout* mainFootLayout = new QHBoxLayout();
+    mainFootLayout->addWidget(emoteButton);
     mainFootLayout->addWidget(msgEdit);
-    mainFootLayout->addLayout(footButtonsSmall);
+    mainFootLayout->addWidget(fileButton);
     mainFootLayout->addSpacing(MAIN_FOOT_LAYOUT_SPACING);
     mainFootLayout->addWidget(sendButton);
-    mainFootLayout->setSpacing(0);
+    mainFootLayout->setSpacing(4);
 
     auto* footerLayout = new QVBoxLayout();
     footerLayout->setSpacing(4);

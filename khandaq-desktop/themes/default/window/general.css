@@ -23,13 +23,14 @@ QTabWidget
 
 QTabBar::tab:selected
 {
-    background: #2d3136;
-    color: #f1f1f1;
+    background: @themeMedium;
+    color: @action;
+    border-bottom: 2px solid @action;
 }
 
 QTabBar::tab:!selected
 {
-    background: #d0d1d1;
+    background: @themeMediumDark;
     color: #5e5e5e;
 }
 
@@ -93,18 +94,31 @@ QGroupBox
 
 QComboBox
 {
-    color: black;
-    background-color: white;
+    color: @mainText;
+    background-color: @themeMedium;
+    border: none;
+    border-radius: 12px;
+    padding: 6px 10px;
 }
 
 QComboBox QAbstractItemView {
-    background-color: white;
+    background-color: @themeMedium;
 }
 
 QLineEdit
 {
     color: @mainText;
-    background-color: white;
+    background-color: @themeMedium;
+    border: 1px solid @themeMedium;
+    border-radius: 12px;
+    padding: 6px 10px;
+    selection-background-color: @action;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus
+{
+    border: 1px solid @action;
 }
 
 QLineEdit:disabled

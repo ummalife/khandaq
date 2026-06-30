@@ -2,18 +2,20 @@ QLineEdit
 {
     background: none;
     background-color: @themeMedium;
-    color: white;
+    color: @mainText;
     border: 0px;
-    border-radius: 4px;
+    border-radius: 14px;
+    padding: 6px 12px;
 }
 
 QToolButton
 {
     background: none;
     background-color: @themeMedium;
-    color: white;
+    color: @mainText;
     border-style: none;
-    border-radius: 4px;
+    border-radius: 14px;
+    padding: 4px 8px;
 }
 
 QToolButton:pressed
@@ -31,7 +33,7 @@ QToolButton::menu-indicator
 QPushButton#green
 {
     background: none;
-    background-color: #6bc260;
+    background-color: #029b7d;
     color: white;
     border-style: none;
     border-radius: 4px;
@@ -41,12 +43,12 @@ QPushButton#green
 
 QPushButton#green:hover
 {
-    background-color: #79c76f;
+    background-color: #02795f;
 }
 
 QPushButton#green:pressed
 {
-    background-color: #51b244;
+    background-color: #016b54;
 }
 
 /**
@@ -79,7 +81,7 @@ QListView
 {
   background-color: @themeDark;
   font: @extraBig;
-  color: @groundBase;
+  color: @nameActive;
 }
 
 #statusPanel > #statusHead > #statusLabel
@@ -124,4 +126,30 @@ QListView
   subcontrol-position: bottom center;
   position: relative;
   bottom: 2px;
+}
+
+/* KHANDAQ: Чаты / Группы / Избранные segmented tabs (Figma) */
+#chatTabsContainer
+{
+  background-color: @themeDark;
+}
+
+QPushButton#chatTabChats, QPushButton#chatTabGroups, QPushButton#chatTabFavorites
+{
+  background-color: @themeDark;
+  border: none;
+  color: @groundExtra;
+  padding: 7px 4px;
+  font: @medium;
+}
+
+QPushButton#chatTabChats:hover, QPushButton#chatTabGroups:hover, QPushButton#chatTabFavorites:hover
+{
+  color: @mainText;
+}
+
+QPushButton#chatTabChats:checked, QPushButton#chatTabGroups:checked, QPushButton#chatTabFavorites:checked
+{
+  color: @action;
+  border-bottom: 2px solid @action;
 }

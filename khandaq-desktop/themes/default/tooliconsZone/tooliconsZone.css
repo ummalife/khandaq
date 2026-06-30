@@ -1,12 +1,12 @@
 QPushButton[update-available=true]
 {
-    background-color: #115508;
+    background-color: #029b7d;
     border: none;
 }
 
 QPushButton:hover[update-available=true]
 {
-    background-color: #2b9e1c;
+    background-color: #02795f;
     border: none;
 }
 

@@ -343,6 +343,13 @@ void Widget::init()
     connect(ui->groupButton, &QPushButton::clicked, this, &Widget::onGroupClicked);
     connect(ui->transferButton, &QPushButton::clicked, this, &Widget::onTransferClicked);
     connect(ui->settingsButton, &QPushButton::clicked, this, &Widget::onShowSettings);
+
+    // KHANDAQ (Figma): Чаты / Группы / Избранные segmented tabs reuse the existing, tested chat-list
+    // filter actions (filterGroup → searchChats), so no new filtering logic is introduced.
+    // Избранные has no backing model yet → maps to the friends/contacts filter as a placeholder.
+    connect(ui->chatTabChats, &QPushButton::clicked, this, [this]() { filterAllAction->trigger(); });
+    connect(ui->chatTabGroups, &QPushButton::clicked, this, [this]() { filterGroupsAction->trigger(); });
+    connect(ui->chatTabFavorites, &QPushButton::clicked, this, [this]() { filterFriendsAction->trigger(); });
     connect(profilePicture, &MaskablePixmapWidget::clicked, this, &Widget::showProfile);
     connect(ui->nameLabel, &CroppingLabel::clicked, this, &Widget::showProfile);
     connect(ui->statusLabel, &CroppingLabel::editFinished, this, &Widget::onStatusMessageChanged);

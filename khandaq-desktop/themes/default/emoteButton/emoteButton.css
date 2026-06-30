@@ -1,6 +1,6 @@
 QPushButton
 {
-    background-color: #6bc260;
+    background-color: #029b7d;
     background-image: url("@getImagePath(emoteButton/emoteButton.svg)");
     background-repeat: none;
     background-position: center;
@@ -12,12 +12,12 @@ QPushButton
 
 QPushButton:hover
 {
-    background-color: #79c76f;
+    background-color: #02795f;
 }
 
 QPushButton:pressed
 {
-    background-color: #51b244;
+    background-color: #016b54;
 }
 
 QPushButton:focus

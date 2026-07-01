@@ -49,6 +49,10 @@ class ChatBaseTextCellModel: ChatMovableDateCellModel {
     var locationLongitude: Double?
     var replyMeta: MessageReplyHelper.ReplyMeta?
     var onReplyQuoteTap: (() -> Void)?
+    /// KHANDAQ (Figma): group sender header ("Name · Role") prefix length inside `message`,
+    /// tinted with the per-peer color. 0 = no header line.
+    var senderHeaderLength: Int = 0
+    var senderColor: UIColor?
 
     var hasLocation: Bool {
         locationLatitude != nil && locationLongitude != nil

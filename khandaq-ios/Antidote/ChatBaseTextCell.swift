@@ -62,6 +62,42 @@ class ChatBaseTextCell: ChatMovableDateCell {
         bubbleView.textColor = theme.colorForType(.NormalText)
     }
 
+    /// KHANDAQ (Figma): tint the group sender header line ("Name · Role") with the per-peer color.
+    /// Must run AFTER any whole-view font/textColor assignment (those wipe per-range attributes),
+    /// so subclasses call it at the END of their setupWithTheme.
+    func applySenderHeaderStyling(_ theme: Theme, model: BaseCellModel) {
+        guard let textModel = model as? ChatBaseTextCellModel,
+              textModel.senderHeaderLength > 0,
+              let senderColor = textModel.senderColor,
+              !textModel.hasLocation else {
+            return
+        }
+
+        let baseFont = bubbleView.font ?? UIFont.preferredFont(forTextStyle: .body)
+        let current: NSMutableAttributedString
+        if let attributed = bubbleView.attributedText, attributed.length > 0 {
+            current = NSMutableAttributedString(attributedString: attributed)
+        }
+        else {
+            current = NSMutableAttributedString(string: textModel.message, attributes: [
+                .foregroundColor: theme.colorForType(.NormalText),
+                .font: baseFont,
+            ])
+        }
+
+        let headerLength = min(textModel.senderHeaderLength, current.length)
+        guard headerLength > 0 else {
+            return
+        }
+
+        let headerFont = UIFont.systemFont(ofSize: max(baseFont.pointSize - 2.0, 12.0), weight: .semibold)
+        current.addAttributes([
+            .foregroundColor: senderColor,
+            .font: headerFont,
+        ], range: NSRange(location: 0, length: headerLength))
+        bubbleView.attributedText = current
+    }
+
     fileprivate func loadLocationMapSnapshot(latitude: Double, longitude: Double) {
         let cacheKey = NSString(string: String(format: "%.5f,%.5f", latitude, longitude))
 

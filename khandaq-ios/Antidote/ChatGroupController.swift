@@ -294,7 +294,33 @@ class ChatGroupController: PortraitChatController {
         submanagerGroups.refreshPeers(for: chat)
         updateLastReadDate()
         updateConnectionBanner()
+        updateGroupTitleView()
         delegate?.chatGroupControllerWillAppear(self)
+    }
+
+    /// KHANDAQ (Figma): group nav bar shows the name with a "N участников" subtitle underneath.
+    private func updateGroupTitleView() {
+        let name = (chat.groupTopic?.isEmpty == false ? chat.groupTopic : chat.groupName)
+            ?? String(localized: "group_chat_default_title")
+        let count = max(Int(submanagerGroups.peerCount(for: chat)), 1)
+
+        let titleLabel = UILabel()
+        titleLabel.text = name
+        titleLabel.font = UIFont.systemFont(ofSize: 16.0, weight: .semibold)
+        titleLabel.textColor = theme.colorForType(.NormalText)
+        titleLabel.textAlignment = .center
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = String(localized: "group_member_count_format", count)
+        subtitleLabel.font = UIFont.systemFont(ofSize: 12.0)
+        subtitleLabel.textColor = theme.colorForType(.FriendCellStatus)
+        subtitleLabel.textAlignment = .center
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 0
+        navigationItem.titleView = stack
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -873,6 +899,9 @@ extension ChatGroupController: UITableViewDataSource {
         }
         else if let header = peerHeader(for: message) {
             model.message = "\(header)\n\(body)"
+            // KHANDAQ (Figma): per-peer colored sender header, keyed by the frozen display name.
+            model.senderHeaderLength = header.count
+            model.senderColor = GroupPeerColors.color(forName: peerName(for: message) ?? header)
         }
         else {
             model.message = body

@@ -134,3 +134,26 @@ enum GroupMentionHelper {
         return index < text.endIndex ? String(text[index...]) : ""
     }
 }
+
+/// KHANDAQ (Figma): deterministic per-peer colors for group sender names (Telegram-style).
+/// Keyed by the display name (frozen on the message at receipt → stable across restarts).
+/// Palette tuned to read on both the light and the dark incoming bubble.
+enum GroupPeerColors {
+    private static let palette: [UIColor] = [
+        UIColor(red: 0.88, green: 0.44, blue: 0.46, alpha: 1.0),   // red
+        UIColor(red: 0.91, green: 0.62, blue: 0.31, alpha: 1.0),   // orange
+        UIColor(red: 0.65, green: 0.58, blue: 0.91, alpha: 1.0),   // violet
+        UIColor(red: 0.48, green: 0.78, blue: 0.38, alpha: 1.0),   // green
+        UIColor(red: 0.43, green: 0.79, blue: 0.80, alpha: 1.0),   // cyan
+        UIColor(red: 0.40, green: 0.67, blue: 0.87, alpha: 1.0),   // blue
+        UIColor(red: 0.93, green: 0.48, blue: 0.68, alpha: 1.0),   // pink
+    ]
+
+    static func color(forName name: String) -> UIColor {
+        var hash: UInt32 = 5381
+        for byte in name.utf8 {
+            hash = hash &* 33 &+ UInt32(byte)
+        }
+        return palette[Int(hash % UInt32(palette.count))]
+    }
+}

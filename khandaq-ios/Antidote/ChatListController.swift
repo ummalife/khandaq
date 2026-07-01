@@ -28,6 +28,10 @@ class ChatListController: UIViewController {
     // KHANDAQ (#34): Telegram-style global search across every chat/group + all message text.
     fileprivate var searchController: UISearchController!
     fileprivate var searchResultsVC: GlobalSearchResultsController!
+    // KHANDAQ (Figma): multi-select edit mode — Отмена + red Удалить replace the nav buttons.
+    fileprivate var defaultRightBarItems: [UIBarButtonItem] = []
+    fileprivate var cancelEditButton: UIBarButtonItem!
+    fileprivate var deleteSelectedButton: UIBarButtonItem!
 
     init(theme: Theme, submanagerChats: OCTSubmanagerChats, submanagerGroups: OCTSubmanagerGroups, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
@@ -77,11 +81,30 @@ class ChatListController: UIViewController {
             )
         }
         themeButton.accessibilityLabel = String(localized: "theme_toggle_accessibility")
-        navigationItem.rightBarButtonItems = [addButton, themeButton]
+        defaultRightBarItems = [addButton, themeButton]
+        navigationItem.rightBarButtonItems = defaultRightBarItems
 
         let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
         editButtonItem.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
         editButtonItem.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
+
+        // KHANDAQ (Figma): edit-mode nav — Отмена (left) + red Удалить (right, enabled on selection).
+        cancelEditButton = UIBarButtonItem(
+            title: String(localized: "alert_cancel"),
+            style: .plain,
+            target: self,
+            action: #selector(ChatListController.cancelEditingPressed))
+        cancelEditButton.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
+        cancelEditButton.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
+
+        deleteSelectedButton = UIBarButtonItem(
+            title: String(localized: "alert_delete"),
+            style: .done,
+            target: self,
+            action: #selector(ChatListController.deleteSelectedPressed))
+        deleteSelectedButton.tintColor = .systemRed
+        deleteSelectedButton.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
+        deleteSelectedButton.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
 
         setupGlobalSearch()
     }
@@ -166,6 +189,46 @@ class ChatListController: UIViewController {
         super.setEditing(editing, animated: animated)
 
         tableManager.tableView.setEditing(editing, animated: animated)
+
+        // KHANDAQ (Figma): multi-select edit mode — Отмена + red Удалить while editing.
+        if editing {
+            navigationItem.leftBarButtonItem = cancelEditButton
+            navigationItem.rightBarButtonItems = [deleteSelectedButton]
+            updateDeleteSelectedButton()
+        }
+        else {
+            navigationItem.rightBarButtonItems = defaultRightBarItems
+            updateViewsVisibility()
+        }
+    }
+
+    @objc func cancelEditingPressed() {
+        setEditing(false, animated: true)
+    }
+
+    @objc func deleteSelectedPressed() {
+        let rows = (tableManager.tableView.indexPathsForSelectedRows ?? []).map { $0.row }
+
+        guard !rows.isEmpty else {
+            return
+        }
+
+        let alert = UIAlertController(title: String(localized: "delete_selected_chats_title", rows.count),
+                                      message: nil,
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "alert_delete"), style: .destructive) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            self.tableManager.deleteChats(atVisibleRows: rows)
+            self.setEditing(false, animated: true)
+        })
+        present(alert, animated: true, completion: nil)
+    }
+
+    func updateDeleteSelectedButton() {
+        deleteSelectedButton.isEnabled = (tableManager.tableView.indexPathsForSelectedRows?.count ?? 0) > 0
     }
 }
 
@@ -186,6 +249,10 @@ extension ChatListController: ChatListTableManagerDelegate {
     func chatListTableManager(_ manager: ChatListTableManager, didRequestGroupInfo chat: OCTChat) {
         delegate?.chatListController(self, didRequestGroupInfo: chat)
     }
+
+    func chatListTableManagerSelectionDidChange(_ manager: ChatListTableManager) {
+        updateDeleteSelectedButton()
+    }
 }
 
 private extension ChatListController {
@@ -199,6 +266,9 @@ private extension ChatListController {
         tableView.estimatedRowHeight = 44.0
         tableView.backgroundColor = theme.colorForType(.NormalBackground)
         tableView.sectionIndexColor = theme.colorForType(.LinkText)
+        // KHANDAQ (Figma): multi-select edit mode with accent selection circles.
+        tableView.allowsMultipleSelectionDuringEditing = true
+        tableView.tintColor = theme.colorForType(.LinkText)
         ThemeChrome.installZeroHeightTableFooter(in: tableView, theme: theme)
 
         view.addSubview(tableView)

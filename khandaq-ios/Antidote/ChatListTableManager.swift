@@ -9,6 +9,8 @@ protocol ChatListTableManagerDelegate: class {
     func chatListTableManager(_ manager: ChatListTableManager, presentAlertController controller: UIAlertController)
     func chatListTableManagerWasUpdated(_ manager: ChatListTableManager)
     func chatListTableManager(_ manager: ChatListTableManager, didRequestGroupInfo chat: OCTChat)
+    // KHANDAQ (Figma): multi-select edit mode — row (de)selection changed while editing.
+    func chatListTableManagerSelectionDidChange(_ manager: ChatListTableManager)
 }
 
 class ChatListTableManager: NSObject {
@@ -319,10 +321,23 @@ extension ChatListTableManager: UITableViewDataSource {
 
 extension ChatListTableManager: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        // KHANDAQ (Figma): in multi-select edit mode a tap toggles the selection circle instead of
+        // opening the chat.
+        if tableView.isEditing {
+            delegate?.chatListTableManagerSelectionDidChange(self)
+            return
+        }
+
         tableView.deselectRow(at: indexPath, animated: true)
 
         let chat = chatAtFilteredRow(indexPath.row)
         delegate?.chatListTableManager(self, didSelectChat: chat)
+    }
+
+    func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
+        if tableView.isEditing {
+            delegate?.chatListTableManagerSelectionDidChange(self)
+        }
     }
 
     @available(iOS 11.0, *)
@@ -461,6 +476,32 @@ extension ChatListTableManager: UITableViewDelegate {
         }
 
         return ChatPreviewController(theme: theme, title: title, avatar: avatar, messages: recent)
+    }
+}
+
+extension ChatListTableManager {
+    // KHANDAQ (Figma): mass delete from the multi-select edit mode. 1:1 chats are removed with their
+    // messages; groups are left (best-effort) and removed — the same semantics as the row-level
+    // destructive actions, applied without per-chat prompts (the controller confirms once for all).
+    func deleteChats(atVisibleRows rows: [Int]) {
+        let chats = rows.sorted().compactMap { $0 < visibleRowCount() ? chatAtFilteredRow($0) : nil }
+
+        for chat in chats {
+            if chat.isGroup {
+                if chat.groupNumber >= 0 {
+                    do {
+                        try submanagerGroups.leaveGroup(withNumber: OCTToxGroupNumber(chat.groupNumber), partMessage: nil)
+                    }
+                    catch {
+                        // Still remove the local chat if the tox leave fails (already left, disconnected, …).
+                    }
+                }
+                submanagerGroups.removeAllMessages(in: chat, removeChat: true, leaveGroup: false)
+            }
+            else {
+                submanagerChats.removeAllMessages(in: chat, removeChat: true)
+            }
+        }
     }
 }
 

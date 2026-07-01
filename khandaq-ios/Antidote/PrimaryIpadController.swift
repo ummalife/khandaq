@@ -120,6 +120,10 @@ extension PrimaryIpadController: ChatListTableManagerDelegate {
     func chatListTableManager(_ manager: ChatListTableManager, didRequestGroupInfo chat: OCTChat) {
         delegate?.primaryIpadController(self, didRequestGroupInfo: chat)
     }
+
+    func chatListTableManagerSelectionDidChange(_ manager: ChatListTableManager) {
+        // nope (multi-select edit mode is an iPhone chat-list feature)
+    }
 }
 
 private extension PrimaryIpadController {

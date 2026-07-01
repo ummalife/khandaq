@@ -40,11 +40,13 @@
 
                 <ImageView
                     android:id="@+id/about_logo"
-                    android:layout_width="120dp"
-                    android:layout_height="120dp"
+                    android:layout_width="200dp"
+                    android:layout_height="72dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="8dp"
                     android:contentDescription="@string/Aboutpage_5a"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/khandaq_logo" />
+                    android:src="@drawable/khandaq_wordmark" />
 
                 <TextView
                     android:id="@+id/about_app_name"

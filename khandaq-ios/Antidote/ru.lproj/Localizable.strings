@@ -297,7 +297,7 @@
 /* Settings screen autodownload images option */
 "settings_wifi" = "Wi-Fi";
 /* Settings screen autodownload images option */
-"settings_using_wifi" = "При наличии Wi-Fi";
+"settings_using_wifi" = "Через Wi-Fi";
 /* Settings screen autodownload images option */
 "settings_always" = "Всегда";
 
@@ -329,6 +329,7 @@
 /* Attachment menu items (Figma) */
 "attach_gallery" = "Галерея";
 "attach_audio" = "Аудио";
+"attach_file" = "Файл";
 "attach_location" = "Геолокация";
 /* Error while converting avatar image */
 "change_avatar_error_convert_image" = "Ошибка конвертации изображения";

@@ -95,6 +95,11 @@ extension ChatInputViewManager: ChatInputViewDelegate {
             self?.presentAudioFilePicker()
         })
 
+        // KHANDAQ (Figma iOS page): generic "Файл" item — any document, like the group chat has.
+        items.append(.init(title: String(localized: "attach_file"), systemImage: "doc") { [weak self] in
+            self?.presentDocumentFilePicker()
+        })
+
         if let shareLocation = onShareLocation {
             items.append(.init(title: String(localized: "attach_location"), systemImage: "location") {
                 shareLocation()
@@ -316,6 +321,13 @@ fileprivate extension ChatInputViewManager {
     // KHANDAQ (#135): pick an existing audio file (mp3/m4a/wav/…) and send it as a file.
     func presentAudioFilePicker() {
         let controller = UIDocumentPickerViewController(documentTypes: [kUTTypeAudio as String], in: .import)
+        controller.delegate = self
+        presentingViewController.present(controller, animated: true, completion: nil)
+    }
+
+    // KHANDAQ (Figma iOS page): pick any document and send it as a file (same delegate/send path).
+    func presentDocumentFilePicker() {
+        let controller = UIDocumentPickerViewController(documentTypes: [kUTTypeItem as String], in: .import)
         controller.delegate = self
         presentingViewController.present(controller, animated: true, completion: nil)
     }

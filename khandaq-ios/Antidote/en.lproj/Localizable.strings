@@ -330,6 +330,7 @@
 /* Attachment menu items (Figma) */
 "attach_gallery" = "Gallery";
 "attach_audio" = "Audio";
+"attach_file" = "File";
 "attach_location" = "Location";
 /* Error while converting avatar image */
 "change_avatar_error_convert_image" = "Cannot convert image";

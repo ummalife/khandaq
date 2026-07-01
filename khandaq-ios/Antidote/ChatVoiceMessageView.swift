@@ -7,6 +7,8 @@ import SnapKit
 
 final class ChatVoiceMessageView: UIView {
     var onPlayTapped: (() -> Void)?
+    // KHANDAQ (Figma voice bubble): tinted per direction, matching the text bubbles
+    var isOutgoing = false
 
     private let playButton = UIButton(type: .system)
     private let waveformView = VoiceWaveformView()
@@ -14,6 +16,8 @@ final class ChatVoiceMessageView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        layer.cornerRadius = 18
+        clipsToBounds = true
         createViews()
         installConstraints()
     }
@@ -23,6 +27,7 @@ final class ChatVoiceMessageView: UIView {
     }
 
     func apply(theme: Theme, enabled: Bool) {
+        backgroundColor = theme.colorForType(isOutgoing ? .ChatOutgoingBubble : .ChatIncomingBubble)
         playButton.tintColor = theme.colorForType(.LinkText)
         durationLabel.textColor = theme.colorForType(.FriendCellStatus)
         // KHANDAQ (Figma voice bubble): waveform bars instead of a plain slider
@@ -68,12 +73,13 @@ final class ChatVoiceMessageView: UIView {
 
     private func installConstraints() {
         playButton.snp.makeConstraints {
-            $0.leading.centerY.equalToSuperview()
+            $0.leading.equalToSuperview().offset(10)
+            $0.centerY.equalToSuperview()
             $0.size.equalTo(40)
         }
 
         durationLabel.snp.makeConstraints {
-            $0.trailing.equalToSuperview()
+            $0.trailing.equalToSuperview().offset(-12)
             $0.centerY.equalToSuperview()
             $0.width.greaterThanOrEqualTo(34)
         }

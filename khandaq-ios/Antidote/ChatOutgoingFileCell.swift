@@ -55,6 +55,7 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
 
         movableContentView.addSubview(loadingView)
         movableContentView.addSubview(captionLabel)
+        voiceMessageView.isOutgoing = true
         movableContentView.addSubview(voiceMessageView)
         movableContentView.addSubview(cancelButton)
         movableContentView.addSubview(retryButton)

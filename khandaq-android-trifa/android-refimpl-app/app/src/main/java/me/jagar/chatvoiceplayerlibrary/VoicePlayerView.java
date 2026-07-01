@@ -213,7 +213,7 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
                         if (seekbarV.getVisibility() == VISIBLE){
                             seekbarV.setMax(mp.getDuration());
                         }
-                        txtProcess.setText("00:00:00/"+convertSecondsToHMmSs(mp.getDuration() / 1000));
+                        txtProcess.setText(convertSecondsToHMmSs(mp.getDuration() / 1000));
                     }
                 });
                 mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
@@ -462,7 +462,11 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
         long s = seconds % 60;
         long m = (seconds / 60) % 60;
         long h = (seconds / (60 * 60)) % 24;
-        return String.format("%02d:%02d:%02d", h,m,s);
+        // KHANDAQ (Figma voice bubble): short "m:ss" (drop leading hours when 0) instead of verbose "00:00:00"
+        if (h > 0) {
+            return String.format("%d:%02d:%02d", h, m, s);
+        }
+        return String.format("%d:%02d", m, s);
     }
 
     //These both functions to avoid mediaplayer errors
@@ -629,7 +633,7 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
                                     imgPlay.setVisibility(View.VISIBLE);
                                 }
                                 Log.i("VoicePlayerView", "VoicePlayerView:refreshPlayer:setOnPreparedListener");
-                                txtProcess.setText("00:00:00/"+convertSecondsToHMmSs(mp.getDuration() / 1000));
+                                txtProcess.setText(convertSecondsToHMmSs(mp.getDuration() / 1000));
                             }
                         });
                     }

@@ -5,6 +5,8 @@
     <color name="tg_bubble_incoming">@color/khandaq_gunmetal</color>
     <color name="tg_bubble_incoming_stroke">@color/khandaq_gunmetal</color>
     <color name="tg_bubble_outgoing">#1A4D3A</color>
+    <!-- KHANDAQ (Figma voice bubble): not-played waveform bars, visible on the dark bubble -->
+    <color name="voice_wave_unplayed">#59FFFFFF</color>
     <color name="tg_bubble_text">#E2E8F0</color>
     <color name="tg_bubble_time_incoming">#94A3B8</color>
     <color name="tg_bubble_time_outgoing">#94A3B8</color>

@@ -133,6 +133,18 @@
                         android:id="@+id/ft_audio_player"
                         android:layout_width="fill_parent"
                         android:layout_height="wrap_content"
+                        app:enableVisualizer="true"
+                        app:visualizationPlayedColor="@color/khandaq_teal"
+                        app:visualizationNotPlayedColor="@color/voice_wave_unplayed"
+                        app:playPauseBackgroundColor="@color/khandaq_teal"
+                        app:seekBarThumbColor="@color/khandaq_teal"
+                        app:showShareButton="false"
+                        app:showTiming="true"
+                        app:playPauseCornerRadius="100"
+                        app:viewCornerRadius="16"
+                        app:viewBackground="@color/tg_bubble_incoming"
+                        app:progressTimeColor="@color/tg_bubble_time_incoming"
+                        app:timingBackgroundColor="@android:color/transparent"
                         android:visibility="gone" />
 
                     <ImageButton

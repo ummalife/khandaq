@@ -130,7 +130,7 @@
                         app:playPauseBackgroundColor="@color/khandaq_teal"
                         app:playPauseCornerRadius="100"
                         app:playProgressbarColor="@color/khandaq_teal"
-                        app:progressTimeColor="#000000"
+                        app:progressTimeColor="@color/tg_bubble_time_incoming"
                         app:seekBarProgressColor="#000000"
                         app:seekBarThumbColor="@color/khandaq_teal"
                         app:shareBackgroundColor="@color/khandaq_teal"
@@ -138,10 +138,10 @@
                         app:shareText="SHARE ME"
                         app:showShareButton="false"
                         app:showTiming="true"
-                        app:timingBackgroundColor="#b0b0b0"
-                        app:viewBackground="@android:color/transparent"
-                        app:viewCornerRadius="10"
-                        app:visualizationNotPlayedColor="#000"
+                        app:timingBackgroundColor="@android:color/transparent"
+                        app:viewBackground="@color/tg_bubble_incoming"
+                        app:viewCornerRadius="16"
+                        app:visualizationNotPlayedColor="@color/voice_wave_unplayed"
                         app:visualizationPlayedColor="@color/khandaq_teal" />
 
                     <ImageButton

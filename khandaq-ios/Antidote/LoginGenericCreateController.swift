@@ -80,6 +80,9 @@ extension LoginGenericCreateController: ExtendedTextFieldDelegate {
 private extension LoginGenericCreateController {
     func createGestureRecognizers() {
         let tapGR = UITapGestureRecognizer(target: self, action: #selector(LoginCreateAccountController.tapOnView))
+        // Let touches reach the text fields (the dismiss-keyboard tap must not swallow/cancel
+        // the touch that focuses a field — synthetic taps lose that race and can never focus).
+        tapGR.cancelsTouchesInView = false
         view.addGestureRecognizer(tapGR)
     }
 

@@ -173,6 +173,8 @@ extension LoginFormController: FullscreenPickerDelegate {
 private extension LoginFormController {
     func createGestureRecognizers() {
         let tapGR = UITapGestureRecognizer(target: self, action: #selector(LoginFormController.tapOnView))
+        // Let touches reach the text fields (see LoginGenericCreateController).
+        tapGR.cancelsTouchesInView = false
         view.addGestureRecognizer(tapGR)
     }
 

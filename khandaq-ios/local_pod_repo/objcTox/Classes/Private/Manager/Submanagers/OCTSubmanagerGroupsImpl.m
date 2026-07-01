@@ -2070,13 +2070,16 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // the live groupMessage path and the history-sync insert path, which otherwise duplicate because the
 // sender's retry loop re-sends the same text with different messageIds. In-memory (no cross-thread
 // Realm reads). Tradeoff: a genuinely identical re-send by the same peer within the window is merged.
-- (BOOL)isRecentDuplicateGroupMessageInChat:(OCTChat *)chat peerId:(uint32_t)peerId text:(NSString *)text windowSeconds:(NSTimeInterval)windowSeconds
+// KHANDAQ (#155): keyed by a STABLE senderKey (the sender pubkey where available) instead of the
+// volatile peer_id — during connection flaps the peer_id churns or resolves to 0, which forked the
+// dedup key and let the same message through (live copy + history-sync copies rendered 2-3x).
+- (BOOL)isRecentDuplicateGroupMessageInChat:(OCTChat *)chat senderKey:(NSString *)senderKey text:(NSString *)text windowSeconds:(NSTimeInterval)windowSeconds
 {
     if (chat.uniqueIdentifier.length == 0 || text.length == 0) {
         return NO;
     }
 
-    NSString *dedupKey = [NSString stringWithFormat:@"%@:%u:%@", chat.uniqueIdentifier, peerId, text];
+    NSString *dedupKey = [NSString stringWithFormat:@"%@:%@:%@", chat.uniqueIdentifier, senderKey ?: @"", text];
     NSTimeInterval nowTs = [[NSDate date] timeIntervalSince1970];
 
     @synchronized(self) {
@@ -2153,7 +2156,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     // send-retry loop re-transmits the same text — each copy with a DIFFERENT messageId — AND the
     // same message also arrives via the history-sync path. messageId-based dedup misses these. Use a
     // shared in-memory content dedup (group+peer+text within a short window) covering BOTH paths.
-    BOOL alreadyStored = [self isRecentDuplicateGroupMessageInChat:chat peerId:peerId text:message windowSeconds:15.0];
+    BOOL alreadyStored = [self isRecentDuplicateGroupMessageInChat:chat
+                                                          senderKey:(senderPubkeyHex.length > 0 ? senderPubkeyHex : [NSString stringWithFormat:@"%u", peerId])
+                                                               text:message
+                                                      windowSeconds:15.0];
 
     // KHANDAQ (#88): the in-memory map above is EMPTY after an app restart and is keyed by the volatile
     // peer_id, so an Android delivery-retry storm (it re-sends the same text up to ~30s apart, each with
@@ -3315,7 +3321,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             return [[self.dataSource managerGetRealmManager] groupMessagesForHistorySyncInChat:chat];
         }
-        messageExistsBlock:^BOOL(OCTChat *chat, uint32_t messageId, uint32_t peerId, NSString *text, NSTimeInterval dateInterval) {
+        messageExistsBlock:^BOOL(OCTChat *chat, uint32_t messageId, uint32_t peerId, NSString *senderPubkeyHex, NSString *peerName, NSString *text, NSTimeInterval dateInterval) {
             __strong typeof(weakSelf) self = weakSelf;
 
             if (! self) {
@@ -3326,8 +3332,27 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             // KHANDAQ (#15): share the live path's content dedup so a message that arrived live (with
             // a different messageId due to the sender's retries) is recognised here and not inserted
-            // again by history-sync.
-            if ([self isRecentDuplicateGroupMessageInChat:chat peerId:peerId text:text windowSeconds:15.0]) {
+            // again by history-sync. Keyed by the stable sender pubkey (#155) so it actually matches
+            // the live path's entry even when the volatile peer_id churned or resolved to 0.
+            if ([self isRecentDuplicateGroupMessageInChat:chat
+                                                senderKey:(senderPubkeyHex.length > 0 ? senderPubkeyHex : [NSString stringWithFormat:@"%u", peerId])
+                                                     text:text
+                                            windowSeconds:15.0]) {
+                return YES;
+            }
+
+            // KHANDAQ (#155): persistent, sender-scoped content check (mirrors the live path's #88
+            // layer, which history-sync lacked). The live-arrived copy is stored with the ARRIVAL time
+            // while the synced copy carries the ORIGINAL send timestamp, so the narrow 3s window below
+            // misses it whenever delivery lagged or the link flapped — a reconnect storm then rendered
+            // the same message 2-3x. The frozen sender name + wide window catches those without eating
+            // an identical short text from a DIFFERENT peer.
+            if (peerName.length > 0 &&
+                [realmManager groupTextMessageExistsInChat:chat
+                                                      text:text
+                                                senderName:peerName
+                                          nearDateInterval:dateInterval
+                                             windowSeconds:120.0]) {
                 return YES;
             }
 
@@ -3405,7 +3430,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             // path (with a different msgIdHashHex from the sender's retries), so the msgIdHashHex
             // check can miss it. Drop the history-sync copy if we already have it (peer + name + size).
             if ([self isRecentDuplicateGroupMessageInChat:chat
-                                                    peerId:peerId
+                                                 senderKey:[NSString stringWithFormat:@"%u", peerId]
                                                       text:[NSString stringWithFormat:@"file:%@:%llu", fileName ?: @"", fileSize]
                                              windowSeconds:120.0]) {
                 return nil;
@@ -3557,7 +3582,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     // as incoming text. Placed after the msgIdHex match so a legitimate resume (same hash) still
     // updates the existing transfer above.
     if ([self isRecentDuplicateGroupMessageInChat:chat
-                                            peerId:peerId
+                                         senderKey:[NSString stringWithFormat:@"%u", peerId]
                                               text:[NSString stringWithFormat:@"file:%@:%llu", fileName ?: @"", fileSize]
                                      windowSeconds:120.0]) {
         return;

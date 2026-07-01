@@ -82,7 +82,10 @@ class StaticTableDefaultCell: StaticTableBaseCell {
                 checkmarkSelected = false
             case .checkmark:
                 showRightImageView = true
-                rightImageView.image = UIImage(named: "checkmark")!
+                // KHANDAQ design: accent template checkmark (the raw PNG was baked black —
+                // invisible in dark theme, off-brand in light).
+                rightImageView.image = UIImage(named: "checkmark")!.withRenderingMode(.alwaysTemplate)
+                rightImageView.tintColor = theme.colorForType(.LinkText)
                 checkmarkSelected = true
         }
 

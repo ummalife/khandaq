@@ -75,7 +75,7 @@ values:
   chat-outgoing-unread-bubble: bubble_outgoing
   chat-outgoing-sentpush-bubble: bubble_outgoing
   chat-information-text: darkgray2
-  tab-badge-background: palered
+  tab-badge-background: accent
   tab-badge-text: white
   tab-item-active: accent
   tab-item-inactive: darkgray2
@@ -85,17 +85,17 @@ values:
   settings-background: fill_tertiary
   call-text-color: white
   call-decline-button-background: red
-  call-answer-button-background: green
-  call-control-background: simpleblue
+  call-answer-button-background: accent
+  call-control-background: accent
   call-control-selected-background: white
   call-button-icon-color: white
-  call-button-selected-icon-color: simpleblue
+  call-button-selected-icon-color: accent
   call-video-preview-background: black
   empty-screen-placeholder-text: darkgray
   file-image-background-active: darkgray
   file-image-cancelled-text: white
   file-image-accept-button-tint: white
   file-image-cancel-button-tint: black
-  lock-gradient-top: mediumblue
-  lock-gradient-bottom: purple
+  lock-gradient-top: accent
+  lock-gradient-bottom: accent_pressed
   chat-list-cell-arrow-unread-background: accent

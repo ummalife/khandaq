@@ -365,8 +365,9 @@ class ChatPrivateController: PortraitChatController {
     }
 
     fileprivate func configureLinearProgressBar(){
-            linearBar.backgroundColor = UIColor(red:0.68, green:0.81, blue:0.72, alpha:1.0)
-            linearBar.progressBarColor = UIColor(red:0.26, green:0.65, blue:0.45, alpha:1.0)
+            // KHANDAQ design: brand accent progress strip (was off-accent hard-coded greens).
+            linearBar.backgroundColor = theme.colorForType(.LinkText).withAlphaComponent(0.25)
+            linearBar.progressBarColor = theme.colorForType(.LinkText)
             linearBar.heightForLinearBar = 5
         }
 

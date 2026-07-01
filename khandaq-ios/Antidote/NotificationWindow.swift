@@ -145,7 +145,7 @@ class NotificationWindow: UIWindow {
                 showConnectingView(true, animated: animated)
 
             case .connected:
-                connectingView.backgroundColor = UIColor(red: 0.17, green: 0.6, blue: 0.33, alpha: 1.0)
+                connectingView.backgroundColor = theme.colorForType(.ConnectingBackground)
                 connectingViewLabel.text = String(localized: "conn_state_connected")
                 showConnectingView(true, animated: animated)
                 // Flash "Online" briefly, then slide away.
@@ -163,7 +163,7 @@ class NotificationWindow: UIWindow {
                 }
 
             case .stable:
-                connectingView.backgroundColor = UIColor(red: 0.17, green: 0.6, blue: 0.33, alpha: 1.0)
+                connectingView.backgroundColor = theme.colorForType(.ConnectingBackground)
                 connectingViewLabel.text = String(localized: "conn_state_stable")
                 showConnectingView(true, animated: animated)
                 connectionAutoHideTimer = Timer.scheduledTimer(withTimeInterval: 1.8, repeats: false) { [weak self] _ in

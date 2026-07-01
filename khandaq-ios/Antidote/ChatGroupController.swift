@@ -426,7 +426,8 @@ class ChatGroupController: PortraitChatController {
 
         switch state {
         case .active:
-            return image.withTintColor(.systemGreen, renderingMode: .alwaysOriginal)
+            // KHANDAQ design: brand accent for the active live-video state (was Apple systemGreen).
+            return image.withTintColor(UIColor(red: 0.01, green: 0.61, blue: 0.49, alpha: 1.0), renderingMode: .alwaysOriginal)
         case .incoming:
             return image.withTintColor(.systemOrange, renderingMode: .alwaysOriginal)
         default:

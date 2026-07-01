@@ -572,7 +572,9 @@ extension CallCoordinator {
 
         // KHANDAQ (remote-video diagnostic): surface the incoming-frame count + flags on the call
         // screen during a video call so a screenshot pinpoints the break (rx:0 = peer not transmitting).
-        if activeCall.call.videoIsEnabled || activeCall.call.friendSendingVideo || frameCount > 0 {
+        // Shown only with the Debug Mode setting on — regular users get a clean call screen.
+        if UserDefaultsManager().DebugMode
+            && (activeCall.call.videoIsEnabled || activeCall.call.friendSendingVideo || frameCount > 0) {
             activeController!.debugVideoInfo = "rx:\(frameCount) sendV:\(activeCall.call.friendSendingVideo ? 1 : 0) feed:\(activeController!.videoFeed != nil ? 1 : 0)"
         }
         else {

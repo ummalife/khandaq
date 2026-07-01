@@ -120,7 +120,8 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 
         sendButton.setTitle(String(localized: "media_send_button"), for: .normal)
         sendButton.setTitleColor(.white, for: .normal)
-        sendButton.backgroundColor = UIColor(red: 0.04, green: 0.45, blue: 0.32, alpha: 1)
+        // KHANDAQ design: brand accent primary action (was an off-accent dark green).
+        sendButton.backgroundColor = UIColor(red: 0.01, green: 0.61, blue: 0.49, alpha: 1)
         sendButton.layer.cornerRadius = 8
         sendButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
 

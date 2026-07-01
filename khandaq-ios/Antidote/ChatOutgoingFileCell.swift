@@ -36,6 +36,7 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
     }
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
+        cachedTheme = theme
         super.setupWithTheme(theme, model: model)
 
         guard let fileModel = model as? ChatOutgoingFileCellModel else {
@@ -44,11 +45,14 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
         }
 
         statusImageView.image = MessageStatusIcon.image(delivered: fileModel.delivered)
+        // KHANDAQ design: accent delivered checkmark (was a hard-coded blue), matching the text cells.
         statusImageView.tintColor = fileModel.delivered
-            ? UIColor(red: 0.05, green: 0.65, blue: 0.91, alpha: 1.0)
-            : UIColor(white: 0.58, alpha: 1.0)
+            ? theme.colorForType(.LinkText)
+            : theme.colorForType(.ChatInformationText)
         statusImageView.isHidden = fileModel.state != .done
     }
+
+    private var cachedTheme: Theme?
 
     override func createViews() {
         super.createViews()
@@ -140,9 +144,11 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
                 }
                 if let outgoingModel = fileModel as? ChatOutgoingFileCellModel {
                     statusImageView.isHidden = fileModel.isVoiceMessage
-                    statusImageView.tintColor = outgoingModel.delivered
-                        ? UIColor(red: 0.05, green: 0.65, blue: 0.91, alpha: 1.0)
-                        : UIColor(white: 0.58, alpha: 1.0)
+                    if let theme = cachedTheme {
+                        statusImageView.tintColor = outgoingModel.delivered
+                            ? theme.colorForType(.LinkText)
+                            : theme.colorForType(.ChatInformationText)
+                    }
                 }
         }
     }

@@ -137,7 +137,8 @@ final class GroupMembersDrawerView: UIView {
         cell.detailTextLabel?.numberOfLines = 2
 
         if UInt32(peer.peerId) == selfPeerId && selfPeerId > 0 {
-            cell.textLabel?.textColor = UIColor(red: 1.0, green: 0.34, blue: 0.2, alpha: 1.0)
+            // KHANDAQ design: mark the self row with the brand accent (was an off-brand orange-red).
+            cell.textLabel?.textColor = theme.colorForType(.LinkText)
         }
         else if peer.peerNotificationsSilent {
             cell.textLabel?.textColor = UIColor(red: 0.84, green: 0.71, blue: 0.26, alpha: 1.0)
@@ -147,7 +148,8 @@ final class GroupMembersDrawerView: UIView {
         }
 
         if submanagerGroups.isGroupPeerOnline(withId: UInt32(peer.peerId), in: chat) {
-            cell.detailTextLabel?.textColor = UIColor(red: 0.39, green: 0.71, blue: 0.96, alpha: 1.0)
+            // KHANDAQ design: online status in brand accent (was a hard-coded light blue).
+            cell.detailTextLabel?.textColor = theme.colorForType(.LinkText)
         }
         else {
             cell.detailTextLabel?.textColor = theme.colorForType(.FriendCellStatus)

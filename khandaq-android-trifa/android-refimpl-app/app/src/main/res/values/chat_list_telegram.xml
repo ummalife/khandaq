@@ -8,7 +8,7 @@
     <color name="tg_chat_preview">@color/khandaq_text_muted</color>
     <color name="tg_chat_draft">#E56555</color>
     <color name="tg_chat_time">@color/khandaq_text_muted</color>
-    <color name="tg_chat_unread_bg">@color/khandaq_primary</color>
+    <color name="tg_chat_unread_bg">@color/khandaq_teal</color>
     <color name="tg_chat_ripple">#1A0F3D2E</color>
     <color name="list_empty_state_icon">#6B7A75</color>
     <dimen name="tg_chat_row_height">72dp</dimen>

@@ -9,8 +9,7 @@ final class ChatVoiceMessageView: UIView {
     var onPlayTapped: (() -> Void)?
 
     private let playButton = UIButton(type: .system)
-    private let progressSlider = UISlider()
-    private let elapsedLabel = UILabel()
+    private let waveformView = VoiceWaveformView()
     private let durationLabel = UILabel()
 
     override init(frame: CGRect) {
@@ -25,12 +24,10 @@ final class ChatVoiceMessageView: UIView {
 
     func apply(theme: Theme, enabled: Bool) {
         playButton.tintColor = theme.colorForType(.LinkText)
-        elapsedLabel.textColor = theme.colorForType(.NormalText)
         durationLabel.textColor = theme.colorForType(.FriendCellStatus)
-        progressSlider.minimumTrackTintColor = theme.colorForType(.LinkText)
-        progressSlider.maximumTrackTintColor = theme.colorForType(.NormalText).withAlphaComponent(0.25)
-        progressSlider.isUserInteractionEnabled = false
-        progressSlider.isEnabled = enabled
+        // KHANDAQ (Figma voice bubble): waveform bars instead of a plain slider
+        waveformView.playedColor = theme.colorForType(.LinkText)
+        waveformView.unplayedColor = theme.colorForType(.NormalText).withAlphaComponent(0.3)
         playButton.isEnabled = enabled
         alpha = enabled ? 1 : 0.55
     }
@@ -38,10 +35,9 @@ final class ChatVoiceMessageView: UIView {
     func update(isPlaying: Bool, progress: Float, currentTime: TimeInterval, duration: TimeInterval, enabled: Bool) {
         let imageName = isPlaying ? "chat-file-pause-big" : "chat-file-play-big"
         playButton.setImage(UIImage.templateNamed(imageName), for: .normal)
-        progressSlider.value = progress
-        elapsedLabel.text = Self.formatTime(currentTime)
-        durationLabel.text = Self.formatTime(duration > 0 ? duration : 0)
-        progressSlider.isEnabled = enabled && duration > 0
+        waveformView.progress = progress
+        // idle shows the total duration (Figma), playing counts the elapsed time up
+        durationLabel.text = Self.formatTime(isPlaying ? currentTime : (duration > 0 ? duration : 0))
         playButton.isEnabled = enabled
         alpha = enabled ? 1 : 0.55
     }
@@ -64,13 +60,9 @@ final class ChatVoiceMessageView: UIView {
         playButton.addTarget(self, action: #selector(playButtonTapped), for: .touchUpInside)
         addSubview(playButton)
 
-        progressSlider.minimumValue = 0
-        progressSlider.maximumValue = 1
-        addSubview(progressSlider)
+        addSubview(waveformView)
 
-        elapsedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         durationLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-        addSubview(elapsedLabel)
         addSubview(durationLabel)
     }
 
@@ -80,26 +72,77 @@ final class ChatVoiceMessageView: UIView {
             $0.size.equalTo(40)
         }
 
-        elapsedLabel.snp.makeConstraints {
-            $0.leading.equalTo(playButton.snp.trailing).offset(8)
-            $0.centerY.equalToSuperview()
-            $0.width.greaterThanOrEqualTo(34)
-        }
-
         durationLabel.snp.makeConstraints {
             $0.trailing.equalToSuperview()
             $0.centerY.equalToSuperview()
             $0.width.greaterThanOrEqualTo(34)
         }
 
-        progressSlider.snp.makeConstraints {
-            $0.leading.equalTo(elapsedLabel.snp.trailing).offset(8)
-            $0.trailing.equalTo(durationLabel.snp.leading).offset(-8)
+        waveformView.snp.makeConstraints {
+            $0.leading.equalTo(playButton.snp.trailing).offset(10)
+            $0.trailing.equalTo(durationLabel.snp.leading).offset(-10)
             $0.centerY.equalToSuperview()
+            $0.height.equalTo(28)
         }
 
         snp.makeConstraints {
             $0.height.equalTo(44)
+        }
+    }
+}
+
+// KHANDAQ (Figma): static waveform visualisation for voice messages. We have no per-message
+// samples, so the bar heights are a deterministic pseudo-waveform (stable across redraws);
+// the "played" portion up to `progress` is tinted with the accent colour.
+private final class VoiceWaveformView: UIView {
+    var progress: Float = 0 {
+        didSet { setNeedsDisplay() }
+    }
+    var playedColor: UIColor = .systemTeal {
+        didSet { setNeedsDisplay() }
+    }
+    var unplayedColor: UIColor = UIColor(white: 0.5, alpha: 0.35) {
+        didSet { setNeedsDisplay() }
+    }
+
+    private static let heights: [CGFloat] = (0..<44).map { i in
+        let a = sin(Double(i) * 1.3)
+        let b = sin(Double(i) * 0.7 + 1.1)
+        let v = abs(a * 0.6 + b * 0.4)
+        return CGFloat(0.25 + 0.7 * v)
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+        contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        let heights = Self.heights
+        let count = heights.count
+        guard count > 0, rect.width > 0, rect.height > 0 else {
+            return
+        }
+
+        let spacing: CGFloat = 2
+        let barWidth = max(1.5, (rect.width - spacing * CGFloat(count - 1)) / CGFloat(count))
+        let step = barWidth + spacing
+        let playedCount = Int((Float(count) * max(0, min(1, progress))).rounded())
+
+        for i in 0 ..< count {
+            let h = max(2, heights[i] * rect.height)
+            let x = CGFloat(i) * step
+            let y = (rect.height - h) / 2
+            let barRect = CGRect(x: x, y: y, width: barWidth, height: h)
+            let path = UIBezierPath(roundedRect: barRect, cornerRadius: barWidth / 2)
+            (i < playedCount ? playedColor : unplayedColor).setFill()
+            path.fill()
         }
     }
 }

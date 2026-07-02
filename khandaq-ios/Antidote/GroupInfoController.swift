@@ -870,6 +870,10 @@ extension GroupInfoController: ChatPrivateControllerDelegate {
         previewController.currentPreviewItemIndex = selectedIndex
         navigationController?.present(previewController, animated: true, completion: nil)
     }
+
+    func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
+        // Not applicable in the group-info hosted preview.
+    }
 }
 
 private extension OCTToxGroupVoiceState {

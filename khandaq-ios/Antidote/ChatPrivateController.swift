@@ -36,6 +36,8 @@ protocol ChatPrivateControllerDelegate: class {
             _ controller: ChatPrivateController,
             dataSource: QuickLookPreviewControllerDataSource,
             selectedIndex: Int)
+    // KHANDAQ (Figma): tapping the chat header opens the friend profile.
+    func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend)
 }
 
 class ChatPrivateController: PortraitChatController {
@@ -1512,8 +1514,21 @@ private extension ChatPrivateController {
         titleView = ChatPrivateTitleView(theme: theme)
         navigationItem.titleView = titleView
 
+        // KHANDAQ (Figma): tapping the header (avatar/name) opens the friend profile. Saved Messages
+        // has no friend — the handler bails there.
+        titleView.isUserInteractionEnabled = true
+        let titleTap = UITapGestureRecognizer(target: self, action: #selector(ChatPrivateController.titleViewTapped))
+        titleView.addGestureRecognizer(titleTap)
+
         // create correct navigation buttons
         toggleTableViewEditing(false, animated: false)
+    }
+
+    @objc func titleViewTapped() {
+        guard let friend = friend else {
+            return
+        }
+        delegate?.chatPrivateControllerShowFriendProfile(self, forFriend: friend)
     }
 
     func createTableView() {

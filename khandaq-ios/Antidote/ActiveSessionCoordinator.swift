@@ -690,6 +690,10 @@ extension ActiveSessionCoordinator: ChatPrivateControllerDelegate {
 
         iPad.splitController.present(controller, animated: true, completion: nil)
     }
+
+    func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
+        // iPad detail flow keeps the friend card reachable from the primary column instead.
+    }
 }
 
 extension ActiveSessionCoordinator: GroupSelectControllerDelegate {

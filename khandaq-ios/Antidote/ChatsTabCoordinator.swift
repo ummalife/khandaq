@@ -149,6 +149,50 @@ extension ChatsTabCoordinator: ChatPrivateControllerDelegate {
 
         navigationController.present(controller, animated: true, completion: nil)
     }
+
+    // KHANDAQ (Figma): chat header tap → friend profile.
+    func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
+        let card = FriendCardController(theme: theme, friend: friend, submanagerObjects: submanagerObjects)
+        card.delegate = self
+
+        navigationController.pushViewController(card, animated: true)
+    }
+}
+
+extension ChatsTabCoordinator: FriendCardControllerDelegate {
+    func friendCardControllerChangeNickname(_ controller: FriendCardController, forFriend friend: OCTFriend) {
+        let title = String(localized: "nickname")
+        let defaultValue = friend.nickname
+
+        let textController = TextEditController(theme: theme, title: title, defaultValue: defaultValue, changeTextHandler: {
+            [unowned self] newValue -> Void in
+            self.submanagerObjects.change(friend, nickname: newValue)
+
+        }, userFinishedEditing: { [unowned self] in
+            self.navigationController.popViewController(animated: true)
+        })
+
+        navigationController.pushViewController(textController, animated: true)
+    }
+
+    func friendCardControllerOpenChat(_ controller: FriendCardController, forFriend friend: OCTFriend) {
+        // We navigated here FROM the chat — pop back to it.
+        navigationController.popViewController(animated: true)
+    }
+
+    func friendCardControllerCall(_ controller: FriendCardController, toFriend friend: OCTFriend) {
+        guard let chat = submanagerChats.getOrCreateChat(with: friend) else {
+            return
+        }
+        delegate?.chatsTabCoordinator(self, callToChat: chat, enableVideo: false)
+    }
+
+    func friendCardControllerVideoCall(_ controller: FriendCardController, toFriend friend: OCTFriend) {
+        guard let chat = submanagerChats.getOrCreateChat(with: friend) else {
+            return
+        }
+        delegate?.chatsTabCoordinator(self, callToChat: chat, enableVideo: true)
+    }
 }
 
 extension ChatsTabCoordinator: ChatGroupControllerDelegate {

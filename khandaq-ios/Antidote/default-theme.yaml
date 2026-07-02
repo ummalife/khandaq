@@ -80,6 +80,7 @@ values:
   tab-item-active: accent
   tab-item-inactive: darkgray2
   tab-selection: fill_tertiary
+  tab-bar-capsule: white
   notification-background: transparent_dark_gray
   notification-text: white
   settings-background: fill_tertiary

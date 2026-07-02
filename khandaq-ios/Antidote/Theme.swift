@@ -60,6 +60,7 @@ class Theme {
         case TabItemActive = "tab-item-active"
         case TabItemInactive = "tab-item-inactive"
         case TabSelection = "tab-selection"
+        case TabBarCapsule = "tab-bar-capsule"
         case NotificationBackground = "notification-background"
         case NotificationText = "notification-text"
         case SettingsBackground = "settings-background"
@@ -122,6 +123,7 @@ class Theme {
             TabItemActive,
             TabItemInactive,
             TabSelection,
+            TabBarCapsule,
             NotificationBackground,
             NotificationText,
             SettingsBackground,

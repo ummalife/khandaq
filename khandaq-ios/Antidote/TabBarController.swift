@@ -7,6 +7,20 @@ import UIKit
 class TabBarController: UITabBarController {
     fileprivate let theme: Theme
 
+    // KHANDAQ design (Figma): the bar is a floating rounded "island" (capsule with side margins +
+    // shadow), not an edge-to-edge bar. The system bar background is made transparent and this
+    // capsule is laid behind the tab items.
+    fileprivate lazy var floatingCapsule: UIView = {
+        let view = UIView()
+        view.backgroundColor = theme.colorForType(.TabBarCapsule)
+        view.isUserInteractionEnabled = false
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.16
+        view.layer.shadowRadius = 12.0
+        view.layer.shadowOffset = CGSize(width: 0, height: 4)
+        return view
+    }()
+
     init(theme: Theme, controllers: [UINavigationController]) {
         self.theme = theme
 
@@ -28,6 +42,36 @@ class TabBarController: UITabBarController {
         }
 
         applyTheme(theme)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        layoutFloatingCapsule()
+    }
+
+    /// Position the floating capsule behind the tab items: side margins + lifted above the home
+    /// indicator, fully rounded ends. Kept at the back so the item icons/labels draw on top of it.
+    private func layoutFloatingCapsule() {
+        let sideInset: CGFloat = 12.0
+        let topInset: CGFloat = 4.0
+        // Lift the capsule clear of the home indicator; on legacy devices leave a small gap.
+        let bottomLift = max(view.safeAreaInsets.bottom - 6.0, 6.0)
+
+        let bounds = tabBar.bounds
+        let height = max(bounds.height - topInset - bottomLift, 0.0)
+        floatingCapsule.frame = CGRect(
+            x: sideInset,
+            y: topInset,
+            width: bounds.width - sideInset * 2.0,
+            height: height)
+        floatingCapsule.layer.cornerRadius = height / 2.0
+
+        if floatingCapsule.superview !== tabBar {
+            tabBar.insertSubview(floatingCapsule, at: 0)
+        }
+        else {
+            tabBar.sendSubview(toBack: floatingCapsule)
+        }
     }
 
     /// iOS 18+ defers tab child layout; preload avoids a blank content area on first paint.
@@ -53,6 +97,7 @@ class TabBarController: UITabBarController {
 
     func applyTheme(_ theme: Theme) {
         configureNativeTabBarAppearance(theme: theme)
+        floatingCapsule.backgroundColor = theme.colorForType(.TabBarCapsule)
     }
 
     static func makeProfileTabBarImage(
@@ -127,9 +172,12 @@ private extension TabBarController {
         tabBar.selectionIndicatorImage = makeSelectionPillImage(theme: theme)
 
         if #available(iOS 13.0, *) {
-            // Figma BG is iOS 26 "Liquid Glass" — use the system material rather than a flat fill.
+            // Figma: the bar itself is invisible — only the floating capsule (laid in
+            // layoutFloatingCapsule) is drawn. Make the system background/shadow transparent.
             let appearance = UITabBarAppearance()
-            appearance.configureWithDefaultBackground()
+            appearance.configureWithTransparentBackground()
+            appearance.backgroundColor = .clear
+            appearance.shadowColor = .clear
 
             // Figma: labels SF Pro Semibold 10; inactive icon grey + near-black label; active green.
             let font = UIFont.systemFont(ofSize: 10.0, weight: .semibold)

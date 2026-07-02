@@ -80,23 +80,21 @@ private extension AvatarManager {
     func createAvatarFromString(_ string: String, diameter: CGFloat, type: AvatarType) -> UIImage {
         let avatarString = avatarStringFromString(string)
 
-        let label = UILabel()
-        label.layer.masksToBounds = true
-        label.textAlignment = .center
-        label.text = avatarString
+        let backgroundColor: UIColor
+        let textColor: UIColor
+        let borderColor: UIColor?
 
         switch type {
             case .Normal:
                 // KHANDAQ design (Figma): solid colour disc keyed deterministically off the name, with
                 // white initials and no ring.
-                label.layer.borderWidth = 0.0
-                label.backgroundColor = AvatarManager.avatarColor(forString: string)
-                label.textColor = .white
+                backgroundColor = AvatarManager.avatarColor(forString: string)
+                textColor = .white
+                borderColor = nil
             case .Call:
-                label.layer.borderWidth = 1.0
-                label.backgroundColor = .clear
-                label.layer.borderColor = theme.colorForType(.CallButtonIconColor).cgColor
-                label.textColor = theme.colorForType(.CallButtonIconColor)
+                backgroundColor = .clear
+                textColor = theme.colorForType(.CallButtonIconColor)
+                borderColor = theme.colorForType(.CallButtonIconColor)
         }
 
         var size: CGSize
@@ -110,13 +108,37 @@ private extension AvatarManager {
         }
         while (max(size.width, size.height) > diameter)
 
+        // KHANDAQ: draw the disc as an anti-aliased bezier oval. The old path rendered a UILabel's
+        // cornerRadius mask via layer.render(in:), which does NOT anti-alias the mask edge — the
+        // circle came out ragged.
         let frame = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+        let font = UIFont.systemFont(ofSize: fontSize * 0.62, weight: .medium)
 
-        label.font = UIFont.systemFont(ofSize: fontSize * 0.62, weight: .medium)
-        label.layer.cornerRadius = frame.size.width / 2
-        label.frame = frame
+        let renderer = UIGraphicsImageRenderer(size: frame.size)
+        return renderer.image { _ in
+            if backgroundColor != .clear {
+                backgroundColor.setFill()
+                UIBezierPath(ovalIn: frame).fill()
+            }
 
-        return imageWithLabel(label)
+            if let borderColor = borderColor {
+                let border = UIBezierPath(ovalIn: frame.insetBy(dx: 0.5, dy: 0.5))
+                border.lineWidth = 1.0
+                borderColor.setStroke()
+                border.stroke()
+            }
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: textColor,
+            ]
+            let textSize = avatarString.size(withAttributes: attributes)
+            let textRect = CGRect(x: (frame.width - textSize.width) / 2.0,
+                                  y: (frame.height - textSize.height) / 2.0,
+                                  width: ceil(textSize.width),
+                                  height: ceil(textSize.height))
+            avatarString.draw(in: textRect, withAttributes: attributes)
+        }
     }
 
     func avatarStringFromString(_ string: String) -> String {
@@ -144,14 +166,4 @@ private extension AvatarManager {
         return String(result[result.startIndex ..< result.index(result.startIndex, offsetBy: numberOfLetters)])
     }
 
-    func imageWithLabel(_ label: UILabel) -> UIImage {
-        UIGraphicsBeginImageContextWithOptions(label.bounds.size, false, 0.0)
-        label.layer.render(in: UIGraphicsGetCurrentContext()!)
-
-        let image = UIGraphicsGetImageFromCurrentImageContext()
-
-        UIGraphicsEndImageContext()
-
-        return image!
-    }
 }

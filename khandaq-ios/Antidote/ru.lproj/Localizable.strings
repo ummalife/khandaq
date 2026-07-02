@@ -64,7 +64,7 @@
 "default_user_status_message" = "Khandaq is Tox";
 
 /* PIN screen text */
-"pin_enter_to_unlock" = "Введите PIN-код для разблокировки";
+"pin_enter_to_unlock" = "Введите PIN-код";
 /* PIN screen text */
 "pin_set" = "Установите PIN-код";
 /* PIN screen text */
@@ -73,6 +73,8 @@
 "pin_do_not_match" = "PIN-коды не совпадают. Попробуйте снова";
 /* PIN screen error */
 "pin_incorrect" = "Неправильный PIN";
+/* PIN pad delete key */
+"pin_delete" = "Удалить";
 /* PIN screen error details */
 "pin_failed_attempts" = "Неудачных попыток: %@";
 /* PIN screen message shown on log out */
@@ -126,8 +128,8 @@
 "voice_recording_slide_to_cancel" = "‹ сдвиньте для отмены";
 "voice_recording_release_to_cancel" = "Отпустите для отмены";
 "global_search_placeholder" = "Поиск";
-"global_search_section_chats" = "Чаты и группы";
-"global_search_section_messages" = "Сообщения";
+"global_search_section_chats" = "Контакты и группы:";
+"global_search_section_messages" = "Сообщения:";
 "global_search_no_results" = "Ничего не найдено";
 /* Tab name and screen name */
 "settings_title" = "Настройки";

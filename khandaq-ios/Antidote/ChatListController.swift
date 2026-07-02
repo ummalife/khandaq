@@ -550,7 +550,7 @@ enum GlobalSearchScrollTarget {
 /// kept in this file so it needs no separate pbxproj entry (same convention as EmojiKeyboardView).
 enum GlobalChatSearch {
     struct ChatHit { let chat: OCTChat; let title: String }
-    struct MessageHit { let chat: OCTChat; let title: String; let snippet: String; let messageId: String }
+    struct MessageHit { let chat: OCTChat; let title: String; let snippet: String; let messageId: String; let date: Date }
     struct Outcome { let chats: [ChatHit]; let messages: [MessageHit] }
 
     // Cap message results so a huge history can't stall the UI on every keystroke.
@@ -613,25 +613,40 @@ enum GlobalChatSearch {
                 continue
             }
             messageHits.append(MessageHit(chat: chat, title: MessageForwarder.displayName(for: chat),
-                                          snippet: snippet, messageId: message.uniqueIdentifier ?? ""))
+                                          snippet: snippet, messageId: message.uniqueIdentifier ?? "",
+                                          date: message.date()))
         }
 
         return Outcome(chats: chatHits, messages: messageHits)
     }
 }
 
-/// Grouped results table behind the search bar. Chat/group name matches first, then message matches
-/// (chat name as title, the matching message as subtitle). Selecting a row opens that conversation.
+/// Grouped results table behind the search bar, styled per Figma: grey section captions
+/// («Контакты и группы:» / «Сообщения:»), avatar rows, teal highlight of the matched substring in
+/// the message preview and the time on the right. Selecting a row opens that conversation.
 final class GlobalSearchResultsController: UITableViewController {
     var onSelectChat: ((OCTChat) -> Void)?
 
+    fileprivate struct Layout {
+        static let avatarSize: CGFloat = 44
+        static let horizontalInset: CGFloat = 16
+        static let avatarToText: CGFloat = 12
+        static let chatRowHeight: CGFloat = 56
+        static let messageRowHeight: CGFloat = 68
+        static let headerHeight: CGFloat = 32
+    }
+
     private let theme: Theme
+    private let avatarManager: AvatarManager
+    private let timeFormatter = DateFormatter(type: .time)
+    private let dateFormatter = DateFormatter(type: .relativeDate)
     private var chatHits: [GlobalChatSearch.ChatHit] = []
     private var messageHits: [GlobalChatSearch.MessageHit] = []
     private var query = ""
 
     init(theme: Theme) {
         self.theme = theme
+        self.avatarManager = AvatarManager(theme: theme)
         super.init(style: .grouped)
     }
 
@@ -643,6 +658,17 @@ final class GlobalSearchResultsController: UITableViewController {
         super.viewDidLoad()
         tableView.backgroundColor = theme.colorForType(.NormalBackground)
         tableView.keyboardDismissMode = .onDrag
+        tableView.separatorColor = theme.colorForType(.SeparatorsAndBorders)
+        tableView.separatorInset = UIEdgeInsets(
+                top: 0,
+                left: Layout.horizontalInset + Layout.avatarSize + Layout.avatarToText,
+                bottom: 0,
+                right: 0)
+        if #available(iOS 15.0, *) {
+            tableView.sectionHeaderTopPadding = 0
+        }
+        tableView.register(GlobalSearchResultCell.self,
+                           forCellReuseIdentifier: GlobalSearchResultCell.staticReuseIdentifier)
     }
 
     func apply(outcome: GlobalChatSearch.Outcome, query: String) {
@@ -687,30 +713,61 @@ final class GlobalSearchResultsController: UITableViewController {
         }
     }
 
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        let container = UIView()
+        container.backgroundColor = .clear
+
+        let label = UILabel()
+        label.font = UIFont.khandaqFontWithSize(15.0, weight: .light)
+        label.textColor = theme.colorForType(.ChatInformationText)
         switch sections[section] {
-            case .chats: return String(localized: "global_search_section_chats")
-            case .messages: return String(localized: "global_search_section_messages")
+            case .chats: label.text = String(localized: "global_search_section_chats")
+            case .messages: label.text = String(localized: "global_search_section_messages")
+        }
+        container.addSubview(label)
+
+        label.snp.makeConstraints {
+            $0.left.equalTo(container).offset(Layout.horizontalInset)
+            $0.right.lessThanOrEqualTo(container).inset(Layout.horizontalInset)
+            $0.bottom.equalTo(container).inset(6.0)
+        }
+        return container
+    }
+
+    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        return Layout.headerHeight
+    }
+
+    override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        return CGFloat.leastNormalMagnitude
+    }
+
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        switch sections[indexPath.section] {
+            case .chats: return Layout.chatRowHeight
+            case .messages: return Layout.messageRowHeight
         }
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        // Fresh subtitle-style cells (bounded result count) so we always get the two-line layout.
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        cell.backgroundColor = theme.colorForType(.NormalBackground)
-        cell.textLabel?.textColor = theme.colorForType(.NormalText)
-        cell.textLabel?.numberOfLines = 1
-        cell.detailTextLabel?.textColor = theme.colorForType(.ChatInformationText)
-        cell.detailTextLabel?.numberOfLines = 1
+        let cell = tableView.dequeueReusableCell(
+                withIdentifier: GlobalSearchResultCell.staticReuseIdentifier,
+                for: indexPath) as! GlobalSearchResultCell
+        cell.applyTheme(theme)
 
         switch sections[indexPath.section] {
             case .chats:
-                cell.textLabel?.text = chatHits[indexPath.row].title
-                cell.detailTextLabel?.text = nil
+                let hit = chatHits[indexPath.row]
+                cell.setup(name: hit.title,
+                           snippet: nil,
+                           timeText: nil,
+                           avatar: avatarImage(for: hit.chat, title: hit.title))
             case .messages:
                 let hit = messageHits[indexPath.row]
-                cell.textLabel?.text = hit.title
-                cell.detailTextLabel?.text = hit.snippet
+                cell.setup(name: hit.title,
+                           snippet: highlightedSnippet(hit.snippet),
+                           timeText: dateText(for: hit.date),
+                           avatar: avatarImage(for: hit.chat, title: hit.title))
         }
         return cell
     }
@@ -730,5 +787,145 @@ final class GlobalSearchResultsController: UITableViewController {
                 }
         }
         onSelectChat?(chat)
+    }
+
+    // MARK: styling helpers
+
+    /// Snippet with every occurrence of the query tinted teal (LinkText), rest is secondary grey.
+    private func highlightedSnippet(_ snippet: String) -> NSAttributedString {
+        let result = NSMutableAttributedString(string: snippet, attributes: [
+            NSAttributedStringKey.font: UIFont.khandaqFontWithSize(15.0, weight: .light),
+            NSAttributedStringKey.foregroundColor: theme.colorForType(.ChatInformationText),
+        ])
+
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return result
+        }
+
+        let nsSnippet = snippet as NSString
+        let accent = theme.colorForType(.LinkText)
+        var searchRange = NSRange(location: 0, length: nsSnippet.length)
+        while searchRange.length > 0 {
+            let found = nsSnippet.range(of: trimmed,
+                                        options: [.caseInsensitive, .diacriticInsensitive],
+                                        range: searchRange)
+            guard found.location != NSNotFound else {
+                break
+            }
+            result.addAttribute(NSAttributedStringKey.foregroundColor, value: accent, range: found)
+            let next = found.location + max(found.length, 1)
+            guard next < nsSnippet.length else {
+                break
+            }
+            searchRange = NSRange(location: next, length: nsSnippet.length - next)
+        }
+        return result
+    }
+
+    private func dateText(for date: Date) -> String {
+        let isToday = (Calendar.current as NSCalendar).compare(Date(), to: date, toUnitGranularity: .day) == .orderedSame
+        return isToday ? timeFormatter.string(from: date) : dateFormatter.string(from: date)
+    }
+
+    /// Same avatar sources as the chat list: friend photo → generated initials disc; groups always
+    /// use the generated disc; Saved Messages keeps its bookmark badge.
+    private func avatarImage(for chat: OCTChat, title: String) -> UIImage? {
+        let diameter = Layout.avatarSize
+
+        if chat.isSavedMessages {
+            if #available(iOS 13.0, *) {
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: diameter, height: diameter))
+                return renderer.image { ctx in
+                    theme.colorForType(.LinkText).setFill()
+                    ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: diameter, height: diameter))
+                    let glyph = diameter * 0.5
+                    UIImage(systemName: "bookmark.fill")?
+                        .withTintColor(.white, renderingMode: .alwaysOriginal)
+                        .draw(in: CGRect(x: (diameter - glyph) / 2, y: (diameter - glyph) / 2, width: glyph, height: glyph))
+                }
+            }
+            return avatarManager.avatarFromString(title, diameter: diameter)
+        }
+
+        if !chat.isGroup, let friend = chat.friends.lastObject() as? OCTFriend {
+            if let data = friend.avatarData, let image = UIImage(data: data) {
+                return image
+            }
+            return avatarManager.avatarFromString(friend.nickname, diameter: diameter)
+        }
+
+        return avatarManager.avatarFromString(title, diameter: diameter)
+    }
+}
+
+/// KHANDAQ (Figma): global-search row — avatar on the left, name + (optional) snippet, time on the
+/// right. Lives here to avoid a new file (no pbxproj edit), same convention as the controller above.
+private final class GlobalSearchResultCell: UITableViewCell {
+    static let staticReuseIdentifier = "GlobalSearchResultCell"
+
+    private let avatarImageView = UIImageView()
+    private let nameLabel = UILabel()
+    private let snippetLabel = UILabel()
+    private let timeLabel = UILabel()
+    private let textStack = UIStackView()
+
+    override init(style: UITableViewCellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+
+        avatarImageView.layer.cornerRadius = GlobalSearchResultsController.Layout.avatarSize / 2
+        avatarImageView.layer.masksToBounds = true
+        avatarImageView.contentMode = .scaleAspectFill
+        contentView.addSubview(avatarImageView)
+
+        nameLabel.font = UIFont.khandaqFontWithSize(17.0, weight: .medium)
+        snippetLabel.font = UIFont.khandaqFontWithSize(15.0, weight: .light)
+        timeLabel.font = UIFont.khandaqFontWithSize(13.0, weight: .light)
+
+        textStack.axis = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 2.0
+        textStack.addArrangedSubview(nameLabel)
+        textStack.addArrangedSubview(snippetLabel)
+        contentView.addSubview(textStack)
+        contentView.addSubview(timeLabel)
+
+        timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        timeLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        avatarImageView.snp.makeConstraints {
+            $0.left.equalTo(contentView).offset(GlobalSearchResultsController.Layout.horizontalInset)
+            $0.centerY.equalTo(contentView)
+            $0.size.equalTo(GlobalSearchResultsController.Layout.avatarSize)
+        }
+
+        textStack.snp.makeConstraints {
+            $0.left.equalTo(avatarImageView.snp.right).offset(GlobalSearchResultsController.Layout.avatarToText)
+            $0.centerY.equalTo(contentView)
+            $0.right.lessThanOrEqualTo(timeLabel.snp.left).offset(-8.0)
+        }
+
+        timeLabel.snp.makeConstraints {
+            $0.right.equalTo(contentView).inset(GlobalSearchResultsController.Layout.horizontalInset)
+            $0.centerY.equalTo(nameLabel)
+        }
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func applyTheme(_ theme: Theme) {
+        backgroundColor = theme.colorForType(.NormalBackground)
+        nameLabel.textColor = theme.colorForType(.NormalText)
+        timeLabel.textColor = theme.colorForType(.ChatInformationText)
+    }
+
+    func setup(name: String, snippet: NSAttributedString?, timeText: String?, avatar: UIImage?) {
+        nameLabel.text = name
+        snippetLabel.attributedText = snippet
+        snippetLabel.isHidden = (snippet == nil)
+        timeLabel.text = timeText
+        avatarImageView.image = avatar
     }
 }

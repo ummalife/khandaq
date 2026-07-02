@@ -119,6 +119,7 @@ extension ProfileTabCoordinator: ProfileDetailsControllerDelegate {
         let controller = EnterPinController(theme: theme, state: .setPin)
         controller.topText = String(localized: "pin_set")
         controller.delegate = self
+        controller.closeHandler = makePinSheetCloseHandler()
 
         let toPresent = PortraitNavigationController(rootViewController: controller)
         toPresent.isNavigationBarHidden = true
@@ -168,6 +169,7 @@ extension ProfileTabCoordinator: EnterPinControllerDelegate {
                 let validate = EnterPinController(theme: theme, state: .validatePin(validPin: pin))
                 validate.topText = String(localized: "pin_confirm")
                 validate.delegate = self
+                validate.closeHandler = makePinSheetCloseHandler()
 
                 presentedNavigation.viewControllers = [validate]
         }
@@ -183,8 +185,19 @@ extension ProfileTabCoordinator: EnterPinControllerDelegate {
         let setPin = EnterPinController(theme: theme, state: .setPin)
         setPin.topText = String(localized: "pin_do_not_match")
         setPin.delegate = self
+        setPin.closeHandler = makePinSheetCloseHandler()
 
         presentedNavigation.viewControllers = [setPin]
+    }
+
+    // KHANDAQ (Figma): X button on the set-PIN sheet; mirrors the interactive swipe-dismiss path
+    // (presentationControllerDidDismiss) which also posts the settings-changed notification.
+    private func makePinSheetCloseHandler() -> () -> Void {
+        return { [weak self] in
+            self?.navigationController.dismiss(animated: true) {
+                NotificationCenter.default.post(name: .khandaqProfileSettingsDidChange, object: nil)
+            }
+        }
     }
 }
 

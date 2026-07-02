@@ -106,6 +106,8 @@ extension RunningCoordinator {
         }
 
         theme = newTheme
+        // KHANDAQ (Figma): keep the (flat, theme-colored) lock screen in sync with the new theme.
+        pinAuthorizationCoordinator.updateTheme(newTheme)
         let preservedOptions = options ?? [:]
         var reloadOptions = preservedOptions
         reloadOptions["ThemeReloadOnly"] = true

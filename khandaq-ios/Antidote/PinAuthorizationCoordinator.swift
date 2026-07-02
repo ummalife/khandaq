@@ -23,7 +23,7 @@ class PinAuthorizationCoordinator: NSObject {
         case validatingPin
     }
 
-    fileprivate let theme: Theme
+    fileprivate var theme: Theme
     fileprivate let window: UIWindow
 
     fileprivate weak var submanagerObjects: OCTSubmanagerObjects!
@@ -49,6 +49,9 @@ class PinAuthorizationCoordinator: NSObject {
 
         // Showing window on top of all other windows.
         window.windowLevel = CGFloat(2000 + 1000)
+        // KHANDAQ (Figma): the flat lock screen shows the login-logo wordmark (light/dark asset
+        // variants) — this window must carry the app theme's interface style, not the system one.
+        ThemeChrome.applyWindowStyle(window, theme: theme)
 
         if lockOnStartup {
             lockIfNeeded(0)
@@ -71,6 +74,13 @@ class PinAuthorizationCoordinator: NSObject {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    /// KHANDAQ (Figma): the lock screen now uses theme backgrounds/keys (no more fixed teal
+    /// gradient), so an in-app theme toggle must reach the NEXT EnterPinController too.
+    func updateTheme(_ newTheme: Theme) {
+        theme = newTheme
+        ThemeChrome.applyWindowStyle(window, theme: newTheme)
     }
 
     @objc func appWillResignActiveNotification() {
@@ -212,6 +222,8 @@ private extension PinAuthorizationCoordinator {
         let failedAttempts = KeychainManager().failedPinAttemptsNumber ?? 0
 
         let controller = EnterPinController(theme: theme, state: .validatePin(validPin: pin))
+        // KHANDAQ (Figma): the unlock screen shows the Khandaq wordmark on top.
+        controller.showLogo = true
         controller.topText = String(localized: "pin_enter_to_unlock")
         controller.descriptionText =
           failedAttempts > 0 ?

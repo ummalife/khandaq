@@ -69,6 +69,8 @@
 "pin_do_not_match" = "PINs did not match. Try again";
 /* PIN screen error */
 "pin_incorrect" = "Incorrect PIN";
+/* PIN pad delete key */
+"pin_delete" = "Delete";
 /* PIN screen error details */
 "pin_failed_attempts" = "Failed attempts: %@";
 /* PIN screen message shown on log out */
@@ -122,8 +124,8 @@
 "voice_recording_slide_to_cancel" = "‹ slide to cancel";
 "voice_recording_release_to_cancel" = "Release to cancel";
 "global_search_placeholder" = "Search all chats and messages";
-"global_search_section_chats" = "Chats and groups";
-"global_search_section_messages" = "Messages";
+"global_search_section_chats" = "Contacts and groups:";
+"global_search_section_messages" = "Messages:";
 "global_search_no_results" = "Nothing found";
 /* Tab name and screen name */
 "settings_title" = "Settings";

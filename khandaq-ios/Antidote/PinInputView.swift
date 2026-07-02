@@ -6,6 +6,7 @@ import Foundation
 
 private struct Constants {
     static let DotsSize: CGFloat = 16
+    static let DotsSpacing: CGFloat = 10
     static let ButtonSize: CGFloat = 75
     static let VerticalOffsetSmall: CGFloat = 12
     static let VerticalOffsetBig: CGFloat = 17
@@ -17,6 +18,8 @@ protocol PinInputViewDelegate: class {
     func pinInputViewDeleteButtonPressed(_ view: PinInputView)
 }
 
+// KHANDAQ (Figma): flat PIN pad — plain background, light-grey circular keys, teal outline/filled
+// dots. Replaces the old full-screen teal gradient styling.
 class PinInputView: UIView {
     weak var delegate: PinInputViewDelegate?
 
@@ -50,8 +53,10 @@ class PinInputView: UIView {
 
     fileprivate let pinLength: Int
 
-    fileprivate let topColorComponents: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)
-    fileprivate let bottomColorComponents: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)
+    fileprivate let textColor: UIColor
+    fileprivate let secondaryTextColor: UIColor
+    fileprivate let accentColor: UIColor
+    fileprivate let keyFillColor: UIColor
 
     fileprivate var topLabel: UILabel!
     fileprivate var descriptionLabel: UILabel!
@@ -60,10 +65,12 @@ class PinInputView: UIView {
     fileprivate var numericButtons = [UIButton]()
     fileprivate var deleteButton: UIButton!
 
-    init(pinLength: Int, topColor: UIColor, bottomColor: UIColor) {
+    init(pinLength: Int, theme: Theme) {
         self.pinLength = pinLength
-        self.topColorComponents = topColor.components()
-        self.bottomColorComponents = bottomColor.components()
+        self.textColor = theme.colorForType(.NormalText)
+        self.secondaryTextColor = theme.colorForType(.ChatInformationText)
+        self.accentColor = theme.colorForType(.LinkText)
+        self.keyFillColor = theme.colorForType(.ChatInputBackground)
 
         super.init(frame: CGRect.zero)
 
@@ -73,25 +80,19 @@ class PinInputView: UIView {
         createDeleteButton()
 
         installConstraints()
+
+        updateDotsImages()
     }
-    
+
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
     /**
-        Applies gradient colors to all subviews.
-        Call this method after adding PinInputView to superview.
+        Refreshes dots state. Kept for compatibility with the previous (gradient) implementation,
+        colors are now static and applied at creation.
     */
     func applyColors() {
-        guard superview != nil else {
-            fatalError("superview shouldn't be nil")
-        }
-
-        layoutIfNeeded()
-        updateButtonColors()
-        updateOtherColors()
-
         updateDotsImages()
     }
 }
@@ -114,10 +115,12 @@ private extension PinInputView {
     func createLabels() {
         topLabel = UILabel()
         topLabel.font = UIFont.khandaqFontWithSize(18.0, weight: .medium)
+        topLabel.textColor = textColor
         addSubview(topLabel)
 
         descriptionLabel = UILabel()
         descriptionLabel.font = UIFont.khandaqFontWithSize(16.0, weight: .light)
+        descriptionLabel.textColor = secondaryTextColor
         addSubview(descriptionLabel)
     }
 
@@ -135,10 +138,17 @@ private extension PinInputView {
     }
 
     func createNumericButtons() {
+        let normalImage = circleImage(color: keyFillColor, size: Constants.ButtonSize, filled: true)
+        let highlightedImage = circleImage(color: accentColor, size: Constants.ButtonSize, filled: true)
+
         for i in 0...9 {
             let button = UIButton()
             button.setTitle("\(i)", for: UIControlState())
-            button.titleLabel?.font = UIFont.systemFont(ofSize: 28.0)
+            button.titleLabel?.font = UIFont.khandaqFontWithSize(26.0, weight: .light)
+            button.setBackgroundImage(normalImage, for: UIControlState())
+            button.setBackgroundImage(highlightedImage, for: .highlighted)
+            button.setTitleColor(textColor, for: UIControlState())
+            button.setTitleColor(.white, for: .highlighted)
             button.addTarget(self, action: #selector(PinInputView.numericButtonPressed(_:)), for: .touchUpInside)
             addSubview(button)
 
@@ -148,9 +158,9 @@ private extension PinInputView {
 
     func createDeleteButton() {
         deleteButton = UIButton(type: .system)
-        // No localication on purpose
-        deleteButton.setTitle("Delete", for: UIControlState())
-        deleteButton.titleLabel?.font = .systemFont(ofSize: 20.0)
+        deleteButton.setTitle(String(localized: "pin_delete"), for: UIControlState())
+        deleteButton.titleLabel?.font = UIFont.khandaqFontWithSize(17.0, weight: .light)
+        deleteButton.setTitleColor(secondaryTextColor, for: UIControlState())
         deleteButton.addTarget(self, action: #selector(PinInputView.deleteButtonPressed(_:)), for: .touchUpInside)
         addSubview(deleteButton)
     }
@@ -194,7 +204,7 @@ private extension PinInputView {
                     $0.left.equalTo(dotsContainer)
                 }
                 else {
-                    $0.left.equalTo(dotsImageViews[i - 1].snp.right).offset(Constants.DotsSize)
+                    $0.left.equalTo(dotsImageViews[i - 1].snp.right).offset(Constants.DotsSpacing)
                 }
 
                 if i == (dotsImageViews.count - 1) {
@@ -244,47 +254,13 @@ private extension PinInputView {
         }
     }
 
-    func updateButtonColors() {
-        for button in numericButtons {
-            let topColor = gradientColorAtPointY(button.frame.minY)
-            let centerColor = gradientColorAtPointY(button.center.y)
-            let bottomColor = gradientColorAtPointY(button.frame.maxY)
-
-            let image = gradientCircleImage(topColor: topColor,
-                                            bottomColor: bottomColor,
-                                            size: Constants.ButtonSize,
-                                            filled: false)
-            let highlightedImage = gradientCircleImage(topColor: topColor,
-                                                       bottomColor: bottomColor,
-                                                       size: Constants.ButtonSize,
-                                                       filled: true)
-
-            button.setBackgroundImage(image, for: UIControlState())
-            button.setBackgroundImage(highlightedImage, for: .highlighted)
-
-            button.setTitleColor(centerColor, for: UIControlState())
-            button.setTitleColor(.white, for: .highlighted)
-        }
-    }
-
-    func updateOtherColors() {
-        topLabel.textColor = gradientColorAtPointY(topLabel.center.y)
-        descriptionLabel.textColor = gradientColorAtPointY(descriptionLabel.center.y)
-        deleteButton.setTitleColor(gradientColorAtPointY(deleteButton.center.y), for: UIControlState())
-    }
-
     func updateDotsImages() {
-        let topColor = gradientColorAtPointY(dotsImageViews[0].frame.minY)
-        let bottomColor = gradientColorAtPointY(dotsImageViews[0].frame.maxY)
+        guard !dotsImageViews.isEmpty else {
+            return
+        }
 
-        let empty = gradientCircleImage(topColor: topColor,
-                                        bottomColor: bottomColor,
-                                        size: Constants.DotsSize,
-                                        filled: false)
-        let filled = gradientCircleImage(topColor: topColor,
-                                        bottomColor: bottomColor,
-                                        size: Constants.DotsSize,
-                                        filled: true)
+        let empty = circleImage(color: accentColor, size: Constants.DotsSize, filled: false)
+        let filled = circleImage(color: accentColor, size: Constants.DotsSize, filled: true)
 
         for i in 0..<dotsImageViews.count {
             let imageView = dotsImageViews[i]
@@ -292,62 +268,25 @@ private extension PinInputView {
         }
     }
 
-    func gradientColorAtPointY(_ y: CGFloat) -> UIColor {
-        guard self.frame.size.height > 0 else {
-            log("PinInputView should not be nil")
-            return .clear
+    func circleImage(color: UIColor, size: CGFloat, filled: Bool) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+
+        return renderer.image { _ in
+            if filled {
+                let path = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: size, height: size))
+                color.setFill()
+                path.fill()
+            }
+            else {
+                let lineWidth: CGFloat = 1.5
+                let path = UIBezierPath(ovalIn: CGRect(x: lineWidth / 2,
+                                                       y: lineWidth / 2,
+                                                       width: size - lineWidth,
+                                                       height: size - lineWidth))
+                path.lineWidth = lineWidth
+                color.setStroke()
+                path.stroke()
+            }
         }
-
-        guard y >= 0 && y <= self.frame.size.height else {
-            log("Point y \(y) is outside of view")
-            return .clear
-        }
-
-        let percent = y / self.frame.size.height
-
-        let red = topColorComponents.red + percent * (bottomColorComponents.red - topColorComponents.red)
-        let green = topColorComponents.green + percent * (bottomColorComponents.green - topColorComponents.green)
-        let blue = topColorComponents.blue + percent * (bottomColorComponents.blue - topColorComponents.blue)
-        let alpha = topColorComponents.alpha + percent * (bottomColorComponents.alpha - topColorComponents.alpha)
-
-        return UIColor(red: red, green: green, blue: blue, alpha: alpha)
-    }
-
-    func gradientCircleImage(topColor: UIColor, bottomColor: UIColor, size: CGFloat, filled: Bool) -> UIImage {
-        let radius = size * UIScreen.main.scale / 2
-
-        let gradientLayer = CAGradientLayer()
-        gradientLayer.frame.size.width = 2 * radius
-        gradientLayer.frame.size.height = 2 * radius
-        gradientLayer.colors = [topColor.cgColor, bottomColor.cgColor]
-        gradientLayer.masksToBounds = true
-        gradientLayer.cornerRadius = radius
-
-        if !filled {
-            // apply mask
-            let lineWidth: CGFloat = 2.0
-
-            let path = UIBezierPath()
-            path.addArc(withCenter: CGPoint(x: radius, y: radius),
-                                radius: radius - lineWidth,
-                                startAngle: 0.0,
-                                endAngle: CGFloat(2 * Double.pi),
-                                clockwise: true)
-
-            let mask = CAShapeLayer()
-            mask.frame = gradientLayer.frame
-            mask.path = path.cgPath
-            mask.lineWidth = lineWidth
-            mask.fillColor = UIColor.clear.cgColor
-            mask.strokeColor = UIColor.black.cgColor
-
-            gradientLayer.mask = mask
-        }
-        
-        UIGraphicsBeginImageContext(gradientLayer.bounds.size)
-        gradientLayer.render(in: UIGraphicsGetCurrentContext()!)
-        let image = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return image!
     }
 }

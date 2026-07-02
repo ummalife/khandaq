@@ -46,9 +46,29 @@ class EnterPinController: UIViewController {
         }
     }
 
+    // KHANDAQ (Figma): the unlock screen shows the Khandaq wordmark above the title.
+    var showLogo: Bool = false {
+        didSet {
+            if isViewLoaded {
+                logoImageView.isHidden = !showLogo
+            }
+        }
+    }
+
+    // KHANDAQ (Figma): the set-PIN sheet (from profile) has a круглая close (X) button top-left.
+    var closeHandler: (() -> Void)? {
+        didSet {
+            if isViewLoaded {
+                closeButton.isHidden = (closeHandler == nil)
+            }
+        }
+    }
+
     fileprivate let theme: Theme
 
     fileprivate var pinInputView: PinInputView!
+    fileprivate var logoImageView: UIImageView!
+    fileprivate var closeButton: UIButton!
 
     fileprivate var enteredString: String = ""
 
@@ -122,16 +142,53 @@ extension EnterPinController: PinInputViewDelegate {
 
 private extension EnterPinController {
     func createViews() {
-        pinInputView = PinInputView(pinLength: Constants.PinLength,
-                                    topColor: theme.colorForType(.LockGradientTop),
-                                    bottomColor: theme.colorForType(.LockGradientBottom))
+        pinInputView = PinInputView(pinLength: Constants.PinLength, theme: theme)
         pinInputView.delegate = self
         view.addSubview(pinInputView)
+
+        logoImageView = UIImageView(image: UIImage(named: "login-logo"))
+        logoImageView.contentMode = .scaleAspectFit
+        logoImageView.isHidden = !showLogo
+        view.addSubview(logoImageView)
+
+        closeButton = UIButton()
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 15.0, weight: .medium)
+            closeButton.setImage(UIImage(systemName: "xmark", withConfiguration: config), for: UIControlState())
+        }
+        else {
+            closeButton.setTitle("✕", for: UIControlState())
+            closeButton.setTitleColor(theme.colorForType(.NormalText), for: UIControlState())
+        }
+        closeButton.tintColor = theme.colorForType(.NormalText)
+        closeButton.backgroundColor = theme.colorForType(.ChatInputBackground)
+        closeButton.layer.cornerRadius = 20.0
+        closeButton.layer.masksToBounds = true
+        closeButton.isHidden = (closeHandler == nil)
+        closeButton.addTarget(self, action: #selector(EnterPinController.closeButtonPressed), for: .touchUpInside)
+        view.addSubview(closeButton)
+    }
+
+    @objc func closeButtonPressed() {
+        closeHandler?()
     }
 
     func installConstraints() {
         pinInputView.snp.makeConstraints {
             $0.center.equalTo(view)
+        }
+
+        logoImageView.snp.makeConstraints {
+            $0.centerX.equalTo(view)
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(48.0)
+            $0.width.equalTo(190.0)
+            $0.height.equalTo(76.0)
+        }
+
+        closeButton.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(16.0)
+            $0.left.equalTo(view).offset(16.0)
+            $0.size.equalTo(40.0)
         }
     }
 

@@ -144,9 +144,10 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
         f_notification.setImageDrawable(cachedNotificationIcon(context, fl.notification_silent));
         f_notification.setOnClickListener(this);
 
-        final boolean groupIsPublic =
-                fl.privacy_state == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value;
-        avatar.setImageDrawable(cachedGroupIcon(context, groupIsPublic));
+        // KHANDAQ (Figma): letter-avatar on a hash-colored disc (like contact rows / iOS), instead of
+        // the old grey shield/globe placeholder icon.
+        ChatBubbleUiHelper.fill_friend_list_avatar(context, fl.group_identifier,
+                get_effective_group_title(group_number, fl.group_identifier), avatar);
 
         try
         {

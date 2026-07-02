@@ -8,7 +8,5 @@
     android:paddingEnd="16dp"
     android:paddingTop="14dp"
     android:paddingBottom="6dp"
-    android:textSize="13sp"
-    android:textStyle="bold"
-    android:textAllCaps="true"
+    android:textSize="15sp"
     android:textColor="?android:attr/textColorSecondary" />

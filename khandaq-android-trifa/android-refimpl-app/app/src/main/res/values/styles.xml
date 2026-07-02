@@ -64,6 +64,19 @@
         <item name="color">@color/tg_chat_title</item>
     </style>
 
+    <!-- KHANDAQ PIN keypad digit key (round grey key, Figma and_pin_*) -->
+    <style name="PinKey">
+        <item name="android:layout_width">72dp</item>
+        <item name="android:layout_height">72dp</item>
+        <item name="android:layout_margin">8dp</item>
+        <item name="android:background">@drawable/pin_key_bg</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/onboarding_title</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
 
     <!--<style name="MainActyActionBar" parent="ThemeOverlay.AppCompat.Dark.ActionBar">-->
     <!--<item name="contentInsetStart">0dp</item>-->

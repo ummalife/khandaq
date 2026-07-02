@@ -1,11 +1,15 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
+import android.text.Spannable;
+import android.text.SpannableString;
 import android.text.TextWatcher;
+import android.text.style.ForegroundColorSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,8 +19,11 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import de.hdodenhof.circleimageview.CircleImageView;
 
 import com.zoffcc.applications.sorm.FriendList;
 import com.zoffcc.applications.sorm.GroupDB;
@@ -55,6 +62,7 @@ public class GlobalSearchActivity extends AppCompatActivity
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Runnable pendingSearch;
     private Thread searchThread;
+    private String lastQuery = ""; // current needle, for teal match highlighting
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -104,6 +112,7 @@ public class GlobalSearchActivity extends AppCompatActivity
     private void runSearch(final String rawQuery)
     {
         final String query = rawQuery == null ? "" : rawQuery.trim();
+        lastQuery = query;
         if (query.isEmpty())
         {
             applyResults(new ArrayList<>(), false);
@@ -190,7 +199,7 @@ public class GlobalSearchActivity extends AppCompatActivity
                         continue;
                     }
                     final String name = HelperFriend.get_friend_name_from_pubkey(m.tox_friendpubkey);
-                    messageHits.add(Row.message(name, oneLine(m.text), m.tox_friendpubkey, false));
+                    messageHits.add(Row.message(name, oneLine(m.text), m.tox_friendpubkey, false, m.sent_timestamp));
                 }
             }
 
@@ -219,7 +228,7 @@ public class GlobalSearchActivity extends AppCompatActivity
                     {
                         name = safe(gm.tox_group_peername);
                     }
-                    messageHits.add(Row.message(name, oneLine(gm.text), gm.group_identifier, true));
+                    messageHits.add(Row.message(name, oneLine(gm.text), gm.group_identifier, true, gm.sent_timestamp));
                     added++;
                 }
             }
@@ -295,6 +304,7 @@ public class GlobalSearchActivity extends AppCompatActivity
         String subtitle;   // message snippet (null for chat rows / headers)
         boolean isGroup;
         String targetId;   // friend pubkey or group_identifier
+        long timestampMs;  // message rows only (0 for chat rows / headers)
 
         static Row header(String title)
         {
@@ -314,7 +324,7 @@ public class GlobalSearchActivity extends AppCompatActivity
             return r;
         }
 
-        static Row message(String title, String snippet, String targetId, boolean isGroup)
+        static Row message(String title, String snippet, String targetId, boolean isGroup, long timestampMs)
         {
             Row r = new Row();
             r.type = TYPE_RESULT;
@@ -322,6 +332,7 @@ public class GlobalSearchActivity extends AppCompatActivity
             r.subtitle = snippet;
             r.targetId = targetId;
             r.isGroup = isGroup;
+            r.timestampMs = timestampMs;
             return r;
         }
     }
@@ -371,15 +382,44 @@ public class GlobalSearchActivity extends AppCompatActivity
             }
             final ResultHolder rh = (ResultHolder) holder;
             rh.title.setText(row.title);
-            if (row.subtitle == null || row.subtitle.isEmpty())
+
+            // Avatar: real photo for friends, coloured initials for groups / unknown peers.
+            if (rh.avatar != null)
+            {
+                try
+                {
+                    ChatBubbleUiHelper.fill_friend_list_avatar(rh.avatar.getContext(), row.targetId,
+                            row.title, rh.avatar);
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+
+            final boolean hasSnippet = row.subtitle != null && !row.subtitle.isEmpty();
+            if (!hasSnippet)
             {
                 rh.subtitle.setVisibility(View.GONE);
             }
             else
             {
                 rh.subtitle.setVisibility(View.VISIBLE);
-                rh.subtitle.setText(row.subtitle);
+                rh.subtitle.setText(highlight(rh.subtitle.getContext(), row.subtitle, lastQuery));
             }
+
+            // Time on the right — message rows only.
+            final CharSequence timeText = (hasSnippet && row.timestampMs > 0)
+                    ? ChatListUiHelper.format_chat_list_time(rh.time.getContext(), row.timestampMs) : "";
+            if (timeText != null && timeText.length() > 0)
+            {
+                rh.time.setVisibility(View.VISIBLE);
+                rh.time.setText(timeText);
+            }
+            else
+            {
+                rh.time.setVisibility(View.GONE);
+            }
+
             rh.itemView.setOnClickListener(v -> openRow(row));
         }
 
@@ -403,14 +443,55 @@ public class GlobalSearchActivity extends AppCompatActivity
 
     private static final class ResultHolder extends RecyclerView.ViewHolder
     {
+        final CircleImageView avatar;
         final TextView title;
         final TextView subtitle;
+        final TextView time;
 
         ResultHolder(@NonNull View itemView)
         {
             super(itemView);
+            avatar = itemView.findViewById(R.id.row_avatar);
             title = itemView.findViewById(R.id.row_title);
             subtitle = itemView.findViewById(R.id.row_subtitle);
+            time = itemView.findViewById(R.id.row_time);
+        }
+    }
+
+    /** Teal-highlight every case-insensitive occurrence of the query inside a message snippet. */
+    private static CharSequence highlight(final Context ctx, final String text, final String query)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+        if (query == null || query.trim().isEmpty())
+        {
+            return text;
+        }
+        try
+        {
+            final String needle = query.trim().toLowerCase(Locale.ROOT);
+            final String hay = text.toLowerCase(Locale.ROOT);
+            final SpannableString sp = new SpannableString(text);
+            final int color = ContextCompat.getColor(ctx, R.color.khandaq_teal);
+            int from = 0;
+            while (true)
+            {
+                final int idx = hay.indexOf(needle, from);
+                if (idx < 0)
+                {
+                    break;
+                }
+                sp.setSpan(new ForegroundColorSpan(color), idx, idx + needle.length(),
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                from = idx + needle.length();
+            }
+            return sp;
+        }
+        catch (Exception e)
+        {
+            return text;
         }
     }
 }

@@ -27,12 +27,16 @@ public class ProfileDetailsActivity extends AppCompatActivity
 {
     static final String PREF__pending_profile_wipe = "PREF__pending_profile_wipe";
 
+    private static final int REQ_SET_PIN = 4801;
+
     // lock timeout choices, parallel arrays (seconds + label resource)
     private static final int[] TIMEOUT_SECONDS = {0, 60, 300, 1800};
 
     private SharedPreferences prefs;
     private SwitchMaterial lockSwitch;
     private TextView timeoutValue;
+    // guards programmatic setChecked() from re-entering the toggle listener
+    private boolean suppressToggle = false;
 
     @Override
     protected void onCreate(final Bundle savedInstanceState)
@@ -57,15 +61,26 @@ public class ProfileDetailsActivity extends AppCompatActivity
                 @Override
                 public void onCheckedChanged(final CompoundButton buttonView, final boolean isChecked)
                 {
-                    if (isChecked && !AppLockHelper.hasPassword())
+                    if (suppressToggle)
                     {
-                        // a lock is meaningless without a password — bounce back + hint
-                        buttonView.setChecked(false);
-                        Toast.makeText(ProfileDetailsActivity.this, R.string.pd_lock_no_password,
-                                Toast.LENGTH_LONG).show();
                         return;
                     }
-                    prefs.edit().putBoolean(AppLockHelper.PREF_ENABLED, isChecked).apply();
+                    if (isChecked)
+                    {
+                        // Enabling requires setting a PIN first. Keep the switch OFF until the PIN
+                        // is confirmed (onActivityResult); revert the visual state meanwhile.
+                        suppressToggle = true;
+                        buttonView.setChecked(false);
+                        suppressToggle = false;
+                        final Intent pin = new Intent(ProfileDetailsActivity.this, PinActivity.class);
+                        pin.putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_SET);
+                        startActivityForResult(pin, REQ_SET_PIN);
+                    }
+                    else
+                    {
+                        prefs.edit().putBoolean(AppLockHelper.PREF_ENABLED, false).apply();
+                        AppLockHelper.clearPin(ProfileDetailsActivity.this);
+                    }
                 }
             });
         }
@@ -91,6 +106,23 @@ public class ProfileDetailsActivity extends AppCompatActivity
         if (deleteRow != null)
         {
             deleteRow.setOnClickListener(v -> confirmDeleteProfile());
+        }
+    }
+
+    @Override
+    protected void onActivityResult(final int requestCode, final int resultCode, final Intent data)
+    {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_SET_PIN && resultCode == RESULT_OK)
+        {
+            // PIN was set + confirmed — now it's safe to enable the lock.
+            prefs.edit().putBoolean(AppLockHelper.PREF_ENABLED, true).apply();
+            if (lockSwitch != null)
+            {
+                suppressToggle = true;
+                lockSwitch.setChecked(true);
+                suppressToggle = false;
+            }
         }
     }
 

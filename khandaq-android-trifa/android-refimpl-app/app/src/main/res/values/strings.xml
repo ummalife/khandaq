@@ -738,9 +738,15 @@
     <string name="friend_info_send_message">Send message</string>
     <string name="chat_list_search_hint">Search</string>
     <string name="global_search_hint">Search all chats and messages</string>
-    <string name="global_search_section_chats">Chats and groups</string>
-    <string name="global_search_section_messages">Messages</string>
+    <string name="global_search_section_chats">Contacts and groups:</string>
+    <string name="global_search_section_messages">Messages:</string>
     <string name="global_search_no_results">Nothing found</string>
+    <!-- KHANDAQ PIN screen -->
+    <string name="pin_enter_title">Enter PIN</string>
+    <string name="pin_set_title">Set a PIN</string>
+    <string name="pin_confirm_title">Confirm PIN</string>
+    <string name="pin_mismatch">PIN didn\'t match!</string>
+    <string name="pin_delete">Delete</string>
     <string name="chat_list_no_messages">No messages</string>
     <string name="chat_list_preview_you">You: %1$s</string>
     <string name="chat_list_preview_sender">%1$s: %2$s</string>

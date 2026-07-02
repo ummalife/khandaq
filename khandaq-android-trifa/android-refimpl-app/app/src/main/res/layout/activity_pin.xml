@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ PIN screen (Figma and_pin_entry/and_pin_set). Two modes driven by PinActivity:
+     "set" shows a "← Детали" bar (no wordmark); "unlock" shows the centered Khandaq wordmark.
+     4-digit code: hollow teal dots fill with teal; round grey keypad 1-9 / 0 + "Удалить". -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/onboarding_form_bg"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- Set-mode app bar ("← Детали"); hidden in unlock mode -->
+    <LinearLayout
+        android:id="@+id/pin_header_bar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="4dp">
+
+        <ImageView
+            android:id="@+id/pin_back_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/onboarding_back"
+            android:padding="12dp"
+            android:src="@drawable/ic_arrow_back" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:text="@string/profile_details"
+            android:textColor="@color/onboarding_title"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Unlock-mode wordmark; hidden in set mode -->
+    <ImageView
+        android:id="@+id/pin_wordmark"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="56dp"
+        android:adjustViewBounds="true"
+        android:importantForAccessibility="no"
+        android:src="@drawable/khandaq_wordmark"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/pin_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingHorizontal="24dp"
+        android:text="@string/pin_set_title"
+        android:textColor="@color/onboarding_title"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <!-- 4 PIN dots -->
+    <LinearLayout
+        android:id="@+id/pin_dots"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="18dp"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/pin_dot_0"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginHorizontal="9dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pin_dot_empty" />
+
+        <ImageView
+            android:id="@+id/pin_dot_1"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginHorizontal="9dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pin_dot_empty" />
+
+        <ImageView
+            android:id="@+id/pin_dot_2"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginHorizontal="9dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pin_dot_empty" />
+
+        <ImageView
+            android:id="@+id/pin_dot_3"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginHorizontal="9dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/pin_dot_empty" />
+    </LinearLayout>
+
+    <!-- Keypad -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="28dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/key_1"
+                style="@style/PinKey"
+                android:text="1" />
+
+            <TextView
+                android:id="@+id/key_2"
+                style="@style/PinKey"
+                android:text="2" />
+
+            <TextView
+                android:id="@+id/key_3"
+                style="@style/PinKey"
+                android:text="3" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/key_4"
+                style="@style/PinKey"
+                android:text="4" />
+
+            <TextView
+                android:id="@+id/key_5"
+                style="@style/PinKey"
+                android:text="5" />
+
+            <TextView
+                android:id="@+id/key_6"
+                style="@style/PinKey"
+                android:text="6" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/key_7"
+                style="@style/PinKey"
+                android:text="7" />
+
+            <TextView
+                android:id="@+id/key_8"
+                style="@style/PinKey"
+                android:text="8" />
+
+            <TextView
+                android:id="@+id/key_9"
+                style="@style/PinKey"
+                android:text="9" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <!-- empty spacer, same footprint as a key -->
+            <View
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_margin="8dp" />
+
+            <TextView
+                android:id="@+id/key_0"
+                style="@style/PinKey"
+                android:text="0" />
+
+            <TextView
+                android:id="@+id/key_del"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_margin="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="@string/pin_delete"
+                android:textColor="@color/onboarding_desc"
+                android:textSize="15sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1.4" />
+
+</LinearLayout>

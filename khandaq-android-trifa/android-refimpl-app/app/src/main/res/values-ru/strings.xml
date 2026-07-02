@@ -113,9 +113,15 @@
     <string name="friend_info_send_message">Написать сообщение</string>
     <string name="chat_list_search_hint">Поиск</string>
     <string name="global_search_hint">Поиск по всем чатам и сообщениям</string>
-    <string name="global_search_section_chats">Чаты и группы</string>
-    <string name="global_search_section_messages">Сообщения</string>
+    <string name="global_search_section_chats">Контакты и группы:</string>
+    <string name="global_search_section_messages">Сообщения:</string>
     <string name="global_search_no_results">Ничего не найдено</string>
+    <!-- KHANDAQ PIN screen -->
+    <string name="pin_enter_title">Введите PIN-код</string>
+    <string name="pin_set_title">Установите PIN-код</string>
+    <string name="pin_confirm_title">Подтвердите PIN-код</string>
+    <string name="pin_mismatch">PIN-код не совпал!</string>
+    <string name="pin_delete">Удалить</string>
     <string name="chat_list_no_messages">Нет сообщений</string>
     <string name="chat_list_preview_you">Вы: %1$s</string>
     <string name="chat_list_preview_sender">%1$s: %2$s</string>

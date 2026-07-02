@@ -19,6 +19,9 @@
     <color name="onboarding_accent">#029B7D</color>
     <color name="onboarding_form_bg">#FFFFFF</color>
     <color name="onboarding_field_bg">#F2F4F6</color>
+    <!-- KHANDAQ PIN keypad (Figma and_pin_*): light-grey round keys, faint teal press tint -->
+    <color name="pin_key_bg">#F2F3F5</color>
+    <color name="pin_key_bg_pressed">#D6EFE7</color>
     <color name="onboarding_hint">#A4A4A4</color>
     <color name="khandaq_background">#0B0F0E</color>
     <color name="khandaq_surface">#151B19</color>

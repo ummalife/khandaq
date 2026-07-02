@@ -6,8 +6,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Base64;
 
 import androidx.preference.PreferenceManager;
+
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PREF__DB_secrect_key__user_hash;
 
@@ -21,6 +25,10 @@ public class AppLockHelper
 {
     static final String PREF_ENABLED = "PREF__app_lock_enabled";
     static final String PREF_TIMEOUT = "PREF__app_lock_timeout_sec";
+    // KHANDAQ PIN: a LOCAL UI gate only. This SHA-256(salt+pin) hash never touches DB encryption /
+    // DbSecretKeyStorage — the DB still opens with its own key; the PIN merely covers the UI.
+    static final String PREF_PIN_HASH = "PREF__app_lock_pin_hash";
+    static final String PREF_PIN_SALT = "PREF__app_lock_pin_salt";
 
     private static int started_count = 0;
     private static long backgrounded_at_ms = 0L;
@@ -56,10 +64,86 @@ public class AppLockHelper
         return !TextUtils.isEmpty(PREF__DB_secrect_key__user_hash);
     }
 
+    /** True once a local PIN has been set (the preferred unlock method). */
+    static boolean hasPin(final Context c)
+    {
+        try
+        {
+            final String h = PreferenceManager.getDefaultSharedPreferences(c).getString(PREF_PIN_HASH, "");
+            return !TextUtils.isEmpty(h);
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    /** Persist a freshly chosen PIN as SHA-256(salt + pin). Does NOT enable the lock — caller decides. */
+    static void savePin(final Context c, final String pin)
+    {
+        try
+        {
+            final byte[] saltBytes = new byte[16];
+            new SecureRandom().nextBytes(saltBytes);
+            final String salt = Base64.encodeToString(saltBytes, Base64.NO_WRAP);
+            PreferenceManager.getDefaultSharedPreferences(c).edit()
+                    .putString(PREF_PIN_SALT, salt)
+                    .putString(PREF_PIN_HASH, hashPin(salt, pin))
+                    .apply();
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    /** Constant enough for a local gate: recompute SHA-256(salt + pin) and compare to the stored hash. */
+    static boolean verifyPin(final Context c, final String pin)
+    {
+        try
+        {
+            final android.content.SharedPreferences p = PreferenceManager.getDefaultSharedPreferences(c);
+            final String salt = p.getString(PREF_PIN_SALT, "");
+            final String stored = p.getString(PREF_PIN_HASH, "");
+            if (TextUtils.isEmpty(stored))
+            {
+                return false;
+            }
+            return stored.equals(hashPin(salt, pin));
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    /** Forget the local PIN (used when the lock is turned off). Never touches DB encryption. */
+    static void clearPin(final Context c)
+    {
+        try
+        {
+            PreferenceManager.getDefaultSharedPreferences(c).edit()
+                    .remove(PREF_PIN_HASH)
+                    .remove(PREF_PIN_SALT)
+                    .apply();
+        }
+        catch (Exception ignored)
+        {
+        }
+    }
+
+    private static String hashPin(final String salt, final String pin) throws Exception
+    {
+        final MessageDigest md = MessageDigest.getInstance("SHA-256");
+        md.update((salt == null ? "" : salt).getBytes("UTF-8"));
+        final byte[] digest = md.digest((pin == null ? "" : pin).getBytes("UTF-8"));
+        return Base64.encodeToString(digest, Base64.NO_WRAP);
+    }
+
     /** Never re-lock while on the auth / onboarding screens themselves. */
     private static boolean isAuthScreen(final Activity a)
     {
         return (a instanceof CheckPasswordActivity) || (a instanceof SetPasswordActivity)
+                || (a instanceof PinActivity)
                 || (a instanceof StartMainActivityWrapper) || (a instanceof OnboardingActivity)
                 || (a instanceof CreateProfileActivity);
     }
@@ -77,14 +161,31 @@ public class AppLockHelper
                     was_backgrounded = false;
                     try
                     {
-                        if (isAuthScreen(a) || !isEnabled(a) || !hasPassword())
+                        if (isAuthScreen(a) || !isEnabled(a))
+                        {
+                            return;
+                        }
+                        final boolean pin = hasPin(a);
+                        // Nothing to enforce with — no PIN and no manual password.
+                        if (!pin && !hasPassword())
                         {
                             return;
                         }
                         final long elapsed = System.currentTimeMillis() - backgrounded_at_ms;
                         if (elapsed >= (long) timeoutSec(a) * 1000L)
                         {
-                            final Intent i = new Intent(a, CheckPasswordActivity.class);
+                            final Intent i;
+                            if (pin)
+                            {
+                                // Preferred local gate: the PIN unlock screen.
+                                i = new Intent(a, PinActivity.class);
+                                i.putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_UNLOCK);
+                            }
+                            else
+                            {
+                                // Legacy fallback: lock was enabled before PIN existed.
+                                i = new Intent(a, CheckPasswordActivity.class);
+                            }
                             i.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
                             a.startActivity(i);
                         }

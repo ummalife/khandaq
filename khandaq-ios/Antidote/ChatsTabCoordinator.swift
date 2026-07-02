@@ -267,19 +267,31 @@ private extension ChatsTabCoordinator {
             self?.submanagerGroups.setGroupBackgroundWorkPaused(false)
         }
 
-        let createController = GroupCreateNameController(theme: theme, isPrivate: isPrivate) { [weak self] groupName, password in
-            resumeBackgroundWork()
-            self?.createGroupAndOpen(isPrivate: isPrivate, groupName: groupName, password: password)
+        // KHANDAQ (Figma): two-step create — select contacts first, then the name/password form;
+        // selected friends are invited right after the group is created.
+        let navigation = PortraitNavigationController()
+
+        let contactsController = GroupCreateContactsController(theme: theme, submanagerObjects: submanagerObjects) {
+            [weak self, weak navigation] selectedFriends in
+            guard let self = self else {
+                return
+            }
+
+            let createController = GroupCreateNameController(theme: self.theme, isPrivate: isPrivate) { [weak self] groupName, password in
+                resumeBackgroundWork()
+                self?.createGroupAndOpen(isPrivate: isPrivate, groupName: groupName, password: password, inviteFriends: selectedFriends)
+            }
+            createController.onCancel = resumeBackgroundWork
+            navigation?.pushViewController(createController, animated: true)
         }
+        contactsController.onCancel = resumeBackgroundWork
 
-        createController.onCancel = resumeBackgroundWork
-
-        let navigation = PortraitNavigationController(rootViewController: createController)
+        navigation.setViewControllers([contactsController], animated: false)
         navigation.modalPresentationStyle = .formSheet
 
         if #available(iOS 15.0, *) {
             if let sheet = navigation.sheetPresentationController {
-                sheet.detents = [.medium()]
+                sheet.detents = [.large()]
                 sheet.prefersGrabberVisible = true
             }
         }
@@ -287,7 +299,7 @@ private extension ChatsTabCoordinator {
         controller.present(navigation, animated: true, completion: nil)
     }
 
-    func createGroupAndOpen(isPrivate: Bool, groupName: String, password: String?) {
+    func createGroupAndOpen(isPrivate: Bool, groupName: String, password: String?, inviteFriends: [OCTFriend] = []) {
         let hud = JGProgressHUD(style: .dark)
         hud?.textLabel.text = String(localized: "group_create_in_progress")
         hud?.show(in: navigationController.view)
@@ -325,6 +337,13 @@ private extension ChatsTabCoordinator {
                 catch let passwordError as NSError {
                     handleErrorWithType(.setGroupPassword, error: passwordError)
                 }
+            }
+
+            // KHANDAQ (Figma): invite the contacts selected on step 1 (best-effort — an offline
+            // friend's one-shot invite can fail; they can be re-invited from the group later).
+            for friend in inviteFriends where friend.friendNumber >= 0 {
+                _ = try? self.submanagerGroups.inviteFriend(withNumber: friend.friendNumber,
+                                                            toGroupNumber: groupNumber)
             }
 
             DispatchQueue.main.async {

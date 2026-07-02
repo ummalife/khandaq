@@ -79,7 +79,9 @@ values:
   tab-badge-text: white
   tab-item-active: accent
   tab-item-inactive: muted_text
-  tab-selection: fill_tertiary
+  # Selection pill must sit ABOVE the capsule (dark_bg_elevated 2C2C2E) — use the lighter
+  # tertiary so the active tab reads, instead of blending into the capsule.
+  tab-selection: dark_bg_tertiary
   tab-bar-capsule: dark_bg_elevated
   notification-background: transparent_dark_gray
   notification-text: white

@@ -54,6 +54,12 @@ class ChatPrivateController: PortraitChatController {
     fileprivate let messages: Results<OCTMessageAbstract>
     fileprivate var messagesToken: RLMNotificationToken?
     fileprivate var visibleMessages: Int
+    // KHANDAQ (Figma): first unread incoming message captured on open (before updateLastReadDate
+    // marks everything read) — its cell shows the "Непрочитанные сообщения" band and the chat opens
+    // scrolled to it.
+    fileprivate var unreadSeparatorMessageId: String?
+    fileprivate var pendingFirstUnreadScrollIndex: Int?
+    fileprivate var didScrollToFirstUnread: Bool = false
     // KHANDAQ: message search in 1:1 chats (parity with groups) — filters the list to matches.
     fileprivate var messageSearchQuery = ""
     fileprivate var messageSearchController: UISearchController?
@@ -270,6 +276,22 @@ class ChatPrivateController: PortraitChatController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // KHANDAQ (Figma): capture the first unread incoming message BEFORE viewWillAppear's
+        // updateLastReadDate marks the chat read. messages are sorted newest-first. The 2s epsilon
+        // covers the chat-creation race: a brand-new chat stamps lastReadDateInterval at creation,
+        // which lands microseconds AFTER the very first message — a strict compare then skipped it.
+        let lastRead = chat.lastReadDateInterval - 2.0
+        for i in 0..<messages.count {
+            let message = messages[i]
+            if message.dateInterval <= lastRead {
+                break
+            }
+            if !message.isOutgoing() {
+                unreadSeparatorMessageId = message.uniqueIdentifier
+                pendingFirstUnreadScrollIndex = i
+            }
+        }
+
         replyController.restorePending(forChatId: chat.uniqueIdentifier, theme: theme)
         addMessagesNotification()
         updateEncryptionBannerVisibility()
@@ -402,6 +424,31 @@ class ChatPrivateController: PortraitChatController {
         }
 
         scrollToGlobalSearchTargetIfNeeded()
+        scrollToFirstUnreadIfNeeded()
+    }
+
+    /// KHANDAQ (Figma): on open, jump to the first unread incoming message (its cell carries the
+    /// "Непрочитанные сообщения" band). One-shot per controller; a global-search jump wins.
+    func scrollToFirstUnreadIfNeeded() {
+        guard !didScrollToFirstUnread, let index = pendingFirstUnreadScrollIndex, let tableView = tableView else {
+            return
+        }
+
+        didScrollToFirstUnread = true
+
+        if index >= visibleMessages {
+            visibleMessages = min(messages.count, index + Constants.MessagesPortionSize)
+            tableView.reloadData()
+        }
+        tableView.layoutIfNeeded()
+
+        guard index < displayableRowCount() else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            tableView.scrollToRow(at: IndexPath(row: index, section: 0), at: .middle, animated: false)
+        }
     }
 
     /// KHANDAQ (#64): if this chat was opened from a global-search message hit, scroll to + briefly
@@ -411,6 +458,9 @@ class ChatPrivateController: PortraitChatController {
               let tableView = tableView else {
             return
         }
+
+        // KHANDAQ (Figma): the search jump takes priority over the first-unread jump.
+        didScrollToFirstUnread = true
 
         // KHANDAQ (#7): the target may be older than the currently loaded window — the chat paginates
         // and only `visibleMessages` rows are loaded. Find its storage index and expand the window to
@@ -1008,6 +1058,8 @@ extension ChatPrivateController: UITableViewDataSource {
 
         // KHANDAQ (#99): tag the row with a day separator when it begins a new calendar day.
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
+        // KHANDAQ (Figma): "Непрочитанные сообщения" band on the first unread incoming message.
+        model.unreadSeparator = (unreadSeparatorMessageId != nil && message.uniqueIdentifier == unreadSeparatorMessageId)
 
         cell.delegate = self
         cell.replySwipeDelegate = self

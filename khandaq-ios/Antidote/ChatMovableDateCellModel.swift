@@ -10,4 +10,8 @@ class ChatMovableDateCellModel: BaseCellModel {
     // KHANDAQ (#99): when set, the cell shows a Telegram-style day separator ("Сегодня"/"Вчера"/date)
     // above its bubble. nil (the default) → no separator and the cell is laid out exactly as before.
     var dateSeparator: String?
+
+    // KHANDAQ (Figma): full-width "Непрочитанные сообщения" band above this cell's bubble — set on
+    // the first unread incoming message when the chat is opened.
+    var unreadSeparator: Bool = false
 }

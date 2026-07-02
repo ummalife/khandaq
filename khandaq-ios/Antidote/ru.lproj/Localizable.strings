@@ -371,6 +371,7 @@
 /* Deleting chat confirmation */
 "delete_chat_title" = "Удалить чат и историю сообщений?";
 "delete_selected_chats_title" = "Удалить выбранные чаты (%d)?";
+"unread_messages_separator" = "Непрочитанные сообщения";
 /* Deleting contat confirmation */
 "delete_contact_title" = "Удалить контакт?\nИстория вашего чата будет потеряна.";
 /* Deleting contat request confirmation */

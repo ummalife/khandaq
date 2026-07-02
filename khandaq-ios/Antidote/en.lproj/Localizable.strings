@@ -372,6 +372,7 @@
 /* Deleting chat confirmation */
 "delete_chat_title" = "Delete this chat and message history?";
 "delete_selected_chats_title" = "Delete selected chats (%d)?";
+"unread_messages_separator" = "Unread messages";
 /* Deleting contat confirmation */
 "delete_contact_title" = "Delete this contact?\nYour chat history will be lost.";
 /* Deleting contat request confirmation */

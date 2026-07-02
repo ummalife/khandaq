@@ -76,9 +76,14 @@ class ChatMovableDateCell: BaseCell {
     // the model carries no dateSeparator, the pill is hidden and movableContentView fills the cell as
     // before (top offset 0) — zero layout impact on the vast majority of rows.
     static let daySeparatorReservedHeight: CGFloat = 34.0
+    // KHANDAQ (Figma): reserved band height for the "Непрочитанные сообщения" divider.
+    static let unreadSeparatorReservedHeight: CGFloat = 32.0
     fileprivate var movableContentViewTopConstraint: Constraint!
     fileprivate var daySeparatorContainer: UIView!
     fileprivate var daySeparatorLabel: UILabel!
+    fileprivate var unreadSeparatorContainer: UIView!
+    fileprivate var unreadSeparatorLabel: UILabel!
+    fileprivate var unreadSeparatorTopConstraint: Constraint!
 
     fileprivate var isShowingMenu: Bool = false
     fileprivate static var setupOnceToken: Int = 0
@@ -110,16 +115,33 @@ class ChatMovableDateCell: BaseCell {
 
         // KHANDAQ (#99): show/hide the day separator and reserve top space only when present. The
         // reserved offset is reset on every reuse, so a recycled separator cell lays out cleanly.
+        // KHANDAQ (Figma): the "Непрочитанные сообщения" band stacks BELOW the day pill when both
+        // land on the same row; offsets are additive and reset on reuse.
+        let dayVisible: Bool
         if let separator = movableModel.dateSeparator, !separator.isEmpty {
             daySeparatorLabel.text = separator
             daySeparatorContainer.isHidden = false
             daySeparatorContainer.backgroundColor = theme.colorForType(.ChatIncomingBubble)
             daySeparatorLabel.textColor = theme.colorForType(.ChatListCellMessage)
-            movableContentViewTopConstraint.update(offset: ChatMovableDateCell.daySeparatorReservedHeight)
+            dayVisible = true
         } else {
             daySeparatorContainer.isHidden = true
-            movableContentViewTopConstraint.update(offset: 0.0)
+            dayVisible = false
         }
+
+        let unreadVisible = movableModel.unreadSeparator
+        if unreadVisible {
+            unreadSeparatorLabel.text = String(localized: "unread_messages_separator")
+            unreadSeparatorContainer.isHidden = false
+            unreadSeparatorContainer.backgroundColor = theme.colorForType(.ChatIncomingBubble).withAlphaComponent(0.92)
+            unreadSeparatorLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        } else {
+            unreadSeparatorContainer.isHidden = true
+        }
+
+        let dayOffset = dayVisible ? ChatMovableDateCell.daySeparatorReservedHeight : 0.0
+        unreadSeparatorTopConstraint.update(offset: dayOffset + 3.0)
+        movableContentViewTopConstraint.update(offset: dayOffset + (unreadVisible ? ChatMovableDateCell.unreadSeparatorReservedHeight : 0.0))
     }
 
     override func createViews() {
@@ -145,6 +167,17 @@ class ChatMovableDateCell: BaseCell {
         daySeparatorLabel.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
         daySeparatorLabel.textAlignment = .center
         daySeparatorContainer.addSubview(daySeparatorLabel)
+
+        // KHANDAQ (Figma): full-width "Непрочитанные сообщения" band (hidden unless the model sets it).
+        unreadSeparatorContainer = UIView()
+        unreadSeparatorContainer.isUserInteractionEnabled = false
+        unreadSeparatorContainer.isHidden = true
+        contentView.addSubview(unreadSeparatorContainer)
+
+        unreadSeparatorLabel = UILabel()
+        unreadSeparatorLabel.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        unreadSeparatorLabel.textAlignment = .center
+        unreadSeparatorContainer.addSubview(unreadSeparatorLabel)
 
         let swipeReply = UISwipeGestureRecognizer(target: self, action: #selector(handleReplySwipe))
         swipeReply.direction = .right
@@ -185,6 +218,16 @@ class ChatMovableDateCell: BaseCell {
             $0.top.bottom.equalTo(daySeparatorContainer)
             $0.leading.equalTo(daySeparatorContainer).offset(12.0)
             $0.trailing.equalTo(daySeparatorContainer).offset(-12.0)
+        }
+
+        // Full-width band sits under the day pill's reserved area (offset updated in setup).
+        unreadSeparatorContainer.snp.makeConstraints {
+            unreadSeparatorTopConstraint = $0.top.equalTo(contentView).offset(3.0).constraint
+            $0.leading.trailing.equalTo(contentView)
+            $0.height.equalTo(26.0)
+        }
+        unreadSeparatorLabel.snp.makeConstraints {
+            $0.edges.equalTo(unreadSeparatorContainer)
         }
     }
 

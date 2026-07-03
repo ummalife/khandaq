@@ -2010,6 +2010,46 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_text_message(final String friend_pubkey, final String message)
     {
+        // KHANDAQ (#9): edit mode — the send button SAVES the edit instead of sending a new message
+        if (ChatReplyPreviewController.isEditActive())
+        {
+            final String newBody = HelperGeneric.normalize_chat_input_text(message);
+            if (newBody == null || newBody.trim().isEmpty())
+            {
+                return;
+            }
+            if (newBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                > HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
+            {
+                display_toast(getString(R.string.chat_edit_too_long), true, 400);
+                return; // edit mode stays active so the user can shorten the text
+            }
+            final com.zoffcc.applications.sorm.Message em = ChatReplyPreviewController.consumeEditDirect();
+            if (em == null)
+            {
+                return;
+            }
+            final boolean ok;
+            if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
+            {
+                ok = HelperMessageEdit.editLocalDirectMessage(em, newBody);
+            }
+            else
+            {
+                ok = HelperMessageEdit.sendOwnFriendEdit(tox_friend_by_public_key__wrapper(friend_pubkey),
+                                                         em, newBody);
+            }
+            if (ok)
+            {
+                HelperGeneric.clear_chat_input_field(ml_new_message);
+            }
+            else
+            {
+                display_toast(getString(R.string.chat_edit_failed), true, 400);
+            }
+            return;
+        }
+
         final String fullText = ChatReplyPreviewController.composeOutgoingText(
                 HelperGeneric.normalize_chat_input_text(message));
         if ((fullText == null) || fullText.isEmpty())

@@ -110,6 +110,16 @@ public class GroupMessage
     @Column(indexed = true, helpers = Column.Helpers.ALL)
     public boolean storage_frame_work;
 
+    // KHANDAQ (#9 message edit): edited flag + when + "edit not yet broadcast to the group"
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public boolean edited;
+
+    @Column(helpers = Column.Helpers.ALL)
+    public long edited_timestamp;
+
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public boolean edit_pending;
+
     static GroupMessage deep_copy(GroupMessage in)
     {
         GroupMessage out = new GroupMessage();
@@ -144,6 +154,9 @@ public class GroupMessage
         out.filename_fullpath = in.filename_fullpath;
         out.filesize = in.filesize;
         out.storage_frame_work = in.storage_frame_work;
+        out.edited = in.edited;
+        out.edited_timestamp = in.edited_timestamp;
+        out.edit_pending = in.edit_pending;
 
         return out;
     }
@@ -151,7 +164,7 @@ public class GroupMessage
     @Override
     public String toString()
     {
-        return "id=" + id + ", message_id_tox=" + message_id_tox + ", group_identifier=" + group_identifier + ", tox_group_peer_pubkey=" + tox_group_peer_pubkey + ", tox_group_peer_role=" + tox_group_peer_role + ", private_message=" + private_message + ", tox_group_peername=" + tox_group_peername + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", sent_timestamp=" + sent_timestamp + ", rcvd_timestamp=" + rcvd_timestamp + ", read=" + read + ", is_new=" + is_new + ", text=" + text + ", was_synced=" + was_synced + ", TRIFA_SYNC_TYPE=" + TRIFA_SYNC_TYPE + ", sync_confirmations=" + sync_confirmations + ", tox_group_peer_pubkey_syncer_01=" + tox_group_peer_pubkey_syncer_01 + ", tox_group_peer_pubkey_syncer_02=" + tox_group_peer_pubkey_syncer_02 + ", tox_group_peer_pubkey_syncer_03=" + tox_group_peer_pubkey_syncer_03 + ", tox_group_peer_pubkey_syncer_01_sent_timestamp=" + tox_group_peer_pubkey_syncer_01_sent_timestamp + ", tox_group_peer_pubkey_syncer_02_sent_timestamp=" + tox_group_peer_pubkey_syncer_02_sent_timestamp + ", tox_group_peer_pubkey_syncer_03_sent_timestamp=" + tox_group_peer_pubkey_syncer_03_sent_timestamp + ", msg_id_hash=" + msg_id_hash + ", sent_privately_to_tox_group_peer_pubkey=" + sent_privately_to_tox_group_peer_pubkey + ", path_name=" + path_name + ", file_name=" + file_name + ", filename_fullpath=" + filename_fullpath + ", filesize=" + filesize + ", storage_frame_work=" + storage_frame_work;
+        return "id=" + id + ", message_id_tox=" + message_id_tox + ", group_identifier=" + group_identifier + ", tox_group_peer_pubkey=" + tox_group_peer_pubkey + ", tox_group_peer_role=" + tox_group_peer_role + ", private_message=" + private_message + ", tox_group_peername=" + tox_group_peername + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", sent_timestamp=" + sent_timestamp + ", rcvd_timestamp=" + rcvd_timestamp + ", read=" + read + ", is_new=" + is_new + ", text=" + text + ", was_synced=" + was_synced + ", TRIFA_SYNC_TYPE=" + TRIFA_SYNC_TYPE + ", sync_confirmations=" + sync_confirmations + ", tox_group_peer_pubkey_syncer_01=" + tox_group_peer_pubkey_syncer_01 + ", tox_group_peer_pubkey_syncer_02=" + tox_group_peer_pubkey_syncer_02 + ", tox_group_peer_pubkey_syncer_03=" + tox_group_peer_pubkey_syncer_03 + ", tox_group_peer_pubkey_syncer_01_sent_timestamp=" + tox_group_peer_pubkey_syncer_01_sent_timestamp + ", tox_group_peer_pubkey_syncer_02_sent_timestamp=" + tox_group_peer_pubkey_syncer_02_sent_timestamp + ", tox_group_peer_pubkey_syncer_03_sent_timestamp=" + tox_group_peer_pubkey_syncer_03_sent_timestamp + ", msg_id_hash=" + msg_id_hash + ", sent_privately_to_tox_group_peer_pubkey=" + sent_privately_to_tox_group_peer_pubkey + ", path_name=" + path_name + ", file_name=" + file_name + ", filename_fullpath=" + filename_fullpath + ", filesize=" + filesize + ", storage_frame_work=" + storage_frame_work + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending;
     }
 
 
@@ -230,6 +243,9 @@ public class GroupMessage
                 out.filename_fullpath = rs.getString("filename_fullpath");
                 out.filesize = rs.getLong("filesize");
                 out.storage_frame_work = rs.getBoolean("storage_frame_work");
+                out.edited = rs.getBoolean("edited");
+                out.edited_timestamp = rs.getLong("edited_timestamp");
+                out.edit_pending = rs.getBoolean("edit_pending");
 
                 list.add(out);
             }
@@ -301,6 +317,9 @@ public class GroupMessage
                     + ",filename_fullpath"
                     + ",filesize"
                     + ",storage_frame_work"
+                    + ",edited"
+                    + ",edited_timestamp"
+                    + ",edit_pending"
                     + ")" +
                     "values" +
                     "("
@@ -334,6 +353,9 @@ public class GroupMessage
                     + ",?28"
                     + ",?29"
                     + ",?30"
+                    + ",?31"
+                    + ",?32"
+                    + ",?33"
                     + ")";
 
             insert_pstmt = sqldb.prepareStatement(insert_pstmt_sql);
@@ -369,6 +391,9 @@ public class GroupMessage
             insert_pstmt.setString(28, this.filename_fullpath);
             insert_pstmt.setLong(29, this.filesize);
             insert_pstmt.setBoolean(30, this.storage_frame_work);
+            insert_pstmt.setBoolean(31, this.edited);
+            insert_pstmt.setLong(32, this.edited_timestamp);
+            insert_pstmt.setBoolean(33, this.edit_pending);
             // @formatter:on
 
             if (ORMA_TRACE)
@@ -772,6 +797,56 @@ public class GroupMessage
         bind_set_count++;
         return this;
     }
+
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
+    public GroupMessage edited(boolean edited)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " edited=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edited));
+        bind_set_count++;
+        return this;
+    }
+
+    public GroupMessage edited_timestamp(long edited_timestamp)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " edited_timestamp=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Long, edited_timestamp));
+        bind_set_count++;
+        return this;
+    }
+
+    public GroupMessage edit_pending(boolean edit_pending)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " edit_pending=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edit_pending));
+        bind_set_count++;
+        return this;
+    }
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
 
     public GroupMessage was_synced(boolean was_synced)
     {
@@ -1866,6 +1941,24 @@ public class GroupMessage
         bind_where_count++;
         return this;
     }
+
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
+    public GroupMessage editedEq(boolean edited)
+    {
+        this.sql_where = this.sql_where + " and edited=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edited));
+        bind_where_count++;
+        return this;
+    }
+
+    public GroupMessage edit_pendingEq(boolean edit_pending)
+    {
+        this.sql_where = this.sql_where + " and edit_pending=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edit_pending));
+        bind_where_count++;
+        return this;
+    }
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
 
     public GroupMessage was_syncedEq(boolean was_synced)
     {

@@ -109,6 +109,16 @@ public class Message
     @Column(indexed = true, helpers = Column.Helpers.ALL)
     public int filetransfer_kind;
 
+    // KHANDAQ (#9 message edit): edited flag + when + "edit not yet delivered to the peer"
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public boolean edited;
+
+    @Column(helpers = Column.Helpers.ALL)
+    public long edited_timestamp;
+
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public boolean edit_pending;
+
     static Message deep_copy(Message in)
     {
         Message out = new Message();
@@ -142,6 +152,9 @@ public class Message
         out.msg_idv3_hash = in.msg_idv3_hash;
         out.sent_push = in.sent_push;
         out.filetransfer_kind = in.filetransfer_kind;
+        out.edited = in.edited;
+        out.edited_timestamp = in.edited_timestamp;
+        out.edit_pending = in.edit_pending;
 
         return out;
     }
@@ -149,7 +162,7 @@ public class Message
     @Override
     public String toString()
     {
-        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind;
+        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending;
     }
 
 
@@ -227,6 +240,9 @@ public class Message
                 out.msg_idv3_hash = rs.getString("msg_idv3_hash");
                 out.sent_push = rs.getInt("sent_push");
                 out.filetransfer_kind = rs.getInt("filetransfer_kind");
+                out.edited = rs.getBoolean("edited");
+                out.edited_timestamp = rs.getLong("edited_timestamp");
+                out.edit_pending = rs.getBoolean("edit_pending");
 
                 list.add(out);
             }
@@ -297,6 +313,9 @@ public class Message
                     + ",msg_idv3_hash"
                     + ",sent_push"
                     + ",filetransfer_kind"
+                    + ",edited"
+                    + ",edited_timestamp"
+                    + ",edit_pending"
                     + ")" +
                     "values" +
                     "("
@@ -329,6 +348,9 @@ public class Message
                     + ",?27"
                     + ",?28"
                     + ",?29"
+                    + ",?30"
+                    + ",?31"
+                    + ",?32"
                     + ")";
 
             insert_pstmt = sqldb.prepareStatement(insert_pstmt_sql);
@@ -363,6 +385,9 @@ public class Message
             insert_pstmt.setString(27, this.msg_idv3_hash);
             insert_pstmt.setInt(28, this.sent_push);
             insert_pstmt.setInt(29, this.filetransfer_kind);
+            insert_pstmt.setBoolean(30, this.edited);
+            insert_pstmt.setLong(31, this.edited_timestamp);
+            insert_pstmt.setBoolean(32, this.edit_pending);
             // @formatter:on
 
             if (ORMA_TRACE)
@@ -990,6 +1015,57 @@ public class Message
         bind_set_count++;
         return this;
     }
+
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
+    public Message edited(boolean edited)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " edited=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edited));
+        bind_set_count++;
+        return this;
+    }
+
+    public Message edited_timestamp(long edited_timestamp)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " edited_timestamp=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Long, edited_timestamp));
+        bind_set_count++;
+        return this;
+    }
+
+    public Message edit_pending(boolean edit_pending)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " edit_pending=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edit_pending));
+        bind_set_count++;
+        return this;
+    }
+
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
 
     public Message filetransfer_kind(int filetransfer_kind)
     {
@@ -2526,6 +2602,24 @@ public class Message
         bind_where_count++;
         return this;
     }
+
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
+    public Message editedEq(boolean edited)
+    {
+        this.sql_where = this.sql_where + " and edited=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edited));
+        bind_where_count++;
+        return this;
+    }
+
+    public Message edit_pendingEq(boolean edit_pending)
+    {
+        this.sql_where = this.sql_where + " and edit_pending=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edit_pending));
+        bind_where_count++;
+        return this;
+    }
+    // KHANDAQ (#9 message edit) -----------------------------------------------------------------
 
     public Message sent_pushNotEq(int sent_push)
     {

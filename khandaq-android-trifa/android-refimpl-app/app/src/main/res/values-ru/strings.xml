@@ -76,6 +76,10 @@
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
     <string name="chat_reply_action">Ответить</string>
+    <string name="chat_edit_action">Изменить</string>
+    <string name="chat_edit_header">Редактирование</string>
+    <string name="chat_edit_too_long">Слишком длинный текст для изменения (макс. ~1300 байт)</string>
+    <string name="chat_edit_failed">Не удалось изменить сообщение</string>
     <string name="chat_reply_cancel">Отменить ответ</string>
     <string name="chat_reply_header">В ответ %1$s</string>
     <string name="chat_reply_self_name">Вы</string>

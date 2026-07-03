@@ -355,7 +355,7 @@ public class MainActivity extends AppCompatActivity
     final static boolean NDK_STDOUT_LOGGING = false; // set "false" for release builds
     final static boolean DEBUG_BATTERY_OPTIMIZATION_LOGGING = false;  // set "false" for release builds
     final static boolean INSANE_TRACE_LOGGING = false; // set "false" for release builds
-    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10242; // increase for database schema changes
+    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10243; // increase for database schema changes
     final static boolean DB_ENCRYPT = true; // set "true" always!
     final static boolean VFS_ENCRYPT = true; // set "true" always!
     final static boolean AEC_DEBUG_DUMP = false; // set "false" for release builds
@@ -2745,6 +2745,20 @@ public class MainActivity extends AppCompatActivity
         if (new_version == 10242) {
             run_multi_sql("ALTER TABLE Filetransfer ADD COLUMN transfer_start_ts INTEGER DEFAULT 0");
             run_multi_sql("CREATE INDEX `index_transfer_start_ts_on_Filetransfer` ON `Filetransfer` (`transfer_start_ts`)");
+        }
+
+        // KHANDAQ (#9 message edit): edited flag + timestamp + pending-send marker on both tables.
+        if (new_version == 10243) {
+            run_multi_sql("ALTER TABLE Message ADD COLUMN edited BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("ALTER TABLE Message ADD COLUMN edited_timestamp INTEGER DEFAULT 0");
+            run_multi_sql("ALTER TABLE Message ADD COLUMN edit_pending BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("CREATE INDEX `index_edited_on_Message` ON `Message` (`edited`)");
+            run_multi_sql("CREATE INDEX `index_edit_pending_on_Message` ON `Message` (`edit_pending`)");
+            run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN edited BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN edited_timestamp INTEGER DEFAULT 0");
+            run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN edit_pending BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("CREATE INDEX `index_edited_on_GroupMessage` ON `GroupMessage` (`edited`)");
+            run_multi_sql("CREATE INDEX `index_edit_pending_on_GroupMessage` ON `GroupMessage` (`edit_pending`)");
         }
     }
 
@@ -5954,6 +5968,9 @@ public class MainActivity extends AppCompatActivity
                     // (immediate + a couple of delayed retries to ride out the channel-ready race).
                     HelperGroup.schedule_manual_invite_resends(f.tox_public_key_string);
                     MessageDeliveryWatchdog.tick();
+                    // KHANDAQ (#9): deliver edits made while this friend was offline (packet is
+                    // rebuilt from the CURRENT row text — repeated edits collapse into one).
+                    HelperMessageEdit.flushPendingEditsForFriend(friend_number);
                 }
             }
 
@@ -6472,6 +6489,11 @@ public class MainActivity extends AppCompatActivity
             else if (data[0] == (byte) ConnectionHealthMonitor.PKT_CONN_KEEPALIVE)
             {
                 ConnectionHealthMonitor.onKeepaliveReceived(friend_number);
+            }
+            else if (data[0] == (byte) HelperMessageEdit.PKT_MSG_EDIT)
+            {
+                // KHANDAQ (#9): app-level edit of an own 1:1 message
+                HelperMessageEdit.handleIncomingFriendEdit(friend_number, data, (int) length);
             }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {
@@ -8872,6 +8894,19 @@ public class MainActivity extends AppCompatActivity
         if (routeNgcChunkedFileTransferPacket(group_number, peer_id, data, length))
         {
             return;
+        }
+
+        // KHANDAQ (#9): message-edit packets are short (16-byte header + text) — own length gate,
+        // handled before the big-file/histsync block whose minimum length would reject them.
+        if ((length >= 17) && (length <= TOX_MAX_NGC_FILE_AND_HEADER_SIZE))
+        {
+            if ((data[0] == (byte) 0x66) && (data[1] == (byte) 0x77) && (data[2] == (byte) 0x88) &&
+                (data[3] == (byte) 0x11) && (data[4] == (byte) 0x34) && (data[5] == (byte) 0x35) &&
+                (data[6] == (byte) 0x1) && (data[7] == HelperMessageEdit.NGC_PKT_MSG_EDIT))
+            {
+                HelperMessageEdit.handleIncomingGroupEdit(group_number, peer_id, data, (int) length);
+                return;
+            }
         }
 
         // check for correct signature of packets

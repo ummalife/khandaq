@@ -2642,6 +2642,38 @@ public class GroupMessageListActivity extends AppCompatActivity
     {
         // HelperGeneric.logI(TAG,"send_message_onclick:---start");
 
+        // KHANDAQ (#9): edit mode — the send button SAVES the edit instead of sending a new message
+        if (ChatReplyPreviewController.isEditActive())
+        {
+            final String newBody =
+                    HelperGeneric.normalize_chat_input_text(ml_new_group_message.getText().toString());
+            if (newBody == null || newBody.trim().isEmpty())
+            {
+                return;
+            }
+            if (newBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                > HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
+            {
+                display_toast(getString(R.string.chat_edit_too_long), true, 400);
+                return; // edit mode stays active so the user can shorten the text
+            }
+            final com.zoffcc.applications.sorm.GroupMessage egm = ChatReplyPreviewController.consumeEditGroup();
+            if (egm == null)
+            {
+                return;
+            }
+            final long gnum = tox_group_by_groupid__wrapper(egm.group_identifier);
+            if (HelperMessageEdit.sendOwnGroupEdit(gnum, egm, newBody))
+            {
+                HelperGeneric.clear_chat_input_field(ml_new_group_message);
+            }
+            else
+            {
+                display_toast(getString(R.string.chat_edit_failed), true, 400);
+            }
+            return;
+        }
+
         String msg = "";
         try
         {

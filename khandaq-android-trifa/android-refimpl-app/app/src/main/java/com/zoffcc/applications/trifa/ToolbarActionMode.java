@@ -104,6 +104,13 @@ public class ToolbarActionMode implements ActionMode.Callback
             replyItem.setVisible(HelperReply.canReplyToCurrentSelection());
         }
 
+        // KHANDAQ (#9): "Изменить" — exactly one OWN text message, addressable, inside the window
+        final MenuItem editItem = menu.findItem(R.id.action_edit);
+        if (editItem != null)
+        {
+            editItem.setVisible(HelperMessageEdit.canEditCurrentSelection());
+        }
+
         action_active = false;
         return true;
     }
@@ -176,6 +183,21 @@ public class ToolbarActionMode implements ActionMode.Callback
                         && (MainActivity.conference_message_list_activity == null))
                 {
                     replyToSelectedGroupMessage(context);
+                }
+                mode.finish();
+                break;
+
+            case R.id.action_edit:
+                // KHANDAQ (#9): prefill the input with the old text; the send button saves the edit
+                action_active = true;
+                if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
+                {
+                    HelperMessageEdit.editSelectedDirectMessage(context);
+                }
+                else if ((selected_conference_messages.isEmpty())
+                        && (MainActivity.conference_message_list_activity == null))
+                {
+                    HelperMessageEdit.editSelectedGroupMessage(context);
                 }
                 mode.finish();
                 break;

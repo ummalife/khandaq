@@ -732,6 +732,23 @@ public class HelperMessage
         {
         }
 
+        // KHANDAQ (#9): an edit for this incoming message may have raced its delivery — apply it now.
+        try
+        {
+            if (row_id != -1 && HelperMessageEdit.consume_pending_edit(m))
+            {
+                m.id = row_id;
+                orma.updateMessage().idEq(row_id).
+                        text(m.text).
+                        edited(true).
+                        edited_timestamp(m.edited_timestamp).
+                        execute();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         try
         {
             if ((row_id != -1) && (update_message_view_flag))

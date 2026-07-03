@@ -85,6 +85,10 @@
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>
     <string name="chat_reply_action">Reply</string>
+    <string name="chat_edit_action">Edit</string>
+    <string name="chat_edit_header">Editing</string>
+    <string name="chat_edit_too_long">Text too long to edit-sync (max ~1300 bytes)</string>
+    <string name="chat_edit_failed">Could not edit the message</string>
     <string name="chat_reply_cancel">Cancel reply</string>
     <string name="chat_reply_header">In reply to %1$s</string>
     <string name="chat_reply_self_name">You</string>

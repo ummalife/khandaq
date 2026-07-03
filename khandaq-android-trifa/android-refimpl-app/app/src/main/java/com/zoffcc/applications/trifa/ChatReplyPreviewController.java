@@ -24,6 +24,13 @@ final class ChatReplyPreviewController
     @Nullable
     private static MessageReplyHelper.ReplyMeta pendingReply;
 
+    // KHANDAQ (#9 message edit): the same bar doubles as the edit banner (mutually exclusive with
+    // reply). While set, the send button SAVES the edit instead of sending a new message.
+    @Nullable
+    private static Message pendingEditDirect;
+    @Nullable
+    private static GroupMessage pendingEditGroup;
+
     @Nullable
     private static View bar;
     @Nullable
@@ -54,9 +61,96 @@ final class ChatReplyPreviewController
 
     static void clear()
     {
+        final boolean wasEdit = (pendingEditDirect != null) || (pendingEditGroup != null);
+        pendingReply = null;
+        pendingEditDirect = null;
+        pendingEditGroup = null;
+        hideBar();
+        // cancelling an edit must also drop the prefilled old text from the input
+        if (wasEdit && inputField != null)
+        {
+            inputField.setText("");
+        }
+    }
+
+    // ---- KHANDAQ (#9 message edit) --------------------------------------------------------------
+
+    static boolean isEditActive()
+    {
+        return (pendingEditDirect != null) || (pendingEditGroup != null);
+    }
+
+    @Nullable
+    static Message consumeEditDirect()
+    {
+        final Message m = pendingEditDirect;
+        pendingEditDirect = null;
+        pendingEditGroup = null;
         pendingReply = null;
         hideBar();
+        return m;
     }
+
+    @Nullable
+    static GroupMessage consumeEditGroup()
+    {
+        final GroupMessage m = pendingEditGroup;
+        pendingEditDirect = null;
+        pendingEditGroup = null;
+        pendingReply = null;
+        hideBar();
+        return m;
+    }
+
+    static void startEditDirectMessage(final Context context, final Message message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+        pendingReply = null;
+        pendingEditGroup = null;
+        pendingEditDirect = message;
+        showEditBar(context, MessageReplyHelper.parse(message.text == null ? "" : message.text).bodyText);
+    }
+
+    static void startEditGroupMessage(final Context context, final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+        pendingReply = null;
+        pendingEditDirect = null;
+        pendingEditGroup = message;
+        showEditBar(context, MessageReplyHelper.parse(message.text == null ? "" : message.text).bodyText);
+    }
+
+    private static void showEditBar(final Context context, final String oldBody)
+    {
+        final String body = (oldBody == null) ? "" : oldBody;
+        if (bar != null && headerView != null && previewView != null)
+        {
+            applyTheme(context);
+            headerView.setText(context.getString(R.string.chat_edit_header));
+            previewView.setText(MessageReplyHelper.previewForDisplay(context, body, 120));
+            bar.setVisibility(View.VISIBLE);
+        }
+        if (inputField != null)
+        {
+            inputField.setText(body);
+            try
+            {
+                inputField.setSelection(body.length());
+            }
+            catch (Exception ignored)
+            {
+            }
+            inputField.requestFocus();
+        }
+    }
+
+    // ---- KHANDAQ (#9 message edit) --------------------------------------------------------------
 
     @Nullable
     static MessageReplyHelper.ReplyMeta peekPending()

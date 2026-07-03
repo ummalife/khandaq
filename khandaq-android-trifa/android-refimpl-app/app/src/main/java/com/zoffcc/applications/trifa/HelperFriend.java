@@ -2140,7 +2140,13 @@ public class HelperFriend
 
         try
         {
-            if (normalized.equalsIgnoreCase(global_my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2))))
+            // KHANDAQ (import/startup fix): global_my_toxid is empty until tox finishes loading the
+            // identity (notably right after a profile import), so substring(0,64) threw
+            // StringIndexOutOfBoundsException on EVERY group-peer name resolve and spammed
+            // printStackTrace per row bind — heavy jank on the group list. Guard the length.
+            final int need = TOX_PUBLIC_KEY_SIZE * 2;
+            if ((global_my_toxid != null) && (global_my_toxid.length() >= need)
+                    && normalized.equalsIgnoreCase(global_my_toxid.substring(0, need)))
             {
                 return global_my_name;
             }

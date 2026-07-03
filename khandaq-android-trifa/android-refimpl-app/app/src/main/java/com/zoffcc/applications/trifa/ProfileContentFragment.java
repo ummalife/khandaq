@@ -1013,24 +1013,57 @@ public class ProfileContentFragment extends Fragment
         }
     }
 
-    // KHANDAQ: log out — stop tox, then go to the login screen (fresh launch shows CheckPassword).
+    // KHANDAQ: log out — stop tox, WAIT until it is fully down, then re-arm the re-login tox bring-up
+    // and go to the password screen. The wait is the crux: tox teardown (stop_tox_fg → tox_kill) is
+    // async, so navigating immediately let the fresh MainActivity re-init tox while the old one was
+    // still being killed → native crash; and without re-arming TOX_SERVICE_STARTED the re-login stayed
+    // stuck "connecting". Waiting for is_tox_started==false makes the re-login a clean start.
     private void performLogout()
     {
-        MainActivity.manually_log_out();
-        try
-        {
-            final Intent intent = new Intent(requireContext(), CheckPasswordActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-        }
-        catch (Exception ignored)
-        {
-        }
         final android.app.Activity act = getActivity();
-        if (act != null)
+        MainActivity.manually_log_out();
+
+        final Thread t = new Thread()
         {
-            act.finish();
-        }
+            @Override
+            public void run()
+            {
+                // wait for the tox iterate thread (incl. tox_kill) to fully finish; ~10s hard cap
+                int guard = 0;
+                while (is_tox_started && guard < 200)
+                {
+                    try
+                    {
+                        Thread.sleep(50);
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                    guard++;
+                }
+
+                // tox is down now → let MainActivity.onCreate re-create + re-bootstrap tox on re-login
+                TrifaToxService.TOX_SERVICE_STARTED = false;
+
+                if (act != null)
+                {
+                    act.runOnUiThread(() ->
+                    {
+                        try
+                        {
+                            final Intent intent = new Intent(act, CheckPasswordActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                            act.startActivity(intent);
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+                        act.finish();
+                    });
+                }
+            }
+        };
+        t.start();
     }
 
     // KHANDAQ: edit Имя/Статус on a full-screen editor (Figma); result is applied via saveProfileChanges().

@@ -237,10 +237,11 @@ public class TrifaToxService extends Service
         HelperGeneric.logI(TAG, "onStartCommand");
         // this gets called all the time!
         tox_service_fg = this;
-        // KHANDAQ: the logout→login latch reset that used to live here is removed — paired with
-        // MainActivity.manually_log_out() it re-armed the onCreate tox-start guard during logout and
-        // raced a second iterate thread against the in-flight tox_kill → native crash. Latches are
-        // owned by onCreate (cold start) only.
+        // KHANDAQ (logout→login): re-login issues startService() but not onCreate() (Service stays
+        // alive across logout), so mark the service started here. This is race-free now because
+        // performLogout() only re-arms TOX_SERVICE_STARTED=false + navigates AFTER tox is fully dead,
+        // so the onCreate tox bring-up can no longer collide with the in-flight tox_kill.
+        TOX_SERVICE_STARTED = true;
         return START_NOT_STICKY; // START_STICKY;
     }
 

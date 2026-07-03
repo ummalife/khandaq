@@ -2475,8 +2475,20 @@ private extension ChatPrivateController {
                     action: #selector(ChatPrivateController.cancelEditingButtonPressed))]
         }
         else {
-            let audioImage = UIImage(named: "start-call-medium")!
-            let videoImage = UIImage(named: "video-call-medium")!
+            // KHANDAQ (Figma): the chat-header call/video actions are thin OUTLINE glyphs (the mock draws
+            // them outlined, not the teal-FILLED call icons). Colour follows the nav-bar tint (teal) to
+            // stay consistent with the back chevron — the mock's neutral/black chrome is an app-wide
+            // nav-bar-tint decision, not changed here.
+            let audioImage: UIImage
+            let videoImage: UIImage
+            if #available(iOS 13.0, *) {
+                audioImage = UIImage(systemName: "phone") ?? UIImage(named: "start-call-medium")!
+                videoImage = UIImage(systemName: "video") ?? UIImage(named: "video-call-medium")!
+            }
+            else {
+                audioImage = UIImage(named: "start-call-medium")!
+                videoImage = UIImage(named: "video-call-medium")!
+            }
             let locationImage = UIImage(named: "location-call-medium")!.withRenderingMode(.alwaysOriginal)
             audioButton = UIBarButtonItem(image: audioImage, style: .plain, target: self, action: #selector(ChatPrivateController.audioCallButtonPressed))
             videoButton = UIBarButtonItem(image: videoImage, style: .plain, target: self, action: #selector(ChatPrivateController.videoCallButtonPressed))

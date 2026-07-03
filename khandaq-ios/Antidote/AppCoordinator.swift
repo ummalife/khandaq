@@ -118,7 +118,11 @@ extension AppCoordinator: TopCoordinatorProtocol {
 
 extension AppCoordinator: RunningCoordinatorDelegate {
     func runningCoordinatorDidLogout(_ coordinator: RunningCoordinator, importToxProfileFromURL: URL?) {
-        KeychainManager().deleteActiveAccountData()
+        // KHANDAQ (#11 Fix B): keep the keychain on a plain logout so recreateActiveCoordinator
+        // auto-logs back into the existing profile instead of onboarding. Only wipe for import-on-logout.
+        if importToxProfileFromURL != nil {
+            KeychainManager().deleteActiveAccountData()
+        }
 
         recreateActiveCoordinator()
 

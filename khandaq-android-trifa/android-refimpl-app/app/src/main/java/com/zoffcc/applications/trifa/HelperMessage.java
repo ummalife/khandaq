@@ -718,6 +718,20 @@ public class HelperMessage
             return -1;
         }
 
+        // KHANDAQ (#1): a read-ACK for this outgoing message may have arrived before this insert
+        // committed (both peers online). Apply it now so the row renders ✓✓ instead of a clock.
+        try
+        {
+            if (row_id != -1 && consume_pending_msgv3_ack(m))
+            {
+                m.id = row_id;
+                update_message_in_db_read_rcvd_timestamp_rawmsgbytes(m);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         try
         {
             if ((row_id != -1) && (update_message_view_flag))
@@ -1358,58 +1372,106 @@ public class HelperMessage
                                                                   "_", hash_bytes, t_sec);
     }
 
+    // KHANDAQ (#1): read-ACKs (msgV3 hash) that arrived BEFORE their outgoing row was committed.
+    // With both peers online the ACK races the insert on the UI thread; the old code did a synchronous
+    // lookup on the tox thread, threw on the empty list, and lost the ACK forever — the message then
+    // fell back to a clock. We now stash such ACKs (hash → ACK receive timestamp, seconds) and apply
+    // them from insert_into_message_db when the row finally lands.
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> pending_incoming_msgv3_acks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Called from insert_into_message_db for a freshly-inserted outgoing message: if a read-ACK for
+     *  its msgV3 hash already arrived, apply it now so it shows ✓✓ instead of a clock. */
+    static boolean consume_pending_msgv3_ack(final Message m)
+    {
+        if (m == null || m.direction != 1 || m.msg_idv3_hash == null || m.msg_idv3_hash.isEmpty())
+        {
+            return false;
+        }
+        final Long ackTs = pending_incoming_msgv3_acks.remove(m.msg_idv3_hash);
+        if (ackTs == null)
+        {
+            return false;
+        }
+        m.rcvd_timestamp = (ackTs > 0) ? ackTs * 1000 : System.currentTimeMillis();
+        m.read = true;
+        return true;
+    }
+
     static void process_msgv3_high_level_ack(final long friend_number, String msgV3hash_hex_string, long message_timestamp)
     {
+        final String friend_pubkey = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
+
+        // Register the ACK FIRST, then look up the row. This closes the race window: if the row isn't
+        // committed yet, insert_into_message_db will consume this pending entry when it lands; if it
+        // already exists, we consume the entry here. Cheap guard against unbounded growth.
+        if (pending_incoming_msgv3_acks.size() > 500)
+        {
+            pending_incoming_msgv3_acks.clear();
+        }
+        pending_incoming_msgv3_acks.put(msgV3hash_hex_string, message_timestamp);
+
         Message m = null;
         try
         {
-            m = (Message) orma.selectFromMessage().
+            final java.util.List<Message> list = orma.selectFromMessage().
                     msg_idv3_hashEq(msgV3hash_hex_string).
-                    tox_friendpubkeyEq(HelperFriend.tox_friend_get_public_key__wrapper(friend_number)).
+                    tox_friendpubkeyEq(friend_pubkey).
                     directionEq(1).
-                    readEq(false).
                     orderByIdDesc().
-                    toList().get(0);
+                    toList();
+            if (!list.isEmpty())
+            {
+                m = list.get(0);
+            }
         }
         catch (Exception e)
+        {
+            return; // leave the pending entry for insert_into_message_db to pick up
+        }
+
+        if (m == null)
+        {
+            return; // row not committed yet → applied on insert
+        }
+
+        // Row exists → drop the pending entry (also handles duplicate/resent ACKs for already-read rows).
+        pending_incoming_msgv3_acks.remove(msgV3hash_hex_string);
+        if (m.read)
         {
             return;
         }
 
-        if (m != null)
+        final Message m2 = m;
+        Runnable myRunnable = new Runnable()
         {
-            final Message m2 = m;
-
-            Runnable myRunnable = new Runnable()
+            @Override
+            public void run()
             {
-                @Override
-                public void run()
+                try
                 {
-                    try
+                    if (message_timestamp > 0)
                     {
-                        if (message_timestamp > 0)
-                        {
-                            m2.rcvd_timestamp = message_timestamp * 1000;
-                        }
-                        else
-                        {
-                            m2.rcvd_timestamp = System.currentTimeMillis();
-                        }
-                        m2.read = true;
-                        HelperMessage.update_message_in_db_read_rcvd_timestamp_rawmsgbytes(m2);
-                        HelperMessage.update_single_message(m2, true);
+                        m2.rcvd_timestamp = message_timestamp * 1000;
                     }
-                    catch (Exception e)
+                    else
                     {
-                        e.printStackTrace();
+                        m2.rcvd_timestamp = System.currentTimeMillis();
                     }
+                    m2.read = true;
+                    HelperMessage.update_message_in_db_read_rcvd_timestamp_rawmsgbytes(m2);
+                    HelperMessage.update_single_message(m2, true);
                 }
-            };
-
-            if (main_handler_s != null)
-            {
-                main_handler_s.post(myRunnable);
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
             }
+        };
+
+        if (main_handler_s != null)
+        {
+            main_handler_s.post(myRunnable);
         }
     }
 

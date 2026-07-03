@@ -49,16 +49,16 @@ final class MessageStatusHelper
             return OutgoingStatus.FAILED;
         }
 
-        if (isDirectDeliveryOverdue(message))
-        {
-            return OutgoingStatus.NOT_DELIVERED;
-        }
-
         if (message.msg_at_relay)
         {
             return OutgoingStatus.DELIVERED;
         }
 
+        // KHANDAQ (#1): once the native send succeeded (message_id > 0) the message IS sent — show a
+        // single ✓. The read-ACK (msgV3) flips it to ✓✓. We no longer fall back to a clock after a
+        // 10s wall-clock timeout: with both peers online the ACK simply races the insert (now handled
+        // via the pending-ACK path) and the old NOT_DELIVERED branch turned a delivered message back
+        // into a clock. Same reasoning already applied to group messages (resolveGroupOutgoing).
         return OutgoingStatus.SENT;
     }
 

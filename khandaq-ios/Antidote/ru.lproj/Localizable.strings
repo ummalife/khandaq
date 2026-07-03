@@ -275,6 +275,8 @@
 "settings_autodownload_images" = "Загрузка вложений";
 /* Settings screen menu */
 "settings_autodownload_images_description" = "Автоматически загружать входящие изображения.";
+"settings_longer_bg_mode" = "Расширенный фоновый режим";
+"settings_longer_bg_mode_description" = "Приложение будет дольше работать в фоне, чтобы завершить отправку сообщений, но это раскрывает больше метаданных о вас — свяжет ваш IP-адрес и PUSH-токен. Это компромисс между удобством и приватностью метаданных.\n\nЧтобы этого избежать, можно использовать MyCitadel VPN.\n\nСм. https://mycitadel.vip\n\nи\n\nhttps://t.me/MyCitadelBot";
 "settings_profile_backup_description" = "Экспорт или импорт профиля Tox (.tox). Переносятся только Tox ID и контакты; история чатов не переносится.";
 "settings_import_profile_invalid_file" = "Выбранный файл не является профилем Tox (.tox).";
 /* Settings screen menu */

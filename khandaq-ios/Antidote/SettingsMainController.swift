@@ -114,7 +114,7 @@ private extension SettingsMainController{
         groupSystemMessagesModel.valueChangedHandler = groupSystemMessagesValueChanged
 
         #if DEBUG
-        longerbgModel.title = "Longer Background Mode"
+        longerbgModel.title = String(localized: "settings_longer_bg_mode")
         longerbgModel.on = userDefaults.LongerbgMode
         longerbgModel.valueChangedHandler = longerbgValueChanged
 
@@ -236,7 +236,7 @@ private extension SettingsMainController {
         return [
             String(localized: "settings_profile_backup_description"),
             String(localized: "settings_autodownload_images_description"),
-            "This will keep the Application running for longer in the background to finish sending messages, but this will also reveal more meta data about you. It will link your IP address and your PUSH token. It's a tradeoff between convenience and metadata privacy.\n\nYou can use MyCitadel VPN to prevent that.\n\nSee https://mycitadel.vip\n\nand\n\nhttps://t.me/MyCitadelBot",
+            String(localized: "settings_longer_bg_mode_description"),
             nil,
             nil,
             nil,

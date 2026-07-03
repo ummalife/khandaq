@@ -33,6 +33,17 @@ public class AppLockHelper
     private static int started_count = 0;
     private static long backgrounded_at_ms = 0L;
     private static boolean was_backgrounded = false;
+    // KHANDAQ (#12): set right before the app launches its OWN picker (file/camera/gallery/audio).
+    // The system picker sends us to the background, and coming back would otherwise trip the lock.
+    // This suppresses exactly one lock check — the return from that picker. Real backgrounding
+    // (no pending internal picker) still locks normally.
+    private static volatile boolean suppress_next_lock = false;
+
+    /** Call just before startActivityForResult() for an in-app picker so the return doesn't re-lock. */
+    static void suppressNextLock()
+    {
+        suppress_next_lock = true;
+    }
 
     static boolean isEnabled(final Context c)
     {
@@ -159,6 +170,13 @@ public class AppLockHelper
                 if (started_count == 1 && was_backgrounded)
                 {
                     was_backgrounded = false;
+                    // KHANDAQ (#12): we just came back from our own picker (file/camera/gallery/audio) —
+                    // that's not a real "left the app", so don't demand the PIN/password.
+                    if (suppress_next_lock)
+                    {
+                        suppress_next_lock = false;
+                        return;
+                    }
                     try
                     {
                         if (isAuthScreen(a) || !isEnabled(a))

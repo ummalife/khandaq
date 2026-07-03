@@ -4975,6 +4975,16 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
+    // KHANDAQ (#12): any picker we launch from the group chat (file/camera/gallery) briefly sends
+    // us to the background; suppress the app-lock for that single return so it doesn't demand a PIN.
+    @Override
+    public void startActivityForResult(Intent intent, int requestCode)
+    {
+        AppLockHelper.suppressNextLock();
+        super.startActivityForResult(intent, requestCode);
+    }
+
+    @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data)
     {
         super.onActivityResult(requestCode, resultCode, data);

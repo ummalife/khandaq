@@ -72,7 +72,7 @@
     <string name="settings_attachment_download">Attachment download</string>
     <string name="settings_dl_never">Never</string>
     <string name="settings_dl_wifi">Wi-Fi only</string>
-    <string name="settings_dl_always">Always</string>
+    <string name="settings_dl_always">Wi-Fi &amp; mobile data</string>
     <string name="main_header_connecting">Connecting…</string>
     <string name="connection_warn_weak">Weak connection</string>
     <string name="connection_good">Connection stable</string>

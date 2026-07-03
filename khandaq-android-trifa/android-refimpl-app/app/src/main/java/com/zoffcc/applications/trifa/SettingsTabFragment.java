@@ -83,7 +83,8 @@ public class SettingsTabFragment extends Fragment
         }
 
         bindPrefSwitch(view, R.id.switch_notif_preview, prefs, "notification_show_content", false);
-        bindPrefSwitch(view, R.id.switch_group_system, prefs, "conference_show_system_messages", false);
+        // KHANDAQ: the 'Системные сообщения групп' toggle was removed from the UI (user request);
+        // the pref keeps its default (hidden), no switch to bind.
 
         bindAttachmentDownloadRow(view, prefs);
     }

@@ -2874,6 +2874,16 @@ public class MessageListActivity extends AppCompatActivity
     public boolean onCreateOptionsMenu(Menu menu)
     {
         getMenuInflater().inflate(R.menu.menu_chat_header, menu);
+        // KHANDAQ: Saved Messages (Избранное) is a local self-chat — a video call to yourself
+        // makes no sense, so hide that overflow item there.
+        if (FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+        {
+            final MenuItem videoItem = menu.findItem(R.id.action_chat_video);
+            if (videoItem != null)
+            {
+                videoItem.setVisible(false);
+            }
+        }
         return true;
     }
 

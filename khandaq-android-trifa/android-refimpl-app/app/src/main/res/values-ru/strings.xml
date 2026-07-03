@@ -72,7 +72,7 @@
     <string name="settings_attachment_download">Загрузка вложений</string>
     <string name="settings_dl_never">Никогда</string>
     <string name="settings_dl_wifi">Только Wi-Fi</string>
-    <string name="settings_dl_always">Всегда</string>
+    <string name="settings_dl_always">Wi-Fi и моб. сеть</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
     <string name="chat_reply_action">Ответить</string>

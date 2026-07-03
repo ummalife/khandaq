@@ -3473,7 +3473,8 @@ public class MessageListActivity extends AppCompatActivity
                     }
                     else if (message_.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)
                     {
-                        if (message_.direction == 0)
+                        // KHANDAQ (#13): voice messages are listen-only — never offer "save" for them.
+                        if (message_.direction == 0 && !HelperFiletransfer.isVoiceMessage(message_))
                         {
                             selected_messages_incoming_file.add(message_.id);
                         }
@@ -3545,7 +3546,8 @@ public class MessageListActivity extends AppCompatActivity
                         }
                         else if (message_.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)
                         {
-                            if (message_.direction == 0)
+                            // KHANDAQ (#13): voice messages are listen-only — never offer "save" for them.
+                            if (message_.direction == 0 && !HelperFiletransfer.isVoiceMessage(message_))
                             {
                                 selected_messages_incoming_file.add(message_.id);
                             }

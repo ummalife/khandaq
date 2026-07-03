@@ -2462,11 +2462,12 @@ private extension ChatPrivateController {
             }
 
             navigationItem.leftBarButtonItems = nil
-            // KHANDAQ design (Figma): the chat header shows video + call only; location sharing lives in
-            // the "+" attachment menu.
+            // KHANDAQ design (Figma): the chat header shows video + call only (location sharing lives in
+            // the "+" attachment menu). Order per the mock: video on the left, call on the right — and
+            // since rightBarButtonItems[0] is the rightmost slot, call goes first.
             navigationItem.rightBarButtonItems = [
-                videoButton,
-                audioButton
+                audioButton,
+                videoButton
             ]
         }
     }

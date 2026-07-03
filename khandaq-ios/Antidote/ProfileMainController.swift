@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import PhotosUI
 import UIKit
 
 protocol ProfileMainControllerDelegate: class {
@@ -96,7 +95,8 @@ extension ProfileMainController: UIImagePickerControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
         dismiss(animated: true, completion: nil)
 
-        guard let image = info[UIImagePickerControllerOriginalImage] as? UIImage else {
+        // KHANDAQ (#8): the picker runs with allowsEditing, so prefer the user's crop/zoom result.
+        guard let image = (info[UIImagePickerControllerEditedImage] ?? info[UIImagePickerControllerOriginalImage]) as? UIImage else {
             return
         }
 
@@ -105,27 +105,6 @@ extension ProfileMainController: UIImagePickerControllerDelegate {
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         dismiss(animated: true, completion: nil)
-    }
-}
-
-@available(iOS 14.0, *)
-extension ProfileMainController: PHPickerViewControllerDelegate {
-    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        dismiss(animated: true, completion: nil)
-
-        guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else {
-            return
-        }
-
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let image = object as? UIImage else {
-                return
-            }
-
-            DispatchQueue.main.async {
-                self?.applyAvatarImage(image)
-            }
-        }
     }
 }
 
@@ -251,6 +230,8 @@ private extension ProfileMainController {
                     let controller = UIImagePickerController()
                     controller.sourceType = .camera
                     controller.delegate = self
+                    // KHANDAQ (#8): let the user crop/zoom the shot before it becomes the avatar.
+                    controller.allowsEditing = true
 
                     if UIImagePickerController.isCameraDeviceAvailable(.front) {
                         controller.cameraDevice = .front
@@ -262,18 +243,14 @@ private extension ProfileMainController {
         }
 
         alert.addAction(UIAlertAction(title: String(localized: "photo_from_photo_library"), style: .default) { [unowned self] _ -> Void in
-            if #available(iOS 14.0, *) {
-                var configuration = PHPickerConfiguration()
-                configuration.filter = .images
-                configuration.selectionLimit = 1
-
-                let controller = PHPickerViewController(configuration: configuration)
-                controller.delegate = self
-                self.present(controller, animated: true, completion: nil)
-            } else if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
+            // KHANDAQ (#8): PHPicker has no crop step, so the avatar was auto-center-cropped with no
+            // way to zoom/reposition. UIImagePickerController with allowsEditing gives the native
+            // move-and-scale square crop (and needs no photo permission since iOS 11).
+            if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
                 let controller = UIImagePickerController()
                 controller.sourceType = .photoLibrary
                 controller.delegate = self
+                controller.allowsEditing = true
                 self.present(controller, animated: true, completion: nil)
             }
         })

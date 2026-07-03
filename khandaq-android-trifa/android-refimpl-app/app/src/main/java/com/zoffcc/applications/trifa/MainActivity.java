@@ -2775,8 +2775,17 @@ public class MainActivity extends AppCompatActivity
 
     static void manually_log_out()
     {
-        global_stop_tox();
+        // KHANDAQ (logout crash fix): arm manually_logged_out BEFORE global_stop_tox() so that any
+        // Fragment onResume / UI callback racing the async tox teardown sees it and skips native
+        // tox_self_get_*() calls on the half-killed tox.
         TrifaToxService.manually_logged_out = true;
+        global_stop_tox();
+        // KHANDAQ: do NOT reset TOX_SERVICE_STARTED here. Doing so made MainActivity.onCreate's
+        // "if (!TOX_SERVICE_STARTED) tox_thread_start()" guard fire during logout and start a SECOND
+        // iterate thread on the tox that stop_tox_fg is simultaneously killing → tox_iterate() on a
+        // freed/NULL tox → native SIGSEGV/SIGABRT crash (reproduced on logout). The Service stays
+        // "started" across logout (known-good); a proper race-free same-process re-login is a separate
+        // fix. Crash-avoidance takes priority.
         try
         {
             final Thread t = new Thread()

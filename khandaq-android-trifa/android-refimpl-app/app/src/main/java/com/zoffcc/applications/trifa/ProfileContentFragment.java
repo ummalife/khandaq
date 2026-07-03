@@ -968,7 +968,11 @@ public class ProfileContentFragment extends Fragment
 
     void reloadProfileFromTox()
     {
-        if (!is_tox_started)
+        // KHANDAQ (logout crash fix): is_tox_started is not cleared atomically with tox_kill, so a
+        // Fragment onResume firing mid-logout could pass this guard and call tox_self_get_*() on a
+        // half-freed tox → native SIGSEGV in tox_lock. manually_logged_out is set at the very start of
+        // logout (before the kill), so it closes that window.
+        if (!is_tox_started || TrifaToxService.manually_logged_out)
         {
             return;
         }

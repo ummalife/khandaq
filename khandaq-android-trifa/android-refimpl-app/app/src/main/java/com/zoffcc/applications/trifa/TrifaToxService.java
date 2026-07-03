@@ -237,6 +237,10 @@ public class TrifaToxService extends Service
         HelperGeneric.logI(TAG, "onStartCommand");
         // this gets called all the time!
         tox_service_fg = this;
+        // KHANDAQ: the logout→login latch reset that used to live here is removed — paired with
+        // MainActivity.manually_log_out() it re-armed the onCreate tox-start guard during logout and
+        // raced a second iterate thread against the in-flight tox_kill → native crash. Latches are
+        // owned by onCreate (cold start) only.
         return START_NOT_STICKY; // START_STICKY;
     }
 
@@ -925,6 +929,10 @@ public class TrifaToxService extends Service
                 HelperGeneric.logI(TAG, "is_tox_started:==============================");
 
                 is_tox_started = true;
+                // KHANDAQ (logout crash fix): tox is up again, so we are no longer "logged out". Clearing
+                // here (cold start AND same-process re-login) re-enables the reloadProfileFromTox guard
+                // that manually_log_out() armed, without leaving it stuck true forever.
+                manually_logged_out = false;
 
                 Runnable myRunnable = new Runnable()
                 {
@@ -1936,13 +1944,55 @@ public class TrifaToxService extends Service
         wakeup_tox_thread();
     }
 
+    // KHANDAQ: known-good public Tox anchors, verified reachable. Tried on EVERY bootstrap so a
+    // cold start is never at the mercy of the random subset (see below). Keys mirror the seed list.
+    private static final String[][] KHANDAQ_BURST_UDP = {
+        {"tox.initramfs.io",   "33445", "3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25"},
+        {"172.104.215.182",    "33445", "DA2BD927E01CD05EBCC2574EBE5BEBB10FF59AE0B2105A7D1E2B40E49BB20239"},
+        {"188.245.84.166",     "33445", "96B66D300BA2B59B98FC42DB1325E7092388F0379593E680ABDBEA03B9C9CE03"},
+    };
+    // TCP relays: port 443 first — it punches through firewalls / UDP-blocked mobile & Wi-Fi networks.
+    private static final String[][] KHANDAQ_BURST_TCP = {
+        {"172.104.215.182",    "443",   "DA2BD927E01CD05EBCC2574EBE5BEBB10FF59AE0B2105A7D1E2B40E49BB20239"},
+        {"188.245.84.166",     "443",   "96B66D300BA2B59B98FC42DB1325E7092388F0379593E680ABDBEA03B9C9CE03"},
+        {"tox.hidemybits.com", "443",   "5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E"},
+        {"tox.initramfs.io",   "33445", "3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25"},
+    };
+
     static void perform_khandaq_bootstrap_burst()
     {
-        // Disabled: we no longer bootstrap to our own bootstrap*.khandaq.org nodes. The app relies
-        // on the proven, well-connected public Tox DHT nodes (tox.initramfs.io, tox.abilinski.com,
-        // mf-net.eu, ...) seeded in BootstrapNodeEntryDB. Over-relying on 3 self-hosted nodes gave a
-        // weaker DHT presence, which can hurt NGC public-group peer discovery. Kept as a no-op so the
-        // existing callers don't need to change.
+        // Our own bootstrap*.khandaq.org nodes are gone, so the app depends entirely on the public
+        // Tox DHT. bootstrap_me__real_locked() shuffles the seed list and only tries a random subset
+        // (USE_MAX_NUMBER_OF_BOOTSTRAP_NODES), so a cold start can miss the few reliable,
+        // firewall-friendly relays and stay stuck "connecting" — worst on UDP-throttled networks.
+        // This burst ADDITIVELY pins a small set of verified public anchors that are tried on every
+        // bootstrap, on top of the broad random seeding (so DHT presence is not narrowed).
+        for (final String[] n : KHANDAQ_BURST_UDP)
+        {
+            try
+            {
+                bootstrap_single_wrapper(n[0], Integer.parseInt(n[1]), n[2]);
+            }
+            catch (Exception e)
+            {
+                HelperGeneric.logI(TAG, "khandaq_burst:udp:EE:" + e.getMessage());
+            }
+        }
+
+        if (!PREF__force_udp_only)
+        {
+            for (final String[] n : KHANDAQ_BURST_TCP)
+            {
+                try
+                {
+                    HelperGeneric.add_tcp_relay_single_wrapper(n[0], Integer.parseInt(n[1]), n[2]);
+                }
+                catch (Exception e)
+                {
+                    HelperGeneric.logI(TAG, "khandaq_burst:tcp:EE:" + e.getMessage());
+                }
+            }
+        }
     }
 
     static void bootstrap_me(boolean force)

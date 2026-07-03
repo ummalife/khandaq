@@ -8,4 +8,7 @@ class StaticTableButtonCellModel: StaticTableSelectableCellModel {
     var title: String?
     // KHANDAQ design (Figma): destructive actions (e.g. "Выйти") render in red instead of accent green.
     var destructive: Bool = false
+    // KHANDAQ design (Figma): optional leading SF Symbol; when set, the icon + label render as a
+    // centered group (the MyID "Копировать"/"Показать QR-код" pill buttons). nil = plain label button.
+    var iconName: String?
 }

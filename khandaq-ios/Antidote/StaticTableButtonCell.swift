@@ -10,6 +10,7 @@ private struct Constants {
 
 class StaticTableButtonCell: StaticTableBaseCell {
     fileprivate var label: UILabel!
+    fileprivate var iconImageView: UIImageView!
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
         super.setupWithTheme(theme, model: model)
@@ -20,9 +21,30 @@ class StaticTableButtonCell: StaticTableBaseCell {
         }
 
         label.text = buttonModel.title
-        label.textColor = buttonModel.destructive
+        let tint = buttonModel.destructive
             ? theme.colorForType(.DestructiveText)
             : theme.colorForType(.LinkText)
+        label.textColor = tint
+
+        // KHANDAQ (Figma): with an icon the icon+label form a centered pill button (MyID actions);
+        // without one it stays the plain edge-to-edge label (e.g. "Выйти").
+        if let iconName = buttonModel.iconName, !iconName.isEmpty {
+            var image: UIImage?
+            if #available(iOS 13.0, *) {
+                image = UIImage(systemName: iconName)
+            }
+            iconImageView.image = image?.withRenderingMode(.alwaysTemplate)
+            iconImageView.tintColor = tint
+            iconImageView.isHidden = false
+            label.textAlignment = .natural
+            applyIconLayout()
+        }
+        else {
+            iconImageView.image = nil
+            iconImageView.isHidden = true
+            label.textAlignment = .natural
+            applyPlainLayout()
+        }
     }
 
     override func createViews() {
@@ -30,13 +52,38 @@ class StaticTableButtonCell: StaticTableBaseCell {
 
         label = UILabel()
         customContentView.addSubview(label)
+
+        iconImageView = UIImageView()
+        iconImageView.contentMode = .scaleAspectFit
+        iconImageView.setContentHuggingPriority(.required, for: .horizontal)
+        customContentView.addSubview(iconImageView)
     }
 
     override func installConstraints() {
         super.installConstraints()
+        applyPlainLayout()
+    }
 
-        label.snp.makeConstraints {
+    /// Plain full-width label (default button look).
+    fileprivate func applyPlainLayout() {
+        iconImageView.snp.removeConstraints()
+        label.snp.remakeConstraints {
             $0.leading.trailing.equalTo(customContentView)
+            $0.top.equalTo(customContentView).offset(Constants.VerticalOffset)
+            $0.bottom.equalTo(customContentView).offset(-Constants.VerticalOffset)
+        }
+    }
+
+    /// Left-aligned [icon][label] group (Figma MyID pill buttons).
+    fileprivate func applyIconLayout() {
+        iconImageView.snp.remakeConstraints {
+            $0.width.height.equalTo(20.0)
+            $0.centerY.equalTo(customContentView)
+            $0.leading.equalTo(customContentView)
+        }
+        label.snp.remakeConstraints {
+            $0.leading.equalTo(iconImageView.snp.trailing).offset(10.0)
+            $0.trailing.lessThanOrEqualTo(customContentView)
             $0.top.equalTo(customContentView).offset(Constants.VerticalOffset)
             $0.bottom.equalTo(customContentView).offset(-Constants.VerticalOffset)
         }

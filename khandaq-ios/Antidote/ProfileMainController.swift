@@ -53,6 +53,12 @@ class ProfileMainController: StaticTableController {
             //],
             [
                 toxIdModel,
+            ],
+            // KHANDAQ (Figma): each MyID action is its own rounded pill, separate from the ID card.
+            [
+                copyMyIdModel,
+            ],
+            [
                 showQrModel,
             ],
             [
@@ -160,8 +166,7 @@ private extension ProfileMainController {
 
         toxIdModel.title = String(localized: "my_tox_id")
         toxIdModel.value = sanitizeAddressInput(submanagerUser.userAddress)
-        // KHANDAQ (#117): tap the MyID row to copy it (with a toast) — the separate "Копировать MyID"
-        // button was redundant and bulky and is removed; long-press still works via canCopyValue.
+        // Tapping the MyID row still copies it (with a toast); long-press works via canCopyValue.
         toxIdModel.userInteractionEnabled = true
         toxIdModel.canCopyValue = true
         toxIdModel.didSelectHandler = { [weak self] _ in
@@ -170,7 +175,18 @@ private extension ProfileMainController {
             self.showCopiedHUD(String(localized: "group_member_action_copy_done"))
         }
 
+        // KHANDAQ (Figma): the MyID section shows two pill buttons with icons — «Копировать MyID» and
+        // «Показать QR-код» (the copy button, dropped in #117, is back to match the design).
+        copyMyIdModel.title = String(localized: "contacts_copy_myid")
+        copyMyIdModel.iconName = "doc.on.doc"
+        copyMyIdModel.didSelectHandler = { [weak self] _ in
+            guard let self = self else { return }
+            UIPasteboard.general.string = self.submanagerUser.userAddress
+            self.showCopiedHUD(String(localized: "group_member_action_copy_done"))
+        }
+
         showQrModel.title = String(localized: "show_qr_code")
+        showQrModel.iconName = "qrcode"
         showQrModel.didSelectHandler = { [weak self] _ in
             self?.showToxIdQR()
         }

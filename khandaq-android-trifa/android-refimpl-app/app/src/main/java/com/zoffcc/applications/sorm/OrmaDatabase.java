@@ -545,6 +545,15 @@ public class OrmaDatabase
             return false;
         }
 
+        // KHANDAQ (#10): the xerial driver opens with READWRITE|CREATE — probing a missing path would
+        // CREATE an empty database and "succeed". A probe must never invent a database: during the
+        // crash-safe rekey that turned a recoverable crash into deleting the .oldk backups.
+        final java.io.File f = new java.io.File(db_file_path);
+        if (!f.isFile() || f.length() == 0)
+        {
+            return false;
+        }
+
         Connection probe = null;
         Statement statement = null;
         ResultSet rs = null;
@@ -593,6 +602,223 @@ public class OrmaDatabase
             {
             }
         }
+    }
+
+    /**
+     * KHANDAQ (#10 change password): re-encrypt a CLOSED SQLCipher database file in place with a new
+     * passphrase. Opens with the old key, checkpoints any WAL into the main file, PRAGMA rekey's to
+     * the new key, closes, then verifies the file opens with the new key. Both keys must be plain
+     * hex/base64 strings (the app's derived hashes are); anything else is rejected. Returns true only
+     * if the file verifiably opens with the new key afterwards. MUST only be called when no other
+     * connection has the file open (fresh process, before DB init).
+     */
+    public static boolean rekeyEncryptedDatabase(final String db_file_path, final String old_key, final String new_key)
+    {
+        if ((db_file_path == null) || (old_key == null) || old_key.isEmpty()
+            || (new_key == null) || new_key.isEmpty())
+        {
+            return false;
+        }
+        // Only new_key is embedded in a PRAGMA string literal — it is always a derived hash
+        // (hex/base64). old_key goes through the driver's password parameter, which escapes it
+        // itself: auto-generated keys legitimately contain punctuation (!§$%&()=?,.;:-_+) and must
+        // NOT be rejected, or "set first password" for skip-mode profiles would always abort.
+        if (!new_key.matches("[A-Za-z0-9+/=]+"))
+        {
+            Log.i(TAG, "rekeyEncryptedDatabase: refusing new key with unexpected characters");
+            return false;
+        }
+
+        Connection con = null;
+        Statement statement = null;
+        try
+        {
+            Class.forName("org.sqlite.JDBC");
+            con = DriverManager.getConnection("jdbc:sqlite:" + db_file_path, null, old_key);
+            statement = con.createStatement();
+            // fold any WAL content into the main file so the re-encrypted file is complete
+            try
+            {
+                statement.execute("PRAGMA wal_checkpoint(TRUNCATE);");
+            }
+            catch (Exception ignored)
+            {
+                // not in WAL mode — fine
+            }
+            statement.execute("PRAGMA rekey = '" + new_key + "';");
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "rekeyEncryptedDatabase:EE:" + e.getMessage());
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (statement != null)
+                {
+                    statement.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            try
+            {
+                if (con != null)
+                {
+                    con.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        return probeEncryptedDatabase(db_file_path, new_key);
+    }
+
+    /**
+     * KHANDAQ (#10): the IOCipher container (files.db) is also a SQLCipher database, but libsqlfs
+     * hardcodes cipher_page_size = 8192 while the JDBC driver's implicit keying assumes the 4096
+     * default — so the normal probe/rekey NEVER open it. These variants connect WITHOUT a password
+     * (the driver skips keying entirely for an empty password) and apply PRAGMA key +
+     * PRAGMA cipher_page_size manually before touching the schema.
+     */
+    public static boolean probeEncryptedDatabaseWithPageSize(final String db_file_path, final String secrect_key,
+                                                             final int cipher_page_size)
+    {
+        if ((db_file_path == null) || (secrect_key == null) || secrect_key.isEmpty())
+        {
+            return false;
+        }
+        final java.io.File f = new java.io.File(db_file_path);
+        if (!f.isFile() || f.length() == 0)
+        {
+            return false;
+        }
+
+        Connection probe = null;
+        Statement statement = null;
+        ResultSet rs = null;
+        try
+        {
+            Class.forName("org.sqlite.JDBC");
+            probe = DriverManager.getConnection("jdbc:sqlite:" + db_file_path);
+            statement = probe.createStatement();
+            statement.execute("PRAGMA key = '" + escapeKeyLiteral(secrect_key) + "';");
+            statement.execute("PRAGMA cipher_page_size = " + cipher_page_size + ";");
+            rs = statement.executeQuery("SELECT count(*) as sqlite_master_count FROM sqlite_master");
+            return rs.next();
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (rs != null)
+                {
+                    rs.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            try
+            {
+                if (statement != null)
+                {
+                    statement.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            try
+            {
+                if (probe != null)
+                {
+                    probe.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    public static boolean rekeyEncryptedDatabaseWithPageSize(final String db_file_path, final String old_key,
+                                                             final String new_key, final int cipher_page_size)
+    {
+        if ((db_file_path == null) || (old_key == null) || old_key.isEmpty()
+            || (new_key == null) || new_key.isEmpty())
+        {
+            return false;
+        }
+        if (!new_key.matches("[A-Za-z0-9+/=]+"))
+        {
+            Log.i(TAG, "rekeyEncryptedDatabaseWithPageSize: refusing new key with unexpected characters");
+            return false;
+        }
+
+        Connection con = null;
+        Statement statement = null;
+        try
+        {
+            Class.forName("org.sqlite.JDBC");
+            con = DriverManager.getConnection("jdbc:sqlite:" + db_file_path);
+            statement = con.createStatement();
+            statement.execute("PRAGMA key = '" + escapeKeyLiteral(old_key) + "';");
+            statement.execute("PRAGMA cipher_page_size = " + cipher_page_size + ";");
+            try
+            {
+                statement.execute("PRAGMA wal_checkpoint(TRUNCATE);");
+            }
+            catch (Exception ignored)
+            {
+            }
+            statement.execute("PRAGMA rekey = '" + new_key + "';");
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "rekeyEncryptedDatabaseWithPageSize:EE:" + e.getMessage());
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (statement != null)
+                {
+                    statement.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            try
+            {
+                if (con != null)
+                {
+                    con.close();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+
+        return probeEncryptedDatabaseWithPageSize(db_file_path, new_key, cipher_page_size);
+    }
+
+    /** SQL string-literal escaping for PRAGMA key: the only dangerous character is a single quote. */
+    private static String escapeKeyLiteral(final String key)
+    {
+        return key.replace("'", "''");
     }
 
     public static void shutdown()

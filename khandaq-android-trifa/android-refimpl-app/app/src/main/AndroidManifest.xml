@@ -201,6 +201,11 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:theme="@style/AppTheme" />
         <activity
+            android:name="com.zoffcc.applications.trifa.ChangePasswordActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
+        <activity
             android:name="com.zoffcc.applications.trifa.PinActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:exported="false"

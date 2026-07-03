@@ -14,14 +14,19 @@ private struct Constants {
 }
 
 class ChatPrivateTitleView: UIView {
+    // KHANDAQ (Figma): the header lives as a LEFT bar item (Telegram-style avatar+name next to the back
+    // button), but a navigation bar only measures a custom bar-item view once. Whenever our content
+    // changes the intrinsic size, fire this so the controller can re-install the item and force a
+    // re-measure. No-op / no re-install when the size is unchanged (avoids flicker on status ticks).
+    var onSizeChanged: (() -> Void)?
+
     var name: String {
         get {
             return nameLabel.text ?? ""
         }
         set {
             nameLabel.text = newValue
-
-            updateFrame()
+            reportSizeIfChanged()
         }
     }
 
@@ -31,7 +36,6 @@ class ChatPrivateTitleView: UIView {
         }
         set {
             statusView.userStatus = newValue
-            updateFrame()
         }
     }
 
@@ -41,7 +45,7 @@ class ChatPrivateTitleView: UIView {
         }
         set {
             statusLabel.text = newValue
-            updateFrame()
+            reportSizeIfChanged()
         }
     }
 
@@ -57,8 +61,6 @@ class ChatPrivateTitleView: UIView {
         }
         set {
             statusView.connectionStatus = newValue
-
-            updateFrame()
         }
     }
 
@@ -69,7 +71,7 @@ class ChatPrivateTitleView: UIView {
         set {
             avatarView.image = newValue
             avatarView.isHidden = newValue == nil
-            updateFrame()
+            reportSizeIfChanged()
         }
     }
 
@@ -78,6 +80,7 @@ class ChatPrivateTitleView: UIView {
     fileprivate var statusView: UserStatusView!
     fileprivate var statusLabel: UILabel!
     fileprivate var theme: Theme!
+    fileprivate var lastReportedSize: CGSize = .zero
 
     init(theme: Theme) {
         super.init(frame: CGRect.zero)
@@ -94,55 +97,57 @@ class ChatPrivateTitleView: UIView {
 }
 
 private extension ChatPrivateTitleView {
+    // KHANDAQ (Figma): Telegram-style header — [avatar][name / status] laid out left-to-right with
+    // stack views so the view has a real intrinsicContentSize. That lets it live as a LEFT bar item
+    // (avatar+name pinned next to the back button) and a hidden avatar collapses cleanly (stack views
+    // drop hidden arranged subviews). Replaces the old manual frame sizing, which broke outside the
+    // centered titleView slot.
     func createViews(_ theme: Theme) {
         avatarView = UIImageView()
         avatarView.contentMode = .scaleAspectFill
         avatarView.layer.cornerRadius = Constants.AvatarSize / 2.0
         avatarView.layer.masksToBounds = true
         avatarView.isHidden = true
-        addSubview(avatarView)
 
         nameLabel = UILabel()
-        nameLabel.textAlignment = .center
+        nameLabel.textAlignment = .natural
         nameLabel.textColor = theme.colorForType(.NormalText)
         nameLabel.font = UIFont.khandaqFontWithSize(16.0, weight: .bold)
-        addSubview(nameLabel)
 
         statusView = UserStatusView()
         statusView.showExternalCircle = false
         statusView.theme = theme
         statusView.isHidden = true
-        addSubview(statusView)
 
         statusLabel = UILabel()
-        statusLabel.textAlignment = .center
+        statusLabel.textAlignment = .natural
         statusLabel.textColor = theme.colorForType(.NormalText)
         statusLabel.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
-        addSubview(statusLabel)
 
+        let nameRow = UIStackView(arrangedSubviews: [nameLabel, statusView])
+        nameRow.axis = .horizontal
+        nameRow.alignment = .center
+        nameRow.spacing = Constants.StatusViewLeftOffset
+
+        let textStack = UIStackView(arrangedSubviews: [nameRow, statusLabel])
+        textStack.axis = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 0
+
+        let mainStack = UIStackView(arrangedSubviews: [avatarView, textStack])
+        mainStack.axis = .horizontal
+        mainStack.alignment = .center
+        mainStack.spacing = Constants.AvatarGap
+        addSubview(mainStack)
+
+        mainStack.snp.makeConstraints {
+            $0.edges.equalTo(self)
+        }
         avatarView.snp.makeConstraints {
-            $0.leading.equalTo(self)
-            $0.centerY.equalTo(self)
             $0.size.equalTo(Constants.AvatarSize)
         }
-
-        nameLabel.snp.makeConstraints {
-            $0.top.equalTo(self)
-            $0.leading.equalTo(avatarView.snp.trailing).offset(Constants.AvatarGap)
-        }
-
         statusView.snp.makeConstraints {
-            $0.centerY.equalTo(nameLabel)
-            $0.leading.equalTo(nameLabel.snp.trailing).offset(Constants.StatusViewLeftOffset)
-            $0.trailing.equalTo(self)
             $0.size.equalTo(Constants.StatusViewSize)
-        }
-
-        statusLabel.snp.makeConstraints {
-            $0.top.equalTo(nameLabel.snp.bottom)
-            $0.leading.equalTo(nameLabel)
-            $0.trailing.equalTo(nameLabel)
-            $0.bottom.equalTo(self)
         }
 
         updatePresenceColor()
@@ -158,14 +163,17 @@ private extension ChatPrivateTitleView {
             : theme.colorForType(.NormalText)
     }
 
-    func updateFrame() {
-        nameLabel.sizeToFit()
-        statusLabel.sizeToFit()
+    // Recompute intrinsic size; only ask the controller to re-install (re-measure) if it actually moved.
+    func reportSizeIfChanged() {
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+        layoutIfNeeded()
 
-        let textWidth = max(nameLabel.frame.size.width, statusLabel.frame.size.width)
-        let avatarWidth = avatarView.isHidden ? 0 : (Constants.AvatarSize + Constants.AvatarGap)
-        let textHeight = nameLabel.frame.size.height + statusLabel.frame.size.height
-        frame.size.width = avatarWidth + textWidth
-        frame.size.height = max(textHeight, avatarView.isHidden ? 0 : Constants.AvatarSize)
+        let newSize = systemLayoutSizeFitting(UILayoutFittingCompressedSize)
+        if abs(newSize.width - lastReportedSize.width) > 0.5
+            || abs(newSize.height - lastReportedSize.height) > 0.5 {
+            lastReportedSize = newSize
+            onSizeChanged?()
+        }
     }
 }

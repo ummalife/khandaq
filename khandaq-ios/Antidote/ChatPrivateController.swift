@@ -398,6 +398,16 @@ class ChatPrivateController: PortraitChatController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
+        // KHANDAQ (Figma): Telegram-style header — the back button is a bare "‹" chevron (no "Чаты"
+        // text), so the left-aligned avatar+name has room. Set on the previous view controller (the
+        // one that pushed us) so its title collapses to just the chevron here.
+        if #available(iOS 14.0, *) {
+            let stack = navigationController?.viewControllers ?? []
+            if stack.count >= 2 {
+                stack[stack.count - 2].navigationItem.backButtonDisplayMode = .minimal
+            }
+        }
+
         updateLastReadDate()
         delegate?.chatPrivateControllerWillAppear(self)
     }
@@ -1512,7 +1522,13 @@ extension ChatPrivateController: UIGestureRecognizerDelegate {
 private extension ChatPrivateController {
     func createNavigationViews() {
         titleView = ChatPrivateTitleView(theme: theme)
-        navigationItem.titleView = titleView
+        // KHANDAQ (Figma): Telegram-style — avatar+name are LEFT-aligned next to the back button, so the
+        // title view is installed as a left bar item (see installTitleLeftItem) and the centered
+        // titleView slot is left empty. A nav bar only measures a custom bar-item view once, so when the
+        // title's intrinsic size changes we re-install it to force a re-measure.
+        titleView.onSizeChanged = { [weak self] in
+            self?.installTitleLeftItem()
+        }
 
         // KHANDAQ (Figma): tapping the header (avatar/name) opens the friend profile. Saved Messages
         // has no friend — the handler bails there.
@@ -1522,6 +1538,16 @@ private extension ChatPrivateController {
 
         // create correct navigation buttons
         toggleTableViewEditing(false, animated: false)
+    }
+
+    /// KHANDAQ (Figma): install the Telegram-style avatar+name as a left bar item (supplementing the
+    /// back button). Skipped while the multi-select edit toolbar owns the left items.
+    func installTitleLeftItem() {
+        guard tableView?.isEditing != true else {
+            return
+        }
+        navigationItem.leftItemsSupplementBackButton = true
+        navigationItem.leftBarButtonItems = [UIBarButtonItem(customView: titleView)]
     }
 
     @objc func titleViewTapped() {
@@ -2461,7 +2487,8 @@ private extension ChatPrivateController {
                 locationButton.setBackgroundImage(locationImage, for: .normal, barMetrics: .default)
             }
 
-            navigationItem.leftBarButtonItems = nil
+            // KHANDAQ (Figma): Telegram-style avatar+name, left-aligned next to the back button.
+            installTitleLeftItem()
             // KHANDAQ design (Figma): the chat header shows video + call only (location sharing lives in
             // the "+" attachment menu). Order per the mock: video on the left, call on the right — and
             // since rightBarButtonItems[0] is the rightmost slot, call goes first.

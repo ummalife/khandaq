@@ -18,7 +18,7 @@
         android:background="@color/tg_chat_header_bg"
         android:minHeight="?attr/actionBarSize"
         app:contentInsetStartWithNavigation="0dp"
-        app:popupTheme="@style/ThemeOverlay.AppCompat.DayNight"
+        app:popupTheme="@style/KhandaqPopupOverlay"
         app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar">
 
         <LinearLayout

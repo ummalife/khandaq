@@ -3126,7 +3126,7 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 if (!selected_group_messages.isEmpty())
                 {
-                    v.setBackgroundColor(Color.GRAY);
+                    v.setBackgroundColor(0x33029B7D); // KHANDAQ (#4): translucent teal selection (was opaque gray)
                     is_selected = true;
                     selected_group_messages.add(message_.id);
 
@@ -3202,7 +3202,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                                 new ToolbarActionMode(context));
                         amode_save_menu_item = amode.getMenu().findItem(R.id.action_save);
                         amode_info_menu_item = amode.getMenu().findItem(R.id.action_info);
-                        v.setBackgroundColor(Color.GRAY);
+                        v.setBackgroundColor(0x33029B7D); // KHANDAQ (#4): translucent teal selection (was opaque gray)
                         ret.is_selected = true;
                         selected_group_messages.add(message_.id);
 

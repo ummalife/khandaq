@@ -7,6 +7,12 @@
         <item name="android:statusBarColor">@color/tg_chat_header_bg</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <!-- KHANDAQ (#6): branded popups + dialogs app-wide (night AppTheme is a full override). -->
+        <item name="popupMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="android:popupMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="actionOverflowMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="alertDialogTheme">@style/KhandaqAlertDialog</item>
+        <item name="android:alertDialogTheme">@style/KhandaqAlertDialog</item>
         <item name="drawerArrowStyle">@style/DrawerArrowStyle</item>
         <item name="patternViewStyle">@style/PatternView</item>
         <!-- KHANDAQ (#4): selection action bar in brand teal (was off-brand md_orange_400). -->

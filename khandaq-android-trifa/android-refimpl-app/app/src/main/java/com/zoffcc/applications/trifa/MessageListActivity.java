@@ -3473,7 +3473,7 @@ public class MessageListActivity extends AppCompatActivity
             {
                 if (!selected_messages.isEmpty())
                 {
-                    v.setBackgroundColor(Color.GRAY);
+                    v.setBackgroundColor(0x33029B7D); // KHANDAQ (#4): translucent teal selection (was opaque gray)
                     is_selected = true;
                     selected_messages.add(message_.id);
                     if (message_.TRIFA_MESSAGE_TYPE == TRIFA_MSG_TYPE_TEXT.value)
@@ -3546,7 +3546,7 @@ public class MessageListActivity extends AppCompatActivity
                         amode = message_list_activity.startSupportActionMode(new ToolbarActionMode(context));
                         amode_save_menu_item = amode.getMenu().findItem(R.id.action_save);
                         amode_info_menu_item = amode.getMenu().findItem(R.id.action_info);
-                        v.setBackgroundColor(Color.GRAY);
+                        v.setBackgroundColor(0x33029B7D); // KHANDAQ (#4): translucent teal selection (was opaque gray)
                         ret.is_selected = true;
                         selected_messages.add(message_.id);
                         if (message_.TRIFA_MESSAGE_TYPE == TRIFA_MSG_TYPE_TEXT.value)

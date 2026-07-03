@@ -844,7 +844,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
             {
                 if (!selected_conference_messages.isEmpty())
                 {
-                    v.setBackgroundColor(Color.GRAY);
+                    v.setBackgroundColor(0x33029B7D); // KHANDAQ (#4): translucent teal selection (was opaque gray)
                     is_selected = true;
                     selected_conference_messages.add(message_.id);
 
@@ -896,7 +896,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
                         amode = MainActivity.conference_message_list_activity.startSupportActionMode(
                                 new ToolbarActionMode(context));
                         amode_info_menu_item = amode.getMenu().findItem(R.id.action_info);
-                        v.setBackgroundColor(Color.GRAY);
+                        v.setBackgroundColor(0x33029B7D); // KHANDAQ (#4): translucent teal selection (was opaque gray)
                         ret.is_selected = true;
                         selected_conference_messages.add(message_.id);
 

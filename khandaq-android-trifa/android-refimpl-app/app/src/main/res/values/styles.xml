@@ -10,6 +10,23 @@
         <item name="android:color">@color/khandaq_nav_indicator</item>
     </style>
 
+    <!-- KHANDAQ (#6): branded popup menus — rounded card on the form surface. -->
+    <style name="KhandaqPopupMenu" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_menu</item>
+    </style>
+
+    <style name="KhandaqPopupOverlay" parent="ThemeOverlay.AppCompat.DayNight">
+        <item name="popupMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="android:popupMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="actionOverflowMenuStyle">@style/KhandaqPopupMenu</item>
+    </style>
+
+    <!-- KHANDAQ (#6): branded AlertDialogs — rounded floating card, teal accents. -->
+    <style name="KhandaqAlertDialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_dialog_rounded</item>
+        <item name="colorAccent">@color/khandaq_teal</item>
+    </style>
+
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
@@ -17,6 +34,12 @@
         <item name="android:statusBarColor">@color/tg_chat_header_bg</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <!-- KHANDAQ (#6): branded popups + dialogs app-wide. -->
+        <item name="popupMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="android:popupMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="actionOverflowMenuStyle">@style/KhandaqPopupMenu</item>
+        <item name="alertDialogTheme">@style/KhandaqAlertDialog</item>
+        <item name="android:alertDialogTheme">@style/KhandaqAlertDialog</item>
         <item name="drawerArrowStyle">@style/DrawerArrowStyle</item>
         <item name="patternViewStyle">@style/PatternView</item>
         <!-- KHANDAQ (#4): selection action bar in brand teal (was off-brand md_orange_400). -->

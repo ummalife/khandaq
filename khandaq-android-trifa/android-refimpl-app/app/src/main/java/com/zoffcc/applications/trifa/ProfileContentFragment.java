@@ -680,10 +680,47 @@ public class ProfileContentFragment extends Fragment
                 Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
                 return;
             }
+            // KHANDAQ (#8): let the user crop/zoom (square) before we save the avatar.
+            launch_avatar_crop(data.getData());
+        }
+        else if (requestCode == com.yalantis.ucrop.UCrop.REQUEST_CROP && resultCode == Activity.RESULT_OK)
+        {
+            final Uri cropped = (data == null) ? null : com.yalantis.ucrop.UCrop.getOutput(data);
+            if (cropped == null)
+            {
+                Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            apply_avatar_from_uri(cropped);
+        }
+    }
 
+    // KHANDAQ (#8): launch the uCrop square (1:1) editor for the picked image; result comes back
+    // to onActivityResult as UCrop.REQUEST_CROP.
+    private void launch_avatar_crop(final Uri source)
+    {
+        try
+        {
+            final Uri dest = Uri.fromFile(new java.io.File(requireContext().getCacheDir(),
+                    "avatar_crop_" + System.currentTimeMillis() + ".jpg"));
+            com.yalantis.ucrop.UCrop.of(source, dest)
+                    .withAspectRatio(1f, 1f)
+                    .withMaxResultSize(1024, 1024)
+                    .start(requireContext(), this);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // KHANDAQ (#8): existing avatar save pipeline, now fed the cropped square image uri.
+    private void apply_avatar_from_uri(final Uri uri)
+    {
+        {
             try
             {
-                final Uri uri = data.getData();
                 final String fileName_ = resolve_picked_image_display_name(uri);
 
                 long file_size = -1;

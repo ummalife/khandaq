@@ -85,6 +85,14 @@ android {
         //
         pickFirst 'lib/arm64-v8a/libjni-c-toxcore.so'
         //
+        // KHANDAQ Android 16 (16 KB page size): drop the legacy 4 KB-aligned topic patch.
+        // Its single JNI symbol (tox_group_set_topic) is already present in the main
+        // libjni-c-toxcore.so, so this lib is redundant. Keeping it made Android 16 raise the
+        // "incompatible with 16 KB devices" PageSizeMismatch warning. Excluding it makes every
+        // remaining native lib 16 KB-aligned. The optional System.loadLibrary() for it is wrapped
+        // in try/catch (UnsatisfiedLinkError), so its absence is handled gracefully.
+        exclude '**/libjni-c-toxcore-topic-patch.so'
+        //
         pickFirst 'lib/armeabi-v7a/libsqlcipher.so'
         pickFirst 'lib/arm64-v8a/libsqlcipher.so'
         pickFirst 'lib/x86/libsqlcipher.so'
@@ -254,9 +262,9 @@ android {
         applicationId "org.khandaq.messenger"
         minSdkVersion 21
         //noinspection OldTargetApi
-        targetSdkVersion 33
-        versionCode 10315
-        versionName "0.2.11"
+        targetSdkVersion 34
+        versionCode 10320
+        versionName "0.2.12"
 
         renderscriptTargetApi 21
         renderscriptSupportModeEnabled true
@@ -404,6 +412,8 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'com.github.medyo:android-about-page:1.2.4'
     implementation 'de.hdodenhof:circleimageview:2.2.0'
+    // KHANDAQ (#8): interactive avatar crop/zoom (1:1) before saving the profile picture.
+    implementation 'com.github.yalantis:ucrop:2.2.8'
     implementation 'me.zhanghai.android.patternlock:library:2.1.2'
     implementation 'com.github.zoff99:pkgs_armchaAutoLinkTextView:0.3.0'
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'

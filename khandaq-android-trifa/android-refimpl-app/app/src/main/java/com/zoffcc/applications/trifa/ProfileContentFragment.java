@@ -1047,11 +1047,19 @@ public class ProfileContentFragment extends Fragment
 
                 if (act != null)
                 {
+                    // KHANDAQ (logout target): with a real password → password screen (must re-enter to
+                    // get back in). WITHOUT a password there is nothing to lock and CheckPasswordActivity
+                    // would just auto-unlock straight back into the account ("can't log out"), so send the
+                    // user to the onboarding start screen instead (create / import). The existing profile
+                    // stays on disk — a normal app restart still auto-loads it, so this isn't a lock-out.
+                    final Class<?> target = DbSecretKeyStorage.prefersManualPasswordUnlock(act)
+                            ? CheckPasswordActivity.class
+                            : OnboardingActivity.class;
                     act.runOnUiThread(() ->
                     {
                         try
                         {
-                            final Intent intent = new Intent(act, CheckPasswordActivity.class);
+                            final Intent intent = new Intent(act, target);
                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                             act.startActivity(intent);
                         }

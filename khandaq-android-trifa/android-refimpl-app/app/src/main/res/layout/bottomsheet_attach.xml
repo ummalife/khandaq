@@ -131,6 +131,37 @@
                 android:textColor="@color/onboarding_title"
                 android:textSize="13sp" />
         </LinearLayout>
+
+        <!-- KHANDAQ (Figma): "Файл" — send any document (user request; the design's attach has it). -->
+        <LinearLayout
+            android:id="@+id/attach_chip_file"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp">
+
+            <ImageView
+                android:id="@+id/attach_chip_file_icon"
+                android:layout_width="58dp"
+                android:layout_height="58dp"
+                android:background="@drawable/bg_attach_chip_circle"
+                android:padding="15dp"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/attach_option_file"
+                android:textColor="@color/onboarding_title"
+                android:textSize="13sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <Button

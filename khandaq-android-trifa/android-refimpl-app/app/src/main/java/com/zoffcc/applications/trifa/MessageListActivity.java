@@ -177,6 +177,8 @@ public class MessageListActivity extends AppCompatActivity
     // KHANDAQ (#17): camera capture (photo/video) result codes + the URI we hand the camera app.
     static final int CAMERA_PHOTO_ID = 8021;
     static final int CAMERA_VIDEO_ID = 8022;
+    // KHANDAQ (Figma): "Файл" attach — pick any document (not just media) and send it.
+    static final int FILEPICK_ID = 8023;
     private Uri pending_camera_capture_uri = null;
 
     private boolean mediaPreviewResultHandled = false;
@@ -1769,6 +1771,8 @@ public class MessageListActivity extends AppCompatActivity
                 new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_videocam).color(Color.WHITE).sizeDp(26));
         ((ImageView) content.findViewById(R.id.attach_chip_gallery_icon)).setImageDrawable(
                 new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_library).color(Color.WHITE).sizeDp(26));
+        ((ImageView) content.findViewById(R.id.attach_chip_file_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_insert_drive_file).color(Color.WHITE).sizeDp(26));
         content.findViewById(R.id.attach_chip_camera).setOnClickListener(v -> {
             sheet.dismiss();
             open_camera_capture(false);
@@ -1780,6 +1784,10 @@ public class MessageListActivity extends AppCompatActivity
         content.findViewById(R.id.attach_chip_gallery).setOnClickListener(v -> {
             sheet.dismiss();
             open_gallery_picker();
+        });
+        content.findViewById(R.id.attach_chip_file).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_file_picker();
         });
 
         // KHANDAQ (Figma attachments 2031:13703): in-app grid of recent device media above the chips.
@@ -1890,6 +1898,29 @@ public class MessageListActivity extends AppCompatActivity
         outgoingMediaPickerActive = true;
         sync_outgoing_attachment_friend_pubkey();
         startActivityForResult(intent, MEDIAPICK_ID_001);
+    }
+
+    // KHANDAQ (Figma): "Файл" — the system document picker for any file type; the resulting Uri goes
+    // straight through add_attachment (the same non-media send path a gallery pick falls back to).
+    private void open_file_picker()
+    {
+        final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        mediaPreviewResultHandled = false;
+        outgoingMediaPickerActive = true;
+        sync_outgoing_attachment_friend_pubkey();
+        try
+        {
+            startActivityForResult(intent, FILEPICK_ID);
+        }
+        catch (Exception e)
+        {
+            outgoingMediaPickerActive = false;
+            HelperGeneric.logI(TAG, "open_file_picker:EE:" + e.getMessage());
+        }
     }
 
     private void open_camera_capture(final boolean video)
@@ -2425,7 +2456,8 @@ public class MessageListActivity extends AppCompatActivity
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == MEDIAPICK_ID_001 || requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW
-                || requestCode == CAMERA_PHOTO_ID || requestCode == CAMERA_VIDEO_ID)
+                || requestCode == CAMERA_PHOTO_ID || requestCode == CAMERA_VIDEO_ID
+                || requestCode == FILEPICK_ID)
         {
             outgoingMediaPickerActive = false;
             prepareFriendMediaSendContext();
@@ -2490,6 +2522,16 @@ public class MessageListActivity extends AppCompatActivity
             {
                 MediaSendPreviewHelper.dispatchAttachments(this, pickedUris,
                         MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true);
+            }
+        }
+        else if (requestCode == FILEPICK_ID && resultCode == Activity.RESULT_OK)
+        {
+            // KHANDAQ (Figma): "Файл" — send the picked document as-is (no media preview).
+            if (data != null && data.getData() != null)
+            {
+                MediaSendPreviewHelper.persistUriPermissions(this,
+                        java.util.Collections.singletonList(data.getData()));
+                add_attachment(this, data, data, -1, true);
             }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)

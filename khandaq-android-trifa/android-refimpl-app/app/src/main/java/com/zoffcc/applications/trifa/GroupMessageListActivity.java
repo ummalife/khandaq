@@ -318,6 +318,8 @@ public class GroupMessageListActivity extends AppCompatActivity
     // KHANDAQ: group attach now mirrors the 1:1 sheet (camera + media grid).
     static final int CAMERA_PHOTO_ID = 8026;
     static final int CAMERA_VIDEO_ID = 8027;
+    // KHANDAQ (Figma): "Файл" attach — pick any document (not just media) and send it.
+    static final int FILEPICK_ID = 8028;
     private Uri pending_camera_capture_uri = null;
 
     private boolean mediaPreviewResultHandled = false;
@@ -2310,6 +2312,8 @@ public class GroupMessageListActivity extends AppCompatActivity
                 new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_videocam).color(Color.WHITE).sizeDp(26));
         ((ImageView) content.findViewById(R.id.attach_chip_gallery_icon)).setImageDrawable(
                 new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_library).color(Color.WHITE).sizeDp(26));
+        ((ImageView) content.findViewById(R.id.attach_chip_file_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_insert_drive_file).color(Color.WHITE).sizeDp(26));
         content.findViewById(R.id.attach_chip_camera).setOnClickListener(v -> {
             sheet.dismiss();
             open_group_camera_capture(false);
@@ -2321,6 +2325,10 @@ public class GroupMessageListActivity extends AppCompatActivity
         content.findViewById(R.id.attach_chip_gallery).setOnClickListener(v -> {
             sheet.dismiss();
             open_group_gallery_picker();
+        });
+        content.findViewById(R.id.attach_chip_file).setOnClickListener(v -> {
+            sheet.dismiss();
+            open_group_file_picker();
         });
 
         final androidx.recyclerview.widget.RecyclerView grid = content.findViewById(R.id.attach_media_grid);
@@ -2391,6 +2399,26 @@ public class GroupMessageListActivity extends AppCompatActivity
         Intent intent = MediaSendPreviewHelper.buildMediaPickerIntent(this);
         mediaPreviewResultHandled = false;
         startActivityForResult(intent, MEDIAPICK_ID_001);
+    }
+
+    // KHANDAQ (Figma): "Файл" — the system document picker for any file type; the resulting Uri goes
+    // straight through add_attachment_ngc (the same non-media send path a gallery pick falls back to).
+    private void open_group_file_picker()
+    {
+        final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        mediaPreviewResultHandled = false;
+        try
+        {
+            startActivityForResult(intent, FILEPICK_ID);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "open_group_file_picker:EE:" + e.getMessage());
+        }
     }
 
     private void open_group_camera_capture(final boolean video)
@@ -5005,6 +5033,17 @@ public class GroupMessageListActivity extends AppCompatActivity
                     MediaSendPreviewHelper.dispatchAttachments(this, pickedUris,
                             MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
                 }
+            }
+        }
+        else if (requestCode == FILEPICK_ID && resultCode == Activity.RESULT_OK)
+        {
+            // KHANDAQ (Figma): "Файл" — send the picked document as-is (no media preview).
+            if (data != null && data.getData() != null)
+            {
+                prepareGroupMediaSendContext();
+                MediaSendPreviewHelper.persistUriPermissions(this,
+                        java.util.Collections.singletonList(data.getData()));
+                add_attachment_ngc(this, data, data, group_id, true);
             }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)

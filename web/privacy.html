@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Khandaq</title>
+<meta name="description" content="Khandaq privacy policy. Khandaq is a peer-to-peer, end-to-end encrypted messenger built on Tox. No accounts, no phone numbers, no tracking.">
+<style>
+  :root { --teal:#10b981; --teal2:#2dd4bf; --bg:#0b0f14; --panel:#111820; --text:#e6edf3; --muted:#9aa7b4; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width: 820px; margin:0 auto; padding: 48px 20px 80px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+  header .logo { width:44px; height:44px; border-radius:11px; background:linear-gradient(135deg,var(--teal),var(--teal2)); display:flex; align-items:center; justify-content:center; }
+  header .logo span { color:#052018; font-weight:800; font-size:22px; }
+  h1 { font-size: 30px; margin: 18px 0 2px; letter-spacing:-.02em; }
+  .sub { color:var(--muted); margin:0 0 32px; }
+  h2 { font-size: 20px; margin: 36px 0 10px; color:var(--teal2); }
+  p, li { color:var(--text); }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  a { color: var(--teal2); }
+  .card { background:var(--panel); border:1px solid #1c2733; border-radius:14px; padding:18px 22px; margin:18px 0; }
+  strong { color:#fff; }
+  footer { margin-top:48px; color:var(--muted); font-size:14px; border-top:1px solid #1c2733; padding-top:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span>K</span></div>
+    <div><strong style="font-size:18px;">Khandaq</strong></div>
+  </header>
+  <h1>Privacy Policy</h1>
+  <p class="sub">Last updated: 4 July 2026</p>
+
+  <p>Khandaq is a free, open-source, peer-to-peer messenger built on the <a href="https://tox.chat/" target="_blank" rel="noopener">Tox</a> protocol. It is engineered so that <strong>we cannot see your data even if we wanted to</strong>. This policy explains, in plain language, what that means.</p>
+
+  <div class="card">
+    <strong>The short version.</strong> No account. No phone number. No email. No analytics. No advertising. No tracking. Your messages, calls, and files are end-to-end encrypted and travel directly between you and the people you talk to. Khandaq operates no central server that stores your conversations.
+  </div>
+
+  <h2>What we do NOT collect</h2>
+  <ul>
+    <li><strong>No registration data.</strong> Khandaq does not ask for a name, phone number, email, or any personal identifier to create a profile. Your identity is a locally generated Tox ID (a cryptographic key pair) that never leaves your device unencrypted.</li>
+    <li><strong>No message content.</strong> Messages, voice/video calls, and file transfers are end-to-end encrypted using the Tox protocol (NaCl/libsodium). They are readable only by you and your conversation partner. We have no servers that receive or store them.</li>
+    <li><strong>No analytics or tracking.</strong> Khandaq contains no advertising SDKs, no behavioral analytics, and no third-party trackers.</li>
+    <li><strong>No address-book upload.</strong> Khandaq does not read or upload your device contacts. You add contacts manually by exchanging Tox IDs.</li>
+  </ul>
+
+  <h2>Data stored on your device</h2>
+  <ul>
+    <li>Your profile, contacts, message history, and downloaded media are stored <strong>locally on your device only</strong>, in a database that can be encrypted with a password you choose. Deleting the app removes this data.</li>
+    <li>You can set a passphrase/PIN so that the local database is encrypted at rest. Khandaq never transmits this passphrase anywhere.</li>
+  </ul>
+
+  <h2>How the network works</h2>
+  <ul>
+    <li>Khandaq connects through the <strong>decentralized Tox DHT</strong> — a network made up of its own users and volunteer bootstrap/relay nodes that we do not control. These nodes help two devices find each other; they cannot read the end-to-end encrypted traffic that flows between you.</li>
+    <li>As with any internet communication, network intermediaries (such as your ISP or a Tox relay) can observe that a connection exists and basic technical metadata (e.g. IP address), but not the content of your conversations.</li>
+  </ul>
+
+  <h2>Push notifications</h2>
+  <p>If you enable notifications, Khandaq uses Apple Push Notification service (APNs) on iOS to wake the app when a message arrives. A per-device push token is processed by Apple to deliver the notification. This token is not used to identify you and is not linked to your Tox identity or message content. You can disable notifications at any time in system settings.</p>
+
+  <h2>Device permissions</h2>
+  <p>Khandaq requests certain permissions only when you use the corresponding feature: <strong>microphone</strong> for voice calls, <strong>camera</strong> for video calls and taking photos, and <strong>photo library</strong> for sending images. These are used on-device and are never sent to us.</p>
+
+  <h2>Children</h2>
+  <p>Khandaq is not directed to children under 17. Because it provides unrestricted, unmoderated communication, it is rated accordingly on the App Store.</p>
+
+  <h2>Third parties</h2>
+  <p>Khandaq is open source and does not sell, rent, or share personal data with third parties — because it does not collect it in the first place. The Tox protocol libraries it builds on are open source and community-audited.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the updated version will be posted on this page with a new “Last updated” date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about privacy? Email <a href="mailto:support@khandaq.org">support@khandaq.org</a>.</p>
+
+  <footer>
+    © 2026 Khandaq. Khandaq is free and open-source software. Portions of this text are derived from <a href="https://tox.chat/" target="_blank" rel="noopener">tox.chat</a>, licensed under CC BY-SA 4.0.
+  </footer>
+</div>
+</body>
+</html>

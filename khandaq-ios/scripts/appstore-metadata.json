@@ -1,0 +1,32 @@
+{
+  "name": "Khandaq — Secure Messenger",
+  "primaryCategory": "SOCIAL_NETWORKING",
+  "supportUrl": "https://khandaq.org",
+  "marketingUrl": "https://khandaq.org",
+  "privacyPolicyUrl": "https://khandaq.org/privacy.html",
+  "copyright": "2026 Khandaq",
+  "versionString": "1.4.28",
+  "locales": {
+    "en-US": {
+      "subtitle": "Private Tox chat & calls",
+      "keywords": "messenger,tox,secure,private,encrypted,p2p,calls,video,chat,privacy,decentralized,anonymous",
+      "promotionalText": "Secure, private messaging on Tox. No phone number, no tracking — end-to-end encrypted chats, calls and files. Free and open source.",
+      "description": "Khandaq is a free, secure messenger that keeps your conversations truly private.\n\nWhether it's corporations or governments, digital surveillance is everywhere. Khandaq connects you with friends and family without anyone else listening in. It's completely free, open source, and has no ads.\n\nBuilt on the decentralized Tox protocol, Khandaq needs no phone number and no email to sign up — your identity is a cryptographic key that only you control.\n\n• PRIVATE MESSAGING — Send instant messages secured with end-to-end encryption.\n• VOICE & VIDEO CALLS — Talk face to face over encrypted calls, completely free.\n• FILE SHARING — Send photos, videos and files with no artificial size limits.\n• GROUPS — Create encrypted group chats.\n• NO PHONE NUMBER — Register with a Tox ID, not your personal number.\n• ENCRYPTED — Everything is encrypted with open-source cryptography. Only you and the person you're talking to can read your messages.\n• DECENTRALIZED — There are no central servers to raid, shut down or subpoena. The network is made of its users.\n• OPEN SOURCE — Khandaq's code is open for anyone to inspect.\n\nWhy Khandaq?\nNo corporate interests. No hidden agendas. No tracking. Just secure, private communication that puts you in control of your data.\n\nQuestions or feedback? Email support@khandaq.org.\n\nPortions derived from tox.chat, licensed under CC BY-SA 4.0.",
+      "whatsNew": "• Edit sent messages in 1:1 and group chats\n• Crop and zoom your photo when setting an avatar\n• Smoother chat design and message selection\n• Return straight to your profile after logging out\n• Delivery and stability improvements\n\nFeedback? support@khandaq.org"
+    },
+    "ru": {
+      "subtitle": "Приватный чат на Tox",
+      "keywords": "мессенджер,tox,защищённый,приватный,шифрование,p2p,звонки,видео,чат,приватность,анонимный",
+      "promotionalText": "Защищённое приватное общение на Tox. Без номера телефона и слежки — сквозное шифрование чатов, звонков и файлов. Бесплатно и с открытым кодом.",
+      "description": "Khandaq — бесплатный защищённый мессенджер, который делает вашу переписку по-настоящему приватной.\n\nЦифровая слежка сегодня повсюду — со стороны корпораций и государств. Khandaq соединяет вас с близкими так, что никто посторонний не подслушивает. Он полностью бесплатный, с открытым кодом и без рекламы.\n\nKhandaq построен на децентрализованном протоколе Tox: для регистрации не нужны ни номер телефона, ни email — ваша личность это криптографический ключ, которым владеете только вы.\n\n• ПРИВАТНЫЕ СООБЩЕНИЯ — мгновенные сообщения со сквозным шифрованием.\n• ЗВОНКИ И ВИДЕО — зашифрованные аудио- и видеозвонки, бесплатно.\n• ПЕРЕДАЧА ФАЙЛОВ — фото, видео и файлы без искусственных ограничений размера.\n• ГРУППЫ — зашифрованные групповые чаты.\n• БЕЗ НОМЕРА ТЕЛЕФОНА — регистрация по Tox ID, а не по личному номеру.\n• ШИФРОВАНИЕ — всё шифруется криптографией с открытым кодом. Читать сообщения можете только вы и ваш собеседник.\n• ДЕЦЕНТРАЛИЗАЦИЯ — нет центральных серверов, которые можно взломать, закрыть или обязать выдать данные. Сеть состоит из её пользователей.\n• ОТКРЫТЫЙ КОД — код Khandaq открыт для проверки.\n\nПочему Khandaq?\nНикаких корпоративных интересов и скрытых целей. Никакой слежки. Только защищённое, приватное общение, где вашими данными управляете вы.\n\nВопросы или отзывы? Пишите на support@khandaq.org.\n\nТекст частично основан на материалах tox.chat, лицензия CC BY-SA 4.0.",
+      "whatsNew": "• Редактирование отправленных сообщений в личных и групповых чатах\n• Кадрирование и зум фото при установке аватара\n• Более аккуратный дизайн чата и выделения сообщений\n• Возврат сразу в профиль после выхода из аккаунта\n• Улучшения доставки и стабильности\n\nОтзывы? support@khandaq.org"
+    },
+    "ar-SA": {
+      "subtitle": "دردشة ومكالمات Tox خاصة",
+      "keywords": "مرسال,تشفير,خصوصية,آمن,خاص,مكالمات,دردشة,tox,لامركزي,مجهول,فيديو",
+      "promotionalText": "مراسلة آمنة وخاصة عبر Tox. بدون رقم هاتف وبدون تتبّع — تشفير من طرف إلى طرف للمحادثات والمكالمات والملفات. مجاني ومفتوح المصدر.",
+      "description": "خندق مرسال آمن ومجاني يحافظ على خصوصية محادثاتك بالكامل.\n\nالمراقبة الرقمية اليوم منتشرة في كل مكان، سواء من الشركات أو الحكومات. يصلك خندق بأصدقائك وعائلتك دون أن يتنصت أحد. إنه مجاني تمامًا ومفتوح المصدر وبدون إعلانات.\n\nبُني خندق على بروتوكول Tox اللامركزي: لا يتطلب رقم هاتف ولا بريدًا إلكترونيًا للتسجيل — هويتك مفتاح تشفير تملكه أنت وحدك.\n\n• رسائل خاصة — رسائل فورية محمية بالتشفير من طرف إلى طرف.\n• مكالمات صوتية ومرئية — تحدث وجهًا لوجه عبر مكالمات مشفّرة ومجانية تمامًا.\n• مشاركة الملفات — أرسل الصور والفيديو والملفات دون قيود مصطنعة على الحجم.\n• المجموعات — محادثات جماعية مشفّرة.\n• بدون رقم هاتف — سجّل باستخدام Tox ID وليس رقمك الشخصي.\n• التشفير — كل شيء مشفّر بتقنيات مفتوحة المصدر. لا يمكن قراءة رسائلك إلا لك ولمن تحادثه.\n• لامركزي — لا خوادم مركزية يمكن اقتحامها أو إغلاقها أو إجبارها على تسليم البيانات. الشبكة مكوّنة من مستخدميها.\n• مفتوح المصدر — شيفرة خندق متاحة للجميع للفحص.\n\nلماذا خندق؟\nلا مصالح تجارية ولا أهداف خفية ولا تتبّع. فقط تواصل آمن وخاص يجعلك المتحكم ببياناتك.\n\nأسئلة أو ملاحظات؟ راسلنا على support@khandaq.org.",
+      "whatsNew": "• تحرير الرسائل المُرسلة في المحادثات الفردية والجماعية\n• قص وتكبير الصورة عند تعيين الصورة الرمزية\n• تصميم محادثة أكثر سلاسة وتحديد أوضح للرسائل\n• العودة مباشرة إلى ملفك الشخصي بعد تسجيل الخروج\n• تحسينات في التسليم والاستقرار\n\nملاحظات؟ support@khandaq.org"
+    }
+  }
+}

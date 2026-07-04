@@ -20,8 +20,10 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
 
     let messages: Results<OCTMessageAbstract>
     var messagesToken: RLMNotificationToken?
+    private let chat: OCTChat
 
     init(chat: OCTChat, submanagerObjects: OCTSubmanagerObjects) {
+        self.chat = chat
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             NSPredicate(format: "chatUniqueIdentifier == %@ AND messageFile != nil", chat.uniqueIdentifier),
 
@@ -53,6 +55,26 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
 
     func indexOfMessage(_ message: OCTMessageAbstract) -> Int? {
         return messages.indexOfObject(message)
+    }
+
+    // KHANDAQ (Figma): items for the custom media gallery.
+    func galleryItems(myName: String) -> [GalleryItem] {
+        let friendName = (chat.friends.lastObject() as? OCTFriend)?.nickname ?? ""
+        var items: [GalleryItem] = []
+        for i in 0..<messages.count {
+            let message = messages[i]
+            guard let file = message.messageFile, let path = file.filePath() else {
+                continue
+            }
+            let url = URL(fileURLWithPath: path)
+            let isVideo = MediaGalleryViewController.isVideoFile(file.fileName ?? url.lastPathComponent)
+            let sender = message.isOutgoing() ? myName : friendName
+            items.append(GalleryItem(url: url,
+                                     isVideo: isVideo,
+                                     senderName: sender,
+                                     date: Date(timeIntervalSince1970: message.dateInterval)))
+        }
+        return items
     }
 }
 

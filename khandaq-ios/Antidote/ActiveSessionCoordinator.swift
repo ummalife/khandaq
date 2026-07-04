@@ -683,6 +683,16 @@ extension ActiveSessionCoordinator: ChatPrivateControllerDelegate {
             dataSource: QuickLookPreviewControllerDataSource,
             selectedIndex: Int)
     {
+        // KHANDAQ (Figma): custom media gallery viewer (falls back to QuickLook if items empty).
+        if let fp = dataSource as? FilePreviewControllerDataSource {
+            let items = fp.galleryItems(myName: toxManager?.user.userName() ?? "")
+            if !items.isEmpty {
+                let gallery = MediaGalleryViewController(items: items, startIndex: selectedIndex)
+                iPad.splitController.present(gallery, animated: true, completion: nil)
+                return
+            }
+        }
+
         let controller = QuickLookPreviewController()
         controller.dataSource = dataSource
         controller.dataSourceStorage = dataSource

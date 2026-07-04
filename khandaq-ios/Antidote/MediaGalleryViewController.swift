@@ -171,6 +171,11 @@ final class MediaGalleryViewController: UIViewController {
             make.width.height.equalTo(44)
         }
 
+        // forward/delete require message-level actions wired to the submanagers; hidden until
+        // that logic is verified on-device (viewer replaces QuickLook's view/zoom/video meanwhile).
+        forwardButton.isHidden = true
+        deleteButton.isHidden = true
+
         // Thumbnail strip (only for multi-item sets)
         thumbsCollection.backgroundColor = .clear
         thumbsCollection.showsHorizontalScrollIndicator = false
@@ -205,6 +210,11 @@ final class MediaGalleryViewController: UIViewController {
 
     @objc private func deleteTapped() {
         delegate?.mediaGallery(self, didRequestDeleteAt: currentIndex)
+    }
+
+    static func isVideoFile(_ name: String) -> Bool {
+        let ext = (name as NSString).pathExtension.lowercased()
+        return ["mp4", "mov", "m4v", "3gp", "3gpp", "mkv", "webm", "avi"].contains(ext)
     }
 }
 

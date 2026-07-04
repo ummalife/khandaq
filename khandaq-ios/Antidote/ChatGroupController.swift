@@ -1398,6 +1398,14 @@ private extension ChatGroupController {
             return
         }
 
+        // KHANDAQ (Figma): custom media gallery viewer (falls back to QuickLook if items empty).
+        let galleryItems = qlDataSource.galleryItems(myName: "")
+        if !galleryItems.isEmpty {
+            let gallery = MediaGalleryViewController(items: galleryItems, startIndex: index)
+            present(gallery, animated: true, completion: nil)
+            return
+        }
+
         let preview = QuickLookPreviewController()
         preview.dataSource = qlDataSource
         preview.dataSourceStorage = qlDataSource

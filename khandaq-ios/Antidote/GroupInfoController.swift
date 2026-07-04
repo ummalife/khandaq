@@ -864,6 +864,16 @@ extension GroupInfoController: ChatPrivateControllerDelegate {
     func chatPrivateControllerShowQuickLookController(_ controller: ChatPrivateController,
                                                       dataSource: QuickLookPreviewControllerDataSource,
                                                       selectedIndex: Int) {
+        // KHANDAQ (Figma): custom media gallery viewer (falls back to QuickLook if items empty).
+        if let fp = dataSource as? FilePreviewControllerDataSource {
+            let items = fp.galleryItems(myName: "")
+            if !items.isEmpty {
+                let gallery = MediaGalleryViewController(items: items, startIndex: selectedIndex)
+                navigationController?.present(gallery, animated: true, completion: nil)
+                return
+            }
+        }
+
         let previewController = QuickLookPreviewController()
         previewController.dataSource = dataSource
         previewController.dataSourceStorage = dataSource

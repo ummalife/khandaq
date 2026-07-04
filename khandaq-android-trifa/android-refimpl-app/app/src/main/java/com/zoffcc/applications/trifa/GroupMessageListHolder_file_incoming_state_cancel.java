@@ -266,7 +266,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
         if (is_selected)
         {
-            layout_message_container.setBackgroundColor(0x33029B7D);
+            layout_message_container.setBackgroundResource(R.drawable.bg_message_selection);
         }
         else
         {

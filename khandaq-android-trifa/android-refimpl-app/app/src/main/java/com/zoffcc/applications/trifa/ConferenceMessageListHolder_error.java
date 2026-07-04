@@ -73,7 +73,7 @@ public class ConferenceMessageListHolder_error extends RecyclerView.ViewHolder
 
         if (is_selected)
         {
-            layout_message_container.setBackgroundColor(Color.GRAY);
+            layout_message_container.setBackgroundColor(0x33029B7D);
         }
         else
         {

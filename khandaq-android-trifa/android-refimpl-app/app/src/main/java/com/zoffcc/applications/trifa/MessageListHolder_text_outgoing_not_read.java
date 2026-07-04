@@ -105,7 +105,7 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
 
         if (is_selected)
         {
-            layout_message_container.setBackgroundColor(Color.GRAY);
+            layout_message_container.setBackgroundColor(0x33029B7D);
         }
         else
         {

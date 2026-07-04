@@ -234,7 +234,7 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
 
         if (is_selected)
         {
-            layout_message_container.setBackgroundColor(Color.GRAY);
+            layout_message_container.setBackgroundColor(0x33029B7D);
         }
         else
         {

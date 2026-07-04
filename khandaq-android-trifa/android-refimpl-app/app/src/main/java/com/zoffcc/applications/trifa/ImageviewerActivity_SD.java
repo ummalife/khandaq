@@ -43,6 +43,8 @@ public class ImageviewerActivity_SD extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_imageviewer);
 
+        ChatMediaHelper.bindMediaOverlay(this);
+
         String image_filename = getIntent().getStringExtra("image_filename");
         String storage_frame_work = getIntent().getStringExtra("storage_frame_work");
         if (storage_frame_work == null)

@@ -46,6 +46,8 @@ public class MediaViewerActivity extends AppCompatActivity
         playerView = findViewById(R.id.media_player_view);
         loadingView = findViewById(R.id.media_loading);
 
+        ChatMediaHelper.bindMediaOverlay(this);
+
         final String mode = getIntent().getStringExtra(ChatMediaHelper.EXTRA_MODE);
         final String vfsPath = getIntent().getStringExtra(ChatMediaHelper.EXTRA_VFS_PATH);
         final String exportPath = getIntent().getStringExtra(ChatMediaHelper.EXTRA_EXPORT_PATH);

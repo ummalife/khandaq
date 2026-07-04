@@ -49,12 +49,90 @@ public final class ChatMediaHelper
     public static final String EXTRA_STORAGE_FRAMEWORK = "storage_frame_work";
     public static final String EXTRA_MESSAGE_ID = "message_id";
     public static final String EXTRA_MIME_TYPE = "mime_type";
+    // KHANDAQ (Figma): sender name + timestamp shown in the media viewer overlay bar.
+    public static final String EXTRA_SENDER_NAME = "sender_name";
+    public static final String EXTRA_TIMESTAMP = "timestamp_secs";
 
     public static final String MODE_IMAGE = "image";
     public static final String MODE_VIDEO = "video";
 
     private ChatMediaHelper()
     {
+    }
+
+    // 1:1 sender: incoming (direction 0) = friend's display name; outgoing = own name.
+    private static String senderNameForMessage(final Message message)
+    {
+        if (message == null)
+        {
+            return "";
+        }
+        if (message.direction == 0)
+        {
+            final String name = HelperFriend.get_friend_name_from_pubkey(message.tox_friendpubkey);
+            return (name == null) ? "" : name;
+        }
+        return (TRIFAGlobals.global_my_name == null) ? "" : TRIFAGlobals.global_my_name;
+    }
+
+    static void putMediaMeta(final Intent intent, final String senderName, final long timestampSecs)
+    {
+        if (intent == null)
+        {
+            return;
+        }
+        intent.putExtra(EXTRA_SENDER_NAME, (senderName == null) ? "" : senderName);
+        intent.putExtra(EXTRA_TIMESTAMP, timestampSecs);
+    }
+
+    // KHANDAQ (Figma): fills the media viewer top overlay (back + sender name + date).
+    static void bindMediaOverlay(final android.app.Activity activity)
+    {
+        if (activity == null)
+        {
+            return;
+        }
+        final View backButton = activity.findViewById(R.id.media_overlay_back);
+        if (backButton != null)
+        {
+            backButton.setOnClickListener(v -> activity.finish());
+        }
+
+        final Intent intent = activity.getIntent();
+        final String senderName = (intent == null) ? "" : intent.getStringExtra(EXTRA_SENDER_NAME);
+        final long timestampSecs = (intent == null) ? 0L : intent.getLongExtra(EXTRA_TIMESTAMP, 0L);
+
+        final android.widget.TextView nameView = activity.findViewById(R.id.media_overlay_name);
+        if (nameView != null)
+        {
+            if ((senderName != null) && (!senderName.isEmpty()))
+            {
+                nameView.setText(senderName);
+                nameView.setVisibility(View.VISIBLE);
+            }
+            else
+            {
+                nameView.setVisibility(View.GONE);
+            }
+        }
+
+        final android.widget.TextView dateView = activity.findViewById(R.id.media_overlay_date);
+        if (dateView != null)
+        {
+            if (timestampSecs > 0L)
+            {
+                final long millis = timestampSecs * 1000L;
+                dateView.setText(android.text.format.DateUtils.formatDateTime(activity, millis,
+                        android.text.format.DateUtils.FORMAT_SHOW_DATE
+                                | android.text.format.DateUtils.FORMAT_SHOW_TIME
+                                | android.text.format.DateUtils.FORMAT_ABBREV_ALL));
+                dateView.setVisibility(View.VISIBLE);
+            }
+            else
+            {
+                dateView.setVisibility(View.GONE);
+            }
+        }
     }
 
     public static void openMessageMedia(final Context context, final Message message, final String exportPath)
@@ -80,7 +158,7 @@ public final class ChatMediaHelper
         if ((mimeType != null) && mimeType.startsWith("video/"))
         {
             openVideoViewer(context, message.filename_fullpath, message.id, message.storage_frame_work, exportPath,
-                            mimeType);
+                            mimeType, senderNameForMessage(message), message.sent_timestamp);
             return;
         }
 
@@ -119,11 +197,15 @@ public final class ChatMediaHelper
             return;
         }
 
+        final String sn = senderNameForMessage(message);
+        final long ts = message.sent_timestamp;
+
         try
         {
             if ((message.storage_frame_work) && (exportPath == null))
             {
                 final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                putMediaMeta(intent, sn, ts);
                 intent.putExtra("image_filename", message.filename_fullpath);
                 intent.putExtra("image_cache_key", message.filename_fullpath + "#" + message.id);
                 intent.putExtra("storage_frame_work", "1");
@@ -134,6 +216,7 @@ public final class ChatMediaHelper
             if (exportPath != null)
             {
                 final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                putMediaMeta(intent, sn, ts);
                 intent.putExtra("image_filename", exportPath);
                 intent.putExtra("image_cache_key", exportPath + "#" + message.id);
                 context.startActivity(intent);
@@ -148,6 +231,7 @@ public final class ChatMediaHelper
                 if (directLocal.isFile() && directLocal.length() > 0L)
                 {
                     final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                putMediaMeta(intent, sn, ts);
                     intent.putExtra("image_filename", directLocal.getAbsolutePath());
                     intent.putExtra("image_cache_key", directLocal.getAbsolutePath() + "#" + message.id);
                     context.startActivity(intent);
@@ -161,6 +245,7 @@ public final class ChatMediaHelper
                 {
                     final String cachedPath = resolveVfsToCachedPath(localPath, "_dmview");
                     final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                putMediaMeta(intent, sn, ts);
                     intent.putExtra("image_filename", cachedPath);
                     intent.putExtra("image_cache_key", cachedPath + "#" + message.id);
                     context.startActivity(intent);
@@ -170,6 +255,7 @@ public final class ChatMediaHelper
                 {
                     Log.i(TAG, "openImageViewer:vfs_cache:EE:" + e.getMessage());
                     final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                putMediaMeta(intent, sn, ts);
                     intent.putExtra("image_filename", localPath);
                     intent.putExtra("image_cache_key", localPath + "#" + message.id);
                     context.startActivity(intent);
@@ -181,6 +267,7 @@ public final class ChatMediaHelper
             if (direct.exists() && direct.isFile())
             {
                 final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                putMediaMeta(intent, sn, ts);
                 intent.putExtra("image_filename", direct.getAbsolutePath());
                 intent.putExtra("image_cache_key", direct.getAbsolutePath() + "#" + message.id);
                 context.startActivity(intent);
@@ -237,7 +324,7 @@ public final class ChatMediaHelper
         {
             final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(fresh);
             openVideoViewer(context, mediaPath, fresh.id, fresh.storage_frame_work, exportPath,
-                            mimeType);
+                            mimeType, "", fresh.sent_timestamp);
             return;
         }
 
@@ -283,13 +370,13 @@ public final class ChatMediaHelper
         {
             if ((message.storage_frame_work) && (exportPath == null))
             {
-                launchGroupImageViewerSd(context, mediaPath, message.id, true);
+                launchGroupImageViewerSd(context, mediaPath, message.id, true, message.sent_timestamp);
                 return;
             }
 
             if (exportPath != null)
             {
-                launchGroupImageViewerSd(context, exportPath, message.id, false);
+                launchGroupImageViewerSd(context, exportPath, message.id, false, message.sent_timestamp);
                 return;
             }
 
@@ -298,7 +385,7 @@ public final class ChatMediaHelper
                 final java.io.File directLocal = new java.io.File(mediaPath);
                 if (directLocal.isFile() && directLocal.length() > 0L)
                 {
-                    launchGroupImageViewerSd(context, directLocal.getAbsolutePath(), message.id, false);
+                    launchGroupImageViewerSd(context, directLocal.getAbsolutePath(), message.id, false, message.sent_timestamp);
                     return;
                 }
             }
@@ -306,14 +393,14 @@ public final class ChatMediaHelper
             if (VFS_ENCRYPT && isIocipherVirtualPath(mediaPath))
             {
                 // Same VFS path + Glide settings as group chat thumbnails (iocipher File + RESOURCE cache).
-                launchGroupImageViewerSd(context, mediaPath, message.id, false);
+                launchGroupImageViewerSd(context, mediaPath, message.id, false, message.sent_timestamp);
                 return;
             }
 
             final java.io.File direct = new java.io.File(mediaPath);
             if (direct.isFile() && direct.length() > 0L)
             {
-                launchGroupImageViewerSd(context, direct.getAbsolutePath(), message.id, false);
+                launchGroupImageViewerSd(context, direct.getAbsolutePath(), message.id, false, message.sent_timestamp);
                 return;
             }
 
@@ -327,7 +414,8 @@ public final class ChatMediaHelper
     }
 
     private static void launchGroupImageViewerSd(final Context context, final String imagePath,
-                                                 final long messageId, final boolean storageFramework)
+                                                 final long messageId, final boolean storageFramework,
+                                                 final long timestampSecs)
     {
         final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
         intent.putExtra("image_filename", imagePath);
@@ -336,17 +424,20 @@ public final class ChatMediaHelper
         {
             intent.putExtra("storage_frame_work", "1");
         }
+        // Group sender name resolution is deferred (gallery phase); show date only for now.
+        putMediaMeta(intent, "", timestampSecs);
         context.startActivity(intent);
     }
 
     public static void openVideoViewer(Context context, Message message, String exportPath, String mimeType)
     {
         openVideoViewer(context, message.filename_fullpath, message.id, message.storage_frame_work, exportPath,
-                        mimeType);
+                        mimeType, senderNameForMessage(message), message.sent_timestamp);
     }
 
     static void openVideoViewer(final Context context, final String vfsPath, final long messageId,
-                                final boolean storageFramework, final String exportPath, final String mimeType)
+                                final boolean storageFramework, final String exportPath, final String mimeType,
+                                final String senderName, final long timestampSecs)
     {
         if (context == null)
         {
@@ -373,6 +464,7 @@ public final class ChatMediaHelper
             }
             intent.putExtra(EXTRA_MESSAGE_ID, messageId);
             intent.putExtra(EXTRA_MIME_TYPE, mimeType);
+            putMediaMeta(intent, senderName, timestampSecs);
             context.startActivity(intent);
         }
         catch (Exception e)

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01BD534CD91F42115BE7621C /* MediaGalleryCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA108C65EEC7B723036A779D /* MediaGalleryCells.swift */; };
 		1105B18D1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1105B18C1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift */; };
 		1105B18E1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1105B18C1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift */; };
 		1105B18F1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1105B18C1EA09B1A0035B213 /* ChatFauxOfflineHeaderView.swift */; };
@@ -471,6 +472,7 @@
 		11FC105E1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC105C1D32F29700CE863E /* OCTSubmanagerObjectsExtension.swift */; };
 		358FC42D04E29FF433F9D596 /* ReconnectBackoffCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB30B71A73F5F6307B09B04 /* ReconnectBackoffCoordinator.swift */; };
 		3F9BB0F12C3981D227460419 /* KhandaqBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E87D6E7F9208C3C45EDD8D /* KhandaqBackButton.swift */; };
+		4719408187CA26904924A11E /* MediaGalleryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386702E10852D20E950F3452 /* MediaGalleryViewController.swift */; };
 		47D14C83430DD0076D082C7D /* WalkthroughController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */; };
 		4E3D0F9527C9751300D5A068 /* LinearProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */; };
 		4E4B267F27C0DCAE00E07A66 /* Call.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4B267E27C0DCAE00E07A66 /* Call.swift */; };
@@ -1058,6 +1060,7 @@
 		22DCF57E8F127B60BD096DD1 /* Pods-ScreenshotsUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ScreenshotsUITests.release.xcconfig"; path = "Pods/Target Support Files/Pods-ScreenshotsUITests/Pods-ScreenshotsUITests.release.xcconfig"; sourceTree = "<group>"; };
 		2D5B916CEDBEC1B69CD1EFA4 /* Pods-Antidote.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Antidote.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Antidote/Pods-Antidote.debug.xcconfig"; sourceTree = "<group>"; };
 		32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WalkthroughController.swift; sourceTree = "<group>"; };
+		386702E10852D20E950F3452 /* MediaGalleryViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaGalleryViewController.swift; sourceTree = "<group>"; };
 		43C533DEE94E80C981FEC348 /* Pods-AntidoteTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AntidoteTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-AntidoteTests/Pods-AntidoteTests.debug.xcconfig"; sourceTree = "<group>"; };
 		4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinearProgressBar.swift; sourceTree = "<group>"; };
 		4E4B267E27C0DCAE00E07A66 /* Call.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Call.swift; sourceTree = "<group>"; };
@@ -1139,6 +1142,7 @@
 		D7479C4F3A734F1604F7D3A0 /* MessageDeliveryWatchdog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDeliveryWatchdog.swift; sourceTree = "<group>"; };
 		DEADBEEF0000000000001301 /* ChatPreviewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatPreviewController.swift; sourceTree = "<group>"; };
 		F0E87D6E7F9208C3C45EDD8D /* KhandaqBackButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KhandaqBackButton.swift; sourceTree = "<group>"; };
+		FA108C65EEC7B723036A779D /* MediaGalleryCells.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MediaGalleryCells.swift; sourceTree = "<group>"; };
 		KHGRPCRT001A1B2C3D4E5F6 /* GroupCreateNameController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupCreateNameController.swift; sourceTree = "<group>"; };
 		KHGRPJOIN001A1B2C3D4E5F6 /* GroupJoinHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupJoinHelper.swift; sourceTree = "<group>"; };
 		KHGRPSEL001A1B2C3D4E5F6 /* GroupSelectController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelectController.swift; sourceTree = "<group>"; };
@@ -1472,6 +1476,8 @@
 				4E3D0F9427C9751300D5A068 /* LinearProgressBar.swift */,
 				CD2400D11C0D29FAE365D14C /* ImportInstructionsController.swift */,
 				32FE0893AF79B4966C9352A5 /* WalkthroughController.swift */,
+				386702E10852D20E950F3452 /* MediaGalleryViewController.swift */,
+				FA108C65EEC7B723036A779D /* MediaGalleryCells.swift */,
 			);
 			name = Classes;
 			sourceTree = "<group>";
@@ -2696,6 +2702,8 @@
 				94011D6AE24947BDF2B63B08 /* WalkthroughController.swift in Sources */,
 				8FF331E609E0EECC554FAC9B /* AttachmentMenuController.swift in Sources */,
 				3F9BB0F12C3981D227460419 /* KhandaqBackButton.swift in Sources */,
+				4719408187CA26904924A11E /* MediaGalleryViewController.swift in Sources */,
+				01BD534CD91F42115BE7621C /* MediaGalleryCells.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -3297,7 +3305,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142904;
+				CURRENT_PROJECT_VERSION = 142905;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -3332,7 +3340,7 @@
 				CLANG_STATIC_ANALYZER_MODE = deep;
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 142904;
+				CURRENT_PROJECT_VERSION = 142905;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;

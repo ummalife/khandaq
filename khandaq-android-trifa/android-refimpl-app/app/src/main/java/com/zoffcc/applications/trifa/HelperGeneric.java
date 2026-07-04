@@ -1921,6 +1921,11 @@ public class HelperGeneric
             if (MainActivity.VFS_ENCRYPT)
             {
                 info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(vfs_image_filename);
+                // KHANDAQ: the cache key must change when an image is replaced IN PLACE (same VFS path,
+                // new content) — e.g. the own profile avatar. Without this, Glide's RESOURCE disk cache
+                // is keyed only by the (constant) path and serves the stale image, so the profile photo
+                // never updates after the user changes it. length+mtime busts the cache on every change.
+                final String vfs_content_sig = vfs_image_filename + "_" + f1.length() + "_" + f1.lastModified();
                 // info.guardianproject.iocipher.FileInputStream fis = new info.guardianproject.iocipher.FileInputStream(f1);
 
                 //byte[] byteArray = new byte[(int) f1.length()];
@@ -1938,7 +1943,9 @@ public class HelperGeneric
                     else
                     {
                         GlideApp.with(c).load(f1).placeholder(R.drawable.round_loading_animation).diskCacheStrategy(
-                                DiskCacheStrategy.RESOURCE).skipMemoryCache(force_update).into(v);
+                                DiskCacheStrategy.RESOURCE).signature(
+                                new com.bumptech.glide.signature.StringSignatureZ(vfs_content_sig)).skipMemoryCache(
+                                force_update).into(v);
                     }
                 }
                 else
@@ -1953,7 +1960,9 @@ public class HelperGeneric
                     else
                     {
                         GlideApp.with(c).load(f1).placeholder(placholder).diskCacheStrategy(
-                                DiskCacheStrategy.RESOURCE).skipMemoryCache(force_update).into(v);
+                                DiskCacheStrategy.RESOURCE).signature(
+                                new com.bumptech.glide.signature.StringSignatureZ(vfs_content_sig)).skipMemoryCache(
+                                force_update).into(v);
                     }
                 }
             }

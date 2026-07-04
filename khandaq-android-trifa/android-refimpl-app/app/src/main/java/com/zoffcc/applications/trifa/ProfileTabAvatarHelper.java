@@ -174,7 +174,11 @@ final class ProfileTabAvatarHelper
 
             GlideApp.with(context).clear(avatarView);
             final RequestOptions glideOptions = new RequestOptions().fitCenter().circleCrop();
-            GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE).skipMemoryCache(false)
+            // KHANDAQ: own avatar lives at a constant VFS path, so the RESOURCE disk cache would serve
+            // the stale image after the user changes the photo — key the cache on length+mtime instead.
+            final String sig = fname + "_" + avatarFile.length() + "_" + avatarFile.lastModified();
+            GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .signature(new com.bumptech.glide.signature.StringSignatureZ(sig)).skipMemoryCache(false)
                     .apply(glideOptions).into(avatarView);
         }
         catch (Throwable ignored)

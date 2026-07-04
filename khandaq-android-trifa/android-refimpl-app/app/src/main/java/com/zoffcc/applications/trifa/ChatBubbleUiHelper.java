@@ -868,7 +868,11 @@ final class ChatBubbleUiHelper
 
             GlideApp.with(context).clear(avatar);
             final RequestOptions glideOptions = new RequestOptions().fitCenter();
-            GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE).skipMemoryCache(false)
+            // KHANDAQ: own avatar path is constant — key the cache on length+mtime so replacing the
+            // photo actually updates (otherwise the RESOURCE disk cache keeps serving the old image).
+            final String sig = fname + "_" + avatarFile.length() + "_" + avatarFile.lastModified();
+            GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .signature(new com.bumptech.glide.signature.StringSignatureZ(sig)).skipMemoryCache(false)
                     .apply(glideOptions).into(avatar);
         }
         catch (Exception ignored)

@@ -513,6 +513,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/tool/imessageboxmanager.cpp
   src/widget/tool/messageboxmanager.cpp
   src/widget/tool/messageboxmanager.h
+  src/widget/tool/imageviewerwidget.cpp
+  src/widget/tool/imageviewerwidget.h
   src/widget/tool/callconfirmwidget.cpp
   src/widget/tool/callconfirmwidget.h
   src/widget/tool/chatquotepreview.cpp

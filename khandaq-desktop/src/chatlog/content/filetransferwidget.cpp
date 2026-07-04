@@ -25,6 +25,7 @@
 #include "src/widget/style.h"
 #include "src/widget/widget.h"
 #include "src/widget/tool/imessageboxmanager.h"
+#include "src/widget/tool/imageviewerwidget.h"
 #include "src/model/exiftransform.h"
 #include "util/display.h"
 
@@ -478,7 +479,12 @@ void FileTransferWidget::handleButton(QPushButton* btn)
     }
 
     if (btn->objectName() == "ok" || btn->objectName() == "previewButton") {
-        messageBoxManager.confirmExecutableOpen(QFileInfo(fileInfo.filePath));
+        // KHANDAQ (Figma): open pictures in the in-app fullscreen viewer instead of the OS app.
+        if (ImageViewerWidget::isImagePath(fileInfo.filePath)) {
+            (new ImageViewerWidget(fileInfo.filePath))->show();
+        } else {
+            messageBoxManager.confirmExecutableOpen(QFileInfo(fileInfo.filePath));
+        }
     } else if (btn->objectName() == "dir") {
         QString dirPath = QFileInfo(fileInfo.filePath).dir().path();
         QDesktopServices::openUrl(QUrl::fromLocalFile(dirPath));

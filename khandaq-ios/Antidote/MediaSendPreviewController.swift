@@ -31,12 +31,15 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
     private static let captionMinHeight: CGFloat = 44
     private static let captionMaxHeight: CGFloat = 120
 
+    private static let brandTeal = UIColor(red: 0.01, green: 0.61, blue: 0.49, alpha: 1)
+
     private let closeButton = UIButton(type: .system)
+    private let checkButton = UIButton(type: .system)
     private let counterLabel = UILabel()
     private let imageView = UIImageView()
     private let playIconView = UILabel()
     private let captionField = UITextView()
-    private let cancelButton = UIButton(type: .system)
+    private let emojiButton = UIButton(type: .system)
     private let sendButton = UIButton(type: .system)
     private let bottomBar = UIView()
 
@@ -90,9 +93,18 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         playIconView.textAlignment = .center
         playIconView.isHidden = true
 
-        closeButton.setTitle("✕", for: .normal)
-        closeButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .medium)
-        closeButton.tintColor = .white
+        closeButton.setTitle("‹", for: .normal)
+        closeButton.setTitleColor(.white, for: .normal)
+        closeButton.titleLabel?.font = .systemFont(ofSize: 30, weight: .medium)
+        closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        closeButton.layer.cornerRadius = 22
+
+        // KHANDAQ (Figma): round teal confirm-check, top-right.
+        checkButton.setTitle("✓", for: .normal)
+        checkButton.setTitleColor(.white, for: .normal)
+        checkButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .bold)
+        checkButton.backgroundColor = Self.brandTeal
+        checkButton.layer.cornerRadius = 22
 
         counterLabel.textColor = .white
         counterLabel.font = .systemFont(ofSize: 14, weight: .medium)
@@ -115,23 +127,24 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 
         bottomBar.backgroundColor = UIColor(white: 0.08, alpha: 0.95)
 
-        cancelButton.setTitle(String(localized: "alert_cancel"), for: .normal)
-        cancelButton.setTitleColor(.white, for: .normal)
+        // KHANDAQ (Figma): emoji icon focuses the caption; round teal send arrow.
+        emojiButton.setTitle("😊", for: .normal)
+        emojiButton.titleLabel?.font = .systemFont(ofSize: 24)
 
-        sendButton.setTitle(String(localized: "media_send_button"), for: .normal)
+        sendButton.setTitle("↑", for: .normal)
         sendButton.setTitleColor(.white, for: .normal)
-        // KHANDAQ design: brand accent primary action (was an off-accent dark green).
-        sendButton.backgroundColor = UIColor(red: 0.01, green: 0.61, blue: 0.49, alpha: 1)
-        sendButton.layer.cornerRadius = 8
-        sendButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        sendButton.titleLabel?.font = .systemFont(ofSize: 24, weight: .bold)
+        sendButton.backgroundColor = Self.brandTeal
+        sendButton.layer.cornerRadius = 24
 
         view.addSubview(imageView)
         view.addSubview(playIconView)
         view.addSubview(closeButton)
+        view.addSubview(checkButton)
         view.addSubview(counterLabel)
         view.addSubview(bottomBar)
+        bottomBar.addSubview(emojiButton)
         bottomBar.addSubview(captionField)
-        bottomBar.addSubview(cancelButton)
         bottomBar.addSubview(sendButton)
 
         let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(showNextItem))
@@ -158,6 +171,12 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
             make.width.height.equalTo(44)
         }
 
+        checkButton.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(8)
+            make.trailing.equalToSuperview().offset(-8)
+            make.width.height.equalTo(44)
+        }
+
         counterLabel.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(16)
             make.centerX.equalToSuperview()
@@ -170,21 +189,24 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
             bottomBarBottomConstraint = make.bottom.equalToSuperview().constraint
         }
 
-        captionField.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(12)
-            make.leading.trailing.equalToSuperview().inset(12)
-            captionHeightConstraint = make.height.equalTo(Self.captionMinHeight).constraint
-        }
-
-        cancelButton.snp.makeConstraints { make in
-            make.top.equalTo(captionField.snp.bottom).offset(10)
-            make.leading.equalToSuperview().offset(12)
-            bottomBarSafeInsetConstraint = make.bottom.equalToSuperview().offset(-12).constraint
+        emojiButton.snp.makeConstraints { make in
+            make.leading.equalToSuperview().offset(6)
+            make.bottom.equalTo(captionField.snp.bottom)
+            make.width.height.equalTo(44)
         }
 
         sendButton.snp.makeConstraints { make in
-            make.centerY.equalTo(cancelButton)
-            make.trailing.equalToSuperview().offset(-12)
+            make.trailing.equalToSuperview().offset(-8)
+            make.bottom.equalTo(captionField.snp.bottom)
+            make.width.height.equalTo(48)
+        }
+
+        captionField.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(12)
+            make.leading.equalTo(emojiButton.snp.trailing).offset(6)
+            make.trailing.equalTo(sendButton.snp.leading).offset(-8)
+            captionHeightConstraint = make.height.equalTo(Self.captionMinHeight).constraint
+            bottomBarSafeInsetConstraint = make.bottom.equalToSuperview().offset(-12).constraint
         }
 
         imageView.snp.makeConstraints { make in
@@ -203,8 +225,13 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 
     private func wireActions() {
         closeButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-        cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+        checkButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
+        emojiButton.addTarget(self, action: #selector(emojiTapped), for: .touchUpInside)
+    }
+
+    @objc private func emojiTapped() {
+        captionField.becomeFirstResponder()
     }
 
     private func makeCaptionKeyboardToolbar() -> UIToolbar {

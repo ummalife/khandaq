@@ -85,9 +85,10 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             thumbs.setAdapter(thumbAdapter);
         }
 
-        final ImageButton closeButton = findViewById(R.id.media_preview_close);
-        final Button cancelButton = findViewById(R.id.media_preview_cancel);
-        final Button sendButton = findViewById(R.id.media_preview_send);
+        final ImageButton backButton = findViewById(R.id.media_preview_close);
+        final ImageButton checkButton = findViewById(R.id.media_preview_check);
+        final ImageButton sendButton = findViewById(R.id.media_preview_send);
+        final ImageView emojiButton = findViewById(R.id.media_preview_emoji);
 
         final View.OnClickListener cancelListener = v ->
         {
@@ -95,10 +96,10 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             finish();
         };
 
-        closeButton.setOnClickListener(cancelListener);
-        cancelButton.setOnClickListener(cancelListener);
+        backButton.setOnClickListener(cancelListener);
 
-        sendButton.setOnClickListener(v ->
+        // KHANDAQ (Figma): both the top confirm-check and the round send arrow confirm the send.
+        final View.OnClickListener sendListener = v ->
         {
             final Intent result = new Intent();
             result.putParcelableArrayListExtra(MediaSendPreviewHelper.EXTRA_URI_LIST, uris);
@@ -109,6 +110,20 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             }
             setResult(Activity.RESULT_OK, result);
             finish();
+        };
+        checkButton.setOnClickListener(sendListener);
+        sendButton.setOnClickListener(sendListener);
+
+        // Emoji icon focuses the caption field and opens the keyboard (user can switch to emoji there).
+        emojiButton.setOnClickListener(v ->
+        {
+            captionField.requestFocus();
+            final android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null)
+            {
+                imm.showSoftInput(captionField, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
         });
     }
 

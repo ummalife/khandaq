@@ -953,6 +953,7 @@
     <string name="chat_ft_status_waiting_friend_accept">Waiting for contact to accept…</string>
     <string name="voice_message_label">Voice message</string>
     <string name="media_label_photo">Photo</string>
+    <string name="emoji">Emoji</string>
     <string name="media_send_caption_hint">Add a caption…</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">Video</string>

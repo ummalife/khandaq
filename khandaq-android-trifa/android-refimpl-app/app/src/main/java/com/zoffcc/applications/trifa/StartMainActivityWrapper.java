@@ -24,6 +24,8 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
+
+import org.khandaq.messenger.R;
 import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -96,6 +98,51 @@ public class StartMainActivityWrapper extends AppCompatActivity
             Log.i(TAG, "pending_profile_wipe:EE:" + e.getMessage());
         }
 
+        // KHANDAQ (#10 change password): a staged rekey re-encrypts the DBs here, in this fresh
+        // process (no open file handles), before any DB/VFS resolution. Crash-safe / idempotent.
+        // It copies + re-encrypts potentially large files, so it runs on a BACKGROUND thread with
+        // a progress screen — an ANR-kill mid-rekey would needlessly widen the crash windows.
+        if (DbRekeyHelper.hasPendingRekey(this))
+        {
+            setContentView(R.layout.activity_rekey_progress);
+            new Thread(() -> {
+                try
+                {
+                    DbRekeyHelper.performPendingRekeyIfNeeded(this);
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "pending_db_rekey:EE:" + e.getMessage());
+                }
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed())
+                    {
+                        continueStartup();
+                    }
+                });
+            }).start();
+            return;
+        }
+
+        continueStartup();
+    }
+
+    private void continueStartup()
+    {
+        // KHANDAQ (#10): a rolled-back password change must never be silent — the user could be
+        // relying on the old password being retired.
+        try
+        {
+            if (DbRekeyHelper.consumeRekeyAbortedFlag(this))
+            {
+                android.widget.Toast.makeText(this, R.string.cp_rekey_failed_note,
+                                              android.widget.Toast.LENGTH_LONG).show();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         boolean already_mounted = false;
 
         Log.i(TAG, "0001");
@@ -103,7 +150,10 @@ public class StartMainActivityWrapper extends AppCompatActivity
         try
         {
             Log.i(TAG, "0002");
-            if (vfs.isMounted())
+            // KHANDAQ: on a fresh first-launch process the VFS is not mounted yet, so the static
+            // vfs is null — calling isMounted() on it threw a (caught) NPE on every cold start and
+            // spammed a misleading stack trace into logcat, muddying real crash analysis. Guard it.
+            if (vfs != null && vfs.isMounted())
             {
                 Log.i(TAG, "0003");
                 already_mounted = true;

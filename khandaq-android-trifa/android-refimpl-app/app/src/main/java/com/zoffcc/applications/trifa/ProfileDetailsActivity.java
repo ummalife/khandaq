@@ -98,7 +98,9 @@ public class ProfileDetailsActivity extends AppCompatActivity
         final View changePw = findViewById(R.id.pd_change_password_row);
         if (changePw != null)
         {
-            changePw.setOnClickListener(v -> startActivity(new Intent(this, SetPasswordActivity.class)));
+            // KHANDAQ (#10): SetPasswordActivity redirects to CheckPassword on an existing DB, so it
+            // could never change a password — route to the real change-password flow instead.
+            changePw.setOnClickListener(v -> startActivity(new Intent(this, ChangePasswordActivity.class)));
         }
 
         // ---- delete profile ----

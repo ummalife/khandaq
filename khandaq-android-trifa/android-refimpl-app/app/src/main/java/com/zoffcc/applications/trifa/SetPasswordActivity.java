@@ -204,25 +204,62 @@ public class SetPasswordActivity extends AppCompatActivity
         }
 
         showProgress(true);
-        ToxProfileImportHelper.handlePickedUri(this, uri, ImportMode.FIRST_LAUNCH, new Runnable()
+
+        // KHANDAQ: run the import I/O AND the PBKDF2 DB-key derivation (auto_create_password) OFF the
+        // UI thread. On first launch these execute before MainActivity, and doing them on the main
+        // thread froze the app right after import — long enough to ANR / be killed by the system
+        // ("выкидывает после импорта"), worst on Android 16 (scoped-storage reads + SQLCipher key
+        // setup). The UI transition is posted back to the main thread once the work completes.
+        new Thread(new Runnable()
         {
             @Override
             public void run()
             {
-                completeFirstLaunchImport();
+                boolean ok = false;
+                try
+                {
+                    final java.io.File staging = new java.io.File(getCacheDir(), "import_savedata.tox");
+                    if (ToxProfileImportHelper.copyUriToFile(SetPasswordActivity.this, uri, staging))
+                    {
+                        HelperGeneric.io_file_copy(staging,
+                                ToxProfileImportHelper.savedataDestination(SetPasswordActivity.this));
+                        staging.delete();
+                        auto_create_password();
+                        settings.edit().putBoolean("PW_SET_SCREEN_DONE", true).commit();
+                        ok = true;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.e(TAG, "first-launch import failed: " + e.getMessage());
+                    ok = false;
+                }
+
+                final boolean success = ok;
+                runOnUiThread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        if (isFinishing() || isDestroyed())
+                        {
+                            return;
+                        }
+                        showProgress(false);
+                        if (success)
+                        {
+                            startActivity(new Intent(SetPasswordActivity.this, MainActivity.class));
+                            finish();
+                        }
+                        else
+                        {
+                            ToxProfileImportHelper.showImportError(SetPasswordActivity.this,
+                                    getString(R.string.settings_import_tox_profile_failed));
+                        }
+                    }
+                });
             }
-        });
-        showProgress(false);
-    }
-
-    private void completeFirstLaunchImport()
-    {
-        auto_create_password();
-        settings.edit().putBoolean("PW_SET_SCREEN_DONE", true).commit();
-
-        Intent main_act = new Intent(SetPasswordActivity.this, MainActivity.class);
-        startActivity(main_act);
-        finish();
+        }).start();
     }
 
     void auto_create_password()

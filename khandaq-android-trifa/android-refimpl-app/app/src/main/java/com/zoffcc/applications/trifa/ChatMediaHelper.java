@@ -51,7 +51,7 @@ public final class ChatMediaHelper
     public static final String EXTRA_MIME_TYPE = "mime_type";
     // KHANDAQ (Figma): sender name + timestamp shown in the media viewer overlay bar.
     public static final String EXTRA_SENDER_NAME = "sender_name";
-    public static final String EXTRA_TIMESTAMP = "timestamp_secs";
+    public static final String EXTRA_TIMESTAMP = "timestamp_millis";
 
     public static final String MODE_IMAGE = "image";
     public static final String MODE_VIDEO = "video";
@@ -75,14 +75,15 @@ public final class ChatMediaHelper
         return (TRIFAGlobals.global_my_name == null) ? "" : TRIFAGlobals.global_my_name;
     }
 
-    static void putMediaMeta(final Intent intent, final String senderName, final long timestampSecs)
+    // timestampMillis: Message.sent_timestamp is already in milliseconds (System.currentTimeMillis()).
+    static void putMediaMeta(final Intent intent, final String senderName, final long timestampMillis)
     {
         if (intent == null)
         {
             return;
         }
         intent.putExtra(EXTRA_SENDER_NAME, (senderName == null) ? "" : senderName);
-        intent.putExtra(EXTRA_TIMESTAMP, timestampSecs);
+        intent.putExtra(EXTRA_TIMESTAMP, timestampMillis);
     }
 
     // KHANDAQ (Figma): fills the media viewer top overlay (back + sender name + date).
@@ -100,7 +101,7 @@ public final class ChatMediaHelper
 
         final Intent intent = activity.getIntent();
         final String senderName = (intent == null) ? "" : intent.getStringExtra(EXTRA_SENDER_NAME);
-        final long timestampSecs = (intent == null) ? 0L : intent.getLongExtra(EXTRA_TIMESTAMP, 0L);
+        final long timestampMillis = (intent == null) ? 0L : intent.getLongExtra(EXTRA_TIMESTAMP, 0L);
 
         final android.widget.TextView nameView = activity.findViewById(R.id.media_overlay_name);
         if (nameView != null)
@@ -119,10 +120,9 @@ public final class ChatMediaHelper
         final android.widget.TextView dateView = activity.findViewById(R.id.media_overlay_date);
         if (dateView != null)
         {
-            if (timestampSecs > 0L)
+            if (timestampMillis > 0L)
             {
-                final long millis = timestampSecs * 1000L;
-                dateView.setText(android.text.format.DateUtils.formatDateTime(activity, millis,
+                dateView.setText(android.text.format.DateUtils.formatDateTime(activity, timestampMillis,
                         android.text.format.DateUtils.FORMAT_SHOW_DATE
                                 | android.text.format.DateUtils.FORMAT_SHOW_TIME
                                 | android.text.format.DateUtils.FORMAT_ABBREV_ALL));

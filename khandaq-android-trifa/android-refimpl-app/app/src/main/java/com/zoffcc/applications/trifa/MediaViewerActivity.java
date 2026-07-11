@@ -35,6 +35,13 @@ public class MediaViewerActivity extends AppCompatActivity
     private PlayerView playerView;
     private ProgressBar loadingView;
     private ExoPlayer exoPlayer;
+    // Player is fully released in onStop and rebuilt in onStart: keeping the codec
+    // attached across screen-off surface destruction ANRs on some OEM ROMs.
+    private Uri currentPlaybackUri;
+    private String currentMimeType;
+    private long resumePositionMs = 0L;
+    private boolean resumePlayWhenReady = true;
+    private boolean activityStarted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -273,6 +280,21 @@ public class MediaViewerActivity extends AppCompatActivity
     private void startVideoPlayback(Uri playbackUri, String mimeType)
     {
         loadingView.setVisibility(View.GONE);
+        currentPlaybackUri = playbackUri;
+        currentMimeType = mimeType;
+
+        if (isFinishing() || (!activityStarted))
+        {
+            // Activity went to background while the URI was being resolved:
+            // onStart will build the player with the stored URI.
+            return;
+        }
+
+        if (exoPlayer != null)
+        {
+            return;
+        }
+
         final DefaultDataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(this);
         exoPlayer = new ExoPlayer.Builder(this).
                 setMediaSourceFactory(new DefaultMediaSourceFactory(dataSourceFactory)).
@@ -286,7 +308,11 @@ public class MediaViewerActivity extends AppCompatActivity
         }
 
         exoPlayer.setMediaItem(itemBuilder.build());
-        exoPlayer.setPlayWhenReady(true);
+        if (resumePositionMs > 0L)
+        {
+            exoPlayer.seekTo(resumePositionMs);
+        }
+        exoPlayer.setPlayWhenReady(resumePlayWhenReady);
         exoPlayer.prepare();
         exoPlayer.addListener(new Player.Listener()
         {
@@ -311,23 +337,44 @@ public class MediaViewerActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onStart()
+    {
+        super.onStart();
+        activityStarted = true;
+        if ((exoPlayer == null) && (currentPlaybackUri != null))
+        {
+            startVideoPlayback(currentPlaybackUri, currentMimeType);
+        }
+    }
+
+    @Override
     protected void onStop()
+    {
+        activityStarted = false;
+        if (exoPlayer != null)
+        {
+            resumePositionMs = exoPlayer.getCurrentPosition();
+            // Come back paused after screen-off/background, like Telegram.
+            resumePlayWhenReady = false;
+            releasePlayer();
+        }
+        super.onStop();
+    }
+
+    private void releasePlayer()
     {
         if (exoPlayer != null)
         {
-            exoPlayer.setPlayWhenReady(false);
+            playerView.setPlayer(null);
+            exoPlayer.release();
+            exoPlayer = null;
         }
-        super.onStop();
     }
 
     @Override
     protected void onDestroy()
     {
-        if (exoPlayer != null)
-        {
-            exoPlayer.release();
-            exoPlayer = null;
-        }
+        releasePlayer();
         super.onDestroy();
     }
 }

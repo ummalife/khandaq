@@ -251,12 +251,12 @@
         <activity
             android:name="com.zoffcc.applications.trifa.MediaViewerActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:theme="@style/Theme.AppCompat.NoActionBar">
+            android:theme="@style/KhandaqMediaTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.MediaSendPreviewActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
-            android:theme="@style/Theme.AppCompat.NoActionBar">
+            android:theme="@style/KhandaqMediaTheme">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaSetPatternActivity"

@@ -28,6 +28,8 @@
     </style>
 
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
+        <!-- KHANDAQ: keep system bars from overlapping content on Android 15+ (targetSdk 35 edge-to-edge enforcement); ignored on older OS -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <!-- KHANDAQ: status bar matches toolbar (neutral), not off-brand green colorPrimaryDark -->
@@ -76,7 +78,14 @@
         <item name="metaButtonBarButtonStyle">?android:attr/buttonBarButtonStyle</item>
     </style>
 
+    <style name="KhandaqMediaTheme" parent="Theme.AppCompat.NoActionBar">
+        <!-- KHANDAQ: media viewer/send-preview; same edge-to-edge opt-out as AppTheme -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
     <style name="QrScanTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- KHANDAQ: keep system bars from overlapping content on Android 15+ (targetSdk 35 edge-to-edge enforcement); ignored on older OS -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/black</item>

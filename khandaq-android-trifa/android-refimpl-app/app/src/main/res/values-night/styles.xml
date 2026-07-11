@@ -1,6 +1,8 @@
 <resources>
 
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
+        <!-- KHANDAQ: keep system bars from overlapping content on Android 15+ (targetSdk 35 edge-to-edge enforcement); ignored on older OS -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <!-- KHANDAQ: status bar matches toolbar (neutral dark), not off-brand green colorPrimaryDark -->

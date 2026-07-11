@@ -206,8 +206,9 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
                 HelperGeneric.format_chat_message_time(m, true), true);
 
-        // KHANDAQ #23: terminal state. filedb_id>=0 => recipient pulled all chunks (delivered);
-        // filedb_id==-1 => the transfer was canceled, so no delivery indicator.
+        // KHANDAQ #23: terminal state. filedb_id>=0 => recipient pulled all chunks — the file IS on
+        // their device, which is exactly what the green ✓✓ (msgV3 ACK) means for text messages, so
+        // show READ, not the grey DELIVERED. filedb_id==-1 => canceled, no delivery indicator.
         if (m.filedb_id == -1)
         {
             ChatBubbleUiHelper.hide_delivery_indicator(m_status);
@@ -215,7 +216,7 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
         else
         {
             ChatBubbleUiHelper.bind_outgoing_file_status(m_status,
-                    MessageStatusHelper.OutgoingStatus.DELIVERED);
+                    MessageStatusHelper.OutgoingStatus.READ);
         }
 
         textView.setVisibility(View.VISIBLE);

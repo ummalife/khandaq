@@ -66,6 +66,10 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
             guard let file = message.messageFile, let path = file.filePath() else {
                 continue
             }
+            // Cleanup/reinstall can leave DB rows whose file is gone — a black page in the gallery.
+            guard FileManager.default.fileExists(atPath: path) else {
+                continue
+            }
             let url = URL(fileURLWithPath: path)
             let isVideo = MediaGalleryViewController.isVideoFile(file.fileName ?? url.lastPathComponent)
             let sender = message.isOutgoing() ? myName : friendName

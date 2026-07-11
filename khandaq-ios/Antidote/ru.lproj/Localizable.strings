@@ -743,3 +743,5 @@
 "group_private_message_action" = "Личное сообщение";
 "group_private_message_failed" = "Не удалось отправить личное сообщение.";
 "group_private_message_notification_title_format" = "🔒 %@ (личное)";
+
+"media_file_unavailable" = "Файл недоступен";

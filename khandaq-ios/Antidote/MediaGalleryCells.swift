@@ -15,6 +15,7 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     private let imageView = UIImageView()
     private let playButton = UIButton(type: .system)
+    private let unavailableLabel = UILabel()
     private var player: AVPlayer?
     private var playerLayer: AVPlayerLayer?
 
@@ -57,6 +58,19 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
             make.center.equalToSuperview()
             make.width.height.equalTo(72)
         }
+
+        unavailableLabel.text = String(localized: "media_file_unavailable")
+        unavailableLabel.textColor = UIColor.white.withAlphaComponent(0.6)
+        unavailableLabel.font = .systemFont(ofSize: 15)
+        unavailableLabel.textAlignment = .center
+        unavailableLabel.numberOfLines = 0
+        unavailableLabel.isHidden = true
+        contentView.addSubview(unavailableLabel)
+        unavailableLabel.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+            make.leading.greaterThanOrEqualToSuperview().offset(24)
+            make.trailing.lessThanOrEqualToSuperview().offset(-24)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -74,14 +88,19 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
         isVideoCell = false
         videoURL = nil
         playButton.isHidden = true
+        unavailableLabel.isHidden = true
     }
 
     func configure(with item: GalleryItem) {
         isVideoCell = item.isVideo
         videoURL = item.url
+        unavailableLabel.isHidden = true
         if item.isVideo {
-            imageView.image = Self.videoFrame(for: item.url)
-            playButton.isHidden = false
+            let frame = Self.videoFrame(for: item.url)
+            imageView.image = frame
+            let missing = (frame == nil) && !FileManager.default.fileExists(atPath: item.url.path)
+            playButton.isHidden = missing
+            unavailableLabel.isHidden = !missing
             scrollView.maximumZoomScale = 1
         } else {
             scrollView.maximumZoomScale = 4
@@ -91,6 +110,7 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
                 DispatchQueue.main.async {
                     guard let self = self, !self.isVideoCell else { return }
                     self.imageView.image = img
+                    self.unavailableLabel.isHidden = (img != nil)
                 }
             }
         }

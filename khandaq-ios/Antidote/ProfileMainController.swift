@@ -330,10 +330,16 @@ private extension ProfileMainController {
         var tempImage = image
 
         repeat {
-            UIGraphicsBeginImageContext(imageSize)
-            tempImage.draw(in: CGRect(origin: CGPoint.zero, size: imageSize))
-            tempImage = UIGraphicsGetImageFromCurrentImageContext()!
-            UIGraphicsEndImageContext()
+            // UIGraphicsBeginImageContext throws on apps linked against the iOS 17+ SDK
+            // (the avatar could not be set at all on iOS 26).
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = false
+            let renderer = UIGraphicsImageRenderer(size: imageSize, format: format)
+            let drawSize = imageSize
+            tempImage = renderer.image { _ in
+                tempImage.draw(in: CGRect(origin: CGPoint.zero, size: drawSize))
+            }
 
             guard let theData = UIImagePNGRepresentation(tempImage) else {
                 throw PNGFromDataError()

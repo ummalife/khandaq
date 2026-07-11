@@ -79,6 +79,7 @@ final class MediaGalleryViewController: UIViewController {
             self.collectionView.scrollToItem(at: IndexPath(item: self.currentIndex, section: 0),
                                              at: .centeredHorizontally, animated: false)
             self.updateOverlayForCurrentItem()
+            self.syncThumbStrip()
         }
     }
 
@@ -253,7 +254,19 @@ extension MediaGalleryViewController: UICollectionViewDataSource, UICollectionVi
                                          at: .centeredHorizontally, animated: true)
         currentIndex = indexPath.item
         updateOverlayForCurrentItem()
+        syncThumbStrip()
+    }
+
+    // Telegram-style: the strip follows the page — selection ring + keep the
+    // current thumb centered/visible (reloadData alone never scrolls the strip).
+    private func syncThumbStrip() {
         thumbsCollection.reloadData()
+        guard items.indices.contains(currentIndex) else { return }
+        thumbsCollection.performBatchUpdates(nil) { [weak self] _ in
+            guard let self = self else { return }
+            self.thumbsCollection.scrollToItem(at: IndexPath(item: self.currentIndex, section: 0),
+                                               at: .centeredHorizontally, animated: true)
+        }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -262,7 +275,7 @@ extension MediaGalleryViewController: UICollectionViewDataSource, UICollectionVi
         if page != currentIndex, items.indices.contains(page) {
             currentIndex = page
             updateOverlayForCurrentItem()
-            thumbsCollection.reloadData()
+            syncThumbStrip()
         }
         // Pause any video that scrolled off-screen.
         for case let cell as MediaPageCell in collectionView.visibleCells where cell.isVideoCell {

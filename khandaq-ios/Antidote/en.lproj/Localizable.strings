@@ -741,3 +741,5 @@
 "group_private_message_failed" = "Could not send private message.";
 "group_private_message_notification_title_format" = "🔒 %@ (private)";
 "alert_create" = "Create";
+
+"media_file_unavailable" = "File unavailable";

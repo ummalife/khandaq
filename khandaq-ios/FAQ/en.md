@@ -5,6 +5,8 @@
 * [How to synchronize Tox ID between multiple devices?](#how-to-synchronize-tox-id-between-multiple-devices)
 * [How do I receive push notifications in the background?](#how-do-i-receive-push-notifications-in-the-background)
 * [Can I send message to offline contacts?](#can-i-send-messages-to-offline-contacts)
+* [Why does "last connected" differ from Telegram's "last seen"?](#why-does-last-connected-differ-from-telegrams-last-seen)
+* [Why did my ID change after reinstalling the app?](#why-did-my-id-change-after-reinstalling-the-app)
 * [How to enable PIN and Touch ID?](#how-to-enable-pin-and-touch-id)
 * [Does Antidote connect to any third party servers?](#does-antidote-connect-to-any-third-party-servers)
 * [More Questions?](#more-questions)
@@ -46,6 +48,18 @@ Push Notifications are only supported currently by TRIfA (Android), Antidote (iO
 ## Can I send messages to offline contacts?
 
 Offline messaging is now supported since version 1.4.2
+
+
+## Why does "last connected" differ from Telegram's "last seen"?
+
+Khandaq has no servers, so there is no global "last seen" anywhere. Contacts connect to each other directly (peer-to-peer), and the time you see under a contact's name is *the last moment YOUR device was connected to THEIR device*. That is also why it often matches the time of the last delivered message — delivery happens over the same direct connection. While you are offline, your device simply cannot learn when your contacts were online.
+
+
+## Why did my ID change after reinstalling the app?
+
+Your ID is a cryptographic key that exists only on your device — there is no server that stores your account. Deleting the app deletes the key, and a fresh install generates a new one. This is by design: nobody (including us) can recover or impersonate your account.
+
+If you want your ID to survive a reinstall or move to a new phone, export your profile first (`Profile` → `Profile Details` → `Export Profile`) and keep the .tox file somewhere safe. Importing it back restores your ID and contacts.
 
 
 ## How to enable PIN and Touch ID?

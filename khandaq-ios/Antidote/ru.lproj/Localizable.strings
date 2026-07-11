@@ -145,7 +145,7 @@
 /* Contact request section title */
 "contact_requests_section" = "Запросы";
 /* Contact last seen status */
-"contact_last_seen" = "Был в сети: %@";
+"contact_last_seen" = "На связи: %@";
 /* Screen name */
 "contact_request" = "Запрос на добавление";
 /* Contact request button */
@@ -237,10 +237,10 @@
 "status_offline" = "Не в сети";
 /* Status message */
 "status_online" = "онлайн";
-"status_last_seen_just_now" = "был(-а) только что";
-"status_last_seen_minutes_ago" = "был(-а) %d мин. назад";
-"status_last_seen_hours_ago" = "был(-а) %d ч. назад";
-"status_last_seen_long_ago" = "был(-а) давно";
+"status_last_seen_just_now" = "на связи только что";
+"status_last_seen_minutes_ago" = "на связи %d мин. назад";
+"status_last_seen_hours_ago" = "на связи %d ч. назад";
+"status_last_seen_long_ago" = "на связи давно";
 /* Status message */
 "status_away" = "Отсутствую";
 /* Status message */

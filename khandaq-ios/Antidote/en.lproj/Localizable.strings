@@ -141,7 +141,7 @@
 /* Contact request section title */
 "contact_requests_section" = "Contact Requests";
 /* Contact last seen status */
-"contact_last_seen" = "Last seen: %@";
+"contact_last_seen" = "Last connected: %@";
 /* Screen name */
 "contact_request" = "Contact Request";
 /* Contact request button */
@@ -238,10 +238,10 @@
 "status_offline" = "Offline";
 /* Status message */
 "status_online" = "Online";
-"status_last_seen_just_now" = "last seen just now";
-"status_last_seen_minutes_ago" = "last seen %d min ago";
-"status_last_seen_hours_ago" = "last seen %d h ago";
-"status_last_seen_long_ago" = "last seen a long time ago";
+"status_last_seen_just_now" = "last connected just now";
+"status_last_seen_minutes_ago" = "last connected %d min ago";
+"status_last_seen_hours_ago" = "last connected %d h ago";
+"status_last_seen_long_ago" = "last connected a long time ago";
 /* Status message */
 "status_away" = "Away";
 /* Status message */

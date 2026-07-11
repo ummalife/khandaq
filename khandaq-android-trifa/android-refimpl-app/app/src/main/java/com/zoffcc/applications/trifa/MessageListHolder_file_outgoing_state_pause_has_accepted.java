@@ -124,6 +124,9 @@ public class MessageListHolder_file_outgoing_state_pause_has_accepted extends Re
         }
 
         date_time.setText(long_date_time_format(m.sent_timestamp));
+        // Media/file bubbles had only the near-invisible external date; show the in-bubble time like text messages.
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                HelperGeneric.format_chat_message_time(m, true), true);
 
         // KHANDAQ #23: accepted, transfer underway -> single check (sent, in flight).
         ChatBubbleUiHelper.bind_outgoing_file_status(m_status, MessageStatusHelper.OutgoingStatus.SENT);

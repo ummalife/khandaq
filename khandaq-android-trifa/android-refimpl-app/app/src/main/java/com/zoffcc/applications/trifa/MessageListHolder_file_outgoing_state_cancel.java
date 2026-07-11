@@ -202,6 +202,9 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
         layout_message_container.setOnLongClickListener(onlongclick_listener);
 
         date_time.setText(long_date_time_format(m.sent_timestamp));
+        // Media/file bubbles had only the near-invisible external date; show the in-bubble time like text messages.
+        ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
+                HelperGeneric.format_chat_message_time(m, true), true);
 
         // KHANDAQ #23: terminal state. filedb_id>=0 => recipient pulled all chunks (delivered);
         // filedb_id==-1 => the transfer was canceled, so no delivery indicator.

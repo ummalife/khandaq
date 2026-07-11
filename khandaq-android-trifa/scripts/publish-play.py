@@ -5,12 +5,12 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10323.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10324.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
 UPLOAD = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3"
-TRACK = "internal"
+TRACKS = ("internal", "alpha")
 
 
 def token():
@@ -54,24 +54,27 @@ def main():
     vc = up.get("versionCode")
     print("bundle uploaded, versionCode:", vc)
 
-    print(f"assigning versionCode {vc} to '{TRACK}' (completed)...")
-    call(tok, "PUT", f"{API}/applications/{PACKAGE}/edits/{eid}/tracks/{TRACK}", {
-        "track": TRACK,
-        "releases": [{
-            "name": f"{vc} (0.2.12)",
-            "versionCodes": [str(vc)],
-            "status": "completed",
-            "releaseNotes": [
-                {"language": "en-US", "text": "First Khandaq release: secure Tox messaging — "
-                    "end-to-end encrypted chats, calls, files and groups. No phone number, no tracking."},
-                {"language": "ru-RU", "text": "Первый релиз Khandaq: защищённый мессенджер на Tox — "
-                    "шифрование, звонки, файлы и группы. Без номера телефона и слежки."},
-            ],
-        }],
-    })
+    for track in TRACKS:
+        print(f"assigning versionCode {vc} to '{track}' (completed)...")
+        call(tok, "PUT", f"{API}/applications/{PACKAGE}/edits/{eid}/tracks/{track}", {
+            "track": track,
+            "releases": [{
+                "name": f"{vc} (0.2.12)",
+                "versionCodes": [str(vc)],
+                "status": "completed",
+                "releaseNotes": [
+                    {"language": "en-US", "text": "Bug fixes: keyboard not opening on chat input tap, "
+                        "system bars overlapping the chat on Android 15+, video player freeze after screen-off, "
+                        "wrong date in the media viewer, raised scroll-to-bottom button, new File attach option."},
+                    {"language": "ru-RU", "text": "Исправления: клавиатура не открывалась по тапу в чате, "
+                        "системные панели перекрывали чат на Android 15+, зависание видео после выключения экрана, "
+                        "неверная дата в просмотрщике, поднята кнопка «вниз», новая кнопка «Файл» в прикреплении."},
+                ],
+            }],
+        })
 
     call(tok, "POST", f"{API}/applications/{PACKAGE}/edits/{eid}:commit")
-    print(f"\n✅ committed — build {vc} is LIVE (completed) on the '{TRACK}' track.")
+    print(f"\n✅ committed — build {vc} is LIVE (completed) on tracks: {', '.join(TRACKS)}.")
 
 
 if __name__ == "__main__":

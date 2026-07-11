@@ -24,6 +24,38 @@ final class ChatInputBarHelper
     {
     }
 
+    // The chat activities open with SOFT_INPUT_STATE_HIDDEN while the input field is
+    // pre-focused, so a tap does not change focus and some IMEs (Yandex keyboard on
+    // Android 16) never show up. Ask the IME explicitly on every tap.
+    static void ensureImeOpensOnTap(final TextView inputField)
+    {
+        if (inputField == null)
+        {
+            return;
+        }
+
+        inputField.setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                try
+                {
+                    final android.view.inputmethod.InputMethodManager imm =
+                            (android.view.inputmethod.InputMethodManager) v.getContext().
+                                    getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                    if (imm != null)
+                    {
+                        imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+        });
+    }
+
     static void setupAttachButton(final ImageButton attachButton,
                                   final Drawable attachIcon,
                                   final View.OnClickListener attachClickListener)

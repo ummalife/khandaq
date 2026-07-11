@@ -382,8 +382,9 @@ public class MessageListActivity extends AppCompatActivity
         {
         }
 
-        // give focus to text input
-        ml_new_message.requestFocus();
+        // do NOT pre-focus the input: with SOFT_INPUT_STATE_HIDDEN a tap on an
+        // already-focused field is not a focus change and some IMEs never open.
+        ChatInputBarHelper.ensureImeOpensOnTap(ml_new_message);
         try
         {
             // hide softkeyboard initially

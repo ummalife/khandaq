@@ -551,8 +551,9 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
         }
 
-        // give focus to text input
-        ml_new_group_message.requestFocus();
+        // do NOT pre-focus the input: with SOFT_INPUT_STATE_HIDDEN a tap on an
+        // already-focused field is not a focus change and some IMEs never open.
+        ChatInputBarHelper.ensureImeOpensOnTap(ml_new_group_message);
         try
         {
             if ((group_id != null) && (!group_id.equals("-1")))

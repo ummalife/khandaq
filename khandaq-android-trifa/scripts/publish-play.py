@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10324.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10325.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,12 +63,12 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Bug fixes: keyboard not opening on chat input tap, "
-                        "system bars overlapping the chat on Android 15+, video player freeze after screen-off, "
-                        "wrong date in the media viewer, raised scroll-to-bottom button, new File attach option."},
-                    {"language": "ru-RU", "text": "Исправления: клавиатура не открывалась по тапу в чате, "
+                    {"language": "en-US", "text": "Bug fixes: send time and green read ticks on media/file messages, keyboard not opening "
+                        "on chat input tap, system bars overlapping the chat on Android 15+, video player freeze "
+                        "after screen-off, wrong date in the media viewer, new File attach option."},
+                    {"language": "ru-RU", "text": "Исправления: время и зелёные галочки на медиа и файлах, клавиатура не открывалась по тапу, "
                         "системные панели перекрывали чат на Android 15+, зависание видео после выключения экрана, "
-                        "неверная дата в просмотрщике, поднята кнопка «вниз», новая кнопка «Файл» в прикреплении."},
+                        "неверная дата в просмотрщике, новая кнопка «Файл» в прикреплении."},
                 ],
             }],
         })

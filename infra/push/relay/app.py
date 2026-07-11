@@ -171,10 +171,10 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
         return False, f"auth failed: {exc}"
 
     url = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
+    # NB: "from" is a reserved FCM data key (HTTP 400 INVALID_ARGUMENT) — only sender_pubkey.
     data_payload: dict[str, str] = {"wake": "1"}
     if sender_pubkey:
         data_payload["sender_pubkey"] = sender_pubkey
-        data_payload["from"] = sender_pubkey
 
     payload = {
         "message": {
@@ -194,22 +194,35 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
             },
         }
     }
-    try:
-        resp = requests.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {access}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=10,
-        )
-    except requests.RequestException as exc:
-        return False, f"FCM v1 request failed: {exc}"
+    for attempt in (1, 2):
+        try:
+            resp = requests.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {access}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=10,
+            )
+        except requests.RequestException as exc:
+            return False, f"FCM v1 request failed: {exc}"
 
-    if resp.status_code not in (200, 201):
-        return False, f"FCM v1 HTTP {resp.status_code}: {resp.text[:200]}"
-    return True, "ok"
+        # Cached token can outlive its real validity (google revokes early, worker slept, …):
+        # on 401 drop the cache and retry ONCE with a freshly-minted token.
+        if resp.status_code == 401 and attempt == 1:
+            _token_cache["token"] = None
+            _token_cache["exp"] = 0.0
+            try:
+                access = _get_access_token()
+            except Exception as exc:
+                return False, f"auth failed: {exc}"
+            continue
+
+        if resp.status_code not in (200, 201):
+            return False, f"FCM v1 HTTP {resp.status_code}: {resp.text[:200]}"
+        return True, "ok"
+    return False, "FCM v1: unreachable"
 
 
 def _send_fcm_legacy(token: str, sender_pubkey: str = "") -> tuple[bool, str]:

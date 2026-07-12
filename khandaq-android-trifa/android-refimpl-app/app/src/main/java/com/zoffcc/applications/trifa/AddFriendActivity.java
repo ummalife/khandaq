@@ -105,6 +105,31 @@ public class AddFriendActivity extends AppCompatActivity
         toxid_text.setText("");
         friend_toxid_inputlayout.setError(null);
 
+        // Tester request: one-tap paste of a copied ID (the paste icon inside the field).
+        friend_toxid_inputlayout.setEndIconOnClickListener(v ->
+        {
+            try
+            {
+                final android.content.ClipboardManager clipboard =
+                        (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                if ((clipboard != null) && clipboard.hasPrimaryClip()
+                        && (clipboard.getPrimaryClip().getItemCount() > 0))
+                {
+                    final CharSequence text =
+                            clipboard.getPrimaryClip().getItemAt(0).coerceToText(this);
+                    if (text != null && text.length() > 0)
+                    {
+                        toxid_text.setText(text.toString().trim());
+                        toxid_text.setSelection(toxid_text.getText().length());
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        });
+
         toxid_text.addTextChangedListener(new TextWatcher()
         {
             @Override

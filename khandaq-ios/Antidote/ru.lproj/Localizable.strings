@@ -176,6 +176,7 @@
 "add_contact_use_qr" = "Добавить по QR-коду";
 "add_contact_use_qr_gallery" = "QR-код из галереи";
 "add_contact_paste" = "Вставить из буфера обмена";
+"add_contact_paste_short" = "Вставить";
 "add_contact_help_text" = "Вставьте ID друга в поле выше или нажмите кнопку QR-кода для сканирования камерой.";
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Сообщение";

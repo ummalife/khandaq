@@ -39,7 +39,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="20dp"
                 android:hint="@string/layout___toxid"
-                app:boxBackgroundMode="outline">
+                app:boxBackgroundMode="outline"
+                app:endIconMode="custom"
+                app:endIconDrawable="@drawable/baseline_content_paste_24"
+                app:endIconContentDescription="@string/add_friend_paste_id"
+                app:endIconTint="@color/khandaq_primary">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/friend_toxid"

@@ -338,16 +338,15 @@ private extension AddFriendController {
         idTextField.leftViewMode = .always
         idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
 
-        // Tester request: one-tap paste of a copied MyID. Modern pattern (wallet/address fields):
-        // a small clipboard icon INSIDE the field, trailing edge; it yields to the clear button
-        // once the field has text (rightViewMode is kept in sync in updatePasteIconVisibility).
+        // Tester request: one-tap paste of a copied MyID. Modern pattern (wallet/address fields —
+        // Binance/Trust style): a small text "Вставить" button INSIDE the field, trailing edge;
+        // it yields to the clear button once the field has text (see updatePasteIconVisibility).
         let pasteIcon = UIButton(type: .system)
-        if #available(iOS 13.0, *) {
-            let config = UIImage.SymbolConfiguration(pointSize: 17.0, weight: .regular)
-            pasteIcon.setImage(UIImage(systemName: "doc.on.clipboard", withConfiguration: config), for: .normal)
-        }
-        pasteIcon.tintColor = theme.colorForType(.LinkText)
-        pasteIcon.frame = CGRect(x: 0, y: 0, width: 44, height: 36)
+        pasteIcon.setTitle(String(localized: "add_contact_paste_short"), for: .normal)
+        pasteIcon.titleLabel?.font = UIFont.systemFont(ofSize: 15.0, weight: .semibold)
+        pasteIcon.setTitleColor(theme.colorForType(.LinkText), for: .normal)
+        pasteIcon.contentEdgeInsets = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 12)
+        pasteIcon.sizeToFit()
         pasteIcon.accessibilityLabel = String(localized: "add_contact_paste")
         pasteIcon.addTarget(self, action: #selector(AddFriendController.pasteButtonPressed), for: .touchUpInside)
         idTextField.rightView = pasteIcon

@@ -2321,13 +2321,25 @@ private extension ChatPrivateController {
         }
 
         if isVoice {
-            model.voicePlayToggleHandle = {
-                guard let path = message.messageFile?.filePath(),
-                      message.messageFile?.fileType == .ready,
-                      let messageId = message.uniqueIdentifier else {
+            model.voicePlayToggleHandle = { [weak self] in
+                let file = message.messageFile
+
+                if file?.fileType == .ready,
+                   let path = file?.filePath(),
+                   let messageId = message.uniqueIdentifier {
+                    ChatVoiceMessagePlayer.shared.togglePlayback(messageId: messageId, filePath: path)
                     return
                 }
-                ChatVoiceMessagePlayer.shared.togglePlayback(messageId: messageId, filePath: path)
+
+                // KHANDAQ (#156): autodownload defaults to Never and the voice bubble hides the
+                // file-box download/retry buttons, so an incoming voice note could never be
+                // fetched at all. Tapping play on a not-yet-downloaded note starts the transfer.
+                if !message.isOutgoing(),
+                   (file?.fileType == .waitingConfirmation || file?.fileType == .paused) {
+                    self?.submanagerFiles.acceptFileTransfer(message) { (error: Error) -> Void in
+                        handleErrorWithType(.acceptIncomingFile, error: error as NSError)
+                    }
+                }
             }
         }
     }

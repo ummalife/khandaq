@@ -9,6 +9,7 @@ import os
 private struct Constants {
     static let MaxFileSizeWiFi: OCTToxFileSize = 200 * 1024 * 1024
     static let MaxFileSizeWWAN: OCTToxFileSize = 200 * 1024 * 1024
+    static let MaxVoiceNoteAutoSize: OCTToxFileSize = 20 * 1024 * 1024
 }
 
 class AutomationCoordinator: NSObject {
@@ -55,15 +56,25 @@ private extension AutomationCoordinator {
     func proceedNewFileMessage(_ message: OCTMessageAbstract) {
         let usingWiFi = self.usingWiFi()
         os_log("AutomationCoordinator:usingWiFi=%d", usingWiFi)
-        switch userDefaults.autodownloadImages {
-            case .Never:
-                return
-            case .UsingWiFi:
-                if !usingWiFi {
+
+        // KHANDAQ (#156): voice notes are part of core messaging (Telegram-style) — always fetch
+        // them from accepted friends regardless of the attachment-autodownload setting, which
+        // defaults to Never and otherwise leaves incoming voice bubbles permanently unloadable.
+        let isVoiceNote = VoiceMessageHelper.isVoiceMessage(fileName: message.messageFile!.fileName,
+                                                            filePath: nil)
+            && message.messageFile!.fileSize <= Constants.MaxVoiceNoteAutoSize
+
+        if !isVoiceNote {
+            switch userDefaults.autodownloadImages {
+                case .Never:
                     return
-                }
-            case .Always:
-                break
+                case .UsingWiFi:
+                    if !usingWiFi {
+                        return
+                    }
+                case .Always:
+                    break
+            }
         }
 
         // HINT: now we apply autodownload to all files, not only images

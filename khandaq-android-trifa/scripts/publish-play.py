@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10330.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10331.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Add contact: new paste button inside the ID field — one tap inserts a copied ID. Plus voice-message recording lock (slide up) and app-lock improvements from the previous build."},
-                    {"language": "ru-RU", "text": "Добавление контакта: кнопка вставки внутри поля ID — скопированный ID вставляется одним нажатием. Плюс закрепление записи голосовых (свайп вверх) и улучшения блокировки из прошлой сборки."},
+                    {"language": "en-US", "text": "App lock: PIN is no longer requested after switching the theme, and the old 'ask every time' setting is migrated to a 1-minute grace period. The theme row now names the current theme (Dark/Light). Avatar errors now show a step code to help us diagnose reports."},
+                    {"language": "ru-RU", "text": "Блокировка: PIN больше не запрашивается при смене темы, а старая настройка «спрашивать каждый раз» переведена на минутную отсрочку. Строка темы теперь называет текущую тему (Тёмная/Светлая). Ошибки установки аватара показывают код шага для диагностики."},
                 ],
             }],
         })

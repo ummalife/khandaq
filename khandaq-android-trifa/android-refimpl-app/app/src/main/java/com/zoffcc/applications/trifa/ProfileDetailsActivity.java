@@ -164,7 +164,8 @@ public class ProfileDetailsActivity extends AppCompatActivity
                 .setTitle(R.string.pd_timeout_title)
                 .setSingleChoiceItems(timeoutLabels(), currentTimeoutIndex(), (dialog, which) ->
                 {
-                    prefs.edit().putInt(AppLockHelper.PREF_TIMEOUT, TIMEOUT_SECONDS[which]).apply();
+                    prefs.edit().putInt(AppLockHelper.PREF_TIMEOUT, TIMEOUT_SECONDS[which])
+                            .putBoolean(AppLockHelper.PREF_TIMEOUT_USER_SET, true).apply();
                     updateTimeoutValueLabel();
                     dialog.dismiss();
                 })

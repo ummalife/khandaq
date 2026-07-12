@@ -677,7 +677,8 @@ public class ProfileContentFragment extends Fragment
         {
             if ((data == null) || (data.getData() == null))
             {
-                Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                Log.i(TAG, "profile_avatar:FAIL:step=1");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (1)", Toast.LENGTH_SHORT).show();
                 return;
             }
             // KHANDAQ (#8): let the user crop/zoom (square) before we save the avatar.
@@ -688,7 +689,8 @@ public class ProfileContentFragment extends Fragment
             final Uri cropped = (data == null) ? null : com.yalantis.ucrop.UCrop.getOutput(data);
             if (cropped == null)
             {
-                Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                Log.i(TAG, "profile_avatar:FAIL:step=2");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (2)", Toast.LENGTH_SHORT).show();
                 return;
             }
             apply_avatar_from_uri(cropped);
@@ -716,7 +718,8 @@ public class ProfileContentFragment extends Fragment
         catch (Exception e)
         {
             e.printStackTrace();
-            Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+            Log.i(TAG, "profile_avatar:FAIL:step=3");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (3)", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -761,7 +764,8 @@ public class ProfileContentFragment extends Fragment
                 // from uCrop); treat those as "unknown" and validate size after copy instead.
                 if ((file_size > 0) && (file_size < 100))
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    Log.i(TAG, "profile_avatar:FAIL:step=4");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (4)", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
@@ -770,13 +774,15 @@ public class ProfileContentFragment extends Fragment
                                                                                                  file_size > 0 ? file_size : 0);
                 if (ofw == null)
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    Log.i(TAG, "profile_avatar:FAIL:step=5");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (5)", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
                 if (ofw.file_size_wrapped < 100)
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    Log.i(TAG, "profile_avatar:FAIL:step=6");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (6)", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
@@ -825,7 +831,8 @@ public class ProfileContentFragment extends Fragment
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    Log.i(TAG, "profile_avatar:FAIL:step=7");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (7)", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
@@ -846,7 +853,8 @@ public class ProfileContentFragment extends Fragment
                 info.guardianproject.iocipher.File vfs_avatar = new info.guardianproject.iocipher.File(vfs_avatar_path);
                 if ((!vfs_avatar.exists()) || (vfs_avatar.length() < 100))
                 {
-                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                    Log.i(TAG, "profile_avatar:FAIL:step=8");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (8)", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
@@ -866,7 +874,8 @@ public class ProfileContentFragment extends Fragment
             catch (Exception e)
             {
                 e.printStackTrace();
-                Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
+                Log.i(TAG, "profile_avatar:FAIL:step=9");
+Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (9)", Toast.LENGTH_SHORT).show();
             }
         }
     }

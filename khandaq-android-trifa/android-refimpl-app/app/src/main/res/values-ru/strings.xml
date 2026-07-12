@@ -43,6 +43,7 @@
     <string name="settings_import_profile">Импорт профиля</string>
     <string name="settings_import_subtitle">Экспорт или импорт профиля Tox (.tox). Переносятся только Tox ID и контакты, история чатов не переносится.</string>
     <string name="settings_dark_theme">Тёмная тема</string>
+    <string name="settings_light_theme">Светлая тема</string>
     <string name="settings_notif_preview">Превью уведомлений</string>
     <string name="settings_group_system">Системные сообщения групп</string>
     <string name="settings_advanced">Расширенные настройки</string>

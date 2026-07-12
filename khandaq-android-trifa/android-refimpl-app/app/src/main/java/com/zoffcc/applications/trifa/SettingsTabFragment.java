@@ -12,6 +12,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CompoundButton;
+import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -64,6 +65,13 @@ public class SettingsTabFragment extends Fragment
         if (darkSwitch != null)
         {
             darkSwitch.setChecked(isNightModeActive());
+            // Tester request: name the CURRENT theme, so switch-off clearly means "Светлая тема".
+            final TextView themeLabel = view.findViewById(R.id.label_dark_theme);
+            if (themeLabel != null)
+            {
+                themeLabel.setText(isNightModeActive() ? R.string.settings_dark_theme
+                                                       : R.string.settings_light_theme);
+            }
             darkSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
             {
                 @Override

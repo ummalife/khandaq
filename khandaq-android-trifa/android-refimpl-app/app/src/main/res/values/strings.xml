@@ -43,6 +43,7 @@
     <string name="settings_import_profile">Import profile</string>
     <string name="settings_import_subtitle">Export or import a Tox profile (.tox). Only the Tox ID and contacts are transferred; chat history is not.</string>
     <string name="settings_dark_theme">Dark theme</string>
+    <string name="settings_light_theme">Light theme</string>
     <string name="settings_notif_preview">Notification preview</string>
     <string name="settings_group_system">Group system messages</string>
     <string name="settings_advanced">Advanced settings</string>

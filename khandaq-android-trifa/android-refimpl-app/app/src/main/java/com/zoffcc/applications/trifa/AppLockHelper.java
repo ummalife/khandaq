@@ -61,12 +61,23 @@ public class AppLockHelper
     // a share sheet, a quick look at another app — demanded the password again ("постоянно
     // просит пароль"). Users who explicitly picked "Сразу" in the picker keep their 0.
     static final int DEFAULT_TIMEOUT_SEC = 60;
+    // Set when the user picks a timeout in the picker themselves. Older builds (≤0.2.11) stored an
+    // implicit 0 without any user choice — a stored 0 WITHOUT this marker is migrated to the default.
+    static final String PREF_TIMEOUT_USER_SET = "PREF__app_lock_timeout_user_set";
 
     static int timeoutSec(final Context c)
     {
         try
         {
-            return PreferenceManager.getDefaultSharedPreferences(c).getInt(PREF_TIMEOUT, DEFAULT_TIMEOUT_SEC);
+            final android.content.SharedPreferences p = PreferenceManager.getDefaultSharedPreferences(c);
+            final int v = p.getInt(PREF_TIMEOUT, DEFAULT_TIMEOUT_SEC);
+            if (v == 0 && !p.getBoolean(PREF_TIMEOUT_USER_SET, false))
+            {
+                // Legacy implicit 0 ("PIN на каждый чих") — one-time migration to the sane default.
+                p.edit().putInt(PREF_TIMEOUT, DEFAULT_TIMEOUT_SEC).apply();
+                return DEFAULT_TIMEOUT_SEC;
+            }
+            return v;
         }
         catch (Exception e)
         {
@@ -226,6 +237,12 @@ public class AppLockHelper
                 if (started_count <= 0)
                 {
                     started_count = 0;
+                    // KHANDAQ: an activity recreate (theme switch, rotation, split-screen) briefly
+                    // drops started_count to 0 but is NOT "leaving the app" — don't arm the lock.
+                    if (a.isChangingConfigurations())
+                    {
+                        return;
+                    }
                     was_backgrounded = true;
                     backgrounded_at_ms = System.currentTimeMillis();
                 }

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10329.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10330.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Voice messages: slide the mic up to lock recording hands-free (WhatsApp-style). App lock now waits 60 seconds by default instead of asking for the password on every app switch. Plus profile photo and import fixes."},
-                    {"language": "ru-RU", "text": "Голосовые: проведите от микрофона вверх, чтобы закрепить запись (как в WhatsApp). Блокировка приложения по умолчанию ждёт 60 секунд, а не спрашивает пароль при каждом переключении. Плюс фиксы фото профиля и импорта."},
+                    {"language": "en-US", "text": "Add contact: new paste button inside the ID field — one tap inserts a copied ID. Plus voice-message recording lock (slide up) and app-lock improvements from the previous build."},
+                    {"language": "ru-RU", "text": "Добавление контакта: кнопка вставки внутри поля ID — скопированный ID вставляется одним нажатием. Плюс закрепление записи голосовых (свайп вверх) и улучшения блокировки из прошлой сборки."},
                 ],
             }],
         })

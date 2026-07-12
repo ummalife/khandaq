@@ -197,6 +197,45 @@ public final class ToxProfileImportHelper
         return dst.exists() && dst.length() >= MIN_SAVEDATA_BYTES;
     }
 
+    static final int TOXSAVE_OK = 0;
+    static final int TOXSAVE_ENCRYPTED = 1;
+    static final int TOXSAVE_INVALID = 2;
+
+    // KHANDAQ #153: an encrypted or non-.tox file used to be imported blindly; on restart the
+    // native tox_new() then failed and the app crash-looped on a NULL tox handle.
+    // A plain tox save starts with 00 00 00 00 1F 1B ED 15 (STATE_COOKIE_GLOBAL, little-endian),
+    // a toxencryptsave file starts with the magic "toxEsave".
+    static int validateToxSaveFile(@NonNull final File f)
+    {
+        try (FileInputStream in = new FileInputStream(f))
+        {
+            final byte[] head = new byte[8];
+            if (in.read(head) != 8)
+            {
+                return TOXSAVE_INVALID;
+            }
+
+            if ((head[0] == 't') && (head[1] == 'o') && (head[2] == 'x') && (head[3] == 'E') &&
+                (head[4] == 's') && (head[5] == 'a') && (head[6] == 'v') && (head[7] == 'e'))
+            {
+                return TOXSAVE_ENCRYPTED;
+            }
+
+            if ((head[0] == 0) && (head[1] == 0) && (head[2] == 0) && (head[3] == 0) &&
+                ((head[4] & 0xff) == 0x1f) && ((head[5] & 0xff) == 0x1b) &&
+                ((head[6] & 0xff) == 0xed) && ((head[7] & 0xff) == 0x15))
+            {
+                return TOXSAVE_OK;
+            }
+
+            return TOXSAVE_INVALID;
+        }
+        catch (Exception e)
+        {
+            return TOXSAVE_INVALID;
+        }
+    }
+
     static void showImportError(@NonNull final Context context, @NonNull final String message)
     {
         new AlertDialog.Builder(context)
@@ -224,6 +263,16 @@ public final class ToxProfileImportHelper
             if (!copyUriToFile(activity, uri, importStaging))
             {
                 showImportError(activity, activity.getString(R.string.settings_import_tox_profile_invalid_file));
+                return;
+            }
+
+            final int validity = validateToxSaveFile(importStaging);
+            if (validity != TOXSAVE_OK)
+            {
+                importStaging.delete();
+                showImportError(activity, activity.getString(
+                        (validity == TOXSAVE_ENCRYPTED) ? R.string.settings_import_tox_profile_encrypted_file
+                                                        : R.string.settings_import_tox_profile_invalid_file));
                 return;
             }
 

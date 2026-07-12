@@ -200,6 +200,8 @@
     <string name="settings_export_tox_profile_failed">Could not export profile.</string>
     <string name="settings_import_tox_profile_replace_warning">Your current profile, chats and local data will be replaced. Only Tox ID and contacts from the .tox file will remain. Chat history is not transferred.</string>
     <string name="settings_import_tox_profile_invalid_file">The selected file does not look like a valid Tox profile (.tox).</string>
+    <string name="settings_import_tox_profile_encrypted_file">This .tox profile is protected with a password. Khandaq can only import unencrypted profile exports — export the profile without a password and try again.</string>
+    <string name="tox_profile_load_failed">Your Tox profile could not be loaded (corrupt or password-protected file). It was kept as savedata.tox.broken — the app will now restart with a new profile.</string>
     <string name="settings_import_tox_profile_failed">Could not import the selected profile file.</string>
     <string name="layout___first_launch_import_profile_hint">Restore an existing Khandaq/Tox profile from a .tox file. Only your Tox ID and contacts are imported; chat history is not included.</string>
 

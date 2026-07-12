@@ -241,6 +241,8 @@
     <string name="settings_export_tox_profile_failed">Не удалось экспортировать профиль.</string>
     <string name="settings_import_tox_profile_replace_warning">Текущий профиль, чаты и локальные данные будут заменены. Останутся только Tox ID и контакты из .tox. История чатов не переносится.</string>
     <string name="settings_import_tox_profile_invalid_file">Выбранный файл не похож на профиль Tox (.tox).</string>
+    <string name="settings_import_tox_profile_encrypted_file">Этот профиль .tox защищён паролем. Импортировать можно только незашифрованный экспорт — экспортируйте профиль без пароля и попробуйте снова.</string>
+    <string name="tox_profile_load_failed">Не удалось загрузить профиль Tox (файл повреждён или защищён паролем). Он сохранён как savedata.tox.broken — приложение перезапустится с новым профилем.</string>
     <string name="settings_import_tox_profile_failed">Не удалось импортировать выбранный файл профиля.</string>
     <string name="layout___first_launch_import_profile_hint">Восстановить существующий профиль Khandaq/Tox из файла .tox. Импортируются только Tox ID и контакты; история чатов не переносится.</string>
     <string name="pref_title_auto_accept_image">автоматически принимать изображения</string>

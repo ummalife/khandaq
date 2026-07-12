@@ -20,6 +20,7 @@
 package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.BuildConfig;
+import org.khandaq.messenger.R;
 
 
 import android.app.AlarmManager;
@@ -36,6 +37,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.zoffcc.applications.nativeaudio.NativeAudio;
 import com.zoffcc.applications.sorm.FriendList;
@@ -921,6 +923,54 @@ public class TrifaToxService extends Service
                 }
                 catch (Exception e)
                 {
+                }
+
+                // KHANDAQ #153: the native init() refuses to create a Tox instance when
+                // savedata.tox is corrupt or password-encrypted (e.g. an encrypted .tox was
+                // imported). Every native call below would then SIGSEGV on the NULL tox handle,
+                // crash-looping the app forever. Park the broken file and restart clean instead.
+                if (get_my_toxid() == null)
+                {
+                    HelperGeneric.logI(TAG, "tox_thread_start_fg:tox init FAILED (NULL tox), parking broken savedata");
+                    try
+                    {
+                        final File broken_savedata = new File(MainActivity.app_files_directory, "savedata.tox");
+                        if (broken_savedata.exists())
+                        {
+                            broken_savedata.renameTo(
+                                    new File(MainActivity.app_files_directory, "savedata.tox.broken"));
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
+
+                    if (main_handler_s != null)
+                    {
+                        main_handler_s.post(() ->
+                        {
+                            try
+                            {
+                                Toast.makeText(context_s, R.string.tox_profile_load_failed,
+                                               Toast.LENGTH_LONG).show();
+                            }
+                            catch (Exception ignored)
+                            {
+                            }
+                        });
+                    }
+
+                    try
+                    {
+                        Thread.sleep(4000); // let the user read the toast
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+
+                    System.exit(0);
+                    return;
                 }
 
                 // ------ correct startup order ------

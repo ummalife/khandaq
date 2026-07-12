@@ -342,15 +342,21 @@ public class HelperRelay
 
     static boolean have_own_relay()
     {
-        boolean ret = false;
-        int num = orma.selectFromRelayListDB().own_relayEq(true).count();
-
-        if (num == 1)
+        // DB init runs on a background thread; right after a profile-import
+        // restart the profile UI can bind before "orma" exists.
+        if (orma == null)
         {
-            ret = true;
+            return false;
         }
 
-        return ret;
+        try
+        {
+            return (orma.selectFromRelayListDB().own_relayEq(true).count() == 1);
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
     }
 
     static void own_push_token_load()

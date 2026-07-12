@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10325.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10326.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,12 +63,12 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Bug fixes: send time and green read ticks on media/file messages, keyboard not opening "
-                        "on chat input tap, system bars overlapping the chat on Android 15+, video player freeze "
-                        "after screen-off, wrong date in the media viewer, new File attach option."},
-                    {"language": "ru-RU", "text": "Исправления: время и зелёные галочки на медиа и файлах, клавиатура не открывалась по тапу, "
-                        "системные панели перекрывали чат на Android 15+, зависание видео после выключения экрана, "
-                        "неверная дата в просмотрщике, новая кнопка «Файл» в прикреплении."},
+                    {"language": "en-US", "text": "Bug fixes: profile import no longer crashes the app — password-protected or invalid .tox "
+                        "files are rejected with a clear message, and a broken profile now self-heals instead of "
+                        "crash-looping on launch."},
+                    {"language": "ru-RU", "text": "Исправления: импорт профиля больше не приводит к падению — зашифрованные и некорректные "
+                        ".tox отклоняются с понятным сообщением, а повреждённый профиль лечится сам вместо "
+                        "бесконечных падений при запуске."},
                 ],
             }],
         })

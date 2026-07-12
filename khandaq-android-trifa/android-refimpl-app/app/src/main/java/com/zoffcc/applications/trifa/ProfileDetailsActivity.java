@@ -139,7 +139,7 @@ public class ProfileDetailsActivity extends AppCompatActivity
 
     private int currentTimeoutIndex()
     {
-        final int cur = prefs.getInt(AppLockHelper.PREF_TIMEOUT, 0);
+        final int cur = prefs.getInt(AppLockHelper.PREF_TIMEOUT, AppLockHelper.DEFAULT_TIMEOUT_SEC);
         for (int i = 0; i < TIMEOUT_SECONDS.length; i++)
         {
             if (TIMEOUT_SECONDS[i] == cur)

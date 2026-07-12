@@ -203,14 +203,18 @@ public class MessageListActivity extends AppCompatActivity
     static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
     static boolean ml_is_recording = false;
     static boolean ml_is_rec_ok = false;
-    // KHANDAQ (iOS hold-to-record): mic ACTION_DOWN starts, ACTION_UP sends, slide-left cancels.
+    // KHANDAQ (iOS hold-to-record): mic ACTION_DOWN starts, ACTION_UP sends, slide-left cancels,
+    // slide-UP locks (WhatsApp-style): recording continues hands-free, finish via the bar buttons.
     private float voice_rec_down_x = 0f;
+    private float voice_rec_down_y = 0f;
     private long voice_rec_down_ms = 0L;
     private boolean voice_rec_cancelled = false;
+    private boolean voice_rec_locked = false;
     // set when the finger is lifted before the (async) recording thread has even started → the
     // thread self-aborts so a too-fast tap can't leave recording stuck running.
     static boolean voice_rec_abort = false;
     private static final float VOICE_REC_SLIDE_CANCEL_PX = 220f;
+    private static final float VOICE_REC_SLIDE_LOCK_PX = 180f;
     private static final long VOICE_REC_MIN_MS = 700L;
     static int global_typing = 0;
     Thread typing_flag_thread = null;
@@ -415,6 +419,7 @@ public class MessageListActivity extends AppCompatActivity
                     @Override
                     public void onSend()
                     {
+                        voice_rec_locked = false;
                         ml_is_rec_ok = true;
                         ml_is_recording = false;
                         set_recording_pop_visibilty_s(false);
@@ -423,6 +428,7 @@ public class MessageListActivity extends AppCompatActivity
                     @Override
                     public void onCancel()
                     {
+                        voice_rec_locked = false;
                         ml_is_rec_ok = false;
                         ml_is_recording = false;
                         set_recording_pop_visibilty_s(false);
@@ -975,8 +981,10 @@ public class MessageListActivity extends AppCompatActivity
                 {
                     case android.view.MotionEvent.ACTION_DOWN:
                         voice_rec_cancelled = false;
+                        voice_rec_locked = false;
                         voice_rec_abort = false;
                         voice_rec_down_x = ev.getRawX();
+                        voice_rec_down_y = ev.getRawY();
                         voice_rec_down_ms = System.currentTimeMillis();
                         if (!ml_is_recording && !ml_is_rec_ok)
                         {
@@ -984,15 +992,31 @@ public class MessageListActivity extends AppCompatActivity
                         }
                         return true;
                     case android.view.MotionEvent.ACTION_MOVE:
-                        if (ml_is_recording && !voice_rec_cancelled
+                        if (ml_is_recording && !voice_rec_cancelled && !voice_rec_locked
                                 && (voice_rec_down_x - ev.getRawX()) > VOICE_REC_SLIDE_CANCEL_PX)
                         {
                             voice_rec_cancelled = true;
                             display_toast(getString(R.string.voice_recording_cancel), false, 0);
                         }
+                        // WhatsApp-style lock: slide up → recording keeps running after release.
+                        if (ml_is_recording && !voice_rec_cancelled && !voice_rec_locked
+                                && (voice_rec_down_y - ev.getRawY()) > VOICE_REC_SLIDE_LOCK_PX)
+                        {
+                            voice_rec_locked = true;
+                            if (voiceRecordingUiHelper != null)
+                            {
+                                voiceRecordingUiHelper.setLockedUi(true);
+                            }
+                            display_toast(getString(R.string.voice_recording_locked), false, 0);
+                        }
                         return true;
                     case android.view.MotionEvent.ACTION_UP:
                     case android.view.MotionEvent.ACTION_CANCEL:
+                        if (voice_rec_locked && ml_is_recording && !voice_rec_cancelled)
+                        {
+                            // locked: keep recording hands-free; the bar's send/cancel finish it.
+                            return true;
+                        }
                         if (ml_is_recording)
                         {
                             final boolean tooShort =

@@ -24,6 +24,7 @@ final class ChatVoiceRecordingUiHelper
     private final View inputBar;
     private final View recordingBar;
     private final TextView timerView;
+    private final ImageButton sendButton;
     private RecordingActionListener actionListener;
     private float swipeStartX;
     private boolean swipeCancelTriggered;
@@ -37,6 +38,7 @@ final class ChatVoiceRecordingUiHelper
         this.inputBar = inputBar;
         this.recordingBar = recordingBar;
         this.timerView = timerView;
+        this.sendButton = sendButton;
 
         cancelView.setOnClickListener(v -> {
             if (actionListener != null)
@@ -128,8 +130,22 @@ final class ChatVoiceRecordingUiHelper
         setTimerText("0:00");
     }
 
+    /**
+     * KHANDAQ (voice lock): while locked the big bar button acts as SEND — swap the mic glyph for
+     * an up-arrow so it's obvious the recording keeps running and a tap sends it.
+     */
+    void setLockedUi(final boolean locked)
+    {
+        if (sendButton != null)
+        {
+            sendButton.setImageResource(locked ? R.drawable.baseline_arrow_upward_24
+                                               : R.drawable.baseline_keyboard_voice_24);
+        }
+    }
+
     void hide()
     {
+        setLockedUi(false);
         if (recordingBar != null)
         {
             final View dot = recordingBar.findViewById(R.id.voice_recording_dot);

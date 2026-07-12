@@ -57,15 +57,20 @@ public class AppLockHelper
         }
     }
 
+    // KHANDAQ: default grace period. With 0 ("немедленно") every app switch — a notification,
+    // a share sheet, a quick look at another app — demanded the password again ("постоянно
+    // просит пароль"). Users who explicitly picked "Сразу" in the picker keep their 0.
+    static final int DEFAULT_TIMEOUT_SEC = 60;
+
     static int timeoutSec(final Context c)
     {
         try
         {
-            return PreferenceManager.getDefaultSharedPreferences(c).getInt(PREF_TIMEOUT, 0);
+            return PreferenceManager.getDefaultSharedPreferences(c).getInt(PREF_TIMEOUT, DEFAULT_TIMEOUT_SEC);
         }
         catch (Exception e)
         {
-            return 0;
+            return DEFAULT_TIMEOUT_SEC;
         }
     }
 

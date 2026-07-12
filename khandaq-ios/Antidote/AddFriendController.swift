@@ -72,6 +72,21 @@ class AddFriendController: UIViewController {
 }
 
 extension AddFriendController {
+    @objc func pasteButtonPressed() {
+        guard let raw = UIPasteboard.general.string, !raw.isEmpty else {
+            return
+        }
+        let value = normalizedIdFieldText(from: raw)
+        applyIdFieldText(value, cursorOffset: (value as NSString).length)
+        updatePasteIconVisibility()
+    }
+
+    /** The in-field paste icon shows only while the field is empty; with text present the clear
+        button owns the trailing slot. */
+    func updatePasteIconVisibility() {
+        idTextField.rightViewMode = (idTextField.text?.isEmpty ?? true) ? .always : .never
+    }
+
     @objc func qrCodeButtonPressed() {
         delegate?.addFriendControllerScanQRCode(self, validateCodeHandler: {
             return isAddressString($0)
@@ -322,6 +337,21 @@ private extension AddFriendController {
         idTextField.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 8, height: 1))
         idTextField.leftViewMode = .always
         idTextField.addTarget(self, action: #selector(AddFriendController.idTextFieldEditingChanged), for: .editingChanged)
+
+        // Tester request: one-tap paste of a copied MyID. Modern pattern (wallet/address fields):
+        // a small clipboard icon INSIDE the field, trailing edge; it yields to the clear button
+        // once the field has text (rightViewMode is kept in sync in updatePasteIconVisibility).
+        let pasteIcon = UIButton(type: .system)
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 17.0, weight: .regular)
+            pasteIcon.setImage(UIImage(systemName: "doc.on.clipboard", withConfiguration: config), for: .normal)
+        }
+        pasteIcon.tintColor = theme.colorForType(.LinkText)
+        pasteIcon.frame = CGRect(x: 0, y: 0, width: 44, height: 36)
+        pasteIcon.accessibilityLabel = String(localized: "add_contact_paste")
+        pasteIcon.addTarget(self, action: #selector(AddFriendController.pasteButtonPressed), for: .touchUpInside)
+        idTextField.rightView = pasteIcon
+        updatePasteIconVisibility()
         view.addSubview(idTextField)
 
         // KHANDAQ design (Figma): an "или" divider, then a filled grey "Добавить по QR-коду" row with
@@ -445,6 +475,7 @@ private extension AddFriendController {
 
     @objc func idTextFieldEditingChanged() {
         sanitizeIdFieldIfNeeded()
+        updatePasteIconVisibility()
     }
 
     func sanitizeIdFieldIfNeeded() {

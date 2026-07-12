@@ -171,6 +171,7 @@
 /* Add contat button */
 "add_contact_use_qr" = "Add by QR code";
 "add_contact_use_qr_gallery" = "QR code from gallery";
+"add_contact_paste" = "Paste from clipboard";
 "add_contact_help_text" = "Paste your friend's ID in the field above, or tap a QR-code button to scan their code with the camera.";
 /* Add contat placeholder text */
 "add_contact_default_message_title" = "Message";

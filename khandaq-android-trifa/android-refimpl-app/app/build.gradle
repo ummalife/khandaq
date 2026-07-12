@@ -266,7 +266,7 @@ android {
         minSdkVersion 21
         //noinspection OldTargetApi
         targetSdkVersion 35
-        versionCode 10326
+        versionCode 10327
         versionName "0.2.12"
 
         renderscriptTargetApi 21

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10326.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10327.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,12 +63,12 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Bug fixes: profile import no longer crashes the app — password-protected or invalid .tox "
-                        "files are rejected with a clear message, and a broken profile now self-heals instead of "
-                        "crash-looping on launch."},
-                    {"language": "ru-RU", "text": "Исправления: импорт профиля больше не приводит к падению — зашифрованные и некорректные "
-                        ".tox отклоняются с понятным сообщением, а повреждённый профиль лечится сам вместо "
-                        "бесконечных падений при запуске."},
+                    {"language": "en-US", "text": "Bug fixes: setting a profile photo works again (crop screen failed to open), profile "
+                        "import no longer crashes the app — invalid or password-protected .tox files are rejected "
+                        "with a clear message, and a broken profile self-heals on launch."},
+                    {"language": "ru-RU", "text": "Исправления: установка фото профиля снова работает (не открывался экран кадрирования), "
+                        "импорт профиля больше не роняет приложение — некорректные и зашифрованные .tox отклоняются "
+                        "с понятным сообщением, повреждённый профиль лечится сам."},
                 ],
             }],
         })

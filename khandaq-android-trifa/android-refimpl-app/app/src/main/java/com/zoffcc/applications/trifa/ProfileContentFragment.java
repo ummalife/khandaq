@@ -703,9 +703,14 @@ public class ProfileContentFragment extends Fragment
         {
             final Uri dest = Uri.fromFile(new java.io.File(requireContext().getCacheDir(),
                     "avatar_crop_" + System.currentTimeMillis() + ".jpg"));
+            final com.yalantis.ucrop.UCrop.Options crop_options = new com.yalantis.ucrop.UCrop.Options();
+            crop_options.setToolbarColor(getResources().getColor(R.color.colorPrimaryDark));
+            crop_options.setStatusBarColor(getResources().getColor(R.color.colorPrimaryDark));
+            crop_options.setActiveControlsWidgetColor(getResources().getColor(R.color.colorPrimary));
             com.yalantis.ucrop.UCrop.of(source, dest)
                     .withAspectRatio(1f, 1f)
                     .withMaxResultSize(1024, 1024)
+                    .withOptions(crop_options)
                     .start(requireContext(), this);
         }
         catch (Exception e)
@@ -726,10 +731,19 @@ public class ProfileContentFragment extends Fragment
                 long file_size = -1;
                 try
                 {
-                    DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext().getApplicationContext(), uri);
-                    if (documentFile != null)
+                    if ("file".equals(uri.getScheme()))
                     {
-                        file_size = documentFile.length();
+                        // uCrop returns a file:// uri in our cacheDir; DocumentFile can't query it
+                        // (returns 0) — read the size from the filesystem directly.
+                        file_size = new java.io.File(uri.getPath()).length();
+                    }
+                    else
+                    {
+                        DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext().getApplicationContext(), uri);
+                        if (documentFile != null)
+                        {
+                            file_size = documentFile.length();
+                        }
                     }
                 }
                 catch (Exception e)
@@ -743,8 +757,9 @@ public class ProfileContentFragment extends Fragment
                     return;
                 }
 
-                // DocumentFile.length() often returns -1; validate size after copy instead.
-                if ((file_size >= 0) && (file_size < 100))
+                // DocumentFile.length() returns -1 or 0 when it can't query the uri (e.g. file://
+                // from uCrop); treat those as "unknown" and validate size after copy instead.
+                if ((file_size > 0) && (file_size < 100))
                 {
                     Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic), Toast.LENGTH_SHORT).show();
                     return;

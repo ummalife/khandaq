@@ -258,6 +258,13 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:theme="@style/KhandaqMediaTheme">
         </activity>
+        <!-- uCrop (avatar crop): the library AAR does NOT declare its activity; without this
+             entry UCrop.start() throws ActivityNotFoundException ("Не удалось установить фото"). -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.NoActionBar">
+        </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaSetPatternActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10328.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10329.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,12 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Bug fixes: setting a profile photo works again (crop screen failed to open), profile "
-                        "import no longer crashes the app — invalid or password-protected .tox files are rejected "
-                        "with a clear message, and a broken profile self-heals on launch."},
-                    {"language": "ru-RU", "text": "Исправления: установка фото профиля снова работает (не открывался экран кадрирования), "
-                        "импорт профиля больше не роняет приложение — некорректные и зашифрованные .tox отклоняются "
-                        "с понятным сообщением, повреждённый профиль лечится сам."},
+                    {"language": "en-US", "text": "Voice messages: slide the mic up to lock recording hands-free (WhatsApp-style). App lock now waits 60 seconds by default instead of asking for the password on every app switch. Plus profile photo and import fixes."},
+                    {"language": "ru-RU", "text": "Голосовые: проведите от микрофона вверх, чтобы закрепить запись (как в WhatsApp). Блокировка приложения по умолчанию ждёт 60 секунд, а не спрашивает пароль при каждом переключении. Плюс фиксы фото профиля и импорта."},
                 ],
             }],
         })

@@ -57,8 +57,10 @@ class ChatOutgoingCallCell: ChatMovableDateCell {
         }
 
         label.snp.makeConstraints {
-            $0.top.equalTo(contentView).offset(Constants.VerticalOffset)
-            $0.bottom.equalTo(contentView).offset(-Constants.VerticalOffset)
+            // KHANDAQ (#162): top/bottom follow movableContentView so the day-pill / unread-band
+            // reserved offset pushes the row content down instead of overlapping it.
+            $0.top.equalTo(movableContentView).offset(Constants.VerticalOffset)
+            $0.bottom.equalTo(movableContentView).offset(-Constants.VerticalOffset)
             $0.trailing.equalTo(movableContentView).offset(Constants.RightOffset)
         }
     }

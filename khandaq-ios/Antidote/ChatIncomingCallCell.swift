@@ -41,11 +41,13 @@ class ChatIncomingCallCell: ChatMovableDateCell {
         let image = UIImage.templateNamed("start-call-small")
 
         callImageView = UIImageView(image: image)
-        contentView.addSubview(callImageView)
+        // KHANDAQ (#162): parent to movableContentView so the day-pill / unread-band reserved offset
+        // pushes the row content down (the tester's screenshot had the divider over a call row).
+        movableContentView.addSubview(callImageView)
 
         label = UILabel()
         label.font = UIFont.khandaqFontWithSize(16.0, weight: .light)
-        contentView.addSubview(label)
+        movableContentView.addSubview(label)
     }
 
     override func installConstraints() {
@@ -53,12 +55,13 @@ class ChatIncomingCallCell: ChatMovableDateCell {
 
         callImageView.snp.makeConstraints {
             $0.centerY.equalTo(label).offset(Constants.ImageViewYOffset)
+            // Horizontal on contentView (movableContentView is pre-shifted in DateonmessageMode).
             $0.leading.equalTo(contentView).offset(Constants.LeftOffset)
         }
 
         label.snp.makeConstraints {
-            $0.top.equalTo(contentView).offset(Constants.VerticalOffset)
-            $0.bottom.equalTo(contentView).offset(-Constants.VerticalOffset)
+            $0.top.equalTo(movableContentView).offset(Constants.VerticalOffset)
+            $0.bottom.equalTo(movableContentView).offset(-Constants.VerticalOffset)
             $0.leading.equalTo(callImageView.snp.trailing).offset(Constants.ImageViewToLabelOffset)
         }
     }

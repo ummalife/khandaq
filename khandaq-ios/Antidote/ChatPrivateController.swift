@@ -1141,6 +1141,10 @@ extension ChatPrivateController: UITableViewDelegate {
         if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
             height += ChatMovableDateCell.daySeparatorReservedHeight
         }
+        // KHANDAQ (#162): same for the «Непрочитанные сообщения» band on explicit-height media rows.
+        if unreadSeparatorMessageId != nil && message.uniqueIdentifier == unreadSeparatorMessageId {
+            height += ChatMovableDateCell.unreadSeparatorReservedHeight
+        }
         return height
     }
 

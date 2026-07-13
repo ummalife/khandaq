@@ -30,19 +30,23 @@ class ChatIncomingFileCell: ChatGenericFileCell {
     override func createViews() {
         super.createViews()
 
-        contentView.addSubview(loadingView)
-        contentView.addSubview(captionLabel)
-        contentView.addSubview(voiceMessageView)
-        contentView.addSubview(cancelButton)
-        contentView.addSubview(retryButton)
+        // KHANDAQ (#162): children live in movableContentView so the day-pill / unread-band reserved
+        // offset (applied to movableContentView's top) pushes the whole bubble down instead of the
+        // separators being drawn over it.
+        movableContentView.addSubview(loadingView)
+        movableContentView.addSubview(captionLabel)
+        movableContentView.addSubview(voiceMessageView)
+        movableContentView.addSubview(cancelButton)
+        movableContentView.addSubview(retryButton)
     }
 
     override func installConstraints() {
         super.installConstraints()
 
         loadingView.snp.makeConstraints {
+            // Horizontal on contentView (movableContentView is pre-shifted in DateonmessageMode).
             $0.leading.equalTo(contentView).offset(Constants.BigOffset)
-            $0.top.equalTo(contentView).offset(Constants.SmallOffset)
+            $0.top.equalTo(movableContentView).offset(Constants.SmallOffset)
             // KHANDAQ (#15): size comes from LoadingImageView (square by default, aspect for media).
         }
 
@@ -50,14 +54,14 @@ class ChatIncomingFileCell: ChatGenericFileCell {
             captionTopConstraint = $0.top.equalTo(loadingView.snp.bottom).constraint
             $0.leading.equalTo(loadingView)
             $0.trailing.equalTo(loadingView)
-            $0.bottom.equalTo(contentView).offset(-Constants.SmallOffset)
+            $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
         }
 
         voiceMessageView.snp.makeConstraints {
             $0.leading.equalTo(contentView).offset(Constants.BigOffset)
             $0.trailing.lessThanOrEqualTo(contentView).offset(-Constants.BigOffset)
-            $0.top.equalTo(contentView).offset(Constants.SmallOffset)
-            $0.bottom.equalTo(contentView).offset(-Constants.SmallOffset)
+            $0.top.equalTo(movableContentView).offset(Constants.SmallOffset)
+            $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
             $0.width.equalTo(260)
         }
 

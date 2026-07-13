@@ -208,14 +208,6 @@ public class ProfileContentFragment extends Fragment
         my_toxcapabilities_textview.setText(
                 TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(tox_self_get_capabilities())));
 
-        // KHANDAQ: also surface Tox capabilities on the main profile card (Figma).
-        final android.widget.TextView capabilitiesValue = view.findViewById(R.id.profile_capabilities_value);
-        if (capabilitiesValue != null)
-        {
-            capabilitiesValue.setText(
-                    TOX_CAPABILITY_DECODE_TO_STRING(TOX_CAPABILITY_DECODE(tox_self_get_capabilities())));
-        }
-
         load_network_connections_button.setOnClickListener(new View.OnClickListener()
         {
             @Override

@@ -28,8 +28,6 @@ class ProfileMainController: StaticTableController {
     fileprivate let toxIdModel = StaticTableDefaultCellModel()
     fileprivate let copyMyIdModel = StaticTableButtonCellModel()
     fileprivate let showQrModel = StaticTableButtonCellModel()
-    fileprivate let capabilitiesModel = StaticTableDefaultCellModel()
-    fileprivate let networkConnectionsModel = StaticTableDefaultCellModel()
     fileprivate let profileDetailsModel = StaticTableDefaultCellModel()
     fileprivate let logoutModel = StaticTableButtonCellModel()
 
@@ -60,12 +58,8 @@ class ProfileMainController: StaticTableController {
             [
                 showQrModel,
             ],
-            [
-                capabilitiesModel,
-            ],
-            [
-                networkConnectionsModel,
-            ],
+            // KHANDAQ: Tox Capabilities + Network connections are developer diagnostics — dropped
+            // from the profile (user request); network log stays reachable via Advanced settings.
             [
                 profileDetailsModel,
             ],
@@ -173,15 +167,6 @@ private extension ProfileMainController {
         // print("TOXID: \(submanagerUser.userAddress)")
         // for debugging print own ToxID ----------------
 
-        capabilitiesModel.title = "Tox Capabilities"
-        capabilitiesModel.value = capabilitiesToString(submanagerUser.capabilities as NSNumber)
-        capabilitiesModel.userInteractionEnabled = false
-
-        networkConnectionsModel.title = String(localized: "network_connections_title")
-        networkConnectionsModel.value = String(localized: "network_connections_summary")
-        networkConnectionsModel.rightImageType = .arrow
-        networkConnectionsModel.didSelectHandler = showNetworkConnections
-
         profileDetailsModel.value = String(localized: "profile_details")
         profileDetailsModel.didSelectHandler = showProfileDetails
         profileDetailsModel.rightImageType = .arrow
@@ -189,26 +174,6 @@ private extension ProfileMainController {
         logoutModel.title = String(localized: "logout_button")
         logoutModel.destructive = true
         logoutModel.didSelectHandler = logout
-    }
-
-    func capabilitiesToString(_ cap: NSNumber) -> String {
-        var ret: String = "BASIC"
-        if ((UInt(cap) & 1) > 0) {
-            ret = ret + " CAPABILITIES"
-        }
-        if ((UInt(cap) & 2) > 0) {
-            ret = ret + " MSGV2"
-        }
-        if ((UInt(cap) & 4) > 0) {
-            ret = ret + " H264"
-        }
-        if ((UInt(cap) & 8) > 0) {
-            ret = ret + " MSGV3"
-        }
-        if ((UInt(cap) & 16) > 0) {
-            ret = ret + " FTV2"
-        }
-        return ret;
     }
 
     func logout(_: StaticTableBaseCell) {
@@ -373,8 +338,4 @@ private extension ProfileMainController {
         delegate?.profileMainControllerShowProfileDetails(self)
     }
 
-    func showNetworkConnections(_: StaticTableBaseCell) {
-        let controller = NetworkDiagnosticsDetailController(theme: profileTheme)
-        navigationController?.pushViewController(controller, animated: true)
-    }
 }

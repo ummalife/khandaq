@@ -107,6 +107,18 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
             }
         }
 
+        // KHANDAQ (#165): a file QUEUED for an offline friend (faux-offline: WaitingConfirmation
+        // with the failure file number, stored as -1 in the signed int property) has no live tox
+        // transfer to lose — keep it queued across restarts so the delivery watchdog can resend it
+        // once the friend comes online. The blanket cancel below is only for transfers that were
+        // actually in-flight when the app died.
+        if (file.fileType == OCTMessageFileTypeWaitingConfirmation &&
+            file.internalFileNumber == (int)kOCTToxFileNumberFailure &&
+            file.groupMsgIdHashHex.length == 0) {
+            OCTLogInfo(@"keeping offline-queued file %@", file);
+            return;
+        }
+
         file.fileType = OCTMessageFileTypeCanceled;
         OCTLogInfo(@"cancelling file %@", file);
     }];
@@ -754,8 +766,12 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
 
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %u",
-                              chat.uniqueIdentifier, OCTMessageFileTypeWaitingConfirmation, kOCTToxFileNumberFailure];
+    // KHANDAQ (#165): internalFileNumber is a SIGNED int property — kOCTToxFileNumberFailure
+    // (UINT32_MAX) is stored as -1. The old "%u" comparison put 4294967295 into the predicate,
+    // which never matched, so files/voice queued for an offline friend were NEVER auto-resent
+    // when the friend came online (neither by the connection-status hook nor by the watchdog).
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND senderUniqueIdentifier == nil AND messageFile.fileType == %d AND messageFile.internalFileNumber == %d",
+                              chat.uniqueIdentifier, OCTMessageFileTypeWaitingConfirmation, (int)kOCTToxFileNumberFailure];
 
     RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 

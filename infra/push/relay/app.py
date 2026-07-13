@@ -189,8 +189,21 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
                 "notification": {"channel_id": "khandaq_fcm_wake"},
             },
             "apns": {
-                "headers": {"apns-priority": "10"},
-                "payload": {"aps": {"content-available": 1}},
+                # KHANDAQ (#163): a present apns.payload OVERRIDES message.notification for iOS, so
+                # the old {"content-available": 1}-only aps turned the push into a SILENT one — and
+                # iOS never delivers silent pushes to a force-quit (swiped-away) app. Build a full
+                # alert push here: alert → shown even after swipe-kill, mutable-content → the
+                # NotificationServiceExtension runs, content-available → a backgrounded app is woken.
+                "headers": {"apns-priority": "10", "apns-push-type": "alert"},
+                "payload": {"aps": {
+                    "alert": {
+                        "title": os.environ.get("PUSH_NOTIFY_TITLE", "Khandaq"),
+                        "body": os.environ.get("PUSH_NOTIFY_BODY", "New message"),
+                    },
+                    "sound": "default",
+                    "mutable-content": 1,
+                    "content-available": 1,
+                }},
             },
         }
     }

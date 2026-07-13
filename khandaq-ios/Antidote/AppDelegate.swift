@@ -15,6 +15,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let callManager = CallManager()
     lazy var providerDelegate: ProviderDelegate = ProviderDelegate(callManager: self.callManager)
     var backgroundTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
+    // KHANDAQ (#164): when the app entered background, to decide if the DHT is stale on return.
+    private var enteredBackgroundAt: Date?
     var gps_was_stopped_by_forground: Bool = false
     static var lastStartGpsTS: Int64 = 0
     static var location_sharing_contact_pubkey: String = "-1"
@@ -45,11 +47,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
            let runcoord = coordinator?.activeCoordinator as? RunningCoordinator,
            let session = runcoord.activeSessionCoordinator,
            let toxManager = session.toxManager {
+            // KHANDAQ (#164): after a real suspension the DHT connections are dead but toxcore only
+            // notices via slow timeouts (~2 min before the peer sees us online again). An urgent
+            // re-bootstrap (debounced, same call the background-fetch path uses) reconnects in
+            // seconds. Skip for quick app switches where the connection is still alive.
+            if let backgroundedAt = enteredBackgroundAt, Date().timeIntervalSince(backgroundedAt) > 30 {
+                toxManager.bootstrap.rebootstrapOnNetworkChange()
+            }
             toxManager.friends.refreshConnectionStatuses()
             toxManager.chats.sendOwnPush()
             toxManager.chats.broadcastOwnPushURLToConnectedFriends()
             QaCommandHandler.consumePendingCommands(coordinator: session)
         }
+        enteredBackgroundAt = nil
 
         coordinator?.processPendingShareIfNeeded()
 
@@ -139,6 +149,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationDidEnterBackground(_ application: UIApplication) {
         log("DidEnterBackground")
         os_log("AppDelegate:applicationDidEnterBackground:start")
+        enteredBackgroundAt = Date()
 
         if ToxOptionsRestartScheduler.isRestartInProgress {
             os_log("AppDelegate:applicationDidEnterBackground:skip:tox_restart")

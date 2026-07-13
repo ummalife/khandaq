@@ -142,6 +142,20 @@
                         android:src="@null"
                         android:visibility="gone" />
 
+                    <TextView
+                        android:id="@+id/ft_caption_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="10dp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginRight="10dp"
+                        android:layout_marginBottom="6dp"
+                        android:autoLink="web"
+                        android:textColor="@color/message_bubble_text"
+                        android:textSize="16sp"
+                        android:visibility="gone" />
+
+
                     <include layout="@layout/chat_file_attachment_row" />
 
                 </LinearLayout>

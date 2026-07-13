@@ -452,6 +452,9 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     ((MessageListHolder_error) holder).bindMessageList(null);
                     break;
             }
+
+            // KHANDAQ: Telegram-style captions — merge an adjacent TEXT into its media bubble.
+            ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
         }
         catch (Exception e)
         {
@@ -588,6 +591,12 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     // Log.i(TAG, "update_item:003:" + pos);
                     this.messagelistitems.set(pos, new_item);
                     this.notifyItemChanged(pos);
+                    // KHANDAQ (captions): a FILE state change (e.g. download finished) can turn the
+                    // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
+                    if ((pos + 1) < this.messagelistitems.size())
+                    {
+                        this.notifyItemChanged(pos + 1);
+                    }
                     break;
                 }
             }

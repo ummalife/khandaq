@@ -99,8 +99,18 @@ enum MessageReplyHelper {
         return header + (bodyText ?? "")
     }
 
+    /// KHANDAQ (#161): drop control characters (most importantly U+0000). Messages received by
+    /// older builds carry a trailing NUL; if it leaks into reply markup, the peer's receive path
+    /// truncates the whole message at that NUL and the reply body arrives empty. `keepNewlines`
+    /// preserves line breaks for message bodies.
+    static func stripControlChars(_ text: String, keepNewlines: Bool = false) -> String {
+        String(text.unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0) || (keepNewlines && ($0 == "\n" || $0 == "\r"))
+        }.map(Character.init))
+    }
+
     static func previewForDisplay(_ text: String?, maxLen: Int) -> String {
-        let single = (text ?? "")
+        let single = stripControlChars(text ?? "")
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -171,7 +181,7 @@ enum MessageReplyHelper {
     }
 
     private static func sanitizeField(_ value: String) -> String {
-        value
+        stripControlChars(value)
             .replacingOccurrences(of: "|", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
@@ -179,6 +189,6 @@ enum MessageReplyHelper {
     }
 
     private static func trimLeading(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines)
+        stripControlChars(value, keepNewlines: true).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

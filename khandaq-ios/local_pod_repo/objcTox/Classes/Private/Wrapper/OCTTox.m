@@ -3954,16 +3954,18 @@ void friendMessageCallback(
 
     memcpy(newcMessage, cMessage, (size_t)newLength);
 
-    // add 1 for the NULL byte at the end
-    newLength++;
-
-    if (newLength < 2)
+    if (newLength < 1)
     {
         // HINT: message seems to contain nothing before the first NULL byte, so discard it
         free(newcMessage);
         return;
     }
 
+    // KHANDAQ (#161): use the TEXT length here. The old code did newLength++ ("for the NULL
+    // byte") before initWithBytes:, so every received message got a trailing U+0000 appended.
+    // Replying to such a message embedded that NUL into the reply markup preview, and the
+    // peer's receive path (the first-NUL scan above) then truncated the reply right after the
+    // preview — the reply body arrived empty ("пустые ответы").
     NSString *message = [[NSString alloc] initWithBytes:newcMessage length:newLength encoding:NSUTF8StringEncoding];
     free(newcMessage);
 
@@ -3972,7 +3974,6 @@ void friendMessageCallback(
         // HINT: message seems to contain invalid UTF-8
         //       instead use a dummy message "__"
         message = @"__";
-        newLength = 2;
     }
 
 

@@ -7,14 +7,12 @@ import os
 
 enum LaunchRecovery {
     private static let inProgressKey = "org.khandaq.messenger.launch-in-progress"
-    private static let lastBuildKey = "org.khandaq.messenger.last-known-build"
     private static let failCountKey = "org.khandaq.messenger.launch-fail-count"
     // KHANDAQ (#5): only wipe the saved session after several consecutive incomplete launches (a real
     // crash LOOP). A single transient crash during launch must NOT log the user out / drop the profile.
     private static let maxConsecutiveFailedLaunches = 3
 
     static func prepareForLaunch() {
-        resetSessionIfBuildChanged()
         recoverFromPreviousCrashIfNeeded()
         UserDefaults.standard.set(true, forKey: inProgressKey)
         UserDefaults.standard.synchronize()
@@ -27,26 +25,9 @@ enum LaunchRecovery {
         UserDefaults.standard.synchronize()
     }
 
-    private static func resetSessionIfBuildChanged() {
-        let current = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-        let previous = UserDefaults.standard.string(forKey: lastBuildKey)
-
-        defer {
-            UserDefaults.standard.set(current, forKey: lastBuildKey)
-            UserDefaults.standard.synchronize()
-        }
-
-        guard let previous = previous, previous != current else {
-            return
-        }
-
-        guard hasStoredSession() else {
-            return
-        }
-
-        os_log("LaunchRecovery: build changed %{public}@ -> %{public}@, clearing session", previous, current)
-        clearStoredSession()
-    }
+    // KHANDAQ (#167): the old resetSessionIfBuildChanged() wiped the keychain password on EVERY
+    // TestFlight update, forcing a fresh profile login after each build. Removed — the crash-loop
+    // guard below already covers a genuinely incompatible build.
 
     private static func recoverFromPreviousCrashIfNeeded() {
         guard UserDefaults.standard.bool(forKey: inProgressKey) else {
@@ -70,11 +51,6 @@ enum LaunchRecovery {
         clearStoredSession()
         UserDefaults.standard.set(0, forKey: failCountKey)
         UserDefaults.standard.synchronize()
-    }
-
-    private static func hasStoredSession() -> Bool {
-        return KeychainManager().toxPasswordForActiveAccount != nil
-            || UserDefaultsManager().lastActiveProfile != nil
     }
 
     private static func clearStoredSession() {

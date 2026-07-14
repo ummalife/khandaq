@@ -260,12 +260,26 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                 textView.setAutoLinkText(HelperFiletransfer.outgoingFileDisplayLabel(context, message) + "\n OK");
             }
 
-            GlideApp.with(context).clear(ft_preview_image);
+            // KHANDAQ (#172): these loads run with memory cache OFF, so an unconditional
+            // clear+spinner+reload made every rebind (neighbour update, return from viewer, scroll)
+            // flash the bubble. Skip the whole reload when this view already shows this message.
+            final String kqPreviewSig = (is_video ? "vid:" : "out:") + message.id + ":" + message.filename_fullpath;
+            final boolean kqPreviewAlreadyBuilt =
+                    kqPreviewSig.equals(ft_preview_image.getTag(R.id.ft_preview_image));
+
+            if (! kqPreviewAlreadyBuilt)
+            {
+                GlideApp.with(context).clear(ft_preview_image);
+            }
             ft_preview_image.setOnTouchListener(null);
 
             if (is_image)
             {
-                ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+                if (! kqPreviewAlreadyBuilt)
+                {
+                    ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+                    ft_preview_image.setTag(R.id.ft_preview_image, kqPreviewSig);
+                }
 
                 if (PREF__compact_chatlist)
                 {
@@ -291,7 +305,13 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                     }
                 });
 
-                if (message.storage_frame_work)
+                if (kqPreviewAlreadyBuilt)
+                {
+                    // KHANDAQ (#172): this view already shows exactly this image — no reload needed.
+                    ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_container);
+                    ChatBubbleUiHelper.apply_media_thumb_wrap(ft_preview_image);
+                }
+                else if (message.storage_frame_work)
                 {
                     try
                     {
@@ -357,8 +377,10 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                     imageView.setVisibility(View.GONE);
                 }
 
+                // container must WRAP (not fixed 180dp) — ft_caption_text sits below the
+                // thumb inside it and a fixed height clips the merged caption away
                 final ViewGroup.LayoutParams previewLp = ft_preview_container.getLayoutParams();
-                previewLp.height = (int) dp2px(180);
+                previewLp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 ft_preview_container.setLayoutParams(previewLp);
                 final ViewGroup.LayoutParams imageLp = ft_preview_image.getLayoutParams();
                 imageLp.height = (int) dp2px(180);

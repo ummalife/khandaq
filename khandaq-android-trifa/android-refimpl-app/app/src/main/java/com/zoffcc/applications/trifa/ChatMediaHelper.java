@@ -534,19 +534,41 @@ public final class ChatMediaHelper
         bindVideoPreview(context, message.filename_fullpath, message.id, exportPath, previewImage);
     }
 
+    // KHANDAQ (#172): composed video thumbnails (frame + play overlay + duration badge) cached per
+    // file, so a rebind reuses the ready bitmap instead of re-extracting the frame through a spinner.
+    private static final android.util.LruCache<String, Bitmap> video_thumb_cache =
+            new android.util.LruCache<>(24);
+
     static void bindVideoPreview(final Context context, final String vfsPath, final long messageId,
                                  final String exportPath, final ImageView previewImage)
     {
-        previewImage.setImageResource(R.drawable.round_loading_animation);
+        final String previewSig = "vid:" + messageId + ":" + vfsPath;
+        final RequestOptions glideOptions = new RequestOptions().
+                centerCrop().
+                optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
+
+        // Cached composed thumb → bind synchronously, no spinner, no flicker (#172).
+        final Bitmap cached = video_thumb_cache.get(vfsPath);
+        if (cached != null)
+        {
+            previewImage.setTag(R.id.ft_preview_image, previewSig);
+            GlideApp.with(context).load(cached).
+                    diskCacheStrategy(DiskCacheStrategy.NONE).skipMemoryCache(true).
+                    apply(glideOptions).into(previewImage);
+            return;
+        }
+
+        // Only flash the spinner when the DISPLAYED video actually changes on this view.
+        if (! previewSig.equals(previewImage.getTag(R.id.ft_preview_image)))
+        {
+            previewImage.setImageResource(R.drawable.round_loading_animation);
+            previewImage.setTag(R.id.ft_preview_image, previewSig);
+        }
 
         final android.graphics.drawable.Drawable playOverlay = new IconicsDrawable(context).
                 icon(GoogleMaterial.Icon.gmd_play_circle_filled).
                 backgroundColor(android.graphics.Color.TRANSPARENT).
                 color(android.graphics.Color.parseColor("#CCFFFFFF")).sizeDp(48);
-
-        final RequestOptions glideOptions = new RequestOptions().
-                centerCrop().
-                optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
 
         new Thread()
         {
@@ -554,6 +576,7 @@ public final class ChatMediaHelper
             public void run()
             {
                 Bitmap frame = null;
+                long durationMs = -1;
                 String localPath = exportPath;
                 try
                 {
@@ -573,6 +596,7 @@ public final class ChatMediaHelper
                     if (localPath != null)
                     {
                         frame = extractVideoFrame(localPath);
+                        durationMs = extractVideoDurationMs(localPath);
                     }
                 }
                 catch (Exception e)
@@ -580,12 +604,27 @@ public final class ChatMediaHelper
                     Log.i(TAG, "bindVideoPreview:EE:" + e.getMessage());
                 }
 
-                final Bitmap frameFinal = frame;
+                // KHANDAQ (#173): make a video look like a video — Telegram-style centered play
+                // button + duration badge composed onto the thumbnail itself.
+                Bitmap composed = null;
+                if (frame != null)
+                {
+                    composed = composeVideoThumb(frame, durationMs);
+                    video_thumb_cache.put(vfsPath, composed);
+                }
+
+                final Bitmap frameFinal = composed;
                 new Handler(Looper.getMainLooper()).post(new Runnable()
                 {
                     @Override
                     public void run()
                     {
+                        // A recycled view may already display another message — don't clobber it.
+                        if (! previewSig.equals(previewImage.getTag(R.id.ft_preview_image)))
+                        {
+                            return;
+                        }
+
                         if (frameFinal != null)
                         {
                             GlideApp.
@@ -611,6 +650,104 @@ public final class ChatMediaHelper
                 });
             }
         }.start();
+    }
+
+    static long extractVideoDurationMs(final String localPath)
+    {
+        android.media.MediaMetadataRetriever retriever = null;
+        try
+        {
+            retriever = new android.media.MediaMetadataRetriever();
+            retriever.setDataSource(localPath);
+            final String d = retriever.extractMetadata(
+                    android.media.MediaMetadataRetriever.METADATA_KEY_DURATION);
+            return d != null ? Long.parseLong(d) : -1;
+        }
+        catch (Exception e)
+        {
+            return -1;
+        }
+        finally
+        {
+            try
+            {
+                if (retriever != null)
+                {
+                    retriever.release();
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    /** Telegram-style video thumb: frame + centered play circle + top-left duration badge (#173). */
+    static Bitmap composeVideoThumb(final Bitmap frame, final long durationMs)
+    {
+        try
+        {
+            final Bitmap out = frame.copy(Bitmap.Config.ARGB_8888, true);
+            final android.graphics.Canvas canvas = new android.graphics.Canvas(out);
+            final int w = out.getWidth();
+            final int h = out.getHeight();
+            final float base = Math.min(w, h);
+
+            // centered play button: dark translucent circle + white triangle
+            final float cx = w / 2.0f;
+            final float cy = h / 2.0f;
+            final float radius = base * 0.14f;
+            final android.graphics.Paint circlePaint = new android.graphics.Paint(
+                    android.graphics.Paint.ANTI_ALIAS_FLAG);
+            circlePaint.setColor(android.graphics.Color.parseColor("#66000000"));
+            canvas.drawCircle(cx, cy, radius, circlePaint);
+
+            final android.graphics.Paint trianglePaint = new android.graphics.Paint(
+                    android.graphics.Paint.ANTI_ALIAS_FLAG);
+            trianglePaint.setColor(android.graphics.Color.WHITE);
+            final float tr = radius * 0.52f;
+            final android.graphics.Path triangle = new android.graphics.Path();
+            final float tx = cx + tr * 0.15f; // optical centering of the triangle
+            triangle.moveTo(tx - tr * 0.8f, cy - tr);
+            triangle.lineTo(tx - tr * 0.8f, cy + tr);
+            triangle.lineTo(tx + tr, cy);
+            triangle.close();
+            canvas.drawPath(triangle, trianglePaint);
+
+            // duration badge, top-left
+            if (durationMs > 0)
+            {
+                final long totalSec = durationMs / 1000;
+                final String label = (totalSec >= 3600)
+                        ? String.format(java.util.Locale.US, "%d:%02d:%02d", totalSec / 3600, (totalSec % 3600) / 60, totalSec % 60)
+                        : String.format(java.util.Locale.US, "%d:%02d", totalSec / 60, totalSec % 60);
+
+                final android.graphics.Paint textPaint = new android.graphics.Paint(
+                        android.graphics.Paint.ANTI_ALIAS_FLAG);
+                textPaint.setColor(android.graphics.Color.WHITE);
+                textPaint.setTextSize(Math.max(base * 0.075f, 22f));
+                textPaint.setFakeBoldText(true);
+
+                final float pad = base * 0.035f;
+                final float textW = textPaint.measureText(label);
+                final float textH = textPaint.getTextSize();
+                final float margin = base * 0.04f;
+
+                final android.graphics.Paint badgePaint = new android.graphics.Paint(
+                        android.graphics.Paint.ANTI_ALIAS_FLAG);
+                badgePaint.setColor(android.graphics.Color.parseColor("#66000000"));
+                final android.graphics.RectF badge = new android.graphics.RectF(
+                        margin, margin, margin + textW + pad * 2.0f, margin + textH + pad * 1.6f);
+                canvas.drawRoundRect(badge, badge.height() / 2.0f, badge.height() / 2.0f, badgePaint);
+                canvas.drawText(label, badge.left + pad, badge.bottom - pad * 0.8f - textPaint.descent() / 2.0f, textPaint);
+            }
+
+            return out;
+        }
+        catch (Exception e)
+        {
+            return frame;
+        }
     }
 
     public static void bindOutgoingImagePreview(final Context context, final Message message,

@@ -665,7 +665,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                             diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                             skipMemoryCache(false).
                             priority(Priority.LOW).
-                            placeholder(R.drawable.round_loading_animation).
+                            // KHANDAQ (#172): no placeholder — the gated spinner above covers new
+                            // content; same content keeps its bitmap during reload (no flash).
                             into(ft_preview_image);
                 }
                 catch (Exception e)
@@ -684,7 +685,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                             diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                             skipMemoryCache(false).
                             priority(Priority.LOW).
-                            placeholder(R.drawable.round_loading_animation).
+                            // KHANDAQ (#172): no placeholder — the gated spinner above covers new
+                            // content; same content keeps its bitmap during reload (no flash).
                             into(ft_preview_image);
                 }
                 catch (Exception e)

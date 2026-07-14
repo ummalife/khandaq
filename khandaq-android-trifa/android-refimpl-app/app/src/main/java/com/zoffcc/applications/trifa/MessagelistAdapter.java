@@ -589,11 +589,15 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     found_item = true;
                     int pos = this.messagelistitems.indexOf(m2);
                     // Log.i(TAG, "update_item:003:" + pos);
+                    final Message old_item = m2;
                     this.messagelistitems.set(pos, new_item);
                     this.notifyItemChanged(pos);
                     // KHANDAQ (captions): a FILE state change (e.g. download finished) can turn the
                     // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
-                    if ((pos + 1) < this.messagelistitems.size())
+                    // Only on an actual state/filedb flip: rebinding on every progress tick made the
+                    // neighbour row (and its Glide preview) flicker through the whole transfer (#172).
+                    if ((pos + 1) < this.messagelistitems.size()
+                            && (old_item.state != new_item.state || old_item.filedb_id != new_item.filedb_id))
                     {
                         this.notifyItemChanged(pos + 1);
                     }

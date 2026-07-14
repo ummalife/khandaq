@@ -311,15 +311,16 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
 
             if (is_image)
             {
-
-                //                final Drawable d3 = new IconicsDrawable(this.context).
-                //                        icon(GoogleMaterial.Icon.gmd_photo).
-                //                        backgroundColor(Color.TRANSPARENT).
-                //                        color(Color.parseColor("#AA000000")).sizeDp(50);
-
-                // ft_preview_image.setImageDrawable(d3);
-                ft_preview_image.setImageResource(R.drawable.round_loading_animation);
-                // final ImageButton ft_preview_image_ = ft_preview_image;
+                // KHANDAQ (#172): only reset to the loading spinner when the DISPLAYED message
+                // changes — an unconditional reset made every rebind (return from the media viewer,
+                // neighbour updates, scroll-back) flash the whole chat with spinners. Glide still
+                // re-issues the load below (memory cache = instant, no visible flicker).
+                final String kqPreviewSig = "img:" + message.id + ":" + message.filename_fullpath;
+                if (! kqPreviewSig.equals(ft_preview_image.getTag(R.id.ft_preview_image)))
+                {
+                    ft_preview_image.setImageResource(R.drawable.round_loading_animation);
+                    ft_preview_image.setTag(R.id.ft_preview_image, kqPreviewSig);
+                }
 
                 if (PREF__compact_chatlist)
                 {
@@ -354,6 +355,10 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
                                 transform(new MultiTransformation<>(new FitCenter(),
                                         new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context))));
 
+                        // KHANDAQ (#172): no Glide placeholder here. New content already shows the
+                        // spinner (set above with the tag guard); same content keeps its current
+                        // bitmap until the reload is ready — so rebinds (return from the media
+                        // viewer, neighbour updates, scroll) no longer flash the whole chat.
                         GlideApp.
                                 with(context).
                                 load(f2).
@@ -361,7 +366,6 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
                                 diskCacheStrategy(DiskCacheStrategy.RESOURCE).
                                 skipMemoryCache(false).
                                 priority(Priority.LOW).
-                                placeholder(R.drawable.round_loading_animation).
                                 into(ft_preview_image);
                         // Log.i(TAG, "glide:img:002");
 
@@ -388,7 +392,14 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
 
                     ft_preview_container.setVisibility(View.VISIBLE);
                     ft_preview_image.setVisibility(View.VISIBLE);
-                    resize_viewgroup(ft_preview_container, 180);
+                    // container must WRAP (not fixed 180dp) — ft_caption_text sits below the
+                    // thumb inside it and a fixed height clips the merged caption away
+                    final ViewGroup.LayoutParams kq_prev_lp = ft_preview_container.getLayoutParams();
+                    if (kq_prev_lp != null)
+                    {
+                        kq_prev_lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                        ft_preview_container.setLayoutParams(kq_prev_lp);
+                    }
                     resize_view(ft_preview_image, 180);
 
                     bindVideoPreview(context, message2, export_filename_with_path, ft_preview_image);

@@ -404,11 +404,15 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     found_item = true;
                     int pos = this.messagelistitems.indexOf(m2);
                     // HelperGeneric.logI(TAG, "update_item:003:" + pos);
+                    final GroupMessage old_item = m2;
                     this.messagelistitems.set(pos, new_item);
                     this.notifyItemChanged(pos);
                     // KHANDAQ (captions): a FILE state change (e.g. media downloaded) can turn the
                     // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
-                    if ((pos + 1) < this.messagelistitems.size())
+                    // Only on an actual content flip, not on every progress tick (#172 flicker).
+                    if ((pos + 1) < this.messagelistitems.size()
+                            && ((old_item.filename_fullpath == null) != (new_item.filename_fullpath == null)
+                                || old_item.TRIFA_MESSAGE_TYPE != new_item.TRIFA_MESSAGE_TYPE))
                     {
                         this.notifyItemChanged(pos + 1);
                     }

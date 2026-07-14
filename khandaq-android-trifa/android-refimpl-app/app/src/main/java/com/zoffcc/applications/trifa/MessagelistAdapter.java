@@ -34,6 +34,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import static com.zoffcc.applications.trifa.HelperGeneric.format_chat_date_header;
@@ -537,6 +538,41 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         return false;
     }
 
+    // KHANDAQ (#181): payload marker for byte-counter-only transfer updates (no full rebind)
+    static final Object PAYLOAD_TRANSFER_PROGRESS = new Object();
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
+                                 @NonNull java.util.List payloads)
+    {
+        boolean progressOnly = !payloads.isEmpty();
+        for (Object p : payloads)
+        {
+            if (p != PAYLOAD_TRANSFER_PROGRESS)
+            {
+                progressOnly = false;
+                break;
+            }
+        }
+
+        if (progressOnly)
+        {
+            try
+            {
+                final Message m = (Message) this.messagelistitems.get(position);
+                ChatTransferProgressHelper.applyDirect(context, holder.itemView, m, m.direction == 1);
+                return;
+            }
+            catch (Exception ignored)
+            {
+                // fall through to the full bind
+            }
+        }
+
+        super.onBindViewHolder(holder, position, payloads);
+    }
+
     public void add_item(Message new_item)
     {
         // Log.i(TAG, "add_item:" + new_item + ":" + this.messagelistitems.size());
@@ -591,7 +627,25 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     // Log.i(TAG, "update_item:003:" + pos);
                     final Message old_item = m2;
                     this.messagelistitems.set(pos, new_item);
-                    this.notifyItemChanged(pos);
+                    // KHANDAQ (#181): a mid-transfer tick changes only the byte counters — a full
+                    // rebind resets the holder's spinner/Glide load every time and the bubble
+                    // blinks through the whole transfer. Ship such updates as a PROGRESS payload
+                    // (bound via ChatTransferProgressHelper.applyDirect, no preview reload).
+                    final boolean progressOnly =
+                            old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
+                            && old_item.TRIFA_MESSAGE_TYPE == new_item.TRIFA_MESSAGE_TYPE
+                            && old_item.state == new_item.state
+                            && old_item.filedb_id == new_item.filedb_id
+                            && old_item.filetransfer_id == new_item.filetransfer_id
+                            && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null));
+                    if (progressOnly)
+                    {
+                        this.notifyItemChanged(pos, PAYLOAD_TRANSFER_PROGRESS);
+                    }
+                    else
+                    {
+                        this.notifyItemChanged(pos);
+                    }
                     // KHANDAQ (captions): a FILE state change (e.g. download finished) can turn the
                     // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
                     // Only on an actual state/filedb flip: rebinding on every progress tick made the

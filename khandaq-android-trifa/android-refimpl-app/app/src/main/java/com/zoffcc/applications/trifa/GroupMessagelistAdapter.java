@@ -386,6 +386,39 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         }
     }
 
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
+                                 @NonNull java.util.List payloads)
+    {
+        // KHANDAQ (#181): light-path bind for transfer-progress payloads (no preview reload)
+        boolean progressOnly = !payloads.isEmpty();
+        for (Object p : payloads)
+        {
+            if (p != MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS)
+            {
+                progressOnly = false;
+                break;
+            }
+        }
+
+        if (progressOnly)
+        {
+            try
+            {
+                final GroupMessage m = (GroupMessage) this.messagelistitems.get(position);
+                ChatTransferProgressHelper.applyGroup(context, holder.itemView, m, m.direction == 1);
+                return;
+            }
+            catch (Exception ignored)
+            {
+                // fall through to the full bind
+            }
+        }
+
+        super.onBindViewHolder(holder, position, payloads);
+    }
+
     synchronized public boolean update_item(final GroupMessage new_item)
     {
         // HelperGeneric.logI(TAG, "update_item:" + new_item);
@@ -406,7 +439,22 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     // HelperGeneric.logI(TAG, "update_item:003:" + pos);
                     final GroupMessage old_item = m2;
                     this.messagelistitems.set(pos, new_item);
-                    this.notifyItemChanged(pos);
+                    // KHANDAQ (#181): byte-counter-only transfer ticks go out as a PROGRESS payload —
+                    // a full rebind restarted the holder's spinner/Glide load on every tick and the
+                    // bubble blinked through the whole transfer.
+                    final boolean progressOnly =
+                            old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
+                            && old_item.TRIFA_MESSAGE_TYPE == new_item.TRIFA_MESSAGE_TYPE
+                            && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null))
+                            && old_item.filesize == new_item.filesize;
+                    if (progressOnly)
+                    {
+                        this.notifyItemChanged(pos, MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS);
+                    }
+                    else
+                    {
+                        this.notifyItemChanged(pos);
+                    }
                     // KHANDAQ (captions): a FILE state change (e.g. media downloaded) can turn the
                     // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
                     // Only on an actual content flip, not on every progress tick (#172 flicker).

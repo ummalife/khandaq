@@ -55,6 +55,73 @@ _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
 
+# ---------------------------------------------------------------------------
+# KHANDAQ: privacy-preserving usage stats. The relay necessarily SEES a push
+# token and a client IP on every wake (that's how pushes work) — for stats we
+# persist only aggregates: SHA-256 of the token (to count unique devices per
+# day; the token itself is never stored) and the ISO country code resolved
+# from the IP via a local DB-IP lite database (the IP itself is never stored).
+# The /stats page is gated by STATS_KEY (server env, not in git).
+# ---------------------------------------------------------------------------
+STATS_KEY = os.environ.get("STATS_KEY", "")
+STATS_DB = os.environ.get("STATS_DB", "/data/stats.db")
+GEOIP_DB = os.environ.get("GEOIP_DB", "/app/dbip-country.mmdb")
+
+_geoip_reader = None
+try:
+    if os.path.isfile(GEOIP_DB):
+        import maxminddb
+
+        _geoip_reader = maxminddb.open_reader(GEOIP_DB)
+except Exception as exc:  # stats must never break the wake path
+    log.warning("geoip disabled: %s", exc)
+
+_stats_lock = Lock()
+
+
+def _stats_conn():
+    import sqlite3
+
+    os.makedirs(os.path.dirname(STATS_DB), exist_ok=True)
+    conn = sqlite3.connect(STATS_DB, timeout=5)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS tokens (day TEXT, th TEXT, PRIMARY KEY(day, th))")
+    conn.execute("CREATE TABLE IF NOT EXISTS countries (day TEXT, cc TEXT, hits INTEGER, PRIMARY KEY(day, cc))")
+    conn.execute("CREATE TABLE IF NOT EXISTS wakes (day TEXT PRIMARY KEY, hits INTEGER)")
+    return conn
+
+
+def _country_for_ip(addr: str) -> str:
+    if _geoip_reader is None or not addr:
+        return "??"
+    try:
+        rec = _geoip_reader.get(addr)
+        return (rec or {}).get("country", {}).get("iso_code") or "??"
+    except Exception:
+        return "??"
+
+
+def _record_stats(token: str, client_ip: str) -> None:
+    try:
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        th = hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+        cc = _country_for_ip(client_ip)
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("INSERT OR IGNORE INTO tokens VALUES (?, ?)", (day, th))
+                conn.execute(
+                    "INSERT INTO countries VALUES (?, ?, 1) "
+                    "ON CONFLICT(day, cc) DO UPDATE SET hits = hits + 1", (day, cc))
+                conn.execute(
+                    "INSERT INTO wakes VALUES (?, 1) "
+                    "ON CONFLICT(day) DO UPDATE SET hits = hits + 1", (day,))
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception as exc:
+        log.warning("stats record failed: %s", exc)
+
 
 def _fcm_configured() -> bool:
     return bool(FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE)) or bool(FCM_SERVER_KEY)
@@ -331,7 +398,46 @@ def wake():
         log.warning("wake fail from %s: %s", client_ip, detail)
         return jsonify({"error": detail}), 503 if "not configured" in detail else 502
 
+    _record_stats(token, client_ip)
     return jsonify({"success": 1}), 200
+
+
+@app.route("/stats")
+def stats():
+    key = request.args.get("key", "")
+    if not STATS_KEY or not hmac.compare_digest(key, STATS_KEY):
+        return jsonify({"error": "not found"}), 404
+
+    conn = _stats_conn()
+    try:
+        days = conn.execute(
+            "SELECT t.day, COUNT(DISTINCT t.th), COALESCE(w.hits, 0) FROM tokens t "
+            "LEFT JOIN wakes w ON w.day = t.day "
+            "GROUP BY t.day ORDER BY t.day DESC LIMIT 30").fetchall()
+        cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 30 * 86400))
+        countries = conn.execute(
+            "SELECT cc, SUM(hits) FROM countries WHERE day >= ? "
+            "GROUP BY cc ORDER BY SUM(hits) DESC LIMIT 20", (cutoff,)).fetchall()
+        week_cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 7 * 86400))
+        uniq30 = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day >= ?", (cutoff,)).fetchone()[0]
+        uniq7 = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day >= ?", (week_cutoff,)).fetchone()[0]
+    finally:
+        conn.close()
+
+    rows = "".join(f"<tr><td>{d}</td><td>{u}</td><td>{w}</td></tr>" for d, u, w in days)
+    crows = "".join(f"<tr><td>{cc}</td><td>{h}</td></tr>" for cc, h in countries)
+    html = f"""<!doctype html><meta charset="utf-8"><title>Khandaq push stats</title>
+<style>body{{font-family:system-ui;margin:2rem;background:#14181c;color:#e8ecef}}
+table{{border-collapse:collapse;margin:1rem 2rem 1rem 0;display:inline-table;vertical-align:top}}
+td,th{{border:1px solid #2e3948;padding:.35rem .8rem;text-align:right}}
+th{{background:#1d242c}}h1{{font-size:1.3rem}}small{{color:#8fa0b0}}</style>
+<h1>Khandaq push relay — usage</h1>
+<p>Активные устройства (уникальные, с включёнными пушами): <b>{uniq7}</b> за 7 дней · <b>{uniq30}</b> за 30 дней</p>
+<table><tr><th>День (UTC)</th><th>Устройств</th><th>Пушей</th></tr>{rows}</table>
+<table><tr><th>Страна (30д)</th><th>Пушей</th></tr>{crows}</table>
+<p><small>Считаются только агрегаты: хэш токена (уникальность за день) и страна по IP; сами токены и IP не сохраняются.
+Покрывает пользователей с включёнными пушами на обеих платформах, независимо от источника установки.</small></p>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
 @app.route("/")

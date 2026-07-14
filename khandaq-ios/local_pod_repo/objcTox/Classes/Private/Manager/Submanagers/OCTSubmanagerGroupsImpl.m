@@ -2411,6 +2411,55 @@ partMessage:(NSString *)partMessage
                groupNumber, peerId, (long)exitType, name);
 }
 
+// KHANDAQ (#179): delete-for-both broadcast (KQ family, mirrors Android HelperMessageDelete):
+// [0..5]=0x667788113435 [6]=ver(1) [7]=0x42 [8..11]=message_id u32 BE [12..15]=ts u32 BE.
+// Returns YES when the packet was a delete (consumed), regardless of whether a row matched.
+- (BOOL)handleIncomingGroupDeletePacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                peerId:(uint32_t)peerId
+                                                  data:(NSData *)data
+{
+    if (data.length != 16) {
+        return NO;
+    }
+    const uint8_t *b = data.bytes;
+    if (b[0] != 0x66 || b[1] != 0x77 || b[2] != 0x88 || b[3] != 0x11 || b[4] != 0x34 || b[5] != 0x35
+        || b[6] != 0x01 || b[7] != 0x42) {
+        return NO;
+    }
+
+    const uint32_t messageId = ((uint32_t)b[8] << 24) | ((uint32_t)b[9] << 16)
+                               | ((uint32_t)b[10] << 8) | (uint32_t)b[11];
+    if (messageId == 0) {
+        return YES;
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager chatWithGroupNumber:groupNumber];
+    if (! chat) {
+        return YES;
+    }
+
+    // authenticate by the sender's STABLE identity: resolve the same frozen peer name that was
+    // stamped on the row at insert time — only the author's own messages can be retracted
+    NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+    if (peerName.length == 0) {
+        return YES;
+    }
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
+                              chat.uniqueIdentifier, (int32_t)messageId, peerName];
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    OCTMessageAbstract *found = [results firstObject];
+    if (found) {
+        OCTLogInfo(@"group delete: removing retracted message id=%u from %@", messageId, peerName);
+        [realmManager removeMessages:@[found]];
+    }
+    (void)tox;
+    return YES;
+}
+
 - (void)tox:(OCTTox *)tox groupCustomPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
        data:(NSData *)data
@@ -2422,6 +2471,10 @@ partMessage:(NSString *)partMessage
     }
 
     if ([self isBlockedIncomingPeerId:peerId groupNumber:groupNumber]) {
+        return;
+    }
+
+    if ([self handleIncomingGroupDeletePacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
         return;
     }
 

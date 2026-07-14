@@ -4142,6 +4142,27 @@ void friendLosslessPacketCallback(
         return;
     }
 
+    if (pktType == 187) {
+        // KHANDAQ (#179): delete-for-both of an own 1:1 message ("KQ" family, mirrors Android
+        // HelperMessageDelete): [0]=187 [1..2]='K','Q' [3]=ver(1) [4..35]=msgv3 hash [36..39]=ts
+        if (length != 40 || data[1] != 'K' || data[2] != 'Q' || data[3] != 1) {
+            return;
+        }
+
+        NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
+        for (int i = 4; i < 36; i++) {
+            [hashHex appendFormat:@"%02X", data[i]];
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([tox.delegate respondsToSelector:@selector(tox:friendMessageDeleteWithMsgv3Hash:friendNumber:)]) {
+                [tox.delegate tox:tox friendMessageDeleteWithMsgv3Hash:hashHex friendNumber:friendNumber];
+            }
+        });
+
+        return;
+    }
+
     if (pktType != 181) {
         return;
     }

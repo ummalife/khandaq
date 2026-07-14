@@ -31,6 +31,14 @@
 - (void)removeMessages:(NSArray<OCTMessageAbstract *> *)messages;
 
 /**
+ * KHANDAQ (#179): delete an OWN 1:1 text message locally AND retract it on the peer
+ * (KQ lossless packet id 187, mirrors Android). Best effort: an offline peer or an old
+ * client silently keeps its copy. Falls back to plain local removal for anything that
+ * cannot be retracted (incoming messages, files, missing msgV3 hash).
+ */
+- (void)deleteMessageForBoth:(OCTMessageAbstract *)message;
+
+/**
  * Removes all messages in chat and chat itself.
  *
  * @param chat Chat to remove in.

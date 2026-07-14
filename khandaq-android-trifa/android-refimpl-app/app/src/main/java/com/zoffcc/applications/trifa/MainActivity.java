@@ -5971,6 +5971,8 @@ public class MainActivity extends AppCompatActivity
                     // KHANDAQ (#9): deliver edits made while this friend was offline (packet is
                     // rebuilt from the CURRENT row text — repeated edits collapse into one).
                     HelperMessageEdit.flushPendingEditsForFriend(friend_number);
+                    // KHANDAQ (#179): deliver deletes made while this friend was offline
+                    HelperMessageDelete.flushPendingDeletesForFriend(friend_number);
                 }
             }
 
@@ -6494,6 +6496,11 @@ public class MainActivity extends AppCompatActivity
             {
                 // KHANDAQ (#9): app-level edit of an own 1:1 message
                 HelperMessageEdit.handleIncomingFriendEdit(friend_number, data, (int) length);
+            }
+            else if (data[0] == (byte) HelperMessageDelete.PKT_MSG_DELETE)
+            {
+                // KHANDAQ (#179): app-level delete-for-both of an own 1:1 message
+                HelperMessageDelete.handleIncomingFriendDelete(friend_number, data, (int) length);
             }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {
@@ -8907,6 +8914,14 @@ public class MainActivity extends AppCompatActivity
                 HelperMessageEdit.handleIncomingGroupEdit(group_number, peer_id, data, (int) length);
                 return;
             }
+            // KHANDAQ (#179): delete-for-both broadcast (fixed 16 bytes, same NGC header family)
+            if ((data[0] == (byte) 0x66) && (data[1] == (byte) 0x77) && (data[2] == (byte) 0x88) &&
+                (data[3] == (byte) 0x11) && (data[4] == (byte) 0x34) && (data[5] == (byte) 0x35) &&
+                (data[6] == (byte) 0x1) && (data[7] == HelperMessageDelete.NGC_PKT_MSG_DELETE))
+            {
+                HelperMessageDelete.handleIncomingGroupDelete(group_number, peer_id, data, (int) length);
+                return;
+            }
         }
 
         // check for correct signature of packets
@@ -9927,6 +9942,17 @@ public class MainActivity extends AppCompatActivity
                     long mid = (Long) i.next();
                     final Message m_to_delete = (Message) orma.selectFromMessage().idEq(mid).get(0);
 
+                    // KHANDAQ (#179): retract own text messages on the peer too (KQ delete packet;
+                    // old clients drop it silently → local-only against them). Must run BEFORE the
+                    // row disappears — the packet is built from msg_idv3_hash.
+                    try
+                    {
+                        HelperMessageDelete.sendOwnFriendDelete(m_to_delete);
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+
                     // ---------- delete fileDB if this message is an outgoing file ----------
                     if (m_to_delete.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)
                     {
@@ -10625,6 +10651,16 @@ public class MainActivity extends AppCompatActivity
                 {
                     long mid = (Long) i.next();
                     final GroupMessage m_to_delete = (GroupMessage) orma.selectFromGroupMessage().idEq(mid).get(0);
+
+                    // KHANDAQ (#179): broadcast retraction of own group text messages (best effort,
+                    // reaches currently-online peers; old clients drop the packet silently)
+                    try
+                    {
+                        HelperMessageDelete.sendOwnGroupDelete(m_to_delete);
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
 
                     // ---------- delete file if this message is an outgoing file ----------
                     if (m_to_delete.TRIFA_MESSAGE_TYPE == TRIFA_MSG_FILE.value)

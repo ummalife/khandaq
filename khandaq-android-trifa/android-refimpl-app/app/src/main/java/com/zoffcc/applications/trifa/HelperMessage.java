@@ -708,6 +708,20 @@ public class HelperMessage
         //    public void run()
         //    {
         // Log.i(TAG, "insert_into_message_db:m=" + m);
+
+        // KHANDAQ (#179): a delete-for-both for this incoming message raced its delivery
+        // (offline-message flood) — honor the tombstone and never insert the row at all.
+        try
+        {
+            if (HelperMessageDelete.consume_pending_delete(m))
+            {
+                return -1;
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         long row_id = -1;
         try
         {

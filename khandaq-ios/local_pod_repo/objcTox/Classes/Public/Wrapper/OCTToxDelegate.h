@@ -74,6 +74,12 @@
 - (void)tox:(OCTTox *)tox friendPushTokenUpdate:(NSString *)pushToken friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (#179): the friend retracted one of their own 1:1 messages (delete-for-both, "KQ"
+ * lossless packet id 187). Addressed by the message's msgV3 hash (uppercase hex).
+ */
+- (void)tox:(OCTTox *)tox friendMessageDeleteWithMsgv3Hash:(NSString *)msgv3HashHex friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * Friend's status message was updated.
  *
  * @param statusMessage Updated status message.

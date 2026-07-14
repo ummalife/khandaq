@@ -608,6 +608,84 @@ static void triggerPush(NSString *used_pushToken,
     [realmManager addMessageWithText:message type:type chat:chat sender:friend messageId:0 msgv3HashHex:msgv3HashHex sentPush:NO tssent:sendTimestamp tsrcvd:0];
 }
 
+// KHANDAQ (#179): the friend retracted one of their own messages (KQ delete packet, id 187).
+- (void)tox:(OCTTox *)tox friendMessageDeleteWithMsgv3Hash:(NSString *)msgv3HashHex
+                                              friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend || msgv3HashHex.length != 64) {
+        return;
+    }
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+
+    // anti-spoofing: only a message this friend SENT us can be retracted by them
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@ AND senderUniqueIdentifier == %@",
+                              chat.uniqueIdentifier, msgv3HashHex, friend.uniqueIdentifier];
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    OCTMessageAbstract *found = [results firstObject];
+    if (! found) {
+        return;
+    }
+
+    OCTLogInfo(@"friendMessageDelete: removing retracted message %@", msgv3HashHex);
+    [self removeMessages:@[found]];
+}
+
+// KHANDAQ (#179): retract an OWN 1:1 text message on the peer too, then delete it locally.
+// Best effort — an offline peer or an old client keeps its copy (packet is dropped silently).
+- (void)deleteMessageForBoth:(OCTMessageAbstract *)message
+{
+    do {
+        if (! message || message.senderUniqueIdentifier != nil
+            || message.messageText == nil || message.messageText.msgv3HashHex.length != 64) {
+            break;
+        }
+
+        OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+        OCTChat *chat = [realmManager objectWithUniqueIdentifier:message.chatUniqueIdentifier
+                                                           class:[OCTChat class]];
+        OCTFriend *friend = [chat.friends firstObject];
+        if (! friend) {
+            break;
+        }
+
+        OCTToxFriendNumber friendNumber = [[self.dataSource managerGetTox]
+                                           friendNumberWithPublicKey:friend.publicKey error:nil];
+        if (friendNumber == kOCTToxFriendNumberFailure) {
+            break;
+        }
+
+        NSString *hashHex = message.messageText.msgv3HashHex;
+        NSMutableData *pkt = [NSMutableData dataWithCapacity:40];
+        const uint8_t header[4] = { 187, 'K', 'Q', 1 };
+        [pkt appendBytes:header length:4];
+        for (int i = 0; i < 64; i += 2) {
+            unsigned int b = 0;
+            [[NSScanner scannerWithString:[hashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+            uint8_t byte = (uint8_t)b;
+            [pkt appendBytes:&byte length:1];
+        }
+        uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+        const uint8_t tsbe[4] = {
+            (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+            (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+        };
+        [pkt appendBytes:tsbe length:4];
+
+        [[self.dataSource managerGetTox] sendLosslessPacketWithFriendNumber:friendNumber
+                                                                      bytes:pkt
+                                                                      error:nil];
+    }
+    while (0);
+
+    // local deletion always happens — even when the retraction could not be delivered
+    [self removeMessages:@[message]];
+}
+
 - (void)tox:(OCTTox *)tox friendHighLevelACK:(NSString *)message
                                 friendNumber:(OCTToxFriendNumber)friendNumber
                                 msgv3HashHex:(NSString *)msgv3HashHex

@@ -870,7 +870,11 @@ extension ChatPrivateController {
                 return self.messages[$0.row]
             }
 
-            self.submanagerChats.removeMessages(toRemove)
+            // KHANDAQ (#179): own text messages are also retracted on the peer (KQ delete packet);
+            // everything else falls back to plain local removal inside deleteMessageForBoth.
+            for message in toRemove {
+                self.submanagerChats.deleteMessage(forBoth: message)
+            }
         })
     }
 
@@ -1473,7 +1477,8 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
 
         let message = messageEntry(atDisplayIndex: indexPath.row).message
 
-        submanagerChats.removeMessages([message])
+        // KHANDAQ (#179): own text messages are also retracted on the peer (KQ delete packet)
+        submanagerChats.deleteMessage(forBoth: message)
     }
 
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell) {

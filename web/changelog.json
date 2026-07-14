@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-14T19:48:53Z",
+  "generated_at": "2026-07-14T20:09:50Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -32,7 +32,7 @@
       "summary": "More of the Android Figma pass plus a few fixes. The status bar now matches the toolbar (no more off-brand green), the bottom-nav icons are the new outlined set, photos and videos in chats are sized to hug the image instead of filling the row, and chats show the exact light/dark doodle wallpaper from the design. Profile gains a Details screen with an app lock (passcode + lock timeout), change password and delete profile. Voice messages switch to iOS-style hold-to-record — hold the mic to record, release to send, slide left to cancel — with a redesigned recording bar. The header theme toggle is gone (the Settings switch stays) and switching themes is now fast and smooth. Fixes a bug where messaging a contact who had just accepted your request was blocked with 'waiting for friend request'.",
       "commits": [
         {
-          "hash": "c15d50a5",
+          "hash": "c15d50a",
           "full": "c15d50a547ca312de1bd96eac243b2cadfe2e813",
           "url": "https://github.com/ummalife/khandaq/commit/c15d50a547ca312de1bd96eac243b2cadfe2e813"
         }
@@ -783,17 +783,17 @@
       "summary": "16 vulnerabilities from the external security audit fixed in code. v0.2.5 builds for Android, iOS, Desktop, and an updated push relay.",
       "commits": [
         {
-          "hash": "48cf5340",
+          "hash": "48cf534",
           "full": "48cf5340879cf8197b20ce5fd767452effc3bc45",
           "url": "https://github.com/ummalife/khandaq/commit/48cf5340879cf8197b20ce5fd767452effc3bc45"
         },
         {
-          "hash": "146bc561",
+          "hash": "146bc56",
           "full": "146bc5619f6c175c622d0d0d13d15bb3c66128b5",
           "url": "https://github.com/ummalife/khandaq/commit/146bc5619f6c175c622d0d0d13d15bb3c66128b5"
         },
         {
-          "hash": "d3b7c7d9",
+          "hash": "d3b7c7d",
           "full": "d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84",
           "url": "https://github.com/ummalife/khandaq/commit/d3b7c7d9420280d5e2675bef2c2f6d6ace60ae84"
         }

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10334.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10335.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Deleting your own text message now removes it for the other person too - in private chats and groups (works with up-to-date apps on both sides)."},
-                    {"language": "ru-RU", "text": "Удаление своего текстового сообщения теперь убирает его и у собеседника — в личных чатах и группах (работает при обновлённом приложении с обеих сторон)."},
+                    {"language": "en-US", "text": "No more blinking while a photo or video is transferring. Fixed sending media picked from the recents grid in the attach sheet. Darker caption field on the media-send screen."},
+                    {"language": "ru-RU", "text": "Убрано мигание во время передачи фото и видео. Починена отправка медиа из сетки недавних в меню «Прикрепить». Тёмное поле подписи на экране отправки медиа."},
                 ],
             }],
         })

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10335.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10336.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "No more blinking while a photo or video is transferring. Fixed sending media picked from the recents grid in the attach sheet. Darker caption field on the media-send screen."},
-                    {"language": "ru-RU", "text": "Убрано мигание во время передачи фото и видео. Починена отправка медиа из сетки недавних в меню «Прикрепить». Тёмное поле подписи на экране отправки медиа."},
+                    {"language": "en-US", "text": "No more chat blinking when returning to a conversation (e.g. after viewing a photo fullscreen)."},
+                    {"language": "ru-RU", "text": "Убрано мигание чата при возврате в диалог (например, после просмотра фото на весь экран)."},
                 ],
             }],
         })

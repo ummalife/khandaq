@@ -1901,6 +1901,10 @@ public class MessageListActivity extends AppCompatActivity
             }
             picked.setClipData(clip);
         }
+        // the pickers reset this flag before launching; the grid path skipped it, so every
+        // grid send AFTER the first one in a chat was silently dropped by the REQUEST_PREVIEW
+        // double-delivery guard in onActivityResult (tester: «фото из сетки не отправляется»)
+        mediaPreviewResultHandled = false;
         if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, picked,
                 MediaSendPreviewHelper.TARGET_FRIEND, fn, null, true))
         {

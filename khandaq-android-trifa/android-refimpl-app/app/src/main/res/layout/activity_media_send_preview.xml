@@ -83,7 +83,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:background="@drawable/rounded_date_bg"
+                android:background="@drawable/bg_media_caption_field"
                 android:hint="@string/media_send_caption_hint"
                 android:imeOptions="actionDone"
                 android:inputType="textCapSentences|textMultiLine"

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ: caption input on the (always dark) media-send preview — dark pill instead of the
+     light date-separator background that stood out as a white bar on the black screen -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#2E3335"/>
+    <corners android:radius="22dp"/>
+</shape>

@@ -1859,6 +1859,15 @@ private extension ChatPrivateController {
                     if deletions.isEmpty && insertions.isEmpty {
                         self.updateTableViewWithModifications(modifications)
                     }
+                    // KHANDAQ (#179): deleted rows leave their neighbours stale — bubble grouping,
+                    // corner rounding and the shared timestamp are computed from adjacent messages,
+                    // and an animated deleteRows repaints only the removed row (tester video: two
+                    // timestamps drawn on top of each other after a delete). Deletions are rare and
+                    // user-initiated, so take the artifact-free full reload instead of the batch.
+                    else if !deletions.isEmpty {
+                        self.visibleMessages = max(0, self.visibleMessages + insertions.count - deletions.count)
+                        tableView.reloadData()
+                    }
                     else if deletions.count + insertions.count <= 5 {
                         // KHANDAQ (#86/#90): an animated begin/endUpdates batch is only valid if its row
                         // arithmetic exactly matches what the table reports afterwards. A Realm change can

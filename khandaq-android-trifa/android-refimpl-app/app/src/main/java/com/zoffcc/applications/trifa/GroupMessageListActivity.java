@@ -5082,12 +5082,21 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
         else if (requestCode == FILEPICK_ID && resultCode == Activity.RESULT_OK)
         {
-            // KHANDAQ (Figma): "Файл" — send the picked document as-is (no media preview).
             if (data != null && data.getData() != null)
             {
                 prepareGroupMediaSendContext();
                 MediaSendPreviewHelper.persistUriPermissions(this,
                         java.util.Collections.singletonList(data.getData()));
+
+                // KHANDAQ (#171): an image/video picked via «Файл» goes through the same caption
+                // preview as a gallery pick (tester feedback: no way to caption a photo sent as a
+                // file). Non-media documents still send as-is — launchPreviewIfNeeded declines them.
+                if (MediaSendPreviewHelper.launchPreviewIfNeeded(this, data,
+                        MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true))
+                {
+                    return;
+                }
+
                 add_attachment_ngc(this, data, data, group_id, true);
             }
         }

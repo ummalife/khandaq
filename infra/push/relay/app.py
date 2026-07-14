@@ -88,6 +88,8 @@ def _stats_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS tokens (day TEXT, th TEXT, PRIMARY KEY(day, th))")
     conn.execute("CREATE TABLE IF NOT EXISTS countries (day TEXT, cc TEXT, hits INTEGER, PRIMARY KEY(day, cc))")
     conn.execute("CREATE TABLE IF NOT EXISTS wakes (day TEXT PRIMARY KEY, hits INTEGER)")
+    # last-seen per token hash — powers the "online now" card (activity in the last 5 minutes)
+    conn.execute("CREATE TABLE IF NOT EXISTS recent (th TEXT PRIMARY KEY, ts INTEGER)")
     return conn
 
 
@@ -116,6 +118,11 @@ def _record_stats(token: str, client_ip: str) -> None:
                 conn.execute(
                     "INSERT INTO wakes VALUES (?, 1) "
                     "ON CONFLICT(day) DO UPDATE SET hits = hits + 1", (day,))
+                now = int(time.time())
+                conn.execute(
+                    "INSERT INTO recent VALUES (?, ?) "
+                    "ON CONFLICT(th) DO UPDATE SET ts = excluded.ts", (th, now))
+                conn.execute("DELETE FROM recent WHERE ts < ?", (now - 86400,))
                 conn.commit()
             finally:
                 conn.close()
@@ -402,41 +409,138 @@ def wake():
     return jsonify({"success": 1}), 200
 
 
-@app.route("/stats")
-def stats():
-    key = request.args.get("key", "")
-    if not STATS_KEY or not hmac.compare_digest(key, STATS_KEY):
-        return jsonify({"error": "not found"}), 404
-
+def _stats_snapshot() -> dict:
     conn = _stats_conn()
     try:
+        now = int(time.time())
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        cutoff30 = time.strftime("%Y-%m-%d", time.gmtime(now - 30 * 86400))
+        cutoff7 = time.strftime("%Y-%m-%d", time.gmtime(now - 7 * 86400))
+        online = conn.execute("SELECT COUNT(*) FROM recent WHERE ts >= ?", (now - 300,)).fetchone()[0]
+        active24h = conn.execute("SELECT COUNT(*) FROM recent WHERE ts >= ?", (now - 86400,)).fetchone()[0]
+        today_dev = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day = ?", (today,)).fetchone()[0]
+        today_wakes = conn.execute("SELECT COALESCE(hits,0) FROM wakes WHERE day = ?", (today,)).fetchone()
+        uniq7 = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day >= ?", (cutoff7,)).fetchone()[0]
+        uniq30 = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day >= ?", (cutoff30,)).fetchone()[0]
         days = conn.execute(
             "SELECT t.day, COUNT(DISTINCT t.th), COALESCE(w.hits, 0) FROM tokens t "
-            "LEFT JOIN wakes w ON w.day = t.day "
-            "GROUP BY t.day ORDER BY t.day DESC LIMIT 30").fetchall()
-        cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 30 * 86400))
+            "LEFT JOIN wakes w ON w.day = t.day GROUP BY t.day ORDER BY t.day DESC LIMIT 30").fetchall()
         countries = conn.execute(
             "SELECT cc, SUM(hits) FROM countries WHERE day >= ? "
-            "GROUP BY cc ORDER BY SUM(hits) DESC LIMIT 20", (cutoff,)).fetchall()
-        week_cutoff = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 7 * 86400))
-        uniq30 = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day >= ?", (cutoff,)).fetchone()[0]
-        uniq7 = conn.execute("SELECT COUNT(DISTINCT th) FROM tokens WHERE day >= ?", (week_cutoff,)).fetchone()[0]
+            "GROUP BY cc ORDER BY SUM(hits) DESC LIMIT 20", (cutoff30,)).fetchall()
     finally:
         conn.close()
+    return {
+        "online": online,
+        "active24h": active24h,
+        "today_devices": today_dev,
+        "today_wakes": (today_wakes[0] if today_wakes else 0),
+        "uniq7": uniq7,
+        "uniq30": uniq30,
+        "days": [{"day": d, "devices": u, "wakes": w} for d, u, w in days],
+        "countries": [{"cc": cc, "hits": h} for cc, h in countries],
+        "ts": now,
+    }
 
-    rows = "".join(f"<tr><td>{d}</td><td>{u}</td><td>{w}</td></tr>" for d, u, w in days)
-    crows = "".join(f"<tr><td>{cc}</td><td>{h}</td></tr>" for cc, h in countries)
-    html = f"""<!doctype html><meta charset="utf-8"><title>Khandaq push stats</title>
-<style>body{{font-family:system-ui;margin:2rem;background:#14181c;color:#e8ecef}}
-table{{border-collapse:collapse;margin:1rem 2rem 1rem 0;display:inline-table;vertical-align:top}}
-td,th{{border:1px solid #2e3948;padding:.35rem .8rem;text-align:right}}
-th{{background:#1d242c}}h1{{font-size:1.3rem}}small{{color:#8fa0b0}}</style>
-<h1>Khandaq push relay — usage</h1>
-<p>Активные устройства (уникальные, с включёнными пушами): <b>{uniq7}</b> за 7 дней · <b>{uniq30}</b> за 30 дней</p>
-<table><tr><th>День (UTC)</th><th>Устройств</th><th>Пушей</th></tr>{rows}</table>
-<table><tr><th>Страна (30д)</th><th>Пушей</th></tr>{crows}</table>
-<p><small>Считаются только агрегаты: хэш токена (уникальность за день) и страна по IP; сами токены и IP не сохраняются.
-Покрывает пользователей с включёнными пушами на обеих платформах, независимо от источника установки.</small></p>"""
+
+def _stats_key_ok() -> bool:
+    key = request.args.get("key", "")
+    return bool(STATS_KEY) and hmac.compare_digest(key, STATS_KEY)
+
+
+@app.route("/stats.json")
+def stats_json():
+    if not _stats_key_ok():
+        return jsonify({"error": "not found"}), 404
+    return jsonify(_stats_snapshot())
+
+
+@app.route("/stats")
+def stats():
+    if not _stats_key_ok():
+        return jsonify({"error": "not found"}), 404
+
+    html = """<!doctype html><html lang="ru"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Khandaq — Dashboard</title>
+<style>
+:root{--bg:#12141f;--card:#1a1d2b;--card2:#20243a;--tx:#eef1f6;--mut:#8b93a7;--line:#2a2f45}
+*{box-sizing:border-box;margin:0}
+body{font-family:-apple-system,system-ui,'Segoe UI',Roboto,sans-serif;background:
+ radial-gradient(1200px 600px at 80% -10%,#232a4d 0%,transparent 60%),var(--bg);
+ color:var(--tx);min-height:100vh;padding:2rem clamp(1rem,4vw,3rem)}
+h1{font-size:1.7rem;margin-bottom:1.4rem}
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-bottom:1.6rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.2rem 1.3rem}
+.card .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+ font-size:22px;margin-bottom:.9rem}
+.card .lb{color:var(--mut);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.35rem}
+.card .v{font-size:1.9rem;font-weight:700}
+.badge{display:inline-block;margin-top:.6rem;font-size:.72rem;padding:.2rem .55rem;border-radius:999px;
+ background:#173626;color:#4ade80}
+.badge.gray{background:#252a3e;color:var(--mut)}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ade80;margin-right:.45rem;
+ animation:p 1.6s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.panels{display:grid;gap:1rem;grid-template-columns:2fr 1fr}
+@media(max-width:800px){.panels{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.2rem 1.3rem;overflow-x:auto}
+.panel h2{font-size:.95rem;margin-bottom:.9rem;color:var(--tx)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{padding:.45rem .6rem;text-align:right;border-bottom:1px solid var(--line)}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--mut);font-weight:500;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.bar{height:6px;border-radius:3px;background:linear-gradient(90deg,#6d5cff,#22d3ee);min-width:2px}
+.flag{font-size:1.15rem;margin-right:.5rem}
+footer{margin-top:1.4rem;color:var(--mut);font-size:.78rem;max-width:70ch}
+#upd{color:var(--mut);font-size:.78rem;margin-left:.8rem;font-weight:400}
+</style>
+<h1>Khandaq — Dashboard <span id="upd"></span></h1>
+<div class="grid">
+ <div class="card"><div class="ic" style="background:#173626">🟢</div><div class="lb">Онлайн сейчас</div>
+  <div class="v" id="online">—</div><span class="badge"><span class="pulse"></span>активность за 5 мин</span></div>
+ <div class="card"><div class="ic" style="background:#2b2450">👥</div><div class="lb">Устройств за 24 часа</div>
+  <div class="v" id="active24h">—</div><span class="badge gray" id="todaydev">—</span></div>
+ <div class="card"><div class="ic" style="background:#123a46">📅</div><div class="lb">Устройств за 7 дней</div>
+  <div class="v" id="uniq7">—</div><span class="badge gray" id="uniq30b">—</span></div>
+ <div class="card"><div class="ic" style="background:#3a2a12">🔔</div><div class="lb">Пушей сегодня</div>
+  <div class="v" id="wakes">—</div><span class="badge gray">доставлено через relay</span></div>
+</div>
+<div class="panels">
+ <div class="panel"><h2>По дням (UTC)</h2>
+  <table id="daysT"><tr><th>День</th><th>Устройств</th><th>Пушей</th><th style="width:40%"></th></tr></table></div>
+ <div class="panel"><h2>Страны · 30 дней</h2>
+  <table id="ccT"><tr><th>Страна</th><th>Пушей</th></tr></table></div>
+</div>
+<footer>Считаются только агрегаты: хэш push-токена (уникальные устройства) и страна по IP; сами токены и
+IP-адреса не сохраняются. Покрывает пользователей с включёнными пушами на обеих платформах, независимо от
+источника установки (Play, TestFlight, APK с сайта или GitHub).</footer>
+<script>
+const KEY=new URLSearchParams(location.search).get('key');
+const flag=cc=>cc&&cc!=='??'?String.fromCodePoint(...[...cc.toUpperCase()].map(c=>127397+c.charCodeAt(0))):'🌐';
+const NAMES={'RU':'Россия','TR':'Турция','DE':'Германия','US':'США','AE':'ОАЭ','KZ':'Казахстан','UZ':'Узбекистан',
+'TJ':'Таджикистан','AZ':'Азербайджан','GE':'Грузия','NL':'Нидерланды','FR':'Франция','GB':'Британия','??':'Неизвестно'};
+async function tick(){
+ try{
+  const r=await fetch('/stats.json?key='+encodeURIComponent(KEY),{cache:'no-store'});
+  if(!r.ok)return;
+  const d=await r.json();
+  for(const id of['online','active24h','uniq7'])document.getElementById(id).textContent=d[id];
+  document.getElementById('wakes').textContent=d.today_wakes;
+  document.getElementById('todaydev').textContent='сегодня: '+d.today_devices;
+  document.getElementById('uniq30b').textContent='за 30 дней: '+d.uniq30;
+  const max=Math.max(1,...d.days.map(x=>x.devices));
+  document.getElementById('daysT').innerHTML='<tr><th>День</th><th>Устройств</th><th>Пушей</th><th style="width:40%"></th></tr>'+
+   d.days.map(x=>`<tr><td>${x.day}</td><td>${x.devices}</td><td>${x.wakes}</td>`+
+   `<td><div class="bar" style="width:${Math.round(100*x.devices/max)}%"></div></td></tr>`).join('');
+  document.getElementById('ccT').innerHTML='<tr><th>Страна</th><th>Пушей</th></tr>'+
+   d.countries.map(x=>`<tr><td><span class="flag">${flag(x.cc)}</span>${NAMES[x.cc]||x.cc}</td><td>${x.hits}</td></tr>`).join('');
+  document.getElementById('upd').textContent='обновлено '+new Date(d.ts*1000).toLocaleTimeString();
+ }catch(e){}
+}
+tick();setInterval(tick,10000);
+</script></html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 

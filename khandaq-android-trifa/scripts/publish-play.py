@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10332.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10333.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Photos sent with text now show as a single bubble with the caption under the picture, like in other messengers - in private chats and groups, in both directions."},
-                    {"language": "ru-RU", "text": "Фото с текстом теперь показываются одним сообщением: подпись под картинкой, как в других мессенджерах — в личных чатах и группах, в обе стороны."},
+                    {"language": "en-US", "text": "No more chat flickering during photo/video transfers. Videos in chats now show a play button and duration. Captions now appear under videos too. Media preview: real emoji picker and a cleaner layout."},
+                    {"language": "ru-RU", "text": "Убрано мерцание чата при передаче фото/видео. Видео в чатах теперь с кнопкой воспроизведения и длительностью. Подписи отображаются и под видео. Экран отправки медиа: настоящий выбор эмодзи и меньше лишних кнопок."},
                 ],
             }],
         })

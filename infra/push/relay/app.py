@@ -233,7 +233,18 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
             continue
 
         if resp.status_code not in (200, 201):
-            return False, f"FCM v1 HTTP {resp.status_code}: {resp.text[:200]}"
+            # surface FCM's errorCode (e.g. THIRD_PARTY_AUTH_ERROR = broken/missing APNs key in
+            # the Firebase project) — the generic 401 text alone points at the WRONG credential.
+            err_code = ""
+            try:
+                for d in resp.json().get("error", {}).get("details", []):
+                    if "errorCode" in d:
+                        err_code = d["errorCode"]
+                        break
+            except Exception:
+                pass
+            return False, f"FCM v1 HTTP {resp.status_code} [{err_code}]: {resp.text[:200]}"
+        log.info("wake ok: token %s…", token[:12])
         return True, "ok"
     return False, "FCM v1: unreachable"
 

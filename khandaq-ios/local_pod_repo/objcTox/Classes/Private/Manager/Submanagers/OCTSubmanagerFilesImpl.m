@@ -759,6 +759,50 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     if (friend.isConnected) {
         [self resendPendingOutgoingFilesToFriend:friend];
     }
+    else {
+        [self requeueInFlightTransfersForDisconnectedFriend:friend];
+    }
+}
+
+// KHANDAQ (#177): toxcore forgets every in-flight transfer when the friend connection drops, but
+// nothing here reacted to the drop — an outgoing voice/file caught mid-flap kept its (now dead)
+// fileNumber and spun in «Loading» forever while later messages flowed over the new connection.
+// On disconnect: cancel the orphaned operation, then move OUTGOING transfers back into the proven
+// faux-offline queue (internalFileNumber=-1 + WaitingConfirmation → auto-resent by the
+// friend-connected hook / delivery watchdog) and mark INCOMING ones canceled (the sender's side
+// re-initiates them the same way, arriving as a fresh transfer).
+- (void)requeueInFlightTransfersForDisconnectedFriend:(OCTFriend *)friend
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageFile.fileType IN %@ AND messageFile.internalFileNumber != %d",
+                              chat.uniqueIdentifier,
+                              @[@(OCTMessageFileTypeWaitingConfirmation), @(OCTMessageFileTypeLoading), @(OCTMessageFileTypePaused)],
+                              (int)kOCTToxFileNumberFailure];
+
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+
+    for (OCTMessageAbstract *message in results) {
+        BOOL outgoing = (message.senderUniqueIdentifier == nil);
+        OCTLogInfo(@"requeue-on-disconnect: %@ transfer fileNumber %d friend %@",
+                   outgoing ? @"outgoing" : @"incoming", message.messageFile.internalFileNumber, friend);
+
+        OCTFileBaseOperation *operation = [self operationWithFileNumber:message.messageFile.internalFileNumber
+                                                           friendNumber:friend.friendNumber];
+        [operation cancel];
+
+        [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+            if (outgoing) {
+                file.internalFileNumber = (int)kOCTToxFileNumberFailure;
+                file.fileType = OCTMessageFileTypeWaitingConfirmation;
+            }
+            else {
+                file.fileType = OCTMessageFileTypeCanceled;
+            }
+        }];
+    }
 }
 
 - (void)resendPendingOutgoingFilesToFriend:(OCTFriend *)friend

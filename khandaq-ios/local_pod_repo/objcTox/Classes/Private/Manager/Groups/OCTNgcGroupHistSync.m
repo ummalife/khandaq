@@ -468,10 +468,28 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
         return nil;
     }
 
+    // KHANDAQ (#170): attribute the served file to its REAL author. The old resolve went through the
+    // VOLATILE groupSenderPeerId (NGC reuses peer ids across leave/rejoin), and any unresolved sender
+    // (peerId 0 — e.g. a sync-inserted file whose author was offline at insert time) was served under
+    // OUR OWN key. The receiver then saw a "new" message from us and stored a duplicate bubble.
+    // Prefer the pubkey frozen at receipt (#82); claim self only for genuinely outgoing rows; if the
+    // author cannot be determined reliably, do not serve the file at all.
     uint32_t senderPeerId = message.groupSenderPeerId;
-    NSString *senderPubkeyHex = senderPeerId == 0
-        ? self.selfPublicKeyBlock(groupNumber)
-        : self.peerPublicKeyBlock(groupNumber, senderPeerId);
+    NSString *senderPubkeyHex = messageFile.groupSenderPubkey;
+
+    if (senderPubkeyHex.length == 0) {
+        if (senderPeerId == 0) {
+            // no frozen pubkey + peer id 0 => our own outgoing file
+            senderPubkeyHex = self.selfPublicKeyBlock(groupNumber);
+        }
+        else {
+            // legacy incoming row without frozen pubkey — best-effort volatile resolve
+            senderPubkeyHex = self.peerPublicKeyBlock(groupNumber, senderPeerId);
+        }
+    }
+
+    NSLog(@"KQ170 sync-file SERVE hash=%@ name=%@ senderPeerId=%u pk=%@",
+          messageFile.groupMsgIdHashHex, messageFile.fileName, senderPeerId, senderPubkeyHex);
 
     if (senderPubkeyHex.length == 0) {
         return nil;
@@ -634,7 +652,10 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
         return;
     }
 
-    if (self.fileExistsBlock(chat, msgIdHashHex)) {
+    BOOL kqExists = self.fileExistsBlock(chat, msgIdHashHex);
+    NSLog(@"KQ170 sync-file RECV group=%u peer=%u hash=%@ sender=%@ name=%@ exists=%d",
+          groupNumber, peerId, msgIdHashHex, senderPubkeyHex, fileName, (int)kqExists);
+    if (kqExists) {
         if (self.fileSyncConfirmationBlock) {
             self.fileSyncConfirmationBlock(chat, msgIdHashHex, peerId);
         }

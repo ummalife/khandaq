@@ -1757,6 +1757,64 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     return handled;
 }
 
+// KHANDAQ (#170): strip the "NNN_" uniquifier prefixes that OCTFileTools/receivers prepend when
+// storing a file under an already-taken name, so re-broadcast copies compare equal to the original.
+static NSString *OCTGroupFileBaseName(NSString *fileName)
+{
+    NSString *base = fileName ?: @"";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"^[0-9]+_"
+                                                                           options:0
+                                                                             error:nil];
+    for (int i = 0; i < 4; i++) {
+        NSString *stripped = [regex stringByReplacingMatchesInString:base
+                                                             options:0
+                                                               range:NSMakeRange(0, base.length)
+                                                        withTemplate:@""];
+        if ([stripped isEqualToString:base]) {
+            break;
+        }
+        base = stripped;
+    }
+    return base;
+}
+
+- (BOOL)groupReadyFileDuplicateExistsInChat:(OCTChat *)chat
+                                   fileName:(NSString *)fileName
+                                   fileSize:(uint64_t)fileSize
+{
+    if (chat.uniqueIdentifier.length == 0 || fileName.length == 0 || fileSize == 0) {
+        return NO;
+    }
+
+    NSString *baseName = OCTGroupFileBaseName(fileName);
+
+    if (baseName.length == 0) {
+        return NO;
+    }
+
+    // 24h window: NGC group files are tiny (<=36KB); the same size + same base name arriving twice
+    // within a day is a sync/re-broadcast duplicate, not a deliberate re-send of an old file.
+    NSTimeInterval windowStart = [[NSDate date] timeIntervalSince1970] - 24.0 * 60.0 * 60.0;
+
+    __block BOOL exists = NO;
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *candidates = [OCTMessageAbstract
+            objectsInRealm:self.realm
+                     where:@"chatUniqueIdentifier == %@ AND messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize == %llu AND dateInterval > %f",
+            chat.uniqueIdentifier, (int)OCTMessageFileTypeReady, fileSize, windowStart];
+
+        for (OCTMessageAbstract *candidate in candidates) {
+            if ([OCTGroupFileBaseName(candidate.messageFile.fileName) caseInsensitiveCompare:baseName] == NSOrderedSame) {
+                exists = YES;
+                return;
+            }
+        }
+    });
+
+    return exists;
+}
+
 - (OCTMessageAbstract *)addMessageWithFileNumber:(OCTToxFileNumber)fileNumber
                                         fileType:(OCTMessageFileType)fileType
                                         fileSize:(OCTToxFileSize)fileSize

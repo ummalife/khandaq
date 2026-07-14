@@ -3436,6 +3436,15 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return nil;
             }
 
+            // KHANDAQ (#170): the check above compares exact name + volatile peer id inside 120s —
+            // a re-served copy after a rejoin has a NEW peer id and a storage-prefixed name, so it
+            // slipped through. Collapse by content (size + base name) against what we already show.
+            if ([realmManager groupReadyFileDuplicateExistsInChat:chat fileName:fileName fileSize:fileSize]) {
+                NSLog(@"KQ170 sync-file DUP-SKIP name=%@ size=%llu", fileName, fileSize);
+                [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
+                return nil;
+            }
+
             if (peerId > 0 && peerName.length > 0) {
                 [realmManager upsertGroupPeerForChat:chat peerId:peerId peerName:peerName];
             }
@@ -3646,7 +3655,19 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                          filePath:filePath
                                                          fileSize:fileSize];
 
+    NSLog(@"KQ170 live-file COMPLETE group=%u peer=%u hash=%@ name=%@ size=%llu handled=%d",
+          groupNumber, peerId, msgIdHex, fileName, fileSize, (int)handled);
+
     if (handled) {
+        return;
+    }
+
+    // KHANDAQ (#170): a re-broadcast/re-served copy arrives with a DIFFERENT msg-id hash and a
+    // storage-prefixed file name, so the hash dedup above cannot catch it. Collapse by content
+    // (same size + same base name in this chat) instead of stacking another identical photo.
+    if ([realmManager groupReadyFileDuplicateExistsInChat:chat fileName:fileName fileSize:fileSize]) {
+        NSLog(@"KQ170 live-file DUP-SKIP group=%u name=%@ size=%llu", groupNumber, fileName, fileSize);
+        [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
         return;
     }
 

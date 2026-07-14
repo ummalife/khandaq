@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10331.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10332.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "App lock: PIN is no longer requested after switching the theme, and the old 'ask every time' setting is migrated to a 1-minute grace period. The theme row now names the current theme (Dark/Light). Avatar errors now show a step code to help us diagnose reports."},
-                    {"language": "ru-RU", "text": "Блокировка: PIN больше не запрашивается при смене темы, а старая настройка «спрашивать каждый раз» переведена на минутную отсрочку. Строка темы теперь называет текущую тему (Тёмная/Светлая). Ошибки установки аватара показывают код шага для диагностики."},
+                    {"language": "en-US", "text": "Photos sent with text now show as a single bubble with the caption under the picture, like in other messengers - in private chats and groups, in both directions."},
+                    {"language": "ru-RU", "text": "Фото с текстом теперь показываются одним сообщением: подпись под картинкой, как в других мессенджерах — в личных чатах и группах, в обе стороны."},
                 ],
             }],
         })

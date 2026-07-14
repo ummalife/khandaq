@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/media_preview_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/black">
@@ -12,7 +13,7 @@
         android:layout_marginTop="56dp"
         android:layout_marginBottom="150dp" />
 
-    <!-- Top bar: back (start) · counter (center) · confirm check (end) -->
+    <!-- Top bar: back (start) · counter (center) -->
     <ImageButton
         android:id="@+id/media_preview_close"
         android:layout_width="48dp"
@@ -39,18 +40,6 @@
         android:textColor="@android:color/white"
         android:textSize="14sp"
         android:visibility="gone" />
-
-    <ImageButton
-        android:id="@+id/media_preview_check"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:layout_gravity="top|end"
-        android:layout_margin="10dp"
-        android:background="@drawable/bg_voice_recording_send"
-        android:contentDescription="@string/group_member_action_send"
-        android:padding="10dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_check_white_24" />
 
     <!-- Bottom bar: thumbnails + [emoji · caption · round send] -->
     <LinearLayout
@@ -89,7 +78,7 @@
                 android:padding="10dp"
                 android:src="@drawable/ic_emoji_smile_24" />
 
-            <EditText
+            <com.vanniktech.emoji.EmojiEditText
                 android:id="@+id/media_preview_caption"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"

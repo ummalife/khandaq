@@ -21,6 +21,10 @@ import android.widget.TextView;
 
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.github.chrisbanes.photoview.PhotoView;
+import com.mikepenz.fontawesome_typeface_library.FontAwesome;
+import com.mikepenz.iconics.IconicsDrawable;
+import com.vanniktech.emoji.EmojiEditText;
+import com.vanniktech.emoji.EmojiPopup;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +38,8 @@ import androidx.viewpager2.widget.ViewPager2;
 public class MediaSendPreviewActivity extends AppCompatActivity
 {
     private ArrayList<Uri> uris;
-    private EditText captionField;
+    private EmojiEditText captionField;
+    private EmojiPopup emojiPopup;
     private TextView counterView;
     private ViewPager2 pager;
     private ThumbnailAdapter thumbAdapter;
@@ -86,7 +91,6 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         }
 
         final ImageButton backButton = findViewById(R.id.media_preview_close);
-        final ImageButton checkButton = findViewById(R.id.media_preview_check);
         final ImageButton sendButton = findViewById(R.id.media_preview_send);
         final ImageView emojiButton = findViewById(R.id.media_preview_emoji);
 
@@ -98,7 +102,6 @@ public class MediaSendPreviewActivity extends AppCompatActivity
 
         backButton.setOnClickListener(cancelListener);
 
-        // KHANDAQ (Figma): both the top confirm-check and the round send arrow confirm the send.
         final View.OnClickListener sendListener = v ->
         {
             final Intent result = new Intent();
@@ -111,25 +114,31 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             setResult(Activity.RESULT_OK, result);
             finish();
         };
-        checkButton.setOnClickListener(sendListener);
         sendButton.setOnClickListener(sendListener);
 
-        // Emoji icon focuses the caption field and opens the keyboard (user can switch to emoji there).
+        emojiPopup = EmojiPopup.Builder.fromRootView(findViewById(R.id.media_preview_root)).
+                setOnEmojiPopupShownListener(() -> emojiButton.setImageDrawable(
+                        new IconicsDrawable(this).icon(FontAwesome.Icon.faw_keyboard).
+                                color(Color.WHITE).sizeDp(24))).
+                setOnEmojiPopupDismissListener(() -> emojiButton.setImageResource(R.drawable.ic_emoji_smile_24)).
+                setBackgroundColor(getResources().getColor(R.color.md_grey_800)).
+                build(captionField);
+
         emojiButton.setOnClickListener(v ->
         {
             captionField.requestFocus();
-            final android.view.inputmethod.InputMethodManager imm =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null)
-            {
-                imm.showSoftInput(captionField, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-            }
+            emojiPopup.toggle();
         });
     }
 
     @Override
     public void onBackPressed()
     {
+        if (emojiPopup != null && emojiPopup.isShowing())
+        {
+            emojiPopup.dismiss();
+            return;
+        }
         setResult(Activity.RESULT_CANCELED);
         super.onBackPressed();
     }

@@ -488,8 +488,7 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
         }
     }
 
-    NSLog(@"KQ170 sync-file SERVE hash=%@ name=%@ senderPeerId=%u pk=%@",
-          messageFile.groupMsgIdHashHex, messageFile.fileName, senderPeerId, senderPubkeyHex);
+    OCTLogInfo(@"NGC sync-file serve hash=%@ name=%@ senderPeerId=%u", messageFile.groupMsgIdHashHex, messageFile.fileName, senderPeerId);
 
     if (senderPubkeyHex.length == 0) {
         return nil;
@@ -652,10 +651,7 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
         return;
     }
 
-    BOOL kqExists = self.fileExistsBlock(chat, msgIdHashHex);
-    NSLog(@"KQ170 sync-file RECV group=%u peer=%u hash=%@ sender=%@ name=%@ exists=%d",
-          groupNumber, peerId, msgIdHashHex, senderPubkeyHex, fileName, (int)kqExists);
-    if (kqExists) {
+    if (self.fileExistsBlock(chat, msgIdHashHex)) {
         if (self.fileSyncConfirmationBlock) {
             self.fileSyncConfirmationBlock(chat, msgIdHashHex, peerId);
         }

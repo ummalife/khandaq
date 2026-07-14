@@ -3440,7 +3440,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             // a re-served copy after a rejoin has a NEW peer id and a storage-prefixed name, so it
             // slipped through. Collapse by content (size + base name) against what we already show.
             if ([realmManager groupReadyFileDuplicateExistsInChat:chat fileName:fileName fileSize:fileSize]) {
-                NSLog(@"KQ170 sync-file DUP-SKIP name=%@ size=%llu", fileName, fileSize);
+                OCTLogInfo(@"NGC sync-file dup-skip name=%@ size=%llu", fileName, fileSize);
                 [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
                 return nil;
             }
@@ -3655,9 +3655,6 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                          filePath:filePath
                                                          fileSize:fileSize];
 
-    NSLog(@"KQ170 live-file COMPLETE group=%u peer=%u hash=%@ name=%@ size=%llu handled=%d",
-          groupNumber, peerId, msgIdHex, fileName, fileSize, (int)handled);
-
     if (handled) {
         return;
     }
@@ -3666,7 +3663,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     // storage-prefixed file name, so the hash dedup above cannot catch it. Collapse by content
     // (same size + same base name in this chat) instead of stacking another identical photo.
     if ([realmManager groupReadyFileDuplicateExistsInChat:chat fileName:fileName fileSize:fileSize]) {
-        NSLog(@"KQ170 live-file DUP-SKIP group=%u name=%@ size=%llu", groupNumber, fileName, fileSize);
+        OCTLogInfo(@"NGC live-file dup-skip group=%u name=%@ size=%llu", groupNumber, fileName, fileSize);
         [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
         return;
     }

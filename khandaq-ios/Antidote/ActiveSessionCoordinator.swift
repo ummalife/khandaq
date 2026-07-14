@@ -287,6 +287,7 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
 
         // Show the connecting pill immediately on launch — connectionStatusUpdate only fires on a
         // *change*, so the initial offline→connecting period would otherwise have no indicator.
+        SelfConnectionTracker.update(isOnline: toxManager.user.connectionStatus != .none)
         if toxManager.user.connectionStatus == .none {
             notificationCoordinator.setConnectionState(
                 networkReachabilityMonitor.isReachable ? .connecting : .offline, animated: false)
@@ -462,6 +463,7 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
 
 extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
     func submanagerUser(_ submanager: OCTSubmanagerUser, connectionStatusUpdate connectionStatus: OCTToxConnectionStatus) {
+        SelfConnectionTracker.update(isOnline: connectionStatus != .none)
         updateUserStatusView()
 
         if connectionStatus == .none {

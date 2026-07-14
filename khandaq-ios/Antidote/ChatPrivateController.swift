@@ -98,6 +98,10 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var floatingDateView: UIView!
     fileprivate var floatingDateLabel: UILabel!
     fileprivate var floatingDateHideTimer: Timer?
+    // KHANDAQ (#178): while the subtitle shows an offline state ("connecting…"/"last seen…"), no
+    // Realm update fires if the friend stays offline — refresh it periodically so the
+    // post-reconnect grace window lapses back to "last seen" and relative times stay fresh.
+    fileprivate var presenceRefreshTimer: Timer?
     fileprivate lazy var floatingDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -188,6 +192,7 @@ class ChatPrivateController: PortraitChatController {
 
         messagesToken?.invalidate()
         friendToken?.invalidate()
+        presenceRefreshTimer?.invalidate()
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
@@ -2083,6 +2088,18 @@ private extension ChatPrivateController {
         let presence = FriendPresenceFormatter.presence(for: friend)
         titleView.presenceText = presence.text
         titleView.presenceIsOnline = presence.isOnline
+
+        if presence.isOnline {
+            presenceRefreshTimer?.invalidate()
+            presenceRefreshTimer = nil
+        } else if presenceRefreshTimer == nil {
+            presenceRefreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+                guard let self = self, let friend = self.friend else {
+                    return
+                }
+                self.updateTitlePresence(for: friend)
+            }
+        }
     }
 
     func updateTableHeaderView() {

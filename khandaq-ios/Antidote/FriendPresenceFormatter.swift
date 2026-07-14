@@ -9,6 +9,35 @@ struct FriendPresence {
     let isOnline: Bool
 }
 
+/// KHANDAQ (#178): friend links take 10–60s to re-establish after our own Tox connection comes up,
+/// so right after launch/reconnect an actually-online friend still reads as offline with a stale
+/// "last seen". Track our own connection so presence text can say "connecting…" during that window.
+enum SelfConnectionTracker {
+    static let friendReconnectGrace: TimeInterval = 60
+
+    private(set) static var isSelfOnline = false
+    private(set) static var selfOnlineSince: Date?
+
+    static func update(isOnline: Bool) {
+        if isOnline {
+            if !isSelfOnline || selfOnlineSince == nil {
+                selfOnlineSince = Date()
+            }
+            isSelfOnline = true
+        } else {
+            isSelfOnline = false
+            selfOnlineSince = nil
+        }
+    }
+
+    static var friendLinksMayStillBeConnecting: Bool {
+        guard isSelfOnline, let since = selfOnlineSince else {
+            return true
+        }
+        return Date().timeIntervalSince(since) < friendReconnectGrace
+    }
+}
+
 enum FriendPresenceFormatter {
     static func presence(for friend: OCTFriend) -> FriendPresence {
         let userStatus = UserStatus(connectionStatus: friend.connectionStatus, userStatus: friend.status)
@@ -21,8 +50,20 @@ enum FriendPresenceFormatter {
         case .busy:
             return FriendPresence(text: String(localized: "status_busy"), isOnline: true)
         case .offline:
+            // Only for recently-active friends — someone gone for days is genuinely offline and
+            // should keep the honest "last seen" even while our own link is settling.
+            if SelfConnectionTracker.friendLinksMayStillBeConnecting && wasRecentlyActive(friend) {
+                return FriendPresence(text: String(localized: "connecting_label"), isOnline: false)
+            }
             return FriendPresence(text: lastSeenText(for: friend), isOnline: false)
         }
+    }
+
+    private static func wasRecentlyActive(_ friend: OCTFriend) -> Bool {
+        guard friend.lastSeenOnlineInterval > 0, let date = friend.lastSeenOnline() else {
+            return false
+        }
+        return Date().timeIntervalSince(date) < 86400
     }
 
     static func lastSeenText(for friend: OCTFriend) -> String {

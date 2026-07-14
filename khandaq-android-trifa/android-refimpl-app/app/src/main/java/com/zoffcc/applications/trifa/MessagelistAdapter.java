@@ -493,6 +493,13 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
 
         try
         {
+            // KHANDAQ: skip the full rebuild when nothing visible changed — a blind
+            // notifyDataSetChanged() blanks every media thumbnail (Glide reload) and makes the
+            // whole chat blink on each onResume / delayed refresh.
+            if (same_rendered_state(this.messagelistitems, new_items))
+            {
+                return;
+            }
             // Log.i(TAG, "add_list_clear:001:new_items=" + new_items);
             this.messagelistitems.clear();
             this.messagelistitems.addAll(new_items);
@@ -504,6 +511,42 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             e.printStackTrace();
             Log.i(TAG, "add_list_clear:EE:" + e.getMessage());
         }
+    }
+
+    // is_new is deliberately ignored: it is reset in the DB on every resume and never rendered
+    // inside a chat row, so including it would defeat the skip on every re-entry.
+    private static boolean same_rendered_state(final List<com.zoffcc.applications.sorm.Message> old_items,
+                                               final List<com.zoffcc.applications.sorm.Message> new_items)
+    {
+        if (old_items == null || new_items == null || old_items.size() != new_items.size())
+        {
+            return false;
+        }
+
+        for (int i = 0; i < old_items.size(); i++)
+        {
+            final com.zoffcc.applications.sorm.Message a = old_items.get(i);
+            final com.zoffcc.applications.sorm.Message b = new_items.get(i);
+            if (a == null || b == null)
+            {
+                return false;
+            }
+            if (a.id != b.id || a.message_id != b.message_id || a.direction != b.direction ||
+                a.TOX_MESSAGE_TYPE != b.TOX_MESSAGE_TYPE || a.TRIFA_MESSAGE_TYPE != b.TRIFA_MESSAGE_TYPE ||
+                a.state != b.state || a.ft_accepted != b.ft_accepted ||
+                a.ft_outgoing_started != b.ft_outgoing_started || a.filedb_id != b.filedb_id ||
+                a.filetransfer_id != b.filetransfer_id || a.sent_timestamp != b.sent_timestamp ||
+                a.rcvd_timestamp != b.rcvd_timestamp || a.read != b.read || a.edited != b.edited ||
+                a.msg_at_relay != b.msg_at_relay || a.sent_push != b.sent_push ||
+                a.filetransfer_kind != b.filetransfer_kind || a.resend_count != b.resend_count ||
+                !java.util.Objects.equals(a.text, b.text) ||
+                !java.util.Objects.equals(a.filename_fullpath, b.filename_fullpath))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private boolean isDuplicateMessage(final Message candidate)

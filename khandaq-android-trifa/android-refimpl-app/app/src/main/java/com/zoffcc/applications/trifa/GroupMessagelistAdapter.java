@@ -318,6 +318,13 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
 
         try
         {
+            // KHANDAQ: skip the full rebuild when nothing visible changed — a blind
+            // notifyDataSetChanged() blanks every media thumbnail (Glide reload) and makes the
+            // whole chat blink on each onResume / delayed refresh.
+            if (same_rendered_state(this.messagelistitems, new_items))
+            {
+                return;
+            }
             // HelperGeneric.logI(TAG, "add_list_clear:001:new_items=" + new_items);
             this.messagelistitems.clear();
             this.messagelistitems.addAll(new_items);
@@ -329,6 +336,42 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             e.printStackTrace();
             HelperGeneric.logI(TAG, "add_list_clear:EE:" + e.getMessage());
         }
+    }
+
+    // is_new is deliberately ignored: it is reset in the DB on every resume and never rendered
+    // inside a chat row, so including it would defeat the skip on every re-entry.
+    private static boolean same_rendered_state(final List<com.zoffcc.applications.sorm.GroupMessage> old_items,
+                                               final List<com.zoffcc.applications.sorm.GroupMessage> new_items)
+    {
+        if (old_items == null || new_items == null || old_items.size() != new_items.size())
+        {
+            return false;
+        }
+
+        for (int i = 0; i < old_items.size(); i++)
+        {
+            final com.zoffcc.applications.sorm.GroupMessage a = old_items.get(i);
+            final com.zoffcc.applications.sorm.GroupMessage b = new_items.get(i);
+            if (a == null || b == null)
+            {
+                return false;
+            }
+            if (a.id != b.id || a.direction != b.direction ||
+                a.TRIFA_MESSAGE_TYPE != b.TRIFA_MESSAGE_TYPE || a.private_message != b.private_message ||
+                a.sent_timestamp != b.sent_timestamp || a.rcvd_timestamp != b.rcvd_timestamp ||
+                a.read != b.read || a.edited != b.edited || a.was_synced != b.was_synced ||
+                a.filesize != b.filesize ||
+                !java.util.Objects.equals(a.text, b.text) ||
+                !java.util.Objects.equals(a.tox_group_peername, b.tox_group_peername) ||
+                !java.util.Objects.equals(a.tox_group_peer_pubkey, b.tox_group_peer_pubkey) ||
+                !java.util.Objects.equals(a.file_name, b.file_name) ||
+                !java.util.Objects.equals(a.filename_fullpath, b.filename_fullpath))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     synchronized public void redraw_all_items()

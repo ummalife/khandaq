@@ -562,8 +562,9 @@ public class MessageListFragment extends Fragment
         try
         {
             int number_of_items_old = data_values.size();
-            data_values.clear();
 
+            // KHANDAQ: no early data_values.clear() — the list is shared with the adapter, and
+            // add_list_clear() needs the old content to detect "nothing changed" and skip the blink.
             List<com.zoffcc.applications.sorm.Message> ml = get_messages();
             adapter.add_list_clear(ml);
             try
@@ -659,7 +660,7 @@ public class MessageListFragment extends Fragment
                         try
                         {
                             final int number_of_items_old = data_values.size();
-                            data_values.clear();
+                            // no early clear — shared list, see add_list_clear unchanged-skip
                             adapter.add_list_clear(ml);
 
                             if (from_resume_fragment && (number_of_items_old > 0) &&

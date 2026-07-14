@@ -580,11 +580,8 @@ public class GroupMessageListFragment extends Fragment
         {
             if ((always) || (data_values != null))
             {
-                if (data_values != null)
-                {
-                    data_values.clear();
-                }
-
+                // KHANDAQ: no early data_values.clear() — the list is shared with the adapter, and
+                // add_list_clear() needs the old content to detect "nothing changed" and skip the blink.
                 if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
                 {
                     if (should_show_group_system_messages(current_group_id))
@@ -754,10 +751,7 @@ public class GroupMessageListFragment extends Fragment
                         }
                         try
                         {
-                            if (data_values != null)
-                            {
-                                data_values.clear();
-                            }
+                            // no early clear — shared list, see add_list_clear unchanged-skip
                             adapter.add_list_clear(loaded);
                         }
                         catch (Exception e)

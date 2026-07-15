@@ -206,6 +206,23 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
         return YES;
     }
 
+    // KHANDAQ (#166): a VoiceProcessingIO unit is invalidated by the system on an audio-session
+    // interruption (incoming PSTN call / Siri) or a media-services reset, but nothing here would
+    // notice — _running stays YES and audio dies for the rest of the call. Observe both and rebuild
+    // the unit. Remove-then-add keeps observers single even if begin is retried.
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    [nc removeObserver:self name:AVAudioSessionInterruptionNotification object:nil];
+    [nc removeObserver:self name:AVAudioSessionMediaServicesWereResetNotification object:nil];
+    [nc addObserver:self selector:@selector(handleAudioInterruption:)
+               name:AVAudioSessionInterruptionNotification object:nil];
+    [nc addObserver:self selector:@selector(handleMediaServicesReset:)
+               name:AVAudioSessionMediaServicesWereResetNotification object:nil];
+
+    return [self startUnit:error];
+}
+
+- (BOOL)startUnit:(NSError **)error
+{
     OSStatus status = noErr;
 
     AudioComponentDescription desc;
@@ -324,6 +341,15 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
 
 - (void)stop
 {
+    // Unregister first so no interruption/reset notification can restart the unit during teardown.
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [self disposeUnit];
+    _running = NO;
+}
+
+// Tears down the AudioUnit but keeps the object + ring buffers alive (used by stop and restartUnit).
+- (void)disposeUnit
+{
     if (_unitCreated) {
         if (_running) {
             AudioOutputUnitStop(_unit);
@@ -333,7 +359,37 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
         _unit = NULL;
         _unitCreated = NO;
     }
+}
+
+- (void)handleAudioInterruption:(NSNotification *)note
+{
+    NSNumber *type = note.userInfo[AVAudioSessionInterruptionTypeKey];
+    // On .began the system already stopped our unit; rebuild it when the interruption ends.
+    if (type.unsignedIntegerValue == AVAudioSessionInterruptionTypeEnded) {
+        [self restartUnit];
+    }
+}
+
+- (void)handleMediaServicesReset:(NSNotification *)note
+{
+    // After a media-services reset EVERY audio object is invalid — full rebuild.
+    [self restartUnit];
+}
+
+- (void)restartUnit
+{
+    OCTLogInfo(@"VPIO restarting unit after audio-session event");
+    [self disposeUnit];
     _running = NO;
+
+    // Best-effort: the call session may need reactivating before the unit can start.
+    NSError *sessionErr = nil;
+    [[AVAudioSession sharedInstance] setActive:YES error:&sessionErr];
+
+    NSError *startErr = nil;
+    if (! [self startUnit:&startErr]) {
+        OCTLogError(@"VPIO restart failed: %@", startErr);
+    }
 }
 
 - (void)provideIncomingPCM:(const SInt16 *)pcm
@@ -385,7 +441,12 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
 @property (nonatomic, assign) OCTToxAVSampleRate outputSampleRate;
 @property (nonatomic, assign) OCTToxAVChannels outputNumberOfChannels;
 #if TARGET_OS_IPHONE
-@property (nonatomic, strong) OCTVoiceUnitIO *voiceIO;
+// KHANDAQ (#166): ATOMIC on purpose — provideAudioFrames runs on the toxav receive thread and reads
+// voiceIO while stopAudioFlow nils it on the main thread. A nonatomic getter would hand back a pointer
+// that stopAudioFlow can dealloc mid-use (freeing the ring buffers under provideIncomingPCM →
+// use-after-free crash). The atomic getter retains+autoreleases, so a local strong capture keeps the
+// object alive across the call. Every read below takes a local strong ref before use.
+@property (atomic, strong) OCTVoiceUnitIO *voiceIO;
 #endif
 
 @end
@@ -654,8 +715,9 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
 - (void)provideAudioFrames:(OCTToxAVPCMData *)pcm sampleCount:(OCTToxAVSampleCount)sampleCount channels:(OCTToxAVChannels)channels sampleRate:(OCTToxAVSampleRate)sampleRate fromFriend:(OCTToxFriendNumber)friendNumber
 {
 #if TARGET_OS_IPHONE
-    if (self.voiceIO) {
-        [self.voiceIO provideIncomingPCM:pcm sampleCount:sampleCount channels:channels sampleRate:sampleRate];
+    OCTVoiceUnitIO *io = self.voiceIO; // atomic getter → strong ref, safe against concurrent stop
+    if (io) {
+        [io provideIncomingPCM:pcm sampleCount:sampleCount channels:channels sampleRate:sampleRate];
         return;
     }
 #endif
@@ -679,8 +741,9 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
 - (BOOL)isAudioRunning:(NSError **)error
 {
 #if TARGET_OS_IPHONE
-    if (self.voiceIO) {
-        return self.voiceIO.running;
+    OCTVoiceUnitIO *io = self.voiceIO;
+    if (io) {
+        return io.running;
     }
 #endif
     return self.inputQueue.running && self.outputQueue.running;

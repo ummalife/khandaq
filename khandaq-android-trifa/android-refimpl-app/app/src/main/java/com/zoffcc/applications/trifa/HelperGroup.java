@@ -7460,7 +7460,14 @@ public class HelperGroup
         {
             return;
         }
-        kickstart_group_connection(group_num, group_identifier);
+        // KHANDAQ: kickstart_group_connection does a BLOCKING bootstrap (getaddrinfo) + Thread.sleep(2000)
+        // — this is reached from create_new_group on the UI thread (AddPublicGroupActivity result), so it
+        // froze the app for >2s and ANR'd right after creating a public group. Run it off the UI thread,
+        // mirroring the already-threaded escalate_if_alone_too_long path.
+        final Thread t = new Thread(() -> kickstart_group_connection(group_num, group_identifier),
+                "grp-kick-pub-" + group_num);
+        t.setDaemon(true);
+        t.start();
     }
 
     // ---------------- friend-assisted group join ----------------

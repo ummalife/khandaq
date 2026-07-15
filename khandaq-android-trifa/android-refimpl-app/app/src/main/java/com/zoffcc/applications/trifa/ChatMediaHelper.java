@@ -241,26 +241,40 @@ public final class ChatMediaHelper
 
             if (VFS_ENCRYPT && isIocipherVirtualPath(localPath))
             {
-                try
-                {
-                    final String cachedPath = resolveVfsToCachedPath(localPath, "_dmview");
-                    final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
-                putMediaMeta(intent, sn, ts);
-                    intent.putExtra("image_filename", cachedPath);
-                    intent.putExtra("image_cache_key", cachedPath + "#" + message.id);
-                    context.startActivity(intent);
-                    return;
-                }
-                catch (Exception e)
-                {
-                    Log.i(TAG, "openImageViewer:vfs_cache:EE:" + e.getMessage());
-                    final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
-                putMediaMeta(intent, sn, ts);
-                    intent.putExtra("image_filename", localPath);
-                    intent.putExtra("image_cache_key", localPath + "#" + message.id);
-                    context.startActivity(intent);
-                    return;
-                }
+                // KHANDAQ: decrypting a multi-MB image out of the encrypted VFS is a full
+                // read+AES+write loop — the video path already does this off the UI thread (see
+                // bindVideoPreview), but the image tap ran it inline and froze the UI on every open.
+                // Do the copy on a background thread, then start the viewer back on the main thread.
+                final long msg_id = message.id;
+                final String vfsLocalPath = localPath;
+                new Thread(() -> {
+                    String cachedPath;
+                    try
+                    {
+                        cachedPath = resolveVfsToCachedPath(vfsLocalPath, "_dmview");
+                    }
+                    catch (Exception e)
+                    {
+                        Log.i(TAG, "openImageViewer:vfs_cache:EE:" + e.getMessage());
+                        cachedPath = vfsLocalPath;
+                    }
+                    final String finalPath = cachedPath;
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                        try
+                        {
+                            final Intent intent = new Intent(context, ImageviewerActivity_SD.class);
+                            putMediaMeta(intent, sn, ts);
+                            intent.putExtra("image_filename", finalPath);
+                            intent.putExtra("image_cache_key", finalPath + "#" + msg_id);
+                            context.startActivity(intent);
+                        }
+                        catch (Exception e2)
+                        {
+                            Log.i(TAG, "openImageViewer:vfs_start:EE:" + e2.getMessage());
+                        }
+                    });
+                }, "img-vfs-decrypt").start();
+                return;
             }
 
             final java.io.File direct = new java.io.File(message.filename_fullpath);

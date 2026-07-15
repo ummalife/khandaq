@@ -3597,6 +3597,19 @@ public class MessageListActivity extends AppCompatActivity
         {
             e.printStackTrace();
         }
+        // KHANDAQ (tester): re-prepare the action menu after the selection changes so Reply/Edit
+        // visibility (which depend on the current selection) update immediately, not only after the
+        // overflow is opened. Skip when the selection just emptied (amode is being finished).
+        try
+        {
+            if (amode != null && !selected_messages.isEmpty())
+            {
+                amode.invalidate();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
         return is_selected;
     }
 
@@ -3662,6 +3675,11 @@ public class MessageListActivity extends AppCompatActivity
                         if (amode != null)
                         {
                             amode.setTitle("" + selected_messages.size() + " selected");
+                            // KHANDAQ (tester): startSupportActionMode() ran onPrepareActionMode BEFORE the
+                            // message was added to selected_messages, so canReplyToCurrentSelection() was
+                            // evaluated on an empty selection and the "Reply" icon stayed hidden until the
+                            // overflow re-prepared the menu. Re-prepare now that the selection is set.
+                            amode.invalidate();
                         }
                         ret.ret_value = true;
                         return ret;

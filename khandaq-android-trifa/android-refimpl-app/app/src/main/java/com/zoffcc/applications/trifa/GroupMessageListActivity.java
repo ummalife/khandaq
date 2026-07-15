@@ -3219,6 +3219,17 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             e.printStackTrace();
         }
+        // KHANDAQ (tester): re-prepare so Reply/Edit visibility tracks the selection immediately.
+        try
+        {
+            if (amode != null && !selected_group_messages.isEmpty())
+            {
+                amode.invalidate();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
         return is_selected;
     }
 
@@ -3287,6 +3298,10 @@ public class GroupMessageListActivity extends AppCompatActivity
                         if (amode != null)
                         {
                             amode.setTitle("" + selected_group_messages.size() + " selected");
+                            // KHANDAQ (tester): action mode was started BEFORE the message was added to
+                            // the selection, so onPrepareActionMode hid "Reply" (empty selection) until
+                            // the overflow re-prepared it. Re-prepare now that the selection is set.
+                            amode.invalidate();
                         }
                         ret.ret_value = true;
                         return ret;

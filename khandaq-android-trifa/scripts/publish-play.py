@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10337.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10338.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Fixes and stability: re-sending the same photo/video to a group works again; group photo captions now arrive after the photo, in the right order; fewer freezes — chat opening, image opening, group creating and network reconnects no longer block the app; fixed a rare crash when showing avatars."},
-                    {"language": "ru-RU", "text": "Исправления и стабильность: повторная отправка того же фото/видео в группу снова работает; подпись к фото в группе приходит после фото, в правильном порядке; меньше зависаний — открытие чата, открытие картинки, создание группы и переподключение к сети больше не блокируют приложение; исправлен редкий вылет при показе аватаров."},
+                    {"language": "en-US", "text": "Setting a profile photo from a large image no longer fails or crashes. Includes the earlier stability fixes (group media re-send, caption order, fewer freezes)."},
+                    {"language": "ru-RU", "text": "Установка фото профиля из большого изображения больше не срывается и не вылетает. Включает прежние фиксы стабильности (повторная отправка медиа в группу, порядок подписи, меньше зависаний)."},
                 ],
             }],
         })

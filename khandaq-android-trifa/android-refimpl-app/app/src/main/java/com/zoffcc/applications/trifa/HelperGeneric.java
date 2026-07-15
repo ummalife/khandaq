@@ -6065,10 +6065,17 @@ public class HelperGeneric
 
     public static void fill_friend_avatar_icon(Message m, Context context, CircleImageView img_avatar)
     {
+        // KHANDAQ (tester feedback): in a 1:1 chat the sender is already obvious from the bubble
+        // colour + side, so a per-message sender-initial avatar is redundant and only clutters the
+        // look — the text bubbles already hide it. This method is called ONLY from the 1:1 message
+        // holders (groups use GroupMessageListHolder_* and keep their per-peer avatars), so hide it
+        // here to make every 1:1 bubble (text, voice, file, media) consistent.
         try
         {
-            final String peerName = HelperFriend.get_friend_name_from_pubkey(m.tox_friendpubkey);
-            ChatBubbleUiHelper.fill_group_peer_avatar(context, m.tox_friendpubkey, peerName, img_avatar);
+            if (img_avatar != null)
+            {
+                img_avatar.setVisibility(View.GONE);
+            }
         }
         catch (Exception e)
         {

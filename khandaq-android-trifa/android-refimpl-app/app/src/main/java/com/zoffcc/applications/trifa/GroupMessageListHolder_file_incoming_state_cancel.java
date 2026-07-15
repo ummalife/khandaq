@@ -631,14 +631,14 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                     icon(GoogleMaterial.Icon.gmd_file_download).color(Color.WHITE).sizeDp(48));
             ft_preview_image.setTag(R.id.ft_preview_image,
                     "dl:" + (message_.msg_id_hash != null ? message_.msg_id_hash : ""));
-            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null));
+            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null, layout_message_container));
         }
         else if (is_image)
         {
             ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
             textView.setVisibility(View.GONE);
 
-            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null));
+            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null, layout_message_container));
 
             final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(message_);
             // KHANDAQ (Figma): rounded photo bubble that HUGS the image at a sane size (override +
@@ -708,7 +708,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                 {
                     bindVideoPreview(context, HelperFiletransfer.resolveGroupMessageMediaPath(message_), message_.id, null, ft_preview_image);
                 }
-                ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null));
+                ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message_, null, layout_message_container));
             }
             catch (Exception e)
             {

@@ -335,7 +335,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
 
                 if (VFS_ENCRYPT)
                 {
-                    ft_preview_image.setOnTouchListener(mediaOpenTouchListener(context, message2, export_filename_with_path));
+                    ft_preview_image.setOnTouchListener(mediaOpenTouchListener(context, message2, export_filename_with_path, layout_message_container));
 
 
                     info.guardianproject.iocipher.File f2 = new info.guardianproject.iocipher.File(
@@ -404,7 +404,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
 
                     bindVideoPreview(context, message2, export_filename_with_path, ft_preview_image);
                     ft_preview_image.setOnTouchListener(
-                            mediaOpenTouchListener(context, message2, export_filename_with_path));
+                            mediaOpenTouchListener(context, message2, export_filename_with_path, layout_message_container));
                 }
                 catch (Exception e)
                 {
@@ -566,7 +566,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
     {
         if ((PREF__allow_open_encrypted_file_via_intent) && (export_filename_with_path == null))
         {
-            ft_preview_image.setOnTouchListener(mediaOpenTouchListener(context, message2, null));
+            ft_preview_image.setOnTouchListener(mediaOpenTouchListener(context, message2, null, layout_message_container));
         }
         else
         {
@@ -577,7 +577,7 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
             else
             {
                 ft_preview_image.setOnTouchListener(
-                        mediaOpenTouchListener(context, message2, export_filename_with_path));
+                        mediaOpenTouchListener(context, message2, export_filename_with_path, layout_message_container));
             }
         }
     }

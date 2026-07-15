@@ -292,18 +292,9 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                     textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, MESSAGE_TEXT_SIZE[PREF__global_font_size]);
                 }
 
-                ft_preview_image.setOnTouchListener(new View.OnTouchListener()
-                {
-                    @Override
-                    public boolean onTouch(View v, MotionEvent event)
-                    {
-                        if (event.getAction() == MotionEvent.ACTION_UP)
-                        {
-                            HelperFiletransfer.open_outgoing_message_file(v.getContext(), message);
-                        }
-                        return true;
-                    }
-                });
+                ft_preview_image.setOnTouchListener(ChatMediaHelper.gestureMediaOpenTouchListener(context,
+                        () -> HelperFiletransfer.open_outgoing_message_file(ft_preview_image.getContext(), message),
+                        layout_message_container));
 
                 if (kqPreviewAlreadyBuilt)
                 {
@@ -387,18 +378,9 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                 ft_preview_image.setLayoutParams(imageLp);
 
                 ChatMediaHelper.bindVideoPreview(context, message, null, ft_preview_image);
-                ft_preview_image.setOnTouchListener(new View.OnTouchListener()
-                {
-                    @Override
-                    public boolean onTouch(View v, MotionEvent event)
-                    {
-                        if (event.getAction() == MotionEvent.ACTION_UP)
-                        {
-                            HelperFiletransfer.open_outgoing_message_file(v.getContext(), message);
-                        }
-                        return true;
-                    }
-                });
+                ft_preview_image.setOnTouchListener(ChatMediaHelper.gestureMediaOpenTouchListener(context,
+                        () -> HelperFiletransfer.open_outgoing_message_file(ft_preview_image.getContext(), message),
+                        layout_message_container));
             }
             else if (is_audio) // ---- an audio file ----
             {

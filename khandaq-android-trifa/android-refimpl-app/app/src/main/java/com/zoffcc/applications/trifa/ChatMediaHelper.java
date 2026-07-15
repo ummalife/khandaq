@@ -811,35 +811,128 @@ public final class ChatMediaHelper
         }
     }
 
+    // KHANDAQ (tester feedback): these used to open the media on ANY ACTION_UP, so a long press over
+    // a photo/video/file thumbnail opened the file instead of entering multi-select (delete), and the
+    // row's long-click never fired over the thumbnail. Use a GestureDetector: a single tap opens the
+    // media (or TOGGLES selection when the row is already in selection mode), and a long press forwards
+    // to the row's selection long-click via the passed selectionTarget.
     public static View.OnTouchListener groupMediaOpenTouchListener(final Context context, final GroupMessage message,
-                                                                   final String exportPath)
+                                                                   final String exportPath, final View selectionTarget)
     {
+        final android.view.GestureDetector gd = new android.view.GestureDetector(context,
+                new android.view.GestureDetector.SimpleOnGestureListener()
+        {
+            @Override
+            public boolean onSingleTapUp(MotionEvent e)
+            {
+                if ((selectionTarget != null) && !MainActivity.selected_group_messages.isEmpty())
+                {
+                    selectionTarget.performClick();
+                }
+                else
+                {
+                    openGroupMessageMedia(context, message, exportPath);
+                }
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e)
+            {
+                if (selectionTarget != null)
+                {
+                    selectionTarget.performLongClick();
+                }
+            }
+        });
         return new View.OnTouchListener()
         {
             @Override
             public boolean onTouch(View v, MotionEvent event)
             {
-                if (event.getAction() == MotionEvent.ACTION_UP)
+                gd.onTouchEvent(event);
+                return true;
+            }
+        };
+    }
+
+    // Same gesture behaviour for OUTGOING media, whose open action differs (open_outgoing_message_file):
+    // single tap runs openAction (or toggles selection when the row is selected), long press selects.
+    public static View.OnTouchListener gestureMediaOpenTouchListener(final Context context, final Runnable openAction,
+                                                                     final View selectionTarget)
+    {
+        final android.view.GestureDetector gd = new android.view.GestureDetector(context,
+                new android.view.GestureDetector.SimpleOnGestureListener()
+        {
+            @Override
+            public boolean onSingleTapUp(MotionEvent e)
+            {
+                if ((selectionTarget != null) && !MainActivity.selected_messages.isEmpty())
                 {
-                    openGroupMessageMedia(context, message, exportPath);
+                    selectionTarget.performClick();
                 }
+                else if (openAction != null)
+                {
+                    openAction.run();
+                }
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e)
+            {
+                if (selectionTarget != null)
+                {
+                    selectionTarget.performLongClick();
+                }
+            }
+        });
+        return new View.OnTouchListener()
+        {
+            @Override
+            public boolean onTouch(View v, MotionEvent event)
+            {
+                gd.onTouchEvent(event);
                 return true;
             }
         };
     }
 
     public static View.OnTouchListener mediaOpenTouchListener(final Context context, final Message message,
-                                                              final String exportPath)
+                                                              final String exportPath, final View selectionTarget)
     {
+        final android.view.GestureDetector gd = new android.view.GestureDetector(context,
+                new android.view.GestureDetector.SimpleOnGestureListener()
+        {
+            @Override
+            public boolean onSingleTapUp(MotionEvent e)
+            {
+                if ((selectionTarget != null) && !MainActivity.selected_messages.isEmpty())
+                {
+                    selectionTarget.performClick();
+                }
+                else
+                {
+                    openMessageMedia(context, message, exportPath);
+                }
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e)
+            {
+                if (selectionTarget != null)
+                {
+                    selectionTarget.performLongClick();
+                }
+            }
+        });
         return new View.OnTouchListener()
         {
             @Override
             public boolean onTouch(View v, MotionEvent event)
             {
-                if (event.getAction() == MotionEvent.ACTION_UP)
-                {
-                    openMessageMedia(context, message, exportPath);
-                }
+                gd.onTouchEvent(event);
                 return true;
             }
         };

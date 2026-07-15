@@ -2527,7 +2527,8 @@ public class HelperFiletransfer
             ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
             ChatMediaHelper.bindOutgoingImagePreview(context, message, ft_preview_image);
             ft_preview_image.setOnTouchListener(
-                    ChatMediaHelper.mediaOpenTouchListener(context, message, null));
+                    ChatMediaHelper.mediaOpenTouchListener(context, message, null,
+                            itemView.findViewById(R.id.layout_message_container)));
         }
 
         return true;

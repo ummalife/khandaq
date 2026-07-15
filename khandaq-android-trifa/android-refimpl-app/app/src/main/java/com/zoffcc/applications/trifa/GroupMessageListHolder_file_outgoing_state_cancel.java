@@ -175,7 +175,7 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
             ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(150));
             textView.setVisibility(View.GONE);
 
-            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message, null));
+            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message, null, layout_message_container));
 
             final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(message);
             // KHANDAQ (Figma): rounded photo bubble that HUGS the image at a sane size (override +
@@ -261,7 +261,7 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
             {
                 bindVideoPreview(context, message.filename_fullpath, message.id, null, ft_preview_image);
             }
-            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message, null));
+            ft_preview_image.setOnTouchListener(groupMediaOpenTouchListener(context, message, null, layout_message_container));
         }
         else if (is_audio) // ---- an audio file ----
         {

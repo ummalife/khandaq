@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10339.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10340.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Voice messages: a proper waveform now shows for long notes too (was a flat line). Long-press a photo/video/file to select and delete it (used to just open). Cleaner 1:1 audio/media bubbles."},
-                    {"language": "ru-RU", "text": "Голосовые: волна теперь рисуется и для длинных сообщений (была плоская линия). Долгое нажатие на фото/видео/файл выделяет для удаления (раньше просто открывало). Чище выглядят аудио/медиа в личных чатах."},
+                    {"language": "en-US", "text": "The Reply icon now appears in the toolbar as soon as you select a message (was hidden until you opened the overflow menu). Plus the earlier voice-waveform, long-press-to-select and cleaner 1:1 media fixes."},
+                    {"language": "ru-RU", "text": "Иконка «Ответить» теперь появляется на панели сразу после выделения сообщения (раньше пряталась до открытия меню «три точки»). Плюс прежние фиксы: волна голосовых, выделение долгим нажатием, чище медиа в личке."},
                 ],
             }],
         })

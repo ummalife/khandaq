@@ -90,7 +90,54 @@ def _stats_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS wakes (day TEXT PRIMARY KEY, hits INTEGER)")
     # last-seen per token hash — powers the "online now" card (activity in the last 5 minutes)
     conn.execute("CREATE TABLE IF NOT EXISTS recent (th TEXT PRIMARY KEY, ts INTEGER)")
+    # last ACTUAL FCM send per token hash — used to coalesce wake-push spam (see wake()).
+    conn.execute("CREATE TABLE IF NOT EXISTS pushsent (th TEXT PRIMARY KEY, ts INTEGER)")
     return conn
+
+
+# KHANDAQ (tester): the client watchdog re-triggers a wake push every few seconds for an undelivered
+# item, so the recipient saw a stream of "New message" banners with nothing new in the app. Coalesce:
+# actually deliver an FCM wake at most once per PUSH_COALESCE_SECONDS per recipient token. The app
+# fetches ALL pending messages when it wakes, so suppressed wakes lose no messages — only redundant
+# banners. Last-SENT time is tracked separately from `recent` (which every request refreshes for the
+# online-now stat), so a continuous spam still re-wakes the device once per window, not never.
+COALESCE_SECONDS = int(os.environ.get("PUSH_COALESCE_SECONDS", "45"))
+
+
+def _th(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+
+
+def _should_coalesce(token: str) -> bool:
+    if COALESCE_SECONDS <= 0:
+        return False
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                row = conn.execute("SELECT ts FROM pushsent WHERE th = ?", (_th(token),)).fetchone()
+            finally:
+                conn.close()
+        return bool(row) and (int(time.time()) - row[0] < COALESCE_SECONDS)
+    except Exception:
+        return False
+
+
+def _mark_push_sent(token: str) -> None:
+    try:
+        now = int(time.time())
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute(
+                    "INSERT INTO pushsent VALUES (?, ?) "
+                    "ON CONFLICT(th) DO UPDATE SET ts = excluded.ts", (_th(token), now))
+                conn.execute("DELETE FROM pushsent WHERE ts < ?", (now - 86400,))
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass
 
 
 def _country_for_ip(addr: str) -> str:
@@ -400,11 +447,19 @@ def wake():
     if sender_pubkey and (len(sender_pubkey) != 64 or not all(c in "0123456789ABCDEF" for c in sender_pubkey)):
         sender_pubkey = ""
 
+    # Coalesce wake-push spam: if we already delivered a wake to this token within the window, skip
+    # the FCM send (no redundant "New message" banner) but keep the stats/online-now accurate and
+    # report success so the caller stops retrying this cycle. Messages still arrive on the prior wake.
+    if _should_coalesce(token):
+        _record_stats(token, client_ip)
+        return jsonify({"success": 1, "coalesced": 1}), 200
+
     ok, detail = _send_wake(token, sender_pubkey)
     if not ok:
         log.warning("wake fail from %s: %s", client_ip, detail)
         return jsonify({"error": detail}), 503 if "not configured" in detail else 502
 
+    _mark_push_sent(token)
     _record_stats(token, client_ip)
     return jsonify({"success": 1}), 200
 

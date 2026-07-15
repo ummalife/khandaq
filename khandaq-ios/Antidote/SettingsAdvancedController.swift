@@ -15,6 +15,9 @@ class SettingsAdvancedController: StaticTableController {
     fileprivate let userDefaults = UserDefaultsManager()
 
     fileprivate let UDPModel = StaticTableSwitchCellModel()
+    // KHANDAQ (#112/#166): escape hatch for the new VoiceProcessingIO call-audio engine.
+    fileprivate let callAudioEngineModel = StaticTableSwitchCellModel()
+    fileprivate static let callAudioVPIODisabledKey = "KhandaqCallAudioVPIODisabled"
     fileprivate let networkDiagnosticsModel = StaticTableDefaultCellModel()
     fileprivate let restoreDefaultsModel = StaticTableButtonCellModel()
     #if DEBUG
@@ -28,6 +31,7 @@ class SettingsAdvancedController: StaticTableController {
 
         var sections: [[StaticTableBaseCellModel]] = [
             [UDPModel],
+            [callAudioEngineModel],
             [networkDiagnosticsModel],
         ]
         #if DEBUG
@@ -51,6 +55,10 @@ private extension SettingsAdvancedController {
         UDPModel.title = String(localized: "settings_udp_enabled")
         UDPModel.on = userDefaults.UDPEnabled
         UDPModel.valueChangedHandler = UDPChanged
+
+        callAudioEngineModel.title = String(localized: "settings_call_audio_vpio")
+        callAudioEngineModel.on = !UserDefaults.standard.bool(forKey: SettingsAdvancedController.callAudioVPIODisabledKey)
+        callAudioEngineModel.valueChangedHandler = callAudioEngineChanged
 
         networkDiagnosticsModel.title = String(localized: "network_connections_title")
         networkDiagnosticsModel.value = String(localized: "network_connections_summary")
@@ -83,6 +91,12 @@ private extension SettingsAdvancedController {
         navigationController?.pushViewController(controller, animated: true)
     }
     #endif
+
+    func callAudioEngineChanged(_ on: Bool) {
+        // Takes effect on the next call — the engine reads the flag at call-audio start.
+        UserDefaults.standard.set(!on, forKey: SettingsAdvancedController.callAudioVPIODisabledKey)
+        callAudioEngineModel.on = on
+    }
 
     func UDPChanged(_ on: Bool) {
         let previous = userDefaults.UDPEnabled

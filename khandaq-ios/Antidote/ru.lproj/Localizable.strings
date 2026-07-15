@@ -290,6 +290,7 @@
 "settings_notifications_description" = "Вы будете получать уведомления в течении 10 минут после сворачивания Khandaq.";
 /* Settings screen menu */
 "settings_udp_enabled" = "Использовать UDP";
+"settings_call_audio_vpio" = "Новый аудиодвижок звонков (эхо и громкость)";
 /* Advanced settings — UDP restart confirmation */
 "settings_udp_restart_title" = "Нужен перезапуск";
 "settings_udp_restart_enable_message" = "UDP на iOS нестабилен и может вызывать вылеты. Приложение перезапустится для применения настройки. Не сворачивайте Khandaq до завершения перезапуска.";

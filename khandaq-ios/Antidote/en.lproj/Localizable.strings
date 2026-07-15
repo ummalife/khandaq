@@ -291,6 +291,7 @@
 "settings_notifications_description" = "When application goes to background, you will still receive notifications up to 10 minutes.";
 /* Settings screen menu */
 "settings_udp_enabled" = "Enable UDP";
+"settings_call_audio_vpio" = "New call audio engine (echo & volume fix)";
 /* Advanced settings — UDP restart confirmation */
 "settings_udp_restart_title" = "Restart Required";
 "settings_udp_restart_enable_message" = "UDP is experimental on iOS and may cause crashes. The app will restart to apply this setting. Stay in Khandaq until restart completes.";

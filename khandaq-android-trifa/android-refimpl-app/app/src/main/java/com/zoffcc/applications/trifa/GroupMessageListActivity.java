@@ -1594,7 +1594,20 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         MainActivity.group_message_list_activity = this;
         wakeup_tox_thread();
-        HelperGroup.on_group_chat_foreground(group_id);
+        // KHANDAQ: off the UI thread — this path bootstraps DHT nodes with BLOCKING DNS resolves
+        // (getaddrinfo) and re-syncs peers to the DB; on a slow resolver it froze onResume for
+        // >5s and ANR'd the whole app every time a group chat came back to the foreground.
+        final String fg_group_id = group_id;
+        new Thread(() -> {
+            try
+            {
+                HelperGroup.on_group_chat_foreground(fg_group_id);
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        }, "group-foreground").start();
         set_peer_count_header();
         start_group_connect_header_refresh();
         try

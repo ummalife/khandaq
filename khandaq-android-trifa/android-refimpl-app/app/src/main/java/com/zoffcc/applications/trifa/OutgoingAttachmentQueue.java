@@ -34,7 +34,14 @@ public final class OutgoingAttachmentQueue
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, AtomicBoolean> groupSendRunning = new ConcurrentHashMap<>();
 
-    private static final ConcurrentHashMap<String, ConcurrentHashMap<String, Boolean>> queuedUriKeys =
+    // KHANDAQ: value = last enqueue timestamp. This map used to be a permanent "seen" set whose
+    // keys were only released on staging FAILURE — so the SAME file could be sent to a group only
+    // once per process lifetime; every later attempt was silently dropped (tester: photo with an
+    // emoji caption "sends only the emoji" — the caption goes out via a separate path). Keep it
+    // only as a short double-dispatch guard: an identical uri is rejected within a small window,
+    // then allowed again.
+    private static final long DUPLICATE_SUPPRESS_MS = 5_000L;
+    private static final ConcurrentHashMap<String, ConcurrentHashMap<String, Long>> queuedUriKeys =
             new ConcurrentHashMap<>();
 
     private OutgoingAttachmentQueue()
@@ -345,8 +352,17 @@ public final class OutgoingAttachmentQueue
 
     private static boolean queueAcceptsUri(final String queueKey, final Uri uri)
     {
-        return queuedUriKeys.computeIfAbsent(queueKey, k -> new ConcurrentHashMap<>()).
-                putIfAbsent(uri.toString(), Boolean.TRUE) == null;
+        final ConcurrentHashMap<String, Long> keys =
+                queuedUriKeys.computeIfAbsent(queueKey, k -> new ConcurrentHashMap<>());
+        final String uriKey = uri.toString();
+        final long now = System.currentTimeMillis();
+        final Long last = keys.get(uriKey);
+        if (last != null && (now - last) < DUPLICATE_SUPPRESS_MS)
+        {
+            return false;
+        }
+        keys.put(uriKey, now);
+        return true;
     }
 
     private static void queueReleaseUri(final String queueKey, final Uri uri)
@@ -356,7 +372,7 @@ public final class OutgoingAttachmentQueue
             return;
         }
 
-        final ConcurrentHashMap<String, Boolean> keys = queuedUriKeys.get(queueKey);
+        final ConcurrentHashMap<String, Long> keys = queuedUriKeys.get(queueKey);
         if (keys != null)
         {
             keys.remove(uri.toString());

@@ -1976,7 +1976,10 @@ public class HelperGeneric
                         DiskCacheStrategy.RESOURCE).skipMemoryCache(force_update).into(v);
             }
         }
-        catch (Exception e)
+        // KHANDAQ: Throwable, not Exception — right after a process restart the IOCipher native lib
+        // may not be loaded yet and f1.length() throws UnsatisfiedLinkError (an Error), which used
+        // to crash the app while merely rendering an avatar. Showing the placeholder is fine.
+        catch (Throwable e)
         {
             e.printStackTrace();
             Log.i(TAG, "put_vfs_image_on_imageview:EE1:" + e.getMessage());

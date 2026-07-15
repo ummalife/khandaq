@@ -8209,8 +8209,19 @@ public class HelperGroup
         if (now - last_nudge_bootstrap_ms >= 20_000L)
         {
             last_nudge_bootstrap_ms = now;
-            perform_khandaq_bootstrap_burst();
-            TrifaToxService.bootstrap_me(false);
+            // KHANDAQ: the burst resolves bootstrap-node hostnames with BLOCKING getaddrinfo calls —
+            // never run it on the caller's thread (several call sites are the UI thread → ANR).
+            new Thread(() -> {
+                try
+                {
+                    perform_khandaq_bootstrap_burst();
+                    TrifaToxService.bootstrap_me(false);
+                }
+                catch (Exception e)
+                {
+                    e.printStackTrace();
+                }
+            }, "group-dht-nudge").start();
         }
         TrifaToxService.wakeup_tox_thread();
         HelperGeneric.logI(TAG, "nudge_public_group_dht:id=" + group_identifier + " gn=" + group_num

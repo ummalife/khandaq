@@ -785,7 +785,7 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 }
 
                 final String local_image_path = ofw.filepath_wrapped + "/" + ofw.filename_wrapped;
-                Bitmap b = BitmapFactory.decodeFile(local_image_path);
+                Bitmap b = decode_downsampled_bitmap(local_image_path, 1600);
                 if (b == null)
                 {
                     Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_unsupported), Toast.LENGTH_SHORT).show();
@@ -863,11 +863,59 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 MainActivity.update_main_profile_bar();
                 Toast.makeText(requireContext(), getString(R.string.profile_avatar_saved_toast), Toast.LENGTH_SHORT).show();
             }
-            catch (Exception e)
+            // KHANDAQ (#159): Throwable, not Exception — a full-resolution avatar can OOM inside the
+            // decode/scale/compress steps, and OutOfMemoryError is an Error. Catching only Exception
+            // let it crash the app ("avatar save fails"); now it surfaces the diagnosable (9) toast.
+            catch (Throwable e)
             {
                 e.printStackTrace();
                 Log.i(TAG, "profile_avatar:FAIL:step=9");
 Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (9)", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    // KHANDAQ (#159): BitmapFactory.decodeFile allocates the whole full-res bitmap at once and throws
+    // OutOfMemoryError (an Error) on large photos / low-RAM devices — a likely cause of avatar-save
+    // failures. Read the bounds first, downsample to a sane cap, and treat any decode failure (incl.
+    // OOM) as a soft null rather than a crash. The result is later scaled to 640px anyway.
+    private static Bitmap decode_downsampled_bitmap(final String path, final int maxDim)
+    {
+        try
+        {
+            final BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(path, bounds);
+
+            int sample = 1;
+            final int w = bounds.outWidth;
+            final int h = bounds.outHeight;
+            if (w <= 0 || h <= 0)
+            {
+                // bounds decode failed — fall back to a straight (guarded) decode
+                return BitmapFactory.decodeFile(path);
+            }
+            while ((w / sample) > maxDim || (h / sample) > maxDim)
+            {
+                sample *= 2;
+            }
+
+            final BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            return BitmapFactory.decodeFile(path, opts);
+        }
+        catch (Throwable t)
+        {
+            // OutOfMemoryError or a corrupt file — retry once at a heavy downsample before giving up.
+            try
+            {
+                final BitmapFactory.Options opts = new BitmapFactory.Options();
+                opts.inSampleSize = 8;
+                return BitmapFactory.decodeFile(path, opts);
+            }
+            catch (Throwable t2)
+            {
+                return null;
             }
         }
     }

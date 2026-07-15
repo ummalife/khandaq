@@ -35,6 +35,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.widget.Toast;
@@ -2046,7 +2047,35 @@ public class TrifaToxService extends Service
         }
     }
 
+    // KHANDAQ: bootstrap resolves node hostnames with BLOCKING getaddrinfo and runs the native
+    // bootstrap — it must NEVER run on the UI thread. Several callers reach here from a main-thread
+    // Handler (ReconnectBackoffCoordinator, group-foreground nudge, network-change), which froze the
+    // app >5s and ANR'd it, especially on flaky networks where reconnect fires often. Centralize the
+    // guard here so EVERY caller is protected: on the main thread, run the work on a dedicated
+    // single-thread executor; off the main thread (tox-service startup), keep the synchronous path.
+    private static final java.util.concurrent.ExecutorService bootstrap_executor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+
     static void bootstrap_me(boolean force)
+    {
+        if (Looper.myLooper() == Looper.getMainLooper())
+        {
+            bootstrap_executor.execute(() -> {
+                try
+                {
+                    bootstrap_me__run(force);
+                }
+                catch (Throwable t)
+                {
+                    HelperGeneric.logI(TAG, "bootstrap_me:bg:EE:" + t.getMessage());
+                }
+            });
+            return;
+        }
+        bootstrap_me__run(force);
+    }
+
+    private static void bootstrap_me__run(boolean force)
     {
         append_logger_msg(TAG + "::" + "calling bootstrap_me()");
         if (force)

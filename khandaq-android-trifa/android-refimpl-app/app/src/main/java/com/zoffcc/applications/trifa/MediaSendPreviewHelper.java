@@ -198,33 +198,46 @@ public final class MediaSendPreviewHelper
                                    final String target, final long friendnum, final String groupId,
                                    final boolean activityPeer)
     {
+        final String captionText = (caption == null || caption.trim().isEmpty()) ? null : caption.trim();
+
+        // KHANDAQ: GROUP captions must wait for the TRANSFER, not a fixed delay. An NGC receiver
+        // only materializes the file bubble once the whole file has arrived, so a caption sent
+        // 1.2s after initiation lands long before the photo and renders ABOVE it (tester: "the
+        // emoji arrives first, then the photo separately"). The queue sends the caption after the
+        // batch's last transfer completes (or fails / times out).
+        if (TARGET_GROUP.equals(target))
+        {
+            final List<Uri> groupUris = new ArrayList<>(uris.size());
+            for (Uri uri : uris)
+            {
+                if (uri != null)
+                {
+                    groupUris.add(uri);
+                }
+            }
+            OutgoingAttachmentQueue.enqueueGroupUris(context, groupUris, groupId, activityPeer, captionText);
+            return;
+        }
+
         dispatchAttachments(context, uris, target, friendnum, groupId, activityPeer);
 
-        if (caption == null || caption.trim().isEmpty())
+        if (captionText == null)
         {
             return;
         }
 
-        final String captionText = caption.trim();
         // KHANDAQ (#127): the file send is dispatched ASYNC (add_attachment -> posted dispatchOutgoing ->
         // add_outgoing_file -> tox_file_send), but the caption text would otherwise be sent SYNCHRONOUSLY
         // right here — so the caption packet hits the wire BEFORE the file is even initiated. The receiver
         // stamps each message on arrival, so it then renders the caption ABOVE the photo (desync). Defer the
         // caption so the file's initiation (a fast control packet — only the chunk transfer is slow) goes out
         // first; Tox preserves per-friend order, so the receiver gets file-then-caption and renders photo,
-        // then caption. Imperceptible (~1s) and fixes both 1:1 and group.
+        // then caption. Imperceptible (~1s). (1:1 only — groups take the transfer-completion path above.)
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() ->
         {
             try
             {
-                if (TARGET_GROUP.equals(target))
-                {
-                    sendGroupCaption(context, groupId, captionText);
-                }
-                else
-                {
-                    sendFriendCaption(context, friendnum, activityPeer, captionText);
-                }
+                sendFriendCaption(context, friendnum, activityPeer, captionText);
             }
             catch (Exception e)
             {
@@ -341,22 +354,53 @@ public final class MediaSendPreviewHelper
         }
     }
 
-    private static void sendGroupCaption(final Context context, final String groupId, final String caption)
+    // package-private: OutgoingAttachmentQueue delivers group captions after the transfer finishes.
+    // KHANDAQ: sends DIRECTLY into groupId — the caption may fire up to 90s after the pick (it waits
+    // for the file broadcast), and the group activity might be gone or showing a DIFFERENT group by
+    // then, so routing through the activity could drop the text or post it into the wrong chat.
+    static void sendGroupCaption(final Context context, final String groupId, final String caption)
     {
-        if (groupId == null || groupId.isEmpty() || "-1".equals(groupId))
+        if (groupId == null || groupId.isEmpty() || "-1".equals(groupId)
+                || caption == null || caption.trim().isEmpty())
         {
             return;
         }
 
-        if (MainActivity.group_message_list_activity != null)
+        try
         {
-            MainActivity.group_message_list_activity.send_text_message_from_preview(caption);
-            return;
-        }
+            TrifaToxService.wakeup_tox_thread();
 
-        if (context instanceof GroupMessageListActivity)
+            final String trimmed = caption.trim();
+            final String msg = trimmed.substring(0,
+                    (int) Math.min(MainActivity.tox_max_message_length(), trimmed.length()));
+
+            final long group_num = HelperGroup.tox_group_by_groupid__wrapper(groupId);
+            final long message_id = HelperGroup.send_group_text_message_resilient(groupId, group_num, msg);
+            if (message_id == HelperGroup.GROUP_SEND_QUEUE_WHEN_UNCONNECTED)
+            {
+                final com.zoffcc.applications.sorm.GroupMessage m = new com.zoffcc.applications.sorm.GroupMessage();
+                m.is_new = false;
+                m.tox_group_peer_pubkey = MainActivity.tox_group_self_get_public_key(group_num).toUpperCase();
+                m.direction = 1;
+                m.TOX_MESSAGE_TYPE = 0;
+                m.read = true;
+                m.tox_group_peername = null;
+                m.private_message = 0;
+                m.group_identifier = groupId.toLowerCase();
+                m.TRIFA_MESSAGE_TYPE = TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value;
+                m.sent_timestamp = System.currentTimeMillis();
+                m.rcvd_timestamp = System.currentTimeMillis();
+                m.text = msg;
+                m.was_synced = false;
+                m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
+                m.message_id_tox = HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX;
+                HelperGroup.insert_into_group_message_db(m, true);
+                HelperGroup.schedule_pending_group_message_flush(groupId);
+            }
+        }
+        catch (Exception e)
         {
-            ((GroupMessageListActivity) context).send_text_message_from_preview(caption);
+            Log.i(TAG, "sendGroupCaption:EE:" + e.getMessage());
         }
     }
 

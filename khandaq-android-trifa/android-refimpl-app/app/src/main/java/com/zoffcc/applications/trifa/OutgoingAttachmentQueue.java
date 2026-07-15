@@ -64,6 +64,13 @@ public final class OutgoingAttachmentQueue
     public static void enqueueGroupUris(final Context context, final List<Uri> uris,
                                         final String groupId, final boolean activityPeer)
     {
+        enqueueGroupUris(context, uris, groupId, activityPeer, null);
+    }
+
+    public static void enqueueGroupUris(final Context context, final List<Uri> uris,
+                                        final String groupId, final boolean activityPeer,
+                                        final String caption)
+    {
         if (context == null || uris == null || uris.isEmpty() || groupId == null || groupId.isEmpty())
         {
             return;
@@ -71,7 +78,7 @@ public final class OutgoingAttachmentQueue
 
         final Context appContext = context.getApplicationContext();
         final String key = groupQueueKey(groupId, activityPeer);
-        runOnMain(() -> stageGroupBatch(appContext, uris, groupId, activityPeer, key));
+        runOnMain(() -> stageGroupBatch(appContext, uris, groupId, activityPeer, key, caption));
     }
 
     public static void enqueueFriendUri(final Context context, final Uri uri,
@@ -143,7 +150,8 @@ public final class OutgoingAttachmentQueue
     }
 
     private static void stageGroupBatch(final Context appContext, final List<Uri> uris,
-                                        final String groupId, final boolean activityPeer, final String key)
+                                        final String groupId, final boolean activityPeer, final String key,
+                                        final String caption)
     {
         final List<GroupMessageListActivity.GroupOutgoingFileHandle> handles = new ArrayList<>();
 
@@ -168,7 +176,21 @@ public final class OutgoingAttachmentQueue
 
         if (handles.isEmpty())
         {
+            if (caption != null)
+            {
+                // nothing staged — still deliver the caption text like a plain message
+                MAIN.postDelayed(() -> MediaSendPreviewHelper.sendGroupCaption(appContext, groupId, caption),
+                        1_200L);
+            }
             return;
+        }
+
+        if (caption != null)
+        {
+            // Send the caption only after the batch's LAST file finishes broadcasting: NGC
+            // receivers render a file only once it fully arrives, so a caption sent earlier
+            // shows up ABOVE its photo on their side.
+            startGroupCaptionWatcher(appContext, groupId, handles.get(handles.size() - 1), caption);
         }
 
         if (handles.size() == 1)
@@ -185,6 +207,54 @@ public final class OutgoingAttachmentQueue
             queue.add(handle);
         }
         kickGroupSendWorker(appContext, key);
+    }
+
+    /** How long a group caption waits for its file broadcast before being sent anyway. */
+    private static final long GROUP_CAPTION_MAX_WAIT_MS = 90_000L;
+
+    private static void startGroupCaptionWatcher(final Context appContext, final String groupId,
+                                                 final GroupMessageListActivity.GroupOutgoingFileHandle handle,
+                                                 final String caption)
+    {
+        final Thread watcher = new Thread(() -> {
+            try
+            {
+                final long deadline = System.currentTimeMillis() + GROUP_CAPTION_MAX_WAIT_MS;
+                while (System.currentTimeMillis() < deadline)
+                {
+                    if (HelperGroup.is_ngc_outgoing_send_complete(handle.groupId, handle.msgIdHash)
+                            || HelperGroup.is_ngc_file_transfer_failed(handle.groupId, handle.msgIdHash)
+                            || HelperGroup.ngc_file_transfer_progress_percent(handle.groupId, handle.msgIdHash) >= 100)
+                    {
+                        break;
+                    }
+                    try
+                    {
+                        Thread.sleep(500L);
+                    }
+                    catch (InterruptedException ignored)
+                    {
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "groupCaptionWatcher:EE:" + e.getMessage());
+            }
+            // small grace so the receiver-side file insert lands before the text packet
+            MAIN.postDelayed(() -> {
+                try
+                {
+                    MediaSendPreviewHelper.sendGroupCaption(appContext, groupId, caption);
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "groupCaptionWatcher:send:EE:" + e.getMessage());
+                }
+            }, 700L);
+        }, "group-caption-wait");
+        watcher.setDaemon(true);
+        watcher.start();
     }
 
     private static void kickGroupSendWorker(final Context appContext, final String key)

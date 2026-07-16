@@ -125,7 +125,7 @@ public class MyExternReceiver extends BroadcastReceiver
 
                                 NotificationCompat.Builder notificationBuilder = new NotificationCompat.
                                         Builder(context, "trifa_extern_msg_receiver_id").
-                                        setSmallIcon(R.mipmap.ic_launcher).
+                                        setSmallIcon(R.drawable.ic_stat_khandaq). // KHANDAQ: monochrome silhouette, not square
                                         setContentTitle(context.getString(R.string.notification_app_title)).
                                         setContentText("Incoming Message").
                                         setPriority(NotificationCompat.PRIORITY_HIGH).

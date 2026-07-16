@@ -442,7 +442,7 @@ public class GroupGroupAudioService extends Service
         b.setShowWhen(false);
         b.setStyle(new androidx.media.app.NotificationCompat.MediaStyle());
         b.setColor(getResources().getColor(R.color.colorPrimary));
-        b.setSmallIcon(R.mipmap.ic_launcher);
+        b.setSmallIcon(R.drawable.ic_stat_khandaq); // KHANDAQ: monochrome silhouette, not the square launcher icon
         b.setLargeIcon((Bitmap) null);
         b.setContentText("Tox:" + "GroupAudio playing ...");
         b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);

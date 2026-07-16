@@ -89,7 +89,9 @@ public class HelperToxNotification
         final NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID_TOX_SERVICE);
         b.setContentTitle(c.getString(R.string.notification_fgs_title));
         b.setContentText(c.getString(R.string.notification_fgs_text));
-        b.setSmallIcon(R.mipmap.ic_launcher);
+        // KHANDAQ: a transparent monochrome silhouette (the shield outline + dots), not the full-colour
+        // launcher icon — the launcher icon rendered as an ugly opaque square in the status bar.
+        b.setSmallIcon(R.drawable.ic_stat_khandaq);
         b.setContentIntent(pendingIntent);
         b.setOngoing(true);
         b.setOnlyAlertOnce(true);

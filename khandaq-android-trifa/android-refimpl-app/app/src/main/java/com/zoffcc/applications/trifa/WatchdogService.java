@@ -125,7 +125,7 @@ public class WatchdogService extends Service
                         Builder(this, channelId_newmessage_sound_and_vibrate).
                         setContentTitle("Khandaq has stopped working!").
                         setContentText("Start the app again by clicking here").
-                        setSmallIcon(R.mipmap.ic_launcher).
+                        setSmallIcon(R.drawable.ic_stat_khandaq). // KHANDAQ: monochrome silhouette, not square
                         setAutoCancel(true).
                         setContentIntent(pendingIntent).
                         setVisibility(NotificationCompat.VISIBILITY_PUBLIC).

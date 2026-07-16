@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10344.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10345.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Sending a photo or video no longer freezes the app while it is prepared — the file is now processed in the background. Plus the previous stability fixes (adding a contact, memory leaks) and smoother scrolling."},
-                    {"language": "ru-RU", "text": "Отправка фото или видео больше не подвешивает приложение на время подготовки файла — теперь он обрабатывается в фоне. Плюс прошлые исправления стабильности (добавление контакта, утечки памяти) и более плавная прокрутка."},
+                    {"language": "en-US", "text": "Polished status-bar notification icon (a clean monochrome shield instead of a square). Plus recent fixes: photo/video sending no longer freezes the app, smoother scrolling, stability and memory-leak fixes."},
+                    {"language": "ru-RU", "text": "Аккуратная иконка уведомлений в статус-баре (чистый монохромный щит вместо квадрата). Плюс недавние исправления: отправка фото/видео больше не подвешивает приложение, плавнее прокрутка, фиксы стабильности и утечек памяти."},
                 ],
             }],
         })

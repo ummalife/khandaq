@@ -600,23 +600,21 @@ public class HelperFriend
 
     public static long tox_friend_by_public_key__wrapper(@NonNull String friend_public_key_string)
     {
-        if (MainActivity.cache_pubkey_fnum.containsKey(friend_public_key_string))
+        // KHANDAQ (audit): single get() instead of containsKey()+get() — the old pair had a TOCTOU
+        // where another thread could clear() between the two calls, making get() return null which
+        // auto-unboxed to a NullPointerException.
+        final Long cached = MainActivity.cache_pubkey_fnum.get(friend_public_key_string);
+        if (cached != null)
         {
-            // Log.i(TAG, "cache hit:1");
-            return MainActivity.cache_pubkey_fnum.get(friend_public_key_string);
+            return cached;
         }
-        else
+        if (MainActivity.cache_pubkey_fnum.size() >= 180)
         {
-            if (MainActivity.cache_pubkey_fnum.size() >= 180)
-            {
-                // TODO: bad!
-                MainActivity.cache_pubkey_fnum.clear();
-            }
-
-            long result = MainActivity.tox_friend_by_public_key(friend_public_key_string);
-            MainActivity.cache_pubkey_fnum.put(friend_public_key_string, result);
-            return result;
+            MainActivity.cache_pubkey_fnum.clear();
         }
+        long result = MainActivity.tox_friend_by_public_key(friend_public_key_string);
+        MainActivity.cache_pubkey_fnum.put(friend_public_key_string, result);
+        return result;
     }
 
     public static String tox_friend_get_public_key__wrapper(long friend_number)
@@ -626,23 +624,22 @@ public class HelperFriend
             return null;
         }
 
-        if (MainActivity.cache_fnum_pubkey.containsKey(friend_number))
+        final String cached = MainActivity.cache_fnum_pubkey.get(friend_number);
+        if (cached != null)
         {
-            // Log.i(TAG, "cache hit:2");
-            return MainActivity.cache_fnum_pubkey.get(friend_number);
+            return cached;
         }
-        else
+        if (MainActivity.cache_fnum_pubkey.size() >= 180)
         {
-            if (MainActivity.cache_fnum_pubkey.size() >= 180)
-            {
-                // TODO: bad!
-                MainActivity.cache_fnum_pubkey.clear();
-            }
-
-            String result = MainActivity.tox_friend_get_public_key(friend_number);
+            MainActivity.cache_fnum_pubkey.clear();
+        }
+        String result = MainActivity.tox_friend_get_public_key(friend_number);
+        // ConcurrentHashMap forbids null values — only cache a real pubkey.
+        if (result != null)
+        {
             MainActivity.cache_fnum_pubkey.put(friend_number, result);
-            return result;
         }
+        return result;
     }
 
     static void del_friend_avatar(String friend_pubkey, String avatar_path_name, String avatar_file_name)

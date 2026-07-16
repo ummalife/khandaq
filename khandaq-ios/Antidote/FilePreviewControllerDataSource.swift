@@ -54,7 +54,11 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
     }
 
     func indexOfMessage(_ message: OCTMessageAbstract) -> Int? {
-        return messages.indexOfObject(message)
+        // KHANDAQ (audit): indexOfObject returns -1 (never nil) for not-found, so the Optional was
+        // always .some and callers' `guard let` never caught the missing case — a -1 then flowed into
+        // gallery/QuickLook indexing. Return a true nil when the message isn't in the current Results.
+        let idx = messages.indexOfObject(message)
+        return idx >= 0 ? idx : nil
     }
 
     // KHANDAQ (Figma): items for the custom media gallery.

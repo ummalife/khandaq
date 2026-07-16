@@ -25,8 +25,11 @@ extern int kNumberOfAudioQueueBuffers;
 @property (strong, nonatomic, readonly) NSString *outputDeviceID;
 #endif
 
-@property (nonatomic, strong) OCTAudioQueue *outputQueue;
-@property (nonatomic, strong) OCTAudioQueue *inputQueue;
+// KHANDAQ (audit): atomic — provideAudioFrames reads outputQueue on the toxav receive thread while
+// stopAudioFlow nils it on the main thread; a nonatomic getter could hand back a queue that is then
+// deallocated mid-use (use-after-free on the ring buffer). Mirrors the OCTVoiceUnitIO voiceIO fix.
+@property (atomic, strong) OCTAudioQueue *outputQueue;
+@property (atomic, strong) OCTAudioQueue *inputQueue;
 
 - (void)makeQueues:(NSError **)error;
 

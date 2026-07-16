@@ -57,6 +57,12 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
 - (void)dealloc
 {
+    // KHANDAQ (audit): the Y-plane (the largest of the three, ~full-frame) was malloc'd on resize but
+    // never freed here — a per-engine leak of ~1-2 MB. Free it alongside U/V.
+    if (self.reusableYChromaPlane) {
+        free(self.reusableYChromaPlane);
+    }
+
     if (self.reusableUChromaPlane) {
         free(self.reusableUChromaPlane);
     }

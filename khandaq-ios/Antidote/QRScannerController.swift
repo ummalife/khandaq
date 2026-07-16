@@ -115,10 +115,10 @@ extension QRScannerController: AVCaptureMetadataOutputObjectsDelegate {
             return
         }
 
-        let readableObjects = metadataObjects.filter {
-            $0 is AVMetadataMachineReadableCodeObject
-        }.map {
-            previewLayer.transformedMetadataObject(for: $0 ) as! AVMetadataMachineReadableCodeObject
+        // KHANDAQ (audit): transformedMetadataObject(for:) returns nil when the code's geometry can't be
+        // transformed — the old `as!` crashed on that. compactMap drops those safely.
+        let readableObjects = metadataObjects.compactMap {
+            previewLayer.transformedMetadataObject(for: $0) as? AVMetadataMachineReadableCodeObject
         }
 
         guard !readableObjects.isEmpty else {

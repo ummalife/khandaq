@@ -5515,7 +5515,8 @@ public class HelperGeneric
         try
         {
             int port_int = Integer.parseInt(port);
-            if ((port_int > 0) && (port_int < 65535))
+            // KHANDAQ (audit): 65535 IS a valid port; the old strict `< 65535` wrongly rejected it.
+            if ((port_int > 0) && (port_int <= 65535))
             {
                 return true;
             }

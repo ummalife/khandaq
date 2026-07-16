@@ -44,11 +44,14 @@ class KeyboardNotificationController: UIViewController {
 
 private extension KeyboardNotificationController {
     func handleNotification(_ notification: Notification, willShow: Bool) {
-        let userInfo = notification.userInfo!
+        // KHANDAQ (audit): keyboard userInfo keys are not contractually guaranteed to be present/typed;
+        // the old forced casts + rawValue! would crash on any surprise payload. Read defensively.
+        let userInfo = notification.userInfo ?? [:]
 
-        let frame = (userInfo[UIKeyboardFrameEndUserInfoKey] as! NSValue).cgRectValue
-        let duration = (userInfo[UIKeyboardAnimationDurationUserInfoKey] as! NSNumber).doubleValue
-        let curve = UIViewAnimationCurve(rawValue: (userInfo[UIKeyboardAnimationCurveUserInfoKey] as! NSNumber).intValue)!
+        let frame = (userInfo[UIKeyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue ?? .zero
+        let duration = (userInfo[UIKeyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
+        let curveRaw = (userInfo[UIKeyboardAnimationCurveUserInfoKey] as? NSNumber)?.intValue ?? 0
+        let curve = UIViewAnimationCurve(rawValue: curveRaw) ?? .easeInOut
 
         let options: UIViewAnimationOptions
 

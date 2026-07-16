@@ -6237,10 +6237,26 @@ public class HelperGroup
                 if ((group_message_list_activity != null)
                     && group_message_list_activity.get_current_group_id().equalsIgnoreCase(existing.group_identifier)
                     && (MainActivity.group_message_list_fragment != null)
-                    && (MainActivity.group_message_list_fragment.adapter != null))
+                    && (MainActivity.group_message_list_fragment.adapter != null)
+                    && main_handler_s != null)
                 {
-                    MainActivity.group_message_list_fragment.adapter.remove_placeholder_by_msg_id_hash(msgIdHex);
-                    MainActivity.group_message_list_fragment.refresh_file_progress_by_hash(msgIdHex);
+                    // KHANDAQ (audit): this runs on the tox iterate/callback thread — the RecyclerView
+                    // adapter must only be touched on the UI thread. Post it (re-check on arrival).
+                    final String hex = msgIdHex;
+                    main_handler_s.post(() -> {
+                        try
+                        {
+                            if (MainActivity.group_message_list_fragment != null
+                                && MainActivity.group_message_list_fragment.adapter != null)
+                            {
+                                MainActivity.group_message_list_fragment.adapter.remove_placeholder_by_msg_id_hash(hex);
+                                MainActivity.group_message_list_fragment.refresh_file_progress_by_hash(hex);
+                            }
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+                    });
                 }
 
                 GroupDB groupDb = null;
@@ -6307,9 +6323,24 @@ public class HelperGroup
             if (group_message_list_activity != null
                     && group_message_list_activity.get_current_group_id().equalsIgnoreCase(m.group_identifier)
                     && MainActivity.group_message_list_fragment != null
-                    && MainActivity.group_message_list_fragment.adapter != null)
+                    && MainActivity.group_message_list_fragment.adapter != null
+                    && main_handler_s != null)
             {
-                MainActivity.group_message_list_fragment.adapter.remove_placeholder_by_msg_id_hash(m.msg_id_hash);
+                // KHANDAQ (audit): off the tox thread — hop the adapter mutation to the UI thread.
+                final String hex2 = m.msg_id_hash;
+                main_handler_s.post(() -> {
+                    try
+                    {
+                        if (MainActivity.group_message_list_fragment != null
+                            && MainActivity.group_message_list_fragment.adapter != null)
+                        {
+                            MainActivity.group_message_list_fragment.adapter.remove_placeholder_by_msg_id_hash(hex2);
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                });
             }
 
             try

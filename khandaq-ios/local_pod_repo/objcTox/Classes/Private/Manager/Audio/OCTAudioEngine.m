@@ -723,15 +723,21 @@ static OSStatus OCTVoiceInputAvailable(void *inRefCon,
 #endif
 
     // TOXAUDIO: -incoming-audio-
+    // KHANDAQ (audit): take a local strong ref so a concurrent stopAudioFlow (main thread) can't
+    // dealloc the queue between the nil-check and the buffer write on this (toxav) thread.
+    OCTAudioQueue *outQ = self.outputQueue;
+    if (outQ == nil) {
+        return;
+    }
     int32_t len = (int32_t)(channels * sampleCount * sizeof(OCTToxAVPCMData));
-    TPCircularBuffer *buf = [self.outputQueue getBufferPointer];
+    TPCircularBuffer *buf = [outQ getBufferPointer];
     if (buf) {
         TPCircularBufferProduceBytes(buf, pcm, len);
     }
 
     if ((self.outputSampleRate != sampleRate) || (self.outputNumberOfChannels != channels)) {
         // failure is logged by OCTAudioQueue.
-        [self.outputQueue updateSampleRate:sampleRate numberOfChannels:channels error:nil];
+        [outQ updateSampleRate:sampleRate numberOfChannels:channels error:nil];
 
         self.outputSampleRate = sampleRate;
         self.outputNumberOfChannels = channels;

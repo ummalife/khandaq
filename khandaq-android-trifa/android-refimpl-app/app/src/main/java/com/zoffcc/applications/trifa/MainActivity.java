@@ -603,8 +603,12 @@ public class MainActivity extends AppCompatActivity
     // YUV conversion -------
 
     // ---- lookup cache ----
-    static Map<String, Long> cache_pubkey_fnum = new HashMap<String, Long>();
-    static Map<Long, String> cache_fnum_pubkey = new HashMap<Long, String>();
+    // KHANDAQ (audit): these two are read/written from BOTH the tox iterate/callback thread and the UI
+    // thread (view-holder binds). A plain HashMap can corrupt its bucket chain on a concurrent put
+    // (resize) → infinite loop / ANR. ConcurrentHashMap is safe (matches HelperGroup usage). Callers
+    // must never put a null value (ConcurrentHashMap forbids it) — guarded at the put sites.
+    static Map<String, Long> cache_pubkey_fnum = new java.util.concurrent.ConcurrentHashMap<String, Long>();
+    static Map<Long, String> cache_fnum_pubkey = new java.util.concurrent.ConcurrentHashMap<Long, String>();
     // static Map<String, String> cache_peernum_pubkey = new HashMap<String, String>();
     // static Map<String, String> cache_peername_pubkey = new HashMap<String, String>();
     static Map<String, String> cache_peername_pubkey2 = new HashMap<String, String>();

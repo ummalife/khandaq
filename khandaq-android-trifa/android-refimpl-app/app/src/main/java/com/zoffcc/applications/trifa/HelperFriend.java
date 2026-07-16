@@ -1103,7 +1103,8 @@ public class HelperFriend
         Log.i(TAG, "add_friend_real_norequest:add friend ID len:" + friend_tox_id.length());
         long friendnum = MainActivity.tox_friend_add_norequest(friend_public_key); // add friend
         Log.i(TAG, "add_friend_real_norequest:add friend  #:" + friendnum);
-        HelperGeneric.update_savedata_file_wrapper(); // save toxcore datafile (new friend added)
+        // KHANDAQ (ANR): tox_friend_add_norequest stays on-thread; offload only the PBKDF2 savedata persist.
+        HelperGeneric.update_savedata_file_wrapper_async(); // save toxcore datafile (new friend added)
 
         if (friendnum == UINT32_MAX_JAVA)
         {
@@ -1582,7 +1583,9 @@ public class HelperFriend
 
         if (friendnum >= 0)
         {
-            HelperGeneric.update_savedata_file_wrapper();
+            // KHANDAQ (ANR): tox_friend_add above stays on this (UI) thread; only offload the slow
+            // PBKDF2 savedata persist off-main (fire-and-forget, matches GroupMemberActions pattern).
+            HelperGeneric.update_savedata_file_wrapper_async();
             if (persist_new_friend_contact(friend_public_key, friendnum))
             {
                 display_toast(context_s.getString(R.string.add_friend_success), false, 300);

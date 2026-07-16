@@ -1675,6 +1675,8 @@ public class MessageListActivity extends AppCompatActivity
         {
             outgoing_attachment_friend_pubkey = null;
         }
+        // KHANDAQ (leak): release the static reply-bar view refs if they still point at this Activity.
+        ChatReplyPreviewController.unbind(ml_new_message);
         super.onDestroy();
     }
 

@@ -73,6 +73,24 @@ final class ChatReplyPreviewController
         }
     }
 
+    // KHANDAQ (leak): these static View refs point into the chat Activity's view tree and were never
+    // released — the destroyed Activity leaked. Call from the owning Activity's onDestroy. Guard on the
+    // caller's own input field so that if a newer chat Activity already re-bound, we don't wipe its refs.
+    static void unbind(@Nullable final EmojiEditText messageField)
+    {
+        if (messageField != null && inputField != messageField)
+        {
+            return;
+        }
+        pendingReply = null;
+        pendingEditDirect = null;
+        pendingEditGroup = null;
+        bar = null;
+        headerView = null;
+        previewView = null;
+        inputField = null;
+    }
+
     // ---- KHANDAQ (#9 message edit) --------------------------------------------------------------
 
     static boolean isEditActive()

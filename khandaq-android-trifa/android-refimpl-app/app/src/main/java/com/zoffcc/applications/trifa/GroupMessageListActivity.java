@@ -1506,6 +1506,14 @@ public class GroupMessageListActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onDestroy()
+    {
+        // KHANDAQ (leak): release the static reply-bar view refs if they still point at this Activity.
+        ChatReplyPreviewController.unbind(ml_new_group_message);
+        super.onDestroy();
+    }
+
+    @Override
     protected void onStop()
     {
         try

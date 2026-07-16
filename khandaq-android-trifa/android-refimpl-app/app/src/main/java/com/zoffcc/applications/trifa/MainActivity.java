@@ -5069,7 +5069,7 @@ public class MainActivity extends AppCompatActivity
                         return;
                     }
 
-                    if (video_frame_image_valid == true)
+                    if (video_frame_image_valid == true && CallingActivity.mContentView != null)
                     {
                         CallingActivity.mContentView.setBitmap(video_frame_image);
                         Callstate.java_video_play_delay = System.currentTimeMillis() - incoming_video_frame_ts;
@@ -5131,7 +5131,10 @@ public class MainActivity extends AppCompatActivity
                     {
                         try
                         {
-                            CallingActivity.accept_button.setVisibility(View.GONE);
+                            if (CallingActivity.accept_button != null)
+                            {
+                                CallingActivity.accept_button.setVisibility(View.GONE);
+                            }
                         }
                         catch (Exception e)
                         {
@@ -5140,7 +5143,10 @@ public class MainActivity extends AppCompatActivity
 
                         try
                         {
-                            CallingActivity.caller_avatar_view.setVisibility(View.GONE);
+                            if (CallingActivity.caller_avatar_view != null)
+                            {
+                                CallingActivity.caller_avatar_view.setVisibility(View.GONE);
+                            }
                         }
                         catch (Exception e)
                         {

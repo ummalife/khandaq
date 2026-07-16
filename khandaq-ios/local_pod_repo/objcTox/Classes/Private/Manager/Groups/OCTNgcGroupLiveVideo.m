@@ -142,16 +142,21 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
     const CFTimeInterval now = CACurrentMediaTime();
     NSMutableArray<NSString *> *staleKeys = [NSMutableArray array];
 
-    [self.incomingPeerLastSeen enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSNumber *timestamp, BOOL *stop) {
-        (void)stop;
+    // KHANDAQ (data race): these dictionaries are written on the tox callback queue and read on the
+    // main thread — serialize every access on the stable incomingPeerLastSeen token (allocated once in
+    // init). @synchronized is re-entrant, so the note->prune nesting below is safe.
+    @synchronized (self.incomingPeerLastSeen) {
+        [self.incomingPeerLastSeen enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSNumber *timestamp, BOOL *stop) {
+            (void)stop;
 
-        if ((now - timestamp.doubleValue) >= seconds) {
-            [staleKeys addObject:key];
+            if ((now - timestamp.doubleValue) >= seconds) {
+                [staleKeys addObject:key];
+            }
+        }];
+
+        for (NSString *key in staleKeys) {
+            [self.incomingPeerLastSeen removeObjectForKey:key];
         }
-    }];
-
-    for (NSString *key in staleKeys) {
-        [self.incomingPeerLastSeen removeObjectForKey:key];
     }
 }
 
@@ -160,13 +165,16 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
 {
     const CFTimeInterval now = CACurrentMediaTime();
 
-    self.lastIncomingPacketTimestampByGroup[@(groupNumber)] = @(now);
+    @synchronized (self.incomingPeerLastSeen) {
+        self.lastIncomingPacketTimestampByGroup[@(groupNumber)] = @(now);
 
-    if (peerPublicKeyHex.length > 0) {
-        self.incomingPeerLastSeen[[self incomingPeerKeyForGroupNumber:groupNumber peerPublicKeyHex:peerPublicKeyHex]] = @(now);
-        [self pruneIncomingPeersOlderThan:5.0];
+        if (peerPublicKeyHex.length > 0) {
+            self.incomingPeerLastSeen[[self incomingPeerKeyForGroupNumber:groupNumber peerPublicKeyHex:peerPublicKeyHex]] = @(now);
+            [self pruneIncomingPeersOlderThan:5.0];
+        }
     }
 
+    // never invoke an out-of-module block while holding the lock
     if (self.incomingVideoActivityBlock) {
         self.incomingVideoActivityBlock(groupNumber);
     }
@@ -179,7 +187,10 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
 
 - (BOOL)hasRecentIncomingVideoForGroupNumber:(uint32_t)groupNumber withinSeconds:(NSTimeInterval)seconds
 {
-    NSNumber *timestamp = self.lastIncomingPacketTimestampByGroup[@(groupNumber)];
+    NSNumber *timestamp;
+    @synchronized (self.incomingPeerLastSeen) {
+        timestamp = self.lastIncomingPacketTimestampByGroup[@(groupNumber)];
+    }
 
     if (! timestamp) {
         return NO;
@@ -194,11 +205,13 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
     const NSString *prefix = [NSString stringWithFormat:@"%u:", groupNumber];
     NSUInteger count = 0;
 
-    for (NSString *key in self.incomingPeerLastSeen) {
-        NSNumber *timestamp = self.incomingPeerLastSeen[key];
+    @synchronized (self.incomingPeerLastSeen) {
+        for (NSString *key in self.incomingPeerLastSeen) {
+            NSNumber *timestamp = self.incomingPeerLastSeen[key];
 
-        if ([key hasPrefix:prefix] && (now - timestamp.doubleValue) < seconds) {
-            count++;
+            if ([key hasPrefix:prefix] && (now - timestamp.doubleValue) < seconds) {
+                count++;
+            }
         }
     }
 
@@ -213,20 +226,22 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
     NSString *bestKey = nil;
     CFTimeInterval bestTimestamp = 0;
 
-    for (NSString *key in self.incomingPeerLastSeen) {
-        if (! [key hasPrefix:prefix]) {
-            continue;
-        }
+    @synchronized (self.incomingPeerLastSeen) {
+        for (NSString *key in self.incomingPeerLastSeen) {
+            if (! [key hasPrefix:prefix]) {
+                continue;
+            }
 
-        const CFTimeInterval seenAt = self.incomingPeerLastSeen[key].doubleValue;
+            const CFTimeInterval seenAt = self.incomingPeerLastSeen[key].doubleValue;
 
-        if ((now - seenAt) >= seconds) {
-            continue;
-        }
+            if ((now - seenAt) >= seconds) {
+                continue;
+            }
 
-        if (! bestKey || seenAt >= bestTimestamp) {
-            bestKey = key;
-            bestTimestamp = seenAt;
+            if (! bestKey || seenAt >= bestTimestamp) {
+                bestKey = key;
+                bestTimestamp = seenAt;
+            }
         }
     }
 

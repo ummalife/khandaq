@@ -495,6 +495,21 @@ public class ConferenceAudioActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+        // KHANDAQ (leak): clear the static Activity/View refs so the destroyed Activity can be GC'd.
+        // Guard on caa==this so a rapid re-open that already reassigned caa isn't clobbered.
+        if (caa == this)
+        {
+            caa = null;
+            group_volume_slider_seekbar_01 = null;
+            group_audio_device_icon = null;
+            group_audio_send_icon = null;
+        }
+    }
+
+    @Override
     protected void onResume()
     {
         Log.i(TAG, "LC:onResume");

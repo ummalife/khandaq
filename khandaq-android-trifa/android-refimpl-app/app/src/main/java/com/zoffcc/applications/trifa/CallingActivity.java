@@ -2114,6 +2114,49 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     }
 
     @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+        // KHANDAQ (leak): this Activity holds its whole view tree in static fields (needed for the
+        // cross-thread call-audio/video callbacks). They were never cleared, leaking the destroyed
+        // Activity. Null them here, but only if we are still the current owner — a rapid re-open may
+        // have already reassigned `ca` to a new instance, and we must not clobber its fields.
+        if (ca == this)
+        {
+            ca = null;
+            mContentView = null;
+            calling_activity_top_viewgroup_vg = null;
+            caller_avatar_view = null;
+            accept_button = null;
+            camera_toggle_button = null;
+            mute_button = null;
+            video_box_speaker_button = null;
+            video_box_aec_button = null;
+            video_speaker_aec = null;
+            video_box_aec = null;
+            calling_friend_online_status = null;
+            audio_device_icon = null;
+            top_text_line = null;
+            cameraSurfacePreview = null;
+            drawingOverlay = null;
+            right_top_text_1 = null;
+            right_top_text_1b = null;
+            right_top_text_2 = null;
+            right_top_text_3 = null;
+            right_top_text_4 = null;
+            right_left_text_1 = null;
+            debug001_text = null;
+            box_right_volumeslider_01 = null;
+            volume_slider_seekbar_01 = null;
+            video_add_delay_slider_seekbar_01 = null;
+            video_add_delay_slider_infotext_01 = null;
+            video_box_self_preview_01 = null;
+            video_box_left_top_01 = null;
+            video_box_right_top_01 = null;
+        }
+    }
+
+    @Override
     protected void onPause()
     {
         super.onPause();

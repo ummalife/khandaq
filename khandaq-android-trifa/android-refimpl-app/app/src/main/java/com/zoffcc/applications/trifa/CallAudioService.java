@@ -497,7 +497,10 @@ public class CallAudioService extends Service
                                         GoogleMaterial.Icon.gmd_mic_off).backgroundColor(Color.TRANSPARENT).color(
                                         context_gas_static.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(
                                         50);
-                                mute_button.setImageDrawable(d2a);
+                                if (mute_button != null)
+                                {
+                                    mute_button.setImageDrawable(d2a);
+                                }
                             }
                             catch (Exception ignored)
                             {
@@ -519,7 +522,10 @@ public class CallAudioService extends Service
                                         GoogleMaterial.Icon.gmd_mic).backgroundColor(Color.TRANSPARENT).color(
                                         context_gas_static.getResources().getColor(R.color.colorPrimaryDark)).sizeDp(
                                         50);
-                                mute_button.setImageDrawable(d2a);
+                                if (mute_button != null)
+                                {
+                                    mute_button.setImageDrawable(d2a);
+                                }
                             }
                             catch (Exception ignored)
                             {

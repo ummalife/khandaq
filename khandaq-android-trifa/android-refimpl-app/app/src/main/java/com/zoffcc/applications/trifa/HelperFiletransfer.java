@@ -1744,7 +1744,10 @@ public class HelperFiletransfer
             BufferedOutputStream out = new BufferedOutputStream(
                     new FileOutputStream(SD_CARD_FILES_OUTGOING_WRAPPER_DIR + "/" + filename2));
 
-            final int chunk_size = 4096;
+            // KHANDAQ (perf): 256KB chunks instead of 4KB — far fewer read/write syscalls on the
+            // content:// -> file copy (the group send still runs this on the UI thread; the 1:1 path
+            // now runs it on a background executor).
+            final int chunk_size = 256 * 1024;
             byte[] buffer = new byte[chunk_size];
             int read;
             while ((read = in.read(buffer)) != -1)

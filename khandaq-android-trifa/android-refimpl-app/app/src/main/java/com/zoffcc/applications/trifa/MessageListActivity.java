@@ -2643,6 +2643,73 @@ public class MessageListActivity extends AppCompatActivity
         long file_size_wrapped = -1;
     }
 
+    // KHANDAQ (ANR): serial background executor for the outgoing-file VFS copy (a plain java.io copy of
+    // up to ~200MB), so sending a large photo/video no longer freezes the UI thread. Single-thread keeps
+    // per-send disk ordering and avoids disk thrash on multi-select.
+    private static final java.util.concurrent.ExecutorService OUTGOING_COPY_EXEC =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    // Returned synchronously by the small-file branch once the send is ACCEPTED for async copy+insert.
+    // Positive so queue callers treat it as success; it is never a real message id (the row is created
+    // only after the copy completes), so a caller's idEq() lookup simply finds nothing (handled).
+    private static final long OUTGOING_FILE_ACCEPTED_ASYNC = Long.MAX_VALUE;
+
+    // KHANDAQ (ANR): shared tail of the small-file send path — build the Filetransfer + Message rows and
+    // kick the transfer. MUST run on the main thread (inserts touch the RecyclerView; finish_...enqueue
+    // does the native tox_file_send). Called synchronously for real-file sources (voice — the caller
+    // deletes the source right after) and from the copy executor's main-thread continuation for picker
+    // media. Returns the new message id.
+    private static long finish_outgoing_file_after_copy(final Context c, final long friendnum,
+            final outgoing_file_wrapped ofw, final boolean update_message_view,
+            final boolean startTransferImmediately)
+    {
+        Filetransfer f = new Filetransfer();
+        f.tox_public_key_string = tox_friend_get_public_key__wrapper(friendnum);
+        f.direction = TRIFA_FT_DIRECTION_OUTGOING.value;
+        f.file_number = -1; // add later when we actually have the number
+        f.kind = TOX_FILE_KIND_DATA.value;
+        f.state = TOX_FILE_CONTROL_PAUSE.value;
+        f.path_name = ofw.filepath_wrapped;
+        f.file_name = ofw.filename_wrapped;
+        f.filesize = ofw.file_size_wrapped;
+        f.ft_accepted = false;
+        f.ft_outgoing_started = false;
+        f.current_position = 0;
+        f.storage_frame_work = false;
+
+        long ft_id = insert_into_filetransfer_db(f);
+        f.id = ft_id;
+
+        // add FT message to UI
+        Message m = new Message();
+
+        m.tox_friendpubkey = tox_friend_get_public_key__wrapper(friendnum);
+        m.direction = 1; // msg outgoing
+        m.TOX_MESSAGE_TYPE = 0;
+        m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_FILE.value;
+        m.filetransfer_id = ft_id;
+        m.filedb_id = -1;
+        m.state = TOX_FILE_CONTROL_PAUSE.value;
+        m.ft_accepted = false;
+        m.ft_outgoing_started = false;
+        m.ft_outgoing_queued = false;
+        m.filename_fullpath = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).getAbsolutePath();
+        m.sent_timestamp = System.currentTimeMillis();
+        m.text = HelperFiletransfer.buildOutgoingFileMessageText(c, ofw.filename_wrapped, ofw.file_size_wrapped);
+        m.storage_frame_work = false;
+        m.sent_push = 0;
+        m.is_new = false; // no notification for outgoing filetransfers
+        m.filetransfer_kind = TOX_FILE_KIND_DATA.value;
+
+        long new_msg_id = insert_into_message_db(m, update_message_view);
+        m.id = new_msg_id;
+
+        f.message_id = new_msg_id;
+        update_filetransfer_db_full(f);
+
+        finish_outgoing_file_enqueue(new_msg_id, update_message_view, startTransferImmediately);
+        return new_msg_id;
+    }
+
     static long add_outgoing_file(Context c, long friendnum, String filepath, String filename, Uri uri, long file_size_manual, boolean real_file_path, boolean update_message_view, boolean use_file_size_manual)
     {
         return add_outgoing_file(c, friendnum, filepath, filename, uri, file_size_manual, real_file_path,
@@ -2748,80 +2815,56 @@ public class MessageListActivity extends AppCompatActivity
         if (file_size < FT_OUTGOING_FILESIZE_BYTE_USE_STORAGE_FRAMEWORK) // less than xxx Bytes filesize
         {
             HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:0001");
-            outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(filepath, filename, file_size);
 
+            // KHANDAQ (ANR): for content-picker media (uri != null) — which can be a ~200MB video — do the
+            // VFS copy on a background thread, then build the rows + kick the transfer back on the main
+            // thread. The message row is inserted only AFTER the copy finishes, so the tox resend loop
+            // (which promotes queued file rows older than ~1.5s) can never pick up a half-written file,
+            // and the native tox_file_send stays on the main thread (no new tox-iterate race).
+            // Real-file sources (uri == null, e.g. voice notes) stay SYNCHRONOUS: the caller deletes the
+            // source file right after this returns, so the copy must read it before we return.
+            if (uri != null)
+            {
+                final Context fnl_c = c;
+                final long fnl_friendnum = friendnum;
+                final String fnl_filepath = filepath;
+                final String fnl_filename = filename;
+                final long fnl_file_size = file_size;
+                final boolean fnl_update = update_message_view;
+                final boolean fnl_start = startTransferImmediately;
+                OUTGOING_COPY_EXEC.execute(() ->
+                {
+                    final outgoing_file_wrapped ofw =
+                            copy_outgoing_file_to_sdcard_dir(fnl_filepath, fnl_filename, fnl_file_size);
+                    final Runnable cont = () ->
+                    {
+                        if (ofw == null)
+                        {
+                            HelperGeneric.logI(TAG, "add_outgoing_file:ERR:0002 (async copy failed)");
+                            return;
+                        }
+                        finish_outgoing_file_after_copy(fnl_c, fnl_friendnum, ofw, fnl_update, fnl_start);
+                    };
+                    if (main_handler_s != null)
+                    {
+                        main_handler_s.post(cont);
+                    }
+                    else
+                    {
+                        cont.run();
+                    }
+                });
+                return OUTGOING_FILE_ACCEPTED_ASYNC;
+            }
+
+            outgoing_file_wrapped ofw = copy_outgoing_file_to_sdcard_dir(filepath, filename, file_size);
             if (ofw == null)
             {
                 HelperGeneric.logI(TAG, "add_outgoing_file:documentFile:ERR:0002");
                 return -1L;
             }
-
-            Filetransfer f = new Filetransfer();
-            f.tox_public_key_string = tox_friend_get_public_key__wrapper(friendnum);
-            f.direction = TRIFA_FT_DIRECTION_OUTGOING.value;
-            f.file_number = -1; // add later when we actually have the number
-            f.kind = TOX_FILE_KIND_DATA.value;
-            f.state = TOX_FILE_CONTROL_PAUSE.value;
-            f.path_name = ofw.filepath_wrapped;
-            f.file_name = ofw.filename_wrapped;
-            f.filesize = ofw.file_size_wrapped;
-            f.ft_accepted = false;
-            f.ft_outgoing_started = false;
-            f.current_position = 0;
-            f.storage_frame_work = false;
-
-            long ft_id = insert_into_filetransfer_db(f);
-            f.id = ft_id;
-
-            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:2:" + ft_id);
-
-            // ---------- DEBUG ----------
-            Filetransfer ft_tmp = (Filetransfer) orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4a:" + "fid=" + ft_tmp.id + " mid=" + ft_tmp.message_id);
-            // ---------- DEBUG ----------
-
-
-            // add FT message to UI
-            Message m = new Message();
-
-            m.tox_friendpubkey = tox_friend_get_public_key__wrapper(friendnum);
-            m.direction = 1; // msg outgoing
-            m.TOX_MESSAGE_TYPE = 0;
-            m.TRIFA_MESSAGE_TYPE = TRIFA_MSG_FILE.value;
-            m.filetransfer_id = ft_id;
-            m.filedb_id = -1;
-            m.state = TOX_FILE_CONTROL_PAUSE.value;
-            m.ft_accepted = false;
-            m.ft_outgoing_started = false;
-            m.ft_outgoing_queued = false;
-            m.filename_fullpath = new java.io.File(ofw.filepath_wrapped + "/" + ofw.filename_wrapped).getAbsolutePath();
-            m.sent_timestamp = System.currentTimeMillis();
-            m.text = HelperFiletransfer.buildOutgoingFileMessageText(c, ofw.filename_wrapped, ofw.file_size_wrapped);
-            m.storage_frame_work = false;
-            m.sent_push = 0;
-            m.is_new = false; // no notification for outgoing filetransfers
-            m.filetransfer_kind = TOX_FILE_KIND_DATA.value;
-
-            long new_msg_id = insert_into_message_db(m, update_message_view);
-            m.id = new_msg_id;
-
-            // ---------- DEBUG ----------
-            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:3:" + new_msg_id);
-            Message m_tmp = (Message) orma.selectFromMessage().idEq(new_msg_id).get(0);
-            // HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4:" + m.filetransfer_id + "::" + m_tmp);
-            // ---------- DEBUG ----------
-
-            f.message_id = new_msg_id;
-            // ** // update_filetransfer_db_messageid_from_id(f, ft_id);
-            update_filetransfer_db_full(f);
-
-            // ---------- DEBUG ----------
-            Filetransfer ft_tmp2 = (Filetransfer) orma.selectFromFiletransfer().idEq(ft_id).get(0);
-            HelperGeneric.logI(TAG, "add_outgoing_file:MM2MM:4b:" + "fid=" + ft_tmp2.id + " mid=" + ft_tmp2.message_id);
-            // ---------- DEBUG ----------
-
-            finish_outgoing_file_enqueue(new_msg_id, update_message_view, startTransferImmediately);
-            return new_msg_id;
+            return finish_outgoing_file_after_copy(c, friendnum, ofw, update_message_view,
+                    startTransferImmediately);
         }
         else
         {

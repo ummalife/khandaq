@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10342.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10343.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Performance & stability: much smoother chat-list and message scrolling (removed per-row database work), faster group admin actions, and a batch of crash/leak fixes across calls, groups and media."},
-                    {"language": "ru-RU", "text": "Производительность и стабильность: заметно плавнее прокрутка списка чатов и сообщений (убрали работу с БД на каждую строку), быстрее действия администратора в группах, плюс набор исправлений крашей и утечек в звонках, группах и медиа."},
+                    {"language": "en-US", "text": "Stability: adding a contact no longer briefly freezes the app, plus memory-leak fixes on the call and chat screens. Builds on the previous update's smoother chat-list and message scrolling."},
+                    {"language": "ru-RU", "text": "Стабильность: добавление контакта больше не подвешивает приложение на секунду, плюс исправления утечек памяти на экранах звонка и чата. В дополнение к прошлому обновлению с более плавной прокруткой списка чатов и сообщений."},
                 ],
             }],
         })

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10343.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10344.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Stability: adding a contact no longer briefly freezes the app, plus memory-leak fixes on the call and chat screens. Builds on the previous update's smoother chat-list and message scrolling."},
-                    {"language": "ru-RU", "text": "Стабильность: добавление контакта больше не подвешивает приложение на секунду, плюс исправления утечек памяти на экранах звонка и чата. В дополнение к прошлому обновлению с более плавной прокруткой списка чатов и сообщений."},
+                    {"language": "en-US", "text": "Sending a photo or video no longer freezes the app while it is prepared — the file is now processed in the background. Plus the previous stability fixes (adding a contact, memory leaks) and smoother scrolling."},
+                    {"language": "ru-RU", "text": "Отправка фото или видео больше не подвешивает приложение на время подготовки файла — теперь он обрабатывается в фоне. Плюс прошлые исправления стабильности (добавление контакта, утечки памяти) и более плавная прокрутка."},
                 ],
             }],
         })

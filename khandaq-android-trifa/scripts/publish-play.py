@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10341.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10342.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Fixed repeated \"New message\" notifications with nothing new in the app (server-side, applies right away). Recent fixes: voice waveform for long notes, long-press a photo/video/file to select & delete, Reply icon shows immediately on select, cleaner 1:1 media."},
-                    {"language": "ru-RU", "text": "Исправлены повторяющиеся уведомления \"New message\", когда в приложении ничего нового (серверный фикс, действует сразу). Недавнее: волна у длинных голосовых, выделение фото/видео/файла долгим нажатием для удаления, иконка «Ответить» сразу при выделении, чище медиа в личке."},
+                    {"language": "en-US", "text": "Performance & stability: much smoother chat-list and message scrolling (removed per-row database work), faster group admin actions, and a batch of crash/leak fixes across calls, groups and media."},
+                    {"language": "ru-RU", "text": "Производительность и стабильность: заметно плавнее прокрутка списка чатов и сообщений (убрали работу с БД на каждую строку), быстрее действия администратора в группах, плюс набор исправлений крашей и утечек в звонках, группах и медиа."},
                 ],
             }],
         })

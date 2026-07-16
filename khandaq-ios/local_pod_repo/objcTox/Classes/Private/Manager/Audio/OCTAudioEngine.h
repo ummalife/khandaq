@@ -8,7 +8,10 @@
 @interface OCTAudioEngine : NSObject
 
 @property (weak, nonatomic) OCTToxAV *toxav;
-@property (nonatomic, assign) OCTToxFriendNumber friendNumber;
+// KHANDAQ (data race): written on the calls-submanager thread while a live engine reads it on the
+// audio render thread — make it atomic (mirrors the atomic voiceIO fix). Drop-in: all access is via
+// the accessor, no direct _friendNumber ivar use.
+@property (atomic, assign) OCTToxFriendNumber friendNumber;
 
 /**
  * YES to send audio frames over to tox, otherwise NO.

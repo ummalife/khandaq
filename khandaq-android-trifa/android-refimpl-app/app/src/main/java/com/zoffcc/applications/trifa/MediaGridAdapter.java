@@ -1,5 +1,6 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.Context;
 import android.graphics.Color;
 import android.net.Uri;
 import android.view.LayoutInflater;
@@ -43,6 +44,12 @@ class MediaGridAdapter extends RecyclerView.Adapter<MediaGridAdapter.VH>
     private final OnSelectionChanged selectionCallback;
     private final LinkedHashSet<Uri> selected = new LinkedHashSet<>();
 
+    // KHANDAQ (perf): these three icon-font drawables have fixed content — build once and reuse across
+    // all grid cells instead of allocating a fresh IconicsDrawable (+ color lookup) on every bind.
+    private IconicsDrawable videoBadgeIcon;
+    private IconicsDrawable selectCheckedIcon;
+    private IconicsDrawable selectUncheckedIcon;
+
     MediaGridAdapter(final List<Uri> items, final OnPick pickCallback, final OnSelectionChanged selectionCallback)
     {
         this.items = items;
@@ -55,13 +62,52 @@ class MediaGridAdapter extends RecyclerView.Adapter<MediaGridAdapter.VH>
     public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType)
     {
         final View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_media_grid, parent, false);
-        return new VH(v);
+        final VH vh = new VH(v);
+        // KHANDAQ (perf): attach the two click listeners once per ViewHolder here instead of allocating
+        // fresh lambdas on every bind; resolve the row lazily via the binding adapter position.
+        vh.select.setOnClickListener(view ->
+        {
+            final int pos = vh.getBindingAdapterPosition();
+            if (pos != RecyclerView.NO_POSITION)
+            {
+                toggle(items.get(pos));
+            }
+        });
+        vh.itemView.setOnClickListener(view ->
+        {
+            final int pos = vh.getBindingAdapterPosition();
+            if (pos == RecyclerView.NO_POSITION)
+            {
+                return;
+            }
+            final Uri uri = items.get(pos);
+            if (!selected.isEmpty())
+            {
+                toggle(uri);
+            }
+            else if (pickCallback != null && uri != null)
+            {
+                pickCallback.onPick(uri);
+            }
+        });
+        return vh;
     }
 
     @Override
     public void onBindViewHolder(@NonNull VH h, int position)
     {
         final Uri uri = items.get(position);
+        if (videoBadgeIcon == null)
+        {
+            final Context ctx = h.itemView.getContext().getApplicationContext();
+            final int teal = ContextCompat.getColor(ctx, R.color.khandaq_teal);
+            videoBadgeIcon = new IconicsDrawable(ctx).icon(GoogleMaterial.Icon.gmd_videocam)
+                    .color(Color.WHITE).sizeDp(16);
+            selectCheckedIcon = new IconicsDrawable(ctx).icon(GoogleMaterial.Icon.gmd_check_circle)
+                    .color(teal).sizeDp(24);
+            selectUncheckedIcon = new IconicsDrawable(ctx).icon(GoogleMaterial.Icon.gmd_radio_button_unchecked)
+                    .color(Color.WHITE).sizeDp(24);
+        }
         try
         {
             GlideApp.with(h.thumb.getContext())
@@ -77,8 +123,7 @@ class MediaGridAdapter extends RecyclerView.Adapter<MediaGridAdapter.VH>
         final boolean isVideo = (uri != null) && uri.toString().contains("/video");
         if (isVideo)
         {
-            h.videoBadge.setImageDrawable(new IconicsDrawable(h.videoBadge.getContext())
-                    .icon(GoogleMaterial.Icon.gmd_videocam).color(Color.WHITE).sizeDp(16));
+            h.videoBadge.setImageDrawable(videoBadgeIcon);
             h.videoBadge.setVisibility(View.VISIBLE);
         }
         else
@@ -87,26 +132,8 @@ class MediaGridAdapter extends RecyclerView.Adapter<MediaGridAdapter.VH>
         }
 
         final boolean isSelected = selected.contains(uri);
-        final int teal = ContextCompat.getColor(h.select.getContext(), R.color.khandaq_teal);
-        h.select.setImageDrawable(isSelected
-                ? new IconicsDrawable(h.select.getContext()).icon(GoogleMaterial.Icon.gmd_check_circle)
-                        .color(teal).sizeDp(24)
-                : new IconicsDrawable(h.select.getContext()).icon(GoogleMaterial.Icon.gmd_radio_button_unchecked)
-                        .color(Color.WHITE).sizeDp(24));
+        h.select.setImageDrawable(isSelected ? selectCheckedIcon : selectUncheckedIcon);
         h.thumb.setAlpha(isSelected ? 0.6f : 1f);
-
-        h.select.setOnClickListener(v -> toggle(uri));
-        h.itemView.setOnClickListener(v ->
-        {
-            if (!selected.isEmpty())
-            {
-                toggle(uri);
-            }
-            else if (pickCallback != null && uri != null)
-            {
-                pickCallback.onPick(uri);
-            }
-        });
     }
 
     private void toggle(final Uri uri)

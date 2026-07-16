@@ -105,14 +105,11 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
         // swipeLayout.addDrag(SwipeLayout.DragEdge.Left, itemView.findViewById(R.id.msg_swipe_bottom_wrapper));
-    }
 
-    public void bindMessageList(Message m)
-    {
-        // Log.i(TAG, "bindMessageList");
-
-        message_ = m;
-
+        // KHANDAQ (#31 leak): attach the swipe listener ONCE per ViewHolder here instead of on every
+        // bindMessageList — daimajia addSwipeListener() appends without dedup, so re-adding per bind
+        // accumulated a listener each rebind. The body only reads instance fields (message_ is refreshed
+        // on each bind), so a single registration is correct.
         swipeLayout.addSwipeListener(new SwipeLayout.SwipeListener()
         {
             @Override
@@ -175,6 +172,13 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
                 swipeLayout.close(true);
             }
         });
+    }
+
+    public void bindMessageList(Message m)
+    {
+        // Log.i(TAG, "bindMessageList");
+
+        message_ = m;
 
         textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, MESSAGE_TEXT_SIZE[PREF__global_font_size]);
 

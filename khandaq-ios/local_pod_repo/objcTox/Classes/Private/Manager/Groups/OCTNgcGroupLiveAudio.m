@@ -217,7 +217,9 @@ static const int32_t kOCTNgcAudioFrameSamples = 5760;
 #endif
 
     [self stopLiveCapture];
-    [self.capturePcmBuffer setLength:0];
+    @synchronized (self) {
+        [self.capturePcmBuffer setLength:0]; // KHANDAQ (data race): guard vs. the input-tap thread's drain
+    }
 
     NSError *sessionError = nil;
     [session setCategory:AVAudioSessionCategoryPlayAndRecord
@@ -363,14 +365,26 @@ static const int32_t kOCTNgcAudioFrameSamples = 5760;
     }
 
     const NSUInteger byteCount = converted.frameLength * sizeof(int16_t);
-    [self.capturePcmBuffer appendBytes:converted.int16ChannelData[0] length:byteCount];
-
     const NSUInteger frameBytes = (NSUInteger)kOCTNgcAudioFrameSamples * sizeof(int16_t);
+    const uint32_t groupNumber = self.captureGroupNumber;
 
-    while (self.capturePcmBuffer.length >= frameBytes) {
-        NSData *frame = [self.capturePcmBuffer subdataWithRange:NSMakeRange(0, frameBytes)];
-        [self.capturePcmBuffer replaceBytesInRange:NSMakeRange(0, frameBytes) withBytes:NULL length:0];
-        [self sendEncodedFrame:(const int16_t *)frame.bytes groupNumber:self.captureGroupNumber];
+    // KHANDAQ (data race): NSMutableData is not thread-safe. This runs on the AVAudioEngine input-tap
+    // thread while startLiveCapture/stopLiveCapture clear the same buffer on the main thread — concurrent
+    // mutation corrupted the backing store (crash on call teardown). Append + drain under a lock, then
+    // encode/send OUTSIDE the lock so the real-time tap thread never blocks on toxav.
+    NSMutableArray<NSData *> *frames = nil;
+    @synchronized (self) {
+        [self.capturePcmBuffer appendBytes:converted.int16ChannelData[0] length:byteCount];
+        while (self.capturePcmBuffer.length >= frameBytes) {
+            if (! frames) {
+                frames = [NSMutableArray array];
+            }
+            [frames addObject:[self.capturePcmBuffer subdataWithRange:NSMakeRange(0, frameBytes)]];
+            [self.capturePcmBuffer replaceBytesInRange:NSMakeRange(0, frameBytes) withBytes:NULL length:0];
+        }
+    }
+    for (NSData *frame in frames) {
+        [self sendEncodedFrame:(const int16_t *)frame.bytes groupNumber:groupNumber];
     }
 }
 
@@ -434,7 +448,9 @@ static const int32_t kOCTNgcAudioFrameSamples = 5760;
     self.captureGroupNumber = 0;
     self.captureConverter = nil;
     self.captureTargetFormat = nil;
-    [self.capturePcmBuffer setLength:0];
+    @synchronized (self) {
+        [self.capturePcmBuffer setLength:0]; // KHANDAQ (data race): guard vs. the input-tap thread's drain
+    }
     [self removeInputTapIfNeeded];
 
     if (self.audioEngine.isRunning) {

@@ -221,7 +221,14 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
             }
         }
 
-        String display_name = HelperFriend.get_friend_name_from_pubkey(fl.tox_public_key_string);
+        // KHANDAQ (perf): fl is already the bound FriendList row — derive the display name from it
+        // directly instead of get_friend_name_from_pubkey() which re-queries selectFromFriendList
+        // (up to 3x) per row on every scroll bind.
+        String display_name = HelperFriend.display_name_from_friendlist(fl, fl.tox_public_key_string);
+        if ((display_name == null) || display_name.isEmpty())
+        {
+            display_name = HelperFriend.peer_pubkey_short_id(fl.tox_public_key_string);
+        }
         textView.setText(name_prefix + display_name);
         try
         {
@@ -285,7 +292,9 @@ public class FriendListHolder extends RecyclerView.ViewHolder implements View.On
         {
             // Log.d(TAG, "004");
 
-            String get_pushurl_for_friend = get_pushurl_for_friend(fl.tox_public_key_string);
+            // KHANDAQ (perf): use the already-bound fl.push_url instead of get_pushurl_for_friend()
+            // which re-runs selectFromFriendList per row on every scroll bind.
+            String get_pushurl_for_friend = fl.push_url;
 
             if ((get_pushurl_for_friend != null) && (get_pushurl_for_friend.length() > "https:".length()))
             {

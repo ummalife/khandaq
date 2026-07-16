@@ -44,6 +44,13 @@ class AutomationCoordinator: NSObject {
             }
         }
     }
+
+    // KHANDAQ (leak): invalidate the Realm observer on teardown. Without this the token (and its
+    // [unowned self] block) leaked on every session logout, and a file message arriving mid-dealloc
+    // could fire on a dead instance and crash.
+    deinit {
+        fileMessagesToken?.invalidate()
+    }
 }
 
 extension AutomationCoordinator: CoordinatorProtocol {

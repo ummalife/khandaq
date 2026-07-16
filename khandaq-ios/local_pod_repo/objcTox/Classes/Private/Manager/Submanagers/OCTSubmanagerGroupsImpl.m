@@ -92,6 +92,18 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @synthesize dataSource = _dataSource;
 @synthesize delegate = _delegate;
 
+// KHANDAQ (leak): the 90s groupsMaintenanceTimer dispatch source was created + resumed but never
+// cancelled — the class had no dealloc, so it leaked on teardown. The event handler captures weakSelf
+// (no retain cycle), so a plain dealloc runs; cancel the always-resumed source here (safe to cancel a
+// resumed source; never suspended, so no "release of suspended object" crash).
+- (void)dealloc
+{
+    if (_groupsMaintenanceTimer) {
+        dispatch_source_cancel(_groupsMaintenanceTimer);
+        _groupsMaintenanceTimer = nil;
+    }
+}
+
 #pragma mark - Tox queue helpers
 
 - (OCTTox *)toxInstance

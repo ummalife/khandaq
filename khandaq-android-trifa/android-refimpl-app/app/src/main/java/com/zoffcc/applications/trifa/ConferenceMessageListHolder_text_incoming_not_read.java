@@ -124,34 +124,11 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
 
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
-    }
 
-    public void bindMessageList(ConferenceMessage m)
-    {
-        message_ = m;
-
-        String message__text = m.text;
-        String message__tox_peername = m.tox_peername;
-        String message__tox_peerpubkey = m.tox_peerpubkey;
-
-        boolean handle_special_name = false;
-
-        name_test_pk res = correct_pubkey(m);
-        if (res.changed)
-        {
-            try
-            {
-                message__tox_peername = res.tox_peername;
-                peer_name_text.setText(message__tox_peername);
-                message__text = res.text;
-                message__tox_peerpubkey = res.tox_peerpubkey;
-                handle_special_name = true;
-            }
-            catch (Exception e)
-            {
-            }
-        }
-
+        // KHANDAQ (#31 leak): attach the swipe listener ONCE per ViewHolder here instead of on every
+        // bindMessageList — daimajia addSwipeListener() appends without dedup, so re-adding per bind
+        // accumulated a listener each rebind. The body only reads instance fields (message_ is refreshed
+        // on each bind), so a single registration is correct.
         swipeLayout.addSwipeListener(new SwipeLayout.SwipeListener()
         {
             @Override
@@ -214,6 +191,33 @@ public class ConferenceMessageListHolder_text_incoming_not_read extends Recycler
                 swipeLayout.close(true);
             }
         });
+    }
+
+    public void bindMessageList(ConferenceMessage m)
+    {
+        message_ = m;
+
+        String message__text = m.text;
+        String message__tox_peername = m.tox_peername;
+        String message__tox_peerpubkey = m.tox_peerpubkey;
+
+        boolean handle_special_name = false;
+
+        name_test_pk res = correct_pubkey(m);
+        if (res.changed)
+        {
+            try
+            {
+                message__tox_peername = res.tox_peername;
+                peer_name_text.setText(message__tox_peername);
+                message__text = res.text;
+                message__tox_peerpubkey = res.tox_peerpubkey;
+                handle_special_name = true;
+            }
+            catch (Exception e)
+            {
+            }
+        }
 
         textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, MESSAGE_TEXT_SIZE[PREF__global_font_size]);
 

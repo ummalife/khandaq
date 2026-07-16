@@ -119,6 +119,9 @@ class ChatGroupController: PortraitChatController {
 
     deinit {
         messagesToken?.invalidate()
+        // KHANDAQ (leak): stop the 2s incoming-video poll on teardown; without this a mid-poll dealloc
+        // left a repeating timer firing into a nil weak self on the main run loop.
+        incomingVideoPollTimer?.invalidate()
         if let observer = connectionStatusObserver {
             NotificationCenter.default.removeObserver(observer)
         }

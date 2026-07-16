@@ -15,7 +15,9 @@
  * Current friend number that video engine should
  * process video data to and from.
  */
-@property (nonatomic, assign) OCTToxFriendNumber friendNumber;
+// KHANDAQ (data race): read on the AVCapture processing queue while written on the calls-submanager
+// thread — make it atomic (mirrors the audio-engine fix). All access is via the accessor.
+@property (atomic, assign) OCTToxFriendNumber friendNumber;
 
 // KHANDAQ: total incoming (decoded) video frames received from the peer. Surfaced on the call screen
 // to diagnose "I don't see the other camera": 0 = peer isn't transmitting / toxav isn't receiving;

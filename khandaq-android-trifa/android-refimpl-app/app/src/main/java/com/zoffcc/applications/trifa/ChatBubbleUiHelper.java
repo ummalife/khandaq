@@ -880,6 +880,74 @@ final class ChatBubbleUiHelper
         }
     }
 
+    // KHANDAQ (perf): fill_peer_avatar ran a selectFromFriendList query + an encrypted-VFS file .length()
+    // stat on the UI thread on EVERY row bind during scroll. Memoize the resolved avatar metadata per
+    // pubkey for a short window so a scroll burst does the DB+VFS work once per peer instead of once per
+    // bind. Kept fully synchronous (no background thread) so there is no view-recycling race; Glide's own
+    // memory cache makes the repeated load cheap. Self-heals within the TTL when an avatar changes.
+    private static final class AvatarMeta
+    {
+        final boolean loadable;
+        final String path;
+        final String filename;
+        final long updateTs;
+
+        AvatarMeta(final boolean l, final String p, final String f, final long t)
+        {
+            loadable = l;
+            path = p;
+            filename = f;
+            updateTs = t;
+        }
+    }
+
+    private static final AvatarMeta AVATAR_META_NONE = new AvatarMeta(false, null, null, 0L);
+    private static final long AVATAR_META_CACHE_TTL_MS = 3000L;
+    private static final java.util.concurrent.ConcurrentHashMap<String, AvatarMeta> avatar_meta_cache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> avatar_meta_cache_ts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static AvatarMeta resolve_avatar_meta(final String peerPubkey)
+    {
+        final Long ts = avatar_meta_cache_ts.get(peerPubkey);
+        if (ts != null && (System.currentTimeMillis() - ts) < AVATAR_META_CACHE_TTL_MS)
+        {
+            final AvatarMeta cached = avatar_meta_cache.get(peerPubkey);
+            if (cached != null)
+            {
+                return cached;
+            }
+        }
+        AvatarMeta v = AVATAR_META_NONE;
+        try
+        {
+            final java.util.List<FriendList> friends =
+                    orma.selectFromFriendList().tox_public_key_stringEq(peerPubkey).toList();
+            if (!friends.isEmpty())
+            {
+                final FriendList friend = friends.get(0);
+                if (shouldLoadVfsAvatar(friend))
+                {
+                    final info.guardianproject.iocipher.File avatarFile =
+                            new info.guardianproject.iocipher.File(
+                                    friend.avatar_pathname + "/" + friend.avatar_filename);
+                    if (avatarFile.length() > 0)
+                    {
+                        v = new AvatarMeta(true, friend.avatar_pathname, friend.avatar_filename,
+                                friend.avatar_update_timestamp);
+                    }
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        avatar_meta_cache.put(peerPubkey, v);
+        avatar_meta_cache_ts.put(peerPubkey, System.currentTimeMillis());
+        return v;
+    }
+
     private static void fill_peer_avatar(final Context context, final String peerPubkey, final String peerName,
                                         final CircleImageView avatar, final int sizePx, final int fontSp,
                                         final boolean resizeLayout)
@@ -906,30 +974,20 @@ final class ChatBubbleUiHelper
 
         try
         {
-            final java.util.List<FriendList> friends = orma.selectFromFriendList().tox_public_key_stringEq(peerPubkey).toList();
-            if (friends.isEmpty())
-            {
-                return;
-            }
-
-            final FriendList friend = friends.get(0);
-            if (!shouldLoadVfsAvatar(friend))
+            final AvatarMeta meta = resolve_avatar_meta(peerPubkey);
+            if (!meta.loadable)
             {
                 return;
             }
 
             final info.guardianproject.iocipher.File avatarFile =
-                    new info.guardianproject.iocipher.File(friend.avatar_pathname + "/" + friend.avatar_filename);
-            if (avatarFile.length() <= 0)
-            {
-                return;
-            }
+                    new info.guardianproject.iocipher.File(meta.path + "/" + meta.filename);
 
             final RequestOptions glideOptions = new RequestOptions().fitCenter();
             GlideApp.with(context).load(avatarFile).diskCacheStrategy(DiskCacheStrategy.RESOURCE).signature(
                     new com.bumptech.glide.signature.StringSignatureZ(
-                            "_avatar_" + friend.avatar_pathname + "/" + friend.avatar_filename + "_" +
-                                    friend.avatar_update_timestamp)).skipMemoryCache(false).apply(glideOptions).into(avatar);
+                            "_avatar_" + meta.path + "/" + meta.filename + "_" +
+                                    meta.updateTs)).skipMemoryCache(false).apply(glideOptions).into(avatar);
         }
         catch (Exception ignored)
         {

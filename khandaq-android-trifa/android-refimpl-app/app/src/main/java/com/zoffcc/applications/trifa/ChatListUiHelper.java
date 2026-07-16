@@ -123,6 +123,140 @@ final class ChatListUiHelper
         unread_count_cache_ts.put(key, System.currentTimeMillis());
     }
 
+    // KHANDAQ (perf): the chat-list preview + timestamp used to fire 2-3 uncached Message/GroupMessage
+    // queries per row on every bind/scroll (friend_has_messages COUNT + two identical last-message
+    // SELECTs). Collapse them into ONE query cached with the same short TTL as the unread badge above,
+    // so a scroll burst reads the DB once per chat instead of once per bind. Freshness is bounded by
+    // the TTL exactly like the unread count (both self-heal on the next list refresh).
+    private static final long LAST_MSG_CACHE_TTL_MS = 1000L;
+
+    private static final class FriendLastMsg
+    {
+        final boolean hasMessages;
+        final String text;
+        final String filename;
+        final boolean outgoing;
+        final long timestampMs;
+
+        FriendLastMsg(final boolean h, final String t, final String f, final boolean o, final long ts)
+        {
+            hasMessages = h;
+            text = t;
+            filename = f;
+            outgoing = o;
+            timestampMs = ts;
+        }
+    }
+
+    private static final FriendLastMsg FRIEND_LAST_MSG_EMPTY = new FriendLastMsg(false, null, null, false, 0L);
+    private static final java.util.concurrent.ConcurrentHashMap<String, FriendLastMsg> friend_last_msg_cache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> friend_last_msg_cache_ts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static FriendLastMsg cached_friend_last_msg(final String friend_pubkey)
+    {
+        if (TextUtils.isEmpty(friend_pubkey))
+        {
+            return FRIEND_LAST_MSG_EMPTY;
+        }
+        final Long ts = friend_last_msg_cache_ts.get(friend_pubkey);
+        if (ts != null && (System.currentTimeMillis() - ts) < LAST_MSG_CACHE_TTL_MS)
+        {
+            final FriendLastMsg cached = friend_last_msg_cache.get(friend_pubkey);
+            if (cached != null)
+            {
+                return cached;
+            }
+        }
+        FriendLastMsg v = FRIEND_LAST_MSG_EMPTY;
+        try
+        {
+            final List<Message> m = orma.selectFromMessage().tox_friendpubkeyEq(friend_pubkey).
+                    orderByRcvd_timestampDesc().limit(1).toList();
+            if (!m.isEmpty())
+            {
+                final Message msg = m.get(0);
+                final long tms = Math.max(msg.rcvd_timestamp_ms, msg.sent_timestamp_ms) > 0L
+                        ? Math.max(msg.rcvd_timestamp_ms, msg.sent_timestamp_ms)
+                        : Math.max(msg.rcvd_timestamp, msg.sent_timestamp);
+                v = new FriendLastMsg(true, msg.text, msg.filename_fullpath, msg.direction == 1,
+                        normalize_message_timestamp_ms(tms));
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        friend_last_msg_cache.put(friend_pubkey, v);
+        friend_last_msg_cache_ts.put(friend_pubkey, System.currentTimeMillis());
+        return v;
+    }
+
+    private static final class GroupLastMsg
+    {
+        final GroupMessage latest;
+        final long timestampMs;
+
+        GroupLastMsg(final GroupMessage l, final long ts)
+        {
+            latest = l;
+            timestampMs = ts;
+        }
+    }
+
+    private static final GroupLastMsg GROUP_LAST_MSG_EMPTY = new GroupLastMsg(null, 0L);
+    private static final java.util.concurrent.ConcurrentHashMap<String, GroupLastMsg> group_last_msg_cache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> group_last_msg_cache_ts =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static GroupLastMsg cached_group_last_msg(final String group_identifier)
+    {
+        if (TextUtils.isEmpty(group_identifier))
+        {
+            return GROUP_LAST_MSG_EMPTY;
+        }
+        final String lower = group_identifier.toLowerCase(Locale.ROOT);
+        final Long ts = group_last_msg_cache_ts.get(lower);
+        if (ts != null && (System.currentTimeMillis() - ts) < LAST_MSG_CACHE_TTL_MS)
+        {
+            final GroupLastMsg cached = group_last_msg_cache.get(lower);
+            if (cached != null)
+            {
+                return cached;
+            }
+        }
+        GroupLastMsg v = GROUP_LAST_MSG_EMPTY;
+        try
+        {
+            final List<GroupMessage> messages = orma.selectFromGroupMessage().
+                    group_identifierEq(lower).
+                    orderByRcvd_timestampDesc().limit(20).toList();
+            if (!messages.isEmpty())
+            {
+                GroupMessage latest = messages.get(0);
+                long latestTs = GroupMessageLayoutHelper.effectiveSortTimestampMs(latest);
+                for (int i = 1; i < messages.size(); i++)
+                {
+                    final GroupMessage candidate = messages.get(i);
+                    final long candidateTs = GroupMessageLayoutHelper.effectiveSortTimestampMs(candidate);
+                    if (candidateTs >= latestTs)
+                    {
+                        latest = candidate;
+                        latestTs = candidateTs;
+                    }
+                }
+                v = new GroupLastMsg(latest, normalize_message_timestamp_ms(latestTs));
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        group_last_msg_cache.put(lower, v);
+        group_last_msg_cache_ts.put(lower, System.currentTimeMillis());
+        return v;
+    }
+
     static void bind_preview_text_color(final TextView previewView, final boolean is_draft)
     {
         if (previewView == null)
@@ -248,18 +382,7 @@ final class ChatListUiHelper
 
     static boolean friend_has_messages(final String friend_pubkey)
     {
-        if (TextUtils.isEmpty(friend_pubkey))
-        {
-            return false;
-        }
-        try
-        {
-            return orma.selectFromMessage().tox_friendpubkeyEq(friend_pubkey).count() > 0;
-        }
-        catch (Exception ignored)
-        {
-            return false;
-        }
+        return cached_friend_last_msg(friend_pubkey).hasMessages;
     }
 
     static String friend_last_message_preview(final Context context, final String friend_pubkey)
@@ -272,14 +395,12 @@ final class ChatListUiHelper
                 return ChatDraftHelper.format_draft_preview(context, draft);
             }
 
-            final List<Message> messages = orma.selectFromMessage().tox_friendpubkeyEq(friend_pubkey).
-                    orderByRcvd_timestampDesc().limit(1).toList();
-            if (messages.isEmpty())
+            final FriendLastMsg lm = cached_friend_last_msg(friend_pubkey);
+            if (!lm.hasMessages)
             {
                 return context.getString(R.string.chat_list_no_messages);
             }
-            final Message message = messages.get(0);
-            return format_message_preview(context, message.text, message.filename_fullpath, message.direction == 1);
+            return format_message_preview(context, lm.text, lm.filename, lm.outgoing);
         }
         catch (Exception ignored)
         {
@@ -289,24 +410,7 @@ final class ChatListUiHelper
 
     static long friend_last_message_timestamp_ms(final String friend_pubkey)
     {
-        try
-        {
-            final List<Message> messages = orma.selectFromMessage().tox_friendpubkeyEq(friend_pubkey).
-                    orderByRcvd_timestampDesc().limit(1).toList();
-            if (messages.isEmpty())
-            {
-                return 0L;
-            }
-            final Message message = messages.get(0);
-            return normalize_message_timestamp_ms(
-                    Math.max(message.rcvd_timestamp_ms, message.sent_timestamp_ms) > 0L
-                            ? Math.max(message.rcvd_timestamp_ms, message.sent_timestamp_ms)
-                            : Math.max(message.rcvd_timestamp, message.sent_timestamp));
-        }
-        catch (Exception ignored)
-        {
-            return 0L;
-        }
+        return cached_friend_last_msg(friend_pubkey).timestampMs;
     }
 
     static String group_last_message_preview(final Context context, final String group_identifier)
@@ -319,26 +423,12 @@ final class ChatListUiHelper
                 return ChatDraftHelper.format_draft_preview(context, draft);
             }
 
-            final List<GroupMessage> messages = orma.selectFromGroupMessage().
-                    group_identifierEq(group_identifier.toLowerCase()).
-                    orderByRcvd_timestampDesc().limit(20).toList();
-            if (messages.isEmpty())
+            final GroupLastMsg lm = cached_group_last_msg(group_identifier);
+            if (lm.latest == null)
             {
                 return format_group_list_status_subtitle(context, group_identifier);
             }
-            GroupMessage latest = messages.get(0);
-            long latestTs = GroupMessageLayoutHelper.effectiveSortTimestampMs(latest);
-            for (int i = 1; i < messages.size(); i++)
-            {
-                final GroupMessage candidate = messages.get(i);
-                final long candidateTs = GroupMessageLayoutHelper.effectiveSortTimestampMs(candidate);
-                if (candidateTs >= latestTs)
-                {
-                    latest = candidate;
-                    latestTs = candidateTs;
-                }
-            }
-            return format_group_message_preview(context, latest);
+            return format_group_message_preview(context, lm.latest);
         }
         catch (Exception ignored)
         {
@@ -348,26 +438,7 @@ final class ChatListUiHelper
 
     static long group_last_message_timestamp_ms(final String group_identifier)
     {
-        try
-        {
-            final List<GroupMessage> messages = orma.selectFromGroupMessage().
-                    group_identifierEq(group_identifier.toLowerCase()).
-                    orderByRcvd_timestampDesc().limit(20).toList();
-            if (messages.isEmpty())
-            {
-                return 0L;
-            }
-            long latestTs = 0L;
-            for (GroupMessage message : messages)
-            {
-                latestTs = Math.max(latestTs, GroupMessageLayoutHelper.effectiveSortTimestampMs(message));
-            }
-            return normalize_message_timestamp_ms(latestTs);
-        }
-        catch (Exception ignored)
-        {
-            return 0L;
-        }
+        return cached_group_last_msg(group_identifier).timestampMs;
     }
 
     /** Strip reply/mention wire metadata and return user-visible preview text. */

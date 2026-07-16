@@ -122,6 +122,73 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
+
+        // KHANDAQ (#31 leak): attach the swipe listener ONCE per ViewHolder here instead of on every
+        // bindMessageList — daimajia addSwipeListener() appends without dedup, so re-adding per bind
+        // accumulated a listener each rebind. The body only reads instance fields (message_ is refreshed
+        // on each bind), so a single registration is correct.
+        swipeLayout.addSwipeListener(new SwipeLayout.SwipeListener()
+        {
+            @Override
+            public void onClose(SwipeLayout layout)
+            {
+                // when the SurfaceView totally cover the BottomView.
+                // Log.i(TAG, "onClose: state=");
+            }
+
+            @Override
+            public void onUpdate(SwipeLayout layout, int leftOffset, int topOffset)
+            {
+                // you are swiping.
+                // Log.i(TAG, "onUpdate: " + leftOffset + " " + topOffset);
+                if (leftOffset > 60)
+                {
+                    swipeLayout.close(true);
+                    // Log.i(TAG, "onUpdate: --> close");
+                    if (swipe_state == 0)
+                    {
+                        swipe_state = 1;
+                    }
+                }
+                else if (leftOffset == 0)
+                {
+                    if (swipe_state == 1)
+                    {
+                        swipe_state = 0;
+                        Log.i(TAG, "onUpdate: --> QUOTE");
+                        ChatReplyPreviewController.startReplyToGroupMessage(context, message_);
+                    }
+                }
+            }
+
+            @Override
+            public void onStartOpen(SwipeLayout layout)
+            {
+                // Log.i(TAG, "onStartOpen");
+            }
+
+            @Override
+            public void onOpen(SwipeLayout layout)
+            {
+                // when the BottomView totally show.
+                // Log.i(TAG, "onOpen");
+                swipeLayout.close(true);
+            }
+
+            @Override
+            public void onStartClose(SwipeLayout layout)
+            {
+                // Log.i(TAG, "onStartClose");
+            }
+
+            @Override
+            public void onHandRelease(SwipeLayout layout, float xvel, float yvel)
+            {
+                // when user's hand released.
+                // Log.i(TAG, "onHandRelease");
+                swipeLayout.close(true);
+            }
+        });
     }
 
     public void bindMessageList(GroupMessage m)
@@ -187,69 +254,6 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             {
             }
         }
-
-        swipeLayout.addSwipeListener(new SwipeLayout.SwipeListener()
-        {
-            @Override
-            public void onClose(SwipeLayout layout)
-            {
-                // when the SurfaceView totally cover the BottomView.
-                // Log.i(TAG, "onClose: state=");
-            }
-
-            @Override
-            public void onUpdate(SwipeLayout layout, int leftOffset, int topOffset)
-            {
-                // you are swiping.
-                // Log.i(TAG, "onUpdate: " + leftOffset + " " + topOffset);
-                if (leftOffset > 60)
-                {
-                    swipeLayout.close(true);
-                    // Log.i(TAG, "onUpdate: --> close");
-                    if (swipe_state == 0)
-                    {
-                        swipe_state = 1;
-                    }
-                }
-                else if (leftOffset == 0)
-                {
-                    if (swipe_state == 1)
-                    {
-                        swipe_state = 0;
-                        Log.i(TAG, "onUpdate: --> QUOTE");
-                        ChatReplyPreviewController.startReplyToGroupMessage(context, message_);
-                    }
-                }
-            }
-
-            @Override
-            public void onStartOpen(SwipeLayout layout)
-            {
-                // Log.i(TAG, "onStartOpen");
-            }
-
-            @Override
-            public void onOpen(SwipeLayout layout)
-            {
-                // when the BottomView totally show.
-                // Log.i(TAG, "onOpen");
-                swipeLayout.close(true);
-            }
-
-            @Override
-            public void onStartClose(SwipeLayout layout)
-            {
-                // Log.i(TAG, "onStartClose");
-            }
-
-            @Override
-            public void onHandRelease(SwipeLayout layout, float xvel, float yvel)
-            {
-                // when user's hand released.
-                // Log.i(TAG, "onHandRelease");
-                swipeLayout.close(true);
-            }
-        });
 
         textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, MESSAGE_TEXT_SIZE[PREF__global_font_size]);
 

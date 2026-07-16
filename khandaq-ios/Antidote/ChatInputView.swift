@@ -136,6 +136,12 @@ class ChatInputView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // KHANDAQ (leak): this view had no deinit — a mid-recording teardown left the 0.2s repeating
+    // recordingTimer firing forever on the run loop. Invalidate it on dealloc (block already [weak self]).
+    deinit {
+        recordingTimer?.invalidate()
+    }
+
     override func becomeFirstResponder() -> Bool {
         return textView.becomeFirstResponder()
     }

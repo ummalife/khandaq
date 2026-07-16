@@ -193,6 +193,8 @@ class ChatPrivateController: PortraitChatController {
         messagesToken?.invalidate()
         friendToken?.invalidate()
         presenceRefreshTimer?.invalidate()
+        // KHANDAQ (leak): also invalidate the one-shot floating-date hide timer for consistency.
+        floatingDateHideTimer?.invalidate()
     }
 
     required convenience init?(coder aDecoder: NSCoder) {

@@ -2919,6 +2919,21 @@ public class HelperGeneric
         }
     }
 
+    // KHANDAQ (perf): format_chat_date_header runs up to ~3x per message-row bind (and per scroll
+    // frame). The old body allocated 2-3 Calendars + a fresh Locale-loaded SimpleDateFormat (the
+    // DateFormatSymbols month-name load is the heaviest cost) on every call. Cache the two formatters
+    // and the day boundaries: boundaries are recomputed only when "now" crosses midnight, formatters
+    // only when Locale.getDefault() changes. One shared scratch Calendar, guarded by a lock (all calls
+    // are on the UI thread so it never contends). Behaviour-preserving: same midnight boundaries in the
+    // default timezone, same Today/Yesterday/"d MMMM"/"d MMMM yyyy" outputs and same year rule.
+    private static final Object DATE_HDR_LOCK = new Object();
+    private static java.util.Locale dateHdrLocale = null;
+    private static java.text.SimpleDateFormat dateHdrSameYearFmt = null;
+    private static java.text.SimpleDateFormat dateHdrOtherYearFmt = null;
+    private static java.util.Calendar dateHdrScratchCal = null;
+    private static long dateHdrTodayStartMs = 0L, dateHdrTomorrowStartMs = 0L, dateHdrYesterdayStartMs = 0L;
+    private static int dateHdrTodayYear = 0;
+
     /** Telegram-style chat date pill: Today / Yesterday / 15 June / 15 June 2024. */
     static String format_chat_date_header(final Context context, final long timestamp_in_millis)
     {
@@ -2929,35 +2944,47 @@ public class HelperGeneric
 
         try
         {
-            final java.util.Calendar messageDay = java.util.Calendar.getInstance();
-            messageDay.setTimeInMillis(timestamp_in_millis);
-            truncateCalendarToDay(messageDay);
-
-            final java.util.Calendar today = java.util.Calendar.getInstance();
-            truncateCalendarToDay(today);
-
-            if (messageDay.equals(today))
+            synchronized (DATE_HDR_LOCK)
             {
-                return context.getString(R.string.chat_date_today);
-            }
+                final java.util.Locale loc = java.util.Locale.getDefault();
+                if (dateHdrSameYearFmt == null || !loc.equals(dateHdrLocale))
+                {
+                    dateHdrLocale = loc;
+                    dateHdrSameYearFmt = new java.text.SimpleDateFormat("d MMMM", loc);
+                    dateHdrOtherYearFmt = new java.text.SimpleDateFormat("d MMMM yyyy", loc);
+                    dateHdrScratchCal = java.util.Calendar.getInstance();
+                    dateHdrTomorrowStartMs = 0L; // force boundary refresh
+                }
 
-            final java.util.Calendar yesterday = (java.util.Calendar) today.clone();
-            yesterday.add(java.util.Calendar.DAY_OF_YEAR, -1);
-            if (messageDay.equals(yesterday))
-            {
-                return context.getString(R.string.chat_date_yesterday);
-            }
+                final long now = System.currentTimeMillis();
+                if (now < dateHdrTodayStartMs || now >= dateHdrTomorrowStartMs)
+                {
+                    final java.util.Calendar c = dateHdrScratchCal;
+                    c.setTimeInMillis(now);
+                    truncateCalendarToDay(c);
+                    dateHdrTodayStartMs = c.getTimeInMillis();
+                    dateHdrTodayYear = c.get(java.util.Calendar.YEAR);
+                    c.add(java.util.Calendar.DAY_OF_YEAR, 1);
+                    dateHdrTomorrowStartMs = c.getTimeInMillis();
+                    c.add(java.util.Calendar.DAY_OF_YEAR, -2);
+                    dateHdrYesterdayStartMs = c.getTimeInMillis();
+                }
 
-            final java.text.SimpleDateFormat formatter;
-            if (messageDay.get(java.util.Calendar.YEAR) == today.get(java.util.Calendar.YEAR))
-            {
-                formatter = new java.text.SimpleDateFormat("d MMMM", java.util.Locale.getDefault());
+                if (timestamp_in_millis >= dateHdrTodayStartMs && timestamp_in_millis < dateHdrTomorrowStartMs)
+                {
+                    return context.getString(R.string.chat_date_today);
+                }
+                if (timestamp_in_millis >= dateHdrYesterdayStartMs && timestamp_in_millis < dateHdrTodayStartMs)
+                {
+                    return context.getString(R.string.chat_date_yesterday);
+                }
+
+                dateHdrScratchCal.setTimeInMillis(timestamp_in_millis);
+                final int msgYear = dateHdrScratchCal.get(java.util.Calendar.YEAR);
+                final java.text.SimpleDateFormat fmt = (msgYear == dateHdrTodayYear)
+                        ? dateHdrSameYearFmt : dateHdrOtherYearFmt;
+                return fmt.format(new Date(timestamp_in_millis));
             }
-            else
-            {
-                formatter = new java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault());
-            }
-            return formatter.format(new Date(timestamp_in_millis));
         }
         catch (Exception e)
         {

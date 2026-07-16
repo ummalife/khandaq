@@ -720,56 +720,50 @@ public class FriendListFragment extends Fragment
             }
 
             // Log.i(TAG, "modify_friend:start");
-            Runnable myRunnable = new Runnable()
-            {
-                @Override
-                public void run()
+            // KHANDAQ (audit): the DB read + deep_copy used to run on the UI thread (posted runnable).
+            // Do that off the UI thread and post ONLY the adapter upsert back to main.
+            final FriendList ff = f;
+            new Thread(() -> {
+                try
                 {
-                    try
+                    if (orma == null)
                     {
-                        if (adapter == null || !isAdded())
-                        {
-                            return;
-                        }
-
-                        final List<com.zoffcc.applications.sorm.FriendList> rows = orma.selectFromFriendList().
-                                tox_public_key_stringEq(f.tox_public_key_string).
-                                toList();
-                        if (rows == null || rows.isEmpty())
-                        {
-                            return;
-                        }
-
-                        final FriendList f2 = rows.get(0);
-
-                        if (f2 != null)
-                        {
-                            FriendList n = (FriendList) com.zoffcc.applications.sorm.FriendList.deep_copy(f2);
-                            CombinedFriendsAndConferences cfac = new CombinedFriendsAndConferences();
-                            cfac.is_friend = COMBINED_IS_FRIEND;
-                            cfac.friend_item = n;
-                            upsertChatListItem(cfac, cfac.is_friend);
-                        }
+                        return;
                     }
-                    catch (Exception e)
+                    final List<com.zoffcc.applications.sorm.FriendList> rows = orma.selectFromFriendList().
+                            tox_public_key_stringEq(ff.tox_public_key_string).
+                            toList();
+                    if (rows == null || rows.isEmpty() || rows.get(0) == null)
                     {
-                        e.printStackTrace();
+                        return;
+                    }
+                    final FriendList n = (FriendList) com.zoffcc.applications.sorm.FriendList.deep_copy(rows.get(0));
+                    if (main_handler_s != null)
+                    {
+                        main_handler_s.post(() -> {
+                            try
+                            {
+                                if (adapter == null || !isAdded())
+                                {
+                                    return;
+                                }
+                                CombinedFriendsAndConferences cfac = new CombinedFriendsAndConferences();
+                                cfac.is_friend = COMBINED_IS_FRIEND;
+                                cfac.friend_item = n;
+                                upsertChatListItem(cfac, cfac.is_friend);
+                            }
+                            catch (Exception e)
+                            {
+                                e.printStackTrace();
+                            }
+                        });
                     }
                 }
-            };
-
-            try
-            {
-                if (main_handler_s != null)
+                catch (Exception e)
                 {
-                    main_handler_s.post(myRunnable);
+                    e.printStackTrace();
                 }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-                Log.i(TAG, "modify_friend:EE1:" + e.getMessage());
-            }
+            }, "friend-modify-db").start();
         }
         else if (is_friend == COMBINED_IS_GROUP)
         {

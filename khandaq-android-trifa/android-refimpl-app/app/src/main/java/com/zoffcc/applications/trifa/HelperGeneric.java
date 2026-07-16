@@ -3846,6 +3846,24 @@ public class HelperGeneric
         }
     }
 
+    // KHANDAQ (audit): update_savedata_file_wrapper() runs a slow PBKDF2 encrypt of the whole tox
+    // savedata (semaphore-guarded, thread-safe). On group-admin dialog taps it ran on the UI thread
+    // and froze the app. Persisting is fire-and-forget (the change already took effect in the live tox
+    // instance), so run it off the UI thread. Safe to call from any thread — it already is.
+    static void update_savedata_file_wrapper_async()
+    {
+        new Thread(() -> {
+            try
+            {
+                update_savedata_file_wrapper();
+            }
+            catch (Throwable t)
+            {
+                t.printStackTrace();
+            }
+        }, "savedata-persist").start();
+    }
+
     static void update_savedata_file_wrapper()
     {
         if (is_tox_started == true)

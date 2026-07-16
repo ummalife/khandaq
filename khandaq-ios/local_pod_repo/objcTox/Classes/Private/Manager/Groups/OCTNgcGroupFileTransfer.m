@@ -173,22 +173,30 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    switch (bytes[7]) {
-        case kOCTNgcPktFileSingle:
-            [self handleIncomingSingleWithGroupNumber:groupNumber peerId:peerId data:data];
-            break;
-        case kOCTNgcPktFileBegin:
-            [self handleIncomingBeginWithGroupNumber:groupNumber peerId:peerId data:data];
-            break;
-        case kOCTNgcPktFileChunk:
-            [self handleIncomingChunkWithGroupNumber:groupNumber peerId:peerId data:data];
-            break;
-        case kOCTNgcPktFileRequest:
-            [self handleIncomingRequestWithGroupNumber:groupNumber peerId:peerId data:data];
-            break;
-        default:
-            break;
-    }
+    const uint8_t pkt = bytes[7];
+
+    // KHANDAQ (audit): this packet callback is delivered on the MAIN thread, but the Single/Chunk
+    // handlers do synchronous file I/O (writeToFile:) that jank the UI. Run all incoming assembly on
+    // the serial sendQueue — it preserves chunk order, the @synchronized guards make the handlers
+    // thread-safe, and they already hop their Realm/delegate updates back to the main queue.
+    dispatch_async(self.sendQueue, ^{
+        switch (pkt) {
+            case kOCTNgcPktFileSingle:
+                [self handleIncomingSingleWithGroupNumber:groupNumber peerId:peerId data:data];
+                break;
+            case kOCTNgcPktFileBegin:
+                [self handleIncomingBeginWithGroupNumber:groupNumber peerId:peerId data:data];
+                break;
+            case kOCTNgcPktFileChunk:
+                [self handleIncomingChunkWithGroupNumber:groupNumber peerId:peerId data:data];
+                break;
+            case kOCTNgcPktFileRequest:
+                [self handleIncomingRequestWithGroupNumber:groupNumber peerId:peerId data:data];
+                break;
+            default:
+                break;
+        }
+    });
 }
 
 - (void)sendFileAtPath:(NSString *)filePath

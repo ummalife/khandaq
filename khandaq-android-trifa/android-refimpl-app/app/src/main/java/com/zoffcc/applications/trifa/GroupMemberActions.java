@@ -267,7 +267,7 @@ final class GroupMemberActions
             }
 
             final int result = tox_group_mod_kick_peer(group_num, peer_num);
-            update_savedata_file_wrapper();
+            HelperGeneric.update_savedata_file_wrapper_async();
             if (result >= 0)
             {
                 update_group_peer_in_db(group_num, group_id, peer_num, peer_pubkey,

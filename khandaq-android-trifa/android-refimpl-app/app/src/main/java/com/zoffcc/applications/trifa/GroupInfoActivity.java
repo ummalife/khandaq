@@ -273,7 +273,7 @@ public class GroupInfoActivity extends AppCompatActivity
 
                     int result = tox_group_founder_set_voice_state(tox_group_by_groupid__wrapper(group_id), new_role);
                     HelperGeneric.logI(TAG, "setting new voicestate to: " + new_role + " result=" + result);
-                    update_savedata_file_wrapper();
+                    HelperGeneric.update_savedata_file_wrapper_async();
                 }
                 catch (Exception ignored)
                 {
@@ -320,7 +320,7 @@ public class GroupInfoActivity extends AppCompatActivity
                         {
                             update_group_in_db_privacy_state(group_id, new_privacy);
                             this_privacy_status_text.setText(humanize_group_privacy(GroupInfoActivity.this, new_privacy));
-                            update_savedata_file_wrapper();
+                            HelperGeneric.update_savedata_file_wrapper_async();
                             apply_user_facing_group_info(group_num);
                             Toast.makeText(GroupInfoActivity.this, getString(R.string.group_privacy_set), Toast.LENGTH_SHORT).show();
                         }
@@ -355,7 +355,7 @@ public class GroupInfoActivity extends AppCompatActivity
                                 (password == null || password.isEmpty()) ? null : password);
                         if (result >= 0)
                         {
-                            update_savedata_file_wrapper();
+                            HelperGeneric.update_savedata_file_wrapper_async();
                             Toast.makeText(GroupInfoActivity.this, getString(R.string.group_password_set), Toast.LENGTH_SHORT).show();
                         }
                         else
@@ -387,7 +387,7 @@ public class GroupInfoActivity extends AppCompatActivity
                     final int result = tox_group_founder_set_topic_lock__wrapper(group_num, lock_state);
                     if (result >= 0)
                     {
-                        update_savedata_file_wrapper();
+                        HelperGeneric.update_savedata_file_wrapper_async();
                     }
                     else
                     {
@@ -561,7 +561,7 @@ public class GroupInfoActivity extends AppCompatActivity
                         if (active_group_num >= 0)
                         {
                             tox_group_reconnect(active_group_num);
-                            update_savedata_file_wrapper();
+                            HelperGeneric.update_savedata_file_wrapper_async();
                             clear_group_group_we_left(group_id);
                             group_update_connected_status_on_groupinfo(active_group_num);
                             peer_limit_text.setText("" + get_display_peer_limit(active_group_num));
@@ -1256,7 +1256,7 @@ public class GroupInfoActivity extends AppCompatActivity
                 if (my_new_name.length() > 0)
                 {
                     tox_group_self_set_name(group_num, my_new_name);
-                    update_savedata_file_wrapper();
+                    HelperGeneric.update_savedata_file_wrapper_async();
                 }
             }
         }
@@ -1275,7 +1275,7 @@ public class GroupInfoActivity extends AppCompatActivity
                     if (parsed_limit >= 1 && parsed_limit <= 65535)
                     {
                         tox_group_founder_set_peer_limit(group_num, parsed_limit);
-                        update_savedata_file_wrapper();
+                        HelperGeneric.update_savedata_file_wrapper_async();
                     }
                 }
             }

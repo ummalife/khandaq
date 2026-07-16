@@ -4245,19 +4245,18 @@ public class HelperGroup
         try
         {
             if (MainActivity.group_message_list_fragment != null
-                    && group_identifier.equalsIgnoreCase(MainActivity.group_message_list_fragment.current_group_id)
-                    && main_handler_s != null)
+                    && group_identifier.equalsIgnoreCase(MainActivity.group_message_list_fragment.current_group_id))
             {
-                main_handler_s.post(() ->
+                // KHANDAQ (audit): the old code posted the SYNCHRONOUS update_all_messages (full DB
+                // read+sort) to the UI thread. The async variant reads off the UI thread and posts only
+                // the adapter update.
+                try
                 {
-                    try
-                    {
-                        MainActivity.group_message_list_fragment.update_all_messages(true, PREF__messageview_paging);
-                    }
-                    catch (Exception ignored)
-                    {
-                    }
-                });
+                    MainActivity.group_message_list_fragment.update_all_messages_async();
+                }
+                catch (Exception ignored)
+                {
+                }
             }
         }
         catch (Exception ignored)

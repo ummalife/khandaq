@@ -38,6 +38,7 @@ class ChatIncomingFileCell: ChatGenericFileCell {
         movableContentView.addSubview(voiceMessageView)
         movableContentView.addSubview(cancelButton)
         movableContentView.addSubview(retryButton)
+        movableContentView.addSubview(reactionsLabel)
     }
 
     override func installConstraints() {
@@ -54,14 +55,14 @@ class ChatIncomingFileCell: ChatGenericFileCell {
             captionTopConstraint = $0.top.equalTo(loadingView.snp.bottom).constraint
             $0.leading.equalTo(loadingView)
             $0.trailing.equalTo(loadingView)
-            $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
+            captionBottomConstraint = $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset).constraint
         }
 
         voiceMessageView.snp.makeConstraints {
             $0.leading.equalTo(contentView).offset(Constants.BigOffset)
             $0.trailing.lessThanOrEqualTo(contentView).offset(-Constants.BigOffset)
             $0.top.equalTo(movableContentView).offset(Constants.SmallOffset)
-            $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
+            voiceBottomConstraint = $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset).constraint
             $0.width.equalTo(260)
         }
 

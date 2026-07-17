@@ -2311,6 +2311,7 @@ private extension ChatPrivateController {
         model.fileSizeBytes = message.messageFile!.fileSize
         model.fileSize = ByteCountFormatter.string(fromByteCount: message.messageFile!.fileSize, countStyle: .file)
         model.fileUTI = message.messageFile!.fileUTI
+        model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
 
         // Telegram-style merged caption (the text message sent right after this file).
         if messageSearchQuery.isEmpty {

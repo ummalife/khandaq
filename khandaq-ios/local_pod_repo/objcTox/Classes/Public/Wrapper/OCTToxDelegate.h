@@ -86,6 +86,12 @@
 - (void)tox:(OCTTox *)tox friendMessageReactionWithMsgv3Hash:(NSString *)msgv3HashHex emoji:(NSString *)emoji add:(BOOL)add friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (#192): the friend added/removed a reaction on a FILE / media / voice message in our 1:1
+ * chat ("KQ" packet 188, anchor_type 2). Addressed by the symmetric tox file_id (uppercase hex).
+ */
+- (void)tox:(OCTTox *)tox friendFileReactionWithFileIdHex:(NSString *)fileIdHex emoji:(NSString *)emoji add:(BOOL)add friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * Friend's status message was updated.
  *
  * @param statusMessage Updated status message.

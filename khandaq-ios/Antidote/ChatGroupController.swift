@@ -1231,7 +1231,7 @@ extension ChatGroupController: UITableViewDelegate {
             var actions: [UIAction] = []
             // KHANDAQ (#192): "Реакция" opens the Telegram-style horizontal reaction bar (shown after
             // the context menu dismisses — the system menu renders in its own overlay above our view).
-            if message.messageText != nil {
+            if message.messageText != nil || message.messageFile != nil {
                 actions.append(UIAction(title: String(localized: "chat_react_action")) { _ in
                     let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
                     self.presentGroupReactionPicker(for: message, sourceView: source)
@@ -1317,6 +1317,7 @@ private extension ChatGroupController {
         model.fileSizeBytes = messageFile.fileSize
         model.fileSize = ByteCountFormatter.string(fromByteCount: messageFile.fileSize, countStyle: .file)
         model.fileUTI = inferredFileUTI(for: messageFile)
+        model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
 
         // Telegram-style merged caption (the text message sent right after this file).
         if messageSearchQuery.isEmpty {

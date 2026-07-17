@@ -9,6 +9,7 @@
 #import "OCTRealmManager.h"
 #import "OCTMessageAbstract.h"
 #import "OCTMessageText.h"
+#import "OCTMessageFile.h"
 #import "OCTChat.h"
 #import "OCTFriend.h"
 #import "OCTLogging.h"
@@ -850,6 +851,37 @@ serialize:
     return pkt;
 }
 
+// KHANDAQ (#192): file/media/voice reaction packet — identical to the hash variant except
+// anchor_type is 2 and bytes[5..36] carry the 32-byte symmetric tox file_id.
+- (NSData *)kqReactionPacketWithFileIdHex:(NSString *)fileIdHex emoji:(NSString *)emoji add:(BOOL)add
+{
+    NSData *em = [emoji dataUsingEncoding:NSUTF8StringEncoding];
+    if (fileIdHex.length != 64 || em.length < 1 || em.length > 16) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:43 + em.length];
+    const uint8_t header[5] = { 188, 'K', 'Q', 1, 2 }; // ver 1, anchor_type 2 = tox file_id
+    [pkt appendBytes:header length:5];
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int b = 0;
+        [[NSScanner scannerWithString:[fileIdHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+        uint8_t byte = (uint8_t)b;
+        [pkt appendBytes:&byte length:1];
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    const uint8_t tail[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tail length:4];
+    const uint8_t action = add ? 1 : 0;
+    [pkt appendBytes:&action length:1];
+    const uint8_t emLen = (uint8_t)em.length;
+    [pkt appendBytes:&emLen length:1];
+    [pkt appendData:em];
+    return pkt;
+}
+
 - (void)toggleReactionOnMessage:(OCTMessageAbstract *)message emoji:(NSString *)emoji
 {
     if (! message || emoji.length == 0
@@ -864,7 +896,9 @@ serialize:
     OCTChat *chat = [realmManager objectWithUniqueIdentifier:message.chatUniqueIdentifier
                                                        class:[OCTChat class]];
     OCTFriend *friend = [chat.friends firstObject];
-    BOOL deliverable = (friend != nil) && (message.messageText.msgv3HashHex.length == 64);
+    // Anchor: text messages use the msgV3 hash; files/media/voice use the symmetric tox file_id.
+    NSString *anchorHex = message.messageFile ? message.messageFile.fileIdHex : message.messageText.msgv3HashHex;
+    BOOL deliverable = (friend != nil) && (anchorHex.length == 64);
 
     [realmManager updateObject:message withBlock:^(OCTMessageAbstract *msg) {
         msg.reactionsJSON = newJson;
@@ -880,9 +914,13 @@ serialize:
 {
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     NSString *own = kqReactionsActorEmoji(message.reactionsJSON, kKQOwnReactionMarker);
-    NSData *pkt = [self kqReactionPacketWithHashHex:message.messageText.msgv3HashHex
-                                              emoji:(own ?: @"*")
-                                                add:(own != nil)];
+    NSData *pkt = message.messageFile
+        ? [self kqReactionPacketWithFileIdHex:message.messageFile.fileIdHex
+                                        emoji:(own ?: @"*")
+                                          add:(own != nil)]
+        : [self kqReactionPacketWithHashHex:message.messageText.msgv3HashHex
+                                      emoji:(own ?: @"*")
+                                        add:(own != nil)];
     if (pkt == nil) {
         [realmManager updateObject:message withBlock:^(OCTMessageAbstract *msg) {
             msg.reactionsPending = NO;
@@ -920,7 +958,8 @@ serialize:
         [pending addObject:msg];
     }
     for (OCTMessageAbstract *msg in pending) {
-        if (msg.messageText.msgv3HashHex.length == 64) {
+        NSString *anchorHex = msg.messageFile ? msg.messageFile.fileIdHex : msg.messageText.msgv3HashHex;
+        if (anchorHex.length == 64) {
             [self deliverReactionForMessage:msg friend:friend];
         }
     }
@@ -947,6 +986,37 @@ serialize:
                               chat.uniqueIdentifier, msgv3HashHex];
     RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
     OCTMessageAbstract *found = [results firstObject];
+    if (! found) {
+        return; // reactions never create state for unknown originals
+    }
+
+    NSString *actor = [publicKey uppercaseString];
+    NSString *newJson = kqReactionsApplyActor(found.reactionsJSON, actor, emoji, add);
+    [realmManager updateObject:found withBlock:^(OCTMessageAbstract *msg) {
+        msg.reactionsJSON = newJson;
+    }];
+}
+
+// KHANDAQ (#192): the friend added/removed a reaction on a FILE/media/voice message in our 1:1 chat.
+// Anchored by the symmetric tox file_id (uppercase hex), matched case-insensitively against fileIdHex.
+- (void)tox:(OCTTox *)tox friendFileReactionWithFileIdHex:(NSString *)fileIdHex
+                                                    emoji:(NSString *)emoji
+                                                      add:(BOOL)add
+                                             friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend || fileIdHex.length != 64) {
+        return;
+    }
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageFile.fileIdHex ==[c] %@",
+                              chat.uniqueIdentifier, fileIdHex];
+    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
     if (! found) {
         return; // reactions never create state for unknown originals
     }

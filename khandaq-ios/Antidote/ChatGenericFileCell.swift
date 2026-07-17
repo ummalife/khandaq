@@ -13,6 +13,13 @@ class ChatGenericFileCell: ChatMovableDateCell {
     // KHANDAQ: Telegram-style caption shown directly under the media, inside the same cell.
     var captionLabel: UILabel!
     var captionTopConstraint: Constraint?
+    // KHANDAQ (#192): reaction chips line ("❤️ 2  👍") under the media/file/voice bubble.
+    var reactionsLabel: UILabel!
+    var onReactionsTap: (() -> Void)?
+    // Bottom-of-bubble ownership: normally the caption (media/file) or the voice view owns
+    // movableContentView's bottom; when reactions are visible they sit below and own it instead.
+    var captionBottomConstraint: Constraint?
+    var voiceBottomConstraint: Constraint?
 
     // KHANDAQ (#36): remembered after a full voice configure so a lightweight player-state refresh
     // (timer/notification driven) can update the play/pause icon + progress WITHOUT rebuilding the
@@ -120,6 +127,14 @@ class ChatGenericFileCell: ChatMovableDateCell {
         }
 
         canBeCopied = false
+        // KHANDAQ (#192): allow reactions on files / media / voice notes too.
+        canBeReacted = true
+        reactionsLabel.textColor = theme.colorForType(.NormalText)
+        bindReactions(fileModel.reactionsDisplay)
+        onReactionsTap = { [weak self] in
+            guard let cell = self else { return }
+            cell.delegate?.chatMovableDateCellReactPressed(cell)
+        }
 
         switch state {
             case .loading:
@@ -170,6 +185,14 @@ class ChatGenericFileCell: ChatMovableDateCell {
         captionLabel.font = ChatGenericFileCell.captionFont
         captionLabel.numberOfLines = 0
         captionLabel.isHidden = true
+
+        reactionsLabel = UILabel()
+        reactionsLabel.font = UIFont.systemFont(ofSize: 13.0)
+        reactionsLabel.numberOfLines = 1
+        reactionsLabel.isHidden = true
+        reactionsLabel.isUserInteractionEnabled = true
+        reactionsLabel.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(ChatGenericFileCell.reactionsLabelTapped)))
 
         voiceMessageView = ChatVoiceMessageView()
         voiceMessageView.isHidden = true
@@ -232,6 +255,48 @@ class ChatGenericFileCell: ChatMovableDateCell {
         let speed = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
         loadingView.topLabel.isHidden = false
         loadingView.topLabel.text = speed
+    }
+
+    // KHANDAQ (#192): show/hide the reaction chips under the bubble and reroute the bottom.
+    // Anchors to the *visible* container (voice view vs media/caption) so a hidden 180px media
+    // box never leaves a phantom gap above the chips on voice notes.
+    func bindReactions(_ display: String?) {
+        let text = display ?? ""
+        reactionsLabel.text = text
+        let hasReactions = !text.isEmpty
+        reactionsLabel.isHidden = !hasReactions
+
+        // Preserve today's exact no-reaction layout: both caption & voice bottoms stay active.
+        // Only when reactions are visible do we hand the bubble bottom to the chips line.
+        if hasReactions {
+            captionBottomConstraint?.deactivate()
+            voiceBottomConstraint?.deactivate()
+        }
+        else {
+            captionBottomConstraint?.activate()
+            voiceBottomConstraint?.activate()
+        }
+
+        let isVoice = !voiceMessageView.isHidden
+        let anchorBottom = isVoice ? voiceMessageView.snp.bottom : captionLabel.snp.bottom
+
+        reactionsLabel.snp.remakeConstraints {
+            $0.top.equalTo(anchorBottom).offset(hasReactions ? 4.0 : 0.0)
+            makeReactionsHorizontalConstraints($0)
+            if hasReactions {
+                $0.bottom.equalTo(movableContentView).offset(-8.0)
+            }
+        }
+    }
+
+    /// Horizontal placement of the reaction chips; overridden per direction (incoming left / outgoing right).
+    func makeReactionsHorizontalConstraints(_ make: ConstraintMaker) {
+        make.leading.equalTo(contentView).offset(20.0)
+        make.trailing.lessThanOrEqualTo(contentView).offset(-20.0)
+    }
+
+    @objc func reactionsLabelTapped() {
+        onReactionsTap?()
     }
 
     @objc func cancelButtonPressed() {
@@ -344,6 +409,7 @@ extension ChatGenericFileCell {
     }
 
     override func menuTargetRect() -> CGRect {
-        return loadingView.frame
+        // Voice notes hide the media box; anchor the menu/reaction bar to the visible player.
+        return voiceMessageView.isHidden ? loadingView.frame : voiceMessageView.frame
     }
 }

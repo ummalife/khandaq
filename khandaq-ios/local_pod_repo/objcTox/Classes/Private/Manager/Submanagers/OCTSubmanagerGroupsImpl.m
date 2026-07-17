@@ -2564,8 +2564,9 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 }
 
 // KHANDAQ (#192): incoming reaction broadcast (KQ NGC family):
-// [0..5]=magic [6]=0x01 [7]=0x43 [8]=anchor_type(1=text message_id) [9..40]=anchor (msg_id in first
-// 4 bytes BE, zero-padded) [41..72]=author pubkey 32B [73..76]=ts u32 BE [77]=action [78]=emojiLen
+// [0..5]=magic [6]=0x01 [7]=0x43 [8]=anchor_type(1=text message_id, 2=file groupMsgIdHashHex)
+// [9..40]=anchor (type 1: msg_id in first 4 bytes BE, zero-padded; type 2: full 32-byte hash)
+// [41..72]=author pubkey 32B (unused for type 2) [73..76]=ts u32 BE [77]=action [78]=emojiLen
 // [79..]=emoji. Returns YES when the packet was a reaction (consumed).
 - (BOOL)handleIncomingGroupReactionPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
                                                   peerId:(uint32_t)peerId
@@ -2585,19 +2586,12 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     if (emLen < 1 || emLen > 16 || data.length < 79 + emLen) {
         return YES; // malformed, but it WAS a reaction packet — consume it
     }
-    if (anchorType != 1) {
-        return YES; // only text-message reactions on iOS for now (file rows unsupported)
+    if (anchorType != 1 && anchorType != 2) {
+        return YES; // unknown anchor kind
     }
     NSString *emoji = [[NSString alloc] initWithBytes:(b + 79) length:emLen encoding:NSUTF8StringEncoding];
     if (add && emoji.length == 0) {
         return YES;
-    }
-
-    const uint32_t messageId = ((uint32_t)b[9] << 24) | ((uint32_t)b[10] << 16)
-                               | ((uint32_t)b[11] << 8) | (uint32_t)b[12];
-    NSMutableString *authorHex = [NSMutableString stringWithCapacity:64];
-    for (int i = 41; i < 73; i++) {
-        [authorHex appendFormat:@"%02x", b[i]];
     }
 
     OCTTox *tox = [self.dataSource managerGetTox];
@@ -2607,24 +2601,46 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         return YES;
     }
 
-    NSString *selfHex = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil];
-    NSPredicate *predicate;
-    if (selfHex.length > 0 && [selfHex caseInsensitiveCompare:authorHex] == NSOrderedSame) {
-        // reaction targets an OWN (outgoing) message
-        predicate = [NSPredicate predicateWithFormat:
-                     @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND groupSenderPeerId == 0",
-                     chat.uniqueIdentifier, (int32_t)messageId];
+    OCTMessageAbstract *found = nil;
+    if (anchorType == 2) {
+        // file / media / voice: anchor is the 32-byte groupMsgIdHashHex (globally unique & symmetric,
+        // so no author disambiguation needed — the hash alone identifies the transfer).
+        NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
+        for (int i = 9; i < 41; i++) {
+            [hashHex appendFormat:@"%02x", b[i]];
+        }
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                     @"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
+                     chat.uniqueIdentifier, hashHex];
+        found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
     }
     else {
-        NSString *authorName = [self groupPeerNameForPubkeyHex:authorHex chat:chat];
-        if (authorName.length == 0) {
-            return YES;
+        const uint32_t messageId = ((uint32_t)b[9] << 24) | ((uint32_t)b[10] << 16)
+                                   | ((uint32_t)b[11] << 8) | (uint32_t)b[12];
+        NSMutableString *authorHex = [NSMutableString stringWithCapacity:64];
+        for (int i = 41; i < 73; i++) {
+            [authorHex appendFormat:@"%02x", b[i]];
         }
-        predicate = [NSPredicate predicateWithFormat:
-                     @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
-                     chat.uniqueIdentifier, (int32_t)messageId, authorName];
+
+        NSString *selfHex = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil];
+        NSPredicate *predicate;
+        if (selfHex.length > 0 && [selfHex caseInsensitiveCompare:authorHex] == NSOrderedSame) {
+            // reaction targets an OWN (outgoing) message
+            predicate = [NSPredicate predicateWithFormat:
+                         @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND groupSenderPeerId == 0",
+                         chat.uniqueIdentifier, (int32_t)messageId];
+        }
+        else {
+            NSString *authorName = [self groupPeerNameForPubkeyHex:authorHex chat:chat];
+            if (authorName.length == 0) {
+                return YES;
+            }
+            predicate = [NSPredicate predicateWithFormat:
+                         @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
+                         chat.uniqueIdentifier, (int32_t)messageId, authorName];
+        }
+        found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
     }
-    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
     if (! found) {
         return YES; // reactions never create rows for unknown originals
     }
@@ -2644,7 +2660,7 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
                                emoji:(NSString *)emoji
                               inChat:(OCTChat *)chat
 {
-    if (! message || ! message.messageText || emoji.length == 0
+    if (! message || (! message.messageText && ! message.messageFile) || emoji.length == 0
         || [emoji lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 16 || ! chat) {
         return;
     }
@@ -2656,10 +2672,28 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         msg.reactionsJSON = newJson;
     }];
 
-    // resolve the message AUTHOR's pubkey (for the wire anchor). Outgoing -> self; incoming ->
-    // the peer whose frozen name matches, or the volatile peerId as a fallback.
     OCTTox *tox = [self.dataSource managerGetTox];
     OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+    NSString *own = kqGroupReactionsActorEmoji(message.reactionsJSON, kKQGroupOwnReactionMarker);
+
+    // FILE / media / voice: anchor on the globally-unique groupMsgIdHashHex (type 2). No author
+    // resolution needed — the hash identifies the transfer for every peer.
+    if (message.messageFile) {
+        NSString *hashHex = message.messageFile.groupMsgIdHashHex;
+        if (hashHex.length != 64) {
+            return; // no shared file anchor yet (reaction still stored locally above)
+        }
+        NSData *pkt = [self kqGroupReactionPacketForMsgIdHash:hashHex
+                                                        emoji:(own ?: @"*")
+                                                          add:(own != nil)];
+        if (pkt) {
+            [tox groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
+        }
+        return;
+    }
+
+    // resolve the message AUTHOR's pubkey (for the wire anchor). Outgoing -> self; incoming ->
+    // the peer whose frozen name matches, or the volatile peerId as a fallback.
     int32_t messageId = (int32_t)message.messageText.messageId;
     if (messageId == 0) {
         return; // pending send has no shared id yet
@@ -2688,7 +2722,6 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         return; // cannot address the author -> local-only reaction (still stored above)
     }
 
-    NSString *own = kqGroupReactionsActorEmoji(message.reactionsJSON, kKQGroupOwnReactionMarker);
     NSData *pkt = [self kqGroupReactionPacketForMessageId:messageId
                                                authorHex:authorHex
                                                    emoji:(own ?: @"*")
@@ -2726,6 +2759,44 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         uint8_t byte = (uint8_t)v;
         [pkt appendBytes:&byte length:1];
     }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    const uint8_t tsbe[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tsbe length:4];
+    const uint8_t action = add ? 1 : 0;
+    [pkt appendBytes:&action length:1];
+    const uint8_t emLen = (uint8_t)em.length;
+    [pkt appendBytes:&emLen length:1];
+    [pkt appendData:em];
+    return pkt;
+}
+
+// KHANDAQ (#192): file/media/voice reaction packet — anchor_type 2, the full 32-byte
+// groupMsgIdHashHex sits in bytes[9..40]; the author-pubkey slot [41..72] is unused (the hash is
+// globally unique) so it stays zero. Layout otherwise identical to the message-id variant.
+- (NSData *)kqGroupReactionPacketForMsgIdHash:(NSString *)msgIdHashHex
+                                        emoji:(NSString *)emoji
+                                          add:(BOOL)add
+{
+    NSData *em = [emoji dataUsingEncoding:NSUTF8StringEncoding];
+    if (msgIdHashHex.length != 64 || em.length < 1 || em.length > 16) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:79 + em.length];
+    const uint8_t header[9] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x43, 0x02 }; // anchor_type 2
+    [pkt appendBytes:header length:9];
+    // anchor: 32-byte hash decoded from hex
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int v = 0;
+        [[NSScanner scannerWithString:[msgIdHashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&v];
+        uint8_t byte = (uint8_t)v;
+        [pkt appendBytes:&byte length:1];
+    }
+    // author pubkey slot [41..72] — unused for file anchors, left zeroed
+    const uint8_t zeros[32] = {0};
+    [pkt appendBytes:zeros length:32];
     uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
     const uint8_t tsbe[4] = {
         (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),

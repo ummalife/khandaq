@@ -239,6 +239,7 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                                                                  fileUTI:[self fileUTIFromFileName:fileName]
                                                                     chat:chat
                                                                   sender:nil];
+    [self stampFileIdHexOnMessage:message fileNumber:fileNumber friendNumber:friend.friendNumber];
 
     NSDictionary *userInfo = [self fileOperationUserInfoWithMessage:message];
     OCTFilePathInput *input = [[OCTFilePathInput alloc] initWithFilePath:filePath];
@@ -1176,7 +1177,7 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
 
-    [realmManager addMessageWithFileNumber:fileNumber
+    OCTMessageAbstract *incoming = [realmManager addMessageWithFileNumber:fileNumber
                                   fileType:OCTMessageFileTypeWaitingConfirmation
                                   fileSize:fileSize
                                   fileName:fileName
@@ -1184,6 +1185,7 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
                                    fileUTI:[self fileUTIFromFileName:fileName]
                                       chat:chat
                                     sender:friend];
+    [self stampFileIdHexOnMessage:incoming fileNumber:fileNumber friendNumber:friendNumber];
     // KHANDAQ: do NOT auto-accept here. The "Загрузка вложений" setting (Never / Wi-Fi / Always) is an
     // app-layer policy enforced by AutomationCoordinator, which observes new incoming file messages and
     // accepts them only when the setting allows. Unconditionally accepting at the submanager level
@@ -1262,6 +1264,32 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
     OCTChat *chat = [[self.dataSource managerGetRealmManager] objectWithUniqueIdentifier:message.chatUniqueIdentifier
                                                                                    class:[OCTChat class]];
     return [chat.friends firstObject];
+}
+
+// KHANDAQ (#192): capture the symmetric tox file_id (identical for both peers) and stamp it as
+// uppercase hex on the message so reactions can anchor to files/media/voice. Must run while the
+// file_number is still live (right after send/receive), since the id is released with the transfer.
+- (void)stampFileIdHexOnMessage:(OCTMessageAbstract *)message
+                     fileNumber:(OCTToxFileNumber)fileNumber
+                   friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    if (! message.messageFile || fileNumber == (OCTToxFileNumber)kOCTToxFileNumberFailure) {
+        return;
+    }
+    NSData *fid = [[self.dataSource managerGetTox] fileGetFileIdForFileNumber:fileNumber
+                                                                friendNumber:friendNumber
+                                                                       error:nil];
+    if (fid.length != 32) { // kOCTToxFileIdLength
+        return;
+    }
+    const uint8_t *fb = fid.bytes;
+    NSMutableString *hex = [NSMutableString stringWithCapacity:64];
+    for (NSUInteger i = 0; i < fid.length; i++) {
+        [hex appendFormat:@"%02X", fb[i]];
+    }
+    [self updateMessageFile:message withBlock:^(OCTMessageFile *file) {
+        file.fileIdHex = hex;
+    }];
 }
 
 @end

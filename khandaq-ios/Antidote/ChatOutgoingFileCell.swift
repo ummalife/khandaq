@@ -63,6 +63,7 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
         movableContentView.addSubview(voiceMessageView)
         movableContentView.addSubview(cancelButton)
         movableContentView.addSubview(retryButton)
+        movableContentView.addSubview(reactionsLabel)
 
         statusImageView = UIImageView()
         statusImageView.contentMode = .scaleAspectFit
@@ -101,16 +102,22 @@ class ChatOutgoingFileCell: ChatGenericFileCell {
             captionTopConstraint = $0.top.equalTo(loadingView.snp.bottom).constraint
             $0.leading.equalTo(loadingView)
             $0.trailing.equalTo(loadingView)
-            $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
+            captionBottomConstraint = $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset).constraint
         }
 
         voiceMessageView.snp.makeConstraints {
             $0.trailing.equalTo(movableContentView).offset(-Constants.BigOffset)
             $0.leading.greaterThanOrEqualTo(movableContentView).offset(Constants.BigOffset)
             $0.top.equalTo(movableContentView).offset(Constants.SmallOffset)
-            $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset)
+            voiceBottomConstraint = $0.bottom.equalTo(movableContentView).offset(-Constants.SmallOffset).constraint
             $0.width.equalTo(260)
         }
+    }
+
+    // Outgoing reactions align to the right edge of the (right-anchored) bubble.
+    override func makeReactionsHorizontalConstraints(_ make: ConstraintMaker) {
+        make.trailing.equalTo(movableContentView).offset(-Constants.BigOffset)
+        make.leading.greaterThanOrEqualTo(movableContentView).offset(Constants.BigOffset)
     }
 
     override func updateViewsWithState(_ state: ChatGenericFileCellModel.State, fileModel: ChatGenericFileCellModel) {

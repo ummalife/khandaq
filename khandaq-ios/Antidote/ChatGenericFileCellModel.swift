@@ -20,6 +20,8 @@ class ChatGenericFileCellModel: ChatMovableDateCellModel {
     var fileUTI: String?
     /// KHANDAQ: Telegram-style caption rendered under the media in the same cell.
     var caption: String?
+    /// KHANDAQ (#192): compact reactions line under the file/media/voice bubble ("❤️ 2  👍"), nil = none.
+    var reactionsDisplay: String?
 
     var startLoadingHandle: (() -> Void)?
     var cancelHandle: (() -> Void)?

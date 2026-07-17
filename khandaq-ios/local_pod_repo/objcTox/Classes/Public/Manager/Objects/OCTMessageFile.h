@@ -47,6 +47,12 @@
 @property (nullable) NSString *groupMsgIdHashHex;
 
 /**
+ * KHANDAQ (#192): symmetric tox file_id (32-byte, as uppercase hex) for a 1:1 transfer. Both peers
+ * read the identical value via tox_file_get_file_id, so it anchors reactions on files/media/voice.
+ */
+@property (nullable) NSString *fileIdHex;
+
+/**
  * Transfer progress for NGC group files (0.0 – 1.0). Meaningful while fileType is Loading.
  */
 @property float groupTransferProgress;

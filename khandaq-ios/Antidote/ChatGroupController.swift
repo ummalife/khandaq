@@ -27,7 +27,7 @@ class ChatGroupController: PortraitChatController {
 
     fileprivate weak var delegate: ChatGroupControllerDelegate?
     let theme: Theme
-    fileprivate weak var submanagerGroups: OCTSubmanagerGroups!
+    weak var submanagerGroups: OCTSubmanagerGroups!
     weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
     weak var submanagerChats: OCTSubmanagerChats!
@@ -887,6 +887,7 @@ extension ChatGroupController: UITableViewDataSource {
             model.dateString = dateText
             model.delivered = (message.messageText?.isDelivered ?? false) || (message.messageText?.groupSyncConfirmations ?? 0) > 0
             model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
+            model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
             cell.delegate = self
             cell.replySwipeDelegate = self
             cell.setupWithTheme(theme, model: model)
@@ -918,6 +919,7 @@ extension ChatGroupController: UITableViewDataSource {
         model.searchHighlight = highlight
         model.dateString = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
+        model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
         cell.delegate = self
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)
@@ -1224,6 +1226,13 @@ extension ChatGroupController: UITableViewDelegate {
             }
 
             var actions: [UIAction] = []
+            // KHANDAQ (#192): react to a group TEXT message (broadcasts KQ NGC packet 0x43)
+            if message.messageText != nil {
+                actions.append(UIAction(title: String(localized: "chat_react_action")) { _ in
+                    let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
+                    self.presentGroupReactionPicker(for: message, sourceView: source)
+                })
+            }
             if self.quoteText(for: message) != nil {
                 actions.append(UIAction(title: String(localized: "chat_reply_action")) { _ in
                     self.startReply(to: message)

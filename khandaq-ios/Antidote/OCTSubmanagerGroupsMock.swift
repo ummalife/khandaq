@@ -11,6 +11,10 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         // nop
     }
 
+    func toggleReaction(onGroupMessage message: OCTMessageAbstract!, emoji: String!, in chat: OCTChat!) {
+        // nop
+    }
+
     func createPublicGroup(withName groupName: String!, peerName: String!, error: NSErrorPointer) -> OCTToxGroupNumber {
         return 0
     }

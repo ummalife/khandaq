@@ -234,4 +234,13 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
  */
 - (void)flushAllPendingGroupMessagesIfNeeded;
 
+/**
+ * KHANDAQ (#192): toggle the OWN reaction on a group TEXT message and broadcast it to the group
+ * (KQ NGC custom packet 0x43, wire-compatible with Android). Same emoji removes, a different one
+ * replaces. Applied to Realm immediately; best-effort broadcast like group edits/deletes.
+ */
+- (void)toggleReactionOnGroupMessage:(OCTMessageAbstract *)message
+                               emoji:(NSString *)emoji
+                              inChat:(OCTChat *)chat;
+
 @end

@@ -2472,6 +2472,274 @@ partMessage:(NSString *)partMessage
     return YES;
 }
 
+// KHANDAQ (#192): reactions JSON model [{"e":emoji,"p":[actors]}] shared with the 1:1 path
+// (duplicated here because the 1:1 helpers are file-static in OCTSubmanagerChatsImpl.m).
+static NSString *const kKQGroupOwnReactionMarker = @"-OWN-";
+
+static NSString *kqGroupReactionsApplyActor(NSString *reactionsJSON, NSString *actor, NSString *emoji, BOOL add)
+{
+    NSArray *arr = nil;
+    if (reactionsJSON.length > 0) {
+        arr = [NSJSONSerialization JSONObjectWithData:[reactionsJSON dataUsingEncoding:NSUTF8StringEncoding]
+                                              options:0 error:nil];
+    }
+    if (! [arr isKindOfClass:[NSArray class]]) {
+        arr = @[];
+    }
+    NSMutableArray *out = [NSMutableArray new];
+    NSMutableDictionary *target = nil;
+    for (NSDictionary *entry in arr) {
+        if (! [entry isKindOfClass:[NSDictionary class]] || ! [entry[@"p"] isKindOfClass:[NSArray class]]) {
+            continue;
+        }
+        NSMutableArray *kept = [NSMutableArray new];
+        for (NSString *a in entry[@"p"]) {
+            if (! [actor isEqualToString:a]) {
+                [kept addObject:a];
+            }
+        }
+        if (kept.count > 0) {
+            NSMutableDictionary *ne = [@{ @"e" : entry[@"e"] ?: @"", @"p" : kept } mutableCopy];
+            [out addObject:ne];
+            if (add && [emoji isEqualToString:entry[@"e"]]) {
+                target = ne;
+            }
+        }
+    }
+    if (add) {
+        if (target == nil) {
+            if (out.count >= 12) {
+                goto serialize;
+            }
+            target = [@{ @"e" : emoji, @"p" : [NSMutableArray new] } mutableCopy];
+            [out addObject:target];
+        }
+        NSMutableArray *actors = target[@"p"];
+        if (actors.count < 128) {
+            [actors addObject:actor];
+        }
+    }
+serialize:
+    if (out.count == 0) {
+        return nil;
+    }
+    NSData *d = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : nil;
+}
+
+static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *actor)
+{
+    if (reactionsJSON.length == 0) {
+        return nil;
+    }
+    NSArray *arr = [NSJSONSerialization JSONObjectWithData:[reactionsJSON dataUsingEncoding:NSUTF8StringEncoding]
+                                                   options:0 error:nil];
+    if (! [arr isKindOfClass:[NSArray class]]) {
+        return nil;
+    }
+    for (NSDictionary *entry in arr) {
+        if ([entry[@"p"] isKindOfClass:[NSArray class]] && [entry[@"p"] containsObject:actor]) {
+            return entry[@"e"];
+        }
+    }
+    return nil;
+}
+
+// Resolve a peer's frozen display name from a pubkey hex (reactor targets the author BY pubkey;
+// iOS text rows carry only the frozen groupPeerName, so we map pubkey -> name via the peer list).
+- (nullable NSString *)groupPeerNameForPubkeyHex:(NSString *)pubkeyHex chat:(OCTChat *)chat
+{
+    if (pubkeyHex.length == 0 || ! chat) {
+        return nil;
+    }
+    RLMResults *peers = [[self.dataSource managerGetRealmManager] groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
+    for (OCTGroupPeer *peer in peers) {
+        if (peer.peerPublicKeyHex.length > 0
+            && [peer.peerPublicKeyHex caseInsensitiveCompare:pubkeyHex] == NSOrderedSame
+            && peer.peerName.length > 0) {
+            return peer.peerName;
+        }
+    }
+    return nil;
+}
+
+// KHANDAQ (#192): incoming reaction broadcast (KQ NGC family):
+// [0..5]=magic [6]=0x01 [7]=0x43 [8]=anchor_type(1=text message_id) [9..40]=anchor (msg_id in first
+// 4 bytes BE, zero-padded) [41..72]=author pubkey 32B [73..76]=ts u32 BE [77]=action [78]=emojiLen
+// [79..]=emoji. Returns YES when the packet was a reaction (consumed).
+- (BOOL)handleIncomingGroupReactionPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                  peerId:(uint32_t)peerId
+                                                    data:(NSData *)data
+{
+    if (data.length < 80) {
+        return NO;
+    }
+    const uint8_t *b = data.bytes;
+    if (b[0] != 0x66 || b[1] != 0x77 || b[2] != 0x88 || b[3] != 0x11 || b[4] != 0x34 || b[5] != 0x35
+        || b[6] != 0x01 || b[7] != 0x43) {
+        return NO;
+    }
+    uint8_t anchorType = b[8];
+    BOOL add = (b[77] == 1);
+    NSUInteger emLen = b[78];
+    if (emLen < 1 || emLen > 16 || data.length < 79 + emLen) {
+        return YES; // malformed, but it WAS a reaction packet — consume it
+    }
+    if (anchorType != 1) {
+        return YES; // only text-message reactions on iOS for now (file rows unsupported)
+    }
+    NSString *emoji = [[NSString alloc] initWithBytes:(b + 79) length:emLen encoding:NSUTF8StringEncoding];
+    if (add && emoji.length == 0) {
+        return YES;
+    }
+
+    const uint32_t messageId = ((uint32_t)b[9] << 24) | ((uint32_t)b[10] << 16)
+                               | ((uint32_t)b[11] << 8) | (uint32_t)b[12];
+    NSMutableString *authorHex = [NSMutableString stringWithCapacity:64];
+    for (int i = 41; i < 73; i++) {
+        [authorHex appendFormat:@"%02x", b[i]];
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager chatWithGroupNumber:groupNumber];
+    if (! chat) {
+        return YES;
+    }
+
+    NSString *selfHex = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil];
+    NSPredicate *predicate;
+    if (selfHex.length > 0 && [selfHex caseInsensitiveCompare:authorHex] == NSOrderedSame) {
+        // reaction targets an OWN (outgoing) message
+        predicate = [NSPredicate predicateWithFormat:
+                     @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND groupSenderPeerId == 0",
+                     chat.uniqueIdentifier, (int32_t)messageId];
+    }
+    else {
+        NSString *authorName = [self groupPeerNameForPubkeyHex:authorHex chat:chat];
+        if (authorName.length == 0) {
+            return YES;
+        }
+        predicate = [NSPredicate predicateWithFormat:
+                     @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
+                     chat.uniqueIdentifier, (int32_t)messageId, authorName];
+    }
+    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+    if (! found) {
+        return YES; // reactions never create rows for unknown originals
+    }
+
+    NSString *reactorHex = [[tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil] uppercaseString];
+    if (reactorHex.length == 0) {
+        return YES;
+    }
+    NSString *newJson = kqGroupReactionsApplyActor(found.reactionsJSON, reactorHex, emoji, add);
+    [realmManager updateObject:found withBlock:^(OCTMessageAbstract *msg) {
+        msg.reactionsJSON = newJson;
+    }];
+    return YES;
+}
+
+- (void)toggleReactionOnGroupMessage:(OCTMessageAbstract *)message
+                               emoji:(NSString *)emoji
+                              inChat:(OCTChat *)chat
+{
+    if (! message || ! message.messageText || emoji.length == 0
+        || [emoji lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 16 || ! chat) {
+        return;
+    }
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSString *cur = kqGroupReactionsActorEmoji(message.reactionsJSON, kKQGroupOwnReactionMarker);
+    BOOL add = ! [emoji isEqualToString:cur];
+    NSString *newJson = kqGroupReactionsApplyActor(message.reactionsJSON, kKQGroupOwnReactionMarker, emoji, add);
+    [realmManager updateObject:message withBlock:^(OCTMessageAbstract *msg) {
+        msg.reactionsJSON = newJson;
+    }];
+
+    // resolve the message AUTHOR's pubkey (for the wire anchor). Outgoing -> self; incoming ->
+    // the peer whose frozen name matches, or the volatile peerId as a fallback.
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+    int32_t messageId = (int32_t)message.messageText.messageId;
+    if (messageId == 0) {
+        return; // pending send has no shared id yet
+    }
+    NSString *authorHex = nil;
+    if (message.groupSenderPeerId == 0) {
+        authorHex = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil];
+    }
+    else {
+        NSString *authorName = message.messageText.groupPeerName;
+        if (authorName.length > 0) {
+            RLMResults *peers = [realmManager groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
+            for (OCTGroupPeer *peer in peers) {
+                if ([peer.peerName isEqualToString:authorName] && peer.peerPublicKeyHex.length > 0) {
+                    authorHex = peer.peerPublicKeyHex;
+                    break;
+                }
+            }
+        }
+        if (authorHex.length == 0) {
+            authorHex = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber
+                                                          peerId:(uint32_t)message.groupSenderPeerId error:nil];
+        }
+    }
+    if (authorHex.length != 64) {
+        return; // cannot address the author -> local-only reaction (still stored above)
+    }
+
+    NSString *own = kqGroupReactionsActorEmoji(message.reactionsJSON, kKQGroupOwnReactionMarker);
+    NSData *pkt = [self kqGroupReactionPacketForMessageId:messageId
+                                               authorHex:authorHex
+                                                   emoji:(own ?: @"*")
+                                                     add:(own != nil)];
+    if (pkt) {
+        [tox groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
+    }
+}
+
+- (NSData *)kqGroupReactionPacketForMessageId:(int32_t)messageId
+                                    authorHex:(NSString *)authorHex
+                                        emoji:(NSString *)emoji
+                                          add:(BOOL)add
+{
+    NSData *em = [emoji dataUsingEncoding:NSUTF8StringEncoding];
+    if (authorHex.length != 64 || em.length < 1 || em.length > 16) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:79 + em.length];
+    const uint8_t header[9] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x43, 0x01 }; // ..anchor_type 1
+    [pkt appendBytes:header length:9];
+    // anchor: message_id (4 bytes BE) zero-padded to 32
+    uint32_t mid = (uint32_t)messageId;
+    const uint8_t midbe[4] = {
+        (uint8_t)((mid >> 24) & 0xFF), (uint8_t)((mid >> 16) & 0xFF),
+        (uint8_t)((mid >> 8) & 0xFF), (uint8_t)(mid & 0xFF)
+    };
+    [pkt appendBytes:midbe length:4];
+    const uint8_t zeros[28] = {0};
+    [pkt appendBytes:zeros length:28];
+    // author pubkey 32 bytes
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int v = 0;
+        [[NSScanner scannerWithString:[authorHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&v];
+        uint8_t byte = (uint8_t)v;
+        [pkt appendBytes:&byte length:1];
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    const uint8_t tsbe[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tsbe length:4];
+    const uint8_t action = add ? 1 : 0;
+    [pkt appendBytes:&action length:1];
+    const uint8_t emLen = (uint8_t)em.length;
+    [pkt appendBytes:&emLen length:1];
+    [pkt appendData:em];
+    return pkt;
+}
+
 - (void)tox:(OCTTox *)tox groupCustomPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
        data:(NSData *)data
@@ -2487,6 +2755,10 @@ partMessage:(NSString *)partMessage
     }
 
     if ([self handleIncomingGroupDeletePacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
+
+    if ([self handleIncomingGroupReactionPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
         return;
     }
 
@@ -2528,6 +2800,11 @@ partMessage:(NSString *)partMessage
     // no media). Route private packets through the same media handlers as the broadcast callback
     // first; each handler ignores packets that aren't its own (magic/type), so histSync still runs for
     // genuine history-sync packets.
+    // KHANDAQ (#192): reactions may also arrive on the private path (robustness, mirrors the
+    // delete/media routing note above)
+    if ([self handleIncomingGroupReactionPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
     NSString *peerPublicKeyHex = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil];
     [self setupLiveVideoIfNeeded];
     if ([self.liveVideo handleIncomingPacketWithGroupNumber:groupNumber

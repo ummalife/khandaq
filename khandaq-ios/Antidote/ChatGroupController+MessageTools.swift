@@ -237,4 +237,31 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: cell)
     }
+
+    // KHANDAQ (#192): quick reaction bar for group messages (broadcasts KQ NGC packet 0x43).
+    // Reached from the reaction-chip tap (legacy delegate) — the long-press context menu calls
+    // presentGroupReactionPicker directly.
+    func chatMovableDateCellReactPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        presentGroupReactionPicker(for: message, sourceView: cell)
+    }
+
+    func presentGroupReactionPicker(for message: OCTMessageAbstract, sourceView: UIView) {
+        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        for emoji in ["❤️", "👍", "👎", "😂", "😮", "😢", "🔥"] {
+            alert.addAction(UIAlertAction(title: emoji, style: .default) { [weak self] _ in
+                guard let self = self else { return }
+                self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
+            })
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView.bounds
+        }
+        present(alert, animated: true)
+    }
 }

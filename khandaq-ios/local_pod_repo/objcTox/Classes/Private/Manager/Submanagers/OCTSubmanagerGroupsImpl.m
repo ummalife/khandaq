@@ -2740,6 +2740,45 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     return pkt;
 }
 
+// KHANDAQ (#193/#179): SEND side of group delete-for-both (the RECEIVE side already exists at
+// handleIncomingGroupDeletePacketWithGroupNumber). Broadcasts the 16-byte 0x42 packet, byte-compatible
+// with Android's HelperMessageDelete.buildGroupDeletePacket. TEXT-only + own message (a file variant
+// needs a 32-byte-anchor packet on both platforms). Local removal always happens.
+- (void)deleteGroupMessageForBoth:(OCTMessageAbstract *)message inChat:(OCTChat *)chat
+{
+    do {
+        if (! message || ! message.messageText || ! chat
+            || message.groupSenderPeerId != 0) { // own outgoing only
+            break;
+        }
+        int32_t messageId = (int32_t)message.messageText.messageId;
+        if (messageId == 0) {
+            break; // pending send has no shared id yet
+        }
+        OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+        NSMutableData *pkt = [NSMutableData dataWithCapacity:16];
+        const uint8_t header[8] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x42 };
+        [pkt appendBytes:header length:8];
+        uint32_t mid = (uint32_t)messageId;
+        const uint8_t midbe[4] = {
+            (uint8_t)((mid >> 24) & 0xFF), (uint8_t)((mid >> 16) & 0xFF),
+            (uint8_t)((mid >> 8) & 0xFF), (uint8_t)(mid & 0xFF)
+        };
+        [pkt appendBytes:midbe length:4];
+        uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+        const uint8_t tsbe[4] = {
+            (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+            (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+        };
+        [pkt appendBytes:tsbe length:4];
+        [[self.dataSource managerGetTox] groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
+    }
+    while (0);
+
+    // local deletion always happens — even if the message can't be retracted for everyone
+    [[self.dataSource managerGetRealmManager] removeMessages:@[message]];
+}
+
 - (void)tox:(OCTTox *)tox groupCustomPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
        data:(NSData *)data

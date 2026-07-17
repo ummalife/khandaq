@@ -15,6 +15,10 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         // nop
     }
 
+    func deleteGroupMessage(forBoth message: OCTMessageAbstract!, in chat: OCTChat!) {
+        // nop
+    }
+
     func createPublicGroup(withName groupName: String!, peerName: String!, error: NSErrorPointer) -> OCTToxGroupNumber {
         return 0
     }

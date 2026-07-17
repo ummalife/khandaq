@@ -243,4 +243,12 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
                                emoji:(NSString *)emoji
                               inChat:(OCTChat *)chat;
 
+/**
+ * KHANDAQ (#193/#179): delete an OWN group TEXT message locally AND retract it for the whole group
+ * (KQ NGC packet 0x42, wire-compatible with Android + the existing iOS receiver). Best effort:
+ * offline members and old clients keep their copy. Falls back to plain local removal for anything
+ * that cannot be retracted (files, incoming messages, pending sends).
+ */
+- (void)deleteGroupMessageForBoth:(OCTMessageAbstract *)message inChat:(OCTChat *)chat;
+
 @end

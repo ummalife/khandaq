@@ -127,7 +127,14 @@ extension ChatGroupController {
         }
 
         let toRemove = selectedRows.map { messageEntry(atDisplayIndex: $0.row).message }
-        submanagerChats.removeMessages(toRemove)
+        // KHANDAQ (#193): own group TEXT messages retract for everyone; the rest delete locally.
+        for message in toRemove {
+            if message.messageText != nil && message.groupSenderPeerId == 0 {
+                submanagerGroups.deleteGroupMessage(forBoth: message, in: chat)
+            } else {
+                submanagerChats.removeMessages([message])
+            }
+        }
         toggleTableViewEditing(false, animated: true)
     }
 
@@ -215,7 +222,12 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         }
 
         let message = messageEntry(atDisplayIndex: indexPath.row).message
-        submanagerChats.removeMessages([message])
+        // KHANDAQ (#193): own group TEXT retracts for everyone; the rest delete locally.
+        if message.messageText != nil && message.groupSenderPeerId == 0 {
+            submanagerGroups.deleteGroupMessage(forBoth: message, in: chat)
+        } else {
+            submanagerChats.removeMessages([message])
+        }
     }
 
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell) {

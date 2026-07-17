@@ -265,6 +265,12 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.NoActionBar">
         </activity>
+        <!-- KHANDAQ: uCrop subclass — edge-to-edge insets + big bottom confirm button. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.AvatarCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.NoActionBar">
+        </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.TrifaSetPatternActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden">

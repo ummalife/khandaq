@@ -701,11 +701,15 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
             crop_options.setToolbarColor(getResources().getColor(R.color.colorPrimaryDark));
             crop_options.setStatusBarColor(getResources().getColor(R.color.colorPrimaryDark));
             crop_options.setActiveControlsWidgetColor(getResources().getColor(R.color.colorPrimary));
-            com.yalantis.ucrop.UCrop.of(source, dest)
+            // KHANDAQ: route through AvatarCropActivity (uCrop subclass) — fixes the toolbar
+            // colliding with the status bar on edge-to-edge devices and adds a big bottom ✓.
+            final android.content.Intent crop_intent = com.yalantis.ucrop.UCrop.of(source, dest)
                     .withAspectRatio(1f, 1f)
                     .withMaxResultSize(1024, 1024)
                     .withOptions(crop_options)
-                    .start(requireContext(), this);
+                    .getIntent(requireContext());
+            crop_intent.setClass(requireContext(), AvatarCropActivity.class);
+            startActivityForResult(crop_intent, com.yalantis.ucrop.UCrop.REQUEST_CROP);
         }
         catch (Exception e)
         {

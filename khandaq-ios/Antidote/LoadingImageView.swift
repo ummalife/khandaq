@@ -16,7 +16,16 @@ class LoadingImageView: UIView {
         // KHANDAQ (#15): bounds for the aspect-ratio media preview bubble.
         static let PreviewMaxWidth: CGFloat = 240.0
         static let PreviewMaxHeight: CGFloat = 300.0
+        // KHANDAQ (file bubble): compact Telegram-style row for non-preview file states —
+        // action circle + progress ring on the LEFT, filename/size stacked on the right
+        // (the old layout put a huge centered icon + ring on top of the labels).
+        static let CompactWidth: CGFloat = 240.0
+        static let CompactHeight: CGFloat = 64.0
+        static let CompactIconSize: CGFloat = 26.0
+        static let CompactRingSize: CGFloat = 44.0
     }
+
+    private var isCompactLayout = false
 
     var imageButton: UIButton!
     var progressView: ProgressCircleView!
@@ -32,15 +41,91 @@ class LoadingImageView: UIView {
     /// KHANDAQ (#15): size the preview box to the media's aspect ratio (bounded), so photos/videos
     /// render at their real shape instead of a square crop. Falls back to the square file box.
     func setPreviewSize(_ imageSize: CGSize) {
+        applyPreviewLayout()
         let box = LoadingImageView.previewBox(for: imageSize)
         widthConstraint?.update(offset: box.width)
         heightConstraint?.update(offset: box.height)
     }
 
-    /// Revert to the square box (non-image files, loading/placeholder, reused cells).
+    /// Revert to the default box (non-image files, loading/placeholder, reused cells).
     func resetPreviewSize() {
+        if isCompactLayout {
+            widthConstraint?.update(offset: Constants.CompactWidth)
+            heightConstraint?.update(offset: Constants.CompactHeight)
+        }
+        else {
+            widthConstraint?.update(offset: Constants.ImageButtonSize)
+            heightConstraint?.update(offset: Constants.ImageButtonSize)
+        }
+    }
+
+    // KHANDAQ (file bubble): compact row layout for file states without a visual preview —
+    // switches automatically (setImageWithUti/setCancelledImage → compact, photo preview → full).
+    private func applyCompactFileLayout() {
+        guard !isCompactLayout else {
+            return
+        }
+        isCompactLayout = true
+
+        widthConstraint?.update(offset: Constants.CompactWidth)
+        heightConstraint?.update(offset: Constants.CompactHeight)
+
+        centerImageView.snp.remakeConstraints {
+            $0.leading.equalTo(self).offset(18)
+            $0.centerY.equalTo(self)
+            $0.size.equalTo(Constants.CompactIconSize)
+        }
+        progressView.snp.remakeConstraints {
+            $0.center.equalTo(centerImageView)
+            $0.size.equalTo(Constants.CompactRingSize)
+        }
+        topLabel.snp.remakeConstraints {
+            $0.leading.equalTo(centerImageView.snp.trailing).offset(16)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.LabelHorizontalOffset)
+            $0.bottom.equalTo(self.snp.centerY).offset(1)
+        }
+        bottomLabel.snp.remakeConstraints {
+            $0.leading.equalTo(topLabel)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.LabelHorizontalOffset)
+            $0.top.equalTo(self.snp.centerY).offset(1)
+        }
+
+        topLabel.font = UIFont.systemFont(ofSize: 14.0, weight: .semibold)
+        topLabel.lineBreakMode = .byTruncatingMiddle
+        bottomLabel.font = UIFont.systemFont(ofSize: 12.0)
+    }
+
+    private func applyPreviewLayout() {
+        guard isCompactLayout else {
+            return
+        }
+        isCompactLayout = false
+
         widthConstraint?.update(offset: Constants.ImageButtonSize)
         heightConstraint?.update(offset: Constants.ImageButtonSize)
+
+        centerImageView.snp.remakeConstraints {
+            $0.center.equalTo(self)
+            $0.size.equalTo(Constants.CenterImageSize)
+        }
+        progressView.snp.remakeConstraints {
+            $0.center.equalTo(self)
+            $0.size.equalTo(Constants.ProgressViewSize)
+        }
+        topLabel.snp.remakeConstraints {
+            $0.leading.equalTo(self).offset(Constants.LabelHorizontalOffset)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.LabelHorizontalOffset)
+            $0.bottom.equalTo(bottomLabel.snp.top)
+        }
+        bottomLabel.snp.remakeConstraints {
+            $0.leading.equalTo(self).offset(Constants.LabelHorizontalOffset)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.LabelHorizontalOffset)
+            $0.bottom.equalTo(self).offset(Constants.LabelBottomOffset)
+        }
+
+        topLabel.font = UIFont.systemFont(ofSize: 14.0)
+        topLabel.lineBreakMode = .byTruncatingTail
+        bottomLabel.font = UIFont.systemFont(ofSize: 14.0)
     }
 
     static func previewBox(for imageSize: CGSize) -> CGSize {
@@ -70,10 +155,12 @@ class LoadingImageView: UIView {
     }
 
     func setCancelledImage() {
+        applyCompactFileLayout()
         centerImageView.image = UIImage.templateNamed("chat-file-type-canceled")
     }
 
     func setImageWithUti(_ uti: String?, fileExtension: String?) {
+        applyCompactFileLayout()
         let imageName = imageNameWithUti(uti, fileExtension: fileExtension)
         centerImageView.image = UIImage.templateNamed(imageName)
     }

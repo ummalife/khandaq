@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10346.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10347.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Avatar photo editor polished: the header no longer overlaps the clock and there is a big easy-to-reach confirm button at the bottom. Plus the recent status-bar icon, stability and performance fixes."},
-                    {"language": "ru-RU", "text": "Редактор фото аватара доработан: шапка больше не наезжает на часы, а внизу появилась крупная удобная кнопка подтверждения. Плюс недавние фиксы иконки статус-бара, стабильности и производительности."},
+                    {"language": "en-US", "text": "Voice messages now play like in Telegram: playback keeps going while you scroll or open another chat, and the player remembers where you stopped — resume instead of starting over. Plus the recent avatar-editor and stability fixes."},
+                    {"language": "ru-RU", "text": "Голосовые теперь как в Telegram: воспроизведение не прерывается при прокрутке или переходе в другой чат, а плеер запоминает, где вы остановились — продолжение вместо старта заново. Плюс недавние фиксы редактора аватара и стабильности."},
                 ],
             }],
         })

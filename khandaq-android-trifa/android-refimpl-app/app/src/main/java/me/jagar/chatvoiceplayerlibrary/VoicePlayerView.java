@@ -36,7 +36,12 @@ import java.io.IOException;
 import java.net.URLConnection;
 
 
-public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHelper.ActiveVoicePlayer {
+public class VoicePlayerView extends LinearLayout
+        implements ChatVoiceSessionHelper.ActiveVoicePlayer,
+        com.zoffcc.applications.trifa.ChatVoicePlaybackManager.Listener {
+
+    // KHANDAQ: this bubble plays PLAIN filesystem files (outgoing voice)
+    private static final boolean IS_VFS = false;
 
     private int playPaueseBackgroundColor, shareBackgroundColor, viewBackgroundColor,
             seekBarProgressColor, seekBarThumbColor, progressTimeColor, timingBackgroundColor,
@@ -56,27 +61,12 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
     private MediaPlayer mediaPlayer;
     private ProgressBar pb_play;
 
-    // KHANDAQ (#20): Telegram-style single voice playback — registered with the shared coordinator
-    // (ChatVoiceSessionHelper) so a newly started voice pauses whichever one was playing before.
-    // Each bubble has its own MediaPlayer, so without this they would all play on top of each other.
+    // KHANDAQ: playback moved to the global ChatVoicePlaybackManager (single MediaPlayer app-wide,
+    // survives row recycling + chat switches, remembers per-file position). Starting any voice
+    // pauses the previous one inside the manager, so the old per-view handoff is a no-op now.
     @Override
     public void pauseForHandoff() {
-        try {
-            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-                mediaPlayer.pause();
-            }
-        } catch (Exception ignored) {
-        }
-        try {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.GONE);
-                    imgPlay.setVisibility(View.VISIBLE);
-                }
-            });
-        } catch (Exception ignored) {
-        }
+        // no-op: exclusivity is guaranteed by ChatVoicePlaybackManager
     }
 
     private PlayerVisualizerSeekbar seekbarV;
@@ -193,51 +183,80 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
     }
 
 
-    //Set the audio source and prepare mediaplayer
+    //Set the audio source — playback state lives in ChatVoicePlaybackManager
 
     public void setAudio(String audioPath){
-        path = audioPath;
-        mediaPlayer = new MediaPlayer();
-        Log.i("VoicePlayerView", "VoicePlayerView:setAudio:new MediaPlayer()");
-        if (path != null) {
-            try {
-                mediaPlayer.setDataSource(path);
-                mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                mediaPlayer.prepare();
-                mediaPlayer.setVolume(10, 10);
-                //START and PAUSE are in other listeners
-                mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                    @Override
-                    public void onPrepared(MediaPlayer mp) {
-                        seekBar.setMax(mp.getDuration());
-                        if (seekbarV.getVisibility() == VISIBLE){
-                            seekbarV.setMax(mp.getDuration());
-                        }
-                        txtProcess.setText(convertSecondsToHMmSs(mp.getDuration() / 1000));
-                    }
-                });
-                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                    @Override
-                    public void onCompletion(MediaPlayer mp) {
-                        imgPause.setVisibility(View.GONE);
-                        imgPlay.setVisibility(View.VISIBLE);
-                    }
-                });
+        bindAudio(audioPath);
+    }
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    // KHANDAQ: bind = wire listeners + render current global state. NEVER touches the global
+    // playback (a row re-bind used to stop the audio and reset progress to 0).
+    private void bindAudio(String audioPath) {
+        path = audioPath;
 
         seekBar.setOnSeekBarChangeListener(seekBarListener);
         imgPlay.setOnClickListener(imgPlayClickListener);
         imgPause.setOnClickListener(imgPauseClickListener);
         imgShare.setOnClickListener(imgShareClickListener);
-        if (seekbarV.getVisibility() == VISIBLE){
+        if (seekbarV.getVisibility() == VISIBLE && path != null){
+            seekbarV.setOnSeekBarChangeListener(seekBarListener);
             seekbarV.updateVisualizer(new File(path));
         }
-        seekbarV.setOnSeekBarChangeListener(seekBarListener);
-        // seekbarV.updateVisualizer(new File(path));
+
+        com.zoffcc.applications.trifa.ChatVoicePlaybackManager.attach(this);
+        renderFromManager();
+    }
+
+    // KHANDAQ: paint play/pause + progress + time from the global manager state.
+    private void renderFromManager() {
+        if (path == null) {
+            return;
+        }
+        final int dur = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.durationMs(path, IS_VFS);
+        final boolean mine = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.isActivePath(path);
+        final boolean playing = mine && com.zoffcc.applications.trifa.ChatVoicePlaybackManager.isPlaying();
+        final int pos = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.positionMs(path);
+        applyPlaybackUi(playing, pos, dur);
+    }
+
+    private void applyPlaybackUi(final boolean playing, final int rawPos, final int dur) {
+        if (dur > 0) {
+            seekBar.setMax(dur);
+            if (seekbarV.getVisibility() == VISIBLE) {
+                seekbarV.setMax(dur);
+            }
+        }
+        imgPause.setVisibility(playing ? View.VISIBLE : View.GONE);
+        imgPlay.setVisibility(playing ? View.GONE : View.VISIBLE);
+
+        // at (or within 400ms of) the end → show as reset
+        final int pos = (dur > 0 && rawPos > 0 && dur - rawPos <= 400) ? 0 : rawPos;
+        seekBar.setProgress(pos);
+        if (seekbarV.getVisibility() == VISIBLE) {
+            seekbarV.setProgress(pos);
+            if (dur > 0) {
+                seekbarV.updatePlayerPercent((float) pos / dur);
+            }
+        }
+        if (dur > 0) {
+            txtProcess.setText(pos > 0
+                    ? convertSecondsToHMmSs(pos / 1000) + " / " + convertSecondsToHMmSs(dur / 1000)
+                    : convertSecondsToHMmSs(dur / 1000));
+        }
+    }
+
+    // KHANDAQ: manager tick (UI thread) — live progress if this bubble's file is the active one,
+    // otherwise the remembered position of this file.
+    @Override
+    public void onVoicePlaybackTick(final String activePath, final boolean playing, final int positionMs) {
+        if (path == null) {
+            return;
+        }
+        final boolean mine = path.equals(activePath);
+        final int dur = seekBar.getMax();
+        final int pos = mine ? positionMs
+                : com.zoffcc.applications.trifa.ChatVoicePlaybackManager.positionMs(path);
+        applyPlaybackUi(mine && playing, pos, dur);
     }
 
 
@@ -247,25 +266,12 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
     OnClickListener imgPlayClickListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.VISIBLE);
-                    imgPlay.setVisibility(View.GONE);
-                }
-            });
-
             try{
                 ChatVoiceSessionHelper.onVoicePlaybackStarting();
-                ChatVoiceSessionHelper.becomeActiveVoicePlayer(VoicePlayerView.this);
-                if (mediaPlayer != null){
-                    mediaPlayer.start();
-                }
-                update(mediaPlayer, txtProcess, seekBar, context);
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.play(path, IS_VFS);
             }catch (Exception e){
                 e.printStackTrace();
             }
-
         }
     };
 
@@ -275,74 +281,37 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
         @Override
         public void onProgressChanged(final SeekBar seekBar, final int progress, boolean fromUser) {
             if (fromUser) {
-                ((Activity) context).runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try
-                        {
-                            mediaPlayer.seekTo(progress);
-                            update(mediaPlayer, txtProcess, seekBar, context);
-                            if (seekbarV.getVisibility() == VISIBLE)
-                            {
-                                seekbarV.updatePlayerPercent((float) mediaPlayer.getCurrentPosition() / mediaPlayer.getDuration());
-                            }
-                        }
-                        catch(Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
-                });
+                try {
+                    com.zoffcc.applications.trifa.ChatVoicePlaybackManager.seekTo(path, progress);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
 
         @Override
         public void onStartTrackingTouch(SeekBar seekBar) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.GONE);
-                    imgPlay.setVisibility(View.VISIBLE);
-                }
-            });
         }
 
         @Override
         public void onStopTrackingTouch(SeekBar seekBar) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPlay.setVisibility(View.GONE);
-                    imgPause.setVisibility(View.VISIBLE);
-                    try{
-                        ChatVoiceSessionHelper.onVoicePlaybackStarting();
-                        ChatVoiceSessionHelper.becomeActiveVoicePlayer(VoicePlayerView.this);
-                        mediaPlayer.start();
-                    }catch (Exception e){
-                        e.printStackTrace();
-                    }
-                }
-            });
-
+            try{
+                ChatVoiceSessionHelper.onVoicePlaybackStarting();
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.play(path, IS_VFS);
+            }catch (Exception e){
+                e.printStackTrace();
+            }
         }
     };
 
     OnClickListener imgPauseClickListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.GONE);
-                    imgPlay.setVisibility(View.VISIBLE);
-                    try{
-                        mediaPlayer.pause();
-                    }catch (Exception e){
-                        e.printStackTrace();
-                    }
-                }
-            });
-
+            try{
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.pause();
+            }catch (Exception e){
+                e.printStackTrace();
+            }
         }
     };
 
@@ -398,63 +367,8 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
         }
     };
 
-    //Updating seekBar in realtime
-    private void update(final MediaPlayer mediaPlayer, final TextView time, final SeekBar seekBar, final Context context) {
-        ((Activity)context).runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try
-                {
-                    seekBar.setProgress(mediaPlayer.getCurrentPosition());
-                }
-                catch(Exception e)
-                {
-                    Log.i("VoicePlayerView", "VoicePlayerView:update:EE01:" + e.getMessage() + " mediaPlayer=" + mediaPlayer);
-                }
-                if (seekbarV.getVisibility() == VISIBLE){
-                    seekbarV.setProgress(mediaPlayer.getCurrentPosition());
-                    seekbarV.updatePlayerPercent((float) mediaPlayer.getCurrentPosition() / mediaPlayer.getDuration());
-                }
-
-
-
-                if (mediaPlayer.getDuration() - mediaPlayer.getCurrentPosition() > 100) {
-                    time.setText(convertSecondsToHMmSs(mediaPlayer.getCurrentPosition() / 1000) + " / " + convertSecondsToHMmSs(mediaPlayer.getDuration() / 1000));
-                }
-                else {
-                    time.setText(convertSecondsToHMmSs(mediaPlayer.getDuration() / 1000));
-                    seekBar.setProgress(0);
-                    if (seekbarV.getVisibility() == VISIBLE){
-                        seekbarV.updatePlayerPercent(0);
-                        seekbarV.setProgress(0);
-                    }
-                }
-                Handler handler = new Handler();
-                try{
-                    Runnable runnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            try{
-                                if (mediaPlayer.getCurrentPosition() > -1) {
-                                    try {
-                                        update(mediaPlayer, time, seekBar, context);
-                                    } catch (Exception e) {
-                                        // e.printStackTrace();
-                                    }
-                                }
-                            }catch (Exception e){
-                                // e.printStackTrace();
-                            }
-                        }
-                    };
-                    handler.postDelayed(runnable, 500);
-                }catch (Exception e){
-                    e.printStackTrace();
-                }
-
-            }
-        });
-    }
+    // KHANDAQ: the old per-view update() polling loop is gone — progress comes from
+    // ChatVoicePlaybackManager ticks (onVoicePlaybackTick above).
 
     //Convert long milli seconds to a formatted String to display it
 
@@ -469,71 +383,16 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
         return String.format("%d:%02d", m, s);
     }
 
-    //These both functions to avoid mediaplayer errors
+    // KHANDAQ: rows get detached/recycled all the time while scrolling and when leaving the chat —
+    // that must NOT stop the global playback anymore (the tester bug: "аудио останавливается, когда
+    // смотришь чат или заходишь в другой чат"). Playback lifetime is owned by
+    // ChatVoicePlaybackManager; these lifecycle hooks are intentionally no-ops now.
 
     public void onStop()
     {
-        try
-        {
-            mediaPlayer.stop();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("VoicePlayerView", "VoicePlayerView:onStop:EE01:" + e.getMessage());
-        }
-
-        try
-        {
-            mediaPlayer.reset();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("VoicePlayerView", "VoicePlayerView:onStop:EE02:" + e.getMessage());
-        }
-
-        try
-        {
-            mediaPlayer.release();
-            Log.i("VoicePlayerView", "VoicePlayerView:mediaPlayer.release()");
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("VoicePlayerView", "VoicePlayerView:onStop:EE03:" + e.getMessage());
-        }
-
-        mediaPlayer = null;
     }
 
     public void onPause(){
-        Log.i("VoicePlayerView", "VoicePlayerView:onPause():mediaPlayer=" + mediaPlayer);
-        try{
-            if (mediaPlayer != null)
-            {
-                Log.i("VoicePlayerView", "VoicePlayerView:onPause():mediaPlayer.isPlaying()=" + mediaPlayer.isPlaying());
-                if (mediaPlayer.isPlaying())
-                {
-                    mediaPlayer.pause();
-                    Log.i("VoicePlayerView", "VoicePlayerView:onPause():DONE ***");
-                    mediaPlayer.stop();
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("VoicePlayerView", "VoicePlayerView:onPause:EE01:" + e.getMessage());
-        }
-
-        ((Activity) context).runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                imgPause.setVisibility(View.GONE);
-                imgPlay.setVisibility(View.VISIBLE);
-            }
-        });
     }
 
 
@@ -588,92 +447,10 @@ public class VoicePlayerView extends LinearLayout implements ChatVoiceSessionHel
         imgPlay.setVisibility(VISIBLE);
     }
 
+    // KHANDAQ: re-bind of a recycled row. Used to stop the audio and reset progress to 0 — now it
+    // only re-wires the view to the global playback state.
     public void refreshPlayer(String audioPath){
-        path = audioPath;
-        if (mediaPlayer != null){
-            try{
-                if (mediaPlayer.isPlaying()){
-                    mediaPlayer.stop();
-                }
-            // mediaPlayer.release();
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-        }
-        if (mediaPlayer == null)
-        {
-            // mediaPlayer = null;
-            mediaPlayer = new MediaPlayer();
-        }
-        mediaPlayer.reset();
-        Log.i("VoicePlayerView", "VoicePlayerView:refreshPlayer:new MediaPlayer()");
-        if (path != null) {
-            try {
-                Log.i("VoicePlayerView", "VoicePlayerView:refreshPlayer:setDataSource");
-                mediaPlayer.setDataSource(path);
-                mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                mediaPlayer.prepare();
-                mediaPlayer.setVolume(10, 10);
-                //START and PAUSE are in other listeners
-                mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                    @Override
-                    public void onPrepared(final MediaPlayer mp) {
-                        ((Activity) context).runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                seekBar.setMax(mp.getDuration());
-                                seekBar.setProgress(0);
-                                if (seekbarV.getVisibility() == VISIBLE){
-                                    seekbarV.setMax(mp.getDuration());
-                                    seekbarV.setProgress(0);
-                                }
-
-                                if (imgPause.getVisibility() == View.VISIBLE){
-                                    imgPause.setVisibility(View.GONE);
-                                    imgPlay.setVisibility(View.VISIBLE);
-                                }
-                                Log.i("VoicePlayerView", "VoicePlayerView:refreshPlayer:setOnPreparedListener");
-                                txtProcess.setText(convertSecondsToHMmSs(mp.getDuration() / 1000));
-                            }
-                        });
-                    }
-                });
-                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                    @Override
-                    public void onCompletion(MediaPlayer mp) {
-                        ((Activity) context).runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                imgPause.setVisibility(View.GONE);
-                                imgPlay.setVisibility(View.VISIBLE);
-                            }
-                        });
-                    }
-                });
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                Log.i("VoicePlayerView", "VoicePlayerView:refreshPlayer:EE01:" + e.getMessage());
-            }
-        }
-
-
-        ((Activity) context).runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                seekBar.setOnSeekBarChangeListener(seekBarListener);
-                imgPlay.setOnClickListener(imgPlayClickListener);
-                imgPause.setOnClickListener(imgPauseClickListener);
-                imgShare.setOnClickListener(imgShareClickListener);
-                if (seekbarV.getVisibility() == VISIBLE){
-                    // seekbarV.updateVisualizer(new File(path));
-                    seekbarV.setOnSeekBarChangeListener(seekBarListener);
-                    seekbarV.updateVisualizer(new File(path));
-                    Log.i("VoicePlayerView", "VoicePlayerView:refreshPlayer:updateVisualizer");
-                }
-            }
-        });
-
+        bindAudio(audioPath);
         seekBar.invalidate();
         seekbarV.invalidate();
         this.invalidate();

@@ -38,6 +38,8 @@ public final class ChatVoiceSessionHelper
     /** Call before starting microphone capture. */
     public static void onVoiceRecordingStarting()
     {
+        // KHANDAQ: playback is global now — pause it (keeps the resume position) before recording.
+        ChatVoicePlaybackManager.pause();
         stopAllVisibleVoicePlayback();
     }
 

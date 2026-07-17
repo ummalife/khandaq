@@ -36,7 +36,12 @@ import info.guardianproject.iocipher.File;
 import info.guardianproject.iocipher.RandomAccessFile;
 
 
-    public class vVoicePlayerView extends LinearLayout implements ChatVoiceSessionHelper.ActiveVoicePlayer {
+    public class vVoicePlayerView extends LinearLayout
+            implements ChatVoiceSessionHelper.ActiveVoicePlayer,
+            com.zoffcc.applications.trifa.ChatVoicePlaybackManager.Listener {
+
+    // KHANDAQ: this bubble plays files from the encrypted IOCipher VFS (incoming voice)
+    private static final boolean IS_VFS = true;
 
     private int playPaueseBackgroundColor, shareBackgroundColor, viewBackgroundColor,
             seekBarProgressColor, seekBarThumbColor, progressTimeColor, timingBackgroundColor,
@@ -56,26 +61,11 @@ import info.guardianproject.iocipher.RandomAccessFile;
     private MediaPlayer mediaPlayer;
     private ProgressBar pb_play;
 
-    // KHANDAQ (#20): Telegram-style single voice playback — registered with the shared coordinator
-    // (ChatVoiceSessionHelper) so a newly started voice pauses whichever one was playing before.
+    // KHANDAQ: playback moved to the global ChatVoicePlaybackManager (single MediaPlayer app-wide,
+    // survives row recycling + chat switches, remembers per-file position).
     @Override
     public void pauseForHandoff() {
-        try {
-            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-                mediaPlayer.pause();
-            }
-        } catch (Exception ignored) {
-        }
-        try {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.GONE);
-                    imgPlay.setVisibility(View.VISIBLE);
-                }
-            });
-        } catch (Exception ignored) {
-        }
+        // no-op: exclusivity is guaranteed by ChatVoicePlaybackManager
     }
 
     private PlayerVisualizerSeekbar seekbarV;
@@ -192,55 +182,80 @@ import info.guardianproject.iocipher.RandomAccessFile;
     }
 
 
-    //Set the audio source and prepare mediaplayer
+    //Set the audio source — playback state lives in ChatVoicePlaybackManager
 
     public void setAudio(String vpath){
-        vaudiopath = vpath;
-        mediaPlayer = new MediaPlayer();
-        Log.i("vVoicePlayerView", "vVoicePlayerView:setAudio:new MediaPlayer()");
-        if (vaudiopath != null) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                {
-                    mediaPlayer.setDataSource(new VFileMediaDataSource(new info.guardianproject.iocipher.RandomAccessFile(vpath, "r")));
-                }
-                mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                mediaPlayer.prepare();
-                mediaPlayer.setVolume(10, 10);
-                //START and PAUSE are in other listeners
-                mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                    @Override
-                    public void onPrepared(MediaPlayer mp) {
-                        seekBar.setMax(mp.getDuration());
-                        if (seekbarV.getVisibility() == VISIBLE){
-                            seekbarV.setMax(mp.getDuration());
-                        }
-                        txtProcess.setText("00:00:00/"+convertSecondsToHMmSs(mp.getDuration() / 1000));
-                    }
-                });
-                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                    @Override
-                    public void onCompletion(MediaPlayer mp) {
-                        imgPause.setVisibility(View.GONE);
-                        imgPlay.setVisibility(View.VISIBLE);
-                    }
-                });
+        bindAudio(vpath);
+    }
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    // KHANDAQ: bind = wire listeners + render current global state. NEVER touches the global
+    // playback (a row re-bind used to stop the audio and reset progress to 0).
+    private void bindAudio(String vpath) {
+        vaudiopath = vpath;
 
         seekBar.setOnSeekBarChangeListener(seekBarListener);
         imgPlay.setOnClickListener(imgPlayClickListener);
         imgPause.setOnClickListener(imgPauseClickListener);
         imgShare.setOnClickListener(imgShareClickListener);
-        if (seekbarV.getVisibility() == VISIBLE){
-            seekbarV.vupdateVisualizer(new info.guardianproject.iocipher.File(vpath));
+        if (seekbarV.getVisibility() == VISIBLE && vaudiopath != null){
+            seekbarV.setOnSeekBarChangeListener(seekBarListener);
+            seekbarV.vupdateVisualizer(new info.guardianproject.iocipher.File(vaudiopath));
         }
 
-        seekbarV.setOnSeekBarChangeListener(seekBarListener);
-        // seekbarV.vupdateVisualizer(new File(path));
+        com.zoffcc.applications.trifa.ChatVoicePlaybackManager.attach(this);
+        renderFromManager();
+    }
+
+    // KHANDAQ: paint play/pause + progress + time from the global manager state.
+    private void renderFromManager() {
+        if (vaudiopath == null) {
+            return;
+        }
+        final int dur = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.durationMs(vaudiopath, IS_VFS);
+        final boolean mine = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.isActivePath(vaudiopath);
+        final boolean playing = mine && com.zoffcc.applications.trifa.ChatVoicePlaybackManager.isPlaying();
+        final int pos = com.zoffcc.applications.trifa.ChatVoicePlaybackManager.positionMs(vaudiopath);
+        applyPlaybackUi(playing, pos, dur);
+    }
+
+    private void applyPlaybackUi(final boolean playing, final int rawPos, final int dur) {
+        if (dur > 0) {
+            seekBar.setMax(dur);
+            if (seekbarV.getVisibility() == VISIBLE) {
+                seekbarV.setMax(dur);
+            }
+        }
+        imgPause.setVisibility(playing ? View.VISIBLE : View.GONE);
+        imgPlay.setVisibility(playing ? View.GONE : View.VISIBLE);
+
+        // at (or within 400ms of) the end → show as reset
+        final int pos = (dur > 0 && rawPos > 0 && dur - rawPos <= 400) ? 0 : rawPos;
+        seekBar.setProgress(pos);
+        if (seekbarV.getVisibility() == VISIBLE) {
+            seekbarV.setProgress(pos);
+            if (dur > 0) {
+                seekbarV.updatePlayerPercent((float) pos / dur);
+            }
+        }
+        if (dur > 0) {
+            txtProcess.setText(pos > 0
+                    ? convertSecondsToHMmSs(pos / 1000) + " / " + convertSecondsToHMmSs(dur / 1000)
+                    : convertSecondsToHMmSs(dur / 1000));
+        }
+    }
+
+    // KHANDAQ: manager tick (UI thread) — live progress if this bubble's file is the active one,
+    // otherwise the remembered position of this file.
+    @Override
+    public void onVoicePlaybackTick(final String activePath, final boolean playing, final int positionMs) {
+        if (vaudiopath == null) {
+            return;
+        }
+        final boolean mine = vaudiopath.equals(activePath);
+        final int dur = seekBar.getMax();
+        final int pos = mine ? positionMs
+                : com.zoffcc.applications.trifa.ChatVoicePlaybackManager.positionMs(vaudiopath);
+        applyPlaybackUi(mine && playing, pos, dur);
     }
 
 
@@ -250,25 +265,12 @@ import info.guardianproject.iocipher.RandomAccessFile;
     OnClickListener imgPlayClickListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.VISIBLE);
-                    imgPlay.setVisibility(View.GONE);
-                }
-            });
-
             try{
                 ChatVoiceSessionHelper.onVoicePlaybackStarting();
-                ChatVoiceSessionHelper.becomeActiveVoicePlayer(vVoicePlayerView.this);
-                if (mediaPlayer != null){
-                    mediaPlayer.start();
-                }
-                update(mediaPlayer, txtProcess, seekBar, context);
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.play(vaudiopath, IS_VFS);
             }catch (Exception e){
                 e.printStackTrace();
             }
-
         }
     };
 
@@ -278,74 +280,37 @@ import info.guardianproject.iocipher.RandomAccessFile;
         @Override
         public void onProgressChanged(final SeekBar seekBar, final int progress, boolean fromUser) {
             if (fromUser) {
-                ((Activity) context).runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try
-                        {
-                            mediaPlayer.seekTo(progress);
-                            update(mediaPlayer, txtProcess, seekBar, context);
-                            if (seekbarV.getVisibility() == VISIBLE)
-                            {
-                                seekbarV.updatePlayerPercent((float) mediaPlayer.getCurrentPosition() / mediaPlayer.getDuration());
-                            }
-                        }
-                        catch(Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
-                });
+                try {
+                    com.zoffcc.applications.trifa.ChatVoicePlaybackManager.seekTo(vaudiopath, progress);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
 
         @Override
         public void onStartTrackingTouch(SeekBar seekBar) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.GONE);
-                    imgPlay.setVisibility(View.VISIBLE);
-                }
-            });
         }
 
         @Override
         public void onStopTrackingTouch(SeekBar seekBar) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPlay.setVisibility(View.GONE);
-                    imgPause.setVisibility(View.VISIBLE);
-                    try{
-                        ChatVoiceSessionHelper.onVoicePlaybackStarting();
-                        ChatVoiceSessionHelper.becomeActiveVoicePlayer(vVoicePlayerView.this);
-                        mediaPlayer.start();
-                    }catch (Exception e){
-                        e.printStackTrace();
-                    }
-                }
-            });
-
+            try{
+                ChatVoiceSessionHelper.onVoicePlaybackStarting();
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.play(vaudiopath, IS_VFS);
+            }catch (Exception e){
+                e.printStackTrace();
+            }
         }
     };
 
     OnClickListener imgPauseClickListener = new OnClickListener() {
         @Override
         public void onClick(View v) {
-            ((Activity) context).runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    imgPause.setVisibility(View.GONE);
-                    imgPlay.setVisibility(View.VISIBLE);
-                    try{
-                        mediaPlayer.pause();
-                    }catch (Exception e){
-                        e.printStackTrace();
-                    }
-                }
-            });
-
+            try{
+                com.zoffcc.applications.trifa.ChatVoicePlaybackManager.pause();
+            }catch (Exception e){
+                e.printStackTrace();
+            }
         }
     };
 
@@ -355,63 +320,8 @@ import info.guardianproject.iocipher.RandomAccessFile;
         }
     };
 
-    //Updating seekBar in realtime
-    private void update(final MediaPlayer mediaPlayer, final TextView time, final SeekBar seekBar, final Context context) {
-        ((Activity)context).runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try
-                {
-                    seekBar.setProgress(mediaPlayer.getCurrentPosition());
-                }
-                catch(Exception e)
-                {
-                    Log.i("vVoicePlayerView", "vVoicePlayerView:update:EE01:" + e.getMessage() + " mediaPlayer=" + mediaPlayer);
-                }
-                if (seekbarV.getVisibility() == VISIBLE){
-                    seekbarV.setProgress(mediaPlayer.getCurrentPosition());
-                    seekbarV.updatePlayerPercent((float) mediaPlayer.getCurrentPosition() / mediaPlayer.getDuration());
-                }
-
-
-
-                if (mediaPlayer.getDuration() - mediaPlayer.getCurrentPosition() > 100) {
-                    time.setText(convertSecondsToHMmSs(mediaPlayer.getCurrentPosition() / 1000) + " / " + convertSecondsToHMmSs(mediaPlayer.getDuration() / 1000));
-                }
-                else {
-                    time.setText(convertSecondsToHMmSs(mediaPlayer.getDuration() / 1000));
-                    seekBar.setProgress(0);
-                    if (seekbarV.getVisibility() == VISIBLE){
-                        seekbarV.updatePlayerPercent(0);
-                        seekbarV.setProgress(0);
-                    }
-                }
-                Handler handler = new Handler();
-                try{
-                    Runnable runnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            try{
-                                if (mediaPlayer.getCurrentPosition() > -1) {
-                                    try {
-                                        update(mediaPlayer, time, seekBar, context);
-                                    } catch (Exception e) {
-                                        // e.printStackTrace();
-                                    }
-                                }
-                            }catch (Exception e){
-                                // e.printStackTrace();
-                            }
-                        }
-                    };
-                    handler.postDelayed(runnable, 500);
-                }catch (Exception e){
-                    e.printStackTrace();
-                }
-
-            }
-        });
-    }
+    // KHANDAQ: the old per-view update() polling loop is gone — progress comes from
+    // ChatVoicePlaybackManager ticks (onVoicePlaybackTick above).
 
     //Convert long milli seconds to a formatted String to display it
 
@@ -419,74 +329,22 @@ import info.guardianproject.iocipher.RandomAccessFile;
         long s = seconds % 60;
         long m = (seconds / 60) % 60;
         long h = (seconds / (60 * 60)) % 24;
-        return String.format("%02d:%02d:%02d", h,m,s);
+        // KHANDAQ (Figma voice bubble): short "m:ss" (drop leading hours when 0) instead of verbose "00:00:00"
+        if (h > 0) {
+            return String.format("%d:%02d:%02d", h, m, s);
+        }
+        return String.format("%d:%02d", m, s);
     }
 
-    //These both functions to avoid mediaplayer errors
+    // KHANDAQ: rows get detached/recycled all the time while scrolling and when leaving the chat —
+    // that must NOT stop the global playback anymore. Playback lifetime is owned by
+    // ChatVoicePlaybackManager; these lifecycle hooks are intentionally no-ops now.
 
     public void onStop()
     {
-        try
-        {
-            mediaPlayer.stop();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("vVoicePlayerView", "vVoicePlayerView:onStop:EE01:" + e.getMessage());
-        }
-
-        try
-        {
-            mediaPlayer.reset();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("vVoicePlayerView", "vVoicePlayerView:onStop:EE02:" + e.getMessage());
-        }
-
-        try
-        {
-            mediaPlayer.release();
-            Log.i("vVoicePlayerView", "vVoicePlayerView:mediaPlayer.release()");
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("vVoicePlayerView", "vVoicePlayerView:onStop:EE03:" + e.getMessage());
-        }
-
-        mediaPlayer = null;
     }
 
     public void onPause(){
-        Log.i("vVoicePlayerView", "vVoicePlayerView:onPause():mediaPlayer=" + mediaPlayer);
-        try{
-            if (mediaPlayer != null)
-            {
-                Log.i("vVoicePlayerView", "vVoicePlayerView:onPause():mediaPlayer.isPlaying()=" + mediaPlayer.isPlaying());
-                if (mediaPlayer.isPlaying())
-                {
-                    mediaPlayer.pause();
-                    Log.i("vVoicePlayerView", "vVoicePlayerView:onPause():DONE ***");
-                    mediaPlayer.stop();
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-            Log.i("vVoicePlayerView", "vVoicePlayerView:onPause:EE01:" + e.getMessage());
-        }
-
-        ((Activity) context).runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                imgPause.setVisibility(View.GONE);
-                imgPlay.setVisibility(View.VISIBLE);
-            }
-        });
     }
 
 
@@ -541,98 +399,10 @@ import info.guardianproject.iocipher.RandomAccessFile;
         imgPlay.setVisibility(VISIBLE);
     }
 
+    // KHANDAQ: re-bind of a recycled row. Used to stop the audio and reset progress to 0 — now it
+    // only re-wires the view to the global playback state.
     public void refreshPlayer(String vpath){
-        vaudiopath = vpath;
-        if (mediaPlayer != null){
-            try{
-                if (mediaPlayer.isPlaying()){
-                    mediaPlayer.stop();
-                }
-            // mediaPlayer.release();
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-        }
-        if (mediaPlayer == null)
-        {
-            // mediaPlayer = null;
-            mediaPlayer = new MediaPlayer();
-        }
-        mediaPlayer.reset();
-        Log.i("vVoicePlayerView", "vVoicePlayerView:refreshPlayer:new MediaPlayer()");
-        if (vpath != null) {
-            try {
-                Log.i("vVoicePlayerView", "vVoicePlayerView:refreshPlayer:setDataSource");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                {
-                    mediaPlayer.setDataSource(new VFileMediaDataSource(new RandomAccessFile(vpath, "r")));
-                }
-                mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                mediaPlayer.prepare();
-                mediaPlayer.setVolume(10, 10);
-                //START and PAUSE are in other listeners
-                mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                    @Override
-                    public void onPrepared(final MediaPlayer mp) {
-                        ((Activity) context).runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                seekBar.setMax(mp.getDuration());
-                                seekBar.setProgress(0);
-                                if (seekbarV.getVisibility() == VISIBLE){
-                                    seekbarV.setMax(mp.getDuration());
-                                    seekbarV.setProgress(0);
-                                }
-
-                                if (imgPause.getVisibility() == View.VISIBLE){
-                                    imgPause.setVisibility(View.GONE);
-                                    imgPlay.setVisibility(View.VISIBLE);
-                                }
-                                Log.i("vVoicePlayerView", "vVoicePlayerView:refreshPlayer:setOnPreparedListener");
-                                txtProcess.setText("00:00:00/"+convertSecondsToHMmSs(mp.getDuration() / 1000));
-                            }
-                        });
-                    }
-                });
-                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                    @Override
-                    public void onCompletion(MediaPlayer mp) {
-                        ((Activity) context).runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                imgPause.setVisibility(View.GONE);
-                                imgPlay.setVisibility(View.VISIBLE);
-                            }
-                        });
-                    }
-                });
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                Log.i("vVoicePlayerView", "vVoicePlayerView:refreshPlayer:EE01:" + e.getMessage());
-            }
-        }
-
-
-        ((Activity) context).runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                seekBar.setOnSeekBarChangeListener(seekBarListener);
-                imgPlay.setOnClickListener(imgPlayClickListener);
-                imgPause.setOnClickListener(imgPauseClickListener);
-                imgShare.setOnClickListener(imgShareClickListener);
-                if (seekbarV.getVisibility() == VISIBLE){
-                    // seekbarV.vupdateVisualizer(new File(path));
-                    seekbarV.setOnSeekBarChangeListener(seekBarListener);
-                    if (vpath != null)
-                    {
-                        seekbarV.vupdateVisualizer(new File(vpath));
-                    }
-                    Log.i("vVoicePlayerView", "vVoicePlayerView:refreshPlayer:vupdateVisualizer");
-                }
-            }
-        });
-
+        bindAudio(vpath);
         seekBar.invalidate();
         seekbarV.invalidate();
         this.invalidate();

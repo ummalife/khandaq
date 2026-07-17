@@ -493,7 +493,8 @@ public class MessageListFragment extends Fragment
         Log.i(TAG, "onPause");
         super.onPause();
 
-        stopVisibleVoicePlayback();
+        // KHANDAQ: voice playback is global (ChatVoicePlaybackManager) and keeps playing when the
+        // user leaves this chat — do NOT stop it here anymore (tester report).
 
         global_showing_messageview = false;
         MainActivity.message_list_fragment = null;

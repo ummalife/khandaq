@@ -426,7 +426,8 @@ public class GroupMessageListFragment extends Fragment
     {
         super.onPause();
 
-        stopVisibleVoicePlayback();
+        // KHANDAQ: voice playback is global (ChatVoicePlaybackManager) and keeps playing when the
+        // user leaves this group — do NOT stop it here anymore (tester report).
 
         global_showing_anygroupview = false;
         MainActivity.group_message_list_fragment = null;

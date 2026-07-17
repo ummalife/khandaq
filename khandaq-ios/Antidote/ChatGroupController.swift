@@ -242,7 +242,10 @@ class ChatGroupController: PortraitChatController {
             guard let self = self else {
                 return text
             }
-            return self.replyController.composeOutgoingText(text)
+            let composed = self.replyController.composeOutgoingText(text)
+            // KHANDAQ (dup fix): purge the PERSISTED reply too — see ChatPrivateController
+            self.replyController.savePending(forChatId: self.chat.uniqueIdentifier)
+            return composed
         }
 
         ngcVideoOverlay.onQualityToggle = { [weak self] in

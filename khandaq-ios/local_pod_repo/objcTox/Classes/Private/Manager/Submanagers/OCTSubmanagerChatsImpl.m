@@ -609,8 +609,9 @@ static void triggerPush(NSString *used_pushToken,
 
     if (msgv3HashHex != nil)
     {
-        // HINT: check for double message, but only select incoming messages (senderUniqueIdentifier != NULL)
-        NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@ AND senderUniqueIdentifier != nil",
+        // KHANDAQ (dup fix): dedup by hash across BOTH directions — a copy matching one of OUR OWN
+        // outgoing hashes (echo/relay) must be ignored too (Android-parity, HelperGeneric).
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@",
                                   chat.uniqueIdentifier, msgv3HashHex];
         RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
         OCTMessageAbstract *message_found = [results firstObject];
@@ -792,23 +793,23 @@ static NSString *const kKQPendingDeletesKey = @"KQPendingFriendDeletes";
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@ AND senderUniqueIdentifier == nil",
                               chat.uniqueIdentifier, msgv3HashHex];
 
-    // HINT: we still sort and use only 1 result row, just in case more than 1 row is returned.
-    //       but if more than 1 row is returned that would actually be an error.
-    //       we use the newest message with this Hash
     RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
     results = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
 
-    OCTMessageAbstract *message_found = [results firstObject];
-
-    if (! message_found) {
+    if (results.count == 0) {
         return;
     }
 
     OCTLogInfo(@"friendHighLevelACK recevied from friend %@", friend);
 
-    [realmManager updateObject:message_found withBlock:^(OCTMessageAbstract *theMessage) {
-        theMessage.messageText.isDelivered = YES;
-    }];
+    // KHANDAQ (dup fix): mark ALL rows carrying this hash as delivered — with a same-hash pair
+    // (e.g. after a resend) marking only the first left a permanent ✓/✓✓ split and made the
+    // delivery watchdog resend the "undelivered" twin every few seconds.
+    for (OCTMessageAbstract *message_found in results) {
+        [realmManager updateObject:message_found withBlock:^(OCTMessageAbstract *theMessage) {
+            theMessage.messageText.isDelivered = YES;
+        }];
+    }
 }
 
 

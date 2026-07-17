@@ -1426,7 +1426,11 @@ extension ChatPrivateController: UIScrollViewDelegate {
             }
 
             if visibleMessages != previous {
-                tableView.reloadData()
+                // KHANDAQ (overlap fix): never reloadData synchronously from a scroll callback —
+                // it can fire reentrantly inside endUpdates' own contentOffset adjustment.
+                DispatchQueue.main.async { [weak self] in
+                    self?.tableView?.reloadData()
+                }
             }
         }
 
@@ -1755,7 +1759,12 @@ private extension ChatPrivateController {
             guard let self = self else {
                 return text
             }
-            return self.replyController.composeOutgoingText(text)
+            let composed = self.replyController.composeOutgoingText(text)
+            // KHANDAQ (dup fix): purge the PERSISTED reply too (savePending with cleared meta
+            // removes the key) — a stale UserDefaults copy resurrected the reply bar after a
+            // relaunch, leading users to re-send the same reply → duplicate bubbles.
+            self.replyController.savePending(forChatId: self.chat.uniqueIdentifier)
+            return composed
         }
         // KHANDAQ design (Figma): the "+" attachment menu's "Геолокация" shares the current location once.
         chatInputViewManager.onShareLocation = { [weak self] in
@@ -1908,14 +1917,21 @@ private extension ChatPrivateController {
                             // displayableRowCount() = min(old visibleMessages, new messages.count), which on
                             // a paginated chat is one short of what the table expects → invalid-batch abort.
                             self.visibleMessages = newVisible
-                            tableView.beginUpdates()
-                            if !deletePaths.isEmpty {
-                                tableView.deleteRows(at: deletePaths, with: .top)
+                            // KHANDAQ (overlap fix): apply the batch UN-animated. An in-flight .top row
+                            // animation collided with the reloadRows/reloadData that routinely land
+                            // 50-200ms later (delivered/tssent updates, pagination), leaving ghost
+                            // cells drawn over their neighbours and rows stuck at estimated height
+                            // (tester: «слиплись сообщения», clipped bubbles).
+                            UIView.performWithoutAnimation {
+                                tableView.beginUpdates()
+                                if !deletePaths.isEmpty {
+                                    tableView.deleteRows(at: deletePaths, with: .none)
+                                }
+                                if !insertPaths.isEmpty {
+                                    tableView.insertRows(at: insertPaths, with: .none)
+                                }
+                                tableView.endUpdates()
                             }
-                            if !insertPaths.isEmpty {
-                                tableView.insertRows(at: insertPaths, with: .top)
-                            }
-                            tableView.endUpdates()
                             if !modifications.isEmpty {
                                 self.updateTableViewWithModifications(modifications)
                             }
@@ -1983,7 +1999,10 @@ private extension ChatPrivateController {
             let indexPath = IndexPath(row: index, section: 0)
 
             if message.messageFile == nil {
-                tableView.reloadRows(at: [indexPath], with: .none)
+                // KHANDAQ (overlap fix): atomic, un-animated — see the insert batch above
+                UIView.performWithoutAnimation {
+                    tableView.reloadRows(at: [indexPath], with: .none)
+                }
                 continue
             }
 

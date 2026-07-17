@@ -182,6 +182,11 @@
     return self.friends;
 }
 
+- (id<OCTSubmanagerFiles>)managerGetFiles
+{
+    return self.files;
+}
+
 #pragma mark -  Private
 
 - (NSData *)getSavedDataFromPath:(NSString *)path

@@ -245,7 +245,9 @@ class CallActiveController: CallBaseController {
 // MARK: Actions
 extension CallActiveController {
     @objc func tapOnView() {
-        guard !smallContainerView.isHidden else {
+        // KHANDAQ: the bottom row is now the ONLY layout, so tap-to-hide must stay a video-call
+        // feature — otherwise any stray tap during an audio call hides the controls.
+        guard videoFeed != nil || videoPreviewLayer != nil else {
             return
         }
 
@@ -412,7 +414,9 @@ private extension CallActiveController {
         }
 
         smallContainerView.snp.makeConstraints {
-            smallContainerViewBottomConstraint = $0.bottom.equalTo(view).offset(Constants.SmallBottomOffset).constraint
+            // KHANDAQ: pin the control row above the home indicator (safe area), not the raw
+            // screen bottom — on notch devices the row used to sit under the gesture bar.
+            smallContainerViewBottomConstraint = $0.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(Constants.SmallBottomOffset).constraint
             $0.centerX.equalTo(view)
         }
 
@@ -450,21 +454,11 @@ private extension CallActiveController {
     }
 
     func updateViewsWithTraitCollection(_ traitCollection: UITraitCollection) {
-        if videoFeed != nil || videoPreviewLayer != nil {
-            bigContainerView.isHidden = true
-            smallContainerView.isHidden = false
-            return
-        }
-
-        switch traitCollection.verticalSizeClass {
-            case .regular:
-                bigContainerView.isHidden = false
-                smallContainerView.isHidden = true
-            case .unspecified:
-                fallthrough
-            case .compact:
-                bigContainerView.isHidden = true
-                smallContainerView.isHidden = false
-        }
+        // KHANDAQ: one uniform bottom-row control layout (mic/speaker/video/hangup) on all devices
+        // and orientations. The old size-class switch picked a scattered mid-screen layout on
+        // hRegular phones, and stale .unspecified traits at loadView made the choice
+        // device/timing-dependent (iPhone 13 got the scattered layout, iPhone 11 the row).
+        bigContainerView.isHidden = true
+        smallContainerView.isHidden = false
     }
 }

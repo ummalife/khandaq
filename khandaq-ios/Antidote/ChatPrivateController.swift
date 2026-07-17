@@ -2115,6 +2115,15 @@ private extension ChatPrivateController {
 
         let hasPendingDelivery = hasPendingOutgoingDelivery()
 
+        // KHANDAQ: flush any pending table layout (e.g. the reloadData() a message deletion just
+        // issued in the notification block) OUTSIDE the animation. Otherwise the layoutIfNeeded()
+        // inside UIView.animate below re-lays-out the freshly reloaded cells within the animation
+        // context, animating their frames from scratch — the transparent message list flashed over
+        // the doodle background once per delete (tester: «фон подмигивает» при удалении).
+        UIView.performWithoutAnimation {
+            tableView.layoutIfNeeded()
+        }
+
         UIView.animate(withDuration: Constants.NewMessageViewAnimationDuration, animations: {
         if friend.isConnected {
             if tableView.tableHeaderView === self.fauxOfflineHeaderView {

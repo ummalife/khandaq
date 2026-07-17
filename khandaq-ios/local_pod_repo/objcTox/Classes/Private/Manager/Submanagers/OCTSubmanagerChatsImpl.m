@@ -4,6 +4,7 @@
 
 #import "OCTSubmanagerChatsImpl.h"
 #import "OCTSubmanagerFriends.h"
+#import "OCTSubmanagerFiles.h"
 #import "OCTTox.h"
 #import "OCTRealmManager.h"
 #import "OCTMessageAbstract.h"
@@ -485,6 +486,9 @@ static void triggerPush(NSString *used_pushToken,
 
     if (friend.isConnected) {
         [self resendUndeliveredMessagesToFriend:friend];
+        // KHANDAQ (#179): deliver delete-for-both retractions that were queued while this friend
+        // was offline (mirrors Android's flushPendingDeletesForFriend on reconnect).
+        [self flushPendingDeletesForFriend:friend];
     }
 }
 
@@ -500,6 +504,9 @@ static void triggerPush(NSString *used_pushToken,
     for (OCTFriend *friend in friends) {
         if (friend.isConnected) {
             [self resendUndeliveredMessagesToFriend:friend];
+            // KHANDAQ (#179): retry queued deletions too — covers half-dead links where the
+            // initial send "succeeded" into a dying connection.
+            [self flushPendingDeletesForFriend:friend];
         }
     }
 }
@@ -508,6 +515,13 @@ static void triggerPush(NSString *used_pushToken,
 
 - (void)resendUndeliveredMessagesToFriend:(OCTFriend *)friend
 {
+    // KHANDAQ: flush queued files/voice BEFORE queued texts. The receiver pins a file bubble's
+    // position (dateInterval) at file_recv REQUEST arrival — not at accept/complete — and toxcore
+    // delivers lossless packets in-order, so issuing queued file_send requests first preserves the
+    // original send order (tester report: offline voice arrived AFTER later texts). tox_file_send
+    // returns immediately; texts are delayed by microseconds, not by the transfer itself.
+    [[self.dataSource managerGetFiles] resendPendingOutgoingFilesToAllOnlineFriends];
+
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
@@ -518,6 +532,9 @@ static void triggerPush(NSString *used_pushToken,
                               chat.uniqueIdentifier];
 
     RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+
+    // KHANDAQ: preserve intra-batch order — RLMResults is unsorted by default
+    results = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
 
     for (OCTMessageAbstract *message in results) {
         OCTLogInfo(@"Resending message to friend %@", friend);
@@ -636,7 +653,92 @@ static void triggerPush(NSString *used_pushToken,
 }
 
 // KHANDAQ (#179): retract an OWN 1:1 text message on the peer too, then delete it locally.
-// Best effort — an offline peer or an old client keeps its copy (packet is dropped silently).
+// The retraction is NOT fire-and-forget anymore: if the peer's tox link is down (the common
+// real-phone case — testers saw "deleted locally, peer keeps it"), the delete is stashed per
+// friend and re-sent when the friend reconnects — mirroring Android's HelperMessageDelete queue.
+static NSString *const kKQPendingDeletesKey = @"KQPendingFriendDeletes";
+
+- (NSData *)kqDeletePacketWithHashHex:(NSString *)hashHex
+{
+    if (hashHex.length != 64) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:40];
+    const uint8_t header[4] = { 187, 'K', 'Q', 1 };
+    [pkt appendBytes:header length:4];
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int b = 0;
+        [[NSScanner scannerWithString:[hashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+        uint8_t byte = (uint8_t)b;
+        [pkt appendBytes:&byte length:1];
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    const uint8_t tsbe[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tsbe length:4];
+    return pkt;
+}
+
+- (void)stashPendingDeleteForFriendPK:(NSString *)publicKey hashHex:(NSString *)hashHex
+{
+    if (publicKey.length == 0 || hashHex.length != 64) {
+        return;
+    }
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    NSMutableDictionary *all = [[ud dictionaryForKey:kKQPendingDeletesKey] mutableCopy] ?: [NSMutableDictionary new];
+    NSMutableArray *list = [all[publicKey] mutableCopy] ?: [NSMutableArray new];
+    if (! [list containsObject:hashHex]) {
+        if (list.count > 100) {
+            [list removeAllObjects]; // cap like Android
+        }
+        [list addObject:hashHex];
+    }
+    all[publicKey] = list;
+    [ud setObject:all forKey:kKQPendingDeletesKey];
+    OCTLogInfo(@"deleteMessageForBoth: stashed pending delete for %@ (%lu queued)",
+               publicKey, (unsigned long)list.count);
+}
+
+- (void)flushPendingDeletesForFriend:(OCTFriend *)friend
+{
+    if (friend.publicKey.length == 0) {
+        return;
+    }
+    NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+    NSMutableDictionary *all = [[ud dictionaryForKey:kKQPendingDeletesKey] mutableCopy];
+    NSArray *list = all[friend.publicKey];
+    if (list.count == 0) {
+        return;
+    }
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxFriendNumber friendNumber = [tox friendNumberWithPublicKey:friend.publicKey error:nil];
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return;
+    }
+    NSMutableArray *remaining = [NSMutableArray new];
+    for (NSString *hashHex in list) {
+        NSData *pkt = [self kqDeletePacketWithHashHex:hashHex]; // fresh ts, like Android's flush
+        if (pkt == nil) {
+            continue;
+        }
+        if (! [tox sendLosslessPacketWithFriendNumber:friendNumber bytes:pkt error:nil]) {
+            [remaining addObject:hashHex];
+        }
+    }
+    OCTLogInfo(@"deleteMessageForBoth: flushed %lu pending deletes to %@ (%lu remain)",
+               (unsigned long)(list.count - remaining.count), friend.publicKey,
+               (unsigned long)remaining.count);
+    if (remaining.count == 0) {
+        [all removeObjectForKey:friend.publicKey];
+    }
+    else {
+        all[friend.publicKey] = remaining;
+    }
+    [ud setObject:all forKey:kKQPendingDeletesKey];
+}
+
 - (void)deleteMessageForBoth:(OCTMessageAbstract *)message
 {
     do {
@@ -653,36 +755,25 @@ static void triggerPush(NSString *used_pushToken,
             break;
         }
 
+        NSString *hashHex = message.messageText.msgv3HashHex;
+        NSData *pkt = [self kqDeletePacketWithHashHex:hashHex];
+
+        BOOL sent = NO;
         OCTToxFriendNumber friendNumber = [[self.dataSource managerGetTox]
                                            friendNumberWithPublicKey:friend.publicKey error:nil];
-        if (friendNumber == kOCTToxFriendNumberFailure) {
-            break;
+        if (pkt != nil && friendNumber != kOCTToxFriendNumberFailure) {
+            sent = [[self.dataSource managerGetTox] sendLosslessPacketWithFriendNumber:friendNumber
+                                                                                 bytes:pkt
+                                                                                 error:nil];
         }
-
-        NSString *hashHex = message.messageText.msgv3HashHex;
-        NSMutableData *pkt = [NSMutableData dataWithCapacity:40];
-        const uint8_t header[4] = { 187, 'K', 'Q', 1 };
-        [pkt appendBytes:header length:4];
-        for (int i = 0; i < 64; i += 2) {
-            unsigned int b = 0;
-            [[NSScanner scannerWithString:[hashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
-            uint8_t byte = (uint8_t)b;
-            [pkt appendBytes:&byte length:1];
+        if (! sent) {
+            // peer offline / link down — queue the retraction, re-sent on reconnect
+            [self stashPendingDeleteForFriendPK:friend.publicKey hashHex:hashHex];
         }
-        uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
-        const uint8_t tsbe[4] = {
-            (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
-            (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
-        };
-        [pkt appendBytes:tsbe length:4];
-
-        [[self.dataSource managerGetTox] sendLosslessPacketWithFriendNumber:friendNumber
-                                                                      bytes:pkt
-                                                                      error:nil];
     }
     while (0);
 
-    // local deletion always happens — even when the retraction could not be delivered
+    // local deletion always happens — even when the retraction could not be delivered yet
     [self removeMessages:@[message]];
 }
 

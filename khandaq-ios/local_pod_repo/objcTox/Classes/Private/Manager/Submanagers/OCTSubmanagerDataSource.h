@@ -9,6 +9,7 @@
 @protocol OCTFileStorageProtocol;
 @protocol OCTSubmanagerChats;
 @protocol OCTSubmanagerFriends;
+@protocol OCTSubmanagerFiles;
 
 /**
  * Notification is send when connection status of friend has changed.
@@ -56,5 +57,6 @@ static NSString *const kOCTSelfConnectionBecameOnlineNotification = @"kOCTSelfCo
 - (BOOL)managerUseFauxOfflineMessaging;
 - (id<OCTSubmanagerChats>)managerGetChats;
 - (id<OCTSubmanagerFriends>)managerGetFriends;
+- (id<OCTSubmanagerFiles>)managerGetFiles;
 
 @end

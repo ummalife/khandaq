@@ -819,6 +819,9 @@ static NSString *const kMessageIdentifierKey = @"kMessageIdentifierKey";
 
     RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
+    // KHANDAQ: preserve intra-batch order — RLMResults is unsorted by default
+    results = [results sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+
     for (OCTMessageAbstract *message in results) {
         OCTLogInfo(@"Resending pending file to friend %@", friend);
         [self retrySendingFile:message failureBlock:^(NSError *error) {

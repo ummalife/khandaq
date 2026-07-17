@@ -248,3 +248,197 @@ class BubbleView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 }
+
+
+// MARK: - KHANDAQ (#192) Telegram-style reaction picker
+
+/// Horizontal floating reaction pill (Telegram-style): a rounded capsule of quick-emoji buttons +
+/// a trailing "expand" button for arbitrary emoji. Replaces the old vertical action-sheet picker.
+/// Uses only pre-iOS-13 UIKit (target-action, solid background) for deployment-target compatibility.
+final class ChatReactionBar: UIView {
+    static let quickReactions = ["❤️", "👍", "👎", "😂", "😮", "😢", "🔥"]
+
+    var onPick: ((String) -> Void)?
+    var onExpand: (() -> Void)?
+
+    static let barHeight: CGFloat = 52
+    static func barWidth() -> CGFloat {
+        // leading(12) + N*44 + N*4 spacing + expand(34) + trailing(10)
+        let n = CGFloat(quickReactions.count)
+        return 12 + n * 44 + n * 4 + 34 + 10
+    }
+
+    init(currentEmoji: String?, dark: Bool) {
+        super.init(frame: .zero)
+
+        backgroundColor = dark ? UIColor(white: 0.16, alpha: 0.98) : UIColor(white: 0.97, alpha: 0.98)
+        layer.cornerRadius = ChatReactionBar.barHeight / 2
+        layer.masksToBounds = true
+
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = 4
+        addSubview(stack)
+        stack.snp.makeConstraints {
+            $0.centerY.equalToSuperview()
+            $0.leading.equalToSuperview().offset(12)
+            $0.trailing.equalToSuperview().offset(-10)
+        }
+
+        for emoji in ChatReactionBar.quickReactions {
+            let b = UIButton(type: .custom)
+            b.setTitle(emoji, for: .normal)
+            b.titleLabel?.font = UIFont.systemFont(ofSize: 30)
+            b.snp.makeConstraints { $0.width.height.equalTo(44) }
+            if emoji == currentEmoji {
+                b.backgroundColor = (dark ? UIColor.white : UIColor.black).withAlphaComponent(0.14)
+                b.layer.cornerRadius = 22
+            }
+            b.addTarget(self, action: #selector(emojiTapped(_:)), for: .touchUpInside)
+            stack.addArrangedSubview(b)
+        }
+
+        // trailing "expand" — opens the full emoji picker for any emoji ("⌄" like Telegram)
+        let expand = UIButton(type: .custom)
+        expand.setTitle("⌄", for: .normal)
+        expand.titleLabel?.font = UIFont.systemFont(ofSize: 22, weight: .semibold)
+        expand.setTitleColor(dark ? UIColor.white.withAlphaComponent(0.8) : UIColor.black.withAlphaComponent(0.5), for: .normal)
+        expand.backgroundColor = (dark ? UIColor.white : UIColor.black).withAlphaComponent(0.10)
+        expand.layer.cornerRadius = 17
+        expand.snp.makeConstraints { $0.width.height.equalTo(34) }
+        expand.addTarget(self, action: #selector(expandTapped), for: .touchUpInside)
+        stack.addArrangedSubview(expand)
+    }
+
+    @objc private func emojiTapped(_ sender: UIButton) {
+        if let emoji = sender.title(for: .normal) {
+            onPick?(emoji)
+        }
+    }
+
+    @objc private func expandTapped() {
+        onExpand?()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+/// Presents a `ChatReactionBar` as a floating overlay anchored above (or below) a message bubble,
+/// with a tap-catcher backdrop. Also handles "expand" → arbitrary-emoji entry via a hidden
+/// emoji-keyboard text field. One instance per chat controller.
+final class ChatReactionPopup: NSObject, UITextFieldDelegate {
+    private var backdrop: UIView?
+    private var bar: ChatReactionBar?
+    private var emojiField: UITextField?
+    private var pickHandler: ((String) -> Void)?
+
+    var isVisible: Bool { return backdrop != nil }
+
+    /// Show the bar above `rect` (message-bubble frame in `host` coordinates).
+    func present(in host: UIView, aboveRect rect: CGRect, currentEmoji: String?, dark: Bool,
+                 onPick: @escaping (String) -> Void) {
+        dismiss(animated: false)
+        pickHandler = onPick
+
+        let backdrop = UIView(frame: host.bounds)
+        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        backdrop.backgroundColor = UIColor.black.withAlphaComponent(0.28) // Telegram-style dim
+        backdrop.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(backdropTapped)))
+        host.addSubview(backdrop)
+        self.backdrop = backdrop
+
+        let bar = ChatReactionBar(currentEmoji: currentEmoji, dark: dark)
+        bar.onPick = { [weak self] emoji in self?.finish(with: emoji) }
+        bar.onExpand = { [weak self] in self?.showEmojiKeyboard() }
+        bar.layer.shadowColor = UIColor.black.cgColor
+        bar.layer.shadowOpacity = 0.22
+        bar.layer.shadowRadius = 12
+        bar.layer.shadowOffset = CGSize(width: 0, height: 4)
+        bar.layer.masksToBounds = false
+        backdrop.addSubview(bar)
+        self.bar = bar
+
+        let barW = min(ChatReactionBar.barWidth(), host.bounds.width - 24)
+        let barH = ChatReactionBar.barHeight
+
+        var x = rect.midX - barW / 2
+        x = max(12, min(x, host.bounds.width - barW - 12))
+        let topSafe = host.safeAreaInsets.top + 8
+        var y = rect.minY - barH - 8
+        if y < topSafe { y = rect.maxY + 8 }
+        bar.frame = CGRect(x: x, y: y, width: barW, height: barH)
+
+        bar.alpha = 0
+        bar.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+        UIView.animate(withDuration: 0.28, delay: 0, usingSpringWithDamping: 0.7,
+                       initialSpringVelocity: 0.5, options: [], animations: {
+            bar.alpha = 1
+            bar.transform = .identity
+        }, completion: nil)
+    }
+
+    @objc private func backdropTapped() { dismiss(animated: true) }
+
+    private func finish(with emoji: String) {
+        let handler = pickHandler
+        dismiss(animated: true)
+        handler?(emoji)
+    }
+
+    private func showEmojiKeyboard() {
+        guard let backdrop = backdrop else { return }
+        // a visually-hidden but on-screen field so the keyboard reliably comes up; the emoji
+        // keyboard is requested explicitly via a custom EmojiTextField (keyboard type Default,
+        // but we prime it) — the user taps any emoji and it's applied.
+        let field = EmojiOnlyTextField(frame: CGRect(x: 20, y: backdrop.bounds.midY, width: 2, height: 20))
+        field.delegate = self
+        field.autocorrectionType = .no
+        field.autocapitalizationType = .none
+        field.tintColor = .clear
+        field.textColor = .clear
+        field.backgroundColor = .clear
+        backdrop.addSubview(field)
+        emojiField = field
+        DispatchQueue.main.async {
+            field.becomeFirstResponder()
+        }
+    }
+
+    // capture the first emoji the user types, apply it
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange,
+                   replacementString string: String) -> Bool {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let emoji = trimmed.first.map(String.init), !emoji.isEmpty {
+            textField.resignFirstResponder()
+            finish(with: emoji)
+        }
+        return false
+    }
+
+    func dismiss(animated: Bool) {
+        emojiField?.resignFirstResponder()
+        emojiField?.removeFromSuperview()
+        emojiField = nil
+        pickHandler = nil
+        let bd = backdrop
+        let b = bar
+        backdrop = nil
+        bar = nil
+        guard animated, let bar = b else { bd?.removeFromSuperview(); return }
+        UIView.animate(withDuration: 0.18, animations: {
+            bar.alpha = 0
+            bar.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+        }, completion: { _ in bd?.removeFromSuperview() })
+    }
+}
+
+/// A text field that opens directly on the emoji keyboard (Telegram-style "expand" for any emoji).
+final class EmojiOnlyTextField: UITextField {
+    override var textInputMode: UITextInputMode? {
+        for mode in UITextInputMode.activeInputModes where mode.primaryLanguage == "emoji" {
+            return mode
+        }
+        return super.textInputMode
+    }
+}

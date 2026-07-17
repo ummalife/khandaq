@@ -27,6 +27,8 @@ class ChatGroupController: PortraitChatController {
 
     fileprivate weak var delegate: ChatGroupControllerDelegate?
     let theme: Theme
+    /// KHANDAQ (#192): Telegram-style floating reaction bar shown above a group message on long-press.
+    let reactionPopup = ChatReactionPopup()
     weak var submanagerGroups: OCTSubmanagerGroups!
     weak var submanagerObjects: OCTSubmanagerObjects!
     fileprivate weak var submanagerFriends: OCTSubmanagerFriends!
@@ -1220,13 +1222,15 @@ extension ChatGroupController: UITableViewDelegate {
             return nil
         }
 
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+        // identifier carries the row so willDisplayContextMenu can float the reaction bar above it
+        return UIContextMenuConfiguration(identifier: NSNumber(value: indexPath.row), previewProvider: nil) { [weak self] _ in
             guard let self = self else {
                 return nil
             }
 
             var actions: [UIAction] = []
-            // KHANDAQ (#192): react to a group TEXT message (broadcasts KQ NGC packet 0x43)
+            // KHANDAQ (#192): "Реакция" opens the Telegram-style horizontal reaction bar (shown after
+            // the context menu dismisses — the system menu renders in its own overlay above our view).
             if message.messageText != nil {
                 actions.append(UIAction(title: String(localized: "chat_react_action")) { _ in
                     let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
@@ -1248,6 +1252,7 @@ extension ChatGroupController: UITableViewDelegate {
             return UIMenu(children: actions)
         }
     }
+
 }
 
 private extension ChatGroupController {

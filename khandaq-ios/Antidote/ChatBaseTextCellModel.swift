@@ -59,6 +59,21 @@ enum ChatReactionsFormat {
         }
         return parts.isEmpty ? nil : parts.joined(separator: "  ")
     }
+
+    /// The emoji the local user currently reacted with (the "-OWN-" actor), or nil.
+    static func ownEmoji(from reactionsJSON: String?) -> String? {
+        guard let json = reactionsJSON, !json.isEmpty,
+              let data = json.data(using: .utf8),
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            return nil
+        }
+        for entry in arr {
+            if let actors = entry["p"] as? [String], actors.contains("-OWN-") {
+                return entry["e"] as? String
+            }
+        }
+        return nil
+    }
 }
 
 class ChatBaseTextCellModel: ChatMovableDateCellModel {

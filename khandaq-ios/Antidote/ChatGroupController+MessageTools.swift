@@ -261,19 +261,14 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         presentGroupReactionPicker(for: message, sourceView: cell)
     }
 
+    // KHANDAQ (#192): Telegram-style horizontal reaction bar above the group message (chip-tap path).
     func presentGroupReactionPicker(for message: OCTMessageAbstract, sourceView: UIView) {
-        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        for emoji in ["❤️", "👍", "👎", "😂", "😮", "😢", "🔥"] {
-            alert.addAction(UIAlertAction(title: emoji, style: .default) { [weak self] _ in
-                guard let self = self else { return }
-                self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
-            })
+        let rect = sourceView.convert(sourceView.bounds, to: view)
+        reactionPopup.present(in: view, aboveRect: rect,
+                              currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
+                              dark: ThemeAppearance.isDarkMode) { [weak self] emoji in
+            guard let self = self else { return }
+            self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
         }
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = sourceView
-            popover.sourceRect = sourceView.bounds
-        }
-        present(alert, animated: true)
     }
 }

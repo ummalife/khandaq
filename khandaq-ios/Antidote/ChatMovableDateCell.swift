@@ -24,7 +24,7 @@ class ChatMovableDateCell: BaseCell {
     private static var __once: () = {
             var items = UIMenuController.shared.menuItems ?? [UIMenuItem]()
             items += [
-                // KHANDAQ (#192): React first among custom items so it lands on the menu's first page
+                // KHANDAQ (#192): "Реакция" opens the Telegram-style horizontal reaction bar.
                 UIMenuItem(title: String(localized: "chat_react_action"), action: #selector(reactAction)),
                 UIMenuItem(title: String(localized: "chat_reply_action"), action: #selector(replyAction)),
                 UIMenuItem(title: String(localized: "chat_forward_action"), action: #selector(forwardAction)),

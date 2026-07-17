@@ -129,6 +129,9 @@ class ChatPrivateController: PortraitChatController {
     /// Index path for cell with UIMenu presented.
     fileprivate var selectedMenuIndexPath: IndexPath?
 
+    /// KHANDAQ (#192): Telegram-style floating reaction bar shown above the message on long-press.
+    fileprivate let reactionPopup = ChatReactionPopup()
+
     fileprivate let showKeyboardOnAppear: Bool
     fileprivate var disableNextInputViewAnimation = false
 
@@ -937,6 +940,10 @@ extension ChatPrivateController {
     }
 
     @objc func willHideMenuNotification() {
+        // KHANDAQ (#192): keep the floating reaction bar in sync with the action menu.
+        if reactionPopup.isVisible {
+            reactionPopup.dismiss(animated: true)
+        }
         guard let indexPath = selectedMenuIndexPath else {
             return
         }
@@ -1532,18 +1539,22 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
     }
 
     func presentReactionPicker(for message: OCTMessageAbstract, sourceView: UIView) {
-        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        for emoji in ["❤️", "👍", "👎", "😂", "😮", "😢", "🔥"] {
-            alert.addAction(UIAlertAction(title: emoji, style: .default) { [weak self] _ in
-                self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
-            })
+        showReactionBar(for: message, cell: sourceView)
+    }
+
+    /// KHANDAQ (#192): Telegram-style horizontal reaction bar floating above the message bubble.
+    func showReactionBar(for message: OCTMessageAbstract, cell: UIView) {
+        let rect: CGRect
+        if let editable = cell as? ChatEditable {
+            rect = cell.convert(editable.menuTargetRect(), to: view)
+        } else {
+            rect = cell.convert(cell.bounds, to: view)
         }
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = sourceView
-            popover.sourceRect = sourceView.bounds
+        reactionPopup.present(in: view, aboveRect: rect,
+                              currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
+                              dark: ThemeAppearance.isDarkMode) { [weak self] emoji in
+            self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
         }
-        present(alert, animated: true)
     }
 }
 

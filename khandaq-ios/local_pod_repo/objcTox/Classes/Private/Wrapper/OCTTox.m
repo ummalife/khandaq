@@ -4163,6 +4163,37 @@ void friendLosslessPacketCallback(
         return;
     }
 
+    if (pktType == 188) {
+        // KHANDAQ (#192): message reaction ("KQ" family, mirrors Android HelperMessageReaction):
+        // [0]=188 [1..2]='K','Q' [3]=ver(1) [4]=anchor_type(1=msgv3 hash) [5..36]=anchor 32B
+        // [37..40]=ts u32 BE [41]=action(1=add,0=remove) [42]=emoji len (1..16) [43..]=emoji UTF-8
+        if (length < 44 || data[1] != 'K' || data[2] != 'Q' || data[3] != 1 || data[4] != 1) {
+            return;
+        }
+        BOOL add = (data[41] == 1);
+        NSUInteger emLen = data[42];
+        if (emLen < 1 || emLen > 16 || length < 43 + emLen) {
+            return;
+        }
+        NSString *emoji = [[NSString alloc] initWithBytes:(data + 43) length:emLen encoding:NSUTF8StringEncoding];
+        if (emoji == nil) {
+            return;
+        }
+
+        NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
+        for (int i = 5; i < 37; i++) {
+            [hashHex appendFormat:@"%02X", data[i]];
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([tox.delegate respondsToSelector:@selector(tox:friendMessageReactionWithMsgv3Hash:emoji:add:friendNumber:)]) {
+                [tox.delegate tox:tox friendMessageReactionWithMsgv3Hash:hashHex emoji:emoji add:add friendNumber:friendNumber];
+            }
+        });
+
+        return;
+    }
+
     if (pktType != 181) {
         return;
     }

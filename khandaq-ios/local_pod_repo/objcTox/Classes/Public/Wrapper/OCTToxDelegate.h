@@ -80,6 +80,12 @@
 - (void)tox:(OCTTox *)tox friendMessageDeleteWithMsgv3Hash:(NSString *)msgv3HashHex friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (#192): the friend added/removed a reaction on a message in our 1:1 chat ("KQ"
+ * lossless packet id 188). Addressed by the message's msgV3 hash (uppercase hex).
+ */
+- (void)tox:(OCTTox *)tox friendMessageReactionWithMsgv3Hash:(NSString *)msgv3HashHex emoji:(NSString *)emoji add:(BOOL)add friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * Friend's status message was updated.
  *
  * @param statusMessage Updated status message.

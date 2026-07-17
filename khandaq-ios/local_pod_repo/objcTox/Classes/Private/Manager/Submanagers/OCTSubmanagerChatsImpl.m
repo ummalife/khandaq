@@ -489,6 +489,8 @@ static void triggerPush(NSString *used_pushToken,
         // KHANDAQ (#179): deliver delete-for-both retractions that were queued while this friend
         // was offline (mirrors Android's flushPendingDeletesForFriend on reconnect).
         [self flushPendingDeletesForFriend:friend];
+        // KHANDAQ (#192): deliver reaction changes made while this friend was offline
+        [self flushPendingReactionsForFriend:friend];
     }
 }
 
@@ -507,6 +509,8 @@ static void triggerPush(NSString *used_pushToken,
             // KHANDAQ (#179): retry queued deletions too — covers half-dead links where the
             // initial send "succeeded" into a dying connection.
             [self flushPendingDeletesForFriend:friend];
+            // KHANDAQ (#192): retry pending reaction deliveries too
+            [self flushPendingReactionsForFriend:friend];
         }
     }
 }
@@ -738,6 +742,220 @@ static NSString *const kKQPendingDeletesKey = @"KQPendingFriendDeletes";
         all[friend.publicKey] = remaining;
     }
     [ud setObject:all forKey:kKQPendingDeletesKey];
+}
+
+// KHANDAQ (#192): Telegram-style message reactions ("KQ" lossless packet id 188, wire-compatible
+// with Android's HelperMessageReaction). ONE reaction per actor per message; an add replaces the
+// actor's previous emoji, a remove clears it (the remove packet's emoji is the "*" placeholder).
+// Storage: OCTMessageAbstract.reactionsJSON = [{"e":"<emoji>","p":["-OWN-","<PUBKEY>",...]},...];
+// own reactions use the "-OWN-" marker. Offline delivery: reactionsPending + reconnect flush
+// rebuilt from the CURRENT own state, so repeated toggles collapse (like message edits).
+static NSString *const kKQOwnReactionMarker = @"-OWN-";
+
+static NSString *kqReactionsActorEmoji(NSString *reactionsJSON, NSString *actor)
+{
+    if (reactionsJSON.length == 0) {
+        return nil;
+    }
+    NSArray *arr = [NSJSONSerialization JSONObjectWithData:[reactionsJSON dataUsingEncoding:NSUTF8StringEncoding]
+                                                   options:0 error:nil];
+    if (! [arr isKindOfClass:[NSArray class]]) {
+        return nil;
+    }
+    for (NSDictionary *entry in arr) {
+        if ([entry[@"p"] isKindOfClass:[NSArray class]] && [entry[@"p"] containsObject:actor]) {
+            return entry[@"e"];
+        }
+    }
+    return nil;
+}
+
+static NSString *kqReactionsApplyActor(NSString *reactionsJSON, NSString *actor, NSString *emoji, BOOL add)
+{
+    NSArray *arr = nil;
+    if (reactionsJSON.length > 0) {
+        arr = [NSJSONSerialization JSONObjectWithData:[reactionsJSON dataUsingEncoding:NSUTF8StringEncoding]
+                                              options:0 error:nil];
+    }
+    if (! [arr isKindOfClass:[NSArray class]]) {
+        arr = @[];
+    }
+    NSMutableArray *out = [NSMutableArray new];
+    NSMutableDictionary *target = nil;
+    for (NSDictionary *entry in arr) {
+        if (! [entry isKindOfClass:[NSDictionary class]] || ! [entry[@"p"] isKindOfClass:[NSArray class]]) {
+            continue;
+        }
+        NSMutableArray *kept = [NSMutableArray new];
+        for (NSString *a in entry[@"p"]) {
+            if (! [actor isEqualToString:a]) {
+                [kept addObject:a];
+            }
+        }
+        if (kept.count > 0) {
+            NSMutableDictionary *ne = [@{ @"e" : entry[@"e"] ?: @"", @"p" : kept } mutableCopy];
+            [out addObject:ne];
+            if (add && [emoji isEqualToString:entry[@"e"]]) {
+                target = ne;
+            }
+        }
+    }
+    if (add) {
+        if (target == nil) {
+            if (out.count >= 12) { // cap distinct emoji like Android
+                goto serialize;
+            }
+            target = [@{ @"e" : emoji, @"p" : [NSMutableArray new] } mutableCopy];
+            [out addObject:target];
+        }
+        NSMutableArray *actors = target[@"p"];
+        if (actors.count < 128) {
+            [actors addObject:actor];
+        }
+    }
+serialize:
+    if (out.count == 0) {
+        return nil;
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
+}
+
+- (NSData *)kqReactionPacketWithHashHex:(NSString *)hashHex emoji:(NSString *)emoji add:(BOOL)add
+{
+    NSData *em = [emoji dataUsingEncoding:NSUTF8StringEncoding];
+    if (hashHex.length != 64 || em.length < 1 || em.length > 16) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:43 + em.length];
+    const uint8_t header[5] = { 188, 'K', 'Q', 1, 1 }; // ver 1, anchor_type 1 = msgv3 hash
+    [pkt appendBytes:header length:5];
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int b = 0;
+        [[NSScanner scannerWithString:[hashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+        uint8_t byte = (uint8_t)b;
+        [pkt appendBytes:&byte length:1];
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    const uint8_t tail[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tail length:4];
+    const uint8_t action = add ? 1 : 0;
+    [pkt appendBytes:&action length:1];
+    const uint8_t emLen = (uint8_t)em.length;
+    [pkt appendBytes:&emLen length:1];
+    [pkt appendData:em];
+    return pkt;
+}
+
+- (void)toggleReactionOnMessage:(OCTMessageAbstract *)message emoji:(NSString *)emoji
+{
+    if (! message || emoji.length == 0
+        || [emoji lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 16) {
+        return;
+    }
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSString *cur = kqReactionsActorEmoji(message.reactionsJSON, kKQOwnReactionMarker);
+    BOOL add = ! [emoji isEqualToString:cur];
+    NSString *newJson = kqReactionsApplyActor(message.reactionsJSON, kKQOwnReactionMarker, emoji, add);
+
+    OCTChat *chat = [realmManager objectWithUniqueIdentifier:message.chatUniqueIdentifier
+                                                       class:[OCTChat class]];
+    OCTFriend *friend = [chat.friends firstObject];
+    BOOL deliverable = (friend != nil) && (message.messageText.msgv3HashHex.length == 64);
+
+    [realmManager updateObject:message withBlock:^(OCTMessageAbstract *msg) {
+        msg.reactionsJSON = newJson;
+        msg.reactionsPending = deliverable;
+    }];
+
+    if (deliverable) {
+        [self deliverReactionForMessage:message friend:friend];
+    }
+}
+
+- (void)deliverReactionForMessage:(OCTMessageAbstract *)message friend:(OCTFriend *)friend
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSString *own = kqReactionsActorEmoji(message.reactionsJSON, kKQOwnReactionMarker);
+    NSData *pkt = [self kqReactionPacketWithHashHex:message.messageText.msgv3HashHex
+                                              emoji:(own ?: @"*")
+                                                add:(own != nil)];
+    if (pkt == nil) {
+        [realmManager updateObject:message withBlock:^(OCTMessageAbstract *msg) {
+            msg.reactionsPending = NO;
+        }];
+        return;
+    }
+    OCTToxFriendNumber friendNumber = [[self.dataSource managerGetTox]
+                                       friendNumberWithPublicKey:friend.publicKey error:nil];
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return; // stays pending for the reconnect flush
+    }
+    if ([[self.dataSource managerGetTox] sendLosslessPacketWithFriendNumber:friendNumber
+                                                                      bytes:pkt
+                                                                      error:nil]) {
+        [realmManager updateObject:message withBlock:^(OCTMessageAbstract *msg) {
+            msg.reactionsPending = NO;
+        }];
+    }
+}
+
+- (void)flushPendingReactionsForFriend:(OCTFriend *)friend
+{
+    if (friend.publicKey.length == 0) {
+        return;
+    }
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND reactionsPending == YES",
+                              chat.uniqueIdentifier];
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    // snapshot: delivery mutates reactionsPending which live-updates the RLMResults
+    NSMutableArray *pending = [NSMutableArray new];
+    for (OCTMessageAbstract *msg in results) {
+        [pending addObject:msg];
+    }
+    for (OCTMessageAbstract *msg in pending) {
+        if (msg.messageText.msgv3HashHex.length == 64) {
+            [self deliverReactionForMessage:msg friend:friend];
+        }
+    }
+}
+
+// KHANDAQ (#192): the friend added/removed a reaction on a message in our shared 1:1 chat.
+- (void)tox:(OCTTox *)tox friendMessageReactionWithMsgv3Hash:(NSString *)msgv3HashHex
+                                                       emoji:(NSString *)emoji
+                                                         add:(BOOL)add
+                                                friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend || msgv3HashHex.length != 64) {
+        return;
+    }
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+
+    // the friend may react to messages of EITHER direction in our shared chat — no sender filter
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@",
+                              chat.uniqueIdentifier, msgv3HashHex];
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    OCTMessageAbstract *found = [results firstObject];
+    if (! found) {
+        return; // reactions never create state for unknown originals
+    }
+
+    NSString *actor = [publicKey uppercaseString];
+    NSString *newJson = kqReactionsApplyActor(found.reactionsJSON, actor, emoji, add);
+    [realmManager updateObject:found withBlock:^(OCTMessageAbstract *msg) {
+        msg.reactionsJSON = newJson;
+    }];
 }
 
 - (void)deleteMessageForBoth:(OCTMessageAbstract *)message

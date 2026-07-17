@@ -25,6 +25,10 @@ class OCTSubmanagerChatsMock: NSObject, OCTSubmanagerChats {
         // nop
     }
 
+    func toggleReaction(onMessage message: OCTMessageAbstract!, emoji: String!) {
+        // nop
+    }
+
     func removeMessages(_ messages: [OCTMessageAbstract]!) {
         // nop
     }

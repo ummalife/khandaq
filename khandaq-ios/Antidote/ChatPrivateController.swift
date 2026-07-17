@@ -998,6 +998,7 @@ extension ChatPrivateController: UITableViewDataSource {
 
                 outgoingModel.delivered = messageText.isDelivered
                 outgoingModel.sentpush = messageText.sentPush
+                outgoingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: outgoingModel)
 
                 model = outgoingModel
@@ -1041,6 +1042,7 @@ extension ChatPrivateController: UITableViewDataSource {
                                                + "dateInterval:\n" + s8 + "\n"
                 }
 
+                incomingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: incomingModel)
                 model = incomingModel
 
@@ -1518,6 +1520,30 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: cell)
+    }
+
+    // KHANDAQ (#192): quick reaction bar — one tap toggles the own reaction on the message
+    func chatMovableDateCellReactPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView?.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        presentReactionPicker(for: message, sourceView: cell)
+    }
+
+    func presentReactionPicker(for message: OCTMessageAbstract, sourceView: UIView) {
+        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        for emoji in ["❤️", "👍", "👎", "😂", "😮", "😢", "🔥"] {
+            alert.addAction(UIAlertAction(title: emoji, style: .default) { [weak self] _ in
+                self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
+            })
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = sourceView
+            popover.sourceRect = sourceView.bounds
+        }
+        present(alert, animated: true)
     }
 }
 

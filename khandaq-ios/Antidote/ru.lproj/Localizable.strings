@@ -748,3 +748,5 @@
 "group_private_message_notification_title_format" = "🔒 %@ (личное)";
 
 "media_file_unavailable" = "Файл недоступен";
+
+"chat_react_action" = "Реакция";

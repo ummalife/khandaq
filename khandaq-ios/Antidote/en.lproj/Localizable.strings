@@ -746,3 +746,5 @@
 "alert_create" = "Create";
 
 "media_file_unavailable" = "File unavailable";
+
+"chat_react_action" = "React";

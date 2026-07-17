@@ -39,6 +39,13 @@
 - (void)deleteMessageForBoth:(OCTMessageAbstract *)message;
 
 /**
+ * KHANDAQ (#192): toggle the OWN reaction on a 1:1 message (KQ lossless packet id 188,
+ * mirrors Android). Same emoji removes, a different one replaces. Applied to Realm
+ * immediately; delivery is queued (reactionsPending) when the peer is offline.
+ */
+- (void)toggleReactionOnMessage:(OCTMessageAbstract *)message emoji:(NSString *)emoji;
+
+/**
  * Removes all messages in chat and chat itself.
  *
  * @param chat Chat to remove in.

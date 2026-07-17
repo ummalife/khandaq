@@ -24,11 +24,18 @@ class ChatBaseTextCell: ChatMovableDateCell {
         }
 
         canBeCopied = true
+        canBeReacted = true
         bubbleView.onLocationTap = nil
         bubbleView.onReplyQuoteTap = nil
         bubbleView.setLocationMapImage(nil)
         bubbleView.bindReplyQuote(textModel.replyMeta, theme: theme)
         bubbleView.onReplyQuoteTap = textModel.onReplyQuoteTap
+        // KHANDAQ (#192): reaction chips + tap-to-toggle (opens the quick bar via the delegate)
+        bubbleView.bindReactions(textModel.reactionsDisplay)
+        bubbleView.onReactionsTap = { [weak self] in
+            guard let cell = self else { return }
+            cell.delegate?.chatMovableDateCellReactPressed(cell)
+        }
 
         if textModel.hasLocation,
            let latitude = textModel.locationLatitude,

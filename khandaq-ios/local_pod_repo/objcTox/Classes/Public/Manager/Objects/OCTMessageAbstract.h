@@ -96,6 +96,18 @@
 @property BOOL isCaption;
 
 /**
+ * KHANDAQ (#192): message reactions as a JSON array [{"e":"<emoji>","p":["-OWN-","<PUBKEY>",...]},...].
+ * One reaction per actor; own reactions stored as the "-OWN-" marker. nil = no reactions.
+ */
+@property (nullable) NSString *reactionsJSON;
+
+/**
+ * KHANDAQ (#192): own reaction state not yet delivered to the peer (reconnect flush rebuilds the
+ * packet from the CURRENT state, so repeated toggles collapse into one delivery).
+ */
+@property BOOL reactionsPending;
+
+/**
  * Message has one of the following properties.
  */
 @property (nullable) OCTMessageText *messageText;

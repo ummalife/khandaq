@@ -40,6 +40,27 @@ struct LocationMessage {
     }
 }
 
+/// KHANDAQ (#192): renders OCTMessageAbstract.reactionsJSON ([{"e":emoji,"p":[actors]}]) as the
+/// compact chips line shown under the bubble text, e.g. "❤️ 2  👍". Returns nil when empty.
+enum ChatReactionsFormat {
+    static func display(from reactionsJSON: String?) -> String? {
+        guard let json = reactionsJSON, !json.isEmpty,
+              let data = json.data(using: .utf8),
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            return nil
+        }
+        var parts: [String] = []
+        for entry in arr {
+            guard let emoji = entry["e"] as? String,
+                  let actors = entry["p"] as? [String], !actors.isEmpty else {
+                continue
+            }
+            parts.append(actors.count > 1 ? "\(emoji) \(actors.count)" : emoji)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "  ")
+    }
+}
+
 class ChatBaseTextCellModel: ChatMovableDateCellModel {
     var message: String = ""
     /// @handles parsed from wire-format mention blocks (group chat).
@@ -53,6 +74,8 @@ class ChatBaseTextCellModel: ChatMovableDateCellModel {
     /// tinted with the per-peer color. 0 = no header line.
     var senderHeaderLength: Int = 0
     var senderColor: UIColor?
+    /// KHANDAQ (#192): compact reactions line under the text ("❤️ 2  👍"), nil = none.
+    var reactionsDisplay: String?
 
     var hasLocation: Bool {
         locationLatitude != nil && locationLongitude != nil

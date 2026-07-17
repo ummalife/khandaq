@@ -20,6 +20,9 @@ class BubbleView: UIView {
     fileprivate var mapImageView: UIImageView?
     fileprivate var locationTapRecognizer: UITapGestureRecognizer?
     let replyQuoteView = ChatReplyQuoteView()
+    // KHANDAQ (#192): reaction chips rendered as a compact line under the text ("❤️ 2  👍").
+    fileprivate let reactionsLabel = UILabel()
+    var onReactionsTap: (() -> Void)?
     // KHANDAQ (#100): keep the quote view's tap handler in sync no matter the assignment order.
     // The cell sets onReplyQuoteTap AFTER calling bindReplyQuote, so without this didSet the quote's
     // onTap was left nil (set to the then-nil handler inside bindReplyQuote) and tapping a reply quote
@@ -55,6 +58,7 @@ class BubbleView: UIView {
         }
         set {
             textView.textColor = newValue
+            reactionsLabel.textColor = newValue.withAlphaComponent(0.9)
         }
     }
 
@@ -109,6 +113,14 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
+    // KHANDAQ (#192): show/hide the reaction chips line. nil/empty hides it.
+    func bindReactions(_ display: String?) {
+        let text = display ?? ""
+        reactionsLabel.text = text
+        reactionsLabel.isHidden = text.isEmpty
+        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
+    }
+
     fileprivate func ensureMapImageView() {
         guard mapImageView == nil else {
             return
@@ -150,13 +162,24 @@ class BubbleView: UIView {
                 $0.top.equalTo(replyQuoteView.snp.bottom).offset(Constants.TextViewVerticalOffset)
             }
 
-            $0.bottom.equalTo(self).offset(-Constants.TextViewVerticalOffset)
+            if reactionsLabel.isHidden {
+                $0.bottom.equalTo(self).offset(-Constants.TextViewVerticalOffset)
+            }
             $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
             $0.trailing.equalTo(self).offset(-Constants.TextViewHorizontalOffset)
 
             $0.width.greaterThanOrEqualTo(Constants.TextViewMinWidth)
             $0.width.lessThanOrEqualTo(Constants.TextViewMaxWidth)
             $0.height.greaterThanOrEqualTo(Constants.TextViewMinHeight)
+        }
+
+        reactionsLabel.snp.remakeConstraints {
+            $0.top.equalTo(textView.snp.bottom)
+            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            if !reactionsLabel.isHidden {
+                $0.bottom.equalTo(self).offset(-4.0)
+            }
         }
     }
 
@@ -181,6 +204,10 @@ class BubbleView: UIView {
         onLocationTap?()
     }
 
+    @objc fileprivate func handleReactionsTap() {
+        onReactionsTap?()
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
@@ -197,6 +224,13 @@ class BubbleView: UIView {
 
         addSubview(replyQuoteView)
         addSubview(textView)
+
+        reactionsLabel.font = UIFont.systemFont(ofSize: 13.0)
+        reactionsLabel.isHidden = true
+        reactionsLabel.isUserInteractionEnabled = true
+        reactionsLabel.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(handleReactionsTap)))
+        addSubview(reactionsLabel)
 
         textView.snp.makeConstraints {
             $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)

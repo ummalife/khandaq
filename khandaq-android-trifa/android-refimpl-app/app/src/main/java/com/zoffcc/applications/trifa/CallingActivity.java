@@ -85,6 +85,7 @@ import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_audio_play_
 import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_call_playback_gain;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_aec_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_gainprocessing_active;
+import static com.zoffcc.applications.nativeaudio.NativeAudio.set_rnnoise_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_rec_preset;
 import static com.zoffcc.applications.trifa.CameraWrapper.camera_preview_call_back_ts_first_frame;
 import static com.zoffcc.applications.trifa.CameraWrapper.getRotation;
@@ -2525,7 +2526,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         try
         {
             set_gainprocessing_active(1);
-            set_aec_active((speaker || !Callstate.audio_call) ? 1 : 0);
+            // KHANDAQ (#188): iOS parity — its VoiceProcessingIO runs AEC + noise suppression on
+            // EVERY call. Android previously enabled the WebRTC echo canceller only in speaker /
+            // video mode, so earpiece audio-only calls echoed. Enable AEC + RNNoise unconditionally.
+            set_aec_active(1);
+            set_rnnoise_active(1);
             na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
             na_set_call_playback_gain(speaker ? 3 : 2);
             if (audio_manager_s != null)

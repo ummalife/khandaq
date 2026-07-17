@@ -23,6 +23,10 @@ final class GroupVoiceMessageRecorder: NSObject {
     func startRecording() throws {
         stopRecording(discard: true)
 
+        // KHANDAQ (Android parity): starting a recording pauses any playing voice note,
+        // keeping its resume position.
+        ChatVoiceMessagePlayer.shared.pauseActive()
+
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             AVAudioSessionCategoryPlayAndRecord,

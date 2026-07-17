@@ -695,7 +695,8 @@ class ChatGroupController: PortraitChatController {
         // KHANDAQ: mark read on EXIT too — viewWillAppear alone misses messages that arrived while the
         // chat was open, leaving the unread badge stuck after the user has actually read everything.
         updateLastReadDate()
-        ChatVoiceMessagePlayer.shared.stop()
+        // KHANDAQ (Android parity): voice playback keeps going when the user leaves the group —
+        // the shared player is app-scoped and must only stop on explicit pause/displacement.
         stopIncomingVideoMonitoring()
         submanagerGroups.stopGroupLiveAudio()
         submanagerGroups.stopGroupLiveVideo()
@@ -1381,6 +1382,15 @@ private extension ChatGroupController {
 
                 ChatVoiceMessagePlayer.shared.togglePlayback(messageId: message.uniqueIdentifier, filePath: path)
                 self.refreshVisibleVoiceCells(for: message.uniqueIdentifier)
+            }
+            // KHANDAQ (Android parity): scrub the waveform
+            model.voiceSeekHandle = { fraction in
+                guard let path = message.messageFile?.filePath(),
+                      message.messageFile?.fileType == .ready else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.seek(
+                    messageId: message.uniqueIdentifier, filePath: path, fraction: fraction)
             }
         }
     }

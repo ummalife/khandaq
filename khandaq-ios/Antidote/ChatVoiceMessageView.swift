@@ -7,6 +7,8 @@ import SnapKit
 
 final class ChatVoiceMessageView: UIView {
     var onPlayTapped: (() -> Void)?
+    // KHANDAQ (Android parity): scrub — drag/tap on the waveform seeks; reports 0…1 fraction
+    var onSeek: ((Float) -> Void)?
     // KHANDAQ (Figma voice bubble): tinted per direction, matching the text bubbles
     var isOutgoing = false
 
@@ -67,8 +69,30 @@ final class ChatVoiceMessageView: UIView {
 
         addSubview(waveformView)
 
+        // KHANDAQ (Android parity): scrub the note by dragging or tapping on the waveform
+        waveformView.isUserInteractionEnabled = true
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(waveformScrubbed(_:)))
+        waveformView.addGestureRecognizer(pan)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(waveformScrubbed(_:)))
+        waveformView.addGestureRecognizer(tap)
+
         durationLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         addSubview(durationLabel)
+    }
+
+    @objc private func waveformScrubbed(_ recognizer: UIGestureRecognizer) {
+        if let pan = recognizer as? UIPanGestureRecognizer,
+           pan.state != .changed && pan.state != .ended {
+            return
+        }
+        let width = waveformView.bounds.width
+        guard width > 0 else {
+            return
+        }
+        let x = recognizer.location(in: waveformView).x
+        let fraction = Float(max(0, min(1, x / width)))
+        waveformView.progress = fraction // immediate visual feedback
+        onSeek?(fraction)
     }
 
     private func installConstraints() {

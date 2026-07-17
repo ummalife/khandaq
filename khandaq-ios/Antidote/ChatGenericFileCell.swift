@@ -270,6 +270,8 @@ class ChatGenericFileCell: ChatMovableDateCell {
         let enabled = fileModel.state == .done
         voiceMessageView.apply(theme: theme, enabled: enabled)
         voiceMessageView.onPlayTapped = fileModel.voicePlayToggleHandle
+        // KHANDAQ (Android parity): scrub support (only for downloaded/ready notes)
+        voiceMessageView.onSeek = enabled ? fileModel.voiceSeekHandle : nil
 
         // KHANDAQ (#36): remember for the lightweight, handle-preserving state refresh.
         voicePlaybackMessageId = fileModel.voiceMessageId

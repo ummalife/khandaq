@@ -2387,6 +2387,16 @@ private extension ChatPrivateController {
                     }
                 }
             }
+            // KHANDAQ (Android parity): scrub the waveform
+            model.voiceSeekHandle = { fraction in
+                guard message.messageFile?.fileType == .ready,
+                      let path = message.messageFile?.filePath(),
+                      let messageId = message.uniqueIdentifier else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.seek(
+                    messageId: messageId, filePath: path, fraction: fraction)
+            }
         }
     }
 

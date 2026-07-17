@@ -32,4 +32,6 @@ class ChatGenericFileCellModel: ChatMovableDateCellModel {
     var voiceTransferProgress: Float = 0
     var voiceDuration: TimeInterval = 0
     var voicePlayToggleHandle: (() -> Void)?
+    // KHANDAQ (Android parity): scrub the voice note (0…1 fraction along the waveform)
+    var voiceSeekHandle: ((Float) -> Void)?
 }

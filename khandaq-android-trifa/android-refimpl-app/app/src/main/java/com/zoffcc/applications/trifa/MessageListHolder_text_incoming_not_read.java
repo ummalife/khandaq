@@ -176,6 +176,11 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
 
     public void bindMessageList(Message m)
     {
+        // KHANDAQ (#192): reaction chips under the bubble
+        final Message m_react = m;
+        ChatReactionsUiHelper.bind_reactions_row(itemView, m_react.reactions,
+                emoji -> HelperMessageReaction.toggleOwnFriendReaction(m_react, emoji));
+
         // Log.i(TAG, "bindMessageList");
 
         message_ = m;

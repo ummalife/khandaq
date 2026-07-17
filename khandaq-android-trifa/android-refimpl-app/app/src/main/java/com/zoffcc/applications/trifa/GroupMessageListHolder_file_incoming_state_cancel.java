@@ -169,6 +169,11 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
 
     public void bindMessageList(GroupMessage m)
     {
+        // KHANDAQ (#192): reaction chips under the bubble
+        final GroupMessage m_react = m;
+        ChatReactionsUiHelper.bind_reactions_row(itemView, m_react.reactions,
+                emoji -> HelperMessageReaction.toggleOwnGroupReaction(m_react, emoji));
+
         message_ = m;
 
         if (m == null)

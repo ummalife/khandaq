@@ -68,6 +68,7 @@
                 <include layout="@layout/chat_message_reply_quote" />
 
                 <include layout="@layout/chat_bubble_text_with_meta" />
+                <include layout="@layout/chat_reactions_row" />
 
             </LinearLayout>
 

@@ -111,6 +111,13 @@ public class ToolbarActionMode implements ActionMode.Callback
             editItem.setVisible(HelperMessageEdit.canEditCurrentSelection());
         }
 
+        // KHANDAQ (#192): "Реакция" — exactly one message that can hold a reaction
+        final MenuItem reactItem = menu.findItem(R.id.action_react);
+        if (reactItem != null)
+        {
+            reactItem.setVisible(HelperMessageReaction.canReactToCurrentSelection());
+        }
+
         action_active = false;
         return true;
     }
@@ -198,6 +205,21 @@ public class ToolbarActionMode implements ActionMode.Callback
                         && (MainActivity.conference_message_list_activity == null))
                 {
                     HelperMessageEdit.editSelectedGroupMessage(context);
+                }
+                mode.finish();
+                break;
+
+            case R.id.action_react:
+                // KHANDAQ (#192): quick-bar dialog, pick toggles the own reaction
+                action_active = true;
+                if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
+                {
+                    HelperMessageReaction.reactSelectedDirectMessage(context);
+                }
+                else if ((selected_conference_messages.isEmpty())
+                        && (MainActivity.conference_message_list_activity == null))
+                {
+                    HelperMessageReaction.reactSelectedGroupMessage(context);
                 }
                 mode.finish();
                 break;

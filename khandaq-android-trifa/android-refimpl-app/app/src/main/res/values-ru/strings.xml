@@ -488,6 +488,8 @@
     </plurals>
     <string name="MainActivity_notification_new_message">новое сообщение</string>
     <string name="MainActivity_notification_new_message2">новое сообщение</string>
+    <string name="reaction_notification_body">отреагировал(а) %1$s</string>
+    <string name="chat_react_action">Реакция</string>
     <string name="MainActivity_button_ok">Хорошо</string>
     <string name="MainActivity_error_starting_email_app">Ошибка запуска приложения электронной почты</string>
     <string name="MainActivity_no_email_app_found">Приложение электронной почты не найдено</string>

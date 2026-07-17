@@ -735,6 +735,8 @@
     </plurals>
     <string name="MainActivity_notification_new_message">new Message</string>
     <string name="MainActivity_notification_new_message2">new Message</string>
+    <string name="reaction_notification_body">reacted %1$s</string>
+    <string name="chat_react_action">React</string>
     <string name="MainActivity_button_ok">Ok</string>
     <string name="MainActivity_error_starting_email_app">Error starting Email App</string>
     <string name="MainActivity_no_email_app_found">No Email App found</string>

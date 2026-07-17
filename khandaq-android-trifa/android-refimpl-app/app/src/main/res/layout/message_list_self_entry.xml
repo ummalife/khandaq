@@ -22,6 +22,7 @@
             android:orientation="vertical">
 
             <include layout="@layout/chat_bubble_text_with_meta" />
+            <include layout="@layout/chat_reactions_row" />
         </LinearLayout>
 
         <LinearLayout

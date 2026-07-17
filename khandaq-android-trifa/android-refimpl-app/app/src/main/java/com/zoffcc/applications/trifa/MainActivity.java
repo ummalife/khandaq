@@ -355,7 +355,7 @@ public class MainActivity extends AppCompatActivity
     final static boolean NDK_STDOUT_LOGGING = false; // set "false" for release builds
     final static boolean DEBUG_BATTERY_OPTIMIZATION_LOGGING = false;  // set "false" for release builds
     final static boolean INSANE_TRACE_LOGGING = false; // set "false" for release builds
-    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10243; // increase for database schema changes
+    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10244; // increase for database schema changes
     final static boolean DB_ENCRYPT = true; // set "true" always!
     final static boolean VFS_ENCRYPT = true; // set "true" always!
     final static boolean AEC_DEBUG_DUMP = false; // set "false" for release builds
@@ -2763,6 +2763,16 @@ public class MainActivity extends AppCompatActivity
             run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN edit_pending BOOLEAN NOT NULL DEFAULT false");
             run_multi_sql("CREATE INDEX `index_edited_on_GroupMessage` ON `GroupMessage` (`edited`)");
             run_multi_sql("CREATE INDEX `index_edit_pending_on_GroupMessage` ON `GroupMessage` (`edit_pending`)");
+        }
+
+        // KHANDAQ (#192 reactions): serialized reactions JSON + "not yet delivered" flag, both tables.
+        if (new_version == 10244) {
+            run_multi_sql("ALTER TABLE Message ADD COLUMN reactions TEXT");
+            run_multi_sql("ALTER TABLE Message ADD COLUMN reactions_pending BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("CREATE INDEX `index_reactions_pending_on_Message` ON `Message` (`reactions_pending`)");
+            run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN reactions TEXT");
+            run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN reactions_pending BOOLEAN NOT NULL DEFAULT false");
+            run_multi_sql("CREATE INDEX `index_reactions_pending_on_GroupMessage` ON `GroupMessage` (`reactions_pending`)");
         }
     }
 
@@ -5983,6 +5993,9 @@ public class MainActivity extends AppCompatActivity
                     HelperMessageEdit.flushPendingEditsForFriend(friend_number);
                     // KHANDAQ (#179): deliver deletes made while this friend was offline
                     HelperMessageDelete.flushPendingDeletesForFriend(friend_number);
+                    // KHANDAQ (#192): deliver reaction changes made while this friend was offline
+                    // (packet is rebuilt from the CURRENT own-reaction state — toggles collapse)
+                    HelperMessageReaction.flushPendingReactionsForFriend(friend_number);
                 }
             }
 
@@ -6511,6 +6524,11 @@ public class MainActivity extends AppCompatActivity
             {
                 // KHANDAQ (#179): app-level delete-for-both of an own 1:1 message
                 HelperMessageDelete.handleIncomingFriendDelete(friend_number, data, (int) length);
+            }
+            else if (data[0] == (byte) HelperMessageReaction.PKT_MSG_REACTION)
+            {
+                // KHANDAQ (#192): app-level message reaction (add/remove)
+                HelperMessageReaction.handleIncomingFriendReaction(friend_number, data, (int) length);
             }
             else if (data[0] == (byte) CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND.value)
             {
@@ -8915,7 +8933,8 @@ public class MainActivity extends AppCompatActivity
 
         // KHANDAQ (#9): message-edit packets are short (16-byte header + text) — own length gate,
         // handled before the big-file/histsync block whose minimum length would reject them.
-        if ((length >= 17) && (length <= TOX_MAX_NGC_FILE_AND_HEADER_SIZE))
+        // (#193 fix: the delete packet is EXACTLY 16 bytes, the old ">= 17" gate dropped it)
+        if ((length >= 16) && (length <= TOX_MAX_NGC_FILE_AND_HEADER_SIZE))
         {
             if ((data[0] == (byte) 0x66) && (data[1] == (byte) 0x77) && (data[2] == (byte) 0x88) &&
                 (data[3] == (byte) 0x11) && (data[4] == (byte) 0x34) && (data[5] == (byte) 0x35) &&
@@ -8930,6 +8949,14 @@ public class MainActivity extends AppCompatActivity
                 (data[6] == (byte) 0x1) && (data[7] == HelperMessageDelete.NGC_PKT_MSG_DELETE))
             {
                 HelperMessageDelete.handleIncomingGroupDelete(group_number, peer_id, data, (int) length);
+                return;
+            }
+            // KHANDAQ (#192): message reactions broadcast (same NGC header family)
+            if ((data[0] == (byte) 0x66) && (data[1] == (byte) 0x77) && (data[2] == (byte) 0x88) &&
+                (data[3] == (byte) 0x11) && (data[4] == (byte) 0x34) && (data[5] == (byte) 0x35) &&
+                (data[6] == (byte) 0x1) && (data[7] == HelperMessageReaction.NGC_PKT_MSG_REACTION))
+            {
+                HelperMessageReaction.handleIncomingGroupReaction(group_number, peer_id, data, (int) length);
                 return;
             }
         }

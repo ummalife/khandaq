@@ -100,6 +100,11 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
     @SuppressLint("ClickableViewAccessibility")
     public void bindMessageList(GroupMessage m)
     {
+        // KHANDAQ (#192): reaction chips under the bubble
+        final GroupMessage m_react = m;
+        ChatReactionsUiHelper.bind_reactions_row(itemView, m_react.reactions,
+                emoji -> HelperMessageReaction.toggleOwnGroupReaction(m_react, emoji));
+
         // Log.i(TAG, "bindMessageList");
 
         if (m == null)

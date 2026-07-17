@@ -119,6 +119,14 @@ public class Message
     @Column(indexed = true, helpers = Column.Helpers.ALL)
     public boolean edit_pending;
 
+    // KHANDAQ (#192 reactions): JSON array [{"e":"<emoji>","p":["-OWN-","<PUBKEY>",...]},...]
+    // + "own reaction state not yet delivered to the peer" flag (reconnect flush)
+    @Column(helpers = Column.Helpers.ALL)
+    public String reactions;
+
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public boolean reactions_pending;
+
     static Message deep_copy(Message in)
     {
         Message out = new Message();
@@ -155,6 +163,8 @@ public class Message
         out.edited = in.edited;
         out.edited_timestamp = in.edited_timestamp;
         out.edit_pending = in.edit_pending;
+        out.reactions = in.reactions;
+        out.reactions_pending = in.reactions_pending;
 
         return out;
     }
@@ -162,7 +172,7 @@ public class Message
     @Override
     public String toString()
     {
-        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending;
+        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending;
     }
 
 
@@ -243,6 +253,8 @@ public class Message
                 out.edited = rs.getBoolean("edited");
                 out.edited_timestamp = rs.getLong("edited_timestamp");
                 out.edit_pending = rs.getBoolean("edit_pending");
+                out.reactions = rs.getString("reactions");
+                out.reactions_pending = rs.getBoolean("reactions_pending");
 
                 list.add(out);
             }
@@ -316,6 +328,8 @@ public class Message
                     + ",edited"
                     + ",edited_timestamp"
                     + ",edit_pending"
+                    + ",reactions"
+                    + ",reactions_pending"
                     + ")" +
                     "values" +
                     "("
@@ -351,6 +365,8 @@ public class Message
                     + ",?30"
                     + ",?31"
                     + ",?32"
+                    + ",?33"
+                    + ",?34"
                     + ")";
 
             insert_pstmt = sqldb.prepareStatement(insert_pstmt_sql);
@@ -388,6 +404,8 @@ public class Message
             insert_pstmt.setBoolean(30, this.edited);
             insert_pstmt.setLong(31, this.edited_timestamp);
             insert_pstmt.setBoolean(32, this.edit_pending);
+            insert_pstmt.setString(33, this.reactions);
+            insert_pstmt.setBoolean(34, this.reactions_pending);
             // @formatter:on
 
             if (ORMA_TRACE)
@@ -1061,6 +1079,39 @@ public class Message
         }
         this.sql_set = this.sql_set + " edit_pending=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
         bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edit_pending));
+        bind_set_count++;
+        return this;
+    }
+
+    // KHANDAQ (#192 reactions) ------------------------------------------------------------------
+    public Message reactions(String reactions)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " reactions=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_String, reactions));
+        bind_set_count++;
+        return this;
+    }
+
+    public Message reactions_pending(boolean reactions_pending)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " reactions_pending=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, reactions_pending));
         bind_set_count++;
         return this;
     }
@@ -2608,6 +2659,14 @@ public class Message
     {
         this.sql_where = this.sql_where + " and edited=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
         bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, edited));
+        bind_where_count++;
+        return this;
+    }
+
+    public Message reactions_pendingEq(boolean reactions_pending)
+    {
+        this.sql_where = this.sql_where + " and reactions_pending=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, reactions_pending));
         bind_where_count++;
         return this;
     }

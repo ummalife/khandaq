@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><!-- KHANDAQ (#192): reaction chip background -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="#2E000000" />
+</shape>

@@ -12,6 +12,11 @@
         android:title="@string/chat_reply_action"
         app:showAsAction="always"/>
     <item
+        android:id="@+id/action_react"
+        android:title="@string/chat_react_action"
+        android:visible="false"
+        app:showAsAction="never"/>
+    <item
         android:id="@+id/action_edit"
         android:title="@string/chat_edit_action"
         android:visible="false"

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10348.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10349.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Account security fixes: logging out now truly logs you out (password required on next launch), the app no longer re-asks the password out of the blue (the PIN guards idle time), and changing the password no longer corrupts the profile."},
-                    {"language": "ru-RU", "text": "Исправления входа: выход из профиля теперь настоящий (при следующем запуске нужен пароль), приложение больше не запрашивает пароль само по себе (простой охраняет PIN), а смена пароля больше не ломает профиль."},
+                    {"language": "en-US", "text": "Message reactions: long-press any message and tap Реакция to react with ❤️👍👎😂😮😢🔥, in both private chats and groups. Reactions sync to the other side and show as chips under the message; tap a reaction to change or remove yours."},
+                    {"language": "ru-RU", "text": "Реакции на сообщения: зажмите любое сообщение и нажмите «Реакция», чтобы поставить ❤️👍👎😂😮😢🔥 — и в личке, и в группах. Реакция улетает собеседнику и показывается чипом под сообщением; нажмите на неё, чтобы сменить или убрать."},
                 ],
             }],
         })

@@ -1134,6 +1134,9 @@ public class HelperFiletransfer
                                                                        file_id_buffer.limit()).toUpperCase();
             Log.i(TAG, "TOX_FILE_ID_LENGTH=" + TOX_FILE_ID_LENGTH + " file_id_buffer_hex=" + file_id_buffer_hex);
             ft.tox_file_id_hex = file_id_buffer_hex;
+            // KHANDAQ (#192): durable reaction anchor for this 1:1 file — survives FT-row deletion.
+            m.ft_id_anchor_hex = file_id_buffer_hex;
+            orma.updateMessage().idEq(m.id).ft_id_anchor_hex(file_id_buffer_hex).execute();
 
             final tox_send_filename send_name = tox_send_filename_for_filetransfer(ft.file_name);
 

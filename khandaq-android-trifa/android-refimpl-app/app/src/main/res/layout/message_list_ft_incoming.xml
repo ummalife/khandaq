@@ -171,6 +171,8 @@
 
                     <include layout="@layout/chat_file_attachment_row" />
 
+                    <include layout="@layout/chat_reactions_row" />
+
                 </LinearLayout>
 
                 <LinearLayout

@@ -199,12 +199,12 @@ public class HelperMessageReaction
     // 1:1
     // =============================================================================================
 
-    static byte[] buildFriendReactionPacket(final String msgV3HashHex, final long tsSec,
+    static byte[] buildFriendReactionPacket(final String anchorHex, final byte anchorType, final long tsSec,
                                             final String emoji, final boolean add)
     {
         try
         {
-            final byte[] hash = hexToBytes(msgV3HashHex);
+            final byte[] hash = hexToBytes(anchorHex);
             final byte[] em = emoji.getBytes(StandardCharsets.UTF_8);
             if (hash == null || hash.length != 32 || em.length < 1 || em.length > MAX_EMOJI_BYTES)
             {
@@ -215,7 +215,7 @@ public class HelperMessageReaction
             out.write(MAGIC_1);
             out.write(MAGIC_2);
             out.write(VERSION);
-            out.write(ANCHOR_MSGV3_HASH);
+            out.write(anchorType);
             out.write(hash, 0, 32);
             writeU32BE(out, tsSec);
             out.write(add ? 1 : 0);
@@ -232,9 +232,24 @@ public class HelperMessageReaction
     /** Can this row carry a NETWORK reaction (shared anchor exists)? Favorites are local-only. */
     static boolean friendRowAddressable(final Message m)
     {
+        if (m == null)
+        {
+            return false;
+        }
+        // text: anchored on the msgV3 hash; file/media/voice: on the symmetric tox file_id.
+        if (m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value)
+        {
+            return m.msg_idv3_hash != null && m.msg_idv3_hash.length() == 64;
+        }
+        return friendFileRow(m);
+    }
+
+    /** A 1:1 file/media/voice row with a usable symmetric anchor. */
+    private static boolean friendFileRow(final Message m)
+    {
         return m != null
-               && m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value
-               && m.msg_idv3_hash != null && m.msg_idv3_hash.length() == 64;
+               && m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
+               && m.ft_id_anchor_hex != null && m.ft_id_anchor_hex.length() == 64;
     }
 
     /**
@@ -286,8 +301,12 @@ public class HelperMessageReaction
     {
         try
         {
+            final boolean isFile = friendFileRow(m);
+            final String anchorHex = isFile ? m.ft_id_anchor_hex : m.msg_idv3_hash;
+            final byte anchorType = isFile ? ANCHOR_MSG_ID_HASH : ANCHOR_MSGV3_HASH;
             final String own = actorEmoji(m.reactions, OWN_MARKER);
-            final byte[] pkt = buildFriendReactionPacket(m.msg_idv3_hash,
+            final byte[] pkt = buildFriendReactionPacket(anchorHex,
+                                                         anchorType,
                                                          System.currentTimeMillis() / 1000,
                                                          own != null ? own : REMOVE_PLACEHOLDER,
                                                          own != null);
@@ -345,8 +364,10 @@ public class HelperMessageReaction
     {
         try
         {
+            final byte anchorType = data[4];
             if (length < (FRIEND_HEADER_LEN + 1) || data[1] != MAGIC_1 || data[2] != MAGIC_2
-                || data[3] != VERSION || data[4] != ANCHOR_MSGV3_HASH)
+                || data[3] != VERSION
+                || (anchorType != ANCHOR_MSGV3_HASH && anchorType != ANCHOR_MSG_ID_HASH))
             {
                 return;
             }
@@ -367,12 +388,19 @@ public class HelperMessageReaction
             Message m = null;
             try
             {
-                // the friend may react to messages of EITHER direction in our shared chat
-                final List<Message> list = orma.selectFromMessage().
-                        msg_idv3_hashEq(hashHex).
-                        tox_friendpubkeyEq(senderPubkey).
-                        orderByIdDesc().
-                        toList();
+                // the friend may react to messages of EITHER direction in our shared chat.
+                // text anchors on msg_idv3_hash; file/media/voice on the symmetric tox file_id.
+                final List<Message> list = (anchorType == ANCHOR_MSG_ID_HASH)
+                        ? orma.selectFromMessage().
+                                ft_id_anchor_hexEq(hashHex).
+                                tox_friendpubkeyEq(senderPubkey).
+                                orderByIdDesc().
+                                toList()
+                        : orma.selectFromMessage().
+                                msg_idv3_hashEq(hashHex).
+                                tox_friendpubkeyEq(senderPubkey).
+                                orderByIdDesc().
+                                toList();
                 if (list != null && !list.isEmpty())
                 {
                     m = list.get(0);

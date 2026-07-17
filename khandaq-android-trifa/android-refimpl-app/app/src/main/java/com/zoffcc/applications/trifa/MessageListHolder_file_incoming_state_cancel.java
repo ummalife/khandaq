@@ -156,6 +156,11 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
 
         message_ = m;
 
+        // KHANDAQ (#192): reaction chips under the (completed) file / media / voice bubble.
+        final Message m_react = m;
+        ChatReactionsUiHelper.bind_reactions_row(itemView, m_react.reactions,
+                emoji -> HelperMessageReaction.toggleOwnFriendReaction(m_react, emoji));
+
         ft_audio_player.setVisibility(View.GONE);
         ft_preview_image.getLayoutParams().height = (int)dp2px(150);
 

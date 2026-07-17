@@ -127,6 +127,12 @@ public class Message
     @Column(indexed = true, helpers = Column.Helpers.ALL)
     public boolean reactions_pending;
 
+    // KHANDAQ (#192 reactions): durable copy of the symmetric tox file_id (uppercase hex) for a 1:1
+    // file/media/voice transfer. Stamped at send/receive so reactions can still anchor to the file
+    // after its Filetransfer row is deleted on completion.
+    @Column(indexed = true, helpers = Column.Helpers.ALL)
+    public String ft_id_anchor_hex;
+
     static Message deep_copy(Message in)
     {
         Message out = new Message();
@@ -165,6 +171,7 @@ public class Message
         out.edit_pending = in.edit_pending;
         out.reactions = in.reactions;
         out.reactions_pending = in.reactions_pending;
+        out.ft_id_anchor_hex = in.ft_id_anchor_hex;
 
         return out;
     }
@@ -172,7 +179,7 @@ public class Message
     @Override
     public String toString()
     {
-        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending;
+        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending + ", ft_id_anchor_hex=" + ft_id_anchor_hex;
     }
 
 
@@ -255,6 +262,7 @@ public class Message
                 out.edit_pending = rs.getBoolean("edit_pending");
                 out.reactions = rs.getString("reactions");
                 out.reactions_pending = rs.getBoolean("reactions_pending");
+                out.ft_id_anchor_hex = rs.getString("ft_id_anchor_hex");
 
                 list.add(out);
             }
@@ -330,6 +338,7 @@ public class Message
                     + ",edit_pending"
                     + ",reactions"
                     + ",reactions_pending"
+                    + ",ft_id_anchor_hex"
                     + ")" +
                     "values" +
                     "("
@@ -367,6 +376,7 @@ public class Message
                     + ",?32"
                     + ",?33"
                     + ",?34"
+                    + ",?35"
                     + ")";
 
             insert_pstmt = sqldb.prepareStatement(insert_pstmt_sql);
@@ -406,6 +416,7 @@ public class Message
             insert_pstmt.setBoolean(32, this.edit_pending);
             insert_pstmt.setString(33, this.reactions);
             insert_pstmt.setBoolean(34, this.reactions_pending);
+            insert_pstmt.setString(35, this.ft_id_anchor_hex);
             // @formatter:on
 
             if (ORMA_TRACE)
@@ -1112,6 +1123,22 @@ public class Message
         }
         this.sql_set = this.sql_set + " reactions_pending=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
         bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, reactions_pending));
+        bind_set_count++;
+        return this;
+    }
+
+    public Message ft_id_anchor_hex(String ft_id_anchor_hex)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " ft_id_anchor_hex=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_String, ft_id_anchor_hex));
         bind_set_count++;
         return this;
     }
@@ -2606,6 +2633,14 @@ public class Message
     {
         this.sql_where = this.sql_where + " and msg_idv3_hash=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
         bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_String, msg_idv3_hash));
+        bind_where_count++;
+        return this;
+    }
+
+    public Message ft_id_anchor_hexEq(String ft_id_anchor_hex)
+    {
+        this.sql_where = this.sql_where + " and ft_id_anchor_hex=?" + (BINDVAR_OFFSET_WHERE + bind_where_count) + " ";
+        bind_where_vars.add(new OrmaBindvar(BINDVAR_TYPE_String, ft_id_anchor_hex));
         bind_where_count++;
         return this;
     }

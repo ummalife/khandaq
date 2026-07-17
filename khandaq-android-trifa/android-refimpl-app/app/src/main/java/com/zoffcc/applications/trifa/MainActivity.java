@@ -355,7 +355,7 @@ public class MainActivity extends AppCompatActivity
     final static boolean NDK_STDOUT_LOGGING = false; // set "false" for release builds
     final static boolean DEBUG_BATTERY_OPTIMIZATION_LOGGING = false;  // set "false" for release builds
     final static boolean INSANE_TRACE_LOGGING = false; // set "false" for release builds
-    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10244; // increase for database schema changes
+    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10245; // increase for database schema changes
     final static boolean DB_ENCRYPT = true; // set "true" always!
     final static boolean VFS_ENCRYPT = true; // set "true" always!
     final static boolean AEC_DEBUG_DUMP = false; // set "false" for release builds
@@ -2773,6 +2773,13 @@ public class MainActivity extends AppCompatActivity
             run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN reactions TEXT");
             run_multi_sql("ALTER TABLE GroupMessage ADD COLUMN reactions_pending BOOLEAN NOT NULL DEFAULT false");
             run_multi_sql("CREATE INDEX `index_reactions_pending_on_GroupMessage` ON `GroupMessage` (`reactions_pending`)");
+        }
+
+        // KHANDAQ (#192 reactions): durable anchor for 1:1 file/media/voice reactions (symmetric tox
+        // file_id hex), stamped at send/receive so it survives Filetransfer-row deletion on completion.
+        if (new_version == 10245) {
+            run_multi_sql("ALTER TABLE Message ADD COLUMN ft_id_anchor_hex TEXT");
+            run_multi_sql("CREATE INDEX `index_ft_id_anchor_hex_on_Message` ON `Message` (`ft_id_anchor_hex`)");
         }
     }
 
@@ -7562,6 +7569,8 @@ public class MainActivity extends AppCompatActivity
             m.text = filename + "\n" + file_size + " bytes";
             m.sent_push = 0;
             m.filetransfer_kind = TOX_FILE_KIND_FTV2.value;
+            // KHANDAQ (#192): durable reaction anchor (symmetric tox file_id) for this incoming 1:1 file.
+            m.ft_id_anchor_hex = file_id_buffer_hex;
             long new_msg_id = -1;
 
             if (message_list_activity != null)

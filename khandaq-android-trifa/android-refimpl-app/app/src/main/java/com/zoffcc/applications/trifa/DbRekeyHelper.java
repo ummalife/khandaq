@@ -53,6 +53,70 @@ public final class DbRekeyHelper
                 .getBoolean(DbSecretKeyStorage.PREFS_REKEY_PENDING, false);
     }
 
+    /**
+     * KHANDAQ (rekey): savedata.tox is toxencryptsave-encrypted with sha256(OLD key) — the SQLCipher
+     * rekey alone left it on the old key, so the restarted app failed to load the profile and parked
+     * it as .broken (tester report). Snapshot the LIVE savedata (exported plaintext, immediately
+     * Keystore-GCM-wrapped) while the old-key tox is still running, so the rekey process can move it
+     * onto the new key. Call from ChangePasswordActivity right after stagePendingRekey.
+     */
+    static boolean stageSavedataSnapshot(final Context context)
+    {
+        final File savedata = new File(context.getFilesDir(), "savedata.tox");
+        final File staged = sibling(savedata, ".rk");
+        //noinspection ResultOfMethodCallIgnored
+        staged.delete();
+        if (!TrifaToxService.is_tox_started)
+        {
+            // no live tox to export from: only OK when there is no savedata needing re-encryption
+            return !savedata.isFile();
+        }
+        final File plain = sibling(savedata, ".rkplain");
+        try
+        {
+            MainActivity.semaphore_tox_savedata.acquire();
+            try
+            {
+                MainActivity.export_savedata_file_unsecure("", plain.getAbsolutePath());
+            }
+            finally
+            {
+                MainActivity.semaphore_tox_savedata.release();
+            }
+            return plain.isFile() && plain.length() > 0
+                   && DbSecretKeyStorage.encryptFileWithRekeyStagingKey(context, plain, staged);
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "stageSavedataSnapshot failed: " + e.getMessage());
+            return false;
+        }
+        finally
+        {
+            //noinspection ResultOfMethodCallIgnored
+            plain.delete();
+        }
+    }
+
+    /** toxencryptsave files start with the 8-byte magic "toxEsave". */
+    private static boolean isToxEncryptedFile(final File f)
+    {
+        if (!f.isFile() || f.length() < 8)
+        {
+            return false;
+        }
+        try (FileInputStream in = new FileInputStream(f))
+        {
+            final byte[] magic = new byte[8];
+            return in.read(magic) == 8
+                   && "toxEsave".equals(new String(magic, java.nio.charset.StandardCharsets.US_ASCII));
+        }
+        catch (Exception e)
+        {
+            return true; // unreadable -> assume encrypted, fail safe
+        }
+    }
+
     /** True once, after an abort — the caller shows "password NOT changed" and the flag clears. */
     static boolean consumeRekeyAbortedFlag(final Context context)
     {
@@ -106,6 +170,16 @@ public final class DbRekeyHelper
         // (must run BEFORE any probe — a probe on a missing path must never be trusted)
         recoverMissingBase(mainDb);
         recoverMissingBase(filesDb);
+
+        // savedata.tox too: a crash between its two renames leaves only savedata.tox.oldk
+        final File savedataRec = new File(context.getFilesDir(), "savedata.tox");
+        final File savedataRecOldk = sibling(savedataRec, ".oldk");
+        if (!savedataRec.isFile() && savedataRecOldk.isFile())
+        {
+            Log.w(TAG, "savedata.tox missing with .oldk present — restoring the original first");
+            //noinspection ResultOfMethodCallIgnored
+            savedataRecOldk.renameTo(savedataRec);
+        }
 
         final String[] staged = DbSecretKeyStorage.loadPendingRekey(context);
         if (staged == null)
@@ -203,6 +277,47 @@ public final class DbRekeyHelper
                 return;
             }
 
+            // ---- savedata.tox must follow the DBs onto the new key --------------------------------
+            // (toxencryptsave-encrypted with sha256(oldKey); the staged Keystore-wrapped snapshot is
+            // swapped in as PLAINTEXT — create_tox accepts unencrypted savedata and the first
+            // update_savedata_file after login re-encrypts it with sha256(newKey))
+            final File savedata = new File(context.getFilesDir(), "savedata.tox");
+            final File stagedSd = sibling(savedata, ".rk");
+            final File sdOldk = sibling(savedata, ".oldk");
+            if (stagedSd.isFile())
+            {
+                final File sdNew = sibling(savedata, ".new");
+                //noinspection ResultOfMethodCallIgnored
+                sdNew.delete();
+                if (!DbSecretKeyStorage.decryptFileWithRekeyStagingKey(context, stagedSd, sdNew))
+                {
+                    Log.w(TAG, "staged savedata unreadable — aborting rekey");
+                    abortAndRestore(context, mainDb, filesDb);
+                    return;
+                }
+                //noinspection ResultOfMethodCallIgnored
+                sdOldk.delete();
+                if (savedata.isFile() && !savedata.renameTo(sdOldk))
+                {
+                    abortAndRestore(context, mainDb, filesDb);
+                    return;
+                }
+                if (!sdNew.renameTo(savedata))
+                {
+                    //noinspection ResultOfMethodCallIgnored
+                    sdOldk.renameTo(savedata);
+                    abortAndRestore(context, mainDb, filesDb);
+                    return;
+                }
+            }
+            else if (isToxEncryptedFile(savedata))
+            {
+                // no snapshot but the profile is still on the old key — finalizing would strand it
+                Log.w(TAG, "savedata.tox on the OLD key with no staged snapshot — aborting rekey");
+                abortAndRestore(context, mainDb, filesDb);
+                return;
+            }
+
             // ---- finalize -------------------------------------------------------------------------
             // Persist the salt FIRST: from here on the new password must be able to re-derive newKey.
             prefs.edit()
@@ -215,6 +330,10 @@ public final class DbRekeyHelper
             deleteWithSidecars(sibling(mainDb, ".oldk"));
             deleteWithSidecars(sibling(filesDb, ".oldk"));
             cleanupCopies(mainDb, filesDb);
+            //noinspection ResultOfMethodCallIgnored
+            sdOldk.delete();
+            //noinspection ResultOfMethodCallIgnored
+            stagedSd.delete();
             DbSecretKeyStorage.clearPendingRekey(context);
             Log.i(TAG, "pending rekey: SUCCESS");
         }
@@ -236,6 +355,24 @@ public final class DbRekeyHelper
     private static void abortAndRestore(final Context context, final File mainDb, final File filesDb)
     {
         restoreOriginals(mainDb, filesDb);
+        // savedata.tox: put the old-key original back if the swap was underway, drop artifacts
+        try
+        {
+            final File savedata = new File(context.getFilesDir(), "savedata.tox");
+            final File sdOldk = sibling(savedata, ".oldk");
+            if (!savedata.isFile() && sdOldk.isFile())
+            {
+                //noinspection ResultOfMethodCallIgnored
+                sdOldk.renameTo(savedata);
+            }
+            //noinspection ResultOfMethodCallIgnored
+            sibling(savedata, ".rk").delete();
+            //noinspection ResultOfMethodCallIgnored
+            sibling(savedata, ".new").delete();
+        }
+        catch (Exception ignored)
+        {
+        }
         DbSecretKeyStorage.markRekeyAborted(context);
         DbSecretKeyStorage.clearPendingRekey(context);
     }

@@ -181,6 +181,19 @@ public class ChangePasswordActivity extends AppCompatActivity
                         Toast.makeText(this, R.string.cp_err_generic, Toast.LENGTH_SHORT).show();
                         return;
                     }
+                    // KHANDAQ (rekey): savedata.tox is toxencryptsave-encrypted with sha256(OLD key)
+                    // — the SQLCipher rekey alone left it behind, so the restarted app failed with
+                    // «файл повреждён или защищён паролем», parked the profile as .broken and
+                    // created a NEW Tox identity (tester report). Snapshot the live savedata now so
+                    // the rekey process can move it onto the new key.
+                    if (!DbRekeyHelper.stageSavedataSnapshot(this))
+                    {
+                        DbSecretKeyStorage.clearPendingRekey(this);
+                        Toast.makeText(this, R.string.cp_err_generic, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    // after the restart the user must log in with the NEW password
+                    DbSecretKeyStorage.setSessionLoggedIn(this, false);
                     // same shutdown pattern as the profile wipe: log out, end the process so the
                     // fresh launch performs the rekey before any DB is opened
                     try

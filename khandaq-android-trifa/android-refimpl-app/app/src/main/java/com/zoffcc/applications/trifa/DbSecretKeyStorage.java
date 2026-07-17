@@ -446,6 +446,7 @@ public final class DbSecretKeyStorage
                     .remove(PREFS_LAST_WORKING_IV)
                     .remove(PREFS_DEVICE_BACKUP_ENC)
                     .remove(PREFS_DEVICE_BACKUP_IV)
+                    .remove(PREFS_SESSION_LOGGED_IN)
                     .putBoolean("PW_SET_SCREEN_DONE", false)
                     .commit();
         }
@@ -563,6 +564,105 @@ public final class DbSecretKeyStorage
     private static final String REKEY_NO_PREV_SALT = "__none__";
     static final String PREFS_REKEY_PENDING = "DB_rekey_pending";
     static final String PREFS_REKEY_ABORTED = "DB_rekey_aborted";
+
+    // ---- persisted login session (tester report: logout must stick across app close; and the app
+    // must NOT re-ask the profile password after the OS kills the idle process — the app-lock PIN is
+    // the idle gate, the password gates only an explicit logout) --------------------------------
+    static final String PREFS_SESSION_LOGGED_IN = "DB_session_logged_in";
+
+    /** Default TRUE: existing installs never wrote the flag; only an explicit logout clears it. */
+    static boolean isSessionLoggedIn(final Context context)
+    {
+        if (context == null)
+        {
+            return true;
+        }
+        return PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(PREFS_SESSION_LOGGED_IN, true);
+    }
+
+    static void setSessionLoggedIn(final Context context, final boolean loggedIn)
+    {
+        if (context == null)
+        {
+            return;
+        }
+        PreferenceManager.getDefaultSharedPreferences(context).edit()
+                .putBoolean(PREFS_SESSION_LOGGED_IN, loggedIn).commit();
+    }
+
+    // ---- KHANDAQ (rekey): file-level GCM staging for the tox savedata snapshot ----------------
+    // (same Keystore staging key as the rekey passphrases; IV length-prefixed in the file)
+
+    static boolean encryptFileWithRekeyStagingKey(final Context ctx, final java.io.File in,
+                                                  final java.io.File out)
+    {
+        try
+        {
+            final byte[] plain = readAllFileBytes(in);
+            final Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.ENCRYPT_MODE, getOrCreateKey(KEYSTORE_REKEY_ALIAS));
+            final byte[] iv = c.getIV();
+            final byte[] enc = c.doFinal(plain);
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out))
+            {
+                fos.write(iv.length);
+                fos.write(iv);
+                fos.write(enc);
+                fos.getFD().sync();
+            }
+            return out.length() > 0;
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "encryptFileWithRekeyStagingKey failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    static boolean decryptFileWithRekeyStagingKey(final Context ctx, final java.io.File in,
+                                                  final java.io.File out)
+    {
+        try
+        {
+            final byte[] all = readAllFileBytes(in);
+            final int ivLen = all[0] & 0xff;
+            final Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.DECRYPT_MODE, getOrCreateKey(KEYSTORE_REKEY_ALIAS),
+                   new GCMParameterSpec(128, java.util.Arrays.copyOfRange(all, 1, 1 + ivLen)));
+            final byte[] plain = c.doFinal(java.util.Arrays.copyOfRange(all, 1 + ivLen, all.length));
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out))
+            {
+                fos.write(plain);
+                fos.getFD().sync();
+            }
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "decryptFileWithRekeyStagingKey failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static byte[] readAllFileBytes(final java.io.File f) throws Exception
+    {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f))
+        {
+            final byte[] buf = new byte[(int) f.length()];
+            int off = 0;
+            while (off < buf.length)
+            {
+                final int n = in.read(buf, off, buf.length - off);
+                if (n < 0)
+                {
+                    throw new java.io.EOFException();
+                }
+                off += n;
+            }
+            return buf;
+        }
+    }
 
     static boolean stagePendingRekey(final Context context, final String oldKey, final String newKey,
                                      final String saltB64)

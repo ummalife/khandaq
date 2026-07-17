@@ -1128,6 +1128,13 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
         final android.app.Activity act = getActivity();
         MainActivity.manually_log_out();
 
+        // KHANDAQ (session persistence): logout must STICK across an app close. The foreground
+        // service keeps the process (and the mounted VFS) alive, so without a persisted flag the
+        // next launch skipped the password screen entirely (tester video). Also drop the in-memory
+        // key candidate so resolveDbSecretKey can't silently re-enter.
+        DbSecretKeyStorage.setSessionLoggedIn(act, false);
+        TRIFAGlobals.PREF__DB_secrect_key__user_hash = "";
+
         final Thread t = new Thread()
         {
             @Override

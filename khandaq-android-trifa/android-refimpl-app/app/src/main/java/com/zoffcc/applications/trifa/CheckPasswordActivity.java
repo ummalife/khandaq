@@ -103,8 +103,13 @@ public class CheckPasswordActivity extends AppCompatActivity
 
             Log.i(TAG, "001");
 
+            // KHANDAQ (session persistence): a manual-password user who is still LOGGED IN (never
+            // pressed «Выйти») must not be re-asked the password just because the OS killed the idle
+            // process — the app-lock PIN is the idle gate. The Keystore-wrapped last-working key is
+            // probed against the real DB, so a wrong key can never auto-unlock by construction.
             if (!TextUtils.isEmpty(DB_secrect_key__tmp)
-                    && !DbSecretKeyStorage.prefersManualPasswordUnlock(this))
+                    && (!DbSecretKeyStorage.prefersManualPasswordUnlock(this)
+                        || DbSecretKeyStorage.isSessionLoggedIn(this)))
             {
                 Log.i(TAG, "auto_generated_password:true");
                 Log.i(TAG, "003");
@@ -165,6 +170,10 @@ public class CheckPasswordActivity extends AppCompatActivity
         }
 
         PREF__DB_secrect_key__user_hash = try_password_hash;
+
+        // KHANDAQ (session persistence): unlock succeeded — mark the session logged in (re-arms
+        // after an explicit logout; also reached by the auto-unlock path for skip-password users).
+        DbSecretKeyStorage.setSessionLoggedIn(this, true);
 
         Intent main_act = new Intent(this, MainActivity.class);
         startActivity(main_act);

@@ -169,7 +169,11 @@ public class StartMainActivityWrapper extends AppCompatActivity
 
         Log.i(TAG, "0007");
 
+        // KHANDAQ (session persistence): after an explicit logout the mounted-VFS shortcut must be
+        // disarmed — the foreground service keeps the process alive across a task swipe, so without
+        // this check a relaunch walked straight past the password screen (tester video).
         if (already_mounted
+                && DbSecretKeyStorage.isSessionLoggedIn(this)
                 && !TextUtils.isEmpty(DbSecretKeyStorage.resolveDbSecretKey(this)))
         {
             Log.i(TAG, "0008");

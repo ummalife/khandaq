@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10350.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10351.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Call audio quality: echo cancellation and noise suppression now run on every call (not only in speaker mode), matching the iOS calls — no more echo on regular earpiece calls."},
-                    {"language": "ru-RU", "text": "Качество звука в звонках: эхоподавление и шумоподавление теперь работают в каждом звонке (а не только в громкой связи), как в iOS — больше никакого эха в обычных разговорных звонках."},
+                    {"language": "en-US", "text": "Reactions now work on files, photos, videos and voice messages too — not just text. Tap-and-hold any file/media/voice message (1:1 or group) and pick a reaction."},
+                    {"language": "ru-RU", "text": "Реакции теперь работают и на файлах, фото, видео и голосовых сообщениях — не только на тексте. Зажмите любое файловое/медиа/голосовое сообщение (1:1 или в группе) и выберите реакцию."},
                 ],
             }],
         })

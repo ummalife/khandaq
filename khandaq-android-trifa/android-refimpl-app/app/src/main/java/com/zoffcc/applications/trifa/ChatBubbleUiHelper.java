@@ -231,8 +231,10 @@ final class ChatBubbleUiHelper
     // KHANDAQ (Figma): photo/video bubbles hug the media at a sane size instead of filling the row
     // full-width with letterbox. Glide loads with .override(these) + FitCenter so the bitmap is the
     // final fitted size (≤ max), and the preview view wraps to it.
-    static final int MEDIA_THUMB_MAX_W_DP = 244;
-    static final int MEDIA_THUMB_MAX_H_DP = 320;
+    // KHANDAQ: bumped up — photos looked too small (capped ~62% of screen width). Bigger, closer
+    // to Telegram (~70-75% width) while still leaving the bubble margins.
+    static final int MEDIA_THUMB_MAX_W_DP = 300;
+    static final int MEDIA_THUMB_MAX_H_DP = 400;
 
     static int media_thumb_max_w_px(final Context context)
     {

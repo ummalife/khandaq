@@ -116,13 +116,21 @@ final class ChatFilterTabIndicatorHelper
             return;
         }
 
-        final float leftA = tabA.getLeft();
-        final float leftB = tabB.getLeft();
-        final float widthA = tabA.getWidth();
-        final float widthB = tabB.getWidth();
+        // KHANDAQ: the underline hugs the tab LABEL (centred under the text) instead of spanning the
+        // whole 1/3-width tab — shorter & tidier. Falls back to half the tab width if the label
+        // hasn't measured yet.
+        final TextView labelA = (base < tabLabels.length) ? tabLabels[base] : null;
+        final TextView labelB = (Math.min(base + 1, lastTab) < tabLabels.length)
+                ? tabLabels[Math.min(base + 1, lastTab)] : null;
+        final float indWA = (labelA != null && labelA.getWidth() > 0) ? labelA.getWidth() : tabA.getWidth() * 0.5f;
+        final float indWB = (labelB != null && labelB.getWidth() > 0) ? labelB.getWidth() : tabB.getWidth() * 0.5f;
 
-        final float left = leftA + (leftB - leftA) * fraction;
-        final float width = widthA + (widthB - widthA) * fraction;
+        final float centerA = tabA.getLeft() + tabA.getWidth() / 2f;
+        final float centerB = tabB.getLeft() + tabB.getWidth() / 2f;
+
+        final float width = indWA + (indWB - indWA) * fraction;
+        final float center = centerA + (centerB - centerA) * fraction;
+        final float left = center - width / 2f;
 
         final ViewGroup.LayoutParams params = slidingIndicator.getLayoutParams();
         if (params != null)

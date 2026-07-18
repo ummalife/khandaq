@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10351.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10352.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Reactions now work on files, photos, videos and voice messages too — not just text. Tap-and-hold any file/media/voice message (1:1 or group) and pick a reaction."},
-                    {"language": "ru-RU", "text": "Реакции теперь работают и на файлах, фото, видео и голосовых сообщениях — не только на тексте. Зажмите любое файловое/медиа/голосовое сообщение (1:1 или в группе) и выберите реакцию."},
+                    {"language": "en-US", "text": "Reactions now work on files, photos, videos and voice messages too — not just text. Tap-and-hold any file/media/voice message (including voice notes) and pick a reaction."},
+                    {"language": "ru-RU", "text": "Реакции теперь работают и на файлах, фото, видео и голосовых сообщениях — не только на тексте. Зажмите любое файловое/медиа/голосовое сообщение (включая голосовые) и выберите реакцию."},
                 ],
             }],
         })

@@ -61,6 +61,61 @@ public class VoicePlayerView extends LinearLayout
     private MediaPlayer mediaPlayer;
     private ProgressBar pb_play;
 
+    // KHANDAQ (#192): a voice note has no caption to long-press and the play button / seekbar consume
+    // touch, so the row's long-press (message selection → the "Реакция" toolbar) never fired — the
+    // note could not be selected to react. Detect a long-press here and STEAL the gesture: children
+    // get ACTION_CANCEL (so play doesn't fire on release) and we perform the row long-click. A short
+    // tap still plays; a drag still scrubs (GestureDetector cancels the long-press on movement).
+    private android.view.GestureDetector kqLongPressDetector;
+    private View kqLongPressSelectionTarget;
+    private boolean kqLongPressFired;
+
+    public void setLongPressSelectionTarget(final View target) {
+        this.kqLongPressSelectionTarget = target;
+        if ((target != null) && (kqLongPressDetector == null)) {
+            kqLongPressDetector = new android.view.GestureDetector(getContext(),
+                    new android.view.GestureDetector.SimpleOnGestureListener() {
+                        @Override
+                        public void onLongPress(android.view.MotionEvent e) {
+                            kqLongPressFired = true;
+                            final View t = kqLongPressSelectionTarget;
+                            if (t != null) {
+                                // defer off the touch-dispatch stack (starting the selection ActionMode
+                                // synchronously here can wedge input dispatch).
+                                t.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        t.performLongClick();
+                                    }
+                                });
+                            }
+                        }
+                    });
+        }
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(android.view.MotionEvent ev) {
+        if (kqLongPressDetector != null) {
+            if (ev.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                kqLongPressFired = false;
+            }
+            kqLongPressDetector.onTouchEvent(ev);
+            if (kqLongPressFired) {
+                return true; // steal the rest of the gesture from the play button / seekbar
+            }
+        }
+        return super.onInterceptTouchEvent(ev);
+    }
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent ev) {
+        if (kqLongPressDetector != null) {
+            kqLongPressDetector.onTouchEvent(ev);
+        }
+        return super.onTouchEvent(ev);
+    }
+
     // KHANDAQ: playback moved to the global ChatVoicePlaybackManager (single MediaPlayer app-wide,
     // survives row recycling + chat switches, remembers per-file position). Starting any voice
     // pauses the previous one inside the manager, so the old per-view handoff is a no-op now.

@@ -799,9 +799,13 @@ public class HelperMessageReaction
                     return false;
                 }
                 final Message m = rows.get(0);
-                // Saved Messages: local-only reactions always allowed; otherwise a shared anchor
+                // Reactable in the UI when: Saved Messages (local-only), any text row with a shared
+                // anchor, OR any file/media/voice row (iOS parity — reaction is offered always;
+                // toggleOwnFriendReaction stores it locally and only puts it on the wire when the
+                // file has a shared anchor, so a voice note is always reactable at least locally).
                 return FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey)
-                       || friendRowAddressable(m);
+                       || friendRowAddressable(m)
+                       || m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value;
             }
             if (MainActivity.selected_group_messages.size() == 1)
             {

@@ -858,6 +858,56 @@ public final class ChatMediaHelper
 
     // Same gesture behaviour for OUTGOING media, whose open action differs (open_outgoing_message_file):
     // single tap runs openAction (or toggles selection when the row is selected), long press selects.
+    // KHANDAQ (#192): a voice-note player handles play/seek touches itself and has no caption to
+    // long-press, so the row's long-press (which starts message selection → the "Реакция" toolbar)
+    // never fired on a voice note — the internal play button / seekbar consume the touch before it
+    // reaches the row. Set a long-click on the player AND every descendant, so whichever child eats
+    // the touch still routes a long-press to the row selection (a short tap still plays / seeks).
+    public static void routeLongPressToSelection(final Context context, final View mediaView,
+                                                 final View selectionTarget)
+    {
+        if ((mediaView == null) || (selectionTarget == null))
+        {
+            return;
+        }
+        final View.OnLongClickListener l = new View.OnLongClickListener()
+        {
+            @Override
+            public boolean onLongClick(View v)
+            {
+                return selectionTarget.performLongClick();
+            }
+        };
+        applyLongClickRecursive(mediaView, l);
+        // the player may (re)build its child views right after bind; re-apply on the next frame too.
+        mediaView.post(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                applyLongClickRecursive(mediaView, l);
+            }
+        });
+    }
+
+    private static void applyLongClickRecursive(final View v, final View.OnLongClickListener l)
+    {
+        if (v == null)
+        {
+            return;
+        }
+        v.setLongClickable(true);
+        v.setOnLongClickListener(l);
+        if (v instanceof android.view.ViewGroup)
+        {
+            final android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++)
+            {
+                applyLongClickRecursive(g.getChildAt(i), l);
+            }
+        }
+    }
+
     public static View.OnTouchListener gestureMediaOpenTouchListener(final Context context, final Runnable openAction,
                                                                      final View selectionTarget)
     {

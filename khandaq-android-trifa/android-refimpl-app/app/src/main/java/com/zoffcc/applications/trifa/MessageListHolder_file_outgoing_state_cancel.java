@@ -125,8 +125,6 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
     @SuppressLint("ClickableViewAccessibility")
     public void bindMessageList(Message m)
     {
-        // Log.i(TAG, "bindMessageList");
-
         if (m == null)
         {
             // TODO: should never be null!!
@@ -410,6 +408,10 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                 }
 
                 HelperFiletransfer.safeRefreshAudioPlayer(ft_audio_player, message.filename_fullpath);
+                // KHANDAQ (#192): a voice note has no caption/preview to long-press, and the player eats
+                // touch for play/seek — so the row's long-press (which starts selection → the "Реакция"
+                // toolbar) never fired. Let the player steal a long-press for the row selection.
+                ft_audio_player.setLongPressSelectionTarget(layout_message_container);
             }
             else
             {

@@ -672,6 +672,9 @@ public class MessageListHolder_file_incoming_state_cancel extends RecyclerView.V
         }
 
         HelperFiletransfer.safeRefreshAudioPlayer(ft_audio_player, message.filename_fullpath);
+        // KHANDAQ (#192): let the voice player steal a long-press for the row selection (→ "Реакция"),
+        // since a voice note has no caption to long-press and the player eats touch for play/seek.
+        ft_audio_player.setLongPressSelectionTarget(layout_message_container);
     }
 
     private void finishDirectVoiceChrome()

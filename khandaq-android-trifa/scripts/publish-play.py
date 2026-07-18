@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10354.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10355.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Chat polish: photos in chats are bigger; the checkmark is on the left and the time on the right under media; voice messages are all the same width now; tidier tab underline. Plus reactions on files/photos/videos/voice and an image-only avatar picker."},
-                    {"language": "ru-RU", "text": "Полировка чата: фото в чатах крупнее; под медиа галочка слева, время справа; голосовые теперь одинаковой ширины; аккуратнее подчёркивание вкладок. Плюс реакции на файлы/фото/видео/голосовые и выбор аватара только из изображений."},
+                    {"language": "en-US", "text": "Delete for everyone now works for photos, videos, voice messages and files too — in private chats and groups, not just text. Plus a tidier, centered tab underline."},
+                    {"language": "ru-RU", "text": "Удаление у всех теперь работает и для фото, видео, голосовых и файлов — в личных чатах и группах, не только для текста. Плюс аккуратнее и по центру подчёркивание вкладок."},
                 ],
             }],
         })

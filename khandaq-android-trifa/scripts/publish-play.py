@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10353.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10354.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Reactions now work on files, photos, videos and voice messages too (tap-and-hold any of them). Avatar picker fix: setting a profile picture now only offers images — picking a video no longer bounced you through the PIN screen back to the profile with nothing changed."},
-                    {"language": "ru-RU", "text": "Реакции теперь работают на файлах, фото, видео и голосовых (зажмите сообщение). Исправлен выбор аватара: при смене фото профиля теперь показываются только изображения — выбор видео больше не выкидывает на ввод PIN и обратно в профиль без изменений."},
+                    {"language": "en-US", "text": "Chat polish: photos in chats are bigger; the checkmark is on the left and the time on the right under media; voice messages are all the same width now; tidier tab underline. Plus reactions on files/photos/videos/voice and an image-only avatar picker."},
+                    {"language": "ru-RU", "text": "Полировка чата: фото в чатах крупнее; под медиа галочка слева, время справа; голосовые теперь одинаковой ширины; аккуратнее подчёркивание вкладок. Плюс реакции на файлы/фото/видео/голосовые и выбор аватара только из изображений."},
                 ],
             }],
         })

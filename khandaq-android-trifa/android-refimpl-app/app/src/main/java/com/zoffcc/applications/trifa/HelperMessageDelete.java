@@ -83,25 +83,60 @@ public class HelperMessageDelete
         }
     }
 
+    // KHANDAQ (#193): file/media/voice 1:1 delete — 41 bytes: anchor_type 2 at [4], tox file_id at
+    // [5..36], ts at [37..40]. (Text stays 40 bytes for back-compat.)
+    static byte[] buildFriendDeleteFilePacket(final String fileIdHex, final long delTsSec)
+    {
+        try
+        {
+            final byte[] fid = hexToBytes(fileIdHex);
+            if (fid == null || fid.length != 32)
+            {
+                return null;
+            }
+            final ByteArrayOutputStream out = new ByteArrayOutputStream(FRIEND_PKT_LEN + 1);
+            out.write(PKT_MSG_DELETE);
+            out.write(MAGIC_1);
+            out.write(MAGIC_2);
+            out.write(VERSION);
+            out.write(2); // anchor_type 2 = tox file_id
+            out.write(fid, 0, 32);
+            writeU32BE(out, delTsSec);
+            return out.toByteArray();
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
     /**
-     * Propagate deletion of an OWN 1:1 TEXT message to the peer. Call BEFORE the local row is
-     * removed (needs msg_idv3_hash). Local deletion itself stays with the existing delete flow.
+     * Propagate deletion of an OWN 1:1 message to the peer. Call BEFORE the local row is removed.
+     * Text anchors on msg_idv3_hash; files/media/voice on the symmetric tox file_id (ft_id_anchor_hex).
+     * Local deletion itself stays with the existing delete flow.
      */
     static void sendOwnFriendDelete(final Message m)
     {
         try
         {
-            if (m == null || m.direction != 1
-                || m.TRIFA_MESSAGE_TYPE != TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value
-                || m.msg_idv3_hash == null || m.msg_idv3_hash.length() != 64
-                || m.tox_friendpubkey == null
+            if (m == null || m.direction != 1 || m.tox_friendpubkey == null
                 || FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey))
             {
                 return;
             }
 
+            final boolean isFile =
+                    (m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value);
+            final String anchorHex = isFile ? m.ft_id_anchor_hex : m.msg_idv3_hash;
+            if (anchorHex == null || anchorHex.length() != 64)
+            {
+                return;
+            }
+
             final long friend_number = HelperFriend.tox_friend_by_public_key__wrapper(m.tox_friendpubkey);
-            final byte[] pkt = buildFriendDeletePacket(m.msg_idv3_hash, System.currentTimeMillis() / 1000);
+            final byte[] pkt = isFile
+                    ? buildFriendDeleteFilePacket(anchorHex, System.currentTimeMillis() / 1000)
+                    : buildFriendDeletePacket(anchorHex, System.currentTimeMillis() / 1000);
             if (pkt == null)
             {
                 return;
@@ -114,8 +149,8 @@ public class HelperMessageDelete
             }
             if (res != 0)
             {
-                // offline / temporary failure — queue for the reconnect flush
-                stashPendingDelete(m.tox_friendpubkey, m.msg_idv3_hash);
+                // offline / temporary failure — queue for the reconnect flush (file entries tagged "F:")
+                stashPendingDelete(m.tox_friendpubkey, isFile ? ("F:" + anchorHex) : anchorHex);
             }
         }
         catch (Exception e)
@@ -133,7 +168,10 @@ public class HelperMessageDelete
             {
                 return;
             }
-            final String hashHex = HelperGeneric.bytesToHex(data, 4, 32).toUpperCase(Locale.ENGLISH);
+            // TEXT = 40 bytes (hash at [4..35]); FILE = 41 bytes (data[4]=2, tox file_id at [5..36]).
+            final boolean isFile = (length >= (FRIEND_PKT_LEN + 1) && data[4] == 2);
+            final String anchorHex =
+                    HelperGeneric.bytesToHex(data, isFile ? 5 : 4, 32).toUpperCase(Locale.ENGLISH);
             final String senderPubkey = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
             if (senderPubkey == null)
             {
@@ -144,8 +182,9 @@ public class HelperMessageDelete
             try
             {
                 // direction==0 = anti-spoofing: only a message this friend SENT me can be retracted
-                final List<Message> list = orma.selectFromMessage().
-                        msg_idv3_hashEq(hashHex).
+                final List<Message> list = (isFile
+                        ? orma.selectFromMessage().ft_id_anchor_hexEq(anchorHex)
+                        : orma.selectFromMessage().msg_idv3_hashEq(anchorHex)).
                         tox_friendpubkeyEq(senderPubkey).
                         directionEq(0).
                         orderByIdDesc().
@@ -166,7 +205,7 @@ public class HelperMessageDelete
                 {
                     pending_tombstones.clear();
                 }
-                pending_tombstones.put(senderPubkey + ":" + hashHex, System.currentTimeMillis());
+                pending_tombstones.put(senderPubkey + ":" + anchorHex, System.currentTimeMillis());
                 return;
             }
 
@@ -269,11 +308,16 @@ public class HelperMessageDelete
             final List<String> remaining = new ArrayList<>();
             for (final String hash : cur.split(","))
             {
-                if (hash.length() != 64)
+                // plain 64-char = text; "F:"+64 = file/media/voice (tox file_id).
+                final boolean isFile = hash.startsWith("F:");
+                final String anchor = isFile ? hash.substring(2) : hash;
+                if (anchor.length() != 64)
                 {
                     continue;
                 }
-                final byte[] pkt = buildFriendDeletePacket(hash, System.currentTimeMillis() / 1000);
+                final byte[] pkt = isFile
+                        ? buildFriendDeleteFilePacket(anchor, System.currentTimeMillis() / 1000)
+                        : buildFriendDeletePacket(anchor, System.currentTimeMillis() / 1000);
                 if (pkt == null)
                 {
                     continue;
@@ -330,26 +374,70 @@ public class HelperMessageDelete
         }
     }
 
-    /** Broadcast deletion of an OWN group TEXT message (best effort — like group edits). */
+    // KHANDAQ (#193): file/media/voice group delete — 45 bytes: magic(6), v1, 0x42, anchor_type 0x02,
+    // full 32-byte msg_id_hash at [9..40], ts at [41..44]. (Text stays 16 bytes.)
+    static byte[] buildGroupDeleteFilePacket(final String msgIdHashHex, final long delTsSec)
+    {
+        try
+        {
+            final byte[] hash = hexToBytes(msgIdHashHex);
+            if (hash == null || hash.length != 32)
+            {
+                return null;
+            }
+            final ByteArrayOutputStream out = new ByteArrayOutputStream(NGC_PKT_LEN + 1 + 28);
+            out.write(0x66);
+            out.write(0x77);
+            out.write(0x88);
+            out.write(0x11);
+            out.write(0x34);
+            out.write(0x35);
+            out.write(VERSION);
+            out.write(NGC_PKT_MSG_DELETE);
+            out.write(2); // anchor_type 2 = msg_id_hash
+            out.write(hash, 0, 32);
+            writeU32BE(out, delTsSec);
+            return out.toByteArray();
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    /** Broadcast deletion of an OWN group message (best effort — like group edits). Text anchors on
+     * message_id_tox; files/media/voice on the 32-byte msg_id_hash. */
     static void sendOwnGroupDelete(final GroupMessage gm)
     {
         try
         {
-            if (gm == null || gm.direction != 1
-                || gm.TRIFA_MESSAGE_TYPE != TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value
-                || gm.message_id_tox == null || gm.message_id_tox.length() != 8
-                || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
+            if (gm == null || gm.direction != 1)
             {
                 return;
+            }
+            final boolean isFile =
+                    (gm.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value);
+            byte[] pkt = null;
+            if (isFile)
+            {
+                if (gm.msg_id_hash == null || gm.msg_id_hash.length() != 64)
+                {
+                    return;
+                }
+                pkt = buildGroupDeleteFilePacket(gm.msg_id_hash, System.currentTimeMillis() / 1000);
+            }
+            else
+            {
+                if (gm.message_id_tox == null || gm.message_id_tox.length() != 8
+                    || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
+                {
+                    return;
+                }
+                pkt = buildGroupDeletePacket(gm.message_id_tox, System.currentTimeMillis() / 1000);
             }
             final long group_number =
                     HelperGroup.tox_group_by_groupid__wrapper(gm.group_identifier);
-            if (group_number < 0)
-            {
-                return;
-            }
-            final byte[] pkt = buildGroupDeletePacket(gm.message_id_tox, System.currentTimeMillis() / 1000);
-            if (pkt == null)
+            if (group_number < 0 || pkt == null)
             {
                 return;
             }
@@ -371,13 +459,13 @@ public class HelperMessageDelete
             {
                 return;
             }
-            final String messageIdHex =
-                    HelperGeneric.bytesToHex(data, 8, 4).toLowerCase(Locale.ENGLISH);
+            // TEXT = 16 bytes (message_id_tox at [8..11]); FILE = 45 bytes (data[8]=2, 32-byte
+            // msg_id_hash at [9..40]).
+            final boolean isFile = (length >= (NGC_PKT_LEN + 1 + 28) && data[8] == 2);
             final String senderPubkey =
                     HelperGroup.tox_group_peer_get_public_key__wrapper(group_number, peer_id);
             final String groupIdentifier = HelperGroup.tox_group_by_groupnum__wrapper(group_number);
-            if (senderPubkey == null || groupIdentifier == null
-                || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(messageIdHex))
+            if (senderPubkey == null || groupIdentifier == null)
             {
                 return;
             }
@@ -385,15 +473,38 @@ public class HelperMessageDelete
             GroupMessage gm = null;
             try
             {
-                final List<GroupMessage> list = orma.selectFromGroupMessage().
-                        group_identifierEq(groupIdentifier).
-                        tox_group_peer_pubkeyEq(senderPubkey.toUpperCase(Locale.ENGLISH)).
-                        message_id_toxEq(messageIdHex).
-                        orderByIdDesc().
-                        toList();
-                if (list != null && !list.isEmpty())
+                if (isFile)
                 {
-                    gm = list.get(0);
+                    // msg_id_hash is globally unique — match on it directly (no author disambiguation).
+                    final String hashHex = HelperGeneric.bytesToHex(data, 9, 32).toUpperCase(Locale.ENGLISH);
+                    final List<GroupMessage> list = orma.selectFromGroupMessage().
+                            group_identifierEq(groupIdentifier).
+                            msg_id_hashEq(hashHex).
+                            orderByIdDesc().
+                            toList();
+                    if (list != null && !list.isEmpty())
+                    {
+                        gm = list.get(0);
+                    }
+                }
+                else
+                {
+                    final String messageIdHex =
+                            HelperGeneric.bytesToHex(data, 8, 4).toLowerCase(Locale.ENGLISH);
+                    if (HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(messageIdHex))
+                    {
+                        return;
+                    }
+                    final List<GroupMessage> list = orma.selectFromGroupMessage().
+                            group_identifierEq(groupIdentifier).
+                            tox_group_peer_pubkeyEq(senderPubkey.toUpperCase(Locale.ENGLISH)).
+                            message_id_toxEq(messageIdHex).
+                            orderByIdDesc().
+                            toList();
+                    if (list != null && !list.isEmpty())
+                    {
+                        gm = list.get(0);
+                    }
                 }
             }
             catch (Exception ignored)

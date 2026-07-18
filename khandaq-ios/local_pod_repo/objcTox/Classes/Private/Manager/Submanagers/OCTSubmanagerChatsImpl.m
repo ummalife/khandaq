@@ -658,6 +658,32 @@ static void triggerPush(NSString *used_pushToken,
     [self removeMessages:@[found]];
 }
 
+// KHANDAQ (#193): the friend retracted one of their own 1:1 FILE/media/voice messages (packet 187,
+// anchor_type 2). Anchored by the symmetric tox file_id; anti-spoofed to a file this friend SENT us.
+- (void)tox:(OCTTox *)tox friendMessageDeleteWithFileIdHex:(NSString *)fileIdHex
+                                             friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend || fileIdHex.length != 64) {
+        return;
+    }
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageFile.fileIdHex ==[c] %@ AND senderUniqueIdentifier == %@",
+                              chat.uniqueIdentifier, fileIdHex, friend.uniqueIdentifier];
+    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+    if (! found) {
+        return;
+    }
+
+    OCTLogInfo(@"friendMessageDelete: removing retracted file message %@", fileIdHex);
+    [self removeMessages:@[found]];
+}
+
 // KHANDAQ (#179): retract an OWN 1:1 text message on the peer too, then delete it locally.
 // The retraction is NOT fire-and-forget anymore: if the peer's tox link is down (the common
 // real-phone case — testers saw "deleted locally, peer keeps it"), the delete is stashed per
@@ -687,9 +713,38 @@ static NSString *const kKQPendingDeletesKey = @"KQPendingFriendDeletes";
     return pkt;
 }
 
+// KHANDAQ (#193): file/media/voice delete — 41 bytes: [0]=187 [1..2]='K','Q' [3]=ver(1)
+// [4]=anchor_type(2=tox file_id) [5..36]=file_id 32B [37..40]=ts u32 BE. Text delete stays 40
+// bytes (implicit anchor_type 1, hash at [4..35]) so it's byte-compatible with older clients.
+- (NSData *)kqDeletePacketWithFileIdHex:(NSString *)fileIdHex
+{
+    if (fileIdHex.length != 64) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:41];
+    const uint8_t header[5] = { 187, 'K', 'Q', 1, 2 };
+    [pkt appendBytes:header length:5];
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int b = 0;
+        [[NSScanner scannerWithString:[fileIdHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+        uint8_t byte = (uint8_t)b;
+        [pkt appendBytes:&byte length:1];
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+    const uint8_t tsbe[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tsbe length:4];
+    return pkt;
+}
+
+// KHANDAQ (#193): `hashHex` is a plain 64-char msgV3 hash (text) OR "F:"+fileIdHex (file/media).
 - (void)stashPendingDeleteForFriendPK:(NSString *)publicKey hashHex:(NSString *)hashHex
 {
-    if (publicKey.length == 0 || hashHex.length != 64) {
+    const BOOL isFileEntry = [hashHex hasPrefix:@"F:"];
+    const NSUInteger anchorLen = isFileEntry ? (hashHex.length - 2) : hashHex.length;
+    if (publicKey.length == 0 || anchorLen != 64) {
         return;
     }
     NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
@@ -725,7 +780,9 @@ static NSString *const kKQPendingDeletesKey = @"KQPendingFriendDeletes";
     }
     NSMutableArray *remaining = [NSMutableArray new];
     for (NSString *hashHex in list) {
-        NSData *pkt = [self kqDeletePacketWithHashHex:hashHex]; // fresh ts, like Android's flush
+        NSData *pkt = [hashHex hasPrefix:@"F:"]
+            ? [self kqDeletePacketWithFileIdHex:[hashHex substringFromIndex:2]]
+            : [self kqDeletePacketWithHashHex:hashHex]; // fresh ts, like Android's flush
         if (pkt == nil) {
             continue;
         }
@@ -1031,8 +1088,13 @@ serialize:
 - (void)deleteMessageForBoth:(OCTMessageAbstract *)message
 {
     do {
-        if (! message || message.senderUniqueIdentifier != nil
-            || message.messageText == nil || message.messageText.msgv3HashHex.length != 64) {
+        // own outgoing only; text anchors on the msgV3 hash, files/media/voice on the tox file_id.
+        if (! message || message.senderUniqueIdentifier != nil) {
+            break;
+        }
+        const BOOL isFile = (message.messageFile != nil);
+        NSString *anchorHex = isFile ? message.messageFile.fileIdHex : message.messageText.msgv3HashHex;
+        if (anchorHex.length != 64) {
             break;
         }
 
@@ -1044,8 +1106,8 @@ serialize:
             break;
         }
 
-        NSString *hashHex = message.messageText.msgv3HashHex;
-        NSData *pkt = [self kqDeletePacketWithHashHex:hashHex];
+        NSData *pkt = isFile ? [self kqDeletePacketWithFileIdHex:anchorHex]
+                             : [self kqDeletePacketWithHashHex:anchorHex];
 
         BOOL sent = NO;
         OCTToxFriendNumber friendNumber = [[self.dataSource managerGetTox]
@@ -1056,8 +1118,10 @@ serialize:
                                                                                  error:nil];
         }
         if (! sent) {
-            // peer offline / link down — queue the retraction, re-sent on reconnect
-            [self stashPendingDeleteForFriendPK:friend.publicKey hashHex:hashHex];
+            // peer offline / link down — queue the retraction, re-sent on reconnect. File entries
+            // are tagged with an "F:" prefix so the flush rebuilds the right packet.
+            [self stashPendingDeleteForFriendPK:friend.publicKey
+                                        hashHex:(isFile ? [@"F:" stringByAppendingString:anchorHex] : anchorHex)];
         }
     }
     while (0);

@@ -4143,20 +4143,28 @@ void friendLosslessPacketCallback(
     }
 
     if (pktType == 187) {
-        // KHANDAQ (#179): delete-for-both of an own 1:1 message ("KQ" family, mirrors Android
-        // HelperMessageDelete): [0]=187 [1..2]='K','Q' [3]=ver(1) [4..35]=msgv3 hash [36..39]=ts
-        if (length != 40 || data[1] != 'K' || data[2] != 'Q' || data[3] != 1) {
+        // KHANDAQ (#179/#193): delete-for-both of an own 1:1 message ("KQ" family, mirrors Android
+        // HelperMessageDelete). TEXT (40B): [0]=187 [1..2]='K','Q' [3]=ver(1) [4..35]=msgv3 hash
+        // [36..39]=ts. FILE (41B): [4]=anchor_type(2) [5..36]=tox file_id 32B [37..40]=ts.
+        if ((length != 40 && length != 41) || data[1] != 'K' || data[2] != 'Q' || data[3] != 1) {
             return;
         }
+        const BOOL isFile = (length == 41 && data[4] == 2);
+        const int anchorStart = isFile ? 5 : 4;
 
-        NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
-        for (int i = 4; i < 36; i++) {
-            [hashHex appendFormat:@"%02X", data[i]];
+        NSMutableString *anchorHex = [NSMutableString stringWithCapacity:64];
+        for (int i = anchorStart; i < anchorStart + 32; i++) {
+            [anchorHex appendFormat:@"%02X", data[i]];
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            if ([tox.delegate respondsToSelector:@selector(tox:friendMessageDeleteWithMsgv3Hash:friendNumber:)]) {
-                [tox.delegate tox:tox friendMessageDeleteWithMsgv3Hash:hashHex friendNumber:friendNumber];
+            if (isFile) {
+                if ([tox.delegate respondsToSelector:@selector(tox:friendMessageDeleteWithFileIdHex:friendNumber:)]) {
+                    [tox.delegate tox:tox friendMessageDeleteWithFileIdHex:anchorHex friendNumber:friendNumber];
+                }
+            }
+            else if ([tox.delegate respondsToSelector:@selector(tox:friendMessageDeleteWithMsgv3Hash:friendNumber:)]) {
+                [tox.delegate tox:tox friendMessageDeleteWithMsgv3Hash:anchorHex friendNumber:friendNumber];
             }
         });
 

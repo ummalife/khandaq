@@ -80,6 +80,12 @@
 - (void)tox:(OCTTox *)tox friendMessageDeleteWithMsgv3Hash:(NSString *)msgv3HashHex friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (#193): the friend retracted one of their own 1:1 FILE / media / voice messages
+ * (delete-for-both, "KQ" packet 187, anchor_type 2). Addressed by the symmetric tox file_id (hex).
+ */
+- (void)tox:(OCTTox *)tox friendMessageDeleteWithFileIdHex:(NSString *)fileIdHex friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * KHANDAQ (#192): the friend added/removed a reaction on a message in our 1:1 chat ("KQ"
  * lossless packet id 188). Addressed by the message's msgV3 hash (uppercase hex).
  */

@@ -2430,7 +2430,9 @@ partMessage:(NSString *)partMessage
                                                 peerId:(uint32_t)peerId
                                                   data:(NSData *)data
 {
-    if (data.length != 16) {
+    // TEXT delete = 16 bytes (message_id at [8..11]); FILE delete = 45 bytes (b[8]=0x02 anchor_type,
+    // full 32-byte groupMsgIdHashHex at [9..40], ts at [41..44]).
+    if (data.length != 16 && data.length != 45) {
         return NO;
     }
     const uint8_t *b = data.bytes;
@@ -2438,12 +2440,7 @@ partMessage:(NSString *)partMessage
         || b[6] != 0x01 || b[7] != 0x42) {
         return NO;
     }
-
-    const uint32_t messageId = ((uint32_t)b[8] << 24) | ((uint32_t)b[9] << 16)
-                               | ((uint32_t)b[10] << 8) | (uint32_t)b[11];
-    if (messageId == 0) {
-        return YES;
-    }
+    const BOOL isFile = (data.length == 45 && b[8] == 0x02);
 
     OCTTox *tox = [self.dataSource managerGetTox];
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
@@ -2452,20 +2449,38 @@ partMessage:(NSString *)partMessage
         return YES;
     }
 
-    // authenticate by the sender's STABLE identity: resolve the same frozen peer name that was
-    // stamped on the row at insert time — only the author's own messages can be retracted
-    NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
-    if (peerName.length == 0) {
-        return YES;
+    OCTMessageAbstract *found = nil;
+    if (isFile) {
+        // file/media/voice: the groupMsgIdHashHex is globally unique, so the hash alone identifies
+        // the transfer — no author disambiguation needed (like the reaction file path).
+        NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
+        for (int i = 9; i < 41; i++) {
+            [hashHex appendFormat:@"%02x", b[i]];
+        }
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                  @"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
+                                  chat.uniqueIdentifier, hashHex];
+        found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
     }
-
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
-                              chat.uniqueIdentifier, (int32_t)messageId, peerName];
-    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
-    OCTMessageAbstract *found = [results firstObject];
+    else {
+        const uint32_t messageId = ((uint32_t)b[8] << 24) | ((uint32_t)b[9] << 16)
+                                   | ((uint32_t)b[10] << 8) | (uint32_t)b[11];
+        if (messageId == 0) {
+            return YES;
+        }
+        // authenticate by the sender's STABLE identity: resolve the same frozen peer name that was
+        // stamped on the row at insert time — only the author's own messages can be retracted
+        NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+        if (peerName.length == 0) {
+            return YES;
+        }
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                                  @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
+                                  chat.uniqueIdentifier, (int32_t)messageId, peerName];
+        found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+    }
     if (found) {
-        OCTLogInfo(@"group delete: removing retracted message id=%u from %@", messageId, peerName);
+        OCTLogInfo(@"group delete: removing retracted %@ message", isFile ? @"file" : @"text");
         [realmManager removeMessages:@[found]];
     }
     (void)tox;
@@ -2818,31 +2833,55 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 - (void)deleteGroupMessageForBoth:(OCTMessageAbstract *)message inChat:(OCTChat *)chat
 {
     do {
-        if (! message || ! message.messageText || ! chat
-            || message.groupSenderPeerId != 0) { // own outgoing only
+        if (! message || ! chat || message.groupSenderPeerId != 0) { // own outgoing only
             break;
         }
-        int32_t messageId = (int32_t)message.messageText.messageId;
-        if (messageId == 0) {
-            break; // pending send has no shared id yet
-        }
         OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
-        NSMutableData *pkt = [NSMutableData dataWithCapacity:16];
-        const uint8_t header[8] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x42 };
-        [pkt appendBytes:header length:8];
-        uint32_t mid = (uint32_t)messageId;
-        const uint8_t midbe[4] = {
-            (uint8_t)((mid >> 24) & 0xFF), (uint8_t)((mid >> 16) & 0xFF),
-            (uint8_t)((mid >> 8) & 0xFF), (uint8_t)(mid & 0xFF)
-        };
-        [pkt appendBytes:midbe length:4];
         uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
         const uint8_t tsbe[4] = {
             (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
             (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
         };
-        [pkt appendBytes:tsbe length:4];
-        [[self.dataSource managerGetTox] groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
+        NSMutableData *pkt = nil;
+
+        if (message.messageFile) {
+            // FILE/media/voice: 0x42 anchor_type 2, full 32-byte groupMsgIdHashHex in bytes[9..40].
+            NSString *hashHex = message.messageFile.groupMsgIdHashHex;
+            if (hashHex.length != 64) {
+                break; // no shared file anchor yet
+            }
+            pkt = [NSMutableData dataWithCapacity:45];
+            const uint8_t header[9] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x42, 0x02 };
+            [pkt appendBytes:header length:9];
+            for (int i = 0; i < 64; i += 2) {
+                unsigned int v = 0;
+                [[NSScanner scannerWithString:[hashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&v];
+                uint8_t byte = (uint8_t)v;
+                [pkt appendBytes:&byte length:1];
+            }
+            [pkt appendBytes:tsbe length:4];
+        }
+        else if (message.messageText) {
+            // TEXT: 16-byte packet, message_id at [8..11] (implicit anchor_type 1).
+            int32_t messageId = (int32_t)message.messageText.messageId;
+            if (messageId == 0) {
+                break; // pending send has no shared id yet
+            }
+            pkt = [NSMutableData dataWithCapacity:16];
+            const uint8_t header[8] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x42 };
+            [pkt appendBytes:header length:8];
+            uint32_t mid = (uint32_t)messageId;
+            const uint8_t midbe[4] = {
+                (uint8_t)((mid >> 24) & 0xFF), (uint8_t)((mid >> 16) & 0xFF),
+                (uint8_t)((mid >> 8) & 0xFF), (uint8_t)(mid & 0xFF)
+            };
+            [pkt appendBytes:midbe length:4];
+            [pkt appendBytes:tsbe length:4];
+        }
+
+        if (pkt) {
+            [[self.dataSource managerGetTox] groupSendCustomPacket:pkt groupNumber:groupNumber lossless:YES error:nil];
+        }
     }
     while (0);
 

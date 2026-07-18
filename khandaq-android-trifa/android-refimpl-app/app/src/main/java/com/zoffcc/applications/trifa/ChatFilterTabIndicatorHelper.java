@@ -116,15 +116,23 @@ final class ChatFilterTabIndicatorHelper
             return;
         }
 
-        // KHANDAQ: the underline hugs the tab LABEL (centred under the text) instead of spanning the
-        // whole 1/3-width tab — shorter & tidier. Falls back to half the tab width if the label
-        // hasn't measured yet.
+        // KHANDAQ: the underline hugs the tab LABEL (a bit wider than the text, centred exactly under
+        // it) instead of spanning the whole 1/3-width tab. Centre is taken from the label's real
+        // position (via window coords) so a hidden badge slot can't push it off-centre.
         final TextView labelA = (base < tabLabels.length) ? tabLabels[base] : null;
         final TextView labelB = (Math.min(base + 1, lastTab) < tabLabels.length)
                 ? tabLabels[Math.min(base + 1, lastTab)] : null;
-        final float indWA = (labelA != null && labelA.getWidth() > 0) ? labelA.getWidth() : tabA.getWidth() * 0.5f;
-        final float indWB = (labelB != null && labelB.getWidth() > 0) ? labelB.getWidth() : tabB.getWidth() * 0.5f;
 
+        final float density = slidingIndicator.getResources().getDisplayMetrics().density;
+        final float pad = 24f * density; // 12dp past the text on each side — not too thin
+
+        final float indWA = (labelA != null && labelA.getWidth() > 0)
+                ? labelA.getWidth() + pad : tabA.getWidth() * 0.55f;
+        final float indWB = (labelB != null && labelB.getWidth() > 0)
+                ? labelB.getWidth() + pad : tabB.getWidth() * 0.55f;
+
+        // the label is centred in the tab (gravity center_horizontal), so the tab centre IS the label
+        // centre — and it's in the same coordinate space as the indicator's translationX.
         final float centerA = tabA.getLeft() + tabA.getWidth() / 2f;
         final float centerB = tabB.getLeft() + tabB.getWidth() / 2f;
 

@@ -516,7 +516,11 @@ public class ProfileContentFragment extends Fragment
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
             {
-                intent.putExtra(Intent.EXTRA_MIME_TYPES, "image/*");
+                // KHANDAQ: EXTRA_MIME_TYPES REQUIRES a String[] — passing a plain String made
+                // getStringArrayExtra() return null, so the system picker ignored the filter and
+                // showed ALL files (incl. videos). Picking a video then broke the crop/apply flow
+                // (bounce to PIN → back to profile, avatar unchanged). Restrict to images only.
+                intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*"});
             }
             startActivityForResult(intent, MEDIAPICK_ID_002);
         });
@@ -672,6 +676,22 @@ public class ProfileContentFragment extends Fragment
                 Log.i(TAG, "profile_avatar:FAIL:step=1");
 Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (1)", Toast.LENGTH_SHORT).show();
                 return;
+            }
+            // KHANDAQ: belt-and-suspenders — reject a non-image pick (e.g. a video from a picker that
+            // ignored the image/* filter). A video URI can't be cropped, which previously bounced the
+            // user through the PIN screen back to the profile with the avatar unchanged.
+            try
+            {
+                final String picked_mime = requireContext().getContentResolver().getType(data.getData());
+                if ((picked_mime != null) && !picked_mime.startsWith("image/"))
+                {
+                    Log.i(TAG, "profile_avatar:FAIL:step=1b:not an image mime=" + picked_mime);
+                    Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic) + " (image only)", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            catch (Exception ignored)
+            {
             }
             // KHANDAQ (#8): let the user crop/zoom (square) before we save the avatar.
             launch_avatar_crop(data.getData());

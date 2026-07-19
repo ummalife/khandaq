@@ -3143,10 +3143,8 @@ public class MainActivity extends AppCompatActivity
                                 PREF__force_udp_only_to_int = 1;
                             }
 
-                            init(app_files_directory, PREF__udp_enabled, PREF__local_discovery_enabled_to_int,
+                            init_tox_with_heal(PREF__udp_enabled, PREF__local_discovery_enabled_to_int,
                                  PREF__orbot_enabled_to_int, ORBOT_PROXY_HOST, ORBOT_PROXY_PORT,
-                                 TrifaSetPatternActivity.bytesToString(TrifaSetPatternActivity.sha256(
-                                         TrifaSetPatternActivity.StringToBytes2(PREF__DB_secrect_key))),
                                  PREF__ipv6_enabled_to_int, PREF__force_udp_only_to_int, PREF__ngc_video_bitrate,
                                  PREF__ngc_video_max_quantizer,
                                  PREF__ngc_audio_bitrate, PREF__ngc_audio_samplerate, PREF__ngc_audio_channels);
@@ -3169,6 +3167,89 @@ public class MainActivity extends AppCompatActivity
             e.printStackTrace();
             HelperGeneric.logI(TAG, "tox_thread_start:EE:" + e.getMessage());
         }
+    }
+
+    // KHANDAQ (#195): load the Tox profile WITHOUT ever silently losing the identity.
+    //  * savedata.tox is encrypted with sha256(current DB key). After a password change / key
+    //    restore it can be left on sha256(an OLDER key); decryption then fails, native
+    //    create_tox() returns NULL, the old path parked savedata.tox -> .broken and the next
+    //    cold start minted a BRAND-NEW keypair (ALL friends lost — the "IDs change on update"
+    //    report). The DB key already probes several candidates; savedata had no such fallback.
+    //  * Retry native init() with every DB-key candidate while savedata.tox is still present and,
+    //    on success, re-encrypt it under the CURRENT key so it stays in sync from then on.
+    //  * If the live profile is gone but a parked ".broken" exists, restore it once (guarded by a
+    //    pref so a truly unloadable file can't loop) so a fresh ID isn't minted over a
+    //    recoverable identity.
+    private boolean init_tox_with_heal(int udp, int localdisc, int orbot, String orbot_host,
+                                       long orbot_port, int ipv6, int force_udp, int ngc_video_bitrate,
+                                       int ngc_video_max_quantizer, int ngc_audio_bitrate,
+                                       int ngc_audio_samplerate, int ngc_audio_channels)
+    {
+        final java.io.File sd = new java.io.File(app_files_directory, "savedata.tox");
+        final java.io.File broken = new java.io.File(app_files_directory, "savedata.tox.broken");
+        android.content.SharedPreferences prefs = null;
+        try { prefs = PreferenceManager.getDefaultSharedPreferences(this); } catch (Exception ignored) {}
+
+        boolean sd_existed = sd.exists();
+        if (!sd_existed && broken.exists()
+                && (prefs == null || !prefs.getBoolean("kq_broken_restore_tried", false)))
+        {
+            try
+            {
+                if (prefs != null) { prefs.edit().putBoolean("kq_broken_restore_tried", true).apply(); }
+                if (broken.renameTo(sd)) { sd_existed = true; }
+                HelperGeneric.logI(TAG, "init_tox_with_heal: restored parked savedata.tox.broken");
+            }
+            catch (Exception e) { e.printStackTrace(); }
+        }
+
+        final String primary_pass = savedata_passphrase_for(PREF__DB_secrect_key);
+        init(app_files_directory, udp, localdisc, orbot, orbot_host, orbot_port, primary_pass, ipv6,
+             force_udp, ngc_video_bitrate, ngc_video_max_quantizer, ngc_audio_bitrate,
+             ngc_audio_samplerate, ngc_audio_channels);
+
+        if (get_my_toxid() != null)
+        {
+            if (prefs != null) { try { prefs.edit().putBoolean("kq_broken_restore_tried", false).apply(); } catch (Exception ignored) {} }
+            return true;
+        }
+
+        // decrypt failed but savedata is present -> try every DB-key candidate (savedata may be
+        // encrypted under an older key). On the first that loads, re-sync it to the current key.
+        if (sd_existed)
+        {
+            try
+            {
+                for (final String cand : DbSecretKeyStorage.candidateDbSecretKeys(this))
+                {
+                    if (TextUtils.isEmpty(cand)) { continue; }
+                    final String pass = savedata_passphrase_for(cand);
+                    if (pass.equals(primary_pass)) { continue; }
+                    init(app_files_directory, udp, localdisc, orbot, orbot_host, orbot_port, pass, ipv6,
+                         force_udp, ngc_video_bitrate, ngc_video_max_quantizer, ngc_audio_bitrate,
+                         ngc_audio_samplerate, ngc_audio_channels);
+                    if (get_my_toxid() != null)
+                    {
+                        try { update_savedata_file(primary_pass); } catch (Exception ignored) {}
+                        if (prefs != null) { try { prefs.edit().putBoolean("kq_broken_restore_tried", false).apply(); } catch (Exception ignored) {} }
+                        HelperGeneric.logI(TAG, "init_tox_with_heal: recovered identity via candidate key + re-synced savedata");
+                        return true;
+                    }
+                }
+            }
+            catch (Exception e) { e.printStackTrace(); }
+        }
+
+        HelperGeneric.logI(TAG, "init_tox_with_heal: could not load identity with any key candidate");
+        return false;
+    }
+
+    // savedata.tox passphrase for a given DB key = Base64(SHA256(UTF8(dbKey))) — the exact
+    // expression used when writing savedata (HelperGeneric.update_savedata_file_wrapper).
+    static String savedata_passphrase_for(final String dbKey)
+    {
+        return TrifaSetPatternActivity.bytesToString(TrifaSetPatternActivity.sha256(
+                TrifaSetPatternActivity.StringToBytes2(dbKey)));
     }
 
     //    static void stop_tox()
@@ -3284,10 +3365,8 @@ public class MainActivity extends AppCompatActivity
                     PREF__force_udp_only_to_int = 1;
                 }
 
-                init(app_files_directory, PREF__udp_enabled, PREF__local_discovery_enabled_to_int,
-                     PREF__orbot_enabled_to_int, ORBOT_PROXY_HOST, ORBOT_PROXY_PORT,
-                     TrifaSetPatternActivity.bytesToString(TrifaSetPatternActivity.sha256(
-                             TrifaSetPatternActivity.StringToBytes2(PREF__DB_secrect_key))), PREF__ipv6_enabled_to_int,
+                init_tox_with_heal(PREF__udp_enabled, PREF__local_discovery_enabled_to_int,
+                     PREF__orbot_enabled_to_int, ORBOT_PROXY_HOST, ORBOT_PROXY_PORT, PREF__ipv6_enabled_to_int,
                      PREF__force_udp_only_to_int, PREF__ngc_video_bitrate, PREF__ngc_video_max_quantizer,
                      PREF__ngc_audio_bitrate, PREF__ngc_audio_samplerate, PREF__ngc_audio_channels);
 

@@ -886,6 +886,14 @@ public final class DbSecretKeyStorage
         return "";
     }
 
+    // KHANDAQ (#195): expose the ordered DB-key candidate list so tox savedata decryption can
+    // try the same keys the DB probe does. savedata.tox may be encrypted under an older key
+    // after a rekey/restore, and unlike the DB key it had no multi-candidate fallback.
+    static List<String> candidateDbSecretKeys(final Context context)
+    {
+        return buildDbSecretKeyCandidates(context);
+    }
+
     private static List<String> buildDbSecretKeyCandidates(final Context context)
     {
         final Set<String> ordered = new LinkedHashSet<>();

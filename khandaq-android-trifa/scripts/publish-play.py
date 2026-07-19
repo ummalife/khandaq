@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10357.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10358.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Chat fixes: the delivery checkmark now sits right next to the time under photos, videos and voice; reactions on media/voice appear instantly (no need to reopen the chat); long incoming messages can be selected by long-press again; and a message is no longer locked after you react to it."},
-                    {"language": "ru-RU", "text": "Исправления в чате: галочка доставки теперь рядом со временем под фото, видео и голосовыми; реакции на медиа/голосовые появляются сразу (без перезахода в чат); длинные входящие снова выделяются долгим нажатием; сообщение больше не «блокируется» после реакции."},
+                    {"language": "en-US", "text": "Critical fix: updating the app no longer loses your Tox ID and contacts. If the profile's encryption key drifted (e.g. after a password change), it now recovers the identity instead of silently creating a new one — so friends stay reachable and you don't have to re-add everyone."},
+                    {"language": "ru-RU", "text": "Важное исправление: обновление приложения больше не теряет ваш Tox ID и контакты. Если ключ шифрования профиля разошёлся (например, после смены пароля), приложение теперь восстанавливает личность вместо молчаливого создания новой — друзья остаются на связи, никого не нужно добавлять заново."},
                 ],
             }],
         })

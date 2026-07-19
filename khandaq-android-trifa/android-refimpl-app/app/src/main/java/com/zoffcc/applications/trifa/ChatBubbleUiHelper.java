@@ -158,10 +158,58 @@ final class ChatBubbleUiHelper
                 container.setClipToOutline(false);
                 container.setOutlineProvider(null);
             }
+            // KHANDAQ (#196): right-align outgoing photos/videos like text (drop own-avatar column)
+            if (outgoing) { align_outgoing_media_bubble(container, true); }
             return;
         }
 
+        // voice/file card — restore the default left layout in case this holder was recycled from a photo
+        if (outgoing) { align_outgoing_media_bubble(container, false); }
         apply_compact_file_bubble(container, outgoing);
+    }
+
+    // KHANDAQ (#196): edge-to-edge outgoing media (photos/videos) hugs the RIGHT edge like text
+    // bubbles, with no own-avatar column. rightAlign=false restores the original left/weighted
+    // layout so a recycled holder that later shows voice/file is not stuck in the photo arrangement.
+    private static void align_outgoing_media_bubble(final ViewGroup bubble, final boolean rightAlign)
+    {
+        try
+        {
+            final int m20 = (int) (bubble.getContext().getResources().getDisplayMetrics().density * 20);
+            if (bubble.getParent() instanceof LinearLayout)
+            {
+                final LinearLayout row = (LinearLayout) bubble.getParent();
+                row.setGravity(rightAlign ? (Gravity.END | Gravity.CENTER_VERTICAL)
+                                          : (Gravity.START | Gravity.TOP));
+                final View av = row.findViewById(R.id.img_avatar);
+                if (av != null) { av.setVisibility(rightAlign ? View.GONE : View.VISIBLE); }
+                final View cr = row.findViewById(R.id.img_corner);
+                if (cr != null) { cr.setVisibility(rightAlign ? View.GONE : View.VISIBLE); }
+            }
+            final ViewGroup.LayoutParams lp = bubble.getLayoutParams();
+            if (lp instanceof LinearLayout.LayoutParams)
+            {
+                final LinearLayout.LayoutParams llp = (LinearLayout.LayoutParams) lp;
+                if (rightAlign)
+                {
+                    llp.weight = 0f;
+                    llp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    llp.leftMargin = 0;
+                    llp.rightMargin = m20;
+                }
+                else
+                {
+                    llp.weight = 6f;
+                    llp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    llp.leftMargin = m20;
+                    llp.rightMargin = 0;
+                }
+                bubble.setLayoutParams(llp);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
     }
 
     /** Compact document/file card — subtle rounded background, minimal padding. */

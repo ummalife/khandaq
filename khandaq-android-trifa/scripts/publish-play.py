@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10358.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10359.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Critical fix: updating the app no longer loses your Tox ID and contacts. If the profile's encryption key drifted (e.g. after a password change), it now recovers the identity instead of silently creating a new one — so friends stay reachable and you don't have to re-add everyone."},
-                    {"language": "ru-RU", "text": "Важное исправление: обновление приложения больше не теряет ваш Tox ID и контакты. Если ключ шифрования профиля разошёлся (например, после смены пароля), приложение теперь восстанавливает личность вместо молчаливого создания новой — друзья остаются на связи, никого не нужно добавлять заново."},
+                    {"language": "en-US", "text": "Critical fix: updating the app no longer loses your Tox ID and contacts — if the profile's encryption key drifted (e.g. after a password change), it now recovers the identity instead of silently creating a new one, so friends stay reachable and you don't have to re-add everyone. Also: sent photos and screenshots now align to the right edge like text messages."},
+                    {"language": "ru-RU", "text": "Важное исправление: обновление приложения больше не теряет ваш Tox ID и контакты — если ключ шифрования профиля разошёлся (например, после смены пароля), приложение теперь восстанавливает личность вместо молчаливого создания новой, друзья остаются на связи и никого не нужно добавлять заново. Ещё: отправленные фото и скриншоты теперь выравниваются по правому краю, как текстовые сообщения."},
                 ],
             }],
         })

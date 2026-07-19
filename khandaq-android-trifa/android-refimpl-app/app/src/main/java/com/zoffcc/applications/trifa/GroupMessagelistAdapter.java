@@ -365,7 +365,8 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 !java.util.Objects.equals(a.tox_group_peername, b.tox_group_peername) ||
                 !java.util.Objects.equals(a.tox_group_peer_pubkey, b.tox_group_peer_pubkey) ||
                 !java.util.Objects.equals(a.file_name, b.file_name) ||
-                !java.util.Objects.equals(a.filename_fullpath, b.filename_fullpath))
+                !java.util.Objects.equals(a.filename_fullpath, b.filename_fullpath) ||
+                !java.util.Objects.equals(a.reactions, b.reactions))
             {
                 return false;
             }
@@ -489,7 +490,11 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                             old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
                             && old_item.TRIFA_MESSAGE_TYPE == new_item.TRIFA_MESSAGE_TYPE
                             && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null))
-                            && old_item.filesize == new_item.filesize;
+                            && old_item.filesize == new_item.filesize
+                            // KHANDAQ: a reaction change must force a FULL rebind (chip row + selection
+                            // state), otherwise a reaction on a media/voice row only shows up after
+                            // re-entering the chat (progress payload skips bind_reactions_row).
+                            && java.util.Objects.equals(old_item.reactions, new_item.reactions);
                     if (progressOnly)
                     {
                         this.notifyItemChanged(pos, MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS);

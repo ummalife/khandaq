@@ -210,8 +210,11 @@ public class ToolbarActionMode implements ActionMode.Callback
                 break;
 
             case R.id.action_react:
-                // KHANDAQ (#192): quick-bar dialog, pick toggles the own reaction
-                action_active = true;
+                // KHANDAQ (#192): quick-bar dialog, pick toggles the own reaction.
+                // Deliberately DO NOT set action_active=true: reactSelected*Message captures the
+                // target message synchronously into the picker callback, so we let
+                // onDestroyActionMode clear the selection and redraw. Leaving the row selected
+                // made its next long-press a silent no-op until the chat was re-entered.
                 if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
                 {
                     HelperMessageReaction.reactSelectedDirectMessage(context);

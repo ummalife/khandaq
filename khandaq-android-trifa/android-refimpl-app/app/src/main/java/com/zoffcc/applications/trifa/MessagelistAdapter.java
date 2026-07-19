@@ -540,7 +540,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 a.msg_at_relay != b.msg_at_relay || a.sent_push != b.sent_push ||
                 a.filetransfer_kind != b.filetransfer_kind || a.resend_count != b.resend_count ||
                 !java.util.Objects.equals(a.text, b.text) ||
-                !java.util.Objects.equals(a.filename_fullpath, b.filename_fullpath))
+                !java.util.Objects.equals(a.filename_fullpath, b.filename_fullpath) ||
+                !java.util.Objects.equals(a.reactions, b.reactions))
             {
                 return false;
             }
@@ -680,7 +681,11 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                             && old_item.state == new_item.state
                             && old_item.filedb_id == new_item.filedb_id
                             && old_item.filetransfer_id == new_item.filetransfer_id
-                            && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null));
+                            && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null))
+                            // KHANDAQ: a reaction change must force a FULL rebind (chip row + selection
+                            // state), otherwise a reaction on a media/voice row only shows up after
+                            // re-entering the chat (progress payload skips bind_reactions_row).
+                            && java.util.Objects.equals(old_item.reactions, new_item.reactions);
                     if (progressOnly)
                     {
                         this.notifyItemChanged(pos, PAYLOAD_TRANSFER_PROGRESS);

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10356.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10357.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Delete for everyone now works for photos, videos, voice messages and files too — in private chats and groups, not just text. Plus a tidier, centered tab underline."},
-                    {"language": "ru-RU", "text": "Удаление у всех теперь работает и для фото, видео, голосовых и файлов — в личных чатах и группах, не только для текста. Плюс аккуратнее и по центру подчёркивание вкладок."},
+                    {"language": "en-US", "text": "Chat fixes: the delivery checkmark now sits right next to the time under photos, videos and voice; reactions on media/voice appear instantly (no need to reopen the chat); long incoming messages can be selected by long-press again; and a message is no longer locked after you react to it."},
+                    {"language": "ru-RU", "text": "Исправления в чате: галочка доставки теперь рядом со временем под фото, видео и голосовыми; реакции на медиа/голосовые появляются сразу (без перезахода в чат); длинные входящие снова выделяются долгим нажатием; сообщение больше не «блокируется» после реакции."},
                 ],
             }],
         })

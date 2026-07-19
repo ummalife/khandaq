@@ -60,6 +60,11 @@ public class EmojiTextViewLinks extends com.vanniktech.emoji.EmojiTextView
 
     private boolean isUnderLineEnabled = false;
 
+    // KHANDAQ: LinkTouchMovementMethod consumes the touch stream on a Spannable TextView and
+    // swallows long-press (message selection) on long, text-filled bubbles. Track whether the
+    // last text actually had tappable links so we install the movement method only when needed.
+    private boolean lastTextHadLinks = false;
+
     private int mentionModeColor = DEFAULT_COLOR;
     private int hashtagModeColor = DEFAULT_COLOR;
     private int urlModeColor = DEFAULT_COLOR;
@@ -119,7 +124,10 @@ public class EmojiTextViewLinks extends com.vanniktech.emoji.EmojiTextView
     {
         SpannableString spannableString = makeSpannableString(text);
         setText(spannableString);
-        setMovementMethod(new LinkTouchMovementMethod());
+        // KHANDAQ: install the link movement method ONLY when the text has tappable links;
+        // on plain text it swallows long-press (message selection) — the cause of long
+        // incoming bubbles not being selectable.
+        setMovementMethod(lastTextHadLinks ? new LinkTouchMovementMethod() : null);
     }
 
     /**
@@ -174,13 +182,15 @@ public class EmojiTextViewLinks extends com.vanniktech.emoji.EmojiTextView
         SpannableString spannableString = makeSpannableString(text);
         setText(spannableString, BufferType.SPANNABLE);
         buildHighlightString(this, highlight_text, true, Color.YELLOW, 1.0F);
-        setMovementMethod(new LinkTouchMovementMethod());
+        // KHANDAQ: see setAutoLinkText — only install the movement method when links exist.
+        setMovementMethod(lastTextHadLinks ? new LinkTouchMovementMethod() : null);
     }
 
     private SpannableString makeSpannableString(String text)
     {
         final SpannableString spannableString = new SpannableString(text);
         List<AutoLinkItem> autoLinkItems = matchedRanges(text);
+        lastTextHadLinks = !autoLinkItems.isEmpty();
 
         for (final AutoLinkItem autoLinkItem : autoLinkItems)
         {

@@ -63,8 +63,10 @@
     <dimen name="notification_padding">8.0dip</dimen>
 
     <!-- Chat input bar — Material-style compact sizing -->
-    <dimen name="chat_input_bar_margin_h">8dp</dimen>
-    <dimen name="chat_input_bar_margin_bottom">4dp</dimen>
+    <!-- KHANDAQ: edge-to-edge input bar — no side margin (the 8dp margins showed the darker
+         parent background as vertical "corner" strips at the screen edges; user asked to remove them). -->
+    <dimen name="chat_input_bar_margin_h">0dp</dimen>
+    <dimen name="chat_input_bar_margin_bottom">0dp</dimen>
     <dimen name="chat_input_bar_padding_v">6dp</dimen>
     <dimen name="chat_input_bar_padding_h">2dp</dimen>
     <dimen name="chat_input_icon_size">36dp</dimen>

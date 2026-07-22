@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10360.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10361.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Critical fix: updating the app no longer loses your Tox ID and contacts — if the profile's encryption key drifted (e.g. after a password change), it now recovers the identity instead of silently creating a new one. Also: sent photos and screenshots align to the right edge like text messages, and the message input bar is now edge-to-edge (the dark side strips are gone)."},
-                    {"language": "ru-RU", "text": "Важное исправление: обновление приложения больше не теряет ваш Tox ID и контакты — если ключ шифрования профиля разошёлся (например, после смены пароля), приложение теперь восстанавливает личность вместо создания новой. Ещё: отправленные фото и скриншоты выравниваются по правому краю, а панель ввода теперь во всю ширину (тёмные боковые полоски убраны)."},
+                    {"language": "en-US", "text": "Now targets Android 16 (API 36) to meet Google Play's new requirements, so future updates keep flowing. Recent improvements included: your Tox ID and contacts survive app updates, sent photos align to the right edge like text, and the message input bar is edge-to-edge."},
+                    {"language": "ru-RU", "text": "Приложение переведено на Android 16 (API 36) для соответствия новым требованиям Google Play, чтобы обновления продолжали выходить. Из недавнего: Tox ID и контакты сохраняются при обновлении, отправленные фото выравниваются по правому краю, панель ввода — во всю ширину."},
                 ],
             }],
         })

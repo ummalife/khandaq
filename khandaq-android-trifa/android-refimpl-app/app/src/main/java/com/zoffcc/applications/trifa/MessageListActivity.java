@@ -299,6 +299,7 @@ public class MessageListActivity extends AppCompatActivity
         sync_outgoing_attachment_friend_pubkey();
 
         setContentView(R.layout.activity_message_list);
+        ViewUtil.applyImeBottomInsets(this); // KHANDAQ (#1): keep the input bar above the keyboard on edge-to-edge
 
         message_list_activity = this;
 
@@ -392,8 +393,11 @@ public class MessageListActivity extends AppCompatActivity
         try
         {
             // hide softkeyboard initially
-            // since it takes a lot of screen space
-            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
+            // since it takes a lot of screen space.
+            // KHANDAQ (#1): keep ADJUST_RESIZE here — a bare STATE_HIDDEN resets the adjust bits
+            // from the manifest to UNSPECIFIED and the keyboard covers the input bar.
+            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN |
+                                         WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
         catch (Exception e)
         {
@@ -1763,7 +1767,8 @@ public class MessageListActivity extends AppCompatActivity
                         }
 
                         ml_avatar.setVisibility(View.VISIBLE);
-                        ChatBubbleUiHelper.fill_friend_list_avatar(MessageListActivity.this,
+                        // KHANDAQ (#3): header-sized avatar (38dp), NOT the 54dp chat-list size
+                        ChatBubbleUiHelper.fill_chat_header_avatar(MessageListActivity.this,
                                 friend_pubkey_final, f_name, ml_avatar);
                     }
                 };

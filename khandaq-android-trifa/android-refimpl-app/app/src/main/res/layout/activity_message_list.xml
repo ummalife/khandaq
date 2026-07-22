@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:background="@color/tg_chat_header_bg"
     tools:context="com.zoffcc.applications.trifa.MessageListActivity">
 
     <!-- KHANDAQ: single-row chat header (Figma): back(nav) + avatar + name/status + call icons +

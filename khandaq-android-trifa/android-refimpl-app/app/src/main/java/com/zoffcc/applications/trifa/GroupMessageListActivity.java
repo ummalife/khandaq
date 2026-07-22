@@ -449,6 +449,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
         setContentView(R.layout.activity_group_message_list);
+        ViewUtil.applyImeBottomInsets(this); // KHANDAQ (#1): keep the input bar above the keyboard on edge-to-edge
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
 
         MainActivity.group_message_list_activity = this;

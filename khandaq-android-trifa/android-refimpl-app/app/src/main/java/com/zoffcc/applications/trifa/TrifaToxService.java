@@ -111,6 +111,7 @@ import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_priva
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_topic;
 import static com.zoffcc.applications.trifa.HelperMessage.set_message_queueing_from_id;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_messageid;
+import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_msg_idv3_hash;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_no_read_recvedts;
 import static com.zoffcc.applications.trifa.HelperMessage.update_message_in_db_resend_count;
 import static com.zoffcc.applications.trifa.HelperRelay.get_relay_for_friend;
@@ -2574,6 +2575,10 @@ public class TrifaToxService extends Service
                             }
 
                             update_message_in_db_messageid(m_resend_v2);
+                            // KHANDAQ (#193): persist the freshly minted msgv3 hash (delete/edit/
+                            // reaction anchor) — it was memory-only, so those features silently
+                            // skipped sending for resent messages.
+                            update_message_in_db_msg_idv3_hash(m_resend_v2);
                             update_message_in_db_resend_count(m_resend_v2);
                             update_message_in_db_no_read_recvedts(m_resend_v2);
                         }
@@ -2693,6 +2698,11 @@ public class TrifaToxService extends Service
                 }
 
                 update_message_in_db_messageid(m_unsent);
+                // KHANDAQ (#193): PERSIST the msgv3 hash the resend just minted. It was only kept
+                // in memory, so a later delete-for-both / edit / reaction re-read the row from the
+                // DB, found an empty anchor and silently skipped sending the wire packet — the
+                // peer never saw the delete. (The recipient stored THIS hash, so it must match.)
+                update_message_in_db_msg_idv3_hash(m_unsent);
                 update_message_in_db_resend_count(m_unsent);
                 update_message_in_db_no_read_recvedts(m_unsent);
 
@@ -2753,9 +2763,34 @@ public class TrifaToxService extends Service
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent)
+    {
+        // KHANDAQ (#2 fix): the app was swiped away from recents. Stop global voice playback so a
+        // voice note does not keep playing after the app is fully closed (this foreground service
+        // otherwise keeps the process — and the static MediaPlayer — alive).
+        try
+        {
+            ChatVoicePlaybackManager.releaseAll();
+        }
+        catch (Throwable e)
+        {
+            e.printStackTrace();
+        }
+        HelperGeneric.logI(TAG, "onTaskRemoved: released voice playback");
+        super.onTaskRemoved(rootIntent);
+    }
+
+    @Override
     public void onDestroy()
     {
         HelperGeneric.logI(TAG, "onDestroy");
+        try
+        {
+            ChatVoicePlaybackManager.releaseAll();
+        }
+        catch (Throwable ignored)
+        {
+        }
         super.onDestroy();
     }
 

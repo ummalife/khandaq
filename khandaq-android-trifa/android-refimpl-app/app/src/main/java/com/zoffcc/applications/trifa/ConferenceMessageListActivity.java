@@ -165,6 +165,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
         conf_id_prev = conf_id;
 
         setContentView(R.layout.activity_conference_message_list);
+        ViewUtil.applyImeBottomInsets(this); // KHANDAQ (#1): keep the input bar above the keyboard on edge-to-edge
 
         MainActivity.conference_message_list_activity = this;
 

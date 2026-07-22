@@ -147,7 +147,10 @@ public class HelperMessageDelete
             {
                 res = MainActivity.tox_friend_send_lossless_packet(friend_number, pkt, pkt.length);
             }
-            if (res != 0)
+            // KHANDAQ (#193): the JNI send returns 1 on success and a negative value on error
+            // (friend offline / temporary failure). Only stash for the reconnect flush on failure —
+            // the old `res != 0` check fired on EVERY successful send and double-queued the packet.
+            if (res <= 0)
             {
                 // offline / temporary failure — queue for the reconnect flush (file entries tagged "F:")
                 stashPendingDelete(m.tox_friendpubkey, isFile ? ("F:" + anchorHex) : anchorHex);

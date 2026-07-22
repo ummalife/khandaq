@@ -49,6 +49,7 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_media_send_preview);
+        ViewUtil.applyImeBottomInsets(this); // KHANDAQ (#1): keep the caption field above the keyboard on edge-to-edge
 
         uris = getIntent().getParcelableArrayListExtra(MediaSendPreviewHelper.EXTRA_URI_LIST);
         if (uris == null || uris.isEmpty())

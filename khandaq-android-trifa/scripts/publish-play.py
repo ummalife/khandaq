@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10361.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10362.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Now targets Android 16 (API 36) to meet Google Play's new requirements, so future updates keep flowing. Recent improvements included: your Tox ID and contacts survive app updates, sent photos align to the right edge like text, and the message input bar is edge-to-edge."},
-                    {"language": "ru-RU", "text": "Приложение переведено на Android 16 (API 36) для соответствия новым требованиям Google Play, чтобы обновления продолжали выходить. Из недавнего: Tox ID и контакты сохраняются при обновлении, отправленные фото выравниваются по правому краю, панель ввода — во всю ширину."},
+                    {"language": "en-US", "text": "Fixes: 'delete for everyone' now also removes the message on the other person's device in 1:1 chats (incoming delete was being dropped); the keyboard no longer covers the message field under a photo or in chat; voice notes stop when you fully close the app; and a tidier chat header on newer Android."},
+                    {"language": "ru-RU", "text": "Исправления: «удалить у всех» теперь удаляет сообщение и на устройстве собеседника в личных чатах (входящее удаление раньше терялось); клавиатура больше не закрывает поле ввода под фото и в чате; голосовые останавливаются при полном закрытии приложения; аккуратнее заголовок чата на новых Android."},
                 ],
             }],
         })

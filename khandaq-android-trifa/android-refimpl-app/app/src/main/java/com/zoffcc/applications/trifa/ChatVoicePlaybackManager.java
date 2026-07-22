@@ -238,6 +238,30 @@ public final class ChatVoicePlaybackManager
         notifyTickOnUi();
     }
 
+    // KHANDAQ (#2 fix): fully stop and release the global player. Called when the app is swiped
+    // from recents (TrifaToxService.onTaskRemoved) so a voice note does not keep playing after the
+    // app is fully closed — the foreground service otherwise keeps the process (and this static
+    // MediaPlayer) alive. Unlike stopAndForget, this releases native resources and nulls the player.
+    public static synchronized void releaseAll()
+    {
+        try { ui.removeCallbacks(ticker); } catch (Exception ignored) {}
+        try
+        {
+            if (mp != null)
+            {
+                mp.reset();
+                mp.release();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        mp = null;
+        activePath = null;
+        activeVfs = false;
+        prepared = false;
+    }
+
     // ---------------------------------------------------------------- state queries
 
     public static synchronized boolean isPlaying()

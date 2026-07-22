@@ -795,6 +795,30 @@ final class ChatBubbleUiHelper
         fill_peer_avatar(context, peerPubkey, peerName, avatar, size, 22, false);
     }
 
+    // KHANDAQ (#3): the chat-header avatar must stay at the toolbar's 38dp. Reusing
+    // fill_friend_list_avatar there blew it up to tg_chat_avatar_size (54dp — sized for the 72dp
+    // chat-LIST rows), so it overflowed the wrap_content toolbar, overlapping the status bar and
+    // the peer name.
+    static void fill_chat_header_avatar(final Context context, final String peerPubkey, final String peerName,
+                                        final CircleImageView avatar)
+    {
+        if (avatar == null || context == null)
+        {
+            return;
+        }
+
+        final int size = (int) (context.getResources().getDisplayMetrics().density * 38);
+        final ViewGroup.LayoutParams params = avatar.getLayoutParams();
+        if (params != null)
+        {
+            params.width = size;
+            params.height = size;
+            avatar.setLayoutParams(params);
+        }
+        avatar.setBorderWidth(0);
+        fill_peer_avatar(context, peerPubkey, peerName, avatar, size, 16, false);
+    }
+
     static void fill_profile_peer_avatar(final Context context, final String peerPubkey, final String peerName,
                                          final CircleImageView avatar)
     {

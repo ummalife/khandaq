@@ -140,17 +140,20 @@
             android:name="com.zoffcc.applications.trifa.MessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
             android:label="@string/message_list_activity_name">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.ConferenceMessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
             android:label="@string/conference_message_list_activity_name">
         </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.GroupMessageListActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
             android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize"
             android:label="@string/group_message_list_activity_name">
         </activity>
         <!-- KHANDAQ (#34): global search across all chats/groups + messages -->

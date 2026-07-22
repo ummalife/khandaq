@@ -104,4 +104,32 @@ public class ViewUtil
             view.startAnimation(animation);
         }
     }
+
+    // KHANDAQ (#1 + #3 fix): on edge-to-edge (targetSdk 35/36) the decor draws under the status bar
+    // AND the keyboard, and adjustResize no longer lifts the layout automatically. Without handling
+    // insets by hand the header ends up under the status bar (avatar/name overlap the clock — #3)
+    // and the input field ends up hidden behind the keyboard (#1). Apply the status-bar inset as top
+    // padding and max(IME, nav-bar) as bottom padding on the content root — reproducing fit-system-
+    // windows + adjustResize by hand.
+    public static void applyImeBottomInsets(final android.app.Activity activity)
+    {
+        if (activity == null) { return; }
+        final View content = activity.findViewById(android.R.id.content);
+        if (content == null) { return; }
+        try
+        {
+            ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
+                final int top = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()).top;
+                final int ime = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;
+                final int nav = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()).bottom;
+                v.setPadding(v.getPaddingLeft(), top, v.getPaddingRight(), Math.max(ime, nav));
+                // consume: group/conference roots still carry fitsSystemWindows="true" — letting the
+                // insets pass through would apply the top offset a second time there.
+                return androidx.core.view.WindowInsetsCompat.CONSUMED;
+            });
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
 }

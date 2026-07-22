@@ -3211,6 +3211,7 @@ public class MainActivity extends AppCompatActivity
         if (get_my_toxid() != null)
         {
             if (prefs != null) { try { prefs.edit().putBoolean("kq_broken_restore_tried", false).apply(); } catch (Exception ignored) {} }
+            register_khandaq_lossless_pktids();
             return true;
         }
 
@@ -3232,6 +3233,7 @@ public class MainActivity extends AppCompatActivity
                     {
                         try { update_savedata_file(primary_pass); } catch (Exception ignored) {}
                         if (prefs != null) { try { prefs.edit().putBoolean("kq_broken_restore_tried", false).apply(); } catch (Exception ignored) {} }
+                        register_khandaq_lossless_pktids();
                         HelperGeneric.logI(TAG, "init_tox_with_heal: recovered identity via candidate key + re-synced savedata");
                         return true;
                     }
@@ -3242,6 +3244,30 @@ public class MainActivity extends AppCompatActivity
 
         HelperGeneric.logI(TAG, "init_tox_with_heal: could not load identity with any key candidate");
         return false;
+    }
+
+    // KHANDAQ (#193 fix): register the RECEIVE callback for our 1:1 custom lossless packet ids —
+    // edit (186), delete-for-both (187) and reactions (188). The native lib only auto-registers
+    // 170/176/181-183, so without this toxcore silently DROPS these packets on the recipient and
+    // delete-for-both / edit / reactions never apply on an Android peer (iOS registered them, which
+    // is why Android->iOS worked but iOS/Android->Android did not). The JNI registrar already exists.
+    private void register_khandaq_lossless_pktids()
+    {
+        try
+        {
+            int last_res = -1000;
+            for (int pktid = 184; pktid <= 188; pktid++)
+            {
+                last_res = tox_callback_friend_lossless_packet_per_pktid(pktid);
+            }
+            // plain android Log on purpose: this runs very early, before the app logger is up
+            android.util.Log.i("trifa.KQREG", "registered lossless pktids 184-188, last_res=" + last_res);
+        }
+        catch (Throwable e)
+        {
+            android.util.Log.i("trifa.KQREG", "register FAILED: " + e);
+            e.printStackTrace();
+        }
     }
 
     // savedata.tox passphrase for a given DB key = Base64(SHA256(UTF8(dbKey))) — the exact
@@ -4294,6 +4320,10 @@ public class MainActivity extends AppCompatActivity
     // -------- native methods --------
     // -------- native methods --------
     public native void init(@NonNull String data_dir, int udp_enabled, int local_discovery_enabled, int orbot_enabled, String orbot_host, long orbot_port, String tox_encrypt_passphrase_hash, int enable_ipv6, int force_udp_only_mode, int ngc_video_bitrate, int max_quantizer, int ngc_audio_bitrate, int ngc_audio_sampling_rate, int ngc_audio_channel_count);
+
+    // KHANDAQ (#193): register the friend lossless receive callback for a custom packet id
+    // (used for edit/delete/reaction — ids 184-188). The native lib exposes this already.
+    public native int tox_callback_friend_lossless_packet_per_pktid(int pktid);
 
     public native String getNativeLibAPI();
 

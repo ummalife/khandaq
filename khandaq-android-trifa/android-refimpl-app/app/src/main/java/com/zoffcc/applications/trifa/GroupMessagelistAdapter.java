@@ -650,18 +650,14 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             return -1;
         }
 
-        if (replyMeta.localMessageId > 0L)
-        {
-            for (int i = 0; i < messagelistitems.size(); i++)
-            {
-                final GroupMessage message = (GroupMessage) messagelistitems.get(i);
-                if (message != null && message.id == replyMeta.localMessageId)
-                {
-                    return i;
-                }
-            }
-        }
-
+        // KHANDAQ #197: the embedded localMessageId is a device-local autoincrement PK that is NOT
+        // stable across DB regen/migration or across devices. Trusting it unconditionally made a
+        // stale/foreign id collide with an unrelated local row -> "уносит куда-то". Accept the exact
+        // id ONLY when its timestamp is consistent; otherwise fall back to the CLOSEST-timestamp
+        // (+pubkey) candidate. Mirrors iOS ChatReplyController bestDelta behaviour.
+        final boolean hasTs = replyMeta.sortTimestampMs > 0L;
+        int bestIndex = -1;
+        long bestDelta = Long.MAX_VALUE;
         for (int i = 0; i < messagelistitems.size(); i++)
         {
             final GroupMessage message = (GroupMessage) messagelistitems.get(i);
@@ -670,17 +666,28 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 continue;
             }
             final long ts = GroupMessageLayoutHelper.effectiveSortTimestampMs(message);
-            if (Math.abs(ts - replyMeta.sortTimestampMs) > 5000L)
-            {
-                continue;
-            }
-            if (replyMeta.senderPubkeyTail == null || replyMeta.senderPubkeyTail.isEmpty()
-                    || MessageReplyHelper.pubkeyTail(message.tox_group_peer_pubkey).equals(replyMeta.senderPubkeyTail))
+            final long delta = Math.abs(ts - replyMeta.sortTimestampMs);
+            if (replyMeta.localMessageId > 0L && message.id == replyMeta.localMessageId
+                    && (!hasTs || delta <= 5000L))
             {
                 return i;
             }
+            if (!hasTs || delta > 5000L)
+            {
+                continue;
+            }
+            if (replyMeta.senderPubkeyTail != null && !replyMeta.senderPubkeyTail.isEmpty()
+                    && !MessageReplyHelper.pubkeyTail(message.tox_group_peer_pubkey).equals(replyMeta.senderPubkeyTail))
+            {
+                continue;
+            }
+            if (delta < bestDelta)
+            {
+                bestDelta = delta;
+                bestIndex = i;
+            }
         }
-        return -1;
+        return bestIndex;
     }
 
     public GroupMessage get_item(int position)

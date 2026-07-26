@@ -829,18 +829,12 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             return -1;
         }
 
-        if (replyMeta.localMessageId > 0L)
-        {
-            for (int i = 0; i < messagelistitems.size(); i++)
-            {
-                final Message message = messagelistitems.get(i);
-                if (message != null && message.id == replyMeta.localMessageId)
-                {
-                    return i;
-                }
-            }
-        }
-
+        // KHANDAQ #197: same fix as the group adapter — the embedded localMessageId is a device-local
+        // autoincrement PK; accept the exact id ONLY when its timestamp is consistent, otherwise pick
+        // the CLOSEST-timestamp (+pubkey) candidate instead of blindly jumping to a collided row.
+        final boolean hasTs = replyMeta.sortTimestampMs > 0L;
+        int bestIndex = -1;
+        long bestDelta = Long.MAX_VALUE;
         for (int i = 0; i < messagelistitems.size(); i++)
         {
             final Message message = messagelistitems.get(i);
@@ -849,17 +843,28 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 continue;
             }
             final long ts = message.direction == 0 ? message.rcvd_timestamp : message.sent_timestamp;
-            if (Math.abs(ts - replyMeta.sortTimestampMs) > 5000L)
-            {
-                continue;
-            }
-            if (replyMeta.senderPubkeyTail == null || replyMeta.senderPubkeyTail.isEmpty()
-                    || MessageReplyHelper.pubkeyTail(message.tox_friendpubkey).equals(replyMeta.senderPubkeyTail))
+            final long delta = Math.abs(ts - replyMeta.sortTimestampMs);
+            if (replyMeta.localMessageId > 0L && message.id == replyMeta.localMessageId
+                    && (!hasTs || delta <= 5000L))
             {
                 return i;
             }
+            if (!hasTs || delta > 5000L)
+            {
+                continue;
+            }
+            if (replyMeta.senderPubkeyTail != null && !replyMeta.senderPubkeyTail.isEmpty()
+                    && !MessageReplyHelper.pubkeyTail(message.tox_friendpubkey).equals(replyMeta.senderPubkeyTail))
+            {
+                continue;
+            }
+            if (delta < bestDelta)
+            {
+                bestDelta = delta;
+                bestIndex = i;
+            }
         }
-        return -1;
+        return bestIndex;
     }
 
     public static class DateTime_in_out

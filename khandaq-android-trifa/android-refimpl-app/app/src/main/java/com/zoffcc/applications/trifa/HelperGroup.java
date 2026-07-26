@@ -1662,7 +1662,10 @@ public class HelperGroup
                 }
                 catch (Exception not_in_db)
                 {
-                    should_leave = true;
+                    // KHANDAQ #202: a group present in tox but ABSENT from GroupDB is the NORMAL state right
+                    // after an import (REPLACE wipes GroupDB; FIRST_LAUNCH starts empty). Leaving it here
+                    // silently dropped every imported group — the "контакты группы пропадают" report. Keep it.
+                    should_leave = false;
                 }
 
                 if (should_leave)
@@ -4470,6 +4473,13 @@ public class HelperGroup
     static void add_system_message_to_group_chat(final String group_identifier, final String system_message,
                                                  final boolean force)
     {
+        // KHANDAQ #202: self-join can fire before the group chat_id is materialized (null identifier),
+        // notably during the post-import reconnect burst. group_identifier.toLowerCase() below would NPE
+        // in an unwrapped callback and crash the app — guard it.
+        if (group_identifier == null)
+        {
+            return;
+        }
         if (!force && !should_show_group_system_messages(group_identifier))
         {
             return;

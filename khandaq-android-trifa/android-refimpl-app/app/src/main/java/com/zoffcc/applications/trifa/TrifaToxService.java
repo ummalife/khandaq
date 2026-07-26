@@ -827,8 +827,11 @@ public class TrifaToxService extends Service
         long[] group_numbers = tox_group_get_grouplist();
         ByteBuffer groupid_buf3 = ByteBuffer.allocateDirect(GROUP_ID_LENGTH * 2);
 
+        // KHANDAQ #202: bound the loop by the ACTUAL grouplist length — prune/leave can make grouplist
+        // shorter than num_groups, and a null list right after import would otherwise NPE / AIOOBE.
+        final long safe_num_groups = (group_numbers == null) ? 0L : Math.min(num_groups, group_numbers.length);
         int conf_ = 0;
-        for (conf_ = 0; conf_ < num_groups; conf_++)
+        for (conf_ = 0; conf_ < safe_num_groups; conf_++)
         {
             groupid_buf3.clear();
 
@@ -1390,16 +1393,18 @@ public class TrifaToxService extends Service
                 {
                     load_and_add_all_conferences();
                 }
-                catch (Exception e)
+                catch (Throwable e)
                 {
+                    e.printStackTrace();
                 }
 
                 try
                 {
                     load_and_add_all_groups();
                 }
-                catch (Exception e)
+                catch (Throwable e) // KHANDAQ #202: also catch Error (OOM/UnsatisfiedLinkError) so import survives
                 {
+                    e.printStackTrace();
                 }
 
                 global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
@@ -1515,8 +1520,19 @@ public class TrifaToxService extends Service
                         e.printStackTrace();
                     }
 
-                    MainActivity.tox_iterate();
-                    HelperGroup.maintain_all_groups();
+                    // KHANDAQ #153/#202: the group-callback burst right after an import (all imported NGC
+                    // groups reconnect and their members join at once) can leave an uncaught Throwable/Error
+                    // here — which the global uncaught-exception handler turns into the "Khandaq crashed"
+                    // screen. Catch it so the import survives and the real cause is logged, not fatal.
+                    try
+                    {
+                        MainActivity.tox_iterate();
+                        HelperGroup.maintain_all_groups();
+                    }
+                    catch (Throwable t)
+                    {
+                        t.printStackTrace();
+                    }
                     ConnectionHealthMonitor.tick();
 
                     if ((Callstate.state != 0) || (Callstate.audio_group_active) || (Callstate.audio_ngc_group_active))

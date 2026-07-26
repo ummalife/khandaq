@@ -71,6 +71,68 @@ public class HelperMsgNotification
 
     static HashSet<String> global_active_notifications = new HashSet<String>();
 
+    // KHANDAQ #200: per-conversation notification ids so different chats no longer collapse into one
+    // shared slot (which made every message look identical / "duplicated"), plus a per-chat rate limit
+    // so a message in chat B is never dropped just because chat A notified within the window.
+    private static final java.util.concurrent.ConcurrentHashMap<String, Integer> notif_id_by_key =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> last_shown_by_key =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.atomic.AtomicInteger notif_id_counter =
+            new java.util.concurrent.atomic.AtomicInteger(0);
+    private static final int NOTIF_ID_BASE = 20100; // clear of Notification_new_message_ID (10023) and call ids
+
+    private static int notif_id_for_key(final String key)
+    {
+        if (key == null || key.isEmpty())
+        {
+            return Notification_new_message_ID;
+        }
+        Integer id = notif_id_by_key.get(key);
+        if (id == null)
+        {
+            id = NOTIF_ID_BASE + (notif_id_counter.getAndIncrement() & 0x3fff);
+            final Integer prev = notif_id_by_key.putIfAbsent(key, id);
+            if (prev != null)
+            {
+                id = prev;
+            }
+        }
+        return id;
+    }
+
+    static String media_label_for_filename(final Context ctx, final String file_name)
+    {
+        try
+        {
+            if (ctx != null && file_name != null)
+            {
+                final String lower = file_name.toLowerCase(java.util.Locale.ENGLISH);
+                if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
+                        || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".heic")
+                        || lower.endsWith(".bmp"))
+                {
+                    return ctx.getString(R.string.notification_media_photo);
+                }
+                if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".mkv")
+                        || lower.endsWith(".webm") || lower.endsWith(".3gp") || lower.endsWith(".avi"))
+                {
+                    return ctx.getString(R.string.notification_media_video);
+                }
+                if (lower.endsWith(".mp3") || lower.endsWith(".ogg") || lower.endsWith(".oga")
+                        || lower.endsWith(".m4a") || lower.endsWith(".aac") || lower.endsWith(".wav")
+                        || lower.endsWith(".opus") || lower.endsWith(".amr"))
+                {
+                    return ctx.getString(R.string.notification_media_voice);
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return ctx != null ? ctx.getString(R.string.notification_media_file) : "File";
+    }
+
     static Uri get_message_notification_sound_uri(final Context context)
     {
         try
@@ -195,6 +257,8 @@ public class HelperMsgNotification
                 if (key.length() > 1)
                 {
                     global_active_notifications.remove(key);
+                    // KHANDAQ #200: cancel THIS conversation's own notification when its chat is opened.
+                    remove_msg_notification(key);
                 }
             }
 
@@ -207,6 +271,13 @@ public class HelperMsgNotification
 
     static void remove_msg_notification()
     {
+        remove_msg_notification(null);
+    }
+
+    // KHANDAQ #200: key == null cancels the legacy shared slot AND every per-chat notification we posted;
+    // key != null cancels just that one conversation's notification (used when its chat is opened).
+    static void remove_msg_notification(final String key)
+    {
         Log.i(TAG, "noti_and_badge:remove_notification:");
         Runnable myRunnable = new Runnable()
         {
@@ -217,7 +288,22 @@ public class HelperMsgNotification
                 {
                     NotificationManager notificationManager = (NotificationManager) context_s.getSystemService(
                             Context.NOTIFICATION_SERVICE);
-                    notificationManager.cancel(Notification_new_message_ID);
+                    if ((key == null) || (key.length() <= 1))
+                    {
+                        notificationManager.cancel(Notification_new_message_ID);
+                        for (final Integer id : notif_id_by_key.values())
+                        {
+                            try { notificationManager.cancel(id); } catch (Exception ignored) {}
+                        }
+                        notif_id_by_key.clear();
+                        last_shown_by_key.clear();
+                    }
+                    else
+                    {
+                        notificationManager.cancel(notif_id_for_key(key));
+                        notif_id_by_key.remove(key);
+                        last_shown_by_key.remove(key);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -380,9 +466,12 @@ public class HelperMsgNotification
                         return;
                     }
 
-                    // allow notification every n seconds
-                    if ((Notification_new_message_last_shown_timestamp + Notification_new_message_every_millis) <
-                        System.currentTimeMillis())
+                    // KHANDAQ #200: rate-limit PER conversation (not globally), so a message in chat B
+                    // is never suppressed just because chat A notified within the window.
+                    final String rl_key = (nf_key != null && nf_key.length() > 1) ? nf_key : "__default__";
+                    final Long last_key_shown = last_shown_by_key.get(rl_key);
+                    if ((last_key_shown == null) ||
+                        ((last_key_shown + Notification_new_message_every_millis) < System.currentTimeMillis()))
                     {
                         if (PREF__notification)
                         {
@@ -392,6 +481,7 @@ public class HelperMsgNotification
                                         (NotificationManager) context_s.getSystemService(
                                                 Context.NOTIFICATION_SERVICE));
                             }
+                            last_shown_by_key.put(rl_key, System.currentTimeMillis());
                             Notification_new_message_last_shown_timestamp = System.currentTimeMillis();
                             Intent notificationIntent = new Intent(context_s, StartMainActivityWrapper.class);
                             notificationIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -474,7 +564,9 @@ public class HelperMsgNotification
                                 }
                                 else
                                 {
-                                    b.setContentText(genericBody);
+                                    // KHANDAQ #200: an empty preview is almost always a media/file message —
+                                    // show an attachment label instead of the generic "new message" body.
+                                    b.setContentText(context_s.getString(R.string.notification_media_generic));
                                 }
                             }
                             else
@@ -496,7 +588,9 @@ public class HelperMsgNotification
                             }
 
                             Notification notification3 = b.build();
-                            MainActivity.nmn3.notify(Notification_new_message_ID, notification3);
+                            // KHANDAQ #200: post under a stable PER-CHAT id so different conversations
+                            // no longer overwrite one shared notification slot.
+                            MainActivity.nmn3.notify(notif_id_for_key(nf_key), notification3);
                             // -- notification ------------------
                             // -- notification ------------------
                         }

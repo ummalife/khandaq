@@ -488,6 +488,11 @@
     </plurals>
     <string name="MainActivity_notification_new_message">новое сообщение</string>
     <string name="MainActivity_notification_new_message2">новое сообщение</string>
+    <string name="notification_media_file">📎 Файл</string>
+    <string name="notification_media_photo">📷 Фото</string>
+    <string name="notification_media_video">🎬 Видео</string>
+    <string name="notification_media_voice">🎤 Голосовое сообщение</string>
+    <string name="notification_media_generic">📎 Вложение</string>
     <string name="reaction_notification_body">отреагировал(а) %1$s</string>
     <string name="chat_react_action">Реакция</string>
     <string name="MainActivity_button_ok">Хорошо</string>

@@ -483,7 +483,7 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__UV_reversed = true; // TODO: on older phones this needs to be "false"
     static boolean PREF__notification_sound = true;
     static boolean PREF__notification_vibrate = false;
-    static boolean PREF__notification_show_content = false;
+    static boolean PREF__notification_show_content = true; // KHANDAQ #200: show sender+preview by default
     static boolean PREF__notification = true;
     static final int MIN_AUDIO_SAMPLINGRATE_OUT = 48000;
     static final int SAMPLE_RATE_FIXED = 48000;
@@ -937,7 +937,7 @@ public class MainActivity extends AppCompatActivity
         PREF__UV_reversed = settings.getBoolean("video_uv_reversed", true);
         PREF__notification_sound = settings.getBoolean("notifications_new_message_sound", true);
         PREF__notification_vibrate = settings.getBoolean("notifications_new_message_vibrate", false);
-        PREF__notification_show_content = settings.getBoolean("notification_show_content", false);
+        PREF__notification_show_content = settings.getBoolean("notification_show_content", true);
         PREF__notification = settings.getBoolean("notifications_new_message", true);
         PREF__software_echo_cancel = settings.getBoolean("software_echo_cancel", false);
         PREF__fps_half = settings.getBoolean("fps_half", false);
@@ -3514,7 +3514,7 @@ public class MainActivity extends AppCompatActivity
         PREF__UV_reversed = settings.getBoolean("video_uv_reversed", true);
         PREF__notification_sound = settings.getBoolean("notifications_new_message_sound", true);
         PREF__notification_vibrate = settings.getBoolean("notifications_new_message_vibrate", true);
-        PREF__notification_show_content = settings.getBoolean("notification_show_content", false);
+        PREF__notification_show_content = settings.getBoolean("notification_show_content", true);
         PREF__notification = settings.getBoolean("notifications_new_message", true);
         if ((nmn3 != null) && (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O))
         {
@@ -7741,7 +7741,8 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, "incoming file");
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname,
+                        HelperMsgNotification.media_label_for_filename(context_s, f.file_name));
             }
             // --- notification ---
             // --- notification ---
@@ -7877,7 +7878,8 @@ public class MainActivity extends AppCompatActivity
             // --- notification ---
             if (do_notification)
             {
-                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname, "incoming file");
+                change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.tox_friendpubkey, friendname,
+                        HelperMsgNotification.media_label_for_filename(context_s, f.file_name));
             }
             // --- notification ---
             // --- notification ---

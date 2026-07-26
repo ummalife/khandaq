@@ -735,6 +735,11 @@
     </plurals>
     <string name="MainActivity_notification_new_message">new Message</string>
     <string name="MainActivity_notification_new_message2">new Message</string>
+    <string name="notification_media_file">📎 File</string>
+    <string name="notification_media_photo">📷 Photo</string>
+    <string name="notification_media_video">🎬 Video</string>
+    <string name="notification_media_voice">🎤 Voice message</string>
+    <string name="notification_media_generic">📎 Attachment</string>
     <string name="reaction_notification_body">reacted %1$s</string>
     <string name="chat_react_action">React</string>
     <string name="MainActivity_button_ok">Ok</string>

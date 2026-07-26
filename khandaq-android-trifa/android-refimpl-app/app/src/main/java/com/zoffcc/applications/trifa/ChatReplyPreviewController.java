@@ -208,10 +208,22 @@ final class ChatReplyPreviewController
         }
         else
         {
-            meta.senderName = resolve_name_for_pubkey(message.tox_friendpubkey, message.tox_friendpubkey);
-            if (meta.senderName == null || meta.senderName.isEmpty())
+            // KHANDAQ #198: reject a hex fallback (6-char short-id or the raw pubkey) so a nameless
+            // friend never renders as hex in the quote header.
+            String resolved = resolve_name_for_pubkey(message.tox_friendpubkey, message.tox_friendpubkey);
+            if (resolved != null)
+            {
+                resolved = resolved.trim();
+            }
+            if (resolved == null || resolved.isEmpty()
+                    || HelperGroup.is_short_hex_peer_id(resolved, message.tox_friendpubkey)
+                    || resolved.equalsIgnoreCase(message.tox_friendpubkey))
             {
                 meta.senderName = context.getString(R.string.chat_reply_unknown_sender);
+            }
+            else
+            {
+                meta.senderName = resolved;
             }
         }
         meta.previewText = previewText;
@@ -240,22 +252,39 @@ final class ChatReplyPreviewController
         }
         else
         {
-            try
+            // KHANDAQ #198: prefer the peer nickname FROZEN on the row at receive time (matches iOS
+            // groupPeerName). The live lookup degrades to a 6-hex pubkey short-id ("E30537") on any
+            // miss and, being non-empty, used to shadow the reliable stored name in the quote header.
+            String resolved = null;
+            final String stored = message.tox_group_peername;
+            if (stored != null && !stored.trim().isEmpty()
+                    && !HelperGroup.is_short_hex_peer_id(stored.trim(), message.tox_group_peer_pubkey))
             {
-                meta.senderName = resolve_name_for_pubkey(message.tox_group_peer_pubkey,
-                        tox_group_peer_get_name__wrapper(message.group_identifier, message.tox_group_peer_pubkey));
+                resolved = stored.trim();
             }
-            catch (Exception ignored)
+            if (resolved == null)
             {
+                try
+                {
+                    final String live = resolve_name_for_pubkey(message.tox_group_peer_pubkey,
+                            tox_group_peer_get_name__wrapper(message.group_identifier, message.tox_group_peer_pubkey));
+                    if (live != null && !live.trim().isEmpty()
+                            && !HelperGroup.is_short_hex_peer_id(live.trim(), message.tox_group_peer_pubkey))
+                    {
+                        resolved = live.trim();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
             }
-            if (meta.senderName == null || meta.senderName.isEmpty())
+            if (resolved == null)
             {
-                meta.senderName = message.tox_group_peername;
+                // last resort: a visible short-id beats nothing, else localized "Unknown"
+                resolved = (stored != null && !stored.trim().isEmpty())
+                        ? stored.trim() : context.getString(R.string.chat_reply_unknown_sender);
             }
-            if (meta.senderName == null || meta.senderName.isEmpty())
-            {
-                meta.senderName = context.getString(R.string.chat_reply_unknown_sender);
-            }
+            meta.senderName = resolved;
         }
         meta.previewText = previewText;
         show(context, meta);

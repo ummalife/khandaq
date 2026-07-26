@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10362.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10363.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Fixes: 'delete for everyone' now also removes the message on the other person's device in 1:1 chats (incoming delete was being dropped); the keyboard no longer covers the message field under a photo or in chat; voice notes stop when you fully close the app; and a tidier chat header on newer Android."},
-                    {"language": "ru-RU", "text": "Исправления: «удалить у всех» теперь удаляет сообщение и на устройстве собеседника в личных чатах (входящее удаление раньше терялось); клавиатура больше не закрывает поле ввода под фото и в чате; голосовые останавливаются при полном закрытии приложения; аккуратнее заголовок чата на новых Android."},
+                    {"language": "en-US", "text": "Fixes: replies now show the correct sender name (instead of a code like 'E30537') and tapping a reply jumps to the right message; notifications now show who wrote and a message preview (Photo/Voice/Video) instead of a generic 'new message', and different chats no longer collapse into one; fixed a crash when importing a profile that has groups — and imported groups are no longer lost."},
+                    {"language": "ru-RU", "text": "Исправления: в ответах теперь показывается правильное имя отправителя (а не код вроде «E30537»), и тап по ответу переходит к нужному сообщению; уведомления показывают, кто написал, и превью сообщения («Фото»/«Голосовое»/«Видео») вместо общего «новое сообщение», а разные чаты больше не сливаются в одно; исправлен краш при импорте профиля с группами — и импортированные группы больше не теряются."},
                 ],
             }],
         })

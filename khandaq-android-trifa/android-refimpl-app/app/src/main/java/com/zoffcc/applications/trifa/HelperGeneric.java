@@ -4916,6 +4916,7 @@ public class HelperGeneric
                 orma.deleteFromMessage().execute();
                 orma.deleteFromConferenceMessage().execute();
                 orma.deleteFromGroupMessage().execute();
+                orma.deleteFromGroupPeerDB().execute(); // KHANDAQ #202: stale peer rows survived import
                 orma.deleteFromConferencePeerCacheDB().execute();
                 orma.deleteFromFileDB().execute();
                 orma.deleteFromFiletransfer().execute();
@@ -5041,6 +5042,7 @@ public class HelperGeneric
                 orma.deleteFromMessage().execute();
                 orma.deleteFromConferenceMessage().execute();
                 orma.deleteFromGroupMessage().execute();
+                orma.deleteFromGroupPeerDB().execute(); // KHANDAQ #202: stale peer rows survived import
                 orma.deleteFromConferencePeerCacheDB().execute();
                 orma.deleteFromFileDB().execute();
                 orma.deleteFromFiletransfer().execute();

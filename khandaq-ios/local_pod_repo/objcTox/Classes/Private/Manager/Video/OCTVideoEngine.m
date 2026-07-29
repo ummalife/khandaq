@@ -102,12 +102,15 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     [self.dataOutput setSampleBufferDelegate:self queue:self.processingQueue];
 
     [self.captureSession addOutput:self.dataOutput];
-    AVCaptureConnection *conn = [self.dataOutput connectionWithMediaType:AVMediaTypeVideo];
 
-    if (conn.supportsVideoOrientation) {
-        [self registerOrientationNotification];
-        [self orientationChanged];
-    }
+    // KHANDAQ (#203): do NOT gate orientation setup on the DEPRECATED `supportsVideoOrientation` —
+    // on iOS 17+ it reports NO, so this whole block was skipped and orientationChanged() (which on
+    // iOS 17+ applies videoRotationAngle) NEVER ran. The data-output connection then stayed at the
+    // sensor-native LANDSCAPE default, so the video SENT to the remote peer was sideways while the
+    // local preview looked fine. Always register + apply; applyCaptureOrientation picks the right API
+    // per iOS version (videoRotationAngle on 17+, videoOrientation below).
+    [self registerOrientationNotification];
+    [self orientationChanged];
 
     return YES;
 }

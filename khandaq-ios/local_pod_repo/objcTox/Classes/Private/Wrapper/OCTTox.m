@@ -4142,6 +4142,37 @@ void friendLosslessPacketCallback(
         return;
     }
 
+    if (pktType == 186) {
+        // KHANDAQ (#208): 1:1 message EDIT ("KQ" family, byte-parity with Android HelperMessageEdit).
+        // Header 40B: [0]=186 [1..2]='K','Q' [3]=ver(1) [4..35]=msgv3 hash 32B [36..39]=edit-ts u32 BE
+        // [40..]=new text UTF-8 (variable).
+        if (length < 40 || data[1] != 'K' || data[2] != 'Q' || data[3] != 1) {
+            return;
+        }
+        NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
+        for (int i = 4; i < 36; i++) {
+            [hashHex appendFormat:@"%02X", data[i]];
+        }
+        uint32_t editTs = ((uint32_t)data[36] << 24) | ((uint32_t)data[37] << 16)
+                        | ((uint32_t)data[38] << 8) | (uint32_t)data[39];
+        NSString *newText = @"";
+        if (length > 40) {
+            newText = [[NSString alloc] initWithBytes:(data + 40) length:(length - 40) encoding:NSUTF8StringEncoding];
+            if (newText == nil) {
+                return;
+            }
+        }
+
+        NSString *newTextCopy = newText;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([tox.delegate respondsToSelector:@selector(tox:friendMessageEditWithMsgv3Hash:newText:editTs:friendNumber:)]) {
+                [tox.delegate tox:tox friendMessageEditWithMsgv3Hash:hashHex newText:newTextCopy editTs:editTs friendNumber:friendNumber];
+            }
+        });
+
+        return;
+    }
+
     if (pktType == 187) {
         // KHANDAQ (#179/#193): delete-for-both of an own 1:1 message ("KQ" family, mirrors Android
         // HelperMessageDelete). TEXT (40B): [0]=187 [1..2]='K','Q' [3]=ver(1) [4..35]=msgv3 hash

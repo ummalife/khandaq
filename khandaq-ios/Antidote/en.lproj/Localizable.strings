@@ -394,6 +394,10 @@
 /* KHANDAQ (#205): delete scope choice */
 "delete_for_me" = "Delete for me";
 "delete_for_everyone" = "Delete for everyone";
+/* KHANDAQ (#208): edit sent message */
+"chat_edit_action" = "Edit";
+"message_edit_save" = "Save";
+"message_edited_marker" = "(edited)";
 /* Delete button */
 "alert_delete" = "Delete";
 /* Delete button */

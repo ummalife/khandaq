@@ -10,7 +10,10 @@ import UIKit
 
 enum MediaSendPreviewItem {
     case image(UIImage, fileName: String?)
-    case video(URL)
+    // KHANDAQ (#204-B): carry the picked video's ORIGINAL name (PHPicker suggestedName /
+    // PHAssetResource.originalFilename) — the staged URL is a UUID temp, so lastPathComponent
+    // would surface a UUID in Saved Messages instead of the real filename.
+    case video(URL, fileName: String?)
 }
 
 protocol MediaSendPreviewControllerDelegate: AnyObject {
@@ -294,7 +297,7 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         case .image(let image, _):
             imageView.image = image
             playIconView.isHidden = true
-        case .video(let url):
+        case .video(let url, _):
             playIconView.isHidden = false
             imageView.image = nil
             Self.previewQueue.async {

@@ -1012,6 +1012,15 @@ extension ChatPrivateController: UITableViewDataSource {
                 outgoingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: outgoingModel)
 
+                // KHANDAQ (#208): own text with a msgV3 hash is editable — but not replies (would
+                // corrupt the reply wire header, matching Android) nor location messages.
+                let editHashOK = (messageText.msgv3HashHex ?? "").count == 64
+                outgoingModel.canEdit = editHashOK && outgoingModel.replyMeta == nil && !outgoingModel.hasLocation
+                outgoingModel.edited = message.edited
+                if message.edited && !outgoingModel.hasLocation {
+                    outgoingModel.message += "  " + String(localized: "message_edited_marker")
+                }
+
                 model = outgoingModel
 
                 cell = tableView.dequeueReusableCell(withIdentifier: ChatOutgoingTextCell.staticReuseIdentifier) as! ChatOutgoingTextCell
@@ -1055,6 +1064,13 @@ extension ChatPrivateController: UITableViewDataSource {
 
                 incomingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: incomingModel)
+
+                // KHANDAQ (#208): the peer can edit their own message → show the marker (never editable by us).
+                incomingModel.edited = message.edited
+                if message.edited && !incomingModel.hasLocation {
+                    incomingModel.message += "  " + String(localized: "message_edited_marker")
+                }
+
                 model = incomingModel
 
                 cell = tableView.dequeueReusableCell(withIdentifier: ChatIncomingTextCell.staticReuseIdentifier) as! ChatIncomingTextCell
@@ -1541,6 +1557,37 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: cell)
+    }
+
+    // KHANDAQ (#208): edit an own text message via an inline editor, then push the change (packet 186).
+    func chatMovableDateCellEditPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView?.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard message.messageText != nil else {
+            return
+        }
+        let current = message.messageText?.text ?? ""
+
+        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: nil, preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.text = current
+            textField.autocapitalizationType = .sentences
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "message_edit_save"), style: .default) { [weak self, weak alert] _ in
+            guard let self = self, let newText = alert?.textFields?.first?.text else {
+                return
+            }
+            let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed == current {
+                return
+            }
+            self.submanagerChats.editMessage(message, newText: trimmed)
+        })
+        present(alert, animated: true, completion: nil)
     }
 
     // KHANDAQ (#192): quick reaction bar — one tap toggles the own reaction on the message

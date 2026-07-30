@@ -80,6 +80,12 @@
 - (void)tox:(OCTTox *)tox friendMessageDeleteWithMsgv3Hash:(NSString *)msgv3HashHex friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (#208): the friend edited one of their own 1:1 text messages ("KQ" lossless packet id
+ * 186). Addressed by the message's msgV3 hash (uppercase hex); editTs is the last-write-wins clock.
+ */
+- (void)tox:(OCTTox *)tox friendMessageEditWithMsgv3Hash:(NSString *)msgv3HashHex newText:(NSString *)newText editTs:(uint32_t)editTs friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * KHANDAQ (#193): the friend retracted one of their own 1:1 FILE / media / voice messages
  * (delete-for-both, "KQ" packet 187, anchor_type 2). Addressed by the symmetric tox file_id (hex).
  */

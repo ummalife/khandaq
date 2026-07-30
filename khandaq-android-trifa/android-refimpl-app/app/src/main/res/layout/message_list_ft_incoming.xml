@@ -171,8 +171,6 @@
 
                     <include layout="@layout/chat_file_attachment_row" />
 
-                    <include layout="@layout/chat_reactions_row" />
-
                 </LinearLayout>
 
                 <LinearLayout
@@ -268,6 +266,10 @@
                         android:visibility="gone" />
 
                 </LinearLayout>
+
+                <!-- KHANDAQ (#206): reactions row hoisted to bubble level (was nested inside the
+                     gone-by-default ft_preview_container, which clipped chips on non-image/paused files). -->
+                <include layout="@layout/chat_reactions_row" />
 
             </LinearLayout>
 

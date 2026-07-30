@@ -12,12 +12,15 @@ protocol ChatMovableDateCellDelegate: class {
     func chatMovableDateCellReplyPressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellReactPressed(_ cell: ChatMovableDateCell)
+    func chatMovableDateCellEditPressed(_ cell: ChatMovableDateCell)
 }
 
 extension ChatMovableDateCellDelegate {
     func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell) {}
     // KHANDAQ (#192): default no-op so delegates without reactions keep compiling
     func chatMovableDateCellReactPressed(_ cell: ChatMovableDateCell) {}
+    // KHANDAQ (#208): default no-op so delegates without edit keep compiling
+    func chatMovableDateCellEditPressed(_ cell: ChatMovableDateCell) {}
 }
 
 class ChatMovableDateCell: BaseCell {
@@ -26,6 +29,8 @@ class ChatMovableDateCell: BaseCell {
             items += [
                 // KHANDAQ (#192): "Реакция" opens the Telegram-style horizontal reaction bar.
                 UIMenuItem(title: String(localized: "chat_react_action"), action: #selector(reactAction)),
+                // KHANDAQ (#208): "Изменить" — own text messages only (gated by canBeEdited).
+                UIMenuItem(title: String(localized: "chat_edit_action"), action: #selector(editMessageAction)),
                 UIMenuItem(title: String(localized: "chat_reply_action"), action: #selector(replyAction)),
                 UIMenuItem(title: String(localized: "chat_forward_action"), action: #selector(forwardAction)),
                 UIMenuItem(title: String(localized: "chat_more_menu_item"), action: #selector(moreAction))
@@ -39,6 +44,8 @@ class ChatMovableDateCell: BaseCell {
     var canBeCopied = false
     // KHANDAQ (#192): gates the "Реакция" menu item; text cells set it in setupWithTheme
     var canBeReacted = false
+    // KHANDAQ (#208): gates the "Изменить" menu item; set for own outgoing text messages only
+    var canBeEdited = false
 
     /**
         Superview for content that should move while panning table to the left.
@@ -297,6 +304,8 @@ extension ChatMovableDateCell {
                 return true
             case #selector(reactAction):
                 return canBeReacted
+            case #selector(editMessageAction):
+                return canBeEdited
             case #selector(forwardAction):
                 return true
             case #selector(moreAction):
@@ -324,6 +333,10 @@ extension ChatMovableDateCell {
 
     @objc func reactAction() {
         delegate?.chatMovableDateCellReactPressed(self)
+    }
+
+    @objc func editMessageAction() {
+        delegate?.chatMovableDateCellEditPressed(self)
     }
 
     @objc func forwardAction() {

@@ -108,6 +108,15 @@
 @property BOOL reactionsPending;
 
 /**
+ * KHANDAQ (#208): message-edit state. `edited` flags an edited message (renders an «изменено»
+ * marker); `editedTimestamp` is the last-write-wins clock (u32 seconds, byte-parity with Android's
+ * 186/0x41 edit packet); `editPending` marks an own edit not yet delivered (reconnect flush).
+ */
+@property BOOL edited;
+@property NSTimeInterval editedTimestamp;
+@property BOOL editPending;
+
+/**
  * Message has one of the following properties.
  */
 @property (nullable) OCTMessageText *messageText;

@@ -438,8 +438,8 @@ fileprivate extension ChatInputViewManager {
         })
     }
 
-    func enqueueVideoSendSequence(_ urls: [URL], caption: String = "") {
-        guard !urls.isEmpty else {
+    func enqueueVideoSendSequence(_ videos: [(url: URL, fileName: String?)], caption: String = "") {
+        guard !videos.isEmpty else {
             if !caption.isEmpty {
                 sendCaptionMessage(caption)
             }
@@ -451,11 +451,13 @@ fileprivate extension ChatInputViewManager {
         // point: a failed export (or a failed copy in @discardableResult storeSavedFileByCopying) left NO
         // message and NO error. Store the picked video directly, exactly like photos/documents do.
         if chat.isSavedMessages {
-            for (index, url) in urls.enumerated() {
-                if !storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent) {
+            for (index, video) in videos.enumerated() {
+                // #204-B: prefer the original picked name over the UUID staging name.
+                let name = video.fileName ?? video.url.lastPathComponent
+                if !storeSavedFileByCopying(atPath: video.url.path, fileName: name) {
                     showMediaPickFailed()
                 }
-                if index == urls.count - 1 {
+                if index == videos.count - 1 {
                     let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty, let message = submanagerObjects.addSavedTextMessage(trimmed, to: chat) {
                         submanagerObjects.markMessage(asCaption: message)
@@ -465,15 +467,15 @@ fileprivate extension ChatInputViewManager {
             return
         }
 
-        var remaining = urls
+        var remaining = videos
         func sendNext() {
             guard !remaining.isEmpty else {
                 return
             }
-            let url = remaining.removeFirst()
+            let video = remaining.removeFirst()
             // The last video carries the caption so it lands right after that video's file message.
             let itemCaption = remaining.isEmpty ? caption : ""
-            enqueueVideoSend(from: url, caption: itemCaption) {
+            enqueueVideoSend(from: video.url, caption: itemCaption) {
                 sendNext()
             }
         }
@@ -716,7 +718,7 @@ fileprivate extension ChatInputViewManager {
 
                     do {
                         let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
-                        loaded.append(.video(staged))
+                        loaded.append(.video(staged, fileName: provider.suggestedName))
                     } catch {
                     }
                 }
@@ -789,10 +791,11 @@ fileprivate extension ChatInputViewManager {
 
         if isMovieMediaType(mediaType) {
             if let url = info[UIImagePickerControllerMediaURL] as? URL {
+                let originalName = url.lastPathComponent
                 stageVideoURL(url) { result in
                     switch result {
                     case .success(let staged):
-                        completion([.video(staged)])
+                        completion([.video(staged, fileName: originalName)])
                     case .failure:
                         completion([])
                     }
@@ -816,7 +819,7 @@ fileprivate extension ChatInputViewManager {
                 PHAssetResourceManager.default().writeData(for: resource, toFile: tempURL, options: options) { error in
                     DispatchQueue.main.async {
                         if error == nil {
-                            completion([.video(tempURL)])
+                            completion([.video(tempURL, fileName: resource.originalFilename)])
                         } else {
                             completion([])
                         }
@@ -832,17 +835,17 @@ fileprivate extension ChatInputViewManager {
     func sendConfirmedPreviewItems(_ items: [MediaSendPreviewItem], caption: String) {
         let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        var videoURLs: [URL] = []
+        var videos: [(url: URL, fileName: String?)] = []
         for item in items {
             switch item {
             case .image(let image, let fileName):
                 sendImageData(image, fileName: fileName)
-            case .video(let url):
-                videoURLs.append(url)
+            case .video(let url, let fileName):
+                videos.append((url, fileName))
             }
         }
 
-        if videoURLs.isEmpty {
+        if videos.isEmpty {
             // Photos create their file message synchronously, so the caption now pairs with the last one.
             if !trimmedCaption.isEmpty {
                 sendCaptionMessage(trimmedCaption)
@@ -851,7 +854,7 @@ fileprivate extension ChatInputViewManager {
         }
 
         // Video prep is async — let the LAST video carry the caption so it follows the video's file message.
-        enqueueVideoSendSequence(videoURLs, caption: trimmedCaption)
+        enqueueVideoSendSequence(videos, caption: trimmedCaption)
     }
 
     func sendCaptionMessage(_ text: String) {

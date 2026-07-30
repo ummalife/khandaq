@@ -215,10 +215,11 @@ extension ChatGroupInputViewManager: PHPickerViewControllerDelegate {
                     stagedResult = .failure(error)
                 }
 
+                let originalName = provider.suggestedName
                 DispatchQueue.main.async {
                     switch stagedResult {
                     case .success(let staged):
-                        self.presentMediaPreview(items: [.video(staged)])
+                        self.presentMediaPreview(items: [.video(staged, fileName: originalName)])
                     case .failure(let error):
                         self.showVideoSendError(error, retryURL: nil)
                     }
@@ -274,7 +275,7 @@ extension ChatGroupInputViewManager: MediaSendPreviewControllerDelegate {
             switch item {
             case .image(let image, _):
                 sendImageData(image, caption: itemCaption)
-            case .video(let url):
+            case .video(let url, _):
                 enqueueVideoSend(from: url, caption: itemCaption)
             }
         }
@@ -351,7 +352,7 @@ private extension ChatGroupInputViewManager {
 
     func sendMovie(imagePickerInfo: [String: Any]) {
         if let url = imagePickerInfo[UIImagePickerControllerMediaURL] as? URL {
-            presentMediaPreview(items: [.video(url)])
+            presentMediaPreview(items: [.video(url, fileName: url.lastPathComponent)])
             return
         }
 
@@ -370,6 +371,7 @@ private extension ChatGroupInputViewManager {
         }
 
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        let originalName = resource.originalFilename
 
         PHAssetResourceManager.default().writeData(for: resource, toFile: tempURL, options: nil) { [weak self] error in
             DispatchQueue.main.async {
@@ -382,7 +384,7 @@ private extension ChatGroupInputViewManager {
                     return
                 }
 
-                self.presentMediaPreview(items: [.video(tempURL)])
+                self.presentMediaPreview(items: [.video(tempURL, fileName: originalName)])
             }
         }
     }

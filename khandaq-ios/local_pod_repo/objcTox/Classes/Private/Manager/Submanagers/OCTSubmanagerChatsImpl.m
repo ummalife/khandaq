@@ -492,6 +492,8 @@ static void triggerPush(NSString *used_pushToken,
         [self flushPendingDeletesForFriend:friend];
         // KHANDAQ (#192): deliver reaction changes made while this friend was offline
         [self flushPendingReactionsForFriend:friend];
+        // KHANDAQ (#208): deliver edits made while this friend was offline
+        [self flushPendingEditsForFriend:friend];
     }
 }
 
@@ -512,6 +514,8 @@ static void triggerPush(NSString *used_pushToken,
             [self flushPendingDeletesForFriend:friend];
             // KHANDAQ (#192): retry pending reaction deliveries too
             [self flushPendingReactionsForFriend:friend];
+            // KHANDAQ (#208): retry pending edit deliveries too
+            [self flushPendingEditsForFriend:friend];
         }
     }
 }
@@ -1128,6 +1132,148 @@ serialize:
 
     // local deletion always happens — even when the retraction could not be delivered yet
     [self removeMessages:@[message]];
+}
+
+#pragma mark - KHANDAQ (#208) message edit ("KQ" lossless packet id 186, byte-parity with Android)
+
+// 40-byte header {186,'K','Q',1} + msgv3 hash 32B + edit-ts u32 BE + new text UTF-8 (variable).
+- (NSData *)kqEditPacketWithHashHex:(NSString *)hashHex newText:(NSString *)newText ts:(uint32_t)ts
+{
+    if (hashHex.length != 64) {
+        return nil;
+    }
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:64];
+    const uint8_t header[4] = { 186, 'K', 'Q', 1 };
+    [pkt appendBytes:header length:4];
+    for (int i = 0; i < 64; i += 2) {
+        unsigned int b = 0;
+        [[NSScanner scannerWithString:[hashHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+        uint8_t byte = (uint8_t)b;
+        [pkt appendBytes:&byte length:1];
+    }
+    const uint8_t tsbe[4] = {
+        (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+        (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF)
+    };
+    [pkt appendBytes:tsbe length:4];
+    NSData *textData = [newText dataUsingEncoding:NSUTF8StringEncoding];
+    if (textData != nil) {
+        [pkt appendData:textData];
+    }
+    return pkt;
+}
+
+- (void)editMessage:(OCTMessageAbstract *)message newText:(NSString *)newText
+{
+    // own outgoing TEXT only; a reply/mention-encoded message is left alone (Android excludes them too).
+    if (! message || message.senderUniqueIdentifier != nil || message.messageText == nil) {
+        return;
+    }
+    NSString *anchorHex = message.messageText.msgv3HashHex;
+    if (anchorHex.length != 64) {
+        return;
+    }
+    NSString *trimmed = [newText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (trimmed.length == 0) {
+        return;
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager objectWithUniqueIdentifier:message.chatUniqueIdentifier class:[OCTChat class]];
+    OCTFriend *friend = [chat.friends firstObject];
+    const BOOL isSaved = (friend == nil); // Saved Messages self-chat has no friend → local edit only
+
+    // update the local row first so the UI reflects the edit immediately (Realm notification → reload)
+    [realmManager updateObject:message withBlock:^(OCTMessageAbstract *m) {
+        m.messageText.text = trimmed;
+        m.edited = YES;
+        m.editedTimestamp = (NSTimeInterval)ts;
+        m.editPending = ! isSaved; // pending until delivered; nothing to deliver in Saved Messages
+    }];
+
+    if (isSaved) {
+        return;
+    }
+
+    NSData *pkt = [self kqEditPacketWithHashHex:anchorHex newText:trimmed ts:ts];
+    OCTToxFriendNumber friendNumber = [[self.dataSource managerGetTox] friendNumberWithPublicKey:friend.publicKey error:nil];
+    BOOL sent = NO;
+    if (pkt != nil && friendNumber != kOCTToxFriendNumberFailure) {
+        sent = [[self.dataSource managerGetTox] sendLosslessPacketWithFriendNumber:friendNumber bytes:pkt error:nil];
+    }
+    if (sent) {
+        [realmManager updateObject:message withBlock:^(OCTMessageAbstract *m) {
+            m.editPending = NO;
+        }];
+    }
+    // else: editPending stays YES → flushed from the CURRENT text on reconnect
+}
+
+- (void)flushPendingEditsForFriend:(OCTFriend *)friend
+{
+    if (friend.publicKey.length == 0) {
+        return;
+    }
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND editPending == YES AND senderUniqueIdentifier == nil",
+                              chat.uniqueIdentifier];
+    RLMResults *results = [realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
+    NSMutableArray *pending = [NSMutableArray new];
+    for (OCTMessageAbstract *msg in results) {
+        [pending addObject:msg];
+    }
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxFriendNumber friendNumber = [tox friendNumberWithPublicKey:friend.publicKey error:nil];
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return;
+    }
+    for (OCTMessageAbstract *msg in pending) {
+        NSString *anchorHex = msg.messageText.msgv3HashHex;
+        if (anchorHex.length != 64 || msg.messageText.text == nil) {
+            continue;
+        }
+        uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970]; // fresh ts, like the delete/reaction flush
+        NSData *pkt = [self kqEditPacketWithHashHex:anchorHex newText:msg.messageText.text ts:ts];
+        if (pkt != nil && [tox sendLosslessPacketWithFriendNumber:friendNumber bytes:pkt error:nil]) {
+            [realmManager updateObject:msg withBlock:^(OCTMessageAbstract *m) {
+                m.editPending = NO;
+            }];
+        }
+    }
+}
+
+// the friend edited one of their OWN text messages → in our shared chat that's an INCOMING message.
+- (void)tox:(OCTTox *)tox friendMessageEditWithMsgv3Hash:(NSString *)msgv3HashHex
+                                                 newText:(NSString *)newText
+                                                  editTs:(uint32_t)editTs
+                                            friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    OCTFriend *friend = [realmManager friendWithPublicKey:publicKey];
+    if (! friend || msgv3HashHex.length != 64) {
+        return;
+    }
+    OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@",
+                              chat.uniqueIdentifier, msgv3HashHex];
+    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+    if (! found || found.messageText == nil) {
+        return; // like reactions/deletes, an edit never creates state for an unknown original
+    }
+    // last-write-wins: ignore an edit not newer than what we already applied
+    if (found.edited && found.editedTimestamp >= (NSTimeInterval)editTs) {
+        return;
+    }
+    [realmManager updateObject:found withBlock:^(OCTMessageAbstract *m) {
+        m.messageText.text = newText;
+        m.edited = YES;
+        m.editedTimestamp = (NSTimeInterval)editTs;
+    }];
 }
 
 - (void)tox:(OCTTox *)tox friendHighLevelACK:(NSString *)message

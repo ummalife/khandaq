@@ -25,6 +25,8 @@ class ChatBaseTextCell: ChatMovableDateCell {
 
         canBeCopied = true
         canBeReacted = true
+        // KHANDAQ (#208): only own outgoing text messages expose "Изменить"
+        canBeEdited = textModel.canEdit
         bubbleView.onLocationTap = nil
         bubbleView.onReplyQuoteTap = nil
         bubbleView.setLocationMapImage(nil)

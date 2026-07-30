@@ -91,6 +91,10 @@ class ChatBaseTextCellModel: ChatMovableDateCellModel {
     var senderColor: UIColor?
     /// KHANDAQ (#192): compact reactions line under the text ("❤️ 2  👍"), nil = none.
     var reactionsDisplay: String?
+    /// KHANDAQ (#208): own outgoing text message that can be edited (msgV3 hash present, not a reply).
+    var canEdit: Bool = false
+    /// KHANDAQ (#208): message was edited — render an «изменено» marker after the text.
+    var edited: Bool = false
 
     var hasLocation: Bool {
         locationLatitude != nil && locationLongitude != nil

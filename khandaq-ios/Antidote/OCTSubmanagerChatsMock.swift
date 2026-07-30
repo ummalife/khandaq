@@ -32,6 +32,10 @@ class OCTSubmanagerChatsMock: NSObject, OCTSubmanagerChats {
     func removeMessages(_ messages: [OCTMessageAbstract]!) {
         // nop
     }
+
+    func editMessage(_ message: OCTMessageAbstract!, newText: String!) {
+        // nop
+    }
     
     func removeAllMessages(in chat: OCTChat!, removeChat: Bool) {
         // nop

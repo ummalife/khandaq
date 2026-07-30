@@ -46,6 +46,14 @@
 - (void)toggleReactionOnMessage:(OCTMessageAbstract *)message emoji:(NSString *)emoji;
 
 /**
+ * KHANDAQ (#208): edit an OWN 1:1 text message in place and push the new text to the peer
+ * (KQ lossless packet id 186, byte-parity with Android). Applied to Realm immediately; delivery
+ * is queued (editPending) when the peer is offline. No-op for incoming messages, files, replies
+ * without a msgV3 hash, or empty text. Saved Messages is edited locally only.
+ */
+- (void)editMessage:(OCTMessageAbstract *)message newText:(NSString *)newText;
+
+/**
  * Removes all messages in chat and chat itself.
  *
  * @param chat Chat to remove in.

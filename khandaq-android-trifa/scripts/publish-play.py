@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10364.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10365.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Fixes: replies now show the correct sender name (instead of a code like 'E30537') and tapping a reply jumps to the right message; notifications now show who wrote and a message preview (Photo/Voice/Video) instead of a generic 'new message', and different chats no longer collapse into one; fixed a crash when importing a profile that has groups — and imported groups are no longer lost."},
-                    {"language": "ru-RU", "text": "Исправления: в ответах теперь показывается правильное имя отправителя (а не код вроде «E30537»), и тап по ответу переходит к нужному сообщению; уведомления показывают, кто написал, и превью сообщения («Фото»/«Голосовое»/«Видео») вместо общего «новое сообщение», а разные чаты больше не сливаются в одно; исправлен краш при импорте профиля с группами — и импортированные группы больше не теряются."},
+                    {"language": "en-US", "text": "Swipe any message (photo, video, voice, file, or your own) to reply to it — not just incoming text. When deleting a message you can now choose \"Delete for everyone\" or \"Delete for me\". Reactions now show on photos and videos, not only on text."},
+                    {"language": "ru-RU", "text": "Свайп по любому сообщению (фото, видео, голосовое, файл или своё) теперь открывает ответ — не только по входящему тексту. При удалении можно выбрать «Удалить у всех» или «Удалить у меня». Реакции теперь видны на фото и видео, а не только на тексте."},
                 ],
             }],
         })

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10365.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10366.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Swipe any message (photo, video, voice, file, or your own) to reply to it — not just incoming text. When deleting a message you can now choose \"Delete for everyone\" or \"Delete for me\". Reactions now show on photos and videos, not only on text."},
-                    {"language": "ru-RU", "text": "Свайп по любому сообщению (фото, видео, голосовое, файл или своё) теперь открывает ответ — не только по входящему тексту. При удалении можно выбрать «Удалить у всех» или «Удалить у меня». Реакции теперь видны на фото и видео, а не только на тексте."},
+                    {"language": "en-US", "text": "Fixed a crash when reopening a chat after the app was closed in the background. Swipe any message (photo, video, voice, file, or your own) to reply. When deleting a message you can choose \"Delete for everyone\" or \"Delete for me\". Reactions now show on photos and videos too."},
+                    {"language": "ru-RU", "text": "Исправлен краш при повторном открытии чата после того, как приложение было выгружено в фоне. Свайп по любому сообщению (фото, видео, голосовое, файл или своё) открывает ответ. При удалении можно выбрать «Удалить у всех» или «Удалить у меня». Реакции теперь видны и на фото/видео."},
                 ],
             }],
         })

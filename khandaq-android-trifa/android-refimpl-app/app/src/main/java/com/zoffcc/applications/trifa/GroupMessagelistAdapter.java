@@ -312,6 +312,22 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         }
     }
 
+    // KHANDAQ (#209): position -> GroupMessage for the swipe-to-reply ItemTouchHelper.
+    public com.zoffcc.applications.sorm.GroupMessage getMessageAtPosition(int position)
+    {
+        try
+        {
+            if (this.messagelistitems != null && position >= 0 && position < this.messagelistitems.size())
+            {
+                return this.messagelistitems.get(position);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return null;
+    }
+
     public void add_list_clear(List<com.zoffcc.applications.sorm.GroupMessage> new_items)
     {
         // HelperGeneric.logI(TAG, "add_list_clear:" + new_items);

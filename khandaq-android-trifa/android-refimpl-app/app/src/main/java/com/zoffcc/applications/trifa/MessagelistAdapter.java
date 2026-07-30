@@ -487,6 +487,22 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         }
     }
 
+    // KHANDAQ (#209): position -> Message for the swipe-to-reply ItemTouchHelper.
+    public com.zoffcc.applications.sorm.Message getMessageAtPosition(int position)
+    {
+        try
+        {
+            if (this.messagelistitems != null && position >= 0 && position < this.messagelistitems.size())
+            {
+                return this.messagelistitems.get(position);
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return null;
+    }
+
     public void add_list_clear(List<com.zoffcc.applications.sorm.Message> new_items)
     {
         // Log.i(TAG, "add_list_clear:" + new_items);

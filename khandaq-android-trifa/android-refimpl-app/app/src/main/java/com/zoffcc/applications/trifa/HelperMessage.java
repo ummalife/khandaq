@@ -787,12 +787,18 @@ public class HelperMessage
 
     static void delete_selected_messages(final Context c, final boolean update_message_list, final boolean update_friend_list, final String dialog_text)
     {
+        delete_selected_messages(c, update_message_list, update_friend_list, dialog_text, true);
+    }
+
+    // KHANDAQ (#205): send_to_peer=false → «Удалить у меня» (local only, no KQ retract packet).
+    static void delete_selected_messages(final Context c, final boolean update_message_list, final boolean update_friend_list, final String dialog_text, final boolean send_to_peer)
+    {
         ProgressDialog progressDialog2 = null;
 
         try
         {
             new MainActivity.delete_selected_messages_asynchtask(c, progressDialog2, update_message_list,
-                                                                 update_friend_list, dialog_text).execute();
+                                                                 update_friend_list, dialog_text, send_to_peer).execute();
         }
         catch (Exception e)
         {

@@ -742,6 +742,9 @@
     <string name="notification_media_generic">📎 Attachment</string>
     <string name="reaction_notification_body">reacted %1$s</string>
     <string name="chat_react_action">React</string>
+    <!-- KHANDAQ (#205): delete scope choice -->
+    <string name="delete_for_me">Delete for me</string>
+    <string name="delete_for_everyone">Delete for everyone</string>
     <string name="MainActivity_button_ok">Ok</string>
     <string name="MainActivity_error_starting_email_app">Error starting Email App</string>
     <string name="MainActivity_no_email_app_found">No Email App found</string>

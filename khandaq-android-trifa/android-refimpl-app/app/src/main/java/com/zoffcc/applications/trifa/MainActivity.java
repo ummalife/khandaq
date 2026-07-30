@@ -10069,14 +10069,22 @@ public class MainActivity extends AppCompatActivity
         boolean update_message_list = false;
         boolean update_friend_list = false;
         String dialog_text = "";
+        // KHANDAQ (#205): when false, delete locally only (skip the KQ retract packet) → «Удалить у меня».
+        boolean send_to_peer = true;
 
         delete_selected_messages_asynchtask(Context c, ProgressDialog progressDialog2, boolean update_message_list, boolean update_friend_list, String dialog_text)
+        {
+            this(c, progressDialog2, update_message_list, update_friend_list, dialog_text, true);
+        }
+
+        delete_selected_messages_asynchtask(Context c, ProgressDialog progressDialog2, boolean update_message_list, boolean update_friend_list, String dialog_text, boolean send_to_peer)
         {
             this.weakContext = new WeakReference<>(c);
             this.progressDialog2 = progressDialog2;
             this.update_message_list = update_message_list;
             this.update_friend_list = update_friend_list;
             this.dialog_text = dialog_text;
+            this.send_to_peer = send_to_peer;
         }
 
         @Override
@@ -10099,15 +10107,18 @@ public class MainActivity extends AppCompatActivity
                     long mid = (Long) i.next();
                     final Message m_to_delete = (Message) orma.selectFromMessage().idEq(mid).get(0);
 
-                    // KHANDAQ (#179): retract own text messages on the peer too (KQ delete packet;
+                    // KHANDAQ (#179/#205): retract own messages on the peer too (KQ delete packet;
                     // old clients drop it silently → local-only against them). Must run BEFORE the
-                    // row disappears — the packet is built from msg_idv3_hash.
-                    try
+                    // row disappears — the packet is built from msg_idv3_hash. Skipped for «Удалить у меня».
+                    if (send_to_peer)
                     {
-                        HelperMessageDelete.sendOwnFriendDelete(m_to_delete);
-                    }
-                    catch (Exception ignored)
-                    {
+                        try
+                        {
+                            HelperMessageDelete.sendOwnFriendDelete(m_to_delete);
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
                     }
 
                     // ---------- delete fileDB if this message is an outgoing file ----------

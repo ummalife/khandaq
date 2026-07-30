@@ -135,8 +135,10 @@ public class ToolbarActionMode implements ActionMode.Callback
 
                     if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
                     {
-                        // normal chat view
-                        delete_selected_messages(context, true, false, "deleting Messages ...");
+                        // normal 1:1 chat view — KHANDAQ (#205): offer «у всех»/«у меня» when the
+                        // selection has an own message; the dialog owns mode.finish(), so return early.
+                        showDeleteScopeFor1on1(mode);
+                        return true;
                     }
                     else
                     {
@@ -293,6 +295,63 @@ public class ToolbarActionMode implements ActionMode.Callback
                 break;
         }
         return false;
+    }
+
+    // KHANDAQ (#205): Telegram-style delete scope for a 1:1 chat. If the selection has at least one
+    // OWN message in a real (non-Favorites) chat, ask «Удалить у всех» (retract on the peer) vs
+    // «Удалить у меня» (local only). Otherwise (incoming-only / Saved Messages) delete locally.
+    private void showDeleteScopeFor1on1(final ActionMode mode)
+    {
+        boolean hasOwn = false;
+        try
+        {
+            for (Long mid : selected_messages)
+            {
+                com.zoffcc.applications.sorm.Message m = TrifaToxService.orma.selectFromMessage().idEq(mid).get(0);
+                if (m != null && m.direction == 1 && m.tox_friendpubkey != null
+                    && !FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey))
+                {
+                    hasOwn = true;
+                    break;
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
+        if (!hasOwn)
+        {
+            // only incoming / Saved Messages — local removal is the only meaningful action
+            delete_selected_messages(context, true, false, "deleting Messages ...");
+            mode.finish();
+            return;
+        }
+
+        final CharSequence[] items = new CharSequence[]{
+                context.getString(R.string.delete_for_everyone),
+                context.getString(R.string.delete_for_me)};
+
+        try
+        {
+            new androidx.appcompat.app.AlertDialog.Builder(context).setItems(items,
+                    new android.content.DialogInterface.OnClickListener()
+                    {
+                        @Override
+                        public void onClick(android.content.DialogInterface d, int which)
+                        {
+                            // 0 = у всех (send_to_peer=true), 1 = у меня (local only)
+                            delete_selected_messages(context, true, false, "deleting Messages ...", which == 0);
+                            mode.finish();
+                        }
+                    }).setNegativeButton(android.R.string.cancel, null).show();
+        }
+        catch (Exception e)
+        {
+            // fall back to a plain retract-for-both if the dialog can't be shown
+            delete_selected_messages(context, true, false, "deleting Messages ...");
+            mode.finish();
+        }
     }
 
     @Override

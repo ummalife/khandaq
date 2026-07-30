@@ -397,6 +397,36 @@ public class MessageListFragment extends Fragment
         // --------------
         // --------------
 
+        // KHANDAQ (#209): swipe-to-reply on every 1:1 row type (text/file/photo/video/voice).
+        final MessagelistAdapter swipe_adapter = adapter;
+        new androidx.recyclerview.widget.ItemTouchHelper(new ReplySwipeCallback(getActivity(),
+                new ReplySwipeCallback.Trigger()
+                {
+                    @Override
+                    public boolean isSwipeable(int position)
+                    {
+                        com.zoffcc.applications.sorm.Message m = swipe_adapter.getMessageAtPosition(position);
+                        if (m == null)
+                        {
+                            return false;
+                        }
+                        // incoming-text keeps its daimajia swipe → exclude here to avoid a double gesture
+                        boolean incomingText = (m.direction == 0)
+                                && (m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value);
+                        return !incomingText;
+                    }
+
+                    @Override
+                    public void onReply(int position)
+                    {
+                        com.zoffcc.applications.sorm.Message m = swipe_adapter.getMessageAtPosition(position);
+                        if (m != null)
+                        {
+                            ChatReplyPreviewController.startReplyToMessage(getActivity(), m);
+                        }
+                    }
+                })).attachToRecyclerView(listingsView);
+
 
         // a = new MessagelistArrayAdapter(context, data_values);
         // setListAdapter(a);

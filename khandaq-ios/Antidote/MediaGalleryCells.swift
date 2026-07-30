@@ -22,6 +22,10 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
     private(set) var isVideoCell = false
     private var videoURL: URL?
 
+    // KHANDAQ (#207): single tap toggles the gallery chrome (top bar + action row) so a photo
+    // can be viewed edge-to-edge; the owning gallery VC supplies the toggle.
+    var onSingleTap: (() -> Void)?
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         contentView.backgroundColor = .black
@@ -45,6 +49,12 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
         doubleTap.numberOfTapsRequired = 2
         scrollView.addGestureRecognizer(doubleTap)
+
+        // KHANDAQ (#207): single tap → toggle chrome; must wait out the double-tap-to-zoom.
+        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
+        singleTap.numberOfTapsRequired = 1
+        singleTap.require(toFail: doubleTap)
+        scrollView.addGestureRecognizer(singleTap)
 
         playButton.setTitle("▶", for: .normal)
         playButton.titleLabel?.font = .systemFont(ofSize: 40, weight: .bold)
@@ -150,6 +160,10 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         guard !isVideoCell else { return }
         scrollView.setZoomScale(scrollView.zoomScale > 1 ? 1 : 2.5, animated: true)
+    }
+
+    @objc private func handleSingleTap(_ gesture: UITapGestureRecognizer) {
+        onSingleTap?()
     }
 
     static func videoFrame(for url: URL) -> UIImage? {

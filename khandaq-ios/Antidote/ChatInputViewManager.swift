@@ -446,6 +446,25 @@ fileprivate extension ChatInputViewManager {
             return
         }
 
+        // KHANDAQ (#204-A): Saved Messages is a LOCAL self-chat with no Tox size limit, so a video does
+        // NOT need the AVAssetExportSession transcode pipeline. That async pipeline was the silent-failure
+        // point: a failed export (or a failed copy in @discardableResult storeSavedFileByCopying) left NO
+        // message and NO error. Store the picked video directly, exactly like photos/documents do.
+        if chat.isSavedMessages {
+            for (index, url) in urls.enumerated() {
+                if !storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent) {
+                    showMediaPickFailed()
+                }
+                if index == urls.count - 1 {
+                    let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty, let message = submanagerObjects.addSavedTextMessage(trimmed, to: chat) {
+                        submanagerObjects.markMessage(asCaption: message)
+                    }
+                }
+            }
+            return
+        }
+
         var remaining = urls
         func sendNext() {
             guard !remaining.isEmpty else {

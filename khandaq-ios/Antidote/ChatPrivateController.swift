@@ -871,17 +871,21 @@ extension ChatPrivateController {
             return
         }
 
-        showMessageDeletionConfirmation(messagesCount: selectedRows.count,
-                                        showFromItem: barButtonItem,
-                                        deleteClosure: { [unowned self] in
+        let toRemove = selectedRows.map { self.messages[$0.row] }
+        let hasOwn = toRemove.contains { $0.isOutgoing() }
+
+        // KHANDAQ (#205): scope choice for the multi-select delete (mirrors the single-message path).
+        showDeleteScopeConfirmation(messagesCount: selectedRows.count,
+                                    canDeleteForEveryone: hasOwn,
+                                    barButtonItem: barButtonItem,
+                                    sourceView: nil,
+                                    deleteForMe: { [unowned self] in
             self.toggleTableViewEditing(false, animated: true)
-
-            let toRemove = selectedRows.map {
-                return self.messages[$0.row]
-            }
-
-            // KHANDAQ (#179): own text messages are also retracted on the peer (KQ delete packet);
-            // everything else falls back to plain local removal inside deleteMessageForBoth.
+            self.submanagerChats.removeMessages(toRemove)
+        }, deleteForEveryone: { [unowned self] in
+            self.toggleTableViewEditing(false, animated: true)
+            // Own messages are retracted on the peer (KQ delete packet); incoming ones fall back to
+            // plain local removal inside deleteMessageForBoth.
             for message in toRemove {
                 self.submanagerChats.deleteMessage(forBoth: message)
             }
@@ -1497,8 +1501,18 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
 
         let message = messageEntry(atDisplayIndex: indexPath.row).message
 
-        // KHANDAQ (#179): own text messages are also retracted on the peer (KQ delete packet)
-        submanagerChats.deleteMessage(forBoth: message)
+        // KHANDAQ (#205): let the user pick the scope. Own message → «у меня»/«у всех»; an incoming
+        // message can only be removed locally so we skip straight to a single «Удалить».
+        showDeleteScopeConfirmation(messagesCount: 1,
+                                    canDeleteForEveryone: message.isOutgoing(),
+                                    barButtonItem: nil,
+                                    sourceView: cell,
+                                    deleteForMe: { [unowned self] in
+            self.submanagerChats.removeMessages([message])
+        }, deleteForEveryone: { [unowned self] in
+            // KHANDAQ (#179): own message is also retracted on the peer (KQ delete packet).
+            self.submanagerChats.deleteMessage(forBoth: message)
+        })
     }
 
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell) {
@@ -2047,11 +2061,22 @@ private extension ChatPrivateController {
                 continue
             }
 
-            let model = ChatIncomingFileCellModel()
+            // KHANDAQ (#206 H/J): reconfigure in place (no reloadRows) to avoid re-flashing the
+            // image/progress — but the row height must be re-measured or a newly-added reaction
+            // chip gets zero vertical space and paints as a clipped/garbled fragment. Also pick the
+            // correct direction model so an outgoing media cell keeps its right-alignment + checkmark.
+            let model: ChatGenericFileCellModel = message.isOutgoing() ? ChatOutgoingFileCellModel()
+                                                                       : ChatIncomingFileCellModel()
             prepareFileCell(cell, andModel: model, withMessage: message)
             cell.setupWithTheme(theme, model: model)
 
             maybeLoadImageForCellAtPath(cell, indexPath: indexPath)
+
+            // Empty batch update forces the table to re-query the self-sizing cell's fitting height
+            // (so the reaction chips lay out) WITHOUT calling cellForRowAt again (no image reload).
+            UIView.performWithoutAnimation {
+                tableView.performBatchUpdates(nil)
+            }
         }
     }
 
@@ -2300,6 +2325,10 @@ private extension ChatPrivateController {
         let model: ChatGenericFileCellModel = incoming ? ChatIncomingFileCellModel() : ChatOutgoingFileCellModel()
 
         prepareFileCell(cell, andModel: model, withMessage: message)
+
+        // KHANDAQ (#209): swipe-to-reply is inherited from ChatMovableDateCell but only worked on
+        // text/call cells because the delegate was never assigned on media/voice cells.
+        cell.replySwipeDelegate = self
 
         return (model, cell)
     }
@@ -2652,6 +2681,44 @@ private extension ChatPrivateController {
 
         alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
 
+        present(alert, animated: true, completion: nil)
+    }
+
+    // KHANDAQ (#205): Telegram-style delete scope. When the selection contains at least one OWN
+    // (outgoing) message in a real 1:1 chat, offer «Удалить у всех» (retract on the peer) vs
+    // «Удалить у меня» (local only) so it's clear where the message is removed. Otherwise (only
+    // incoming, or Saved Messages self-chat) just a single local «Удалить».
+    func showDeleteScopeConfirmation(messagesCount: Int,
+                                     canDeleteForEveryone: Bool,
+                                     barButtonItem: UIBarButtonItem?,
+                                     sourceView: UIView?,
+                                     deleteForMe: @escaping () -> Void,
+                                     deleteForEveryone: @escaping () -> Void) {
+        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        if let barButtonItem = barButtonItem {
+            alert.popoverPresentationController?.barButtonItem = barButtonItem
+        } else if let sourceView = sourceView {
+            alert.popoverPresentationController?.sourceView = sourceView
+            alert.popoverPresentationController?.sourceRect = sourceView.bounds
+        }
+
+        if canDeleteForEveryone && !chat.isSavedMessages {
+            alert.addAction(UIAlertAction(title: String(localized: "delete_for_everyone"), style: .destructive) { _ in
+                deleteForEveryone()
+            })
+            alert.addAction(UIAlertAction(title: String(localized: "delete_for_me"), style: .destructive) { _ in
+                deleteForMe()
+            })
+        } else {
+            let title = messagesCount > 1 ?
+                String(localized: "delete_multiple_messages") + " (\(messagesCount))" :
+                String(localized: "delete_single_message")
+            alert.addAction(UIAlertAction(title: title, style: .destructive) { _ in
+                deleteForMe()
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
         present(alert, animated: true, completion: nil)
     }
 }

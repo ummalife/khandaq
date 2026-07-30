@@ -1282,6 +1282,9 @@ private extension ChatGroupController {
 
         prepareGroupFileCell(cell, andModel: model, withMessage: message)
 
+        // KHANDAQ (#209): swipe-to-reply on group media/voice bubbles (delegate was text-only).
+        cell.replySwipeDelegate = self
+
         if incoming, let peerName = peerName(for: message), !model.isVoiceMessage {
             model.fileName = "\(peerName)\n\(messageFile.fileName ?? "")"
         }
@@ -1429,12 +1432,14 @@ private extension ChatGroupController {
             return
         }
 
-        // KHANDAQ (Figma): custom media gallery viewer (falls back to QuickLook if items empty).
-        let galleryItems = qlDataSource.galleryItems(myName: "")
-        if !galleryItems.isEmpty {
-            let gallery = MediaGalleryViewController(items: galleryItems, startIndex: index)
-            present(gallery, animated: true, completion: nil)
-            return
+        // KHANDAQ (Figma / #204-C): media gallery for image/video; non-media (PDF, doc…) → QuickLook.
+        if let start = qlDataSource.galleryStartIndex(forMessageIndex: index) {
+            let galleryItems = qlDataSource.galleryItems(myName: "")
+            if !galleryItems.isEmpty {
+                let gallery = MediaGalleryViewController(items: galleryItems, startIndex: start)
+                present(gallery, animated: true, completion: nil)
+                return
+            }
         }
 
         let preview = QuickLookPreviewController()

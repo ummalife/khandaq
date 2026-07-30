@@ -44,6 +44,9 @@ final class MediaGalleryViewController: UIViewController {
     private let deleteButton = UIButton(type: .system)
     private let thumbsCollection: UICollectionView
 
+    // KHANDAQ (#207): tap a photo to hide the top bar + action row for an edge-to-edge view.
+    private var chromeHidden = false
+
     init(items: [GalleryItem], startIndex: Int) {
         self.items = items
         self.currentIndex = max(0, min(startIndex, max(0, items.count - 1)))
@@ -205,6 +208,19 @@ final class MediaGalleryViewController: UIViewController {
         dismiss(animated: true, completion: nil)
     }
 
+    // KHANDAQ (#207): fade the chrome in/out. Alpha (not isHidden) so already-hidden controls
+    // (forward/delete when no delegate action, single-item thumb strip) stay hidden.
+    private func toggleChrome() {
+        chromeHidden.toggle()
+        let a: CGFloat = chromeHidden ? 0 : 1
+        UIView.animate(withDuration: 0.22) {
+            self.topBar.alpha = a
+            self.forwardButton.alpha = a
+            self.deleteButton.alpha = a
+            self.thumbsCollection.alpha = a
+        }
+    }
+
     @objc private func forwardTapped() {
         delegate?.mediaGallery(self, didRequestForwardAt: currentIndex)
     }
@@ -235,6 +251,7 @@ extension MediaGalleryViewController: UICollectionViewDataSource, UICollectionVi
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: MediaPageCell.reuseId,
                                                       for: indexPath) as! MediaPageCell
         cell.configure(with: items[indexPath.item])
+        cell.onSingleTap = { [weak self] in self?.toggleChrome() }
         return cell
     }
 

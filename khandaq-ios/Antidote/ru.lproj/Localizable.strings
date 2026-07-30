@@ -390,6 +390,9 @@
 "delete_multiple_messages" = "Удалить сообщения";
 /* Deleting all messages in chat. */
 "delete_all_messages" = "Удалить всё";
+/* KHANDAQ (#205): delete scope choice */
+"delete_for_me" = "Удалить у меня";
+"delete_for_everyone" = "Удалить у всех";
 /* Delete button */
 "alert_delete" = "Удалить";
 /* Delete button */

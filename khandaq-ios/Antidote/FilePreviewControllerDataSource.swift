@@ -61,20 +61,47 @@ class FilePreviewControllerDataSource: NSObject , QuickLookPreviewControllerData
         return idx >= 0 ? idx : nil
     }
 
-    // KHANDAQ (Figma): items for the custom media gallery.
+    // KHANDAQ (#204-C): the custom gallery can only render image/video. A non-media file
+    // (PDF, doc, archive…) landed in it as a black page and was un-openable. Classify by
+    // extension so galleryItems and the tapped-index mapping stay consistent.
+    static func isImageFile(_ name: String) -> Bool {
+        let ext = (name as NSString).pathExtension.lowercased()
+        return ["jpg", "jpeg", "png", "gif", "heic", "heif", "webp", "bmp", "tiff", "tif"].contains(ext)
+    }
+
+    // A message qualifies for the media gallery only if its file exists AND is image/video.
+    private func isMediaMessage(at index: Int) -> Bool {
+        guard index >= 0, index < messages.count,
+              let file = messages[index].messageFile,
+              let path = file.filePath(),
+              FileManager.default.fileExists(atPath: path) else {
+            return false
+        }
+        let name = file.fileName ?? URL(fileURLWithPath: path).lastPathComponent
+        return MediaGalleryViewController.isVideoFile(name) || FilePreviewControllerDataSource.isImageFile(name)
+    }
+
+    // Map a tapped index (into the full file `messages` Results) to its position inside the
+    // media-only gallery list. Returns nil when the tapped message is NOT media → caller routes
+    // it to QuickLook (which previews everything, PDFs included) instead of the gallery.
+    func galleryStartIndex(forMessageIndex index: Int) -> Int? {
+        guard isMediaMessage(at: index) else { return nil }
+        var count = 0
+        for i in 0..<index where isMediaMessage(at: i) {
+            count += 1
+        }
+        return count
+    }
+
+    // KHANDAQ (Figma): items for the custom media gallery (image/video only — see isMediaMessage).
     func galleryItems(myName: String) -> [GalleryItem] {
         let friendName = (chat.friends.lastObject() as? OCTFriend)?.nickname ?? ""
         var items: [GalleryItem] = []
         for i in 0..<messages.count {
+            guard isMediaMessage(at: i) else { continue }
             let message = messages[i]
-            guard let file = message.messageFile, let path = file.filePath() else {
-                continue
-            }
-            // Cleanup/reinstall can leave DB rows whose file is gone — a black page in the gallery.
-            guard FileManager.default.fileExists(atPath: path) else {
-                continue
-            }
-            let url = URL(fileURLWithPath: path)
+            let file = message.messageFile!
+            let url = URL(fileURLWithPath: file.filePath()!)
             let isVideo = MediaGalleryViewController.isVideoFile(file.fileName ?? url.lastPathComponent)
             let sender = message.isOutgoing() ? myName : friendName
             items.append(GalleryItem(url: url,

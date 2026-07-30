@@ -107,6 +107,20 @@ public class MainApplication extends Application
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
 
+        // KHANDAQ (crash fix): install the emoji provider in the Application, not only in MainActivity.
+        // MIUI/low-memory can kill the process and relaunch STRAIGHT into MessageListActivity (chat
+        // resume from recents / a notification tap) without MainActivity ever running — its
+        // com.vanniktech.emoji.EmojiEditText input then crashed on inflation with
+        // "Please install an EmojiProvider through the EmojiManager.install() method first."
+        // The Application runs first for EVERY activity entry, so this guarantees it is always set up.
+        try
+        {
+            com.vanniktech.emoji.EmojiManager.install(new KhandaqGoogleEmojiProvider());
+        }
+        catch (Throwable ignored)
+        {
+        }
+
         // KHANDAQ: media-codec warm-up is kicked off from attachBaseContext() (earliest entry point)
         // to maximise its head start before any chat with media is opened. See warmUpMediaCodecsAsync().
         DbSecretKeyStorage.onApplicationStart(this);

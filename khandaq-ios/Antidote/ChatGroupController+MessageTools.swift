@@ -261,6 +261,37 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         presentGroupReactionPicker(for: message, sourceView: cell)
     }
 
+    // KHANDAQ (#208): edit an own group text message via an inline editor, then broadcast (NGC 0x41).
+    func chatMovableDateCellEditPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard message.messageText != nil, message.groupSenderPeerId == 0 else {
+            return
+        }
+        let current = message.messageText?.text ?? ""
+
+        let alert = UIAlertController(title: String(localized: "chat_edit_action"), message: nil, preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.text = current
+            textField.autocapitalizationType = .sentences
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: String(localized: "message_edit_save"), style: .default) { [weak self, weak alert] _ in
+            guard let self = self, let newText = alert?.textFields?.first?.text else {
+                return
+            }
+            let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed == current {
+                return
+            }
+            self.submanagerGroups.editGroupMessage(message, in: self.chat, newText: trimmed)
+        })
+        present(alert, animated: true, completion: nil)
+    }
+
     // KHANDAQ (#192): Telegram-style horizontal reaction bar above the group message (chip-tap path).
     func presentGroupReactionPicker(for message: OCTMessageAbstract, sourceView: UIView) {
         let rect = sourceView.convert(sourceView.bounds, to: view)

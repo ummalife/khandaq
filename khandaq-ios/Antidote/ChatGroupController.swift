@@ -890,6 +890,13 @@ extension ChatGroupController: UITableViewDataSource {
             model.delivered = (message.messageText?.isDelivered ?? false) || (message.messageText?.groupSyncConfirmations ?? 0) > 0
             model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
             model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+            // KHANDAQ (#208): own group text with a shared message_id is editable (not replies/location).
+            let editIdOK = (message.messageText?.messageId ?? 0) != 0
+            model.canEdit = editIdOK && model.replyMeta == nil && !model.hasLocation
+            model.edited = message.edited
+            if message.edited && !model.hasLocation {
+                model.message += "  " + String(localized: "message_edited_marker")
+            }
             cell.delegate = self
             cell.replySwipeDelegate = self
             cell.setupWithTheme(theme, model: model)
@@ -922,6 +929,11 @@ extension ChatGroupController: UITableViewDataSource {
         model.dateString = dateText
         model.dateSeparator = daySeparatorString(forDisplayIndex: indexPath.row)
         model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
+        // KHANDAQ (#208): a peer can edit their own group message → show the marker (never editable by us).
+        model.edited = message.edited
+        if message.edited && !model.hasLocation {
+            model.message += "  " + String(localized: "message_edited_marker")
+        }
         cell.delegate = self
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)

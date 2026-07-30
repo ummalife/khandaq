@@ -2889,6 +2889,106 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     [[self.dataSource managerGetRealmManager] removeMessages:@[message]];
 }
 
+// KHANDAQ (#208): NGC group message EDIT (custom pkt 0x41, byte-parity with Android
+// HelperMessageEdit.buildGroupEditPacket). 16-byte header: [0..5]=magic [6]=ver(1) [7]=0x41
+// [8..11]=original message_id u32 BE [12..15]=edit-ts u32 BE [16..]=new text UTF-8. TEXT-only +
+// own message (addressed by group+message_id+frozen author name, like the 0x42 text delete).
+- (void)editGroupMessage:(OCTMessageAbstract *)message inChat:(OCTChat *)chat newText:(NSString *)newText
+{
+    if (! message || ! chat || message.groupSenderPeerId != 0 || message.messageText == nil) {
+        return; // own outgoing text only
+    }
+    int32_t messageId = (int32_t)message.messageText.messageId;
+    if (messageId == 0) {
+        return; // pending send has no shared id yet
+    }
+    NSString *trimmed = [newText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (trimmed.length == 0) {
+        return;
+    }
+    uint32_t ts = (uint32_t)[[NSDate date] timeIntervalSince1970];
+
+    // apply locally first (Realm notification refreshes the row)
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    [realmManager updateObject:message withBlock:^(OCTMessageAbstract *m) {
+        m.messageText.text = trimmed;
+        m.edited = YES;
+        m.editedTimestamp = (NSTimeInterval)ts;
+    }];
+
+    NSMutableData *pkt = [NSMutableData dataWithCapacity:16 + trimmed.length];
+    const uint8_t header[8] = { 0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x41 };
+    [pkt appendBytes:header length:8];
+    uint32_t mid = (uint32_t)messageId;
+    const uint8_t midbe[4] = { (uint8_t)((mid >> 24) & 0xFF), (uint8_t)((mid >> 16) & 0xFF),
+                               (uint8_t)((mid >> 8) & 0xFF), (uint8_t)(mid & 0xFF) };
+    [pkt appendBytes:midbe length:4];
+    const uint8_t tsbe[4] = { (uint8_t)((ts >> 24) & 0xFF), (uint8_t)((ts >> 16) & 0xFF),
+                              (uint8_t)((ts >> 8) & 0xFF), (uint8_t)(ts & 0xFF) };
+    [pkt appendBytes:tsbe length:4];
+    NSData *textData = [trimmed dataUsingEncoding:NSUTF8StringEncoding];
+    if (textData) {
+        [pkt appendData:textData];
+    }
+    [[self.dataSource managerGetTox] groupSendCustomPacket:pkt groupNumber:(OCTToxGroupNumber)chat.groupNumber lossless:YES error:nil];
+}
+
+// Receive/apply an incoming 0x41 group edit. Returns YES when the packet was an edit (consumed).
+- (BOOL)handleIncomingGroupEditPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
+                                              peerId:(uint32_t)peerId
+                                                data:(NSData *)data
+{
+    if (data.length < 16) {
+        return NO;
+    }
+    const uint8_t *b = data.bytes;
+    if (b[0] != 0x66 || b[1] != 0x77 || b[2] != 0x88 || b[3] != 0x11 || b[4] != 0x34 || b[5] != 0x35
+        || b[6] != 0x01 || b[7] != 0x41) {
+        return NO;
+    }
+    const uint32_t messageId = ((uint32_t)b[8] << 24) | ((uint32_t)b[9] << 16)
+                             | ((uint32_t)b[10] << 8) | (uint32_t)b[11];
+    const uint32_t editTs = ((uint32_t)b[12] << 24) | ((uint32_t)b[13] << 16)
+                          | ((uint32_t)b[14] << 8) | (uint32_t)b[15];
+    if (messageId == 0) {
+        return YES;
+    }
+    NSString *newText = @"";
+    if (data.length > 16) {
+        newText = [[NSString alloc] initWithBytes:(b + 16) length:(data.length - 16) encoding:NSUTF8StringEncoding];
+        if (newText == nil) {
+            return YES;
+        }
+    }
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTChat *chat = [realmManager chatWithGroupNumber:groupNumber];
+    if (! chat) {
+        return YES;
+    }
+    // authenticate by the author's frozen peer name (only the author can edit their own message)
+    NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
+    if (peerName.length == 0) {
+        return YES;
+    }
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:
+                              @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
+                              chat.uniqueIdentifier, (int32_t)messageId, peerName];
+    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+    if (! found || found.messageText == nil) {
+        return YES;
+    }
+    if (found.edited && found.editedTimestamp >= (NSTimeInterval)editTs) {
+        return YES; // last-write-wins
+    }
+    [realmManager updateObject:found withBlock:^(OCTMessageAbstract *m) {
+        m.messageText.text = newText;
+        m.edited = YES;
+        m.editedTimestamp = (NSTimeInterval)editTs;
+    }];
+    return YES;
+}
+
 - (void)tox:(OCTTox *)tox groupCustomPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
      peerId:(uint32_t)peerId
        data:(NSData *)data
@@ -2904,6 +3004,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     }
 
     if ([self handleIncomingGroupDeletePacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
+
+    if ([self handleIncomingGroupEditPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
         return;
     }
 
@@ -2949,8 +3053,11 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     // no media). Route private packets through the same media handlers as the broadcast callback
     // first; each handler ignores packets that aren't its own (magic/type), so histSync still runs for
     // genuine history-sync packets.
-    // KHANDAQ (#192): reactions may also arrive on the private path (robustness, mirrors the
-    // delete/media routing note above)
+    // KHANDAQ (#192/#208): reactions and edits may also arrive on the private path (robustness,
+    // mirrors the delete/media routing note above)
+    if ([self handleIncomingGroupEditPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
     if ([self handleIncomingGroupReactionPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
         return;
     }

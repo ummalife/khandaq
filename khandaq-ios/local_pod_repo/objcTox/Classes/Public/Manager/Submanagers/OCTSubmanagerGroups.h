@@ -251,4 +251,11 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
  */
 - (void)deleteGroupMessageForBoth:(OCTMessageAbstract *)message inChat:(OCTChat *)chat;
 
+/**
+ * KHANDAQ (#208): edit an OWN group TEXT message in place and broadcast the new text to the group
+ * (KQ NGC packet 0x41, byte-parity with Android). Own text only; addressed by message_id + frozen
+ * author name. Applied to Realm immediately.
+ */
+- (void)editGroupMessage:(OCTMessageAbstract *)message inChat:(OCTChat *)chat newText:(NSString *)newText;
+
 @end

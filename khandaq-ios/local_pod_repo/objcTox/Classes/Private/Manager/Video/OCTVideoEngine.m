@@ -9,6 +9,8 @@
 #import "OCTLogging.h"
 
 @import AVFoundation;
+@import CoreImage;
+@import ImageIO;
 
 static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
 
@@ -368,19 +370,16 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
     CVPixelBufferUnlockBaseAddress(bufferRef, 0);
 
-    dispatch_async(self.processingQueue, ^{
-        /* Create Core Image */
-        CIImage *coreImage = [CIImage imageWithCVPixelBuffer:bufferRef];
-
-        CVPixelBufferRelease(bufferRef);
-
-        // KHANDAQ (remote-video fix): OCTVideoView is a GLKView whose -setImage: triggers a synchronous
-        // -display (drawRect + OpenGL ES). That MUST run on the main thread; invoked here from the
-        // background processingQueue, the incoming remote frames never actually rendered — which is why
-        // only the local self-preview (a separate AVCaptureVideoPreviewLayer) was visible during a call.
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.videoView.image = coreImage;
-        });
+    // KHANDAQ (remote-video H2): build the CIImage right here (on the toxav receive thread) instead of
+    // hopping through self.processingQueue. processingQueue is ALSO the AVCaptureVideoDataOutput delegate
+    // queue (capture → NV12 → VP8 encode at ~30fps); during a 2-way video call the outgoing encode
+    // saturates it, so routing incoming frames through it made the remote video render late / frozen.
+    // CIImage creation is cheap and lazy. OCTVideoView -setImage: still MUST run on the main thread (it
+    // triggers a synchronous GLKView -display), so only that hop remains.
+    CIImage *coreImage = [CIImage imageWithCVPixelBuffer:bufferRef];
+    CVPixelBufferRelease(bufferRef);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.videoView.image = coreImage;
     });
 }
 
@@ -393,6 +392,19 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
     if (! imageBuffer) {
         return;
+    }
+
+    // KHANDAQ (#203 robust portrait fix): AVCaptureConnection.videoRotationAngle can silently be a no-op
+    // on some iOS 17+ devices (isVideoRotationAngleSupported returns NO with no error), leaving the
+    // delivered buffer at its sensor-native LANDSCAPE — so the remote peer saw our video on its side.
+    // The camera-connection rotation only affects the display preview reliably, not the data-output
+    // buffer on every device. Physically rotate a landscape buffer to portrait here. The guard inside
+    // (height >= width -> return NULL) means that if the connection DID already rotate to portrait we
+    // skip, so there is never a double rotation.
+    CVPixelBufferRef rotatedBuffer = [self portraitBufferIfLandscape:imageBuffer];
+    BOOL usingRotatedBuffer = (rotatedBuffer != NULL);
+    if (usingRotatedBuffer) {
+        imageBuffer = rotatedBuffer;
     }
 
     CVPixelBufferLockBaseAddress(imageBuffer, kCVPixelBufferLock_ReadOnly);
@@ -464,6 +476,10 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     }
 
     CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+
+    if (usingRotatedBuffer) {
+        CVPixelBufferRelease(rotatedBuffer);
+    }
     uDestination = nil;
     vDestination = nil;
 
@@ -480,6 +496,42 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 }
 
 #pragma mark - Private
+
+// KHANDAQ (#203): return a NEW portrait CVPixelBuffer (caller must release) when `src` is landscape
+// (width > height), else NULL. Used to physically rotate outgoing camera frames to portrait when the
+// AVCaptureConnection rotation was not honored, so the remote peer sees upright video. The height>=width
+// guard skips already-portrait buffers, so it never double-rotates a frame the connection DID rotate.
+- (CVPixelBufferRef)portraitBufferIfLandscape:(CVImageBufferRef)src
+{
+    size_t w = CVPixelBufferGetWidth(src);
+    size_t h = CVPixelBufferGetHeight(src);
+    if (h >= w) {
+        return NULL;
+    }
+
+    CVPixelBufferRef out = NULL;
+    NSDictionary *attrs = @{(__bridge NSString *)kCVPixelBufferIOSurfacePropertiesKey: @{}};
+    if (CVPixelBufferCreate(kCFAllocatorDefault, (size_t)h, (size_t)w,
+                            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                            (__bridge CFDictionaryRef)attrs, &out) != kCVReturnSuccess) {
+        return NULL;
+    }
+
+    CIImage *img = [CIImage imageWithCVPixelBuffer:src];
+    // Rotate the sensor-landscape frame 90° clockwise to portrait, then move its extent back to (0,0)
+    // so it renders into the new buffer from the origin.
+    img = [img imageByApplyingCGOrientation:kCGImagePropertyOrientationRight];
+    img = [img imageByApplyingTransform:CGAffineTransformMakeTranslation(-img.extent.origin.x, -img.extent.origin.y)];
+
+    static CIContext *rotationContext;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        rotationContext = [CIContext contextWithOptions:nil];
+    });
+
+    [rotationContext render:img toCVPixelBuffer:out];
+    return out;
+}
 
 - (AVCaptureDevice *)getDeviceForPosition:(AVCaptureDevicePosition)position
 {

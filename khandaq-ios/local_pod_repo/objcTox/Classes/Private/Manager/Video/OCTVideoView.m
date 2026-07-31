@@ -35,15 +35,23 @@
 - (void)finishInitializing
 {
 #if TARGET_OS_IPHONE
-    __weak OCTVideoView *weakSelf = self;
-
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-        OCTVideoView *strongSelf = weakSelf;
-        strongSelf.context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
-        strongSelf.coreImageContext = [CIContext contextWithEAGLContext:strongSelf.context];
-    });
-
-    self.enableSetNeedsDisplay = NO;
+    // KHANDAQ (remote-video-black fix): build the EAGLContext + CIContext SYNCHRONOUSLY on the main
+    // thread. Previously this ran on a background global queue, which set self.context (a GLKView /
+    // CAEAGLLayer-backed property) off the main thread. That could leave the layer's drawable invalid
+    // (drawableWidth/Height == 0) or the contexts still nil when the first -display fired, so every
+    // frame was silently dropped -> the remote peer's video (e.g. from Android) stayed permanently
+    // black even though frames were arriving. Creating them on-main before any -display fixes it.
+    void (^build)(void) = ^{
+        self.context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+        self.coreImageContext = [CIContext contextWithEAGLContext:self.context];
+        self.enableSetNeedsDisplay = NO;
+    };
+    if ([NSThread isMainThread]) {
+        build();
+    }
+    else {
+        dispatch_sync(dispatch_get_main_queue(), build);
+    }
 #endif
 }
 
@@ -68,7 +76,7 @@
 - (void)drawRect:(CGRect)rect
 {
 #if TARGET_OS_IPHONE
-    if (self.image) {
+    if (self.image && self.coreImageContext) {
 
         glClearColor(0, 0.0, 0.0, 1.0);
         glClear(GL_COLOR_BUFFER_BIT);

@@ -370,16 +370,13 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
 
     CVPixelBufferUnlockBaseAddress(bufferRef, 0);
 
-    // KHANDAQ (remote-video H2): build the CIImage right here (on the toxav receive thread) instead of
-    // hopping through self.processingQueue. processingQueue is ALSO the AVCaptureVideoDataOutput delegate
-    // queue (capture → NV12 → VP8 encode at ~30fps); during a 2-way video call the outgoing encode
-    // saturates it, so routing incoming frames through it made the remote video render late / frozen.
-    // CIImage creation is cheap and lazy. OCTVideoView -setImage: still MUST run on the main thread (it
-    // triggers a synchronous GLKView -display), so only that hop remains.
-    CIImage *coreImage = [CIImage imageWithCVPixelBuffer:bufferRef];
-    CVPixelBufferRelease(bufferRef);
+    // KHANDAQ (remote-video-black fix): hand the decoded pixel buffer straight to the OCTVideoView's
+    // AVSampleBufferDisplayLayer on the main thread. (Previously we built a CIImage and drew it through a
+    // GLKView/EAGL CIContext, which was black on iOS 17/18/26 real devices.) Building/enqueue happens on
+    // the receive thread only up to the main hop; the buffer is released after enqueue retains it.
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.videoView.image = coreImage;
+        [self.videoView enqueuePixelBuffer:bufferRef];
+        CVPixelBufferRelease(bufferRef);
     });
 }
 
@@ -518,9 +515,11 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     }
 
     CIImage *img = [CIImage imageWithCVPixelBuffer:src];
-    // Rotate the sensor-landscape frame 90° clockwise to portrait, then move its extent back to (0,0)
-    // so it renders into the new buffer from the origin.
-    img = [img imageByApplyingCGOrientation:kCGImagePropertyOrientationRight];
+    // Rotate the sensor-landscape frame 90° to portrait, then move its extent back to (0,0) so it
+    // renders into the new buffer from the origin. Front camera: `Right` produced an upside-down
+    // portrait on the remote (verified live on a real call), so use `Left` (90° the other way) for
+    // an upright portrait.
+    img = [img imageByApplyingCGOrientation:kCGImagePropertyOrientationLeft];
     img = [img imageByApplyingTransform:CGAffineTransformMakeTranslation(-img.extent.origin.x, -img.extent.origin.y)];
 
     static CIContext *rotationContext;

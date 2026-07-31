@@ -7,6 +7,7 @@
 #import "OCTLogging.h"
 @import Foundation;
 @import AVFoundation;
+@import CoreMedia;
 
 @interface OCTVideoView ()
 
@@ -16,15 +17,44 @@
 
 @implementation OCTVideoView
 
+#if TARGET_OS_IPHONE
+
+// KHANDAQ (remote-video-black fix): render incoming frames through an AVSampleBufferDisplayLayer.
+// The previous GLKView/OpenGL-ES + CIContext(contextWithEAGLContext:) path built its context off the
+// main thread and is deprecated/fragile on iOS 17/18/26 real devices — the layer's drawable stayed
+// invalid so every decoded frame was silently dropped and the remote peer's video (e.g. from Android)
+// showed permanently black. AVSampleBufferDisplayLayer is the modern, robust display path.
+
++ (Class)layerClass
+{
+    return [AVSampleBufferDisplayLayer class];
+}
+
+- (AVSampleBufferDisplayLayer *)displayLayer
+{
+    return (AVSampleBufferDisplayLayer *)self.layer;
+}
+
 + (instancetype)view
 {
-#if TARGET_OS_IPHONE
     OCTVideoView *videoView = [[self alloc] initWithFrame:CGRectZero];
-#else
-    OCTVideoView *videoView = [[self alloc] initWithFrame:CGRectZero pixelFormat:[self defaultPixelFormat]];
-#endif
     [videoView finishInitializing];
     return videoView;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.backgroundColor = [UIColor blackColor];
+        self.displayLayer.videoGravity = AVLayerVideoGravityResizeAspect;
+    }
+    return self;
+}
+
+- (void)finishInitializing
+{
+    // Nothing extra needed — the display layer is configured in initWithFrame:.
 }
 
 - (void)dealloc
@@ -32,68 +62,86 @@
     OCTLogVerbose(@"dealloc");
 }
 
+- (void)enqueuePixelBuffer:(CVPixelBufferRef)pixelBuffer
+{
+    if (! pixelBuffer) {
+        return;
+    }
+
+    CMVideoFormatDescriptionRef formatDescription = NULL;
+    if (CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixelBuffer, &formatDescription) != noErr) {
+        return;
+    }
+
+    // Display each frame immediately (no A/V sync clock needed for a live call feed).
+    CMSampleTimingInfo timing = kCMTimingInfoInvalid;
+    timing.duration = kCMTimeInvalid;
+    timing.decodeTimeStamp = kCMTimeInvalid;
+    timing.presentationTimeStamp = kCMTimeInvalid;
+
+    CMSampleBufferRef sampleBuffer = NULL;
+    OSStatus status = CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, pixelBuffer,
+                                                               formatDescription, &timing, &sampleBuffer);
+    CFRelease(formatDescription);
+
+    if (status != noErr || ! sampleBuffer) {
+        return;
+    }
+
+    // Mark for immediate display.
+    CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
+    if (attachments && CFArrayGetCount(attachments) > 0) {
+        CFMutableDictionaryRef dict = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachments, 0);
+        CFDictionarySetValue(dict, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
+    }
+
+    AVSampleBufferDisplayLayer *layer = self.displayLayer;
+    if (layer.status == AVQueuedSampleBufferRenderingStatusFailed) {
+        [layer flush];
+    }
+    [layer enqueueSampleBuffer:sampleBuffer];
+    CFRelease(sampleBuffer);
+}
+
+// setImage is unused on iOS now (frames go through enqueuePixelBuffer:); keep the property setter a no-op
+// so any legacy caller doesn't crash.
+- (void)setImage:(CIImage *)image
+{
+    _image = image;
+}
+
+#else
+
++ (instancetype)view
+{
+    OCTVideoView *videoView = [[self alloc] initWithFrame:CGRectZero pixelFormat:[self defaultPixelFormat]];
+    [videoView finishInitializing];
+    return videoView;
+}
+
 - (void)finishInitializing
 {
-#if TARGET_OS_IPHONE
-    // KHANDAQ (remote-video-black fix): build the EAGLContext + CIContext SYNCHRONOUSLY on the main
-    // thread. Previously this ran on a background global queue, which set self.context (a GLKView /
-    // CAEAGLLayer-backed property) off the main thread. That could leave the layer's drawable invalid
-    // (drawableWidth/Height == 0) or the contexts still nil when the first -display fired, so every
-    // frame was silently dropped -> the remote peer's video (e.g. from Android) stayed permanently
-    // black even though frames were arriving. Creating them on-main before any -display fixes it.
-    void (^build)(void) = ^{
-        self.context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
-        self.coreImageContext = [CIContext contextWithEAGLContext:self.context];
-        self.enableSetNeedsDisplay = NO;
-    };
-    if ([NSThread isMainThread]) {
-        build();
-    }
-    else {
-        dispatch_sync(dispatch_get_main_queue(), build);
-    }
-#endif
+}
+
+- (void)dealloc
+{
+    OCTLogVerbose(@"dealloc");
 }
 
 - (void)setImage:(CIImage *)image
 {
     _image = image;
-#if TARGET_OS_IPHONE
-    [self display];
-#else
     [self setNeedsDisplay:YES];
-#endif
 }
 
-#if ! TARGET_OS_IPHONE
 // OS X: we need to correct the viewport when the view size changes
 - (void)reshape
 {
     glViewport(0, 0, self.bounds.size.width, self.bounds.size.height);
 }
-#endif
 
 - (void)drawRect:(CGRect)rect
 {
-#if TARGET_OS_IPHONE
-    if (self.image && self.coreImageContext) {
-
-        glClearColor(0, 0.0, 0.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // KHANDAQ: drawRect's `rect` is in POINTS, but the CIContext renders into this GLKView's
-        // renderbuffer, whose coordinate space is in PIXELS (points * contentScaleFactor). Drawing
-        // into the points-sized rect filled only a 1/scale corner of the buffer (bottom-left on
-        // Retina), so the remote video showed up as a tiny image in the corner. Draw into the full
-        // pixel-sized drawable instead so the feed fills the view (aspect-fit).
-        CGRect drawableRect = CGRectMake(0.0, 0.0, self.drawableWidth, self.drawableHeight);
-        if (CGRectIsEmpty(drawableRect)) {
-            drawableRect = rect;
-        }
-        CGRect destRect = AVMakeRectWithAspectRatioInsideRect(self.image.extent.size, drawableRect);
-        [self.coreImageContext drawImage:self.image inRect:destRect fromRect:self.image.extent];
-    }
-#else
     [self.openGLContext makeCurrentContext];
 
     if (self.image) {
@@ -107,6 +155,8 @@
         glClear(GL_COLOR_BUFFER_BIT);
     }
     glFlush();
-#endif
 }
+
+#endif
+
 @end

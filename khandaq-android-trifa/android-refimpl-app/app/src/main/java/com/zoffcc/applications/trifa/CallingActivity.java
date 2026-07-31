@@ -3106,6 +3106,24 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     // b) the other party accepting our call invitation
     static void on_call_started_actions()
     {
+        // KHANDAQ (cross-platform video fix): force the toxav video encoder to VP8. The TRIfA native
+        // toxcore defaults its encoder to H264, but iOS (objcTox) ships only a VP8 decoder — so an
+        // Android->iOS video call sent H264 that iOS could not decode ("Bitstream not supported by this
+        // decoder", video.m:326) and showed the remote video BLACK. VP8 is decodable on both platforms.
+        // (Android<->Android stays fine on VP8.) Verified via iPhone device logs on a live 2-device call.
+        try
+        {
+            long fn_codec = tox_friend_by_public_key__wrapper(Callstate.friend_pubkey);
+            if (fn_codec >= 0)
+            {
+                toxav_option_set(fn_codec, ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_ENCODER_CODEC_USED.value,
+                                 ToxVars.TOXAV_ENCODER_CODEC_USED_VALUE.TOXAV_ENCODER_CODEC_USED_VP8.value);
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+
         set_min_and_max_video_bitrate();
         applyActiveCallVideoBitrate();
         set_video_delay_ms();

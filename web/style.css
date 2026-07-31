@@ -374,7 +374,9 @@ h1 {
 }
 
 .card h3 { margin: 0; font-size: 1.1rem; }
-.card p { margin: 0; color: var(--muted); font-size: 0.9rem; flex: 1; }
+/* Equal-height description so the primary button lines up across all cards */
+.card p { margin: 0; color: var(--muted); font-size: 0.9rem; min-height: 4.6rem; }
+@media (max-width: 520px) { .card p { min-height: 0; } }
 
 .card-icon {
   width: 48px;
@@ -389,8 +391,10 @@ h1 {
 .card-icon.linux { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M12.5 2c-.8 0-1.5.4-2 1-.3.4-.5.9-.6 1.4-.6-.1-1.2-.1-1.8 0-.1-.5-.3-1-.6-1.4-.5-.6-1.2-1-2-1-1.5 0-2.7 1.2-2.7 2.7 0 .5.1 1 .4 1.4-1.2.8-2 2.2-2 3.8v.1c0 .3.2.5.5.5h.1c-.1.4-.1.8-.1 1.2 0 2.5 1.5 4.6 3.6 5.5-.3.5-.5 1.1-.5 1.7 0 1.8 1.5 3.3 3.3 3.3.6 0 1.2-.2 1.7-.5.5.3 1.1.5 1.7.5 1.8 0 3.3-1.5 3.3-3.3 0-.6-.2-1.2-.5-1.7 2.1-.9 3.6-3 3.6-5.5 0-.4 0-.8-.1-1.2h.1c.3 0 .5-.2.5-.5v-.1c0-1.6-.8-3-2-3.8.3-.4.4-.9.4-1.4 0-1.5-1.2-2.7-2.7-2.7z'/%3E%3C/svg%3E"); }
 .card-icon.ios { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M16.5 3c-1.2 0-2.6.8-3.5 1.9-.8 1-1.4 2.4-1.2 3.8 1.3.1 2.7-.7 3.5-1.8.8-1.1 1.4-2.5 1.2-3.9zM19.8 17.2c-.6 1.3-1.3 2.5-2.3 2.5-.9 0-1.2-.6-2.3-.6-1.1 0-1.4.6-2.3.6-1 0-2.1-1.2-2.7-2.4-1.5-2.6-2.1-6.4-.5-9.2.8-1.4 2.2-2.3 3.7-2.3.9 0 1.7.6 2.3.6.6 0 1.6-.7 2.7-.7 1.1 0 2.1.6 2.8 1.5-2.5 1.4-2.1 5 .4 6.2-.5 1.2-1.1 2.3-1.8 3.3z'/%3E%3C/svg%3E"); }
 
-.card .btn { margin-top: 0.35rem; width: 100%; }
-.meta { font-size: 0.75rem; color: var(--muted-2); }
+.card .btn { width: 100%; }
+.card .btn + .btn { margin-top: 0.5rem; }
+/* Push the version meta to the bottom so every card's footer aligns */
+.meta { font-size: 0.75rem; color: var(--muted-2); margin-top: auto; padding-top: 0.85rem; }
 
 .checksum-box {
   background: var(--bg-elevated);

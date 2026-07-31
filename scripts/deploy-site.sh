@@ -61,6 +61,9 @@ ssh "$REMOTE" "mkdir -p '$REMOTE_BACKUP_ROOT' && \
 
 echo "==> Upload Khandaq site to $REMOTE:$REMOTE_SITE_DIR"
 ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/downloads'"
+# KHANDAQ (KHQ-01): purge any previously-published sideload APK from the live server so it can't be
+# fetched by direct URL after the site switched to Google Play.
+ssh "$REMOTE" "rm -f '$REMOTE_SITE_DIR/downloads/khandaq-android.apk' '$REMOTE_SITE_DIR/downloads/khandaq-release.apk' '$REMOTE_SITE_DIR/downloads/SHA256SUMS.android.txt' 2>/dev/null || true"
 scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -pr "$WEB/assets" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -p "$DL"/* "$REMOTE:$REMOTE_SITE_DIR/downloads/" 2>/dev/null || true

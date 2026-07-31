@@ -427,6 +427,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
 
         setContentView(R.layout.activity_calling);
 
+        // KHANDAQ (ringtone fix): the moment our own call screen is up, cancel the incoming-call
+        // notification so its ringtone channel can't overlap with the Activity ringtone ("several at once").
+        try { org.khandaq.messenger.HelperCallNotification.cancel(this); } catch (Exception ignored) {}
+
         SharedPreferences settings_cs1 = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         PREF__video_play_delay_ms = settings_cs1.getInt(GLOBAL_PLAY_DELAY_SETTING_NAME, GLOBAL_INIT_PLAY_DELAY);
         HelperGeneric.logI(TAG, "pref:get:PREF__video_play_delay_ms=" + PREF__video_play_delay_ms);
@@ -942,18 +946,30 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             if (!dh._Detect())
             {
-                AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                if (Callstate.audio_speaker)
+                // KHANDAQ (ring-audio fix): do NOT enter MODE_IN_COMMUNICATION / earpiece routing while
+                // merely RINGING (accepted_call==0). Bringing up comm-mode + earpiece before answer
+                // re-routed the ringtone into the earpiece quietly = the reported "can't hear the ring /
+                // sounds like media". The route is applied on answer in on_call_started_actions().
+                // Outgoing calls arrive here already accepted (accepted_call==1) -> unchanged behaviour.
+                if (Callstate.accepted_call == 1)
                 {
-                    video_box_speaker_button.setText("Speaker: ON");
-                    set_audio_to_loudspeaker(manager);
+                    AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                    if (Callstate.audio_speaker)
+                    {
+                        video_box_speaker_button.setText("Speaker: ON");
+                        set_audio_to_loudspeaker(manager);
+                    }
+                    else
+                    {
+                        video_box_speaker_button.setText("Speaker: OFF");
+                        set_audio_to_ear(manager);
+                    }
+                    applyCallAudioProcessing(Callstate.audio_speaker);
                 }
                 else
                 {
-                    video_box_speaker_button.setText("Speaker: OFF");
-                    set_audio_to_ear(manager);
+                    video_box_speaker_button.setText(Callstate.audio_speaker ? "Speaker: ON" : "Speaker: OFF");
                 }
-                applyCallAudioProcessing(Callstate.audio_speaker);
             }
             else
             {
@@ -1310,6 +1326,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             start_ringtone();
         }
 
+        // KHANDAQ (answerability fix): if we were opened by the notification's "Accept" action, answer now.
+        maybeAutoAcceptFromNotification(getIntent());
+
+        // KHANDAQ (modern call screen): strip the legacy TRIfA debug/expert overlays for a clean look.
+        hide_legacy_call_debug_ui();
+
         if (active_camera_type == FRONT_CAMERA_USED)
         {
             final Drawable d5 = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_camera_front).backgroundColor(
@@ -1403,7 +1425,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         initViewParams();
         HelperGeneric.logI(TAG, "start:0003");
 
-        top_text_line_str1 = Callstate.friend_alias_name;
+        // KHANDAQ: never show the pubkey sentinel "-1" as the caller name (it leaks into the name field
+        // when the friend isn't resolved yet — the reported "-1" at the top). Fall back to a localized title.
+        top_text_line_str1 = ("-1".equals(Callstate.friend_alias_name)
+                              || Callstate.friend_alias_name == null
+                              || Callstate.friend_alias_name.trim().isEmpty())
+                             ? getString(R.string.notification_incoming_call_title)
+                             : Callstate.friend_alias_name;
         top_text_line_str2 = "";
         top_text_line_str3 = "";
         top_text_line_str4 = "";
@@ -1553,6 +1581,84 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             scheduleCameraOpen();
         }
+    }
+
+    // KHANDAQ (modern call screen): hide the legacy TRIfA debug/expert overlays so end users see a clean
+    // call screen (avatar + name + call controls) instead of the old "Video Quality low/high" slider,
+    // bitrate/fps stats, volume & video-delay sliders, the "- AEC -" toggle and the VU meters. Views keep
+    // their ids/listeners (just hidden), so nothing in the toxav wiring breaks.
+    private void hide_legacy_call_debug_ui()
+    {
+        final int[] legacy_ids = {
+                R.id.quality_slider_container,
+                R.id.video_box_right_top_01,
+                R.id.video_box_right_volumeslider_01,
+                R.id.video_box_right_video_add_delay_slider_01,
+                R.id.video_box_aec,
+                R.id.audio_bar_in_v,
+                R.id.audio_bar_out_v,
+        };
+        for (int id : legacy_ids)
+        {
+            try
+            {
+                View v = findViewById(id);
+                if (v != null)
+                {
+                    v.setVisibility(View.GONE);
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+        }
+    }
+
+    // KHANDAQ (answerability fix): the notification "Accept" action opens this Activity with an extra;
+    // auto-answer once the screen is wired up. Handles both a fresh onCreate and a re-delivered intent
+    // (onNewIntent) when the call screen was already showing.
+    private void maybeAutoAcceptFromNotification(Intent intent)
+    {
+        try
+        {
+            if (intent == null
+                    || !intent.getBooleanExtra(org.khandaq.messenger.HelperCallNotification.EXTRA_ACCEPT_NOW, false)
+                    || Callstate.accepted_call == 1)
+            {
+                return;
+            }
+            intent.removeExtra(org.khandaq.messenger.HelperCallNotification.EXTRA_ACCEPT_NOW);
+            new Handler(getMainLooper()).post(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    try
+                    {
+                        if (Callstate.accepted_call != 1)
+                        {
+                            ensureCallPermissions(CallingActivity.this::performIncomingCallAcceptance);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent)
+    {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        maybeAutoAcceptFromNotification(intent);
     }
 
     @Override
@@ -2995,7 +3101,33 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         set_video_delay_ms();
         set_audio_play_volume();
         stop_ringtone();
-        set_calling_audio_mode();
+        // KHANDAQ (ring-audio fix): the call is now accepted -> bring up the call audio route here
+        // (earpiece/loudspeaker + MODE_IN_COMMUNICATION). Previously this ran in onCreate before answer,
+        // which muffled the ringtone. Skip if a headset/BT already owns the route (audio_device != 0),
+        // leaving onResume's headset handling in charge.
+        try
+        {
+            AudioManager manager = MainActivity.audio_manager_s;
+            if (manager != null && Callstate.audio_device == 0)
+            {
+                if (Callstate.audio_speaker)
+                {
+                    set_audio_to_loudspeaker(manager);
+                }
+                else
+                {
+                    set_audio_to_ear(manager);
+                }
+            }
+            else
+            {
+                set_calling_audio_mode();
+            }
+        }
+        catch (Exception e)
+        {
+            set_calling_audio_mode();
+        }
         applyCallAudioProcessing(Callstate.audio_speaker);
         requestAudioFocus();
 
@@ -3008,7 +3140,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 {
                     CallingActivity.video_box_self_preview_01.setVisibility(View.VISIBLE);
                     CallingActivity.video_box_left_top_01.setVisibility(View.VISIBLE);
-                    CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);
+                    // KHANDAQ (modern call screen): keep the debug bitrate/fps stats box hidden.
+                    // CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);
                 }
                 catch (Exception e)
                 {
@@ -3613,28 +3746,39 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             // e.printStackTrace();
         }
+        // KHANDAQ: null out so a leaked looping player can't survive an un-stoppable reference.
+        mMediaPlayer = null;
     }
 
     void start_ringtone()
     {
         try
         {
-            Uri ringtone_uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
-            mMediaPlayer = new MediaPlayer();
-            mMediaPlayer.setDataSource(getApplicationContext(), ringtone_uri);
+            // KHANDAQ (ringtone fix): kill any previous looping player first. Without this guard a
+            // second onCreate (rotation/theme-change/double launch path) leaked a new looping
+            // MediaPlayer while the old one kept playing and became un-stoppable -> the reported
+            // "several ringtones at once / noise".
+            stop_ringtone();
+
             final AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            if (audioManager.getStreamVolume(AudioManager.STREAM_RING) != 0)
+            if (audioManager != null
+                    && audioManager.getRingerMode() != AudioManager.RINGER_MODE_SILENT
+                    && audioManager.getStreamVolume(AudioManager.STREAM_RING) != 0)
             {
-                mMediaPlayer.setAudioStreamType(AudioManager.STREAM_RING);
+                Uri ringtone_uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+                mMediaPlayer = new MediaPlayer();
+                mMediaPlayer.setDataSource(getApplicationContext(), ringtone_uri);
+                // KHANDAQ (ringtone fix): play as a real RINGTONE, not a media melody.
+                // setAudioStreamType(STREAM_RING) is a deprecated shim that on Android 8+/Samsung still
+                // tags the content as MUSIC -> routed on the media path (wrong volume, ducking, ignores
+                // the ringer profile) = the reported "sounds like a normal melody, not a ringtone".
+                // AudioAttributes(USAGE_NOTIFICATION_RINGTONE) makes the OS treat it as the ringtone.
+                mMediaPlayer.setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build());
                 mMediaPlayer.setLooping(true);
-                try
-                {
-                    mMediaPlayer.prepare();
-                }
-                catch (Exception e1)
-                {
-                    e1.printStackTrace();
-                }
+                mMediaPlayer.prepare();
                 mMediaPlayer.start();
             }
         }

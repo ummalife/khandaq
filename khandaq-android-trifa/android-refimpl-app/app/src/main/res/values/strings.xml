@@ -141,6 +141,7 @@
     <string name="notification_incoming_call_unknown">Contact</string>
     <string name="notification_incoming_call_video">Video</string>
     <string name="notification_incoming_call_decline">Decline</string>
+    <string name="notification_incoming_call_accept">Accept</string>
     <string name="add_friend_activity_name">Add Friend</string>
     <string name="add_group_activity_name">Create Private Group</string>
     <string name="add_public_group_activity_name">Create Public Group</string>

@@ -968,6 +968,7 @@
     <string name="notification_incoming_call_unknown">Контакт</string>
     <string name="notification_incoming_call_video">Видео</string>
     <string name="notification_incoming_call_decline">Отклонить</string>
+    <string name="notification_incoming_call_accept">Принять</string>
     <string name="network_diag_title">Диагностика сети</string>
     <string name="network_diag_summary">Статус DHT, реле, журнал переподключений</string>
     <string name="network_diag_refresh">Обновить</string>

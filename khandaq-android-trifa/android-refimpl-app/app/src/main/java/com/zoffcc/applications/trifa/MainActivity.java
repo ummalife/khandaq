@@ -5249,6 +5249,9 @@ public class MainActivity extends AppCompatActivity
                   TOXAV_FRIEND_CALL_STATE_ACCEPTING_A.value + TOXAV_FRIEND_CALL_STATE_ACCEPTING_V.value)) > 0)
             {
                 HelperGeneric.logI(TAG, "toxav_call_state:from=" + friend_number + " call starting");
+                // KHANDAQ (ringtone fix): the call is now live -> kill the incoming-call notification so
+                // its ringtone channel can't keep sounding if the Activity never came to the foreground.
+                org.khandaq.messenger.HelperCallNotification.cancel(context_s);
                 Callstate.call_start_timestamp = System.currentTimeMillis();
                 Runnable myRunnable = new Runnable()
                 {
@@ -5310,6 +5313,7 @@ public class MainActivity extends AppCompatActivity
             else if ((a_TOXAV_FRIEND_CALL_STATE & (TOXAV_FRIEND_CALL_STATE_ERROR.value)) > 0)
             {
                 HelperGeneric.logI(TAG, "toxav_call_state:from=" + friend_number + " call ERROR(3)");
+                org.khandaq.messenger.HelperCallNotification.cancel(context_s);
                 CallAudioService.stop_me(false);
             }
         }

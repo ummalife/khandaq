@@ -22,6 +22,8 @@ public final class HelperCallNotification {
     private static final String TAG = "KhandaqCallNoti";
     public static final int INCOMING_CALL_NOTIFICATION_ID = 886681;
     public static final String ACTION_DECLINE = "org.khandaq.messenger.DECLINE_INCOMING_CALL";
+    /** Set on the CallingActivity intent when launched from the notification's "Accept" action. */
+    public static final String EXTRA_ACCEPT_NOW = "khandaq_accept_now";
 
     private HelperCallNotification() {}
 
@@ -74,6 +76,15 @@ public final class HelperCallNotification {
         PendingIntent declinePendingIntent = PendingIntent.getBroadcast(
                 context, 1, declineIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        // KHANDAQ (answerability fix): an "Accept" action so the callee can answer straight from the
+        // heads-up notification even when the full-screen call screen didn't front (USE_FULL_SCREEN_INTENT
+        // not granted on Android 14+). Opens CallingActivity flagged to auto-answer.
+        Intent acceptIntent = new Intent(context, CallingActivity.class);
+        acceptIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        acceptIntent.putExtra(EXTRA_ACCEPT_NOW, true);
+        PendingIntent acceptPendingIntent = PendingIntent.getActivity(
+                context, 2, acceptIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         boolean useFullScreen = true;
         if (Build.VERSION.SDK_INT >= 34) {
             NotificationManager nmCheck = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -93,6 +104,7 @@ public final class HelperCallNotification {
                 .setOngoing(true)
                 .setAutoCancel(false)
                 .setContentIntent(fullScreenPendingIntent)
+                .addAction(0, context.getString(R.string.notification_incoming_call_accept), acceptPendingIntent)
                 .addAction(0, context.getString(R.string.notification_incoming_call_decline), declinePendingIntent);
 
         if (useFullScreen) {

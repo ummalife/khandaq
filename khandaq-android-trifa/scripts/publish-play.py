@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10370.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10373.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Redesigned, cleaner call screen. The incoming-call ringtone now plays as a proper ringtone (no more overlapping media melody) and you can Accept a call straight from the notification. Fixed the chat header for Arabic (right-to-left) names so the online status is no longer clipped."},
-                    {"language": "ru-RU", "text": "Обновлённый, чистый экран звонка. Рингтон входящего звонка теперь звучит как настоящий рингтон (без наложения нескольких мелодий), а принять звонок можно прямо из уведомления. Исправлена шапка чата для арабских (справа-налево) имён — статус «в сети» больше не обрезается."},
+                    {"language": "en-US", "text": "Video calls now work reliably with iPhone (video shows both ways), the incoming video fills the whole screen, and the camera resumes correctly after you switch apps and come back. Cleaner call screen."},
+                    {"language": "ru-RU", "text": "Видеозвонки теперь стабильно работают с iPhone (видео видно в обе стороны), входящее видео на весь экран, камера корректно возобновляется после переключения приложений. Чище экран звонка."},
                 ],
             }],
         })

@@ -47,19 +47,18 @@ if [[ -f "${RELEASE_KS:-}" && -n "$RELEASE_STORE_PASS" && -n "$BT" && -x "$BT/ap
   echo "Signed with PRODUCTION keystore -> $OUT"
   echo "Share with team as: $OUT (or khandaq-release.apk from dist/android/)"
   SIGN_MODE="production"
-elif [[ -f "${ANDROID_DEBUG_KEYSTORE:-$HOME/.android/debug.keystore}" && -n "$BT" && -x "$BT/apksigner" ]]; then
-  KS="${ANDROID_DEBUG_KEYSTORE:-$HOME/.android/debug.keystore}"
-  OUT="$DIST/trifa-release.apk"
-  "$BT/apksigner" sign \
-    --ks "$KS" --ks-pass pass:android --key-pass pass:android \
-    --out "$OUT" "$UNSIGNED"
-  echo "WARNING: Signed with DEBUG keystore -> $OUT"
-  SIGN_MODE="debug"
 else
-  cp -f "$UNSIGNED" "$DIST/trifa-release.apk"
-  echo "No keystore — unsigned APK at $DIST/trifa-release.apk"
-  SIGN_MODE="unsigned"
+  # KHANDAQ (security KHQ-01/VULN-01): NEVER fall back to the Android debug keystore (public
+  # password "android") or ship an unsigned APK as a "release". A debug-signed APK published to the
+  # site would let anyone holding ~/.android/debug.keystore sign fake "updates" (TOFU sideload
+  # trust). Fail hard instead so a misconfigured build can't silently produce a distributable APK.
+  echo "ERROR: production keystore not found or signing vars unset." >&2
+  echo "       Set KHANDAQ_ANDROID_KEYSTORE + KHANDAQ_ANDROID_STORE_PASS (see secrets/android-signing.env)." >&2
+  exit 1
 fi
 
-( cd "$DIST" && shasum -a 256 khandaq-release.apk trifa-release*.apk 2>/dev/null | sort -u | tee sha256sums.txt )
+# KHANDAQ (security KHQ-13): run shasum from inside $DIST on BASENAMES only, so the published
+# SHA256SUMS contains "<hash>  khandaq-release.apk" (matching the downloaded filename) and never an
+# absolute build-machine path (which leaked the username/dir layout and broke `sha256sum -c`).
+( cd "$DIST" && shasum -a 256 khandaq-release.apk trifa-release.apk 2>/dev/null | sort -u | tee sha256sums.txt )
 echo "TRIfA build OK (signing: $SIGN_MODE)"

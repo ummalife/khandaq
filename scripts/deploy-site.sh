@@ -18,12 +18,11 @@ mkdir -p "$DL"
 echo "==> Generate changelog from git"
 python3 "$ROOT/scripts/generate-changelog.py"
 
-echo "==> Package Android APK"
-APK_SRC="${KHANDAQ_ANDROID_APK:-$ROOT/dist/android/khandaq-release.apk}"
-[[ -f "$APK_SRC" ]] || APK_SRC="$ROOT/dist/android/trifa-release.apk"
-[[ -f "$APK_SRC" ]] || { echo "Missing Android APK at dist/android/"; exit 1; }
-cp -f "$APK_SRC" "$DL/khandaq-android.apk"
-cp -f "$APK_SRC" "$DL/khandaq-release.apk"
+# KHANDAQ: Android is now distributed via Google Play (official), so the website no longer hosts a
+# sideload/debug APK. (This also closes KHQ-01: a debug-signed APK could previously be published here
+# via the build-script fallback.) The site links to the Play listing instead. The tester APK still goes
+# to the GitHub release for internal testers only — never to the public site.
+echo "==> Android: skipping APK hosting (site links to Google Play)"
 
 echo "==> Package desktop/mobile mirrors (optional — skip missing)"
 if [[ -d "$ROOT/dist/macos/khandaq.app" ]]; then

@@ -120,9 +120,9 @@
         <article class="card">
           <div class="card-icon android" aria-hidden="true"></div>
           <h3>Android</h3>
-          <p>Sideload APK. Android 8+. Package <code>org.khandaq.messenger</code>.</p>
-          <a class="btn btn-primary dl-android" href="#">Download APK</a>
-          <span class="meta">v0.2.12 · build 10363 · GPL-3.0</span>
+          <p>Install from Google Play. Android 8+. Package <code>com.khandaq.messenger</code>.</p>
+          <a class="btn btn-primary" href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Get it on Google Play</a>
+          <span class="meta">v0.2.12 · GPL-3.0</span>
         </article>
 
         <article class="card">
@@ -189,12 +189,11 @@
     <section class="section container">
       <h2 class="section-title">Installation notes</h2>
       <details class="install">
-        <summary>Android — sideload APK</summary>
+        <summary>Android — Google Play</summary>
         <ol>
-          <li>Download the APK and verify SHA-256.</li>
-          <li>Allow installation from your browser (unknown sources / install unknown apps).</li>
-          <li>Open the APK and confirm install.</li>
-          <li><strong>Upgrading from old debug builds:</strong> export your Tox profile → uninstall the old app → install the new APK → import the profile (signing key changed).</li>
+          <li>Open <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Khandaq on Google Play</a>.</li>
+          <li>Tap Install. Updates arrive automatically through Google Play.</li>
+          <li><strong>Coming from an old sideloaded/debug build?</strong> Export your Tox profile → uninstall the old app → install from Google Play → import the profile (the signing key is different).</li>
         </ol>
       </details>
       <details class="install">
@@ -292,7 +291,7 @@
         <h4>Download</h4>
         <ul>
           <li><a href="#download">All platforms</a></li>
-          <li><a href="/downloads/khandaq-android.apk">Android APK mirror</a></li>
+          <li><a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Android on Google Play</a></li>
           <li><a href="https://testflight.apple.com/join/4ppS8ZN5">iOS TestFlight</a></li>
         </ul>
       </div>
@@ -319,7 +318,6 @@
       document.getElementById('sha-mirror').href = mirror + 'SHA256SUMS.txt';
 
       var links = {
-        '.dl-android': ['khandaq-android.apk', gh, mirror],
         '.dl-windows': ['khandaq-windows-x86_64.zip', gh, mirror],
         '.dl-macos': ['khandaq-macos.zip', gh, mirror],
         '.dl-linux': ['khandaq-linux-x86_64-portable.tar.gz', gh, mirror],

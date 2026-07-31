@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10367.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10368.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Fixed a crash when reopening a chat after the app was closed in the background. Swipe any message (photo, video, voice, file, or your own) to reply. When deleting a message you can choose \"Delete for everyone\" or \"Delete for me\". Reactions now show on photos and videos too."},
-                    {"language": "ru-RU", "text": "Исправлен краш при повторном открытии чата и краш при выходе из профиля. Улучшена стабильность."},
+                    {"language": "en-US", "text": "Redesigned, cleaner call screen. The incoming-call ringtone now plays as a proper ringtone (no more overlapping media melody) and you can Accept a call straight from the notification. Fixed the chat header for Arabic (right-to-left) names so the online status is no longer clipped."},
+                    {"language": "ru-RU", "text": "Обновлённый, чистый экран звонка. Рингтон входящего звонка теперь звучит как настоящий рингтон (без наложения нескольких мелодий), а принять звонок можно прямо из уведомления. Исправлена шапка чата для арабских (справа-налево) имён — статус «в сети» больше не обрезается."},
                 ],
             }],
         })

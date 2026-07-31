@@ -2043,6 +2043,23 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
         activity_state = 1;
 
+        // KHANDAQ (video-resume fix): re-open the camera on EVERY foreground return (e.g. the user
+        // switched to another app during a video call and came back). A plain onPause->onResume does not
+        // run onStart, so onStart's scheduleCameraOpen wouldn't fire — pendingCameraOpen stayed false, so
+        // even when the SurfaceView was recreated (surfaceCreated -> onCameraSurfaceReady) the camera was
+        // NOT re-opened, and the peer's screen went blank / froze. scheduleCameraOpen sets
+        // pendingCameraOpen=true so both the immediate attempt and the surfaceCreated callback re-open it.
+        if ((Callstate.accepted_call == 1) && (!Callstate.audio_call))
+        {
+            try
+            {
+                ensureCallPermissions(this::scheduleCameraOpen);
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
         // ------ set audio device ------
         // ------ set audio device ------
         // ------ set audio device ------

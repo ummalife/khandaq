@@ -32,6 +32,8 @@
                 android:layout_marginTop="0dp"
                 android:background="@android:color/black" />
 
+            <!-- KHANDAQ (modern call screen): the TRIfA green/yellow/red connection-quality bar looked like
+                 a stray coloured line across the top of the call; hide it. -->
             <LinearLayout
                 android:id="@+id/calling_friend_online_status"
                 android:layout_width="match_parent"
@@ -39,7 +41,8 @@
                 android:layout_marginLeft="0dp"
                 android:background="#04b431"
                 android:elevation="25dp"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:visibility="gone">
 
             </LinearLayout>
 

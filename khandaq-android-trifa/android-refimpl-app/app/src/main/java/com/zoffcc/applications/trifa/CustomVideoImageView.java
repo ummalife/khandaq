@@ -54,7 +54,11 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
         }
         else
         {
-            this.setScaleType(ScaleType.FIT_CENTER);
+            // KHANDAQ: fill the screen (crop) instead of letterboxing. FIT_CENTER left black bars on the
+            // sides and exposed the encoder's green chroma edge column at the right of the frame; CENTER_CROP
+            // scales the remote video to cover the whole view, so it's full-screen and the green edge is
+            // cropped off.
+            this.setScaleType(ScaleType.CENTER_CROP);
         }
         this.setOnTouchListener(this);
         matrix_was_reset = true;
@@ -69,7 +73,11 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
         }
         else
         {
-            this.setScaleType(ScaleType.FIT_CENTER);
+            // KHANDAQ: fill the screen (crop) instead of letterboxing. FIT_CENTER left black bars on the
+            // sides and exposed the encoder's green chroma edge column at the right of the frame; CENTER_CROP
+            // scales the remote video to cover the whole view, so it's full-screen and the green edge is
+            // cropped off.
+            this.setScaleType(ScaleType.CENTER_CROP);
         }
         this.setOnTouchListener(this);
         matrix_was_reset = true;
@@ -84,7 +92,11 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
         }
         else
         {
-            this.setScaleType(ScaleType.FIT_CENTER);
+            // KHANDAQ: fill the screen (crop) instead of letterboxing. FIT_CENTER left black bars on the
+            // sides and exposed the encoder's green chroma edge column at the right of the frame; CENTER_CROP
+            // scales the remote video to cover the whole view, so it's full-screen and the green edge is
+            // cropped off.
+            this.setScaleType(ScaleType.CENTER_CROP);
         }
         this.setOnTouchListener(this);
         matrix_was_reset = true;

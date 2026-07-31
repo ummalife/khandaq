@@ -420,6 +420,26 @@ h1 {
 .panel h3 { margin: 0 0 0.6rem; font-size: 1rem; }
 .panel ul, .panel ol { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 0.92rem; }
 .panel li { margin: 0.35rem 0; }
+.panel ul.highlights { list-style: none; padding-left: 0; }
+.panel ul.highlights li {
+  position: relative;
+  padding: 0.55rem 0 0.55rem 1rem;
+  margin: 0;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border);
+}
+.panel ul.highlights li:last-child { border-bottom: none; }
+.panel ul.highlights li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.95rem;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: var(--green);
+}
+.panel ul.highlights li strong { color: var(--text, inherit); }
 
 details.install {
   background: var(--surface);

@@ -1001,7 +1001,9 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
 
     private void update_avatar_remove_button_visibility()
     {
-        if (profile_icon_remove == null)
+        // KHANDAQ (logout crash fix): a delayed avatar Handler can fire AFTER logout has begun tearing
+        // down the IOCipher VFS / this fragment. Bail if the fragment is detached.
+        if (profile_icon_remove == null || !isAdded())
         {
             return;
         }
@@ -1019,9 +1021,12 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
 
             profile_icon_remove.setVisibility(has_avatar ? View.VISIBLE : View.GONE);
         }
-        catch (Exception ignored)
+        // catch Throwable, not Exception: reading a CLOSED IOCipher/SQLCipher VFS during logout throws
+        // a native Error, which catch(Exception) let through → uncaught crash → CrashActivity → the app
+        // relaunched into the same profile (the reported "logout/import doesn't work").
+        catch (Throwable ignored)
         {
-            profile_icon_remove.setVisibility(View.GONE);
+            try { profile_icon_remove.setVisibility(View.GONE); } catch (Throwable ignored2) { }
         }
     }
 
@@ -1365,6 +1370,13 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 }
                 else if (id == 3)
                 {
+                    // KHANDAQ (logout crash fix): this delayed avatar refresh reads the IOCipher VFS;
+                    // if it fires after logout tore the VFS down it throws a native Error. Bail when the
+                    // fragment is gone, and catch Throwable so a closed-VFS Error can't crash the app.
+                    if (!isAdded())
+                    {
+                        return;
+                    }
                     try
                     {
                         String fname = get_vfs_image_filename_own_avatar();
@@ -1380,13 +1392,14 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                         update_avatar_remove_button_visibility();
                         ProfileTabAvatarHelper.updateAsync();
                     }
-                    catch (Exception e)
+                    catch (Throwable e)
                     {
                         e.printStackTrace();
                     }
                 }
             }
-            catch (Exception e)
+            // KHANDAQ (logout crash fix): swallow Errors too (closed-VFS native aborts during logout).
+            catch (Throwable e)
             {
                 e.printStackTrace();
             }

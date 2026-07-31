@@ -87,6 +87,9 @@ body {
 }
 
 img { max-width: 100%; height: auto; }
+/* Mobile safety: never allow a stray element (long code/IDs) to cause horizontal scroll */
+html, body { overflow-x: hidden; }
+code { overflow-wrap: anywhere; }
 
 a { color: var(--gold-soft); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -341,14 +344,17 @@ h1 {
   font-size: 0.92rem;
 }
 
-/* Download cards */
+/* Download cards — flex so a lone last card (5 platforms) centers instead of leaving a gap */
 .download-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 1rem;
 }
 
 .card {
+  flex: 1 1 200px;
+  max-width: 280px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -357,6 +363,9 @@ h1 {
   flex-direction: column;
   gap: 0.55rem;
   transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+@media (max-width: 520px) {
+  .card { flex-basis: 100%; max-width: none; }
 }
 .card:hover {
   border-color: var(--green-light);

@@ -102,10 +102,15 @@ typedef struct Messenger_Options {
  */
 #define TOX_CAPABILITY_NEXT_IMPLEMENTATION ((uint64_t)1) << 63
 /* hardcoded capabilities of this version/branch of toxcore */
+/* KHANDAQ (remote-video-black fix): this iOS toxcore ships a VP8-ONLY toxav decoder
+ * (video.m: vpx_codec_vp8_dx). Advertising TOX_CAPABILITY_TOXAV_H264/H265 was a LIE — it made the
+ * Android peer (whose native toxcore can encode H264) send H264, which this side could not decode
+ * ("Bitstream not supported by this decoder", video.m:326) so the remote video stayed BLACK. Drop the
+ * H264/H265 capability bits so codec negotiation falls back to VP8, which both platforms decode. */
 #ifdef TOX_CAPABILITIES_ACTIVE
-#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV2 | TOX_CAPABILITY_MSGV3 | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_TOXAV_H265 | TOX_CAPABILITY_FTV2 | TOX_CAPABILITY_FTV2A)
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV2 | TOX_CAPABILITY_MSGV3 | TOX_CAPABILITY_FTV2 | TOX_CAPABILITY_FTV2A)
 #else
-#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_TOXAV_H265)
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES)
 #endif
 /* size of the FLAGS in bytes */
 #define TOX_CAPABILITIES_SIZE sizeof(uint64_t)

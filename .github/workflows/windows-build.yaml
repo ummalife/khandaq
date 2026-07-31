@@ -17,7 +17,7 @@ jobs:
       run:
         working-directory: khandaq-desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # NB: build with plain `docker build` (not docker compose / bake) — docker compose v2 trips a
       # false "cycle detected" on the dotted service name `windows_builder.i686` in docker-compose.yml.
@@ -41,7 +41,7 @@ jobs:
 
       - name: Upload Windows artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: khandaq-windows-x86_64-release
           path: |

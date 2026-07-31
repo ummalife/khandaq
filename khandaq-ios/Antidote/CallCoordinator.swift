@@ -406,6 +406,15 @@ extension CallCoordinator {
             return
         }
 
+        // KHANDAQ (crash fix): CallKit's didActivate(audioSession:) can fire LATE — after the call has
+        // already ended and its OCTCall Realm row was deleted. Reading ANY property of an invalidated
+        // Realm object throws RLMException → SIGABRT (reported on a real device from the call path).
+        // Bail out if the call object is no longer attached to Realm.
+        guard !activeCall.call.isInvalidated else {
+            print("cc:controler:performAnswerCall:skip:call_invalidated")
+            return
+        }
+
         guard activeCall.call.status == .ringing else {
             print("cc:controler:performAnswerCall:skip:status=\(activeCall.call.status.rawValue)")
             return

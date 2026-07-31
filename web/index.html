@@ -278,6 +278,38 @@
         <summary>How do I report a bug?</summary>
         <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">Open an issue on <a href="https://github.com/ummalife/khandaq/issues">GitHub Issues</a> or use the security advisory flow for vulnerabilities (<a href="https://github.com/ummalife/khandaq/security/advisories/new">private report</a>).</p>
       </details>
+      <details class="install">
+        <summary>Where do I download Khandaq?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;"><strong>Android:</strong> the official <a href="https://play.google.com/store/apps/details?id=com.khandaq.messenger" target="_blank" rel="noopener">Google Play</a> listing (install and auto-update from there). <strong>iPhone/iPad:</strong> via <a href="https://testflight.apple.com/join/4ppS8ZN5">TestFlight</a> while iOS is in beta. <strong>Windows, macOS, Linux:</strong> from the <a href="#download">Download</a> section above.</p>
+      </details>
+      <details class="install">
+        <summary>Do I need a phone number or email to sign up?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">No. There is no account and no sign-up. You create a local profile and get a <strong>Tox ID</strong> — share it with people you trust to connect. No phone number, email or any personal detail is required or collected.</p>
+      </details>
+      <details class="install">
+        <summary>Why don't I get notifications when the app is closed?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">Because Khandaq is peer-to-peer, a closed app has no live connection. A lightweight push <em>wake</em> service nudges your device to reconnect and fetch the message — it never carries the message content, only a wake signal. Make sure notifications are allowed for Khandaq in system settings and that the app isn't force-stopped or battery-restricted. On Android, Google Play builds get these wakes automatically.</p>
+      </details>
+      <details class="install">
+        <summary>I sent a message but it wasn't delivered — why?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">There is no central server holding your messages. A message is delivered when your contact's device is reachable. If they're offline it is queued and sent automatically once either of you reconnects — so a message can take a while if the other person hasn't opened the app. Keeping the app open (or allowing background/push) makes delivery near-instant.</p>
+      </details>
+      <details class="install">
+        <summary>I forgot my profile password — can you reset it?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">No — and no one can. Your profile's encryption keys are derived from that password, and there is no server that stores it, so there is no reset. If it's lost you'll need to create a new profile (and a new Tox ID). Write your password down somewhere safe when you create the profile.</p>
+      </details>
+      <details class="install">
+        <summary>How do I move my profile to a new phone?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">Export your Tox profile from the old device (Profile → export) and import it on the new one, so you keep the same Tox ID and contacts. A profile is meant for one active device at a time — running the same one on two devices simultaneously isn't supported by the Tox protocol.</p>
+      </details>
+      <details class="install">
+        <summary>Do voice and video calls work between Android and iPhone?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">Yes. 1:1 audio and video calls work across Android and iOS — both sides see each other's camera, upright and full-screen. Calls are peer-to-peer and end-to-end encrypted like messages.</p>
+      </details>
+      <details class="install">
+        <summary>Is it really end-to-end encrypted?</summary>
+        <p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.92rem;">Yes. Every message, file and call is end-to-end encrypted by the <a href="https://tox.chat">Tox</a> protocol (NaCl cryptography), directly between devices. No one in the middle — including us — can read your messages or see your contacts.</p>
+      </details>
     </section>
   </main>
 

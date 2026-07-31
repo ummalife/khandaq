@@ -1,0 +1,63 @@
+{
+  "version": "0.2.12",
+  "date": "2026-08-01",
+  "title": "Cross-platform video calls, Google Play release, iOS voice-note fix on older iPhones",
+  "summary": "The big one: 1:1 video calls now work end-to-end between Android and iOS. Both sides see each other's camera, the picture is upright and full-screen, and it keeps working after you switch apps and come back — previously the remote camera could show black, sideways, or freeze. Android is now published on the official Google Play Store (install and auto-update from there; the website links to Play instead of a sideload APK). On iOS, voice notes that silently failed to send on older iPhones (e.g. iPhone 11) now record and send reliably. The Android incoming-call screen was redesigned with the correct ringtone and accept-from-notification, right-to-left (Arabic) chat headers no longer clip, and both apps gained editing sent messages, reactions and delete-for-everyone across all message types, and swipe-to-reply.",
+  "commits": ["13a483c3", "ce76a188", "185e14e8", "ecf7df90", "31cd0e8a", "c860d5bb"],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Cross-platform 1:1 video calls (Android ↔ iOS)",
+      "description": "Video calls between Android and iPhone now work in both directions. Each side sees the other's camera (the remote view was showing black before), the image is upright instead of sideways or upside-down, it fills the screen without letterbox bars, and the camera resumes correctly after you switch to another app and return. Under the hood the two platforms now negotiate the same video codec (VP8) and iOS renders incoming frames on a modern display layer.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Android is now on Google Play",
+      "description": "Khandaq for Android is published on the official Google Play Store — install and get automatic updates from there. The website now links to the Play listing instead of hosting a sideload APK. If you are coming from an old sideloaded build, export your Tox profile first, then install from Play and import it (the app signing key is different).",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "iOS — voice notes fixed on older iPhones",
+      "description": "On older iPhones (such as iPhone 11) a voice note would record while you held the mic but silently fail to send when you released. Recording now uses the correct audio session and the device's real sample rate, so voice notes capture and send reliably across all iPhone models.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Android — redesigned call screen and ringtone",
+      "description": "The incoming-call screen was modernised: a proper ringtone that plays on the ringtone channel (instead of a mangled media sound), an Accept action directly from the call notification, a clean full-screen video layout, and the microphone/speaker routing is set up only once the call is accepted so early audio glitches are gone.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Edit sent messages",
+      "description": "You can now edit a message you already sent — in 1:1 chats and groups. The recipient sees the updated text marked as edited. (Android already supported this; iOS now matches.)",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "Reactions, delete-for-everyone and swipe-to-reply across all message types",
+      "description": "Emoji reactions and delete-for-everyone now work on photos, videos, voice messages and files — not just text — in both 1:1 chats and groups. Swipe a message to reply to it. Deleting for everyone reliably removes the message on the other person's device too.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — right-to-left (Arabic) chat header no longer clips",
+      "description": "With an Arabic contact name the chat header and the 'online' status were being clipped or misaligned. The header now lays out correctly in right-to-left, in both 1:1 and group chats.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android — targets Android 16 and keeps your Tox ID across updates",
+      "description": "The app now targets Android 16 (API 36) for Google Play compliance, and updating the app no longer loses your Tox ID and contacts — the identity is recovered even if the encryption key drifted after a password change.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "low",
+      "title": "Build, signing and website distribution hardening",
+      "description": "Following an external security review: the Android build can no longer be signed with a debug key by mistake, published checksums no longer leak build-machine paths, CI actions are pinned to exact versions, and the sideload APK was removed from the website and the release downloads in favour of Google Play.",
+      "platforms": ["android"]
+    }
+  ]
+}

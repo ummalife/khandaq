@@ -956,19 +956,19 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
                     if (Callstate.audio_speaker)
                     {
-                        video_box_speaker_button.setText("Speaker: ON");
+                        set_speaker_button_icon(true);
                         set_audio_to_loudspeaker(manager);
                     }
                     else
                     {
-                        video_box_speaker_button.setText("Speaker: OFF");
+                        set_speaker_button_icon(false);
                         set_audio_to_ear(manager);
                     }
                     applyCallAudioProcessing(Callstate.audio_speaker);
                 }
                 else
                 {
-                    video_box_speaker_button.setText(Callstate.audio_speaker ? "Speaker: ON" : "Speaker: OFF");
+                    set_speaker_button_icon(Callstate.audio_speaker);
                 }
             }
             else
@@ -991,11 +991,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         if (Callstate.audio_speaker == false)
                         {
-                            video_box_speaker_button.setText("Speaker: OFF");
+                            set_speaker_button_icon(false);
                         }
                         else
                         {
-                            video_box_speaker_button.setText("Speaker: ON");
+                            set_speaker_button_icon(true);
                         }
                     }
                     catch (Exception e)
@@ -1010,13 +1010,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         if (Callstate.audio_speaker == false)
                         {
                             set_audio_to_loudspeaker(audio_manager_s);
-                            video_box_speaker_button.setText("Speaker: ON");
+                            set_speaker_button_icon(true);
                             applyCallAudioProcessing(true);
                         }
                         else
                         {
                             set_audio_to_ear(audio_manager_s);
-                            video_box_speaker_button.setText("Speaker: OFF");
+                            set_speaker_button_icon(false);
                             applyCallAudioProcessing(false);
                         }
                     }
@@ -1583,6 +1583,28 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         }
     }
 
+    // KHANDAQ (modern call screen): render the speaker toggle as a clean white volume icon instead of the
+    // old "Speaker: ON/OFF" blue text box, matching the round call-control buttons.
+    private void set_speaker_button_icon(boolean speakerOn)
+    {
+        try
+        {
+            if (video_box_speaker_button == null)
+            {
+                return;
+            }
+            video_box_speaker_button.setText("");
+            Drawable ic = new IconicsDrawable(this).icon(
+                    speakerOn ? GoogleMaterial.Icon.gmd_volume_up : GoogleMaterial.Icon.gmd_volume_off).color(
+                    android.graphics.Color.WHITE).sizeDp(26);
+            video_box_speaker_button.setCompoundDrawablesWithIntrinsicBounds(null, ic, null, null);
+            video_box_speaker_button.setCompoundDrawablePadding(0);
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
     // KHANDAQ (modern call screen): hide the legacy TRIfA debug/expert overlays so end users see a clean
     // call screen (avatar + name + call controls) instead of the old "Video Quality low/high" slider,
     // bitrate/fps stats, volume & video-delay sliders, the "- AEC -" toggle and the VU meters. Views keep
@@ -1925,23 +1947,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 {
                     // HelperGeneric.logI(TAG, "update_top_text_line(2c):top_text_line_str3=" + top_text_line_str3);
 
-                    if ((top_text_line_str3 != "") || (top_text_line_str4 != ""))
-                    {
-                        top_text_line.setText(
-                                top_text_line_str1 + ":" + top_text_line_str2 + ":" + top_text_line_str3 + ":" +
-                                top_text_line_str4);
-                    }
-                    else
-                    {
-                        if (top_text_line_str2 != "")
-                        {
-                            top_text_line.setText(top_text_line_str1 + ":" + top_text_line_str2);
-                        }
-                        else
-                        {
-                            top_text_line.setText(top_text_line_str1);
-                        }
-                    }
+                    // KHANDAQ (modern call screen): show ONLY the caller name at the top. The old code
+                    // concatenated str2/str3/str4 (accept-seconds + video-frame debug + bitrate/fps), which
+                    // rendered the ugly "Isa 300/9900/1" the user reported. The call duration is shown in
+                    // the clean timer chip instead.
+                    top_text_line.setText(top_text_line_str1);
                 }
                 catch (Exception e)
                 {

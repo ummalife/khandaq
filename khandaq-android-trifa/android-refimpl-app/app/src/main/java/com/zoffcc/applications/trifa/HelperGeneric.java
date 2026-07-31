@@ -2480,9 +2480,13 @@ public class HelperGeneric
 
                             try
                             {
+                                // KHANDAQ (modern call screen): show ONLY the caller name here. This was the
+                                // real source of the "Isa 300/9900/0" the user reported — update_bitrates
+                                // overwrote top_text_line every tick with name + round_trip_time/play_delay/
+                                // play_buffer_entries (network debug), bypassing update_top_text_line().
                                 CallingActivity.top_text_line.setText(
-                                        Callstate.friend_alias_name + " " + Callstate.round_trip_time + "/" +
-                                        Callstate.play_delay + "/" + Callstate.play_buffer_entries);
+                                        ("-1".equals(Callstate.friend_alias_name) || Callstate.friend_alias_name == null)
+                                                ? "" : Callstate.friend_alias_name);
                             }
                             catch (Exception e)
                             {

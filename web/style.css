@@ -427,13 +427,41 @@ details.install {
   border-radius: var(--radius);
   padding: 0.8rem 1rem;
   margin-bottom: 0.65rem;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
+details.install:hover { border-color: var(--green); }
+details.install[open] { border-color: var(--green); }
 details.install summary {
   cursor: pointer;
   font-weight: 600;
   list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  outline: none;
+  transition: color 0.2s ease;
 }
+details.install summary:hover { color: var(--green); }
 details.install summary::-webkit-details-marker { display: none; }
+/* chevron on the right, rotates when open */
+details.install summary::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transform-origin: center;
+  transition: transform 0.28s ease, border-color 0.2s ease;
+  margin-top: -0.15rem;
+}
+details.install[open] summary::after,
+details.install summary:hover::after { border-color: var(--green); }
+details.install[open] summary::after { transform: rotate(-135deg); }
+/* JS-animated body wrapper (smooth open/close, no page jump) */
+details.install .faq-body { overflow: hidden; will-change: height; }
 details.install ol {
   margin: 0.75rem 0 0;
   padding-left: 1.2rem;

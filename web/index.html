@@ -370,6 +370,73 @@
       });
     })();
   </script>
+
+  <script>
+    // Smooth accordion for <details class="install"> (FAQ + install notes): animate the height on
+    // open AND close so the page never jumps, and rotate the chevron. Falls back to the native
+    // instant toggle if the browser lacks Web Animations or the user prefers reduced motion.
+    (function () {
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var items = Array.prototype.slice.call(document.querySelectorAll('details.install'));
+
+      items.forEach(function (det) {
+        var summary = det.querySelector('summary');
+        if (!summary) return;
+
+        // Wrap everything after <summary> into an animatable body element.
+        var body = document.createElement('div');
+        body.className = 'faq-body';
+        var node = summary.nextSibling;
+        while (node) {
+          var next = node.nextSibling;
+          body.appendChild(node);
+          node = next;
+        }
+        det.appendChild(body);
+
+        if (reduce || typeof body.animate !== 'function') return; // native toggle
+
+        var animating = false;
+        summary.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (animating) return;
+          animating = true;
+
+          if (!det.open) {
+            // OPEN: close any sibling that's open (single-open accordion), then grow 0 → height.
+            items.forEach(function (other) {
+              if (other !== det && other.open) closeItem(other);
+            });
+            det.open = true;
+            var target = body.offsetHeight;
+            body.animate(
+              [{ height: '0px', opacity: 0 }, { height: target + 'px', opacity: 1 }],
+              { duration: 260, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+            ).onfinish = function () { animating = false; };
+          } else {
+            var start = body.offsetHeight;
+            var anim = body.animate(
+              [{ height: start + 'px', opacity: 1 }, { height: '0px', opacity: 0 }],
+              { duration: 200, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+            );
+            anim.onfinish = function () { det.open = false; animating = false; };
+          }
+        });
+
+        // Close helper used when another item opens (no lock needed — quick collapse).
+        function closeItem(other) {
+          var ob = other.querySelector('.faq-body');
+          if (!ob) { other.open = false; return; }
+          var h = ob.offsetHeight;
+          var a = ob.animate(
+            [{ height: h + 'px', opacity: 1 }, { height: '0px', opacity: 0 }],
+            { duration: 180, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+          );
+          a.onfinish = function () { other.open = false; };
+        }
+      });
+    })();
+  </script>
   <script src="assets/theme.js" defer></script>
 </body>
 </html>

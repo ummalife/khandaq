@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10366.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10367.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -64,7 +64,7 @@ def main():
                 "status": "completed",
                 "releaseNotes": [
                     {"language": "en-US", "text": "Fixed a crash when reopening a chat after the app was closed in the background. Swipe any message (photo, video, voice, file, or your own) to reply. When deleting a message you can choose \"Delete for everyone\" or \"Delete for me\". Reactions now show on photos and videos too."},
-                    {"language": "ru-RU", "text": "Исправлен краш при повторном открытии чата после того, как приложение было выгружено в фоне. Свайп по любому сообщению (фото, видео, голосовое, файл или своё) открывает ответ. При удалении можно выбрать «Удалить у всех» или «Удалить у меня». Реакции теперь видны и на фото/видео."},
+                    {"language": "ru-RU", "text": "Исправлен краш при повторном открытии чата и краш при выходе из профиля. Улучшена стабильность."},
                 ],
             }],
         })

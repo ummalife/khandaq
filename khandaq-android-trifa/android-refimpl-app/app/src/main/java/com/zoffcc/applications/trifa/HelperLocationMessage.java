@@ -27,6 +27,13 @@ public final class HelperLocationMessage
     {
     }
 
+    /** KHANDAQ (#T2): build the wire text for a location message, parity with iOS
+     *  ("khandaq-location:LAT,LON", 5 decimals, '.'-separated so parsing is locale-independent). */
+    public static String encode(final double latitude, final double longitude)
+    {
+        return String.format(Locale.US, "khandaq-location:%.5f,%.5f", latitude, longitude);
+    }
+
     public static double[] parse(String text)
     {
         if (text == null)

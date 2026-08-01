@@ -200,8 +200,13 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         textView.setCustomRegex(TOXURL_PATTERN);
 
         final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(message__text);
-        GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
-                group_search_messages_text);
+        // KHANDAQ (#T2): render a "khandaq-location:LAT,LON" group message as a map bubble.
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, false);
+        if (!locationBound)
+        {
+            GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
+                    group_search_messages_text);
+        }
 
         HelperGeneric.fill_own_avatar_icon(context, img_avatar);
         img_avatar.setVisibility(View.GONE);

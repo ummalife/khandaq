@@ -1821,6 +1821,13 @@ public class MessageListActivity extends AppCompatActivity
             sheet.dismiss();
             open_file_picker();
         });
+        // KHANDAQ (#T2): share current location as a map bubble.
+        ((ImageView) content.findViewById(R.id.attach_chip_location_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_place).color(Color.WHITE).sizeDp(26));
+        content.findViewById(R.id.attach_chip_location).setOnClickListener(v -> {
+            sheet.dismiss();
+            share_current_location();
+        });
 
         // KHANDAQ (Figma attachments 2031:13703): in-app grid of recent device media above the chips.
         // Tapping a thumbnail routes the content Uri into the existing send preview. If the media-read
@@ -2042,6 +2049,37 @@ public class MessageListActivity extends AppCompatActivity
         {
             mla_handler_s.post(myRunnable);
         }
+    }
+
+    // KHANDAQ (#T2): fetch the current location once and send it as a "khandaq-location:LAT,LON"
+    // message (wire-compatible with iOS). Requests the location permission on first use.
+    void share_current_location()
+    {
+        if (!ShareLocationHelper.hasPermission(this))
+        {
+            ShareLocationHelper.requestPermission(this);
+            return;
+        }
+        ShareLocationHelper.fetchOnce(this, new ShareLocationHelper.Callback()
+        {
+            @Override
+            public void onLocation(final double latitude, final double longitude)
+            {
+                runOnUiThread(() -> {
+                    final String pk = get_friend_pubkey();
+                    if (pk != null && !pk.isEmpty())
+                    {
+                        send_text_message(pk, HelperLocationMessage.encode(latitude, longitude));
+                    }
+                });
+            }
+
+            @Override
+            public void onError(final String reason)
+            {
+                runOnUiThread(() -> display_toast(getString(R.string.location_share_failed), true, 400));
+            }
+        });
     }
 
     public void send_text_message(final String friend_pubkey, final String message)
@@ -3139,6 +3177,17 @@ public class MessageListActivity extends AppCompatActivity
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
     {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        // KHANDAQ (#T2): location permission just granted from the "Геолокация" chip → send it now.
+        if (requestCode == ShareLocationHelper.PERMISSION_REQUEST_CODE)
+        {
+            if (grantResults.length > 0
+                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            {
+                share_current_location();
+            }
+            return;
+        }
 
         if (requestCode != HelperCall.REQUEST_CALL_PERMISSIONS)
         {

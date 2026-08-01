@@ -993,6 +993,9 @@
     <string name="attach_chip_camera">Camera</string>
     <string name="attach_chip_video">Video</string>
     <string name="attach_option_file">File</string>
+    <string name="attach_location">Location</string>
+    <string name="location_share_failed">Couldn\'t get your location. Turn on location and try again.</string>
+    <string name="location_open_in_maps">Open in Maps</string>
     <string name="attach_send_selected">Send (%1$d)</string>
     <string name="attach_no_camera">No camera available</string>
     <string name="group_private_msg_label">Private message:</string>

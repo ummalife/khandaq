@@ -2322,6 +2322,39 @@ public class GroupMessageListActivity extends AppCompatActivity
         }
     }
 
+    // KHANDAQ (#T2): fetch the current location once and send it into the group as a
+    // "khandaq-location:LAT,LON" message (wire-compatible with iOS + 1:1).
+    void share_current_location_group()
+    {
+        if (!ShareLocationHelper.hasPermission(this))
+        {
+            ShareLocationHelper.requestPermission(this);
+            return;
+        }
+        ShareLocationHelper.fetchOnce(this, new ShareLocationHelper.Callback()
+        {
+            @Override
+            public void onLocation(final double latitude, final double longitude)
+            {
+                runOnUiThread(() -> {
+                    final String gid = get_current_group_id();
+                    if (gid != null && !gid.equals("-1"))
+                    {
+                        final long group_num = tox_group_by_groupid__wrapper(gid);
+                        send_group_text_message_resilient(gid, group_num,
+                                HelperLocationMessage.encode(latitude, longitude));
+                    }
+                });
+            }
+
+            @Override
+            public void onError(final String reason)
+            {
+                runOnUiThread(() -> display_toast(getString(R.string.location_share_failed), true, 400));
+            }
+        });
+    }
+
     public void send_attatchment(View view)
     {
         // KHANDAQ (Figma attachments 2031:13703): mirror the 1:1 attach sheet — teal camera/video/gallery
@@ -2352,6 +2385,13 @@ public class GroupMessageListActivity extends AppCompatActivity
         content.findViewById(R.id.attach_chip_file).setOnClickListener(v -> {
             sheet.dismiss();
             open_group_file_picker();
+        });
+        // KHANDAQ (#T2): share current location into the group as a map bubble.
+        ((ImageView) content.findViewById(R.id.attach_chip_location_icon)).setImageDrawable(
+                new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_place).color(Color.WHITE).sizeDp(26));
+        content.findViewById(R.id.attach_chip_location).setOnClickListener(v -> {
+            sheet.dismiss();
+            share_current_location_group();
         });
 
         final androidx.recyclerview.widget.RecyclerView grid = content.findViewById(R.id.attach_media_grid);
@@ -5023,6 +5063,17 @@ public class GroupMessageListActivity extends AppCompatActivity
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
     {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        // KHANDAQ (#T2): location permission just granted from the "Геолокация" chip → send it now.
+        if (requestCode == ShareLocationHelper.PERMISSION_REQUEST_CODE)
+        {
+            if (grantResults.length > 0
+                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            {
+                share_current_location_group();
+            }
+            return;
+        }
 
         if (requestCode != HelperCall.REQUEST_CALL_PERMISSIONS)
         {

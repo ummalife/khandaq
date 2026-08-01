@@ -381,8 +381,13 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
                 HelperGeneric.format_group_message_time(m, false), false);
 
-        GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
-                group_search_messages_text);
+        // KHANDAQ (#T2): render a "khandaq-location:LAT,LON" group message as a map bubble (parity with 1:1).
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, false);
+        if (!locationBound)
+        {
+            GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,
+                    group_search_messages_text);
+        }
         ChatBubbleUiHelper.bind_reply_quote(textView_container, parsedGroup.reply,
                 meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));
 

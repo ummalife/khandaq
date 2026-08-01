@@ -2066,10 +2066,16 @@ public class MessageListActivity extends AppCompatActivity
             public void onLocation(final double latitude, final double longitude)
             {
                 runOnUiThread(() -> {
+                    // KHANDAQ (#T2): the fix can arrive up to 15s late — bail if the user already left.
+                    if (isFinishing() || isDestroyed())
+                    {
+                        return;
+                    }
                     final String pk = get_friend_pubkey();
                     if (pk != null && !pk.isEmpty())
                     {
-                        send_text_message(pk, HelperLocationMessage.encode(latitude, longitude));
+                        // rawStandalone=true: never let an active edit/reply draft swallow or decorate the pin.
+                        send_text_message(pk, HelperLocationMessage.encode(latitude, longitude), true);
                     }
                 });
             }
@@ -2084,8 +2090,16 @@ public class MessageListActivity extends AppCompatActivity
 
     public void send_text_message(final String friend_pubkey, final String message)
     {
+        send_text_message(friend_pubkey, message, false);
+    }
+
+    // KHANDAQ (#T2): rawStandalone=true sends `message` verbatim as a brand-new message, bypassing
+    // edit-mode capture and reply-quote composition. Used for location pins so an active edit/reply
+    // draft can't swallow the original message or decorate the "khandaq-location:LAT,LON" payload.
+    public void send_text_message(final String friend_pubkey, final String message, final boolean rawStandalone)
+    {
         // KHANDAQ (#9): edit mode — the send button SAVES the edit instead of sending a new message
-        if (ChatReplyPreviewController.isEditActive())
+        if (!rawStandalone && ChatReplyPreviewController.isEditActive())
         {
             final String newBody = HelperGeneric.normalize_chat_input_text(message);
             if (newBody == null || newBody.trim().isEmpty())
@@ -2124,8 +2138,10 @@ public class MessageListActivity extends AppCompatActivity
             return;
         }
 
-        final String fullText = ChatReplyPreviewController.composeOutgoingText(
-                HelperGeneric.normalize_chat_input_text(message));
+        final String fullText = rawStandalone
+                ? message
+                : ChatReplyPreviewController.composeOutgoingText(
+                        HelperGeneric.normalize_chat_input_text(message));
         if ((fullText == null) || fullText.isEmpty())
         {
             return;
@@ -3181,10 +3197,16 @@ public class MessageListActivity extends AppCompatActivity
         // KHANDAQ (#T2): location permission just granted from the "Геолокация" chip → send it now.
         if (requestCode == ShareLocationHelper.PERMISSION_REQUEST_CODE)
         {
-            if (grantResults.length > 0
-                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            // KHANDAQ (#T2): accept FINE *or* COARSE ("Approximate", Android 12+). grantResults[0] is
+            // always the FINE slot, so an approximate-only grant read as DENIED and silently no-op'd.
+            // Re-read the live permission state instead, and surface a toast when truly denied.
+            if (ShareLocationHelper.hasPermission(this))
             {
                 share_current_location();
+            }
+            else
+            {
+                display_toast(getString(R.string.location_share_failed), true, 400);
             }
             return;
         }

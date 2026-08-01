@@ -602,6 +602,7 @@
     <string name="attach_location">Геолокация</string>
     <string name="location_share_failed">Не удалось определить местоположение. Включите геолокацию и попробуйте снова.</string>
     <string name="location_open_in_maps">Открыть в картах</string>
+    <string name="forward_source_you">Вы</string>
     <string name="attach_send_selected">Отправить (%1$d)</string>
     <string name="attach_no_camera">Камера недоступна</string>
     <string name="group_private_msg_label">Личное сообщение:</string>

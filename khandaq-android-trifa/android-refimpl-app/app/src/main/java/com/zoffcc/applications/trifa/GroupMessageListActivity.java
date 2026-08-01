@@ -2337,12 +2337,24 @@ public class GroupMessageListActivity extends AppCompatActivity
             public void onLocation(final double latitude, final double longitude)
             {
                 runOnUiThread(() -> {
+                    // KHANDAQ (#T2): the fix can arrive up to 15s late — bail if the user already left.
+                    if (isFinishing() || isDestroyed())
+                    {
+                        return;
+                    }
+                    // Restore group_id if onPause (shown while the permission dialog was up) set it to "-1";
+                    // otherwise a first-run grant would silently drop the pin.
+                    prepareGroupMediaSendContext();
                     final String gid = get_current_group_id();
                     if (gid != null && !gid.equals("-1"))
                     {
                         final long group_num = tox_group_by_groupid__wrapper(gid);
                         send_group_text_message_resilient(gid, group_num,
                                 HelperLocationMessage.encode(latitude, longitude));
+                    }
+                    else
+                    {
+                        display_toast(getString(R.string.location_share_failed), true, 400);
                     }
                 });
             }
@@ -2691,9 +2703,13 @@ public class GroupMessageListActivity extends AppCompatActivity
             display_toast(group_send_failure_reason(message_id), true, 400);
             try
             {
-                ml_new_group_message.setText(m.text);
-                ml_new_group_message.setSelection(m.text.length());
-                ChatDraftHelper.save_group_draft(send_group_id, m.text);
+                // KHANDAQ (#T5): restore only the VISIBLE text — m.text is the raw wire form
+                // (reply header + [KQ|m|…] mention block); dumping it back would leak markers into
+                // the input field AND the persisted draft.
+                final String restored = GroupMentionHelper.cleanForClipboard(m.text);
+                ml_new_group_message.setText(restored);
+                ml_new_group_message.setSelection(restored.length());
+                ChatDraftHelper.save_group_draft(send_group_id, restored);
             }
             catch (Exception ignored)
             {
@@ -5067,10 +5083,15 @@ public class GroupMessageListActivity extends AppCompatActivity
         // KHANDAQ (#T2): location permission just granted from the "Геолокация" chip → send it now.
         if (requestCode == ShareLocationHelper.PERMISSION_REQUEST_CODE)
         {
-            if (grantResults.length > 0
-                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            // KHANDAQ (#T2): accept FINE *or* COARSE ("Approximate", Android 12+) — re-read the live
+            // permission state instead of trusting grantResults[0] (always the FINE slot).
+            if (ShareLocationHelper.hasPermission(this))
             {
                 share_current_location_group();
+            }
+            else
+            {
+                display_toast(getString(R.string.location_share_failed), true, 400);
             }
             return;
         }

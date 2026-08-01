@@ -104,10 +104,11 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
 
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
-        // KHANDAQ (#209): incoming-text keeps its proven daimajia swipe-to-reply; the new
-        // RecyclerView-level ItemTouchHelper covers the OTHER row types (media/voice/outgoing) and
-        // deliberately EXCLUDES incoming-text (see ReplySwipeCallback.Trigger.isSwipeable) so the
-        // two mechanisms never fight for the same row.
+        // KHANDAQ (#T3): swipe-to-reply for incoming 1:1 text now goes through the RecyclerView-level
+        // ItemTouchHelper (reliable from the first open) like every other row type — same fix already
+        // shipped for groups. Disable the old per-ViewHolder daimajia swipe so the two don't fight over
+        // the horizontal drag. The listener below stays registered but never fires while swipe is off.
+        swipeLayout.setSwipeEnabled(false);
         // swipeLayout.addDrag(SwipeLayout.DragEdge.Left, itemView.findViewById(R.id.msg_swipe_bottom_wrapper));
 
         // KHANDAQ (#31 leak): attach the swipe listener ONCE per ViewHolder here instead of on every
@@ -249,7 +250,7 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
                                  AutoLinkMode.MODE_MENTION, AutoLinkMode.MODE_CUSTOM);
 
         final MessageReplyHelper.ParsedMessage parsedMessage = MessageReplyHelper.parse(m.text);
-        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedMessage.bodyText, false);
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedMessage.bodyText, true);
         if (!locationBound)
         {
             if ((search_messages_text == null) || (search_messages_text.length() == 0))

@@ -201,7 +201,7 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
 
         final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(message__text);
         // KHANDAQ (#T2): render a "khandaq-location:LAT,LON" group message as a map bubble.
-        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, false);
+        final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, true);
         if (!locationBound)
         {
             GroupMessageBubbleTextHelper.bind(textView, parsedGroup, m.group_identifier, context,

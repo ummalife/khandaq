@@ -32,7 +32,10 @@ public class ReplySwipeCallback extends ItemTouchHelper.SimpleCallback
     private final Trigger trigger;
     private final float maxDx;      // how far the bubble can slide
     private final float triggerDx;  // distance past which release triggers the reply
-    private int latchedPosition = RecyclerView.NO_POSITION;
+    // KHANDAQ (#T3): latch only "triggered while the finger was down" — the actual target row is
+    // resolved from the swiped ViewHolder in clearView(), so a list rebuild during the ~200ms settle
+    // (incoming msg / remote delete-for-both / re-sort) can't make us quote a stale position.
+    private boolean latchedTriggered = false;
 
     public ReplySwipeCallback(Context context, Trigger trigger)
     {
@@ -84,8 +87,7 @@ public class ReplySwipeCallback extends ItemTouchHelper.SimpleCallback
             // the latch before clearView() runs.
             if (isCurrentlyActive)
             {
-                latchedPosition = (clamped >= triggerDx) ? viewHolder.getBindingAdapterPosition()
-                                                         : RecyclerView.NO_POSITION;
+                latchedTriggered = (clamped >= triggerDx);
             }
             super.onChildDraw(c, recyclerView, viewHolder, clamped, dY, actionState, isCurrentlyActive);
         }
@@ -99,16 +101,21 @@ public class ReplySwipeCallback extends ItemTouchHelper.SimpleCallback
     public void clearView(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder)
     {
         super.clearView(recyclerView, viewHolder);
-        if (latchedPosition != RecyclerView.NO_POSITION)
+        if (latchedTriggered)
         {
-            final int pos = latchedPosition;
-            latchedPosition = RecyclerView.NO_POSITION;
-            try
+            latchedTriggered = false;
+            // Resolve the target from the SWIPED holder now (post-settle), so a mid-swipe list rebuild
+            // can't misdirect the reply. NO_POSITION (row removed meanwhile) → silently no-op.
+            final int pos = viewHolder.getBindingAdapterPosition();
+            if (pos != RecyclerView.NO_POSITION && trigger.isSwipeable(pos))
             {
-                trigger.onReply(pos);
-            }
-            catch (Exception ignored)
-            {
+                try
+                {
+                    trigger.onReply(pos);
+                }
+                catch (Exception ignored)
+                {
+                }
             }
         }
     }

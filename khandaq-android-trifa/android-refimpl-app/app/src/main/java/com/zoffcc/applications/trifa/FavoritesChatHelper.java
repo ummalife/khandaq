@@ -435,7 +435,7 @@ final class FavoritesChatHelper
                         continue;
                     }
                     appendForwardText(sb, GroupMentionHelper.cleanForClipboard(message.text),
-                            sourceLabelForDirect(message));
+                            sourceLabelForDirect(context, message));
                 }
                 else
                 {
@@ -487,11 +487,23 @@ final class FavoritesChatHelper
         sb.append(text);
     }
 
-    /** KHANDAQ (#T6): "who + which chat" label for a forwarded 1:1 message (the contact's name). */
-    private static String sourceLabelForDirect(final Message m)
+    /** KHANDAQ (#T6): "who + which chat" label for a forwarded 1:1 message. */
+    private static String sourceLabelForDirect(final Context context, final Message m)
     {
         try
         {
+            // A message already living in Saved has no meaningful "from" — attributing it to self would
+            // stack "↪ Избранное" on every re-forward.
+            if (isFavoritesChat(m.tox_friendpubkey))
+            {
+                return null;
+            }
+            // Own outgoing 1:1 message → attribute to self, not the peer (m.tox_friendpubkey is the peer
+            // for BOTH directions in a 1:1 chat, so direction is the only discriminator).
+            if (m.direction == 1)
+            {
+                return context != null ? context.getString(R.string.forward_source_you) : null;
+            }
             final String name = HelperFriend.get_friend_name_from_pubkey(m.tox_friendpubkey);
             return (name != null && !name.trim().isEmpty()) ? name.trim() : null;
         }

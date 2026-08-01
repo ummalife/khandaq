@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10376.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10377.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Share your location with a map preview in 1:1 and group chats — tap \"+\" and choose Location. Also: copying a reply/mention no longer pastes internal markers, swipe-to-reply works reliably in groups, tapping \"retry\" on a failed file now works, and Saved messages show who wrote them and from which chat."},
-                    {"language": "ru-RU", "text": "Отправка геолокации с превью карты в личных и групповых чатах — нажмите «+» и выберите «Геолокация». А также: копирование ответа/упоминания больше не вставляет служебные символы, свайп-ответ в группах работает стабильно, тап по «Повторить» на файле теперь срабатывает, и в Избранном видно, кто и из какого чата написал."},
+                    {"language": "en-US", "text": "Location sharing polished: received & group pins now show the map preview (not a blank box), approximate-location permission works, and sending a pin no longer disturbs a message you're editing. Also: swipe-to-reply is reliable in 1:1 too, reply/edit no longer leaves a message stuck-selected, replies/edits/copies never leak internal markers, and forwarding to Saved no longer stacks the source label."},
+                    {"language": "ru-RU", "text": "Геолокация доработана: полученные и групповые точки теперь показывают превью карты (а не пустую рамку), работает «приблизительное» разрешение, а отправка точки больше не портит редактируемое сообщение. А также: свайп-ответ стабилен и в личных чатах, ответ/редактирование больше не оставляет сообщение «выделенным», ответы/правки/копирование не вставляют служебные символы, и пересылка в Избранное не дублирует подпись источника."},
                 ],
             }],
         })

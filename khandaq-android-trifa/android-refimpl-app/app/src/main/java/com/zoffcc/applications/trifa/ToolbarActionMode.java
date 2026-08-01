@@ -359,7 +359,11 @@ public class ToolbarActionMode implements ActionMode.Callback
     {
         try
         {
-            if (action_active == false)
+            // KHANDAQ: ALWAYS clear the selection + redraw when the action mode ends. This used to be
+            // gated on action_active==false, so Reply/Edit/Copy/Save/Info (which set it true) left their
+            // rows in selected_messages — the translucent-teal highlight stuck to the row AND the next
+            // plain tap silently re-entered multi-select on a phantom, still-non-empty selection.
+            // Delete/Forward already refresh the list themselves; a second redraw here is cheap.
             {
                 selected_conference_messages.clear();
 

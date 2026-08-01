@@ -410,10 +410,10 @@ public class MessageListFragment extends Fragment
                         {
                             return false;
                         }
-                        // incoming-text keeps its daimajia swipe → exclude here to avoid a double gesture
-                        boolean incomingText = (m.direction == 0)
-                                && (m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value);
-                        return !incomingText;
+                        // KHANDAQ (#T3): incoming 1:1 text now swipes through this RecyclerView-level
+                        // ItemTouchHelper too (daimajia swipe disabled in the holder) — reliable from the
+                        // first open, same as groups. Every replyable row type is swipeable.
+                        return true;
                     }
 
                     @Override

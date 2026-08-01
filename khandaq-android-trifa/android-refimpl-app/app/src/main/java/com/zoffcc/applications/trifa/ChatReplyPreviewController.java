@@ -141,7 +141,9 @@ final class ChatReplyPreviewController
         pendingReply = null;
         pendingEditDirect = null;
         pendingEditGroup = message;
-        showEditBar(context, MessageReplyHelper.parse(message.text == null ? "" : message.text).bodyText);
+        // KHANDAQ (#T5): strip BOTH the reply header and the @mention block ([KQ|m|…][KQ/m]) so the edit
+        // prefill shows only the visible text, never the raw wire markers.
+        showEditBar(context, GroupMentionHelper.parse(message.text == null ? "" : message.text).bodyText);
     }
 
     private static void showEditBar(final Context context, final String oldBody)
@@ -362,7 +364,9 @@ final class ChatReplyPreviewController
             return ChatMediaHelper.groupMessageMediaDisplayLabel(context, message);
         }
         final String displayText = GroupMessageLayoutHelper.displayTextForMessage(context, message);
-        final String body = MessageReplyHelper.parse(displayText).bodyText;
+        // KHANDAQ (#T5): strip BOTH the reply header and the @mention block so the reply quote never
+        // leaks raw [KQ|m|…] markers — locally in the reply bar AND over the wire to recipients.
+        final String body = GroupMentionHelper.parse(displayText).bodyText;
         if (body != null && !body.trim().isEmpty())
         {
             return body.trim();

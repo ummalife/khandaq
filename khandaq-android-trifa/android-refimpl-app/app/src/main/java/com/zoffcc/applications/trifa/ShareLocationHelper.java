@@ -104,6 +104,9 @@ final class ShareLocationHelper
         final Location fallback = best;
         final Handler handler = new Handler(Looper.getMainLooper());
         final boolean[] done = {false};
+        // KHANDAQ (#T2): keep a handle to the 15s timeout so a successful fix can cancel it — otherwise
+        // the posted Runnable (and the captured Activity context) is retained on the main looper for 15s.
+        final Runnable[] timeout = new Runnable[1];
         final LocationListener listener = new LocationListener()
         {
             @Override
@@ -115,6 +118,10 @@ final class ShareLocationHelper
                 }
                 done[0] = true;
                 try { lm.removeUpdates(this); } catch (Exception ignored) {}
+                if (timeout[0] != null)
+                {
+                    handler.removeCallbacks(timeout[0]);
+                }
                 cb.onLocation(location.getLatitude(), location.getLongitude());
             }
 
@@ -139,7 +146,7 @@ final class ShareLocationHelper
             return;
         }
         // 15s timeout → use whatever last-known we had, else error
-        handler.postDelayed(() -> {
+        timeout[0] = () -> {
             if (done[0])
             {
                 return;
@@ -154,7 +161,8 @@ final class ShareLocationHelper
             {
                 cb.onError("timeout");
             }
-        }, 15_000L);
+        };
+        handler.postDelayed(timeout[0], 15_000L);
     }
 
     private ShareLocationHelper()

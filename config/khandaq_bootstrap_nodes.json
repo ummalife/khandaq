@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-06-08T15:00:00Z",
-  "description": "Khandaq bootstrap registry: public Tox nodes + planned Khandaq-owned nodes (additive, does not replace public network)",
+  "updated_at": "2026-08-01T00:00:00Z",
+  "description": "Khandaq bootstrap registry. Clients bootstrap from the public Tox DHT. The self-hosted khandaq-owned nodes below were retired (see README) and are kept here for reference only, marked status=retired.",
   "sources": {
     "public_registry": "https://nodes.tox.chat/json",
     "khandaq_registry": "https://bootstrap.khandaq.org/nodes.json"
@@ -13,15 +13,18 @@
       "ipv4": "bootstrap1.khandaq.org",
       "ipv6": "-",
       "port": 33445,
-      "tcp_ports": [33445, 3389],
+      "tcp_ports": [
+        33445,
+        3389
+      ],
       "public_key": "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D",
       "location": "NL",
-      "status": "active",
-      "status_udp": true,
-      "status_tcp": true,
+      "status": "retired",
+      "status_udp": false,
+      "status_tcp": false,
       "motd": "Khandaq khandaq-bootstrap-eu-1 — https://khandaq.org",
       "deployed_at": "2026-06-08T14:35:13Z",
-      "notes": "Docker compose @ /opt/khandaq-bootstrap"
+      "notes": "Retired — see README (clients use the public Tox DHT). Kept for reference."
     },
     {
       "id": "khandaq-bootstrap-us-1",
@@ -29,15 +32,18 @@
       "ipv4": "bootstrap2.khandaq.org",
       "ipv6": "-",
       "port": 33445,
-      "tcp_ports": [33445, 3389],
+      "tcp_ports": [
+        33445,
+        3389
+      ],
       "public_key": "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B",
       "location": "US",
-      "status": "active",
-      "status_udp": true,
-      "status_tcp": true,
+      "status": "retired",
+      "status_udp": false,
+      "status_tcp": false,
       "motd": "Khandaq khandaq-bootstrap-us-1 — https://khandaq.org",
       "deployed_at": "2026-06-08T14:34:33Z",
-      "notes": "Docker compose @ /opt/khandaq-bootstrap"
+      "notes": "Retired — see README (clients use the public Tox DHT). Kept for reference."
     },
     {
       "id": "khandaq-bootstrap-de-1",
@@ -45,15 +51,18 @@
       "ipv4": "bootstrap3.khandaq.org",
       "ipv6": "-",
       "port": 33445,
-      "tcp_ports": [33445, 3389],
+      "tcp_ports": [
+        33445,
+        3389
+      ],
       "public_key": "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665",
       "location": "DE",
-      "status": "active",
-      "status_udp": true,
-      "status_tcp": true,
+      "status": "retired",
+      "status_udp": false,
+      "status_tcp": false,
       "motd": "Khandaq khandaq-bootstrap-de-1 — https://khandaq.org",
       "deployed_at": "2026-06-08T14:36:21Z",
-      "notes": "Docker compose @ /opt/khandaq-bootstrap"
+      "notes": "Retired — see README (clients use the public Tox DHT). Kept for reference."
     }
   ],
   "public_bootstrap_nodes": [

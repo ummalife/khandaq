@@ -1659,6 +1659,23 @@ QString ngcParseFilename(const uint8_t* field, size_t fieldLen)
     QString name = QString::fromUtf8(reinterpret_cast<const char*>(field), static_cast<int>(len)).trimmed();
     // strip any path components a malicious sender could embed
     name = QFileInfo(name).fileName();
+    // KHANDAQ (security P-4): drop trailing dots/spaces and avoid Windows reserved device names
+    // (CON, PRN, AUX, NUL, COM1-9, LPT1-9). A peer-chosen name like "CON" or "evil." otherwise causes
+    // silent write failures / surprising behavior on Windows.
+    while (!name.isEmpty() && (name.endsWith(QLatin1Char('.')) || name.endsWith(QLatin1Char(' ')))) {
+        name.chop(1);
+    }
+    static const QSet<QString> reservedWindowsNames = {
+        QStringLiteral("CON"), QStringLiteral("PRN"), QStringLiteral("AUX"), QStringLiteral("NUL"),
+        QStringLiteral("COM1"), QStringLiteral("COM2"), QStringLiteral("COM3"), QStringLiteral("COM4"),
+        QStringLiteral("COM5"), QStringLiteral("COM6"), QStringLiteral("COM7"), QStringLiteral("COM8"),
+        QStringLiteral("COM9"), QStringLiteral("LPT1"), QStringLiteral("LPT2"), QStringLiteral("LPT3"),
+        QStringLiteral("LPT4"), QStringLiteral("LPT5"), QStringLiteral("LPT6"), QStringLiteral("LPT7"),
+        QStringLiteral("LPT8"), QStringLiteral("LPT9")
+    };
+    if (reservedWindowsNames.contains(name.section(QLatin1Char('.'), 0, 0).toUpper())) {
+        name = QStringLiteral("_") + name;
+    }
     if (name.isEmpty()) {
         name = QStringLiteral("file.bin");
     }

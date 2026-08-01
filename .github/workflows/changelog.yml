@@ -6,11 +6,14 @@ on:
   pull_request:
     branches: [master, main]
 
+# KHANDAQ (security P-2): default to read-only. Only the push-triggered `commit` job below is granted
+# contents: write (it auto-commits the regenerated changelog). The PR path (`verify`) stays read-only
+# so a pull request can never obtain a write token via this workflow.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  changelog:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -20,8 +23,29 @@ jobs:
       - name: Generate changelog.json from git
         run: python3 scripts/generate-changelog.py
 
+      - name: Verify changelog.json on pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --exit-code web/changelog.json; then
+            echo "::error::web/changelog.json is stale. Run: python3 scripts/generate-changelog.py"
+            exit 1
+          fi
+
+  commit:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog.json from git
+        run: python3 scripts/generate-changelog.py
+
       - name: Auto-update changelog.json on master
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: |
           if git diff --quiet web/changelog.json; then
             echo "changelog.json is up to date"
@@ -32,11 +56,3 @@ jobs:
           git add web/changelog.json
           git commit -m "chore: regenerate changelog.json from git"
           git push
-
-      - name: Verify changelog.json on pull request
-        if: github.event_name == 'pull_request'
-        run: |
-          if ! git diff --exit-code web/changelog.json; then
-            echo "::error::web/changelog.json is stale. Run: python3 scripts/generate-changelog.py"
-            exit 1
-          fi

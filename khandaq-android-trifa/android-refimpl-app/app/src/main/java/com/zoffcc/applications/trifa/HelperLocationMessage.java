@@ -93,11 +93,11 @@ public final class HelperLocationMessage
 
         final ImageView mapView = ensureMapView(itemView, bubbleContainer);
         mapView.setVisibility(View.VISIBLE);
+        final String cacheKey = String.format(Locale.US, "%.5f,%.5f", coordinates[0], coordinates[1]);
         mapView.setOnClickListener(v -> {
             if (mapView.getDrawable() == null)
             {
-                final String cacheKey = String.format(Locale.US, "%.5f,%.5f", coordinates[0], coordinates[1]);
-                mapView.setTag(cacheKey);
+                mapView.setTag(org.khandaq.messenger.R.id.khandaq_map_cache_key, cacheKey);
                 LocationMapSnapshot.loadInto(mapView, coordinates[0], coordinates[1]);
             }
             openMaps(v.getContext(), coordinates[0], coordinates[1]);
@@ -105,8 +105,7 @@ public final class HelperLocationMessage
 
         if (autoLoadMap)
         {
-            final String cacheKey = String.format(Locale.US, "%.5f,%.5f", coordinates[0], coordinates[1]);
-            mapView.setTag(cacheKey);
+            mapView.setTag(org.khandaq.messenger.R.id.khandaq_map_cache_key, cacheKey);
             LocationMapSnapshot.loadInto(mapView, coordinates[0], coordinates[1]);
         }
         else
@@ -232,9 +231,13 @@ public final class HelperLocationMessage
         final ImageView mapView = findMapView(host);
         if (mapView != null)
         {
+            // Keep the identity tag (TAG_MAP) so findMapView can re-locate and re-use this
+            // hidden ImageView on the next location bind — otherwise every hide/show cycle
+            // leaks a fresh ImageView. Only clear the cache-key slot + drawable so an in-flight
+            // tile load can't surface stale map art on a recycled text bubble.
             mapView.setVisibility(View.GONE);
             mapView.setImageDrawable(null);
-            mapView.setTag(null);
+            mapView.setTag(org.khandaq.messenger.R.id.khandaq_map_cache_key, null);
         }
     }
 

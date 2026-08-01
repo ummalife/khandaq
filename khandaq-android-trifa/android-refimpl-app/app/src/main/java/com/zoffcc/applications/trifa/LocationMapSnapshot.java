@@ -56,7 +56,11 @@ public final class LocationMapSnapshot
 
             CACHE.put(cacheKey, bitmap);
             MAIN.post(() -> {
-                if (imageView.getTag() != null && !cacheKey.equals(imageView.getTag()))
+                // Race-guard against RecyclerView view recycling: only apply the tile if this
+                // ImageView is still bound to the same coordinates. The cache key lives in a
+                // dedicated tag slot so it never collides with the TAG_MAP identity tag.
+                final Object keyTag = imageView.getTag(org.khandaq.messenger.R.id.khandaq_map_cache_key);
+                if (keyTag != null && !cacheKey.equals(keyTag))
                 {
                     return;
                 }

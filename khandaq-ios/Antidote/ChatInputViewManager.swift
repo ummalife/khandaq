@@ -188,18 +188,24 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
-        guard let url = voiceRecorder.stopRecording(discard: cancelled) else {
+        if cancelled {
+            voiceRecorder.cancelRecording()
             return
         }
-
-        if chat.isSavedMessages {
-            storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
-            try? FileManager.default.removeItem(at: url)
-            return
-        }
-
-        submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: chat) { error in
-            handleErrorWithType(.sendFileToFriend, error: error as NSError)
+        // KHANDAQ (#voice-iphone11): wait for the finalized file (delegate) before sending, so a
+        // slow device (iPhone 11) doesn't hand over a half-written file that gets dropped.
+        voiceRecorder.finishRecording { [weak self] url in
+            guard let self = self, let url = url else {
+                return
+            }
+            if self.chat.isSavedMessages {
+                self.storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
+                try? FileManager.default.removeItem(at: url)
+                return
+            }
+            self.submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: self.chat) { error in
+                handleErrorWithType(.sendFileToFriend, error: error as NSError)
+            }
         }
     }
 

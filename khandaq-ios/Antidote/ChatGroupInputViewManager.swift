@@ -58,11 +58,17 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
     }
 
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
-        guard let url = voiceRecorder.stopRecording(discard: cancelled) else {
+        if cancelled {
+            voiceRecorder.cancelRecording()
             return
         }
-
-        sendFileAtPath(url.path)
+        // KHANDAQ (#voice-iphone11): send only the FINALIZED recording (delegate callback).
+        voiceRecorder.finishRecording { [weak self] url in
+            guard let self = self, let url = url else {
+                return
+            }
+            self.sendFileAtPath(url.path)
+        }
     }
 
     func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {

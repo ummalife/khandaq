@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Location sharing polished: received & group pins now show the map preview (not a blank box), approximate-location permission works, and sending a pin no longer disturbs a message you're editing. Also: swipe-to-reply is reliable in 1:1 too, reply/edit no longer leaves a message stuck-selected, replies/edits/copies never leak internal markers, and forwarding to Saved no longer stacks the source label."},
-                    {"language": "ru-RU", "text": "Геолокация доработана: полученные и групповые точки теперь показывают превью карты (а не пустую рамку), работает «приблизительное» разрешение, а отправка точки больше не портит редактируемое сообщение. А также: свайп-ответ стабилен и в личных чатах, ответ/редактирование больше не оставляет сообщение «выделенным», ответы/правки/копирование не вставляют служебные символы, и пересылка в Избранное не дублирует подпись источника."},
+                    {"language": "en-US", "text": "Critical fix: deleting a message (Delete for me / Delete for everyone, in 1:1 and groups) now actually removes it — the previous internal build showed \"Messages deleted\" but left the message in place. Everything else from the recent batch (location previews, swipe-to-reply, clean reply/edit, Saved forwarding) is included."},
+                    {"language": "ru-RU", "text": "Критический фикс: удаление сообщения («у меня» / «у всех», в личных и групповых чатах) теперь действительно удаляет — в прошлой internal-сборке был тост «Сообщение удалено», но сообщение оставалось. Всё остальное из недавнего батча (превью карт, свайп-ответ, чистые ответ/правка, пересылка в Избранное) включено."},
                 ],
             }],
         })

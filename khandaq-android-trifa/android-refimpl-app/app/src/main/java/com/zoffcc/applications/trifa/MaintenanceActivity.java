@@ -91,7 +91,6 @@ import static com.zoffcc.applications.trifa.MainActivity.MAIN_DB_NAME;
 import static com.zoffcc.applications.trifa.MainActivity.MAIN_VFS_NAME;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__DB_secrect_key;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__orbot_enabled;
-import static com.zoffcc.applications.trifa.MainActivity.PREF__trust_all_webcerts;
 import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_ENC_CHATS_EXPORT_DIR;
 import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_ENC_FILES_EXPORT_DIR;
 import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_FILES_EXPORT_DIR;
@@ -404,58 +403,11 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                     }
                     else
                     {
-                        /*
-                         *
-                         * this will trust all CERTS
-                         * !!DANGER!! !!DANGER!!
-                         */
-                        TrustManager[] trustAllCerts = new TrustManager[]{
-                                new X509TrustManager() {
-                                    @Override
-                                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
-                                    }
-
-                                    @Override
-                                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {
-                                    }
-
-                                    @Override
-                                    public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                                        return new java.security.cert.X509Certificate[]{};
-                                    }
-                                }
-                        };
-                        SSLContext sslContext = SSLContext.getInstance("SSL");
-                        sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-                        /*
-                         *
-                         * this will trust all CERTS
-                         * !!DANGER!! !!DANGER!!
-                         */
-
-                        // this is correct call in all cases -------------
-                        // this is correct call in all cases -------------
+                        // KHANDAQ (security V-4): removed the dead trust-all-certs / trust-all-hostnames
+                        // path. PREF__trust_all_webcerts was hard-coded false and never set true anywhere,
+                        // so this only ever added risk (a future UI toggle would have silently enabled MITM
+                        // on the bootstrap-node fetch). Standard platform TLS validation is used always.
                         OkHttpClient.Builder newBuilder = new OkHttpClient.Builder();
-                        // this is correct call in all cases -------------
-                        // this is correct call in all cases -------------
-
-                        /*
-                         *
-                         * this will trust all CERTS
-                         * !!DANGER!! !!DANGER!!
-                         * to avoid this: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
-                         * when your android is just too old
-                         */
-                        if (PREF__trust_all_webcerts)
-                        {
-                            newBuilder.sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0]);
-                            newBuilder.hostnameVerifier((hostname, session) -> true);
-                        }
-                        /*
-                         *
-                         * this will trust all CERTS
-                         * !!DANGER!! !!DANGER!!
-                         */
 
                         Log.i(TAG, "StrongOkHttpClientBuilder:002");
                         onConnected(newBuilder.

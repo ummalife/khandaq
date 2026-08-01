@@ -1830,6 +1830,15 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             || chunkPayload == 0 || chunkPayload > NGC_CHUNK_PAYLOAD_MAX) {
             return;
         }
+        // KHANDAQ (security V-1): totalChunks is attacker-controlled bytes from a group peer and was
+        // only checked !=0. Without a consistency bound, a peer can send totalChunks=0xFFFFFFFE with
+        // totalSize=1 → static_cast<int> yields a negative size → QVector<bool>(-2) aborts (remote DoS),
+        // and later FILE_CHUNK seeks (chunkIndex*chunkPayload) run far past totalSize (sparse-file disk
+        // exhaustion). Require totalChunks to match ceil(totalSize/chunkPayload) and fit in int.
+        const uint64_t expectedChunks = (totalSize + chunkPayload - 1) / chunkPayload;
+        if (totalChunks != expectedChunks || totalChunks > 0x7FFFFFFFu) {
+            return;
+        }
 
         NgcIncomingAssembly asm_;
         asm_.fileName = fileName;

@@ -5,7 +5,7 @@ import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10374.aab"
+AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10375.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
@@ -63,8 +63,8 @@ def main():
                 "versionCodes": [str(vc)],
                 "status": "completed",
                 "releaseNotes": [
-                    {"language": "en-US", "text": "Fixes from tester feedback: copying a reply or mention no longer pastes internal markers; swipe-to-reply works reliably in group chats from the first time you open them; tapping 'retry' on a failed file transfer now responds; and Saved messages now show who wrote them and from which chat."},
-                    {"language": "ru-RU", "text": "Исправления по отзывам тестеров: копирование ответа или упоминания больше не вставляет служебные символы; свайп-ответ в группах работает с первого открытия чата; тап по «Повторить» на неудавшейся передаче файла теперь срабатывает; в Избранном теперь видно, кто и из какого чата написал сообщение."},
+                    {"language": "en-US", "text": "Share your location with a map preview in 1:1 and group chats — tap \"+\" and choose Location. Also: copying a reply/mention no longer pastes internal markers, swipe-to-reply works reliably in groups, tapping \"retry\" on a failed file now works, and Saved messages show who wrote them and from which chat."},
+                    {"language": "ru-RU", "text": "Отправка геолокации с превью карты в личных и групповых чатах — нажмите «+» и выберите «Геолокация». А также: копирование ответа/упоминания больше не вставляет служебные символы, свайп-ответ в группах работает стабильно, тап по «Повторить» на файле теперь срабатывает, и в Избранном видно, кто и из какого чата написал."},
                 ],
             }],
         })

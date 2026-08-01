@@ -434,7 +434,8 @@ final class FavoritesChatHelper
                         }
                         continue;
                     }
-                    appendForwardText(sb, message.text);
+                    appendForwardText(sb, GroupMentionHelper.cleanForClipboard(message.text),
+                            sourceLabelForDirect(message));
                 }
                 else
                 {
@@ -447,7 +448,8 @@ final class FavoritesChatHelper
                         }
                         continue;
                     }
-                    appendForwardText(sb, groupMessage.text);
+                    appendForwardText(sb, GroupMentionHelper.cleanForClipboard(groupMessage.text),
+                            sourceLabelForGroup(groupMessage));
                 }
             }
             catch (Exception ignored)
@@ -467,7 +469,7 @@ final class FavoritesChatHelper
         ids.clear();
     }
 
-    private static void appendForwardText(final StringBuilder sb, final String text)
+    private static void appendForwardText(final StringBuilder sb, final String text, final String sourceLabel)
     {
         if (TextUtils.isEmpty(text))
         {
@@ -475,9 +477,61 @@ final class FavoritesChatHelper
         }
         if (sb.length() > 0)
         {
-            sb.append('\n');
+            sb.append("\n\n");
+        }
+        // KHANDAQ (#T6): Telegram-style source attribution so Saved shows WHO wrote it and from WHERE.
+        if (!TextUtils.isEmpty(sourceLabel))
+        {
+            sb.append("↪ ").append(sourceLabel).append('\n');
         }
         sb.append(text);
+    }
+
+    /** KHANDAQ (#T6): "who + which chat" label for a forwarded 1:1 message (the contact's name). */
+    private static String sourceLabelForDirect(final Message m)
+    {
+        try
+        {
+            final String name = HelperFriend.get_friend_name_from_pubkey(m.tox_friendpubkey);
+            return (name != null && !name.trim().isEmpty()) ? name.trim() : null;
+        }
+        catch (Exception ignored)
+        {
+            return null;
+        }
+    }
+
+    /** KHANDAQ (#T6): "who · which group" label for a forwarded group message. */
+    private static String sourceLabelForGroup(final GroupMessage m)
+    {
+        String sender = null;
+        try
+        {
+            if (m.tox_group_peername != null && !m.tox_group_peername.trim().isEmpty())
+            {
+                sender = m.tox_group_peername.trim();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        String title = null;
+        try
+        {
+            final String t = HelperGroup.get_effective_group_title(-1, m.group_identifier);
+            if (t != null && !t.trim().isEmpty())
+            {
+                title = t.trim();
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        if (sender != null && title != null)
+        {
+            return sender + " · " + title;
+        }
+        return sender != null ? sender : title;
     }
 
     private static boolean forwardDirectMessageFileToFavorites(final Context context, final Message message,

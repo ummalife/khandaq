@@ -10075,6 +10075,10 @@ public class MainActivity extends AppCompatActivity
         String dialog_text = "";
         // KHANDAQ (#205): when false, delete locally only (skip the KQ retract packet) → «Удалить у меня».
         boolean send_to_peer = true;
+        // KHANDAQ (delete-scope race): snapshot the selected ids on the MAIN thread in the constructor.
+        // The scope dialog's onClick calls .execute() then mode.finish(), and onDestroyActionMode now
+        // always clears selected_messages — which raced the AsyncTask thread and made it delete nothing.
+        final List<Long> ids_snapshot;
 
         delete_selected_messages_asynchtask(Context c, ProgressDialog progressDialog2, boolean update_message_list, boolean update_friend_list, String dialog_text)
         {
@@ -10089,20 +10093,23 @@ public class MainActivity extends AppCompatActivity
             this.update_friend_list = update_friend_list;
             this.dialog_text = dialog_text;
             this.send_to_peer = send_to_peer;
+            this.ids_snapshot = new ArrayList<>(selected_messages);
         }
 
         @Override
         protected String doInBackground(Void... voids)
         {
+            // KHANDAQ (delete-scope race): operate on the constructor-time snapshot, NOT the global
+            // selected_messages (which onDestroyActionMode may already have cleared by now).
             // sort ascending (lowest ID on top)
-            Collections.sort(selected_messages, new Comparator<Long>()
+            Collections.sort(ids_snapshot, new Comparator<Long>()
             {
                 public int compare(Long o1, Long o2)
                 {
                     return o1.compareTo(o2);
                 }
             });
-            Iterator i = selected_messages.iterator();
+            Iterator i = ids_snapshot.iterator();
 
             while (i.hasNext())
             {
@@ -10321,17 +10328,20 @@ public class MainActivity extends AppCompatActivity
         ProgressDialog progressDialog2;
         private WeakReference<Context> weakContext;
         private String export_directory = "";
+        // KHANDAQ (delete-scope race): snapshot ids on the main thread (see 1:1 delete task).
+        final List<Long> ids_snapshot;
 
         save_selected_messages_asynchtask(Context c, ProgressDialog progressDialog2)
         {
             this.weakContext = new WeakReference<>(c);
             this.progressDialog2 = progressDialog2;
+            this.ids_snapshot = new ArrayList<>(selected_messages_incoming_file);
         }
 
         @Override
         protected String doInBackground(Void... voids)
         {
-            Iterator i = selected_messages_incoming_file.iterator();
+            Iterator i = ids_snapshot.iterator();
 
             while (i.hasNext())
             {
@@ -10641,6 +10651,8 @@ public class MainActivity extends AppCompatActivity
         private WeakReference<Context> weakContext;
         boolean update_conf_message_list = false;
         String dialog_text = "";
+        // KHANDAQ (delete-scope race): snapshot ids on the main thread (see 1:1 delete task).
+        final List<Long> ids_snapshot;
 
         delete_selected_conference_messages_asynchtask(Context c, ProgressDialog progressDialog2, boolean update_conf_message_list, String dialog_text)
         {
@@ -10648,20 +10660,22 @@ public class MainActivity extends AppCompatActivity
             this.progressDialog2 = progressDialog2;
             this.update_conf_message_list = update_conf_message_list;
             this.dialog_text = dialog_text;
+            this.ids_snapshot = new ArrayList<>(selected_conference_messages);
         }
 
         @Override
         protected String doInBackground(Void... voids)
         {
+            // KHANDAQ (delete-scope race): operate on the snapshot, not the global selected_conference_messages.
             // sort ascending (lowest ID on top)
-            Collections.sort(selected_conference_messages, new Comparator<Long>()
+            Collections.sort(ids_snapshot, new Comparator<Long>()
             {
                 public int compare(Long o1, Long o2)
                 {
                     return o1.compareTo(o2);
                 }
             });
-            Iterator i = selected_conference_messages.iterator();
+            Iterator i = ids_snapshot.iterator();
 
             while (i.hasNext())
             {
@@ -10795,6 +10809,8 @@ public class MainActivity extends AppCompatActivity
         private WeakReference<Context> weakContext;
         boolean update_group_message_list = false;
         String dialog_text = "";
+        // KHANDAQ (delete-scope race): snapshot ids on the main thread (see 1:1 delete task).
+        final List<Long> ids_snapshot;
 
         delete_selected_group_messages_asynchtask(Context c, ProgressDialog progressDialog2, boolean update_group_message_list, String dialog_text)
         {
@@ -10802,20 +10818,22 @@ public class MainActivity extends AppCompatActivity
             this.progressDialog2 = progressDialog2;
             this.update_group_message_list = update_group_message_list;
             this.dialog_text = dialog_text;
+            this.ids_snapshot = new ArrayList<>(selected_group_messages);
         }
 
         @Override
         protected String doInBackground(Void... voids)
         {
+            // KHANDAQ (delete-scope race): operate on the snapshot, not the global selected_group_messages.
             // sort ascending (lowest ID on top)
-            Collections.sort(selected_group_messages, new Comparator<Long>()
+            Collections.sort(ids_snapshot, new Comparator<Long>()
             {
                 public int compare(Long o1, Long o2)
                 {
                     return o1.compareTo(o2);
                 }
             });
-            Iterator i = selected_group_messages.iterator();
+            Iterator i = ids_snapshot.iterator();
 
             while (i.hasNext())
             {

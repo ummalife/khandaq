@@ -329,10 +329,10 @@ class ChatPrivateController: PortraitChatController {
     }
 
     func sendLocationMessage(_ payload: String) {
-        guard isActiveLocationSharingChat else {
-            return
-        }
-
+        // KHANDAQ (#T2): don't gate on isActiveLocationSharingChat. The "+" menu shares location ONCE
+        // via the coordinator's one-shot path (like groups), which never sets the continuous-sharing
+        // pubkey — the old guard silently dropped every one-shot 1:1 location so nothing was sent. The
+        // continuous path already checks the pubkey in didUpdateLocations before calling this.
         submanagerChats.sendMessage(to: chat, text: payload, type: .normal, successBlock: nil, failureBlock: nil)
     }
 
@@ -960,6 +960,10 @@ extension ChatPrivateController {
         editable.willHideMenu()
     }
 }
+
+// KHANDAQ (#T2): conform to LocationSharingChat so the "+" menu can share once via the coordinator's
+// one-shot path (like groups). sendLocationMessage(_:) is implemented in the main class body above.
+extension ChatPrivateController: LocationSharingChat {}
 
 extension ChatPrivateController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -1865,8 +1869,12 @@ private extension ChatPrivateController {
             return composed
         }
         // KHANDAQ design (Figma): the "+" attachment menu's "Геолокация" shares the current location once.
+        // KHANDAQ (#T2): use the coordinator's one-shot path (same as groups) instead of the continuous
+        // toggle — the continuous path required location_sharing_contact_pubkey to be set first, which the
+        // menu never did, so the location was never actually sent in 1:1.
         chatInputViewManager.onShareLocation = { [weak self] in
-            self?.startLocationSharing(sendImmediately: true)
+            guard let self = self else { return }
+            LocationSharingCoordinator.shared.shareCurrentLocationOnce(to: self)
         }
         replyController.install(in: view, above: chatInputView, theme: theme)
     }

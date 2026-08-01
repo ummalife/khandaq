@@ -85,6 +85,19 @@ final class GroupMentionHelper
         return parsed;
     }
 
+    /** KHANDAQ (#T5): clean a stored raw message text for the clipboard — strips the reply header
+     *  ([KQ|…][KQ/end]) and the @mention block ([KQ|m|…][KQ/m]) so Copy yields only the visible text
+     *  instead of leaking the raw wire markers (which then paste back into the input field). */
+    static String cleanForClipboard(final String rawText)
+    {
+        if (rawText == null)
+        {
+            return "";
+        }
+        final String body = parse(rawText).bodyText;
+        return body == null ? rawText : body;
+    }
+
     static String encodeMentionsBlock(final String bodyText, final List<MentionEntry> mentions)
     {
         if (mentions == null || mentions.isEmpty())

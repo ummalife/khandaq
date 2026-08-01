@@ -595,6 +595,20 @@ final class ChatTransferProgressHelper
                 }
             });
         }
+        // KHANDAQ (#T7): the failure status text ("Connection issue — tap retry" / "Проблема с
+        // соединением — нажмите Повторить") is the large target users actually tap — not the small
+        // retry icon. Make the status text trigger the retry too (only while it's the visible FAILED
+        // state) so the tap responds instead of doing nothing.
+        final android.widget.TextView errorText = row.findViewById(R.id.ft_file_error);
+        if (errorText != null)
+        {
+            errorText.setOnClickListener(v -> {
+                if (callbacks != null && errorText.getVisibility() == View.VISIBLE)
+                {
+                    callbacks.onRetry();
+                }
+            });
+        }
     }
 
     private static void bindMediaOverlay(final Context context, final View itemRoot, final View preview,

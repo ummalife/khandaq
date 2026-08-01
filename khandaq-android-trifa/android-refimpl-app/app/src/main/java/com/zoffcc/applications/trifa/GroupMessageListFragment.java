@@ -353,10 +353,12 @@ public class GroupMessageListFragment extends Fragment
                         {
                             return false;
                         }
-                        // incoming-text keeps its daimajia swipe → exclude here to avoid a double gesture
-                        boolean incomingText = (m.direction == 0)
-                                && (m.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_TYPE_TEXT.value);
-                        return !incomingText;
+                        // KHANDAQ (#T3): swipe-to-reply now goes through the RecyclerView-level ItemTouchHelper
+                        // for EVERY row type, including incoming text. The old per-ViewHolder daimajia swipe on
+                        // incoming-text rows was unreliable on first entry into a group (worked only after
+                        // reopening the chat); the daimajia listener on those rows is disabled to avoid a double
+                        // gesture. One consistent mechanism = reliable from the first open.
+                        return true;
                     }
 
                     @Override

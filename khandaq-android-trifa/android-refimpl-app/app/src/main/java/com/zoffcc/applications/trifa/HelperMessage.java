@@ -832,12 +832,13 @@ public class HelperMessage
                         if (first)
                         {
                             first = false;
-                            copy_text = new StringBuilder(
-                                    "" + orma.selectFromMessage().idEq((Long) i.next()).get(0).text);
+                            copy_text = new StringBuilder(GroupMentionHelper.cleanForClipboard(
+                                    orma.selectFromMessage().idEq((Long) i.next()).get(0).text));
                         }
                         else
                         {
-                            copy_text.append("\n").append(orma.selectFromMessage().idEq((Long) i.next()).get(0).text);
+                            copy_text.append("\n").append(GroupMentionHelper.cleanForClipboard(
+                                    orma.selectFromMessage().idEq((Long) i.next()).get(0).text));
                         }
                     }
                     catch (Exception e)

@@ -74,13 +74,13 @@ public class HelperConference
                         if (first)
                         {
                             first = false;
-                            copy_text = new StringBuilder(
-                                    "" + orma.selectFromConferenceMessage().idEq((Long) i.next()).get(0).text);
+                            copy_text = new StringBuilder(GroupMentionHelper.cleanForClipboard(
+                                    orma.selectFromConferenceMessage().idEq((Long) i.next()).get(0).text));
                         }
                         else
                         {
-                            copy_text.append("\n").append(
-                                    orma.selectFromConferenceMessage().idEq((Long) i.next()).get(0).text);
+                            copy_text.append("\n").append(GroupMentionHelper.cleanForClipboard(
+                                    orma.selectFromConferenceMessage().idEq((Long) i.next()).get(0).text));
                         }
                     }
                     catch (Exception e)
@@ -135,13 +135,13 @@ public class HelperConference
                         if (first)
                         {
                             first = false;
-                            copy_text = new StringBuilder(
-                                    "" + orma.selectFromGroupMessage().idEq((Long) i.next()).get(0).text);
+                            copy_text = new StringBuilder(GroupMentionHelper.cleanForClipboard(
+                                    orma.selectFromGroupMessage().idEq((Long) i.next()).get(0).text));
                         }
                         else
                         {
-                            copy_text.append("\n").append(
-                                    orma.selectFromGroupMessage().idEq((Long) i.next()).get(0).text);
+                            copy_text.append("\n").append(GroupMentionHelper.cleanForClipboard(
+                                    orma.selectFromGroupMessage().idEq((Long) i.next()).get(0).text));
                         }
                     }
                     catch (Exception e)

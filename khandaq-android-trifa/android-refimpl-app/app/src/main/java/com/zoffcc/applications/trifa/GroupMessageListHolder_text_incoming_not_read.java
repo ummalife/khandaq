@@ -122,8 +122,11 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
         swipeLayout = (SwipeLayout) itemView.findViewById(R.id.msg_swipe_container);
         swipeLayout.setShowMode(SwipeLayout.ShowMode.PullOut);
-        // KHANDAQ (#209): incoming-text keeps its proven daimajia swipe; the RecyclerView-level
-        // ItemTouchHelper covers the other row types and EXCLUDES incoming-text to avoid conflict.
+        // KHANDAQ (#T3): swipe-to-reply for incoming group text now goes through the RecyclerView-level
+        // ItemTouchHelper (reliable from the first open) like every other row type. Disable the old
+        // per-ViewHolder daimajia swipe here so the two don't fight over the horizontal drag. The
+        // listener below stays registered but never fires while swipe is disabled.
+        swipeLayout.setSwipeEnabled(false);
 
         // KHANDAQ (#31 leak): attach the swipe listener ONCE per ViewHolder here instead of on every
         // bindMessageList — daimajia addSwipeListener() appends without dedup, so re-adding per bind

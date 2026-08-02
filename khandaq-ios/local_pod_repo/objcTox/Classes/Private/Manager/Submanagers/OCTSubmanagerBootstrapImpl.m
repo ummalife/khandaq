@@ -396,6 +396,18 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
 
 - (NSArray *)selectedNodesForIteration
 {
+    // KHANDAQ (#H4): the minusSet pop below drains addedNodes, so after ~2 iterations it ran dry and
+    // bootstrap gave up ~7s into launch (a big first-connect gap after an update). Re-seed the predefined
+    // nodes when the working set empties so bootstrap keeps cycling the full reliable list until actually
+    // connected. (The iterate loop only calls this while trying to connect, so it can't spin once online.)
+    BOOL empty;
+    @synchronized(self.addedNodes) {
+        empty = (self.addedNodes.count == 0);
+    }
+    if (empty) {
+        [self reloadPredefinedNodes];
+    }
+
     NSMutableArray *allNodes;
     NSMutableArray *selectedNodes = [NSMutableArray new];
 

@@ -57,7 +57,7 @@
       "ipv4": "tox.abilinski.com",
       "ipv6": "-",
       "port": 33445,
-      "tcp_ports": [],
+      "tcp_ports": [33445, 3389],
       "public_key": "10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E",
       "maintainer": "AnthonyBilinski",
       "location": "CA",

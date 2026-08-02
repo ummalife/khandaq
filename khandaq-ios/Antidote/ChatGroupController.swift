@@ -334,6 +334,119 @@ class ChatGroupController: PortraitChatController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         scrollToGlobalSearchTargetIfNeeded()
+        refreshPinnedBanner()   // KHANDAQ (#G5): restore the pinned-message banner if any.
+    }
+
+    // KHANDAQ (#G5): pinned-message banner for group chats (mirrors ChatPrivateController).
+    private var pinnedBannerView: UIView? {
+        get { objc_getAssociatedObject(self, &ChatGroupController.pinBannerKey) as? UIView }
+        set { objc_setAssociatedObject(self, &ChatGroupController.pinBannerKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+    private var pinnedBannerLabel: UILabel? {
+        get { objc_getAssociatedObject(self, &ChatGroupController.pinLabelKey) as? UILabel }
+        set { objc_setAssociatedObject(self, &ChatGroupController.pinLabelKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+    private static var pinBannerKey: UInt8 = 0
+    private static var pinLabelKey: UInt8 = 0
+    private static let pinnedBannerHeight: CGFloat = 46.0
+
+    func refreshPinnedBanner() {
+        let pinnedId = ChatPinStore.pinnedMessageId(forChat: chat.uniqueIdentifier)
+        var preview: String?
+        if let pinnedId = pinnedId {
+            for i in 0..<messages.count where messages[i].uniqueIdentifier == pinnedId {
+                let m = messages[i]
+                if let text = m.messageText?.text, !text.isEmpty {
+                    preview = MessageReplyHelper.plainBody(for: m) ?? text
+                } else if let file = m.messageFile {
+                    preview = "📎 " + (file.fileName ?? "")
+                } else {
+                    preview = "📌"
+                }
+                break
+            }
+        }
+        guard let text = preview else {
+            if pinnedId != nil { ChatPinStore.clearPin(forChat: chat.uniqueIdentifier) }
+            pinnedBannerView?.isHidden = true
+            tableView?.contentInset.top = 0
+            tableView?.verticalScrollIndicatorInsets.top = 0
+            return
+        }
+        ensurePinnedBannerBuilt()
+        pinnedBannerLabel?.text = text
+        pinnedBannerView?.isHidden = false
+        if let banner = pinnedBannerView { view.bringSubview(toFront: banner) }
+        tableView?.contentInset.top = ChatGroupController.pinnedBannerHeight
+        tableView?.verticalScrollIndicatorInsets.top = ChatGroupController.pinnedBannerHeight
+    }
+
+    private func ensurePinnedBannerBuilt() {
+        guard pinnedBannerView == nil else { return }
+        let banner = UIView()
+        banner.backgroundColor = theme.colorForType(.NormalBackground)
+        banner.isUserInteractionEnabled = true
+        banner.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pinnedBannerTapped)))
+
+        let accent = UIView()
+        accent.backgroundColor = theme.colorForType(.LinkText)
+
+        let title = UILabel()
+        title.text = String(localized: "chat_pin_action")
+        title.font = UIFont.systemFont(ofSize: 11.0, weight: .semibold)
+        title.textColor = theme.colorForType(.LinkText)
+
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 14.0)
+        label.textColor = theme.colorForType(.NormalText)
+        label.lineBreakMode = .byTruncatingTail
+
+        let close = UIButton(type: .system)
+        if #available(iOS 13.0, *) { close.setImage(UIImage(systemName: "xmark"), for: .normal) } else { close.setTitle("✕", for: .normal) }
+        close.tintColor = theme.colorForType(.NormalText)
+        close.addTarget(self, action: #selector(pinnedBannerClosePressed), for: .touchUpInside)
+
+        let separator = UIView()
+        separator.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+
+        banner.addSubview(accent); banner.addSubview(title); banner.addSubview(label); banner.addSubview(close); banner.addSubview(separator)
+        view.addSubview(banner)
+
+        banner.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
+            $0.leading.trailing.equalTo(view)
+            $0.height.equalTo(ChatGroupController.pinnedBannerHeight)
+        }
+        accent.snp.makeConstraints { $0.leading.equalTo(banner).offset(12.0); $0.top.equalTo(banner).offset(8.0); $0.bottom.equalTo(banner).offset(-8.0); $0.width.equalTo(3.0) }
+        close.snp.makeConstraints { $0.trailing.equalTo(banner).offset(-14.0); $0.centerY.equalTo(banner); $0.width.height.equalTo(24.0) }
+        title.snp.makeConstraints { $0.leading.equalTo(accent.snp.trailing).offset(10.0); $0.top.equalTo(banner).offset(6.0); $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0) }
+        label.snp.makeConstraints { $0.leading.equalTo(accent.snp.trailing).offset(10.0); $0.top.equalTo(title.snp.bottom).offset(1.0); $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0) }
+        separator.snp.makeConstraints { $0.leading.trailing.bottom.equalTo(banner); $0.height.equalTo(0.5) }
+
+        pinnedBannerView = banner
+        pinnedBannerLabel = label
+    }
+
+    @objc private func pinnedBannerTapped() {
+        guard let id = ChatPinStore.pinnedMessageId(forChat: chat.uniqueIdentifier), let tableView = tableView else { return }
+        var storageIndex: Int?
+        for i in 0..<messages.count where messages[i].uniqueIdentifier == id { storageIndex = i; break }
+        guard let target = storageIndex else { return }
+        if target >= visibleMessages {
+            visibleMessages = min(messages.count, target + Constants.MessagesPortionSize)
+            tableView.reloadData(); tableView.layoutIfNeeded()
+        }
+        let rows = tableView.numberOfRows(inSection: 0)
+        for row in 0..<rows where messageEntry(atDisplayIndex: row).message.uniqueIdentifier == id {
+            let ip = IndexPath(row: row, section: 0)
+            DispatchQueue.main.async { tableView.scrollToRow(at: ip, at: .middle, animated: true) }
+            break
+        }
+    }
+
+    @objc private func pinnedBannerClosePressed() {
+        ChatPinStore.clearPin(forChat: chat.uniqueIdentifier)
+        refreshPinnedBanner()
     }
 
     /// KHANDAQ (#64): if this group was opened from a global-search message hit, scroll to + briefly
@@ -1257,6 +1370,12 @@ extension ChatGroupController: UITableViewDelegate {
             actions.append(UIAction(title: String(localized: "chat_forward_action")) { _ in
                 let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
                 MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
+            })
+            // KHANDAQ (#G5): pin in groups too (parity with 1:1).
+            actions.append(UIAction(title: String(localized: "chat_pin_action"), image: UIImage(systemName: "pin")) { _ in
+                guard let id = message.uniqueIdentifier else { return }
+                ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
+                self.refreshPinnedBanner()
             })
             actions.append(UIAction(title: String(localized: "group_messages_select_action")) { _ in
                 self.toggleTableViewEditing(true, animated: true)

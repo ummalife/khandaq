@@ -416,12 +416,21 @@ public class HelperMessageReaction
             }
 
             final String actor = senderPubkey.toUpperCase(Locale.ENGLISH);
-            final String newJson = applyActor(m.reactions, actor, emoji, add);
-            orma.updateMessage().idEq(m.id).reactions(newJson).execute();
-            m.reactions = newJson;
-            HelperMessage.update_single_message(m, true);
+            final String oldJson = m.reactions;
+            final String newJson = applyActor(oldJson, actor, emoji, add);
+            // KHANDAQ (#F6): a reaction packet can be re-delivered (offline re-flush on reconnect,
+            // sender's reactions_pending re-send). applyActor is idempotent (one reaction per actor),
+            // so a duplicate yields the SAME json — do NOT re-write the DB or re-fire the
+            // notification, otherwise the "liked your voice message" notice keeps re-arriving.
+            final boolean changed = (newJson == null) ? (oldJson != null) : !newJson.equals(oldJson);
+            if (changed)
+            {
+                orma.updateMessage().idEq(m.id).reactions(newJson).execute();
+                m.reactions = newJson;
+                HelperMessage.update_single_message(m, true);
+            }
 
-            if (add)
+            if (add && changed)
             {
                 notifyFriendReaction(m, senderPubkey, emoji);
             }

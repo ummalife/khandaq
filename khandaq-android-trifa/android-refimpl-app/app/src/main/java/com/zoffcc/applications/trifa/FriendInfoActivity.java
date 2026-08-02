@@ -136,6 +136,23 @@ public class FriendInfoActivity extends AppCompatActivity
         setSupportActionBar(toolbar);
         HelperToolbar.enableUpNavigation(this, toolbar);
 
+        // KHANDAQ (#F1): pad the toolbar down by the status-bar inset so the title ("Информация о
+        // друге") isn't cramped under the status-bar clock (edge-to-edge on Android 15+ / some OEM
+        // skins like Realme/MIUI). Same idiom as AvatarCropActivity.
+        if (toolbar != null)
+        {
+            final int toolbar_pad_left = toolbar.getPaddingLeft();
+            final int toolbar_pad_right = toolbar.getPaddingRight();
+            final int toolbar_pad_bottom = toolbar.getPaddingBottom();
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(toolbar, (v, wi) ->
+            {
+                final androidx.core.graphics.Insets sys =
+                        wi.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                v.setPadding(toolbar_pad_left, sys.top, toolbar_pad_right, toolbar_pad_bottom);
+                return wi;
+            });
+        }
+
         alias_text.setText("");
         populate_friend_profile_from_cache();
         schedule_friend_profile_refresh();

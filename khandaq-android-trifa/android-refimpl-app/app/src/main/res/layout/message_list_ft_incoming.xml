@@ -279,6 +279,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="0dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
             android:padding="0dp">
 
@@ -288,15 +289,18 @@
                 android:layout_weight="10"
                 android:visibility="gone" />
 
+            <!-- KHANDAQ (#F4): time under INCOMING voice sat pinned to the top (gravity=top),
+                 almost touching the bubble. Match outgoing: vertically centered + a little top
+                 breathing room so it drops down like on the green bubbles. -->
             <TextView
                 android:id="@+id/date_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="top"
-                android:layout_marginTop="4dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginTop="6dp"
                 android:layout_marginRight="20dp"
                 android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
-                android:gravity="top"
+                android:gravity="center_vertical"
                 android:padding="0dp"
                 android:text="2017-06-20 14:00:12"
                 android:textAlignment="gravity"

@@ -225,6 +225,7 @@
 
 
 
+            <!-- KHANDAQ (#F1): raw Tox capabilities are dev-only debug noise for end users — hide. -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -237,7 +238,8 @@
                 android:text="@string/layout___capabilities"
                 android:textAlignment="textStart"
                 android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/fi_toxcapabilities_textview"
@@ -253,7 +255,8 @@
                 android:textIsSelectable="true"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:typeface="monospace" />
+                android:typeface="monospace"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/remove_friend_relay_button"

@@ -288,15 +288,17 @@
                 android:layout_weight="10"
                 android:visibility="invisible" />
 
+            <!-- KHANDAQ (#F4): was marginTop=-7dp + gravity=top → time jammed up almost clipped
+                 on the incoming voice bubble. Drop it down to match outgoing. -->
             <TextView
                 android:id="@+id/date_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="top"
-                android:layout_marginTop="-7dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginTop="0dp"
                 android:layout_marginRight="20dp"
                 android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
-                android:gravity="top"
+                android:gravity="center_vertical"
                 android:padding="0dp"
                 android:text="2017-06-20 14:00:12"
                 android:textAlignment="gravity"

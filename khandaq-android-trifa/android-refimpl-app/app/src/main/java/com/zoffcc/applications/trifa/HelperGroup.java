@@ -6607,7 +6607,11 @@ public class HelperGroup
 
             for (final long duration_ms : durations_ms)
             {
-                if (trim_video_to_duration(src, tmp, duration_ms, false))
+                // KHANDAQ (#F3): keep the AUDIO track when shrinking a group video to fit the NGC
+                // size cap. It used to strip audio (include_audio=false) → recipients got a silent
+                // clip ("can't hear the video joke"). Audio is cheap; the duration ladder below just
+                // trims to a shorter length that still fits WITH sound.
+                if (trim_video_to_duration(src, tmp, duration_ms, true))
                 {
                     if ((tmp.length() > 0) && (tmp.length() <= TOX_MAX_NGC_FILESIZE))
                     {

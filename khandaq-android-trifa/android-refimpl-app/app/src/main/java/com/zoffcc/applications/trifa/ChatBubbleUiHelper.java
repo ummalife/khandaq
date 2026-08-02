@@ -54,15 +54,17 @@ final class ChatBubbleUiHelper
 {
     /** Telegram-style sticker messages: 1–3 emoji only, no bubble background. */
     private static final int STICKER_EMOJI_MAX_COUNT = 3;
-    /** Auto-generated Tox identicons use a fixed VFS filename; keep Telegram-style placeholders for those. */
+    /**
+     * KHANDAQ (#F5): a genuine friend avatar is loadable whenever we have a saved VFS path+file.
+     * This USED to also reject FRIEND_AVATAR_FILENAME to hide auto-generated identicons — but
+     * identicons are now disabled (Identicon.create_avatar_identicon_for_pubkey is a no-op) and
+     * EVERY real received avatar is saved under exactly FRIEND_AVATAR_FILENAME (set_friend_avatar).
+     * So that check suppressed exactly the real avatars → friends' photos never showed (placeholder
+     * fallback). Drop it: a non-null pathname+filename now means a genuine saved avatar.
+     */
     static boolean shouldLoadVfsAvatar(final FriendList friend)
     {
-        if (friend == null || friend.avatar_pathname == null || friend.avatar_filename == null)
-        {
-            return false;
-        }
-
-        return !FRIEND_AVATAR_FILENAME.equals(friend.avatar_filename);
+        return friend != null && friend.avatar_pathname != null && friend.avatar_filename != null;
     }
 
     private ChatBubbleUiHelper()

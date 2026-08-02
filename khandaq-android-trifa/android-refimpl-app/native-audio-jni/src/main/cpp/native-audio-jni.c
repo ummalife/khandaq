@@ -1487,52 +1487,6 @@ jint Java_com_zoffcc_applications_nativeaudio_NativeAudio_PlayPCM16(JNIEnv *env,
                                 "PlayPCM16:SetPlayState:A:SL_PLAYSTATE_PLAYING:Enqueue:2 frames");
             (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_PLAYING);
             player_state_current = _PLAYING;
-
-            if (filteraudio_used)
-            {
-                //pass_audio_output(filteraudio, (const int16_t *) nextBuffer,
-                //                  (unsigned int) (nextSize / 2));
-#ifdef WEBRTC_AEC
-                if (aec_active == 1)
-                {
-                    if (nextSize == (samples_per_frame_for_48000_40ms * 2))
-                    {
-                        const int num_samples_play = nextSize / 2;
-                        int16_t *pcm_buf_play = (int16_t *) nextBuffer;
-                        int16_t *pcm_buf_play_resampled = (int16_t *) calloc(1,
-                                                                             sizeof(int16_t) *
-                                                                             (num_samples_play /
-                                                                              3));
-                        // downsample to 16khz
-                        downsample_48000_to_16000_basic(pcm_buf_play, pcm_buf_play_resampled,
-                                                        num_samples_play);
-
-                        const int split_factor = 4;
-                        const int sample_count_split = (num_samples_play / split_factor);
-                        const int sample_count_split_downsampled = sample_count_split / 3;
-#ifdef WEBRTC_DEBUGGING
-                        printf("WebRtcAecm_BufferFarend:samples=%d split_factor=%d sample_count_split=%d sample_count_split_downsampled=%d\n",
-                           (int32_t) num_samples_play, split_factor, sample_count_split,
-                           sample_count_split_downsampled);
-#endif
-                        for (int x = 0; x < split_factor; x++)
-                        {
-                            int32_t res = WebRtcAecm_BufferFarend(
-                                    webrtc_aecmInst,
-                                    (int16_t *) pcm_buf_play_resampled +
-                                    (x * sample_count_split_downsampled),
-                                    sample_count_split_downsampled);
-                            // suppress unused var
-                            (void) res;
-#ifdef WEBRTC_DEBUGGING
-                            printf("WebRtcAecm_BufferFarend:res=%d\n", res);
-#endif
-                        }
-                        free(pcm_buf_play_resampled);
-                    }
-                }
-#endif
-            }
         }
         else
         {
@@ -1547,6 +1501,45 @@ jint Java_com_zoffcc_applications_nativeaudio_NativeAudio_PlayPCM16(JNIEnv *env,
                 __android_log_print(ANDROID_LOG_INFO, LOGTAG,
                                     "PlayPCM16:SetPlayState:B:SL_PLAYSTATE_PLAYING");
             }
+        }
+
+        // KHANDAQ (#F2b): feed the AEC far-end reference on EVERY playback callback (not just the
+        // first). It used to live inside the one-time `player_state_current != _PLAYING` branch, so
+        // WebRtcAecm ran the whole call against a stale/empty far-end buffer and cancelled nothing →
+        // the caller heard their own voice echo. Now every played 40ms/48kHz frame updates the
+        // reference, matching the amplified signal actually sent to the speaker.
+        if (filteraudio_used)
+        {
+#ifdef WEBRTC_AEC
+            if (aec_active == 1)
+            {
+                if (nextSize == (samples_per_frame_for_48000_40ms * 2))
+                {
+                    const int num_samples_play = nextSize / 2;
+                    int16_t *pcm_buf_play = (int16_t *) nextBuffer;
+                    int16_t *pcm_buf_play_resampled = (int16_t *) calloc(1,
+                                                                         sizeof(int16_t) *
+                                                                         (num_samples_play / 3));
+                    // downsample to 16khz
+                    downsample_48000_to_16000_basic(pcm_buf_play, pcm_buf_play_resampled,
+                                                    num_samples_play);
+
+                    const int split_factor = 4;
+                    const int sample_count_split = (num_samples_play / split_factor);
+                    const int sample_count_split_downsampled = sample_count_split / 3;
+                    for (int x = 0; x < split_factor; x++)
+                    {
+                        int32_t res = WebRtcAecm_BufferFarend(
+                                webrtc_aecmInst,
+                                (int16_t *) pcm_buf_play_resampled +
+                                (x * sample_count_split_downsampled),
+                                sample_count_split_downsampled);
+                        (void) res;
+                    }
+                    free(pcm_buf_play_resampled);
+                }
+            }
+#endif
         }
     }
     else

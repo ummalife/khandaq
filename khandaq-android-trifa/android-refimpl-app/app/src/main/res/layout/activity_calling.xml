@@ -558,6 +558,28 @@
             android:text=""></TextView>
 
 
+        <!-- KHANDAQ (#F2a): loudspeaker toggle in the bottom control row. The only prior speaker
+             toggle lived in the video overlay and was painted UNDER the full-screen caller avatar
+             in audio calls (invisible). This one lives with mute/decline so it's always reachable. -->
+        <ImageButton
+            android:id="@+id/audio_speaker_button"
+            android:layout_width="@dimen/calling_activity_bottom_buttons_small_height"
+            android:layout_height="@dimen/calling_activity_bottom_buttons_small_height"
+            android:layout_gravity="center_vertical"
+            android:background="@drawable/circle_blue"
+            android:clickable="true"
+            android:keepScreenOn="true"
+            android:padding="10dp"
+            android:scaleType="centerInside" />
+
+        <TextView
+            android:id="@+id/audio_speaker_button_pad"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/calling_activity_bottom_buttons_height"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:text=""></TextView>
+
         <ImageButton
             android:id="@+id/mute_button"
             android:layout_width="@dimen/calling_activity_bottom_buttons_small_height"

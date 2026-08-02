@@ -152,6 +152,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     ImageButton decline_button = null;
     static ImageButton camera_toggle_button = null;
     static ImageButton mute_button = null;
+    static ImageButton audio_speaker_button = null; // KHANDAQ (#F2a): loudspeaker toggle in the bottom row
     static Button video_box_speaker_button = null;
     static Button video_box_aec_button = null;
     static View video_speaker_aec = null;
@@ -442,6 +443,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         decline_button = (ImageButton) findViewById(R.id.decline_button);
         camera_toggle_button = (ImageButton) findViewById(R.id.camera_toggle_button);
         mute_button = (ImageButton) findViewById(R.id.mute_button);
+        audio_speaker_button = (ImageButton) findViewById(R.id.audio_speaker_button); // KHANDAQ (#F2a)
         video_box_aec_button = findViewById(R.id.video_box_aec_button);
         video_box_speaker_button = findViewById(R.id.video_box_speaker_button);
         video_box_aec = findViewById(R.id.video_box_aec);
@@ -1033,6 +1035,41 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         });
 
 
+        // KHANDAQ (#F2a): loudspeaker toggle in the bottom control row (always reachable in audio
+        // calls, unlike the video-overlay speaker button). Reuses the same routing + AEC logic.
+        set_audio_speaker_button_icon(Callstate.audio_speaker);
+        if (audio_speaker_button != null)
+        {
+            audio_speaker_button.setOnClickListener(new View.OnClickListener()
+            {
+                @Override
+                public void onClick(View v)
+                {
+                    try
+                    {
+                        if (Callstate.audio_speaker == false)
+                        {
+                            set_audio_to_loudspeaker(audio_manager_s);
+                            set_speaker_button_icon(true);
+                            set_audio_speaker_button_icon(true);
+                            applyCallAudioProcessing(true);
+                        }
+                        else
+                        {
+                            set_audio_to_ear(audio_manager_s);
+                            set_speaker_button_icon(false);
+                            set_audio_speaker_button_icon(false);
+                            applyCallAudioProcessing(false);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+
         try
         {
             video_box_aec_button.setText("AEC: " + get_aec_active());
@@ -1599,6 +1636,25 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     android.graphics.Color.WHITE).sizeDp(26);
             video_box_speaker_button.setCompoundDrawablesWithIntrinsicBounds(null, ic, null, null);
             video_box_speaker_button.setCompoundDrawablePadding(0);
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+    // KHANDAQ (#F2a): white volume-up/off glyph on the bottom-row loudspeaker ImageButton (blue circle bg).
+    private void set_audio_speaker_button_icon(boolean speakerOn)
+    {
+        try
+        {
+            if (audio_speaker_button == null)
+            {
+                return;
+            }
+            Drawable ic = new IconicsDrawable(this).icon(
+                    speakerOn ? GoogleMaterial.Icon.gmd_volume_up : GoogleMaterial.Icon.gmd_volume_off).color(
+                    android.graphics.Color.WHITE).sizeDp(24);
+            audio_speaker_button.setImageDrawable(ic);
         }
         catch (Throwable ignored)
         {
@@ -2264,6 +2320,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             accept_button = null;
             camera_toggle_button = null;
             mute_button = null;
+            audio_speaker_button = null; // KHANDAQ (#F2a)
             video_box_speaker_button = null;
             video_box_aec_button = null;
             video_speaker_aec = null;

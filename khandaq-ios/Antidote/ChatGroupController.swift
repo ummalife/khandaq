@@ -165,6 +165,14 @@ class ChatGroupController: PortraitChatController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "groupSystemCell")
         view.addSubview(tableView)
 
+        // KHANDAQ (#G5 reaction-row): custom Telegram-style long-press popup (reaction bar + action menu
+        // together) for groups too — parity with 1:1. Replaces the system context menu (see
+        // contextMenuConfigurationForRowAt → nil). minimumPressDuration 0.4 beats UITextView's ~0.5s
+        // selection press so it wins over text selection.
+        let longPressGR = UILongPressGestureRecognizer(target: self, action: #selector(ChatGroupController.longPressOnGroupTable(_:)))
+        longPressGR.minimumPressDuration = 0.4
+        tableView.addGestureRecognizer(longPressGR)
+
         chatInputView = ChatInputView(theme: theme)
         view.addSubview(chatInputView)
         view.addSubview(ngcVideoOverlay)
@@ -1336,52 +1344,12 @@ extension ChatGroupController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, performAction action: Selector, forRowAt indexPath: IndexPath, withSender sender: Any?) {
     }
 
+    // KHANDAQ (#G5 reaction-row): groups use the custom unified popup (longPressOnGroupTable →
+    // presentGroupContextPopup: reaction bar + action list together), same as 1:1. The system menu
+    // can't host a reaction row, so return nil here to avoid a double menu on the same long-press.
     @available(iOS 13.0, *)
     func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
-        guard !tableView.isEditing else {
-            return nil
-        }
-
-        let message = messageEntry(atDisplayIndex: indexPath.row).message
-        guard !message.groupSystemMessage else {
-            return nil
-        }
-
-        // identifier carries the row so willDisplayContextMenu can float the reaction bar above it
-        return UIContextMenuConfiguration(identifier: NSNumber(value: indexPath.row), previewProvider: nil) { [weak self] _ in
-            guard let self = self else {
-                return nil
-            }
-
-            var actions: [UIAction] = []
-            // KHANDAQ (#192): "Реакция" opens the Telegram-style horizontal reaction bar (shown after
-            // the context menu dismisses — the system menu renders in its own overlay above our view).
-            if message.messageText != nil || message.messageFile != nil {
-                actions.append(UIAction(title: String(localized: "chat_react_action")) { _ in
-                    let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
-                    self.presentGroupReactionPicker(for: message, sourceView: source)
-                })
-            }
-            if self.quoteText(for: message) != nil {
-                actions.append(UIAction(title: String(localized: "chat_reply_action")) { _ in
-                    self.startReply(to: message)
-                })
-            }
-            actions.append(UIAction(title: String(localized: "chat_forward_action")) { _ in
-                let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
-                MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
-            })
-            // KHANDAQ (#G5): pin in groups too (parity with 1:1).
-            actions.append(UIAction(title: String(localized: "chat_pin_action"), image: UIImage(systemName: "pin")) { _ in
-                guard let id = message.uniqueIdentifier else { return }
-                ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
-                self.refreshPinnedBanner()
-            })
-            actions.append(UIAction(title: String(localized: "group_messages_select_action")) { _ in
-                self.toggleTableViewEditing(true, animated: true)
-            })
-            return UIMenu(children: actions)
-        }
+        return nil
     }
 
 }

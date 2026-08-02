@@ -302,4 +302,68 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
             self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
         }
     }
+
+    // KHANDAQ (#G5 reaction-row): custom Telegram long-press popup for GROUPS (parity with 1:1) —
+    // reaction bar above + action list below, one dimmed backdrop. Same gating as the old group system
+    // menu (text/file only, no system messages); reuses the group per-message handlers, minus «Реакция»
+    // (the bar handles it via submanagerGroups.toggleReaction).
+    @objc func longPressOnGroupTable(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, !tableView.isEditing else {
+            return
+        }
+        let point = gesture.location(in: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point),
+              let cell = tableView.cellForRow(at: indexPath) as? ChatMovableDateCell else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard !message.groupSystemMessage else {
+            return
+        }
+        guard message.messageText != nil || message.messageFile != nil else {
+            return
+        }
+        if let editable = cell as? ChatEditable, !editable.shouldShowMenu() {
+            return
+        }
+        presentGroupContextPopup(for: cell, message: message, indexPath: indexPath)
+    }
+
+    fileprivate func presentGroupContextPopup(for cell: ChatMovableDateCell, message: OCTMessageAbstract, indexPath: IndexPath) {
+        if #available(iOS 10.0, *) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        var actions: [ChatContextMenuAction] = []
+        if quoteText(for: message) != nil {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_reply_action"), systemImageName: "arrowshape.turn.up.left") { [weak self] in self?.startReply(to: message) })
+        }
+        actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in
+            guard let self = self else { return }
+            let source: UIView = self.tableView.cellForRow(at: indexPath) ?? self.tableView
+            MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: source)
+        })
+        actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in
+            guard let self = self, let id = message.uniqueIdentifier else { return }
+            ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
+            self.refreshPinnedBanner()
+        })
+        actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.toggleTableViewEditing(true, animated: true) })
+
+        let editable = cell as? ChatEditable
+        let rect: CGRect
+        if let editable = editable {
+            rect = cell.convert(editable.menuTargetRect(), to: view)
+        } else {
+            rect = cell.convert(cell.bounds, to: view)
+        }
+        editable?.willShowMenu()
+        reactionPopup.presentMenu(in: view, aroundRect: rect,
+                                  currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
+                                  dark: ThemeAppearance.isDarkMode, actions: actions,
+                                  onPick: { [weak self] emoji in
+                                      guard let self = self else { return }
+                                      self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
+                                  },
+                                  onDismiss: { editable?.willHideMenu() })
+    }
 }

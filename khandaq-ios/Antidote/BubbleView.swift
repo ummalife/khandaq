@@ -445,8 +445,12 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         var cardX = rect.minX
         // align the card to the bubble side, clamped on screen
         cardX = max(12, min(cardX, hostW - cardW - 12))
-        var cardY = rect.maxY + 8
-        if cardY + cardH > bottomSafe { cardY = max(barY + barH + 8, bottomSafe - cardH) }
+        // KHANDAQ (#G5 review): place below the bubble but never above the bar's bottom (fix #4: a short
+        // top-pinned bubble had the card overlap the bar), and never off the bottom (fix #3: a low bubble
+        // clipped the Delete row); if the card is taller than the space, clamp to the top (rows visible).
+        var cardY = max(rect.maxY + 8, barY + barH + 8)
+        if cardY + cardH > bottomSafe { cardY = bottomSafe - cardH }
+        if cardY < topSafe { cardY = topSafe }
         card.frame = CGRect(x: cardX, y: cardY, width: cardW, height: cardH)
 
         for (v, t) in [(bar as UIView, CGAffineTransform(scaleX: 0.6, y: 0.6)),

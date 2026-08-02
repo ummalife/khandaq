@@ -433,6 +433,9 @@ class ChatPrivateController: PortraitChatController {
         // KHANDAQ: mark read on EXIT too — viewWillAppear alone misses messages that arrived while the
         // chat was open, leaving the unread badge stuck after the user has actually read everything.
         updateLastReadDate()
+        // KHANDAQ (#G7-lock, review): a slide-up-locked recording survives a finger-lift, so leaving the
+        // chat would otherwise leave it running off-screen (AVAudioSession held + temp file orphaned).
+        chatInputView?.abortActiveRecordingIfNeeded()
         chatInputViewManager?.endUserInteraction()
         replyController.savePending(forChatId: chat.uniqueIdentifier)
         delegate?.chatPrivateControllerWillDisappear(self)

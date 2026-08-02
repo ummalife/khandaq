@@ -294,6 +294,16 @@ extension ChatInputView {
         finishVoiceRecording(cancelled: false)
     }
 
+    /// KHANDAQ (#G7-lock, review): abort an in-progress recording when the chat is torn down. Slide-up
+    /// lock lets a recording survive a finger-lift, so leaving the chat (Back, push profile, etc.) would
+    /// otherwise orphan the AVAudioSession + temp file with no way to stop it. Controllers call this
+    /// from viewWillDisappear. Safe no-op when nothing is recording.
+    func abortActiveRecordingIfNeeded() {
+        guard isVoiceRecording else { return }
+        recordingEndedByControl = true
+        finishVoiceRecording(cancelled: true)
+    }
+
     /// KHANDAQ design (Figma): start a voice recording from the "+" attachment menu (tap to start;
     /// the recording bar's send/cancel controls finish it — no hold required).
     func beginVoiceRecordingFromMenu() {

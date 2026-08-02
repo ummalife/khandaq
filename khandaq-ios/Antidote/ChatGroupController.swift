@@ -821,6 +821,10 @@ class ChatGroupController: PortraitChatController {
         // KHANDAQ: mark read on EXIT too — viewWillAppear alone misses messages that arrived while the
         // chat was open, leaving the unread badge stuck after the user has actually read everything.
         updateLastReadDate()
+        // KHANDAQ (#G7-lock, review): abort an in-progress (esp. slide-up-locked) RECORDING on leave —
+        // it survives a finger-lift, so it would otherwise run off-screen leaking the audio session +
+        // temp file. (Distinct from voice PLAYBACK below, which is intentionally app-scoped.)
+        chatInputView?.abortActiveRecordingIfNeeded()
         // KHANDAQ (Android parity): voice playback keeps going when the user leaves the group —
         // the shared player is app-scoped and must only stop on explicit pause/displacement.
         stopIncomingVideoMonitoring()

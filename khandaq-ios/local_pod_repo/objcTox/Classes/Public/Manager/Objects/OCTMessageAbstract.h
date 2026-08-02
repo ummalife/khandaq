@@ -24,6 +24,15 @@
 @property NSTimeInterval dateInterval;
 
 /**
+ * KHANDAQ (#H5): the timestamp the chat timeline SORTS by. Unlike `dateInterval` (local arrival/insert
+ * time), this is the message's true chronological position: for 1:1 it's MIN(tssent, dateInterval) so a
+ * late/offline-flushed message lands in its real slot (matching its displayed time) and the order is
+ * identical across devices; for group live it equals dateInterval; for group history-sync it equals the
+ * clamped original stamp. 0 = legacy/unset → callers fall back to dateInterval.
+ */
+@property NSTimeInterval sortTimestamp;
+
+/**
  * Unixtimestamp when messageV3 was sent or 0.
  */
 @property NSTimeInterval tssent;

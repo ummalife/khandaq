@@ -252,6 +252,19 @@ private extension NotificationCoordinator {
             return
         }
 
+        // KHANDAQ (#H3): the sound is gated only on "inserted at index 0 of the global dateInterval-DESC
+        // list", so a 1:1 message that was offline-QUEUED and flushed on reconnect (old send time, stored
+        // now) inserted at 0 and rang with no visible new message ("звук на входе, а сообщений нет"). A
+        // genuinely-live message has tssent ≈ now; a flushed/backfilled one has an old tssent. 45s absorbs
+        // sender clock skew. Non-msgv3 peers have tssent==0 (can't be offline-queued) → ring normally.
+        if message.tssent > 0, Date().timeIntervalSince1970 - message.tssent > 45 {
+            return
+        }
+        // Don't ring for the chat that's already open in the foreground (mirror shouldEnqueueMessage).
+        if UIApplication.isActive && bannedChatIdentifiers.contains(message.chatUniqueIdentifier) {
+            return
+        }
+
         if message.messageText != nil || message.messageFile != nil {
             audioPlayer.playSound(.NewMessage)
         }

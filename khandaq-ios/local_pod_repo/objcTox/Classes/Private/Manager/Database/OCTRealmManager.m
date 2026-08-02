@@ -23,7 +23,7 @@
 // KHANDAQ (#82): 36 adds OCTMessageFile.groupPeerName + groupSenderPubkey (nullable strings).
 // KHANDAQ (#192): 37 adds OCTMessageAbstract.reactionsJSON (nullable string) + reactionsPending
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
-static const uint64_t kCurrentSchemeVersion = 39; // 39: +OCTMessageAbstract.edited/editedTimestamp/editPending (#208 edit); 38: +OCTMessageFile.fileIdHex (1:1 file reaction anchor)
+static const uint64_t kCurrentSchemeVersion = 40; // 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -1012,6 +1012,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5): group live = arrival
     // KHANDAQ (#60): live messages dedup on their own arrival time (== dateInterval here).
     messageAbstract.groupSyncDedupTimestamp = messageAbstract.dateInterval;
     messageAbstract.senderUniqueIdentifier = nil;
@@ -1046,6 +1047,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5)
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = 0;
     messageAbstract.groupPendingSend = YES;
@@ -1106,6 +1108,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5)
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = 0;
     messageAbstract.groupSystemMessage = YES;
@@ -1345,6 +1348,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5)
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = isOutgoing ? 0 : peerId;
     messageAbstract.groupPrivateMessage = YES;
@@ -1389,6 +1393,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5)
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
@@ -1594,6 +1599,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     NSTimeInterval nowTimestamp = [[NSDate date] timeIntervalSince1970];
     NSTimeInterval originalTimestamp = dateInterval > 0 ? dateInterval : nowTimestamp;
     messageAbstract.dateInterval = MIN(originalTimestamp, nowTimestamp);
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5): group sync = clamped original
     messageAbstract.groupSyncDedupTimestamp = originalTimestamp;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
@@ -1646,6 +1652,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     NSTimeInterval nowTimestamp = [[NSDate date] timeIntervalSince1970];
     NSTimeInterval originalTimestamp = dateInterval > 0 ? dateInterval : nowTimestamp;
     messageAbstract.dateInterval = MIN(originalTimestamp, nowTimestamp);
+    messageAbstract.sortTimestamp = messageAbstract.dateInterval; // KHANDAQ (#H5): group sync = clamped original
     messageAbstract.groupSyncDedupTimestamp = originalTimestamp;
     messageAbstract.senderUniqueIdentifier = nil;
     messageAbstract.groupSenderPeerId = peerId;
@@ -1982,7 +1989,24 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
                if (oldSchemaVersion < 31) {
                    [self doMigrationVersion31:migration];
                }
+
+               if (oldSchemaVersion < 40) {
+                   [self doMigrationVersion40:migration];
+               }
     };
+}
+
+// KHANDAQ (#H5): backfill sortTimestamp for existing rows. For old rows dateInterval was the local
+// arrival stamp, so MIN(tssent, dateInterval) reproduces the sender time for late-delivered messages
+// (fixing their misplacement) and the arrival time for normal/future-skewed ones — no wrong reordering
+// of existing history; only the late-delivered rows move, into their true chronological slot.
++ (void)doMigrationVersion40:(RLMMigration *)migration
+{
+    [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
+        double ts = [oldObject[@"tssent"] doubleValue];
+        double di = [oldObject[@"dateInterval"] doubleValue];
+        newObject[@"sortTimestamp"] = @(ts > 0 ? MIN(ts, di) : di);
+    }];
 }
 
 + (void)doMigrationVersion4:(RLMMigration *)migration
@@ -2261,6 +2285,10 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
     messageAbstract.tssent = tssent;
     messageAbstract.tsrcvd = tsrcvd;
+    // KHANDAQ (#H5): sort by the sender's real send time (clamped non-future) so a late/offline-flushed
+    // message lands in its true chronological slot — matching its displayed tssent label — and the order
+    // is identical across devices. dateInterval == arrival here, so MIN keeps future-skewed senders put.
+    messageAbstract.sortTimestamp = (tssent > 0) ? MIN((NSTimeInterval)tssent, messageAbstract.dateInterval) : messageAbstract.dateInterval;
     messageAbstract.messageText = messageText;
     messageAbstract.messageFile = messageFile;
     messageAbstract.messageCall = messageCall;

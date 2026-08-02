@@ -1876,7 +1876,10 @@ private extension ChatGroupController {
             ? "chatUniqueIdentifier == %@ AND groupPrivateMessage == NO"
             : "chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND groupSystemMessage == NO"
         let predicate = NSPredicate(format: predicateFormat, chat.uniqueIdentifier)
-        return submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("dateInterval", ascending: false)
+        // KHANDAQ (#H5): sort by sortTimestamp (group live == arrival, sync == clamped original) for a
+        // stable order that matches displayed times. (Group LIVE cross-device order still depends on
+        // per-device arrival — no sender wire ts on the NGC live path — but 1:1 + sync are now stable.)
+        return submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
     }
 }
 

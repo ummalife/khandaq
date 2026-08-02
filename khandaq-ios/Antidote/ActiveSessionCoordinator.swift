@@ -312,6 +312,9 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
                     return
                 }
                 self.toxManager.bootstrap.addPredefinedNodes()
+                // KHANDAQ (#H4): burst the proven TCP relays at cold launch (every app update forces a
+                // cold start) so first-connect doesn't wait ~20s for the offline-fallback re-seed.
+                self.toxManager.bootstrap.performKhandaqBootstrapBurst()
                 self.toxManager.bootstrap.bootstrap()
                 self.startNetworkMonitoringAndPushBinding()
             }

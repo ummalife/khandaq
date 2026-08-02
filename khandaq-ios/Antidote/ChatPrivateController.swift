@@ -152,7 +152,10 @@ class ChatPrivateController: PortraitChatController {
         self.callwaiting_running = false
 
         let predicate = NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier)
-        self.messages = submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("dateInterval", ascending: false)
+        // KHANDAQ (#H5): sort by sortTimestamp (sender send-time, clamped), NOT dateInterval (local
+        // arrival). A late/offline-flushed message then lands in its true chronological slot — matching
+        // its displayed time — and the order is identical across devices.
+        self.messages = submanagerObjects.messages(predicate: predicate).sortedResultsUsingProperty("sortTimestamp", ascending: false)
         self.visibleMessages = Constants.MessagesPortionSize
 
         self.timeFormatter = DateFormatter(type: .time)

@@ -58,6 +58,13 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (void)rebootstrapOnNetworkChange;
 
+/**
+ * KHANDAQ (#H4): immediately add the hand-picked PROVEN TCP relays and bootstrap against them. Safe to
+ * call at cold launch (idempotent tox_add_tcp_relay/tox_bootstrap on the tox queue) to shorten
+ * first-connect after an update, instead of waiting ~20s for the offline-fallback re-seed.
+ */
+- (void)performKhandaqBootstrapBurst;
+
 @end
 
 NS_ASSUME_NONNULL_END

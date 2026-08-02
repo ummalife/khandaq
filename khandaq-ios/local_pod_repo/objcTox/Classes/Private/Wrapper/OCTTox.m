@@ -26,8 +26,10 @@ static long long last_check_time = 0;
 static void * const kOCTToxQueueSpecificKey = (void *)&kOCTToxQueueSpecificKey;
 static dispatch_queue_t sOCTFileTransferQueue;
 static dispatch_once_t sOCTFileTransferQueueOnceToken;
-static long long OFFLINE_REBOOTSTRAP_GRACE_MS = (5 * 1000);
-static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (15 * 1000);
+// KHANDAQ (#H4): shorten the offline re-seed cadence (was 5s/15s) so the reliable relays are re-added
+// ~8-11s after launch instead of ~20s — cuts the dead window before first-connect after an update.
+static long long OFFLINE_REBOOTSTRAP_GRACE_MS = (3 * 1000);
+static long long OFFLINE_REBOOTSTRAP_INTERVAL_MS = (8 * 1000);
 
 static void perform_khandaq_offline_rebootstrap(Tox *tox)
 {

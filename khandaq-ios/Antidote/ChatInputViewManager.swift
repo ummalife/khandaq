@@ -174,7 +174,9 @@ extension ChatInputViewManager: ChatInputViewDelegate {
     // KHANDAQ (#15): hold-to-record voice for 1:1 chats (mirrors the group input bar).
     func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {
         requestMicrophoneAccess { [weak self] granted in
-            guard granted, let self = self else {
+            guard let self = self else { return }
+            guard granted else {
+                VoiceDebugHUD.shared.log("✖︎ mic DENIED")
                 return
             }
 
@@ -182,6 +184,7 @@ extension ChatInputViewManager: ChatInputViewDelegate {
                 try self.voiceRecorder.startRecording()
             }
             catch {
+                VoiceDebugHUD.shared.log("✖︎ startRecording threw: \(error.localizedDescription)")
                 handleErrorWithType(.sendFileToFriend, error: error as NSError)
             }
         }
@@ -189,6 +192,7 @@ extension ChatInputViewManager: ChatInputViewDelegate {
 
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {
         if cancelled {
+            VoiceDebugHUD.shared.log("• record ended: CANCELLED (slide/short)")
             voiceRecorder.cancelRecording()
             return
         }
@@ -196,14 +200,18 @@ extension ChatInputViewManager: ChatInputViewDelegate {
         // slow device (iPhone 11) doesn't hand over a half-written file that gets dropped.
         voiceRecorder.finishRecording { [weak self] url in
             guard let self = self, let url = url else {
+                VoiceDebugHUD.shared.log("✖︎ no file from recorder → nothing sent")
                 return
             }
             if self.chat.isSavedMessages {
+                VoiceDebugHUD.shared.log("→ Saved: storing copy")
                 self.storeSavedFileByCopying(atPath: url.path, fileName: url.lastPathComponent)
                 try? FileManager.default.removeItem(at: url)
                 return
             }
+            VoiceDebugHUD.shared.log("→ sendFile to friend…")
             self.submanagerFiles.sendFile(atPath: url.path, moveToUploads: true, to: self.chat) { error in
+                VoiceDebugHUD.shared.log("✖︎ sendFile error: \(error.localizedDescription)")
                 handleErrorWithType(.sendFileToFriend, error: error as NSError)
             }
         }

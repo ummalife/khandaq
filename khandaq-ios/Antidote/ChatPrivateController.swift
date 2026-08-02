@@ -1461,64 +1461,13 @@ extension ChatPrivateController: UITableViewDelegate {
         // Dummy method to make tableView:shouldShowMenuForRowAtIndexPath: work.
     }
 
-    // KHANDAQ (#G5): Telegram-style native vertical context menu for 1:1 (parity with groups).
-    // Reuses the existing per-cell delegate handlers + the cell's action gating so behaviour is
-    // identical to the old horizontal menu — only the presentation changes.
+    // KHANDAQ (#G5 reaction-row): the system context menu can't host a floating reaction row, so 1:1
+    // long-press is served by the custom unified popup (longPressOnTableView → presentContextPopup:
+    // reaction bar + action list together). Returning nil here disables the system menu so the two
+    // don't both fire on the same long-press. iOS 12 still uses the legacy UIMenuController path.
     @available(iOS 13.0, *)
     func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
-        guard !tableView.isEditing else {
-            return nil
-        }
-        guard let cell = tableView.cellForRow(at: indexPath) as? ChatMovableDateCell else {
-            return nil
-        }
-        if let editable = cell as? ChatEditable, !editable.shouldShowMenu() {
-            return nil
-        }
-
-        return UIContextMenuConfiguration(identifier: NSNumber(value: indexPath.row), previewProvider: nil) { [weak self] _ in
-            guard let self = self,
-                  let cell = self.tableView?.cellForRow(at: indexPath) as? ChatMovableDateCell else {
-                return nil
-            }
-
-            func icon(_ name: String) -> UIImage? { UIImage(systemName: name) }
-            var actions: [UIAction] = []
-
-            if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.reactAction)) {
-                actions.append(UIAction(title: String(localized: "chat_react_action"), image: icon("heart")) { _ in
-                    self.chatMovableDateCellReactPressed(cell)
-                })
-            }
-            if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.replyAction)) {
-                actions.append(UIAction(title: String(localized: "chat_reply_action"), image: icon("arrowshape.turn.up.left")) { _ in
-                    self.chatMovableDateCellReplyPressed(cell)
-                })
-            }
-            if cell.isMenuActionSupportedByCell(#selector(copy(_:))) {
-                actions.append(UIAction(title: String(localized: "chat_copy_action"), image: icon("doc.on.doc")) { _ in
-                    self.chatMovableDateCellCopyPressed(cell)
-                })
-            }
-            if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.editMessageAction)) {
-                actions.append(UIAction(title: String(localized: "chat_edit_action"), image: icon("pencil")) { _ in
-                    self.chatMovableDateCellEditPressed(cell)
-                })
-            }
-            actions.append(UIAction(title: String(localized: "chat_pin_action"), image: icon("pin")) { _ in
-                self.chatMovableDateCellPinPressed(cell)
-            })
-            actions.append(UIAction(title: String(localized: "chat_forward_action"), image: icon("arrowshape.turn.up.right")) { _ in
-                self.chatMovableDateCellForwardPressed(cell)
-            })
-            actions.append(UIAction(title: String(localized: "chat_select_action"), image: icon("checkmark.circle")) { _ in
-                self.chatMovableDateCellMorePressed(cell)
-            })
-            actions.append(UIAction(title: String(localized: "alert_delete"), image: icon("trash"), attributes: .destructive) { _ in
-                self.chatMovableDateCellDeletePressed(cell)
-            })
-            return UIMenu(children: actions)
-        }
+        return nil
     }
 }
 
@@ -1975,6 +1924,73 @@ private extension ChatPrivateController {
         let panGR = UIPanGestureRecognizer(target: self, action: #selector(ChatPrivateController.panOnTableView(_:)))
         panGR.delegate = self
         tableView.addGestureRecognizer(panGR)
+
+        // KHANDAQ (#G5 reaction-row): custom Telegram-style long-press popup (reaction bar + action menu
+        // together). Replaces the system context menu on iOS 13+ (which can't host a reaction row). No
+        // delegate — gestureRecognizerShouldBegin returns false for non-pan recognizers, which would
+        // block it; the default delegate lets it coexist with scroll (movement cancels the press).
+        let longPressGR = UILongPressGestureRecognizer(target: self, action: #selector(ChatPrivateController.longPressOnTableView(_:)))
+        longPressGR.minimumPressDuration = 0.4
+        tableView.addGestureRecognizer(longPressGR)
+    }
+
+    @objc func longPressOnTableView(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, let tableView = tableView, !tableView.isEditing else {
+            return
+        }
+        let point = gesture.location(in: tableView)
+        guard let indexPath = tableView.indexPathForRow(at: point),
+              let cell = tableView.cellForRow(at: indexPath) as? ChatMovableDateCell else {
+            return
+        }
+        if let editable = cell as? ChatEditable, !editable.shouldShowMenu() {
+            return
+        }
+        presentContextPopup(for: cell, indexPath: indexPath)
+    }
+
+    // KHANDAQ (#G5 reaction-row): the unified Telegram popup — reaction bar above + action list below,
+    // one dimmed backdrop. Reuses the exact per-cell handlers the system menu used, minus "Реакция"
+    // (the bar handles it). Reactions and actions are gated by the cell exactly as before.
+    fileprivate func presentContextPopup(for cell: ChatMovableDateCell, indexPath: IndexPath) {
+        if #available(iOS 10.0, *) {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+
+        func supports(_ sel: Selector) -> Bool { cell.isMenuActionSupportedByCell(sel) }
+        var actions: [ChatContextMenuAction] = []
+        if supports(#selector(ChatMovableDateCell.replyAction)) {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_reply_action"), systemImageName: "arrowshape.turn.up.left") { [weak self] in self?.chatMovableDateCellReplyPressed(cell) })
+        }
+        if supports(#selector(copy(_:))) {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_copy_action"), systemImageName: "doc.on.doc") { [weak self] in self?.chatMovableDateCellCopyPressed(cell) })
+        }
+        if supports(#selector(ChatMovableDateCell.editMessageAction)) {
+            actions.append(ChatContextMenuAction(title: String(localized: "chat_edit_action"), systemImageName: "pencil") { [weak self] in self?.chatMovableDateCellEditPressed(cell) })
+        }
+        actions.append(ChatContextMenuAction(title: String(localized: "chat_pin_action"), systemImageName: "pin") { [weak self] in self?.chatMovableDateCellPinPressed(cell) })
+        actions.append(ChatContextMenuAction(title: String(localized: "chat_forward_action"), systemImageName: "arrowshape.turn.up.right") { [weak self] in self?.chatMovableDateCellForwardPressed(cell) })
+        actions.append(ChatContextMenuAction(title: String(localized: "chat_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.chatMovableDateCellMorePressed(cell) })
+        actions.append(ChatContextMenuAction(title: String(localized: "alert_delete"), systemImageName: "trash", destructive: true) { [weak self] in self?.chatMovableDateCellDeletePressed(cell) })
+
+        let editable = cell as? ChatEditable
+        let rect: CGRect
+        if let editable = editable {
+            rect = cell.convert(editable.menuTargetRect(), to: view)
+        } else {
+            rect = cell.convert(cell.bounds, to: view)
+        }
+        // KHANDAQ (#G5 reaction-row): suppress the bubble's own text-selection/loupe while the popup is
+        // up (mirrors the legacy UIMenuController willShow/Hide), then restore it (keeps links tappable).
+        editable?.willShowMenu()
+        reactionPopup.presentMenu(in: view, aroundRect: rect,
+                                  currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
+                                  dark: ThemeAppearance.isDarkMode, actions: actions,
+                                  onPick: { [weak self] emoji in
+                                      self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
+                                  },
+                                  onDismiss: { editable?.willHideMenu() })
     }
 
     func createTableHeaderViews() {

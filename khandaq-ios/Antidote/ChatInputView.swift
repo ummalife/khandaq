@@ -102,6 +102,12 @@ class ChatInputView: UIView {
     // (Telegram behaviour) and show the "hold to record" hint instead of sending a 0.x s clip.
     fileprivate var recordingStartTime: Date?
     fileprivate static let minRecordingDuration: TimeInterval = 0.7
+    // KHANDAQ (#G7-lock): Telegram-style slide-UP-to-lock. While holding the mic, drag up past the
+    // threshold to lock hands-free — the finger can lift and recording continues; the bar's send/cancel
+    // buttons then finish it. Coexists with slide-LEFT-to-cancel (#35): the dominant axis wins.
+    fileprivate var recordingTouchStartY: CGFloat = 0
+    fileprivate var recordingLocked = false
+    fileprivate static let slideLockThreshold: CGFloat = 80.0
     fileprivate var myHeight: Constraint!
     fileprivate var didconstraint = 0
     fileprivate var isEmojiActive = false
@@ -210,24 +216,34 @@ extension ChatInputView {
                 isVoiceRecording = true
                 recordingEndedByControl = false
                 recordingWillCancel = false
+                recordingLocked = false
                 recordingStartTime = Date()
                 recordingTouchStartX = gesture.location(in: self).x
+                recordingTouchStartY = gesture.location(in: self).y
                 showRecordingBar(showControls: false)
                 delegate?.chatInputViewVoiceRecordDidStart(self)
             case .changed:
-                guard isVoiceRecording, !recordingEndedByControl else { return }
-                // Drag left from the press origin to arm cancellation (Telegram slide-to-cancel).
+                guard isVoiceRecording, !recordingEndedByControl, !recordingLocked else { return }
                 let dx = gesture.location(in: self).x - recordingTouchStartX
+                let dy = gesture.location(in: self).y - recordingTouchStartY
+                // KHANDAQ (#G7-lock): dragging UP past the threshold (vertical dominant) locks hands-free.
+                if dy < -ChatInputView.slideLockThreshold, abs(dy) > abs(dx) {
+                    lockRecording()
+                    return
+                }
+                // Drag left from the press origin to arm cancellation (Telegram slide-to-cancel).
                 let willCancel = dx < -ChatInputView.slideCancelThreshold
                 if willCancel != recordingWillCancel {
                     recordingWillCancel = willCancel
                     updateSlideToCancelHint()
                 }
             case .ended:
-                guard isVoiceRecording, !recordingEndedByControl else { return }
+                // KHANDAQ (#G7-lock): once locked, lifting the finger must NOT end the recording — the
+                // bar's send/cancel buttons finish it (hands-free).
+                guard isVoiceRecording, !recordingEndedByControl, !recordingLocked else { return }
                 finishVoiceRecording(cancelled: recordingWillCancel)
             case .cancelled, .failed:
-                guard isVoiceRecording, !recordingEndedByControl else { return }
+                guard isVoiceRecording, !recordingEndedByControl, !recordingLocked else { return }
                 finishVoiceRecording(cancelled: true)
             default:
                 break
@@ -243,9 +259,26 @@ extension ChatInputView {
             recordingTimerLabel.alpha = 0.4
         }
         else {
-            slideHintLabel.text = String(localized: "voice_recording_slide_to_cancel")
+            // KHANDAQ (#G7-lock): advertise both gestures — slide left to cancel, up to lock hands-free.
+            slideHintLabel.text = String(localized: "voice_recording_slide_hint")
             slideHintLabel.textColor = theme.colorForType(.ChatInformationText)
             recordingTimerLabel.alpha = 1.0
+        }
+    }
+
+    /// KHANDAQ (#G7-lock): switch the in-progress hold recording to hands-free — reveal the send/cancel
+    /// buttons and drop the slide hint WITHOUT restarting the timer/recorder (unlike showRecordingBar).
+    func lockRecording() {
+        guard isVoiceRecording, !recordingLocked else { return }
+        recordingLocked = true
+        recordingWillCancel = false
+        slideHintLabel.isHidden = true
+        recordingCancelButton.isHidden = false
+        recordingSendButton.isHidden = false
+        recordingTimerLabel.alpha = 1.0
+        // Haptic confirm the lock engaged (matches Telegram).
+        if #available(iOS 10.0, *) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }
     }
 
@@ -412,7 +445,7 @@ private extension ChatInputView {
         slideHintLabel.font = UIFont.systemFont(ofSize: 15.0)
         slideHintLabel.textColor = theme.colorForType(.ChatInformationText)
         slideHintLabel.textAlignment = .center
-        slideHintLabel.text = String(localized: "voice_recording_slide_to_cancel")
+        slideHintLabel.text = String(localized: "voice_recording_slide_hint")
         recordingBar.addSubview(slideHintLabel)
 
         recordingCancelButton = UIButton(type: .system)
@@ -614,6 +647,7 @@ private extension ChatInputView {
     func finishVoiceRecording(cancelled: Bool) {
         guard isVoiceRecording else { return }
         isVoiceRecording = false
+        recordingLocked = false
         hideRecordingBar()
 
         // KHANDAQ (#G7): a hold released quicker than minRecordingDuration is an accidental tap —

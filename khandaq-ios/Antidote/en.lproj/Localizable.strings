@@ -122,6 +122,7 @@
 "voice_recording_cancel" = "Cancel";
 "voice_recording_send" = "Send voice message";
 "voice_recording_slide_to_cancel" = "‹ slide to cancel";
+"voice_recording_slide_hint" = "‹ cancel   ⌃ lock";
 "voice_recording_release_to_cancel" = "Release to cancel";
 "global_search_placeholder" = "Search all chats and messages";
 "global_search_section_chats" = "Contacts and groups:";

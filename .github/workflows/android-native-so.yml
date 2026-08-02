@@ -1,0 +1,89 @@
+name: android-native-so
+
+# KHANDAQ (#201): rebuild the native toxcore JNI shared lib (libjni-c-toxcore.so) with the
+# NGC media-resend head-of-line fix (patches/apply_khandaq_media_resend.py, wired into
+# circle_scripts/deps.sh for all 4 ABIs). Reproduces the old CircleCI ubuntu:20.04 recipe.
+# Manual-trigger only (heavy: NDK r13b + ffmpeg/x264/vpx/opus/sodium + toxcore per ABI).
+# ABI build order in deps.sh: armeabi -> arm64-v8a -> x86 -> x86_64. arm64-v8a (needed for
+# emulator + Redmi QA) is done ~halfway, so even a late-ABI timeout still yields it via the
+# always() artifact upload.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    container:
+      image: ubuntu:20.04
+    env:
+      HOME: /root
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: install build deps (same set as the old CircleCI recipe + a few for the native build)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            clang cmake libconfig-dev libgtest-dev ninja-build pkg-config \
+            zip unzip grep file ca-certificates autotools-dev autoconf automake \
+            git bc wget curl rsync make libtool \
+            ssh gzip tar xz-utils coreutils perl yasm nasm \
+            python3 python-is-python3 \
+            openjdk-11-jdk openjdk-11-jre libncurses5
+          # deps.sh calls python3 for the patch scripts; keep a python shim too
+          ln -sf /usr/bin/python3 /usr/bin/python || true
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: stage source into /root/work (scripts hard-code _HOME_=/root/work)
+        run: |
+          set -eux
+          mkdir -p /root/work
+          cp -a khandaq-android-trifa/. /root/work/
+          mkdir -p /root/work/deploy
+          mkdir -p /root/.android
+          touch /root/.android/repositories.cfg
+          touch /root/.android/debug.keystore
+          echo "=== patches present in /root/work/patches ==="
+          ls -1 /root/work/patches/
+          echo "=== confirm #201 media-resend patch is wired into deps.sh ==="
+          grep -c apply_khandaq_media_resend.py /root/work/circle_scripts/deps.sh
+
+      - name: build native deps + patched toxcore + libjni-c-toxcore.so (deps.sh)
+        id: build
+        continue-on-error: true
+        working-directory: /root/work
+        run: |
+          set -x
+          mkdir -p build_dir
+          cd build_dir
+          bash ../circle_scripts/deps.sh ""
+
+      - name: list produced artefacts
+        if: always()
+        run: |
+          echo "=== artefacts tree ==="
+          find /root/work/artefacts -name '*.so' -exec ls -hal {} \; 2>/dev/null || true
+          echo "=== any libjni-c-toxcore.so anywhere ==="
+          find /root/work -name 'libjni-c-toxcore.so' -exec sh -c 'echo "$1:"; file "$1"' _ {} \; 2>/dev/null || true
+
+      - name: upload libjni-c-toxcore.so (all ABIs that finished)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libjni-c-toxcore-so-201
+          if-no-files-found: warn
+          path: |
+            /root/work/artefacts/android/libs/**/libjni-c-toxcore.so
+
+      - name: fail the job if the build step failed AND no arm64 .so was produced
+        if: always()
+        run: |
+          if [ -f /root/work/artefacts/android/libs/arm64-v8a/libjni-c-toxcore.so ]; then
+            echo "arm64-v8a libjni-c-toxcore.so produced OK"
+            exit 0
+          fi
+          echo "no arm64-v8a .so produced"
+          exit 1

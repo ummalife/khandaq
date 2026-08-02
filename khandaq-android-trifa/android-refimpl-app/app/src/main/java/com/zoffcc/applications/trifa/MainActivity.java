@@ -4223,6 +4223,13 @@ public class MainActivity extends AppCompatActivity
 
     // -- this is for incoming video --
     // -- this is for incoming video --
+    // KHANDAQ (crash hunt, #238-class): caps to reject peer-declared frame dims/sizes. A malicious peer
+    // in an accepted video call can craft a VP8 frame declaring huge dims (VP8 allows up to 16383x16383);
+    // the direct-buffer + Bitmap alloc below would then OOM on the toxav callback thread and hard-crash
+    // the app (a remote DoS). Real calls are far below these caps.
+    private static final int ALLOC_MAX_VIDEO_DIM = 3840;                       // > 4K width; drops absurd frames
+    private static final long ALLOC_MAX_VIDEO_BUFFER_BYTES = 64L * 1024 * 1024; // YUV direct-buffer ceiling
+
     static void allocate_video_buffer_1(int frame_width_px1, int frame_height_px1, long ystride, long ustride, long vstride)
     {
         try
@@ -4236,6 +4243,16 @@ public class MainActivity extends AppCompatActivity
             //Log.i("semaphore_01","release:01");
             semaphore_videoout_bitmap.release();
             //Log.i("semaphore_01","release:01:OK");
+            return;
+        }
+
+        // KHANDAQ (crash hunt): reject implausible peer frame dims BEFORE freeing the current buffer, so a
+        // malformed frame can neither OOM the alloc below nor tear down the live frame. Release + drop.
+        if (frame_width_px1 <= 0 || frame_height_px1 <= 0
+            || frame_width_px1 > ALLOC_MAX_VIDEO_DIM || frame_height_px1 > ALLOC_MAX_VIDEO_DIM)
+        {
+            HelperGeneric.logI(TAG, "allocate_video_buffer_1:reject dims w=" + frame_width_px1 + " h=" + frame_height_px1);
+            semaphore_videoout_bitmap.release();
             return;
         }
 
@@ -4277,36 +4294,47 @@ public class MainActivity extends AppCompatActivity
         HelperGeneric.logI(TAG, "YUV420 frame w1=" + frame_width_px1 + " h1=" + frame_height_px1 + " bytes=" + buffer_size_in_bytes);
         HelperGeneric.logI(TAG, "YUV420 frame w=" + frame_width_px + " h=" + frame_height_px + " bytes=" + buffer_size_in_bytes);
         HelperGeneric.logI(TAG, "YUV420 frame ystride=" + ystride + " ustride=" + ustride + " vstride=" + vstride);
-        video_buffer_1 = ByteBuffer.allocateDirect(buffer_size_in_bytes);
-        set_JNI_video_buffer(video_buffer_1, frame_width_px, frame_height_px);
-        RenderScript rs = RenderScript.create(context_s);
-        yuvToRgb = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs));
-        // --------- works !!!!! ---------
-        // --------- works !!!!! ---------
-        // --------- works !!!!! ---------
-        Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs)).setX(frame_width_px).setY(frame_height_px);
-        yuvType.setYuvFormat(ImageFormat.YV12);
-        alloc_in = Allocation.createTyped(rs, yuvType.create(), Allocation.USAGE_SCRIPT);
-        Type.Builder rgbaType = new Type.Builder(rs, Element.RGBA_8888(rs)).setX(frame_width_px).setY(frame_height_px);
-        alloc_out = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
-        // --------- works !!!!! ---------
-        // --------- works !!!!! ---------
-        // --------- works !!!!! ---------
-        video_frame_image = Bitmap.createBitmap(frame_width_px, frame_height_px, Bitmap.Config.ARGB_8888);
-
-        if (video_frame_image == null)
+        // KHANDAQ (crash hunt): allocation guarded — a peer-inflated stride can still push buffer_size
+        // past the cap, and any OOM/RenderScript error here must NOT propagate uncaught on the toxav
+        // callback thread (that hard-crashes the app + leaks the semaphore). Drop the frame instead.
+        try
         {
+            if (buffer_size_in_bytes <= 0 || buffer_size_in_bytes > ALLOC_MAX_VIDEO_BUFFER_BYTES
+                || frame_width_px <= 0 || frame_height_px <= 0)
+            {
+                HelperGeneric.logI(TAG, "allocate_video_buffer_1:reject size=" + buffer_size_in_bytes + " w=" + frame_width_px + " h=" + frame_height_px);
+                video_frame_image_valid = false;
+                video_buffer_1 = null;
+                return;
+            }
+            video_buffer_1 = ByteBuffer.allocateDirect(buffer_size_in_bytes);
+            set_JNI_video_buffer(video_buffer_1, frame_width_px, frame_height_px);
+            RenderScript rs = RenderScript.create(context_s);
+            yuvToRgb = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs));
+            Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs)).setX(frame_width_px).setY(frame_height_px);
+            yuvType.setYuvFormat(ImageFormat.YV12);
+            alloc_in = Allocation.createTyped(rs, yuvType.create(), Allocation.USAGE_SCRIPT);
+            Type.Builder rgbaType = new Type.Builder(rs, Element.RGBA_8888(rs)).setX(frame_width_px).setY(frame_height_px);
+            alloc_out = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
+            video_frame_image = Bitmap.createBitmap(frame_width_px, frame_height_px, Bitmap.Config.ARGB_8888);
+            video_frame_image_valid = (video_frame_image != null);
+            if (video_frame_image == null)
+            {
+                video_buffer_1 = null;
+            }
+        }
+        catch (Throwable t)
+        {
+            HelperGeneric.logI(TAG, "allocate_video_buffer_1:alloc failed, dropping frame:" + t.getMessage());
             video_frame_image_valid = false;
             video_buffer_1 = null;
         }
-        else
+        finally
         {
-            video_frame_image_valid = true;
+            //Log.i("semaphore_01","release:02");
+            semaphore_videoout_bitmap.release();
+            //Log.i("semaphore_01","relase:02:OK");
         }
-
-        //Log.i("semaphore_01","release:02");
-        semaphore_videoout_bitmap.release();
-        //Log.i("semaphore_01","relase:02:OK");
     }
     // -- this is for incoming video --
     // -- this is for incoming video --

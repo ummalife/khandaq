@@ -598,6 +598,8 @@
 "chat_reply_action" = "Reply";
 "chat_forward_action" = "Forward";
 "chat_pin_action" = "Pin";
+"chat_copy_action" = "Copy";
+"chat_select_action" = "Select";
 "chat_forwarded_from_format" = "↪ Forwarded from %@";
 "saved_messages_title" = "Saved Messages";
 "chat_reply_cancel" = "Cancel reply";

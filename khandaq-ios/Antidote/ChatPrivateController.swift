@@ -1427,6 +1427,11 @@ extension ChatPrivateController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, shouldShowMenuForRowAt indexPath: IndexPath) -> Bool {
+        // KHANDAQ (#G5): iOS 13+ uses the native vertical context menu (contextMenuConfigurationForRowAt,
+        // Telegram-style) — suppress the legacy horizontal UIMenuController there.
+        if #available(iOS 13.0, *) {
+            return false
+        }
         guard !tableView.isEditing else {
             return false
         }
@@ -1454,6 +1459,66 @@ extension ChatPrivateController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, performAction action: Selector, forRowAt indexPath: IndexPath, withSender sender: Any?) {
         // Dummy method to make tableView:shouldShowMenuForRowAtIndexPath: work.
+    }
+
+    // KHANDAQ (#G5): Telegram-style native vertical context menu for 1:1 (parity with groups).
+    // Reuses the existing per-cell delegate handlers + the cell's action gating so behaviour is
+    // identical to the old horizontal menu — only the presentation changes.
+    @available(iOS 13.0, *)
+    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        guard !tableView.isEditing else {
+            return nil
+        }
+        guard let cell = tableView.cellForRow(at: indexPath) as? ChatMovableDateCell else {
+            return nil
+        }
+        if let editable = cell as? ChatEditable, !editable.shouldShowMenu() {
+            return nil
+        }
+
+        return UIContextMenuConfiguration(identifier: NSNumber(value: indexPath.row), previewProvider: nil) { [weak self] _ in
+            guard let self = self,
+                  let cell = self.tableView?.cellForRow(at: indexPath) as? ChatMovableDateCell else {
+                return nil
+            }
+
+            func icon(_ name: String) -> UIImage? { UIImage(systemName: name) }
+            var actions: [UIAction] = []
+
+            if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.reactAction)) {
+                actions.append(UIAction(title: String(localized: "chat_react_action"), image: icon("heart")) { _ in
+                    self.chatMovableDateCellReactPressed(cell)
+                })
+            }
+            if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.replyAction)) {
+                actions.append(UIAction(title: String(localized: "chat_reply_action"), image: icon("arrowshape.turn.up.left")) { _ in
+                    self.chatMovableDateCellReplyPressed(cell)
+                })
+            }
+            if cell.isMenuActionSupportedByCell(#selector(copy(_:))) {
+                actions.append(UIAction(title: String(localized: "chat_copy_action"), image: icon("doc.on.doc")) { _ in
+                    self.chatMovableDateCellCopyPressed(cell)
+                })
+            }
+            if cell.isMenuActionSupportedByCell(#selector(ChatMovableDateCell.editMessageAction)) {
+                actions.append(UIAction(title: String(localized: "chat_edit_action"), image: icon("pencil")) { _ in
+                    self.chatMovableDateCellEditPressed(cell)
+                })
+            }
+            actions.append(UIAction(title: String(localized: "chat_pin_action"), image: icon("pin")) { _ in
+                self.chatMovableDateCellPinPressed(cell)
+            })
+            actions.append(UIAction(title: String(localized: "chat_forward_action"), image: icon("arrowshape.turn.up.right")) { _ in
+                self.chatMovableDateCellForwardPressed(cell)
+            })
+            actions.append(UIAction(title: String(localized: "chat_select_action"), image: icon("checkmark.circle")) { _ in
+                self.chatMovableDateCellMorePressed(cell)
+            })
+            actions.append(UIAction(title: String(localized: "alert_delete"), image: icon("trash"), attributes: .destructive) { _ in
+                self.chatMovableDateCellDeletePressed(cell)
+            })
+            return UIMenu(children: actions)
+        }
     }
 }
 

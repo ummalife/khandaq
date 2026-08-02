@@ -601,6 +601,8 @@
 "chat_reply_action" = "Ответить";
 "chat_forward_action" = "Переслать";
 "chat_pin_action" = "Закрепить";
+"chat_copy_action" = "Скопировать";
+"chat_select_action" = "Выбрать";
 "chat_forwarded_from_format" = "↪ Переслано от %@";
 "saved_messages_title" = "Избранное";
 "chat_reply_cancel" = "Отменить ответ";

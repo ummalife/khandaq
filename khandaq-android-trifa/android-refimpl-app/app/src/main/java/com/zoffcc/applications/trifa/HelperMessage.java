@@ -1438,6 +1438,15 @@ public class HelperMessage
 
     static void process_msgv3_high_level_ack(final long friend_number, String msgV3hash_hex_string, long message_timestamp)
     {
+        // KHANDAQ (crash hotfix): a HIGH_LEVEL_ACK can arrive with NO msgV3 hash (msgV3hash_bin == null in
+        // receive_incoming_message → hex string stays null). ConcurrentHashMap forbids a null key, so the
+        // put() below crashed the app (NPE on the main thread) on every such incoming ACK. An ACK with no
+        // hash can't be correlated to any row anyway → nothing to do.
+        if (msgV3hash_hex_string == null || msgV3hash_hex_string.isEmpty())
+        {
+            return;
+        }
+
         final String friend_pubkey = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
 
         // Register the ACK FIRST, then look up the row. This closes the race window: if the row isn't

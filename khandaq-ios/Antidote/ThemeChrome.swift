@@ -177,17 +177,23 @@ enum ThemeChrome {
     // "Править"). Applied selectively per screen, NOT globally, so back buttons stay plain as in
     // the design.
     static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector, tint: UIColor? = nil) -> UIBarButtonItem {
-        // KHANDAQ (#102): slightly smaller circle — 32pt felt bulky on narrower devices (iPhone 13 Pro).
-        let size: CGFloat = 29.0
+        // KHANDAQ (#G9): cleaner nav circle — a soft system fill (adapts light/dark) instead of the
+        // flat grey pill, a touch larger, with a slightly larger/lighter glyph so it reads crisp and
+        // matches the native Liquid Glass tab bar rather than looking heavy.
+        let size: CGFloat = 32.0
         let button = UIButton(type: .system)
-        button.backgroundColor = theme.colorForType(.TabSelection)
+        if #available(iOS 13.0, *) {
+            button.backgroundColor = UIColor.secondarySystemFill
+        } else {
+            button.backgroundColor = theme.colorForType(.TabSelection)
+        }
         button.tintColor = tint ?? theme.colorForType(.LinkText)
         button.layer.cornerRadius = size / 2.0
         button.layer.masksToBounds = true
         button.setImage(image, for: .normal)
         button.imageView?.contentMode = .scaleAspectFit
         // Keep the glyph clear of the circle edge regardless of the source image's natural size.
-        button.imageEdgeInsets = UIEdgeInsets(top: 7.0, left: 7.0, bottom: 7.0, right: 7.0)
+        button.imageEdgeInsets = UIEdgeInsets(top: 8.0, left: 8.0, bottom: 8.0, right: 8.0)
         button.addTarget(target, action: action, for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.widthAnchor.constraint(equalToConstant: size).isActive = true
@@ -198,7 +204,8 @@ enum ThemeChrome {
     static func makeCircleNavButton(theme: Theme, systemImage: String, fallback: UIImage?, target: Any?, action: Selector) -> UIBarButtonItem {
         var image = fallback
         if #available(iOS 13.0, *) {
-            let config = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .semibold)
+            // KHANDAQ (#G9): 17pt medium reads crisper/lighter than 16pt semibold in the soft circle.
+            let config = UIImage.SymbolConfiguration(pointSize: 17.0, weight: .medium)
             image = UIImage(systemName: systemImage, withConfiguration: config) ?? fallback
         }
         return makeCircleNavButton(theme: theme, image: image, target: target, action: action)
@@ -210,11 +217,19 @@ enum ThemeChrome {
         let height: CGFloat = 30.0
         let cap = height / 2.0
         let size = CGSize(width: cap * 2.0 + 1.0, height: height)
+        // KHANDAQ (#G9): match the softened nav circles — a subtle system fill instead of flat grey.
+        let fill: UIColor
+        if #available(iOS 13.0, *) {
+            let trait = UITraitCollection(userInterfaceStyle: ThemeAppearance.isDarkMode ? .dark : .light)
+            fill = UIColor.secondarySystemFill.resolvedColor(with: trait)
+        } else {
+            fill = theme.colorForType(.TabSelection)
+        }
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { _ in
             let rect = CGRect(origin: .zero, size: size)
             let path = UIBezierPath(roundedRect: rect, cornerRadius: cap)
-            theme.colorForType(.TabSelection).setFill()
+            fill.setFill()
             path.fill()
         }
         return image

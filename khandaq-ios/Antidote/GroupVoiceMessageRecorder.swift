@@ -147,9 +147,11 @@ final class GroupVoiceMessageRecorder: NSObject, AVAudioRecorderDelegate {
 /// screen — start → finalized file size → sent/dropped — and sends a screenshot, or taps the panel
 /// to copy the full log. Lives here (not a standalone file) so no .pbxproj change is needed.
 /// Gated by `VoiceDebugHUD.enabled`; revert this block + its call sites once confirmed fixed.
+/// KHANDAQ: DISABLED — iPhone-11 voice-send issue is resolved, so the on-screen diag HUD is off.
+/// The log() calls become no-ops; flip `enabled` back to true to re-arm field diagnosis.
 final class VoiceDebugHUD {
     static let shared = VoiceDebugHUD()
-    static var enabled = true
+    static var enabled = false
 
     private var lines: [String] = []
     private var hideWork: DispatchWorkItem?

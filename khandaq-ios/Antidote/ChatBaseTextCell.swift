@@ -69,6 +69,38 @@ class ChatBaseTextCell: ChatMovableDateCell {
         }
 
         bubbleView.textColor = theme.colorForType(.NormalText)
+
+        // KHANDAQ (#H2): render «изменено» as a small, dim suffix so it reads as a system note — not as
+        // if the sender typed it. (Previously appended to the message text at full size/colour.)
+        appendEditedMarkerIfNeeded(textModel, theme: theme)
+    }
+
+    /// KHANDAQ (#H2): append a small, dim «(изменено)» run after the message. Works for plain, search-
+    /// highlight and mention text (reads the current attributed/plain content). Runs BEFORE the group
+    /// sender-header styling (subclasses call that after super), which preserves this trailing run.
+    private func appendEditedMarkerIfNeeded(_ textModel: ChatBaseTextCellModel, theme: Theme) {
+        guard textModel.edited, !textModel.hasLocation else {
+            return
+        }
+        let baseFont = bubbleView.font ?? UIFont.preferredFont(forTextStyle: .body)
+        let result: NSMutableAttributedString
+        if let attributed = bubbleView.attributedText, attributed.length > 0 {
+            result = NSMutableAttributedString(attributedString: attributed)
+        }
+        else {
+            result = NSMutableAttributedString(string: bubbleView.text ?? "", attributes: [
+                .foregroundColor: theme.colorForType(.NormalText),
+                .font: baseFont,
+            ])
+        }
+        let marker = NSAttributedString(
+            string: "  " + String(localized: "message_edited_marker"),
+            attributes: [
+                .font: UIFont.systemFont(ofSize: max(baseFont.pointSize - 4.0, 10.0)),
+                .foregroundColor: theme.colorForType(.NormalText).withAlphaComponent(0.45),
+            ])
+        result.append(marker)
+        bubbleView.attributedText = result
     }
 
     /// KHANDAQ (Figma): tint the group sender header line ("Name · Role") with the per-peer color.

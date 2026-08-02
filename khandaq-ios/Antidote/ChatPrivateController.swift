@@ -1040,10 +1040,10 @@ extension ChatPrivateController: UITableViewDataSource {
                 // corrupt the reply wire header, matching Android) nor location messages.
                 let editHashOK = (messageText.msgv3HashHex ?? "").count == 64
                 outgoingModel.canEdit = editHashOK && outgoingModel.replyMeta == nil && !outgoingModel.hasLocation
+                // KHANDAQ (#H2): the «изменено» marker is rendered as a small dim suffix by the cell
+                // (see ChatBaseTextCell), NOT appended to the text — so it reads as a system note, not
+                // as if the sender typed it.
                 outgoingModel.edited = message.edited
-                if message.edited && !outgoingModel.hasLocation {
-                    outgoingModel.message += "  " + String(localized: "message_edited_marker")
-                }
 
                 model = outgoingModel
 
@@ -1089,11 +1089,9 @@ extension ChatPrivateController: UITableViewDataSource {
                 incomingModel.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
                 attachReplyQuoteHandler(to: incomingModel)
 
-                // KHANDAQ (#208): the peer can edit their own message → show the marker (never editable by us).
+                // KHANDAQ (#208/#H2): the peer can edit their own message → the cell renders a small dim
+                // «изменено» marker (never editable by us; not appended to the text).
                 incomingModel.edited = message.edited
-                if message.edited && !incomingModel.hasLocation {
-                    incomingModel.message += "  " + String(localized: "message_edited_marker")
-                }
 
                 model = incomingModel
 

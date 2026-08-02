@@ -153,32 +153,11 @@ extension AddFriendController {
     }
 
     func presentMessageAlert(for address: String) {
-        let alert = UIAlertController(
-            title: String(localized: "add_contact_default_message_title"),
-            message: nil,
-            preferredStyle: .alert
-        )
-
-        alert.addTextField { [weak self] textField in
-            textField.text = self?.cachedMessage
-            textField.placeholder = String(localized: "add_contact_default_message_text")
-            textField.autocorrectionType = .no
-            textField.spellCheckingType = .no
-        }
-
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-        alert.addAction(UIAlertAction(title: String(localized: "add_contact_send"), style: .default) { [weak self] _ in
-            guard let self = self else {
-                return
-            }
-
-            let messageText = alert.textFields?.first?.text ?? ""
-            self.cachedMessage = messageText
-            let message = messageText.isEmpty ? KhandaqBranding.defaultStatusMessage : messageText
-            self.sendFriendRequest(to: address, message: message)
-        })
-
-        present(alert, animated: true, completion: nil)
+        // KHANDAQ (#G1): no intermediate "enter a request message" dialog — send the request straight
+        // away with the default greeting. The "request sent" toast (in sendFriendRequest) is enough.
+        let cached = cachedMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let message = cached.isEmpty ? String(localized: "add_contact_default_message_text") : cached
+        sendFriendRequest(to: address, message: message)
     }
 
     func sendFriendRequest(to address: String, message: String) {

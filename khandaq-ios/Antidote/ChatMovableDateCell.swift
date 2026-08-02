@@ -404,18 +404,58 @@ enum MessageForwarder {
         controller.present(alert, animated: true, completion: nil)
     }
 
+    /// KHANDAQ (#G3): bulk forward — pick one destination, forward every selected message into it
+    /// (caller passes them in chronological order). Same chat picker as the single-message path.
+    static func presentForwardPicker(forMessages messages: [OCTMessageAbstract], from controller: UIViewController, sourceView: UIView) {
+        guard let manager = toxManager, !messages.isEmpty else {
+            return
+        }
+        let chats = manager.objects.chats().sortedResultsUsingProperty("lastActivityDateInterval", ascending: false)
+        let alert = UIAlertController(title: String(localized: "chat_forward_action"), message: nil, preferredStyle: .actionSheet)
+        alert.popoverPresentationController?.sourceView = sourceView
+        alert.popoverPresentationController?.sourceRect = sourceView.bounds
+
+        let send: (OCTChat) -> Void = { chat in messages.forEach { forward($0, to: chat, manager: manager) } }
+
+        alert.addAction(UIAlertAction(title: String(localized: "saved_messages_title"), style: .default) { _ in
+            guard let saved = manager.objects.getOrCreateSavedMessagesChat() else { return }
+            send(saved)
+        })
+
+        let limit = min(chats.count, 25)
+        for index in 0..<limit {
+            let chat = chats[index]
+            if chat.isSavedMessages {
+                continue
+            }
+            alert.addAction(UIAlertAction(title: displayName(for: chat), style: .default) { _ in send(chat) })
+        }
+        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+        controller.present(alert, animated: true, completion: nil)
+    }
+
     /// KHANDAQ (#39): the original author's display name for a "Forwarded from …" header — own
     /// messages → "You"; group messages → the frozen group peer name; 1:1 → the friend's nickname.
     private static func forwardSourceName(for message: OCTMessageAbstract, manager: OCTManager) -> String {
+        // KHANDAQ (#G2): sanitize — a stale/cross-platform peer name can arrive as the literal
+        // string "(null)"/"null" (or empty), which non-empty checks let through and produced
+        // "↪ Переслано от (null)". Never surface those; fall back to "Неизвестно".
+        func clean(_ raw: String) -> String? {
+            let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty || t == "(null)" || t.lowercased() == "null" { return nil }
+            return t
+        }
+
         if message.isOutgoing() {
             return String(localized: "chat_reply_self_name")
         }
-        if let peerName = message.messageText?.groupPeerName, !peerName.isEmpty {
-            return peerName
+        if let peerName = message.messageText?.groupPeerName, let name = clean(peerName) {
+            return name
         }
         if let senderId = message.senderUniqueIdentifier,
            let friend = manager.objects.object(withUniqueIdentifier: senderId, for: .friend) as? OCTFriend {
-            return friend.nickname.isEmpty ? friend.publicKey : friend.nickname
+            if let nick = clean(friend.nickname) { return nick }
+            if let pk = clean(friend.publicKey) { return pk }
         }
         return String(localized: "chat_reply_unknown_sender")
     }

@@ -892,6 +892,17 @@ extension ChatPrivateController {
         })
     }
 
+    // KHANDAQ (#G3): forward every selected message into one chosen chat (chronological order).
+    @objc func editMessagesForwardButtonPressed(_ barButtonItem: UIBarButtonItem) {
+        guard let selectedRows = tableView?.indexPathsForSelectedRows, !selectedRows.isEmpty else {
+            return
+        }
+        let ordered = selectedRows.sorted { $0.row < $1.row }.map { self.messages[$0.row] }
+        let source: UIView = editMessagesToolbar ?? view
+        toggleTableViewEditing(false, animated: true)
+        MessageForwarder.presentForwardPicker(forMessages: ordered, from: self, sourceView: source)
+    }
+
     @objc func deleteAllMessagesButtonPressed(_ barButtonItem: UIBarButtonItem) {
         toggleTableViewEditing(false, animated: true)
 
@@ -1883,7 +1894,20 @@ private extension ChatPrivateController {
         editMessagesToolbar = UIToolbar()
         editMessagesToolbar.isHidden = true
         editMessagesToolbar.tintColor = theme.colorForType(.LinkText)
+        // KHANDAQ (#G3): selection mode offered only Delete — add Forward for the selected messages.
+        let forwardItem: UIBarButtonItem
+        if #available(iOS 13.0, *) {
+            forwardItem = UIBarButtonItem(image: UIImage(systemName: "arrowshape.turn.up.right"),
+                                          style: .plain, target: self,
+                                          action: #selector(ChatPrivateController.editMessagesForwardButtonPressed(_:)))
+        } else {
+            forwardItem = UIBarButtonItem(title: String(localized: "chat_forward_action"),
+                                          style: .plain, target: self,
+                                          action: #selector(ChatPrivateController.editMessagesForwardButtonPressed(_:)))
+        }
         editMessagesToolbar.items = [
+            forwardItem,
+            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
             UIBarButtonItem(barButtonSystemItem: .trash, target: self, action: #selector(ChatPrivateController.editMessagesDeleteButtonPressed(_:)))
         ]
         view.addSubview(editMessagesToolbar)

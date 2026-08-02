@@ -808,10 +808,10 @@ private extension ChatListTableManager {
             return privateUnread
         }
 
-        guard chat.hasUnreadMessages() else {
-            return 0
-        }
-
+        // KHANDAQ (#G8): do NOT gate on chat.hasUnreadMessages() — the core version is date-only and
+        // disagrees with the tab/app badge (which counts by lastMessage.dateInterval > lastReadDateInterval),
+        // so a chat could show a tab badge yet no per-row pill. The predicate below already returns 0
+        // for a fully-read chat, so the guard only introduced that inconsistency.
         let predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND dateInterval > %f",
                                     chat.uniqueIdentifier,
                                     chat.lastReadDateInterval)

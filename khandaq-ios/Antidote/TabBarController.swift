@@ -7,19 +7,10 @@ import UIKit
 class TabBarController: UITabBarController {
     fileprivate let theme: Theme
 
-    // KHANDAQ design (Figma): the bar is a floating rounded "island" (capsule with side margins +
-    // shadow), not an edge-to-edge bar. The system bar background is made transparent and this
-    // capsule is laid behind the tab items.
-    fileprivate lazy var floatingCapsule: UIView = {
-        let view = UIView()
-        view.backgroundColor = theme.colorForType(.TabBarCapsule)
-        view.isUserInteractionEnabled = false
-        view.layer.shadowColor = UIColor.black.cgColor
-        view.layer.shadowOpacity = 0.16
-        view.layer.shadowRadius = 12.0
-        view.layer.shadowOffset = CGSize(width: 0, height: 4)
-        return view
-    }()
+    // KHANDAQ: use the NATIVE system tab bar. On iOS 26 it renders as Liquid Glass; on earlier iOS
+    // it is the standard blur material (Telegram-style). The previous build faked an iOS-26 island
+    // with a custom white capsule over a force-transparent bar — that is what looked "off" and left
+    // a white strip behind the bar on non-white screens (Settings/Profile). See configureNativeTabBarAppearance.
 
     init(theme: Theme, controllers: [UINavigationController]) {
         self.theme = theme
@@ -42,36 +33,6 @@ class TabBarController: UITabBarController {
         }
 
         applyTheme(theme)
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        layoutFloatingCapsule()
-    }
-
-    /// Position the floating capsule behind the tab items: side margins + lifted above the home
-    /// indicator, fully rounded ends. Kept at the back so the item icons/labels draw on top of it.
-    private func layoutFloatingCapsule() {
-        let sideInset: CGFloat = 12.0
-        let topInset: CGFloat = 4.0
-        // Lift the capsule clear of the home indicator; on legacy devices leave a small gap.
-        let bottomLift = max(view.safeAreaInsets.bottom - 6.0, 6.0)
-
-        let bounds = tabBar.bounds
-        let height = max(bounds.height - topInset - bottomLift, 0.0)
-        floatingCapsule.frame = CGRect(
-            x: sideInset,
-            y: topInset,
-            width: bounds.width - sideInset * 2.0,
-            height: height)
-        floatingCapsule.layer.cornerRadius = height / 2.0
-
-        if floatingCapsule.superview !== tabBar {
-            tabBar.insertSubview(floatingCapsule, at: 0)
-        }
-        else {
-            tabBar.sendSubview(toBack: floatingCapsule)
-        }
     }
 
     /// iOS 18+ defers tab child layout; preload avoids a blank content area on first paint.
@@ -97,7 +58,6 @@ class TabBarController: UITabBarController {
 
     func applyTheme(_ theme: Theme) {
         configureNativeTabBarAppearance(theme: theme)
-        floatingCapsule.backgroundColor = theme.colorForType(.TabBarCapsule)
     }
 
     static func makeProfileTabBarImage(
@@ -149,51 +109,36 @@ extension TabBarController: UITabBarControllerDelegate {
 }
 
 private extension TabBarController {
-    // KHANDAQ design (Figma): the active tab sits in a fully-rounded GREY pill (Fills-Vibrant/Tertiary
-    // #EDEDED light), enclosing icon + label — only the icon/label themselves turn green.
-    func makeSelectionPillImage(theme: Theme) -> UIImage {
-        // Fixed natural-size pill drawn centered behind the active tab. NOT resizable — a resizable
-        // indicator gets stretched by UIKit and its rounded ends bleed into the neighbouring tabs.
-        let size = CGSize(width: 78.0, height: 46.0)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { _ in
-            let rect = CGRect(origin: .zero, size: size)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: size.height / 2.0)
-            theme.colorForType(.TabSelection).setFill()
-            path.fill()
-        }
-        return image.withRenderingMode(.alwaysOriginal)
-    }
-
     func configureNativeTabBarAppearance(theme: Theme) {
-        tabBar.tintColor = theme.colorForType(.TabItemActive)
-        tabBar.unselectedItemTintColor = theme.colorForType(.TabItemInactive)
+        let active = theme.colorForType(.TabItemActive)
+        let inactive = theme.colorForType(.TabItemInactive)
+        tabBar.tintColor = active
+        tabBar.unselectedItemTintColor = inactive
         tabBar.isTranslucent = true
-        tabBar.selectionIndicatorImage = makeSelectionPillImage(theme: theme)
+        // No custom selection indicator: the native bar (Liquid Glass on iOS 26) tints the active
+        // item green on its own — a drawn pill is exactly the "off" look testers reported.
+        tabBar.selectionIndicatorImage = nil
 
         if #available(iOS 13.0, *) {
-            // Figma: the bar itself is invisible — only the floating capsule (laid in
-            // layoutFloatingCapsule) is drawn. Make the system background/shadow transparent.
+            // Default (system) background: Liquid Glass on iOS 26, standard blur on earlier iOS.
+            // Deliberately NOT transparent — a transparent bar exposes the (white) controller view
+            // behind it and leaves a white strip on grey screens (Settings/Profile).
             let appearance = UITabBarAppearance()
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundColor = .clear
-            appearance.shadowColor = .clear
+            appearance.configureWithDefaultBackground()
 
-            // Figma: labels SF Pro Semibold 10; inactive icon grey + near-black label; active green.
-            let font = UIFont.systemFont(ofSize: 10.0, weight: .semibold)
-            let normalAttributes: [NSAttributedString.Key: Any] = [
-                .foregroundColor: theme.colorForType(.NormalText),
-                .font: font,
-            ]
-            let selectedAttributes: [NSAttributedString.Key: Any] = [
-                .foregroundColor: theme.colorForType(.TabItemActive),
-                .font: font,
-            ]
+            let normalAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: inactive]
+            let selectedAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: active]
 
-            appearance.stackedLayoutAppearance.normal.iconColor = theme.colorForType(.TabItemInactive)
-            appearance.stackedLayoutAppearance.selected.iconColor = theme.colorForType(.TabItemActive)
-            appearance.stackedLayoutAppearance.normal.titleTextAttributes = normalAttributes
-            appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
+            // Cover every layout (stacked on iPhone, inline/compact on iPad/landscape) so the green
+            // active / grey inactive tint holds regardless of size class.
+            for itemAppearance in [appearance.stackedLayoutAppearance,
+                                   appearance.inlineLayoutAppearance,
+                                   appearance.compactInlineLayoutAppearance] {
+                itemAppearance.normal.iconColor = inactive
+                itemAppearance.selected.iconColor = active
+                itemAppearance.normal.titleTextAttributes = normalAttributes
+                itemAppearance.selected.titleTextAttributes = selectedAttributes
+            }
 
             tabBar.standardAppearance = appearance
 

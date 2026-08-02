@@ -13,6 +13,7 @@ protocol ChatMovableDateCellDelegate: class {
     func chatMovableDateCellForwardPressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellReactPressed(_ cell: ChatMovableDateCell)
     func chatMovableDateCellEditPressed(_ cell: ChatMovableDateCell)
+    func chatMovableDateCellPinPressed(_ cell: ChatMovableDateCell)
 }
 
 extension ChatMovableDateCellDelegate {
@@ -21,6 +22,8 @@ extension ChatMovableDateCellDelegate {
     func chatMovableDateCellReactPressed(_ cell: ChatMovableDateCell) {}
     // KHANDAQ (#208): default no-op so delegates without edit keep compiling
     func chatMovableDateCellEditPressed(_ cell: ChatMovableDateCell) {}
+    // KHANDAQ (#G5): default no-op so delegates without pin keep compiling
+    func chatMovableDateCellPinPressed(_ cell: ChatMovableDateCell) {}
 }
 
 class ChatMovableDateCell: BaseCell {
@@ -33,6 +36,8 @@ class ChatMovableDateCell: BaseCell {
                 UIMenuItem(title: String(localized: "chat_edit_action"), action: #selector(editMessageAction)),
                 UIMenuItem(title: String(localized: "chat_reply_action"), action: #selector(replyAction)),
                 UIMenuItem(title: String(localized: "chat_forward_action"), action: #selector(forwardAction)),
+                // KHANDAQ (#G5): "Закрепить" — pin a message; a banner atop the chat shows it.
+                UIMenuItem(title: String(localized: "chat_pin_action"), action: #selector(pinAction)),
                 UIMenuItem(title: String(localized: "chat_more_menu_item"), action: #selector(moreAction))
             ]
 
@@ -308,6 +313,8 @@ extension ChatMovableDateCell {
                 return canBeEdited
             case #selector(forwardAction):
                 return true
+            case #selector(pinAction):
+                return true
             case #selector(moreAction):
                 return true
             default:
@@ -341,6 +348,10 @@ extension ChatMovableDateCell {
 
     @objc func forwardAction() {
         delegate?.chatMovableDateCellForwardPressed(self)
+    }
+
+    @objc func pinAction() {
+        delegate?.chatMovableDateCellPinPressed(self)
     }
 
     @objc func handleReplySwipe() {

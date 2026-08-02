@@ -113,6 +113,11 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var chatInputView: ChatInputView!
     fileprivate var editMessagesToolbar: UIToolbar!
 
+    // KHANDAQ (#G5): pinned-message banner (Telegram-style) shown atop the chat.
+    fileprivate var pinnedBannerView: UIView?
+    fileprivate var pinnedBannerLabel: UILabel?
+    fileprivate static let pinnedBannerHeight: CGFloat = 46.0
+
     fileprivate var chatInputViewManager: ChatInputViewManager!
     fileprivate let replyController = ChatReplyController()
 
@@ -447,6 +452,7 @@ class ChatPrivateController: PortraitChatController {
 
         scrollToGlobalSearchTargetIfNeeded()
         scrollToFirstUnreadIfNeeded()
+        refreshPinnedBanner()   // KHANDAQ (#G5): restore the pinned-message banner if any.
     }
 
     /// KHANDAQ (Figma): on open, jump to the first unread incoming message (its cell carries the
@@ -1572,6 +1578,177 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         }
         let message = messageEntry(atDisplayIndex: indexPath.row).message
         MessageForwarder.presentForwardPicker(for: message, from: self, sourceView: cell)
+    }
+
+    // KHANDAQ (#G5): pin the message for this chat and show the tap-to-jump banner atop the chat.
+    func chatMovableDateCellPinPressed(_ cell: ChatMovableDateCell) {
+        guard let indexPath = tableView?.indexPath(for: cell) else {
+            return
+        }
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard let messageId = message.uniqueIdentifier else {
+            return
+        }
+        ChatPinStore.setPinned(messageId: messageId, forChat: chat.uniqueIdentifier)
+        refreshPinnedBanner()
+    }
+
+    /// Show/refresh (or hide) the pinned-message banner based on the stored pin for this chat.
+    func refreshPinnedBanner() {
+        let pinnedId = ChatPinStore.pinnedMessageId(forChat: chat.uniqueIdentifier)
+        var preview: String?
+        if let pinnedId = pinnedId {
+            for i in 0..<messages.count where messages[i].uniqueIdentifier == pinnedId {
+                preview = ChatPrivateController.pinnedPreview(for: messages[i])
+                break
+            }
+        }
+
+        guard let text = preview else {
+            // No pin, or the pinned message was deleted — hide and drop a stale pin.
+            if pinnedId != nil { ChatPinStore.clearPin(forChat: chat.uniqueIdentifier) }
+            pinnedBannerView?.isHidden = true
+            tableView?.contentInset.top = 0
+            tableView?.verticalScrollIndicatorInsets.top = 0
+            return
+        }
+
+        ensurePinnedBannerBuilt()
+        pinnedBannerLabel?.text = text
+        pinnedBannerView?.isHidden = false
+        view.bringSubview(toFront: pinnedBannerView!)
+        tableView?.contentInset.top = ChatPrivateController.pinnedBannerHeight
+        tableView?.verticalScrollIndicatorInsets.top = ChatPrivateController.pinnedBannerHeight
+    }
+
+    private static func pinnedPreview(for message: OCTMessageAbstract) -> String {
+        if let text = message.messageText?.text, !text.isEmpty {
+            return MessageReplyHelper.plainBody(for: message) ?? text
+        }
+        if let file = message.messageFile {
+            if VoiceMessageHelper.isVoiceMessage(fileName: file.fileName, filePath: nil) {
+                return "🎤 " + String(localized: "voice_message_label")
+            }
+            return "📎 " + (file.fileName ?? "")
+        }
+        return "📌"
+    }
+
+    private func ensurePinnedBannerBuilt() {
+        guard pinnedBannerView == nil else {
+            return
+        }
+        let banner = UIView()
+        banner.backgroundColor = theme.colorForType(.NormalBackground)
+        banner.isUserInteractionEnabled = true
+        banner.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pinnedBannerTapped)))
+
+        let accent = UIView()
+        accent.backgroundColor = theme.colorForType(.LinkText)
+        accent.layer.cornerRadius = 1.5
+
+        let title = UILabel()
+        title.text = String(localized: "chat_pin_action")
+        title.font = UIFont.systemFont(ofSize: 11.0, weight: .semibold)
+        title.textColor = theme.colorForType(.LinkText)
+
+        let label = UILabel()
+        label.font = UIFont.systemFont(ofSize: 14.0)
+        label.textColor = theme.colorForType(.NormalText)
+        label.lineBreakMode = .byTruncatingTail
+
+        let close = UIButton(type: .system)
+        if #available(iOS 13.0, *) {
+            close.setImage(UIImage(systemName: "xmark"), for: .normal)
+        } else {
+            close.setTitle("✕", for: .normal)
+        }
+        close.tintColor = theme.colorForType(.NormalText)
+        close.addTarget(self, action: #selector(pinnedBannerClosePressed), for: .touchUpInside)
+
+        let separator = UIView()
+        separator.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+
+        banner.addSubview(accent)
+        banner.addSubview(title)
+        banner.addSubview(label)
+        banner.addSubview(close)
+        banner.addSubview(separator)
+        view.addSubview(banner)
+
+        banner.snp.makeConstraints {
+            $0.top.equalTo(view.safeAreaLayoutGuide.snp.top)
+            $0.leading.trailing.equalTo(view)
+            $0.height.equalTo(ChatPrivateController.pinnedBannerHeight)
+        }
+        accent.snp.makeConstraints {
+            $0.leading.equalTo(banner).offset(12.0)
+            $0.top.equalTo(banner).offset(8.0)
+            $0.bottom.equalTo(banner).offset(-8.0)
+            $0.width.equalTo(3.0)
+        }
+        close.snp.makeConstraints {
+            $0.trailing.equalTo(banner).offset(-14.0)
+            $0.centerY.equalTo(banner)
+            $0.width.height.equalTo(24.0)
+        }
+        title.snp.makeConstraints {
+            $0.leading.equalTo(accent.snp.trailing).offset(10.0)
+            $0.top.equalTo(banner).offset(6.0)
+            $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0)
+        }
+        label.snp.makeConstraints {
+            $0.leading.equalTo(accent.snp.trailing).offset(10.0)
+            $0.top.equalTo(title.snp.bottom).offset(1.0)
+            $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0)
+        }
+        separator.snp.makeConstraints {
+            $0.leading.trailing.bottom.equalTo(banner)
+            $0.height.equalTo(0.5)
+        }
+
+        pinnedBannerView = banner
+        pinnedBannerLabel = label
+    }
+
+    @objc private func pinnedBannerTapped() {
+        guard let id = ChatPinStore.pinnedMessageId(forChat: chat.uniqueIdentifier) else {
+            return
+        }
+        jumpToPinnedMessage(id: id)
+    }
+
+    @objc private func pinnedBannerClosePressed() {
+        ChatPinStore.clearPin(forChat: chat.uniqueIdentifier)
+        refreshPinnedBanner()
+    }
+
+    /// Scroll to the pinned message (mirrors the global-search jump: expand the paging window first).
+    private func jumpToPinnedMessage(id: String) {
+        guard let tableView = tableView else {
+            return
+        }
+        var storageIndex: Int?
+        for i in 0..<messages.count where messages[i].uniqueIdentifier == id {
+            storageIndex = i
+            break
+        }
+        guard let targetStorageIndex = storageIndex else {
+            return
+        }
+        if targetStorageIndex >= visibleMessages {
+            visibleMessages = min(messages.count, targetStorageIndex + Constants.MessagesPortionSize)
+            tableView.reloadData()
+            tableView.layoutIfNeeded()
+        }
+        let rows = tableView.numberOfRows(inSection: 0)
+        for row in 0..<rows where messageEntry(atDisplayIndex: row).message.uniqueIdentifier == id {
+            let indexPath = IndexPath(row: row, section: 0)
+            DispatchQueue.main.async {
+                tableView.scrollToRow(at: indexPath, at: .middle, animated: true)
+            }
+            break
+        }
     }
 
     // KHANDAQ (#208): edit an own text message via an inline editor, then push the change (packet 186).
@@ -2842,5 +3019,23 @@ extension ChatPrivateController: UISearchResultsUpdating {
 
         let safeIndex = min(max(0, index), max(0, messages.count - 1))
         return (messages[safeIndex], safeIndex)
+    }
+}
+
+/// KHANDAQ (#G5): per-chat pinned-message storage. Local (UserDefaults) for now — a single pinned
+/// message id per chat; no Realm migration, no wire sync yet (that's a follow-up).
+enum ChatPinStore {
+    private static func key(_ chatId: String) -> String { "khandaq_pinned_msg_\(chatId)" }
+
+    static func pinnedMessageId(forChat chatId: String) -> String? {
+        UserDefaults.standard.string(forKey: key(chatId))
+    }
+
+    static func setPinned(messageId: String, forChat chatId: String) {
+        UserDefaults.standard.set(messageId, forKey: key(chatId))
+    }
+
+    static func clearPin(forChat chatId: String) {
+        UserDefaults.standard.removeObject(forKey: key(chatId))
     }
 }

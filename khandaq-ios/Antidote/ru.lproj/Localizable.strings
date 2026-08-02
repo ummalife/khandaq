@@ -600,6 +600,7 @@
 "group_messages_quote_action" = "Цитировать";
 "chat_reply_action" = "Ответить";
 "chat_forward_action" = "Переслать";
+"chat_pin_action" = "Закрепить";
 "chat_forwarded_from_format" = "↪ Переслано от %@";
 "saved_messages_title" = "Избранное";
 "chat_reply_cancel" = "Отменить ответ";

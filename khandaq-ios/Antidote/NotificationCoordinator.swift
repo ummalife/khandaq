@@ -4,6 +4,7 @@
 
 import Foundation
 import os
+import UserNotifications
 
 private enum NotificationType {
     case newMessage(OCTMessageAbstract)
@@ -45,6 +46,10 @@ class NotificationCoordinator: NSObject {
     fileprivate var notificationQueue = [NotificationType]()
     fileprivate var inAppNotificationAppIdsRegistered = [String: Bool]()
     fileprivate var bannedChatIdentifiers = Set<String>()
+
+    // KHANDAQ (#G6): last contentful local notification, to suppress rapid duplicates.
+    fileprivate var lastLocalNotificationBody: String = ""
+    fileprivate var lastLocalNotificationTime: TimeInterval = 0
 
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
@@ -310,14 +315,47 @@ private extension NotificationCoordinator {
     }
 
     func showLocalNotificationObject(_ object: NotificationObject) {
+        let body = "\(object.title): \(object.body)"
+
+        // KHANDAQ (#G6): drop a duplicate of the SAME contentful notification fired within a short
+        // window (Realm observer can re-emit) so "ISA: …" doesn't show twice.
+        let now = Date().timeIntervalSince1970
+        if body == lastLocalNotificationBody, now - lastLocalNotificationTime < 4.0 {
+            showNextNotification()
+            return
+        }
+        lastLocalNotificationBody = body
+        lastLocalNotificationTime = now
+
         let local = UILocalNotification()
-        local.alertBody = "\(object.title): \(object.body)"
+        local.alertBody = body
         local.userInfo = object.action.archive()
         local.soundName = object.soundName
 
         UIApplication.shared.presentLocalNotificationNow(local)
 
+        // KHANDAQ (#G6): the push-extension already delivered a GENERIC wake banner ("Khandaq" /
+        // "New activity" / empty) for this same message — clear those so the contentful one we just
+        // posted isn't shadowed by a "New message" duplicate.
+        removeGenericPushNotifications()
+
         showNextNotification()
+    }
+
+    /// KHANDAQ (#G6): remove delivered generic wake-push banners from the notification-service
+    /// extension, so they don't duplicate the contentful Tox-driven local notification.
+    private func removeGenericPushNotifications() {
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+            let genericIds = delivered.filter { n in
+                let title = n.request.content.title
+                let text = n.request.content.body
+                return title == "Khandaq" || text == "New activity" || text == "New message" || text.isEmpty
+            }.map { $0.request.identifier }
+            if !genericIds.isEmpty {
+                center.removeDeliveredNotifications(withIdentifiers: genericIds)
+            }
+        }
     }
 
     func notificationObjectFromNotification(_ notification: NotificationType) -> NotificationObject {

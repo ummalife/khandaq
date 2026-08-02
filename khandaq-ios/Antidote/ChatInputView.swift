@@ -98,6 +98,10 @@ class ChatInputView: UIView {
     fileprivate var recordingTouchStartX: CGFloat = 0
     fileprivate var recordingWillCancel = false
     fileprivate static let slideCancelThreshold: CGFloat = 90.0
+    // KHANDAQ (#G7): a release faster than this is an accidental tap, not a real note — discard it
+    // (Telegram behaviour) and show the "hold to record" hint instead of sending a 0.x s clip.
+    fileprivate var recordingStartTime: Date?
+    fileprivate static let minRecordingDuration: TimeInterval = 0.7
     fileprivate var myHeight: Constraint!
     fileprivate var didconstraint = 0
     fileprivate var isEmojiActive = false
@@ -206,6 +210,7 @@ extension ChatInputView {
                 isVoiceRecording = true
                 recordingEndedByControl = false
                 recordingWillCancel = false
+                recordingStartTime = Date()
                 recordingTouchStartX = gesture.location(in: self).x
                 showRecordingBar(showControls: false)
                 delegate?.chatInputViewVoiceRecordDidStart(self)
@@ -610,7 +615,19 @@ private extension ChatInputView {
         guard isVoiceRecording else { return }
         isVoiceRecording = false
         hideRecordingBar()
-        delegate?.chatInputViewVoiceRecordDidEnd(self, cancelled: cancelled)
+
+        // KHANDAQ (#G7): a hold released quicker than minRecordingDuration is an accidental tap —
+        // discard instead of firing a 0.x s note, and nudge with the "hold to record" hint. Only
+        // applies to the hold gesture (recordingStartTime set); the menu path (nil) is unaffected.
+        var effectiveCancel = cancelled
+        if !cancelled, let start = recordingStartTime,
+           Date().timeIntervalSince(start) < ChatInputView.minRecordingDuration {
+            effectiveCancel = true
+            delegate?.chatInputViewVoiceButtonTapped(self)
+        }
+        recordingStartTime = nil
+
+        delegate?.chatInputViewVoiceRecordDidEnd(self, cancelled: effectiveCancel)
     }
 
     func updateRecordingTimerLabel() {

@@ -451,6 +451,7 @@ cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || 
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -680,7 +681,7 @@ cd $_s_/jni-c-toxcore/; export V=1;$GCC -O3 -g -shared \
     "$_toolchain_"/arm-linux-androideabi/sysroot/usr/lib/libavcodec.a \
     "$_toolchain_"/arm-linux-androideabi/sysroot/usr/lib/libavutil.a \
     coffeecatch.c coffeejni.c \
-    -lm "$_NDK_"/sources/android/cpufeatures/cpu-features2.c || exit 1
+    -lm -llog "$_NDK_"/sources/android/cpufeatures/cpu-features2.c || exit 1
 
 res=$?
 
@@ -1018,6 +1019,7 @@ cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || 
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -1250,7 +1252,7 @@ cd $_s_/jni-c-toxcore/; export V=1;$GCC -O3 -g -shared \
     "$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr/lib/libavcodec.a \
     "$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr/lib/libavutil.a \
     coffeecatch.c coffeejni.c \
-    -lm "$_NDK_"/sources/android/cpufeatures/cpu-features2.c || exit 1
+    -lm -llog "$_NDK_"/sources/android/cpufeatures/cpu-features2.c || exit 1
 
 res=$?
 
@@ -1595,6 +1597,7 @@ cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || 
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -1674,7 +1677,7 @@ cd $_s_/jni-c-toxcore/; export V=1;$GCC -O3 -g -shared -Wall -Wextra \
     "$_toolchain_"/x86/sysroot/usr/lib/libavcodec.a \
     "$_toolchain_"/x86/sysroot/usr/lib/libavutil.a \
     coffeecatch.c coffeejni.c \
-    -lm "$_NDK_"/sources/android/cpufeatures/cpu-features.c || exit 1
+    -lm -llog "$_NDK_"/sources/android/cpufeatures/cpu-features.c || exit 1
 
 res=$?
 
@@ -2018,6 +2021,7 @@ cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || 
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
+cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
 git_hash_for_toxcore=$(git rev-parse --verify --short=8 HEAD 2>/dev/null|tr -dc '[A-Fa-f0-9]' 2>/dev/null)
@@ -2097,7 +2101,7 @@ cd $_s_/jni-c-toxcore/; export V=1;$GCC -O3 -g -shared -Wall -Wextra \
     "$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr/lib/libavcodec.a \
     "$_toolchain_"/"$AND_TOOLCHAIN_ARCH"/sysroot/usr/lib/libavutil.a \
     coffeecatch.c coffeejni.c \
-    -lm "$_NDK_"/sources/android/cpufeatures/cpu-features.c || exit 1
+    -lm -llog "$_NDK_"/sources/android/cpufeatures/cpu-features.c || exit 1
 
 res=$?
 

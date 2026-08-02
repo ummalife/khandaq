@@ -10,6 +10,11 @@ name: android-native-so
 
 on:
   workflow_dispatch:
+    inputs:
+      instrument:
+        description: "Add #201 KHQ201 resend-timing logcat instrumentation (QA measurement build)"
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -20,6 +25,7 @@ jobs:
     env:
       HOME: /root
       DEBIAN_FRONTEND: noninteractive
+      KHQ201_INSTRUMENT: ${{ inputs.instrument && '1' || '' }}
     steps:
       - name: install build deps (same set as the old CircleCI recipe + a few for the native build)
         run: |

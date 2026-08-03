@@ -1876,12 +1876,18 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         asm_.totalChunks = totalChunks;
         asm_.chunkPayload = chunkPayload;
         asm_.received = QVector<bool>(static_cast<int>(totalChunks), false);
-        asm_.outPath = QString(); // filled on complete via in-memory buffer write to temp - use settings path
 
         const QString saveDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
                                 + QDir::separator() + QStringLiteral("ngc_files");
         QDir().mkpath(saveDir);
-        asm_.outPath = saveDir + QDir::separator() + fileName;
+        // KHANDAQ (audit A39): assemble into an OPAQUE scratch file named from the transfer's random
+        // msgId (hex — always filesystem-safe, never the sender-supplied fileName), so a group peer
+        // controls no on-disk name and cannot pre-create/pre-size a file under a name of its choosing.
+        // The received file is delivered in-memory via groupFileReceived(); this scratch file is
+        // deleted once assembly completes (see FILE_CHUNK below). asm_.fileName is kept only as the
+        // display name handed to the UI.
+        asm_.outPath = saveDir + QDir::separator()
+                       + QString::fromLatin1(msgId.toHex()) + QStringLiteral(".part");
 
         QFile outFile(asm_.outPath);
         if (!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -1935,24 +1941,32 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return;
         }
 
+        // KHANDAQ (audit A39): capture what we need from asm_ into locals BEFORE remove(key) — asm_ is a
+        // reference into ngcIncomingAssemblies and dangles afterwards — and delete the opaque scratch
+        // file on every exit path (it was previously left on disk on all of them).
+        const QString scratchPath = asm_.outPath;
+        const QString displayName = asm_.fileName;
         const ToxPk sender = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
         ngcIncomingAssemblies.remove(key);
         if (sender == getSelfPublicKey()) {
+            QFile::remove(scratchPath);
             return;
         }
 
-        QFile in(asm_.outPath);
+        QFile in(scratchPath);
         if (!in.open(QIODevice::ReadOnly)) {
+            QFile::remove(scratchPath);
             return;
         }
         const QByteArray fileData = in.readAll();
         in.close();
+        QFile::remove(scratchPath); // scratch fully read into memory; delivered in-memory below
 
         if (ngcFileMsgIdSeen(msgId)) {
             return;
         }
-        qDebug() << "NGC chunked file complete:" << asm_.fileName << fileData.size() << "bytes";
-        emit groupFileReceived(static_cast<int>(groupId), sender, asm_.fileName, fileData,
+        qDebug() << "NGC chunked file complete:" << displayName << fileData.size() << "bytes";
+        emit groupFileReceived(static_cast<int>(groupId), sender, displayName, fileData,
                                QDateTime::currentDateTime());
         return;
     }

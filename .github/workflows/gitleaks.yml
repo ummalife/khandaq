@@ -1,12 +1,16 @@
-# KHANDAQ (audit A18): scan the FULL git history for secrets on every push/PR (and on demand). This is
-# the forward-looking control; any already-leaked value (e.g. the Firebase key) must additionally be
-# rotated + purged from history by the owner (audit A21).
+# KHANDAQ (audit A18): secret scanning.
+# On push/PR we scan ONLY the newly-introduced commits — a fast, forward-looking gate that blocks NEW
+# secrets without failing on pre-existing history (the historical Firebase key is tracked separately as
+# audit A21 and can only be purged by a history rewrite). The FULL-history sweep runs on a weekly
+# schedule and on manual dispatch, so an audit can still surface anything already in history.
 name: gitleaks
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC — full-history audit
 
 permissions:
   contents: read
@@ -17,11 +21,30 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0   # full history for secret scanning
+          fetch-depth: 0   # full history available; the range below decides what is actually scanned
       - name: Run gitleaks (pinned)
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           VER=8.18.4
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o gitleaks.tgz
           tar -xzf gitleaks.tgz gitleaks
-          ./gitleaks detect --source . --log-opts="--all" --redact --no-banner
+          # Decide the commit range to scan.
+          case "$EVENT" in
+            schedule|workflow_dispatch)
+              RANGE="--all" ;;                              # full-history audit
+            pull_request)
+              RANGE="${PR_BASE}..${SHA}" ;;                 # only the PR's commits
+            *)
+              if [ -z "${BEFORE:-}" ] || echo "${BEFORE:-}" | grep -qE '^0+$'; then
+                RANGE="${SHA}~1..${SHA}"                    # new branch / first push: just the tip
+              else
+                RANGE="${BEFORE}..${SHA}"                   # only the pushed commits
+              fi ;;
+          esac
+          echo "gitleaks range: ${RANGE}"
+          ./gitleaks detect --source . --log-opts="${RANGE}" --redact --no-banner

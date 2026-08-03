@@ -1,0 +1,17 @@
+# KHANDAQ gitleaks config (audit A18). Extends the default ruleset, but allowlists files that
+# legitimately contain PUBLIC (non-secret) key material so the scan doesn't raise false positives:
+#   - Tox DHT node PUBLIC keys, TLS SPKI cert pins, embedded PUBLIC CA certs, public SSH signing keys.
+# Secrets are NEVER committed (Firebase SA is a mounted runtime file; the push-relay auth secret comes
+# from the environment / BuildConfig at build time), so allowlisting these public-data files is safe.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public (non-secret) key material: DHT node keys, cert pins/roots, SSH signing keys"
+paths = [
+  '''khandaq-desktop/res/nodes\.json''',
+  '''.*/res/xml/network_security_config\.xml''',
+  '''.*/Submanagers/OCTSubmanagerChatsImpl\.m''',
+  '''\.github/allowed_signers''',
+  '''\.github/CONTRIBUTING\.md''',
+]

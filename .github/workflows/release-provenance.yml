@@ -36,6 +36,45 @@ jobs:
           yes | sudo "$SDKMGR" --install "ndk;21.0.6113669" --sdk_root="${ANDROID_SDK_ROOT}" || true
           yes | sudo "$SDKMGR" --install "platforms;android-36" --sdk_root="${ANDROID_SDK_ROOT}" || true
 
+      - name: Provide google-services.json (real from secret, else placeholder for the build)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          f=khandaq-android-trifa/android-refimpl-app/app/google-services.json
+          # google-services.json is gitignored (audit A21 — it held the committed Firebase key), so it is
+          # absent on a fresh CI checkout. Use the real config if the owner supplies it as a secret (that
+          # yields the SHIPPABLE build); otherwise write a placeholder with the correct package so the
+          # google-services plugin is satisfied and we can still build an unsigned REFERENCE artifact to
+          # attest. The placeholder is created in the runner only, never committed.
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            printf '%s' "${GOOGLE_SERVICES_JSON}" > "$f"
+            echo "using google-services.json from secret"
+          elif [ ! -f "$f" ]; then
+            cat > "$f" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "khandaq-messenger",
+              "storage_bucket": "khandaq-messenger.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": { "package_name": "com.khandaq.messenger" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "PLACEHOLDER_NOT_A_REAL_KEY_reference_build_only" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+            echo "wrote placeholder google-services.json (unsigned reference build)"
+          fi
+
       - name: Build release APK (regenerate witness checksums for the CI toolchain first)
         env:
           KHANDAQ_UPLOAD_STORE_FILE: ${{ secrets.KHANDAQ_UPLOAD_STORE_FILE }}

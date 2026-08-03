@@ -19,8 +19,8 @@ set -euo pipefail
 
 # KHANDAQ (security): 1.11.0 was vulnerable to CVE-2023-5217 (VP8 heap overflow,
 # exploited in the wild; fixed in 1.13.1). Bumped to 1.14.0 to match the Linux build.
-VPX_VERSION=1.14.0
-VPX_HASH=5f21d2db27071c8a46f1725928a10227ae45c5cd1cad3727e4aafbe476e321fa
+VPX_VERSION=1.14.1
+VPX_HASH=901747254d80a7937c933d03bd7c5d41e8e6c883e0665fadcb172542167c7977
 
 source "$(dirname "$(realpath "$0")")/common.sh"
 

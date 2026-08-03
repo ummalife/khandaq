@@ -114,7 +114,13 @@ private extension KeychainManager {
         if let data = readKeychainData(forKey: key) {
             return data
         }
-        return UserDefaults.standard.data(forKey: fallbackStorageKey(key))
+        // KHANDAQ (audit A37): migrate any LEGACY plaintext UserDefaults fallback into the keychain, then
+        // it is purged (setData → writeFallbackData removes it). New data never touches UserDefaults.
+        if let legacy = UserDefaults.standard.data(forKey: fallbackStorageKey(key)) {
+            setData(legacy, forKey: key)
+            return legacy
+        }
+        return nil
     }
 
     func readKeychainData(forKey key: String) -> Data? {
@@ -145,12 +151,11 @@ private extension KeychainManager {
     }
 
     func writeFallbackData(_ newData: Data?, forKey key: String) {
-        let fallbackKey = fallbackStorageKey(key)
-        if let newData = newData {
-            UserDefaults.standard.set(newData, forKey: fallbackKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: fallbackKey)
-        }
+        // KHANDAQ (audit A37): NEVER persist sensitive data (Tox key / profile password) in plaintext
+        // UserDefaults — only purge any legacy copy. (A keychain-write failure now means the value isn't
+        // persisted this cycle, rather than being leaked in cleartext.)
+        _ = newData
+        UserDefaults.standard.removeObject(forKey: fallbackStorageKey(key))
     }
 
     func setData(_ newData: Data?, forKey key: String) {
@@ -201,7 +206,9 @@ private extension KeychainManager {
         query[kSecClass as String] = kSecClassGenericPassword
         query[kSecAttrService as String] = Constants.ActiveAccountDataService as AnyObject?
         query[kSecAttrAccount as String] = key as AnyObject?
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // KHANDAQ (audit A37): ...ThisDeviceOnly keeps background/push decrypt working but excludes the
+        // item from iCloud Keychain sync and encrypted device backups (the Tox key never leaves the device).
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
         return query
     }

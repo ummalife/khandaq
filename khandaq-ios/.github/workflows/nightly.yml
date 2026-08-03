@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
     - name: Display the OS Version1
       run: sw_vers -productVersion
@@ -73,7 +73,7 @@ jobs:
             file /Users/runner/Library/Developer/Xcode/DerivedData/Antidote-bhjjxfvewsypipfpuadvlmuxuzew/Build/Products/Debug-iphonesimulator/Antidote.app/Antidote
 
     - name: upload IPA file
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: ipa
         path: |
@@ -87,7 +87,7 @@ jobs:
         cp -v /Users/runner/work/Antidote/Antidote/Antidote_unsigned.ipa Antidote_unsigned_${GITHUB_REF#refs/*/}.ipa
     - name: Upload to versioned release
       if: contains(github.ref, 'refs/tags/v')
-      uses: ncipollo/release-action@v1
+      uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
       with:
         allowUpdates: true
         draft: true

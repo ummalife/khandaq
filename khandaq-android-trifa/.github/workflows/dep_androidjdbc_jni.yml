@@ -20,7 +20,7 @@ jobs:
       pull-requests: write
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
     - name: Run auto dependency update
       run: ./tools/check_android_jdbc.sh > output.txt
@@ -39,7 +39,7 @@ jobs:
 
     - name: Create Pull Request
       if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/zoff99/dev003' }}
-      uses: peter-evans/create-pull-request@v8
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
       with:
         commit-message: ${{ steps.titletext_str.outputs.titletext }}
         branch: create-pull-request/android_jdbc

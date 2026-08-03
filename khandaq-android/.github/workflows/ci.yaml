@@ -8,8 +8,8 @@ jobs:
   ktlint:
     runs-on: ubuntu-slim
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: adopt
           java-version: 17
@@ -28,17 +28,17 @@ jobs:
           - windows-2025
     steps:
       - name: Download tox4j
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: tox4j
           path: ~/.m2
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: adopt
           java-version: 17
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
         with:
           # https://github.com/gradle/actions/blob/11d4d83c63a6ce61b32d8a9c4faddbdb04fe9917/docs/setup-gradle.md
           cache-provider: basic
@@ -52,7 +52,7 @@ jobs:
       - run: ./gradlew build
       - name: Upload apk
         if: startsWith(matrix.os, 'ubuntu')
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: atox-debug.apk
           path: ./atox/build/outputs/apk/debug/atox-debug.apk
@@ -66,7 +66,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Run Android tests
         if: startsWith(matrix.os, 'ubuntu')
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 31
           arch: x86_64
@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: adopt
           java-version: 17
@@ -88,7 +88,7 @@ jobs:
           sbt-runner-version: 1.11.5
       - name: Set up cache
         id: cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/toktok
           key: from-src-${{ hashFiles('scripts/**') }}
@@ -108,7 +108,7 @@ jobs:
           export ANDROID_NDK_HOME="${ANDROID_SDK_ROOT}/ndk/29.0.14206865"
           ./scripts/build-all -j$(nproc)
       - name: Upload tox4j
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: tox4j
           path: ~/.m2
@@ -119,8 +119,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: adopt
           java-version: 17
@@ -131,7 +131,7 @@ jobs:
         env:
           NDK_VERSION: "25.2.9519653"
       - name: Set up Bazel cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.cache/bazel
           key: bazel-${{ hashFiles('.bazelversion', 'WORKSPACE', 'bazel/**') }}
@@ -140,7 +140,7 @@ jobs:
   buildifier:
     runs-on: ubuntu-slim
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install
         run: |
           wget --output-document=buildifier https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildifier-linux-amd64
@@ -151,7 +151,7 @@ jobs:
   prettier:
     runs-on: ubuntu-slim
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: npm install --global prettier@3.3.3
       - run: npx prettier --ignore-path .gitignore --write .
       - run: git diff --exit-code

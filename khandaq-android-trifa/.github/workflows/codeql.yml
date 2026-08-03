@@ -19,15 +19,15 @@ jobs:
         language: [ 'cpp', 'java' ]
 
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-java@v5
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+    - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
       with:
         distribution: 'temurin'
         java-version: '11'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
+      uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
       with:
         languages: ${{ matrix.language }}
 
@@ -39,13 +39,13 @@ jobs:
       run: cd android-refimpl-app ; ./gradlew assembleRelease
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
+      uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
       with:
         upload: false # disable the upload here - we will upload in a different action
         output: sarif-results
 
     - name: filter-sarif
-      uses: advanced-security/filter-sarif@v1
+      uses: advanced-security/filter-sarif@f3b8118a9349d88f7b1c0c488476411145b6270d # v1
       with:
         # filter out all test files unless they contain a sql-injection vulnerability
         patterns: |
@@ -55,13 +55,13 @@ jobs:
         output: sarif-results/${{ matrix.language }}.sarif
 
     - name: Upload SARIF
-      uses: github/codeql-action/upload-sarif@v4
+      uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
       with:
         sarif_file: sarif-results/${{ matrix.language }}.sarif
 
     # optional: for debugging the uploaded sarif
     - name: Upload loc as a Build Artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: sarif-results
         path: sarif-results

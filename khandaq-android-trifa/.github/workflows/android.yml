@@ -22,7 +22,7 @@ jobs:
     permissions:
         contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Move nightly tag to head for nightly release
         run: git tag -f nightly && git push origin nightly -f
 
@@ -31,8 +31,8 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-java@v5
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+    - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
       with:
         distribution: 'temurin'
         java-version: '17'
@@ -115,7 +115,7 @@ jobs:
         apksigner sign --ks debug.keystore --ks-pass "pass:android" --ks-key-alias androiddebugkey --out /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk --verbose /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/android-refimpl-app/app/build/outputs/apk/debug/app-debug-aligned.apk
 
     - name: upload apk
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: trifa
         path: /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk
@@ -127,7 +127,7 @@ jobs:
         cp -av /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk TRIfA-nightly.apk
 
     - name: Upload to nightly release
-      uses: ncipollo/release-action@v1
+      uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
       if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/dev003'
       with:
         allowUpdates: true
@@ -157,7 +157,7 @@ jobs:
 
     - name: Create Pull Request
       if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: peter-evans/create-pull-request@v8
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
       with:
         commit-message: update witness checksums
         branch: 'create-pull-request/witness_checksums'

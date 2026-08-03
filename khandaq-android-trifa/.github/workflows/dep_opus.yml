@@ -19,7 +19,7 @@ jobs:
       pull-requests: write
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
     - name: Run auto dependency update
       run: ./tools/check_opus.sh > output.txt
@@ -36,7 +36,7 @@ jobs:
       run: rm -f output.txt
 
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v8
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
       with:
         commit-message: update opus to ${{ steps.version_info_str.outputs.release_tag }}
         branch: create-pull-request/opus

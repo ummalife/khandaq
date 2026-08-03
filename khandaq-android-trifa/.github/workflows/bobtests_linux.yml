@@ -24,7 +24,7 @@ jobs:
       contents: write
     if: ${{ true }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: install deps
         run: |
@@ -40,7 +40,7 @@ jobs:
         run: |
           convert -list font || echo "NO ERR"
       - name: Install Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: 'temurin'
           java-version: |
@@ -100,7 +100,7 @@ jobs:
       - name: android test
         timeout-minutes: 40
         continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api-level }}
           profile: Nexus 6
@@ -179,7 +179,7 @@ jobs:
               cp -av output.png promo_102.png
               mv -v promo_102.png ../promo_${{ matrix.api-level }}_102.png
       - name: Upload to nightly release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/dev003'
         with:
           allowUpdates: true
@@ -209,7 +209,7 @@ jobs:
               mv test_007_time.png test_007.png
               mv test_099_time.png test_099.png
       - name: upload screenshots
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linuxscreen_${{ matrix.api-level }}
           path: |
@@ -217,7 +217,7 @@ jobs:
             /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/test_outputfiles/*.png
       - name: upload logcat output
         continue-on-error: true
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: logcat_${{ matrix.api-level }}
           path: |
@@ -230,7 +230,7 @@ jobs:
           cp -av /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/test_outputfiles/test_005.png screen_shot_android_${{ matrix.api-level }}_03.png
           cp -av /home/runner/work/ToxAndroidRefImpl/ToxAndroidRefImpl/test_outputfiles/test_099.png screen_shot_android_${{ matrix.api-level }}_11.png
       - name: Upload to nightly release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/dev003'
         with:
           allowUpdates: true

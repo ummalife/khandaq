@@ -450,13 +450,10 @@ void Core::performKhandaqBootstrapBurst()
         const char* publicKeyHex;
     };
 
+    // KHANDAQ (audit A44/A45): the self-hosted bootstrap*.khandaq.org nodes are RETIRED (no DNS — verified
+    // 2026-08-03) and iOS/Android already dropped them. Use the same PROVEN PUBLIC relays those clients use
+    // so desktop first-connect works and doesn't waste attempts on dead DNS.
     static const KhandaqNode khandaqNodes[] = {
-        {"bootstrap1.khandaq.org", "74AE9E62A2AE51983CF9C6B526CD89ABD8AA91864B35FC0CF7AC60454CBDDD6D"},
-        {"bootstrap2.khandaq.org", "5C6F3903FB1EC4AC386843D8FB584CC34567E045EC26939A6034C3A2746A9B6B"},
-        {"bootstrap3.khandaq.org", "A181DD1F8C9A9D41BE1875A5C2687A89C3CB4F0F76ED9C390E7270B01BF24665"},
-        // KHANDAQ (audit A45): also burst the PROVEN PUBLIC relays that iOS/Android use, so desktop
-        // first-connect no longer depends SOLELY on the self-hosted nodes (which may be retired). Whether
-        // to drop the bootstrap*.khandaq.org entries above is an ops decision (are those servers still up?).
         {"tox.abilinski.com",   "10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E"},
         {"tox1.mf-net.eu",      "B3E5FA80DC8EBD1149AD2AB35ED8B85BD546DEDE261CA593234C619249419506"},
         {"tox2.mf-net.eu",      "70EA214FDE161E7432530605213F18F7427DC773E276B3E317A07531F548545F"},

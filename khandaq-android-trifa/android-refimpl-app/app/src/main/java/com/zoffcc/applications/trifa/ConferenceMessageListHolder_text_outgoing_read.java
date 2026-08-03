@@ -298,7 +298,7 @@ public class ConferenceMessageListHolder_text_outgoing_read extends RecyclerView
         // check to see if protocol is specified in URL, otherwise add "http://"
         if (!url2.contains("://"))
         {
-            url2 = "http://" + url1;
+            url2 = "https://" + url1;
         }
         final String url = url2;
 

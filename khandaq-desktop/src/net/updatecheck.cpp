@@ -30,7 +30,7 @@
 #include <cassert>
 
 namespace {
-const QString versionUrl{QStringLiteral("https://api.github.com/repos/qTox/qTox/releases/latest")};
+const QString versionUrl{QStringLiteral("https://api.github.com/repos/ummalife/khandaq/releases/latest")};
 const QString versionRegexString{QStringLiteral("v([0-9]+)\\.([0-9]+)\\.([0-9]+)")};
 
 struct Version {

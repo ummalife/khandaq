@@ -109,3 +109,6 @@ __pycache__/
 *.tmp
 dmg.tmp/
 khandaq-desktop/osx/DS_Store-DMG
+
+# KHANDAQ (audit A21): keep Firebase config out of git (rotate the leaked key in GCP)
+**/google-services.json

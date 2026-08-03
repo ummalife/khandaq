@@ -897,7 +897,7 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         // check to see if protocol is specified in URL, otherwise add "http://"
         if (!url2.contains("://"))
         {
-            url2 = "http://" + url1;
+            url2 = "https://" + url1;
         }
         final String url = url2;
 

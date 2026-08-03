@@ -50,7 +50,7 @@ def _is_trusted_proxy(addr: str) -> bool:
         ip = ipaddress.ip_address(addr)
     except ValueError:
         return False
-    return ip.is_loopback or ip.is_private or ip.is_link_local
+    return ip.is_loopback  # KHANDAQ (audit A5): only loopback is auto-trusted; other hops via PUSH_TRUSTED_PROXIES
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}

@@ -146,7 +146,13 @@ static const char global_version_asan_string[] = "0.99.96-ASAN";
      _a < _b ? _a : _b; })
 
 
-#define CURRENT_LOG_LEVEL 9 // 0 -> error, 1 -> warn, 2 -> info, 9 -> debug
+// KHANDAQ (audit A22): full verbosity leaks metadata (pubkeys, message flow) in production logs.
+// Release builds (NDEBUG) log warnings-and-above only; debug builds keep full verbosity.
+#ifdef NDEBUG
+#define CURRENT_LOG_LEVEL 1 // release: 0 -> error, 1 -> warn
+#else
+#define CURRENT_LOG_LEVEL 9 // debug: 0 -> error, 1 -> warn, 2 -> info, 9 -> debug
+#endif
 #define MAX_LOG_LINE_LENGTH 1000
 #define MAX_FULL_PATH_LENGTH 1000
 

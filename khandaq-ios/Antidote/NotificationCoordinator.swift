@@ -51,6 +51,11 @@ class NotificationCoordinator: NSObject {
     fileprivate var lastLocalNotificationBody: String = ""
     fileprivate var lastLocalNotificationTime: TimeInterval = 0
 
+    // KHANDAQ (#H3): when the app last became active. On foreground Realm flushes the backlog of
+    // messages that arrived while away as a single insertion batch; those must not ring on entry
+    // (the user was already push-notified). We suppress the new-message sound briefly after this.
+    fileprivate var lastBecameActiveDate: Date = .distantPast
+
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
         self.notificationWindow = NotificationWindow(theme: theme)
@@ -171,6 +176,7 @@ extension NotificationCoordinator: CoordinatorProtocol {
 // MARK: Notifications
 extension NotificationCoordinator {
     @objc func applicationDidBecomeActive() {
+        lastBecameActiveDate = Date()
         UIApplication.shared.cancelAllLocalNotifications()
     }
 }
@@ -258,6 +264,13 @@ private extension NotificationCoordinator {
         // genuinely-live message has tssent ≈ now; a flushed/backfilled one has an old tssent. 45s absorbs
         // sender clock skew. Non-msgv3 peers have tssent==0 (can't be offline-queued) → ring normally.
         if message.tssent > 0, Date().timeIntervalSince1970 - message.tssent > 45 {
+            return
+        }
+        // KHANDAQ (#H3): don't ring for the backlog Realm flushes right after the app comes to the
+        // foreground — those arrived while away (already push-notified) and rang "on entry with nothing
+        // new visible". A message arriving while the app is already open (past this short grace window)
+        // still rings normally.
+        if Date().timeIntervalSince(lastBecameActiveDate) < 3.0 {
             return
         }
         // Don't ring for the chat that's already open in the foreground (mirror shouldEnqueueMessage).

@@ -93,11 +93,14 @@ class ChatBaseTextCell: ChatMovableDateCell {
                 .font: baseFont,
             ])
         }
+        // KHANDAQ (#H2 rework): style the marker like the timestamp/status metadata — italic + the
+        // grey ChatInformationText colour (same as the time/checkmark), no parentheses — so it clearly
+        // reads as a system note rather than text the sender typed into the message.
         let marker = NSAttributedString(
             string: "  " + String(localized: "message_edited_marker"),
             attributes: [
-                .font: UIFont.systemFont(ofSize: max(baseFont.pointSize - 4.0, 10.0)),
-                .foregroundColor: theme.colorForType(.NormalText).withAlphaComponent(0.45),
+                .font: UIFont.italicSystemFont(ofSize: max(baseFont.pointSize - 3.0, 11.0)),
+                .foregroundColor: theme.colorForType(.ChatInformationText),
             ])
         result.append(marker)
         bubbleView.attributedText = result

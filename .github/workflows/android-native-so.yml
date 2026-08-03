@@ -41,7 +41,7 @@ jobs:
           ln -sf /usr/bin/python3 /usr/bin/python || true
 
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: stage source into /root/work (scripts hard-code _HOME_=/root/work)
         run: |
@@ -77,7 +77,7 @@ jobs:
 
       - name: upload libjni-c-toxcore.so (all ABIs that finished)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: libjni-c-toxcore-so-201
           if-no-files-found: warn

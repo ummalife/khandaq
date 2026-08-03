@@ -3326,6 +3326,12 @@ bool toxav_ngc_video_decode(void *vngc, uint8_t *encoded_frame_bytes, uint32_t e
                 // ------ GOT a VIDEO FRAME ------
             } else if ((frame->format == 23) && (frame->linesize[0] > 1)
                     && (frame->linesize[1] > 1) && (frame->data[0]) && (frame->data[1])) {
+                    // KHANDAQ (audit A29): same bounds guard as the planar branch — reject a peer frame
+                    // whose stride/height exceed the caller's y/u/v buffers before the memcpy (heap overflow).
+                    if ((width < frame->linesize[0]) || (height != frame->height)) {
+                        av_frame_free(&frame);
+                        continue;
+                    }
                     *ystride = frame->linesize[0];
                     *ustride = frame->linesize[1] / 2;
                     *vstride = frame->linesize[1] / 2;

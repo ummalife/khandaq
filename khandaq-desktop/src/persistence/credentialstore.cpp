@@ -78,7 +78,7 @@ bool CredentialStore::save(const QString& profile, const QString& password)
     cred.UserName = user.data();
     cred.CredentialBlobSize = static_cast<DWORD>(secret.size() * sizeof(wchar_t));
     cred.CredentialBlob = reinterpret_cast<LPBYTE>(secret.data());
-    cred.Persist = CRED_PERSIST_LOCAL_MACHINE;
+    cred.Persist = CRED_PERSIST_CURRENT_USER; // KHANDAQ (audit A43): scope to this user, not all machine users
 
     return CredWriteW(&cred, 0) != FALSE;
 #else

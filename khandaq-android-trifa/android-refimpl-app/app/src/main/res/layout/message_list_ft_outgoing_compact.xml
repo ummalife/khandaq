@@ -157,9 +157,12 @@
 
 
                     <include layout="@layout/chat_file_attachment_row" />
-                    <include layout="@layout/chat_reactions_row" />
 
                 </LinearLayout>
+
+                <!-- KHANDAQ (#206 parity): reactions hoisted OUT of the gone-by-default ft_preview_container
+                     to bubble level, so chips aren't mispositioned far below on voice / non-image files. -->
+                <include layout="@layout/chat_reactions_row" />
 
                 <!-- KHANDAQ: no in-bubble bubble_time for media — time goes to the footer's
                      date_time so it sits on ONE row next to the checkmark (m_status), like text. -->

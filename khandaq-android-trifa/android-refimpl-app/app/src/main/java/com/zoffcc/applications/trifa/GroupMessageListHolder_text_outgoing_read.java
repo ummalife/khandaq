@@ -228,7 +228,7 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         ChatBubbleUiHelper.bind_text_message_bubble(text_block_group, textView, true, parsedGroup.bodyText,
                 PREF__global_font_size, parsedGroup.reply != null, false);
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
-                HelperGeneric.format_group_message_time(m, true), true);
+                HelperGeneric.format_group_message_time(m, true), true, m.edited);
         ChatBubbleUiHelper.bind_outgoing_delivery_status(imageView, m);
         ChatBubbleUiHelper.bind_reply_quote(text_block_group, parsedGroup.reply,
                 meta -> HelperReply.scrollToReplyTargetInGroupChat(meta));

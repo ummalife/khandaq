@@ -374,7 +374,7 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
         ChatBubbleUiHelper.bind_text_message_bubble(bubble, textView, false, parsedMessage.bodyText,
                 PREF__global_font_size, parsedMessage.reply != null, locationBound);
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
-                format_chat_message_time(m, false), false);
+                format_chat_message_time(m, false), false, m.edited);
         ChatBubbleUiHelper.bind_reply_quote(bubble, parsedMessage.reply,
                 meta -> HelperReply.scrollToReplyTargetInDirectChat(meta));
         if (img_avatar != null)

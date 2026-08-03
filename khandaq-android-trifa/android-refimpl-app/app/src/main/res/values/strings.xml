@@ -1118,4 +1118,5 @@
     <string name="group_peer_kick_success">%1$s was removed from the group.</string>
     <string name="group_peer_kick_failed">Could not remove this member. Try again later.</string>
 
+    <string name="message_edited_marker">edited</string>
 </resources>

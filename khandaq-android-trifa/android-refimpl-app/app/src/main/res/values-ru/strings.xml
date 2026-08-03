@@ -1010,4 +1010,5 @@
     <string name="group_peer_kick_confirm_message">%1$s больше не сможет отправлять сообщения в этой группе.</string>
     <string name="group_peer_kick_success">%1$s удалён из группы.</string>
     <string name="group_peer_kick_failed">Не удалось удалить участника. Попробуйте позже.</string>
+    <string name="message_edited_marker">изменено</string>
 </resources>

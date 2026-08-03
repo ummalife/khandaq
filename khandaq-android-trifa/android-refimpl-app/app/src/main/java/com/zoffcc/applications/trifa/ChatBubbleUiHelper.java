@@ -563,6 +563,24 @@ final class ChatBubbleUiHelper
         }
     }
 
+    // KHANDAQ (Android edited-marker parity): show a Telegram-style «изменено» before the timestamp when
+    // the message was edited (own + incoming). It shares the grey/small bubble-time style, so
+    // "изменено 19:07" reads as a system note. `edited` applies to text messages only (files can't be edited).
+    static void bind_bubble_time(final TextView bubbleTime, final TextView externalTime,
+                                 final String timeText, final boolean outgoing, final boolean edited)
+    {
+        String t = timeText;
+        if (edited && timeText != null)
+        {
+            final TextView anchor = (bubbleTime != null) ? bubbleTime : externalTime;
+            if (anchor != null)
+            {
+                t = anchor.getContext().getString(R.string.message_edited_marker) + " " + timeText;
+            }
+        }
+        bind_bubble_time(bubbleTime, externalTime, t, outgoing);
+    }
+
     private static void apply_bubble_time_style(final TextView timeView, final boolean outgoing,
                                                 final boolean inlineInBubble)
     {

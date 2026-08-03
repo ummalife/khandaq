@@ -308,12 +308,16 @@ android {
         release {
             crunchPngs false
             ext.enableCrashlytics = false
-            minifyEnabled false
+            // KHANDAQ (audit A30): code shrinking on. proguard-rules.pro keeps -dontobfuscate +
+            // -dontoptimize, so only dead-code removal runs and the JNI bridge / C->Java callbacks
+            // are kept intact. shrinkResources stays false (dynamic resource lookups make resource
+            // shrinking a separate, higher-risk change needing its own device QA).
+            minifyEnabled true
             shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro', 'proguard-gson.pro', 'proguard-glide.pro', 'proguard-sqlite.pro', 'proguard-mikepenz-android-iconics.pro', 'proguard-rounded-image-view.pro'
             ndk {
                 abiFilters 'arm64-v8a', 'armeabi-v7a'
             }
-            // proguardFile ('proguard-disable.pro')
             if (project.hasProperty('KHANDAQ_UPLOAD_STORE_FILE')) {
                 signingConfig signingConfigs.release
             }

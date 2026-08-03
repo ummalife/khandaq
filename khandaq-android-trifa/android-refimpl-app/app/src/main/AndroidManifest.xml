@@ -83,6 +83,7 @@
         android:requestLegacyExternalStorage="false"
         android:theme="@style/AppTheme"
         android:localeConfig="@xml/locales_config"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:replace="android:allowBackup,android:fullBackupContent,android:label">
 
         <meta-data

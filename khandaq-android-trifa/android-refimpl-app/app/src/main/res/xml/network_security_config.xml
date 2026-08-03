@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  KHANDAQ (audit A47): certificate pinning for the push wake endpoint push.khandaq.org.
+
+  We pin the STABLE Let's Encrypt trust anchors (ISRG Root X2 — the current ECDSA anchor —
+  and ISRG Root X1 as the RSA fallback), PLUS the currently-served LE intermediate as a
+  belt-and-suspenders third pin. Pinning the ROOTS (valid until 2035) rather than the leaf
+  is deliberate: LE rotates the leaf every ~60-90 days and the intermediate ~yearly, and
+  pinning either would break push on every routine renewal. The roots survive all routine
+  LE rotation.
+
+  `expiration` is an anti-brick safety net: after this date Android stops enforcing the pins
+  and reverts to normal system-CA validation, so even a full CA migration cannot brick push
+  beyond this window. IMPORTANT: if push.khandaq.org ever migrates off Let's Encrypt, refresh
+  these pins (and this date) in a client release BEFORE the expiration lapses.
+
+  Live chain fetched 2026-08-03 via `openssl s_client -connect push.khandaq.org:443`.
+  Only push.khandaq.org is pinned; all other traffic keeps default validation.
+-->
+<network-security-config>
+    <domain-config>
+        <domain includeSubdomains="false">push.khandaq.org</domain>
+        <pin-set expiration="2027-08-01">
+            <!-- ISRG Root X2 (ECDSA, valid to 2035) — current chain anchor -->
+            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
+            <!-- ISRG Root X1 (RSA, valid to 2035) — fallback if LE serves the RSA chain -->
+            <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+            <!-- Let's Encrypt intermediate (currently served) — always present in the chain -->
+            <pin digest="SHA-256">s/tdAOmUzd8syaTuqfgGvFcn6DzA5Cmb+Vby1ST+U3Y=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>

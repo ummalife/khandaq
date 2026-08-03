@@ -11,9 +11,11 @@ services:
       - PORT=8080
       - FCM_PROJECT_ID=khandaq-messenger
       - FCM_SERVICE_ACCOUNT_FILE=/run/secrets/firebase-sa.json
-      # Push relay auth (security NEW-2). Empty defaults => auth stays OFF, so current deploys are
-      # unchanged. To enable, provide these to the shell before `docker compose up` (keep the secret
-      # OUT of git — e.g. `set -a; . /opt/khandaq-push/.env; set +a`). See docs/PUSH_AUTH_ROLLOUT.md.
-      - PUSH_RELAY_AUTH_SECRET=${PUSH_RELAY_AUTH_SECRET:-}
+      # KHANDAQ (audit A1): the relay must not run without auth. The secret is now MANDATORY --
+      # `docker compose up` fails fast if it is unset (provide it via the shell / .env, kept OUT of
+      # git: `set -a; . /opt/khandaq-push/.env; set +a`). PUSH_AUTH_ENFORCE stays 0 (soft/monitor) by
+      # default so clients that do not sign yet keep working; flip it to 1 once client signing is
+      # adopted (watch the "push auth SOFT" log lines drop to ~0). See docs/PUSH_AUTH_ROLLOUT.md.
+      - PUSH_RELAY_AUTH_SECRET=${PUSH_RELAY_AUTH_SECRET:?set a strong random secret in /opt/khandaq-push/.env; it must match the value baked into the iOS/Android client builds}
       - PUSH_AUTH_ENFORCE=${PUSH_AUTH_ENFORCE:-0}
       - PUSH_AUTH_MAX_SKEW_SEC=${PUSH_AUTH_MAX_SKEW_SEC:-300}

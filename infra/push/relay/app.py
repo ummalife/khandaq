@@ -256,9 +256,13 @@ def _rate_ok(client_ip: str) -> bool:
 
 
 def _auth_ok() -> bool:
-    # Auth stays OFF until a secret is provisioned (current production state).
+    # KHANDAQ (audit A1): the relay must never run wide-open. docker-compose makes
+    # PUSH_RELAY_AUTH_SECRET mandatory (:? -> the container refuses to start without it), so an
+    # empty secret here is a misconfiguration, not "auth off" -> fail CLOSED instead of accepting
+    # every request.
     if not PUSH_RELAY_AUTH_SECRET:
-        return True
+        log.error("push auth: PUSH_RELAY_AUTH_SECRET is empty -> rejecting (set it in the relay .env)")
+        return False
 
     if _auth_signature_valid():
         return True
@@ -267,8 +271,10 @@ def _auth_ok() -> bool:
     if PUSH_AUTH_ENFORCE:
         return False  # hard enforce -> caller returns 401
 
-    # Soft/monitor mode: allow it through but record it, so adoption can be measured
-    # before flipping PUSH_AUTH_ENFORCE=1. client_ip is best-effort here.
+    # Soft/monitor mode (TRANSITIONAL): allow the unsigned request through but record it, so
+    # client-signing adoption can be measured from these logs. Old clients built before the secret
+    # was provisioned do not sign yet; enforcing now would drop their pushes. Once the "SOFT" line
+    # count falls to ~0 (i.e. shipped clients sign), set PUSH_AUTH_ENFORCE=1 to close the window.
     log.warning("push auth SOFT: unsigned/invalid request allowed from %s (set PUSH_AUTH_ENFORCE=1 after client adoption)", _client_ip())
     return True
 

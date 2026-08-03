@@ -414,10 +414,29 @@ public class ShareActivity extends AppCompatActivity
         }
     }
 
+    // KHANDAQ (audit A27): a malicious app can ACTION_SEND us a URI pointing at OUR OWN private files
+    // (a file:// path, or a content:// from our own FileProvider) — we'd then read + attach + exfiltrate
+    // it to a chat. Only accept content:// URIs whose authority is NOT ours (i.e. a real foreign share).
+    private boolean isUnsafeShareUri(Uri uri)
+    {
+        if (uri == null) { return true; }
+        if (!"content".equalsIgnoreCase(uri.getScheme())) { return true; } // reject file:// and non-content
+        final String auth = uri.getAuthority();
+        if (auth != null)
+        {
+            final String pkg = getPackageName();
+            if (auth.equals(pkg) || auth.startsWith(pkg + ".") || auth.toLowerCase().contains("khandaq"))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void handleSendImage(Intent intent, String id, int type)
     {
         Uri imageUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
-        if (imageUri != null)
+        if (imageUri != null && !isUnsafeShareUri(imageUri))
         {
             Intent intent_fixup = new Intent();
             intent_fixup.setData(imageUri);
@@ -442,6 +461,14 @@ public class ShareActivity extends AppCompatActivity
         ArrayList<Uri> imageUris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
         if (imageUris != null)
         {
+            // KHANDAQ (audit A27): drop any URI that isn't a foreign content:// share (see isUnsafeShareUri).
+            final ArrayList<Uri> safeUris = new ArrayList<>();
+            for (Uri u : imageUris)
+            {
+                if (!isUnsafeShareUri(u)) { safeUris.add(u); }
+            }
+            imageUris = safeUris;
+            if (imageUris.isEmpty()) { this.finish(); return; }
             if (type == 0)
             {
                 MediaSendPreviewHelper.dispatchAttachments(this, imageUris,

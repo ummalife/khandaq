@@ -3,10 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application>
+        <!-- KHANDAQ (audit A25): debug-only QA receiver is NOT exported — an external app can no longer
+             broadcast to it (it is BuildConfig.DEBUG-gated and never in release builds anyway). -->
         <receiver
             android:name="com.zoffcc.applications.trifa.QaGroupBroadcastReceiver"
             android:enabled="true"
-            android:exported="true"
+            android:exported="false"
             tools:replace="android:enabled,android:exported" />
     </application>
 </manifest>

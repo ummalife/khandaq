@@ -49,6 +49,17 @@ public final class PushUrlValidator
         try
         {
             final Uri uri = Uri.parse(pushUrl);
+
+            // KHANDAQ (audit A33): reject constructs where this parser (android.net.Uri) and the parser
+            // at the actual request site (OkHttp) can disagree on the host — userinfo ("host.a@host.b")
+            // and backslashes are the classic host-confusion tricks that smuggle a different host past
+            // this whitelist (SSRF / IP leak). Legit push URLs contain neither.
+            if (uri.getUserInfo() != null || pushUrl.indexOf('\\') >= 0
+                || pushUrl.indexOf('@') >= 0 || pushUrl.matches(".*\\s.*"))
+            {
+                return false;
+            }
+
             final String host = uri.getHost();
             final String path = uri.getPath();
 

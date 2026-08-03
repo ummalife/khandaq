@@ -48,7 +48,6 @@ const QStringList neededFields{status_udp, status_tcp, ipv4, ipv6, public_key, u
 } // namespace NodeFields
 
 namespace {
-const QUrl NodeListAddress{"https://nodes.tox.chat/json"};
 const QLatin1String jsonNodeArrayName{"nodes"};
 const QLatin1String emptyAddress{"-"};
 const QRegularExpression ToxPkRegEx(QString("(^|\\s)[A-Fa-f0-9]{%1}($|\\s)").arg(64));
@@ -238,17 +237,6 @@ QList<DhtServer> BootstrapNodeUpdater::getBootstrapNodes() const
     }
 }
 
-void BootstrapNodeUpdater::requestBootstrapNodes()
-{
-    nam.setProxy(proxy);
-    connect(&nam, &QNetworkAccessManager::finished, this, &BootstrapNodeUpdater::onRequestComplete);
-
-    QNetworkRequest request{NodeListAddress};
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-    nam.get(request);
-}
-
 /**
  * @brief Loads the list of built in boostrap nodes
  * @return List of bootstrap nodes on success, empty list on error
@@ -256,24 +244,4 @@ void BootstrapNodeUpdater::requestBootstrapNodes()
 QList<DhtServer> BootstrapNodeUpdater::loadDefaultBootstrapNodes()
 {
     return loadNodesFile(builtinNodesFile);
-}
-
-void BootstrapNodeUpdater::onRequestComplete(QNetworkReply* reply)
-{
-    if (reply->error() != QNetworkReply::NoError) {
-        nam.clearAccessCache();
-        emit availableBootstrapNodes({});
-        return;
-    }
-
-    // parse the reply JSON
-    QJsonDocument jsonDocument = QJsonDocument::fromJson(reply->readAll());
-    if (jsonDocument.isNull()) {
-        emit availableBootstrapNodes({});
-        return;
-    }
-
-    QList<DhtServer> result = jsonToNodeList(jsonDocument);
-
-    emit availableBootstrapNodes(result);
 }

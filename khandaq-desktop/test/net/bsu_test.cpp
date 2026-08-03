@@ -34,7 +34,7 @@ class TestBootstrapNodesUpdater : public QObject
 public:
     TestBootstrapNodesUpdater();
 private slots:
-    void testOnline();
+    // KHANDAQ (audit A44): the online test exercised the removed unpinned nodes.tox.chat fetch.
     void testLocal();
 };
 
@@ -43,22 +43,6 @@ TestBootstrapNodesUpdater::TestBootstrapNodesUpdater()
     qRegisterMetaType<QList<DhtServer>>("QList<DhtServer>");
     // Contains the builtin nodes list
     Q_INIT_RESOURCE(res);
-}
-
-void TestBootstrapNodesUpdater::testOnline()
-{
-    QNetworkProxy proxy{QNetworkProxy::ProxyType::NoProxy};
-    Paths paths{Paths::Portable::NonPortable};
-
-    BootstrapNodeUpdater updater{proxy, paths};
-    QSignalSpy spy(&updater, &BootstrapNodeUpdater::availableBootstrapNodes);
-
-    updater.requestBootstrapNodes();
-
-    spy.wait(10000); // increase wait time for speradic CI failures with slow nodes server
-    QCOMPARE(spy.count(), 1); // make sure the signal was emitted exactly one time
-    QList<DhtServer> result = qvariant_cast<QList<DhtServer>>(spy.at(0).at(0));
-    QVERIFY(result.size() > 0); // some data should be returned
 }
 
 void TestBootstrapNodesUpdater::testLocal()

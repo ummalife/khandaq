@@ -36,14 +36,11 @@ class BootstrapNodeUpdater : public QObject, public IBootstrapListGenerator
 public:
     explicit BootstrapNodeUpdater(const QNetworkProxy& proxy_, Paths& paths_, QObject* parent = nullptr);
     QList<DhtServer> getBootstrapNodes() const override;
-    void requestBootstrapNodes();
     static QList<DhtServer> loadDefaultBootstrapNodes();
 
-signals:
-    void availableBootstrapNodes(QList<DhtServer> nodes);
-
-private slots:
-    void onRequestComplete(QNetworkReply* reply);
+    // KHANDAQ (audit A44): the runtime bootstrap-list fetch over the unpinned/unsigned
+    // https://nodes.tox.chat/json endpoint was dead code (never called — the app loads the
+    // bundled/user nodes.json only), so it was removed to eliminate the substitution/MITM surface.
 
 private:
     QList<DhtServer> loadUserBootrapNodes();

@@ -2298,6 +2298,16 @@ public class TrifaToxService extends Service
         HelperGeneric.logI(TAG, "bootstrap_tcp_parallel:ok=" + successCount.get() + " tried=" + limit);
     }
 
+    // KHANDAQ: re-push undelivered wake pings with backoff instead of ONCE. Previously a message got a
+    // single push ~10s after sending; if that wake was missed (peer app killed by the OEM, FCM delayed,
+    // no network for a moment) the message stayed stuck until the peer manually opened the app. Now the
+    // `sent_push` int doubles as an attempt counter and we re-wake on a backoff schedule, capped, and only
+    // while the message is still undelivered (read==false → we stop the moment a read/delivery receipt
+    // arrives). The push relay coalesces duplicates, and a duplicate wake is harmless (it only wakes the
+    // peer, it does not resend the message), so this is safe to retry.
+    static final int PUSH_WAKE_MAX_ATTEMPTS = 5;
+    static final long[] PUSH_WAKE_BACKOFF_MS = {10_000L, 45_000L, 120_000L, 300_000L, 720_000L};
+
     static void resend_push_for_v3_messages()
     {
         try
@@ -2307,17 +2317,16 @@ public class TrifaToxService extends Service
                 return;
             }
 
-            // HINT: if we have not received a "read receipt" for msgV3 within 10 seconds, then we trigger a push again
-            final long cutoff_sent_time = System.currentTimeMillis() - (10 * 1000);
+            final long now = System.currentTimeMillis();
 
             List<com.zoffcc.applications.sorm.Message> m_push = orma.selectFromMessage().
                     directionEq(1).
                     msg_versionEq(0).
                     TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_TYPE_TEXT.value).
-                    sent_pushEq(0).
+                    sent_pushLt(PUSH_WAKE_MAX_ATTEMPTS).
                     readEq(false).
                     orderBySent_timestampAsc().
-                    sent_timestampLt(cutoff_sent_time).
+                    sent_timestampLt(now - PUSH_WAKE_BACKOFF_MS[0]).
                     toList();
 
             if ((m_push != null) && (m_push.size() > 0))
@@ -2328,7 +2337,13 @@ public class TrifaToxService extends Service
                     Message m_resend_push = (Message) ii.next();
                     if ((m_resend_push.msg_idv3_hash != null) && (m_resend_push.msg_idv3_hash.length() > 3))
                     {
-                        friend_call_push_url(m_resend_push.tox_friendpubkey, m_resend_push.sent_timestamp);
+                        // attempt N is due only once (sent_time + backoff[N]) has passed; sent_push is
+                        // incremented on each successful push (update_message_in_db_sent_push_set).
+                        final int attempt = Math.max(0, Math.min(m_resend_push.sent_push, PUSH_WAKE_BACKOFF_MS.length - 1));
+                        if (now >= (m_resend_push.sent_timestamp + PUSH_WAKE_BACKOFF_MS[attempt]))
+                        {
+                            friend_call_push_url(m_resend_push.tox_friendpubkey, m_resend_push.sent_timestamp);
+                        }
                     }
                 }
             }

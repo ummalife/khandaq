@@ -1370,24 +1370,29 @@ public class HelperMessage
     {
         try
         {
+            // KHANDAQ: no sent_pushEq(0) filter anymore — a wake ping can be re-sent with backoff while the
+            // message stays undelivered, so we must also find rows already pushed >=1 time to bump their counter.
             Message m = (Message) orma.selectFromMessage().
                     tox_friendpubkeyEq(friend_pubkey).
                     sent_timestampBetween(sent_timestamp - PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_prev,
                                           sent_timestamp + PUSH_URL_TRIGGER_GET_MESSAGE_FOR_delta_ms_after).
                     directionEq(1).
-                    sent_pushEq(0).
                     orderBySent_timestampAsc().
                     limit(1).toList().get(0);
 
             // Log.i(TAG, "update_message_in_db_sent_push_set:ts=" + sent_timestamp + " m=" + m);
 
+            // KHANDAQ: sent_push doubles as the wake-attempt counter — increment, not set-to-1, so
+            // resend_push_for_v3_messages can space retries by count (backoff) and cap them.
+            final int next_push_count = m.sent_push + 1;
+
             orma.updateMessage().
                     tox_friendpubkeyEq(friend_pubkey).
                     idEq(m.id).
-                    sent_push(1).
+                    sent_push(next_push_count).
                     execute();
 
-            m.sent_push = 1;
+            m.sent_push = next_push_count;
 
             update_single_message(m, true);
         }

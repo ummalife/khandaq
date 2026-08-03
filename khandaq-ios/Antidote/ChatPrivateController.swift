@@ -1979,18 +1979,18 @@ private extension ChatPrivateController {
         actions.append(ChatContextMenuAction(title: String(localized: "alert_delete"), systemImageName: "trash", destructive: true) { [weak self] in self?.chatMovableDateCellDeletePressed(cell) })
 
         let editable = cell as? ChatEditable
-        let rect: CGRect
-        if let editable = editable {
-            rect = cell.convert(editable.menuTargetRect(), to: view)
-        } else {
-            rect = cell.convert(cell.bounds, to: view)
-        }
+        let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds
+        let rect = cell.convert(bubbleRectInCell, to: view)
+        // KHANDAQ (#G5): lifted-bubble snapshot (Telegram-style) — taken before willShowMenu so it captures
+        // the pristine bubble; nil-safe (falls back to the dimmed real bubble).
+        let snapshot = cell.resizableSnapshotView(from: bubbleRectInCell, afterScreenUpdates: false, withCapInsets: .zero)
         // KHANDAQ (#G5 reaction-row): suppress the bubble's own text-selection/loupe while the popup is
         // up (mirrors the legacy UIMenuController willShow/Hide), then restore it (keeps links tappable).
         editable?.willShowMenu()
         reactionPopup.presentMenu(in: view, aroundRect: rect,
                                   currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
                                   dark: ThemeAppearance.isDarkMode, actions: actions,
+                                  bubbleSnapshot: snapshot,
                                   onPick: { [weak self] emoji in
                                       self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
                                   },

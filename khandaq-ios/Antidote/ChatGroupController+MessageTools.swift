@@ -350,16 +350,15 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.toggleTableViewEditing(true, animated: true) })
 
         let editable = cell as? ChatEditable
-        let rect: CGRect
-        if let editable = editable {
-            rect = cell.convert(editable.menuTargetRect(), to: view)
-        } else {
-            rect = cell.convert(cell.bounds, to: view)
-        }
+        let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds
+        let rect = cell.convert(bubbleRectInCell, to: view)
+        // KHANDAQ (#G5): lifted-bubble snapshot (Telegram-style), nil-safe.
+        let snapshot = cell.resizableSnapshotView(from: bubbleRectInCell, afterScreenUpdates: false, withCapInsets: .zero)
         editable?.willShowMenu()
         reactionPopup.presentMenu(in: view, aroundRect: rect,
                                   currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
                                   dark: ThemeAppearance.isDarkMode, actions: actions,
+                                  bubbleSnapshot: snapshot,
                                   onPick: { [weak self] emoji in
                                       guard let self = self else { return }
                                       self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)

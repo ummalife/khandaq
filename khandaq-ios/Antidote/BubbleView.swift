@@ -397,7 +397,8 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
     /// bubble and a vertical action menu BELOW it, over one dimmed tap-to-dismiss backdrop. Reuses the
     /// tested bar/backdrop/expand path; the message stays visible under the light dim (no snapshot).
     func presentMenu(in host: UIView, aroundRect rect: CGRect, currentEmoji: String?, dark: Bool,
-                     actions: [ChatContextMenuAction], onPick: @escaping (String) -> Void,
+                     actions: [ChatContextMenuAction], bubbleSnapshot: UIView? = nil,
+                     onPick: @escaping (String) -> Void,
                      onDismiss: (() -> Void)? = nil) {
         dismiss(animated: false)
         pickHandler = onPick
@@ -409,6 +410,14 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         backdrop.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(backdropTapped)))
         host.addSubview(backdrop)
         self.backdrop = backdrop
+
+        // --- lifted bubble snapshot (Telegram-style): the message sits ABOVE the dim, un-dimmed, between
+        // the reaction bar and the action card. Additive — if no snapshot is supplied the real (lightly
+        // dimmed) bubble shows through as before. Added first so the bar/card render on top. ---
+        if let snapshot = bubbleSnapshot {
+            snapshot.frame = rect
+            backdrop.addSubview(snapshot)
+        }
 
         // --- reaction bar (above) ---
         let bar = ChatReactionBar(currentEmoji: currentEmoji, dark: dark)

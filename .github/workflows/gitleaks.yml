@@ -1,0 +1,27 @@
+# KHANDAQ (audit A18): scan the FULL git history for secrets on every push/PR (and on demand). This is
+# the forward-looking control; any already-leaked value (e.g. the Firebase key) must additionally be
+# rotated + purged from history by the owner (audit A21).
+name: gitleaks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0   # full history for secret scanning
+      - name: Run gitleaks (pinned)
+        run: |
+          set -euo pipefail
+          VER=8.18.4
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o gitleaks.tgz
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks detect --source . --log-opts="--all" --redact --no-banner

@@ -985,15 +985,29 @@ void export_savedata_file_unsecure(const Tox *tox, const uint8_t *passphrase, si
     dbg(9, "export_savedata_file_unsecure:tox_get_savedata_size=%d", (int)size);
     char *savedata = malloc(size);
     dbg(9, "export_savedata_file_unsecure:savedata=%p", savedata);
-    tox_get_savedata(tox, (uint8_t *)savedata);
-    FILE *f = fopen(export_full_path_of_file, "wb");
-    fwrite(savedata, size, 1, f);
-    fclose(f);
-
-    if(savedata)
+    if(savedata == NULL)
     {
-        free(savedata);
+        return;
     }
+    tox_get_savedata(tox, (uint8_t *)savedata);
+    // KHANDAQ (audit A23): the savedata contains the Tox PRIVATE KEY. Write it 0600 (owner-only — the
+    // export target may be outside the app sandbox), and wipe the plaintext from heap before free so it
+    // doesn't linger in freed memory.
+    int fd = open(export_full_path_of_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if(fd >= 0)
+    {
+        size_t off = 0;
+        while(off < size)
+        {
+            ssize_t w = write(fd, savedata + off, size - off);
+            if(w <= 0) { break; }
+            off += (size_t)w;
+        }
+        fsync(fd);
+        close(fd);
+    }
+    sodium_memzero(savedata, size);
+    free(savedata);
 }
 
 
@@ -2589,13 +2603,18 @@ void toxav_video_receive_frame_cb_(ToxAV *av, uint32_t friend_number, uint16_t w
             //    (int)video_buffer_1_y_size,
             //    (int)video_buffer_1_u_size,
             //    (int)video_buffer_1_v_size);
-            int actual_y_size = max(width, abs(ystride)) * height;
-            int actual_u_size = max(width/2, abs(ustride)) * (height/2);
-            int actual_v_size = max(width/2, abs(vstride)) * (height/2);
+            // KHANDAQ (audit A28): compute plane sizes in 64-bit and reject negative/oversized frames.
+            // A peer-crafted frame (VP8 allows up to 16383x16383) can overflow 32-bit `int` here to a
+            // negative size that passes the "> buffer" check, then memcpy copies a huge size -> heap
+            // overflow. int64 arithmetic + the <0 guard make the bounds check trustworthy.
+            int64_t actual_y_size = (int64_t)max((int)width, abs(ystride)) * (int64_t)height;
+            int64_t actual_u_size = (int64_t)max((int)width/2, abs(ustride)) * (int64_t)(height/2);
+            int64_t actual_v_size = (int64_t)max((int)width/2, abs(vstride)) * (int64_t)(height/2);
             video_buffer_1_u = (uint8_t *)(video_buffer_1 + actual_y_size);
             video_buffer_1_v = (uint8_t *)(video_buffer_1 + actual_y_size + actual_u_size);
 
-            if((actual_y_size + actual_u_size + actual_v_size) > video_buffer_1_size)
+            if(actual_y_size < 0 || actual_u_size < 0 || actual_v_size < 0 ||
+               (actual_y_size + actual_u_size + actual_v_size) > (int64_t)video_buffer_1_size)
             {
                 dbg(9, "Video buffer too small for incoming frame frame=%d buffer=%d",
                     (int)(actual_y_size + actual_u_size + actual_v_size),
@@ -2635,13 +2654,18 @@ void toxav_video_receive_frame_pts_cb_(ToxAV *av, uint32_t friend_number, uint16
             //    (int)video_buffer_1_y_size,
             //    (int)video_buffer_1_u_size,
             //    (int)video_buffer_1_v_size);
-            int actual_y_size = max(width, abs(ystride)) * height;
-            int actual_u_size = max(width/2, abs(ustride)) * (height/2);
-            int actual_v_size = max(width/2, abs(vstride)) * (height/2);
+            // KHANDAQ (audit A28): compute plane sizes in 64-bit and reject negative/oversized frames.
+            // A peer-crafted frame (VP8 allows up to 16383x16383) can overflow 32-bit `int` here to a
+            // negative size that passes the "> buffer" check, then memcpy copies a huge size -> heap
+            // overflow. int64 arithmetic + the <0 guard make the bounds check trustworthy.
+            int64_t actual_y_size = (int64_t)max((int)width, abs(ystride)) * (int64_t)height;
+            int64_t actual_u_size = (int64_t)max((int)width/2, abs(ustride)) * (int64_t)(height/2);
+            int64_t actual_v_size = (int64_t)max((int)width/2, abs(vstride)) * (int64_t)(height/2);
             video_buffer_1_u = (uint8_t *)(video_buffer_1 + actual_y_size);
             video_buffer_1_v = (uint8_t *)(video_buffer_1 + actual_y_size + actual_u_size);
 
-            if((actual_y_size + actual_u_size + actual_v_size) > video_buffer_1_size)
+            if(actual_y_size < 0 || actual_u_size < 0 || actual_v_size < 0 ||
+               (actual_y_size + actual_u_size + actual_v_size) > (int64_t)video_buffer_1_size)
             {
                 dbg(9, "Video buffer too small for incoming frame frame=%d buffer=%d",
                     (int)(actual_y_size + actual_u_size + actual_v_size),

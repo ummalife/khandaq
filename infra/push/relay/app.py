@@ -140,6 +140,51 @@ def _mark_push_sent(token: str) -> None:
         pass
 
 
+# KHANDAQ (audit A6): atomically reserve the coalesce window for `token` in ONE SQLite transaction,
+# BEFORE the network send, so two concurrent requests (incl. across gunicorn -w2 processes — the
+# threading.Lock alone can't serialize processes; BEGIN IMMEDIATE takes a DB-level RESERVED lock that
+# does) can't both pass the check and double-send. Returns True if THIS caller won the slot.
+def _claim_coalesce_slot(token: str) -> bool:
+    if COALESCE_SECONDS <= 0:
+        return True
+    now = int(time.time())
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute("SELECT ts FROM pushsent WHERE th = ?", (_th(token),)).fetchone()
+                if row and now - row[0] < COALESCE_SECONDS:
+                    conn.commit()
+                    return False
+                conn.execute(
+                    "INSERT INTO pushsent VALUES (?, ?) "
+                    "ON CONFLICT(th) DO UPDATE SET ts = excluded.ts", (_th(token), now))
+                conn.execute("DELETE FROM pushsent WHERE ts < ?", (now - 86400,))
+                conn.commit()
+                return True
+            finally:
+                conn.close()
+    except Exception:
+        # DB busy/error → fail toward delivery (never drop a wake); worst case is the old behaviour.
+        return True
+
+
+# KHANDAQ (audit A6): release a claimed slot when the send FAILED, so the immediate retry isn't
+# swallowed by coalescing (the claim marks "sent" before the network call).
+def _release_coalesce_slot(token: str) -> None:
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("DELETE FROM pushsent WHERE th = ?", (_th(token),))
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+
+
 def _country_for_ip(addr: str) -> str:
     if _geoip_reader is None or not addr:
         return "??"
@@ -228,6 +273,12 @@ def _auth_ok() -> bool:
     return True
 
 
+# KHANDAQ (audit A2): single-use signature cache — an accepted ts-bound HMAC is consumed so it cannot
+# be replayed inside the AUTH_MAX_SKEW_SEC window. (Single-process; for multi-worker back with SQLite.)
+_used_sigs: dict[str, float] = {}
+_used_sigs_lock = Lock()
+
+
 def _auth_signature_valid() -> bool:
     # KHANDAQ (security NEW-2): replay-resistant, request-bound auth.
     # The old scheme signed a CONSTANT (HMAC(secret, "khandaq-push-relay")) → the same value
@@ -260,7 +311,19 @@ def _auth_signature_valid() -> bool:
     sender = request.args.get("from", "")
     msg = (token + "\n" + sender + "\n" + ts).encode("utf-8")
     expected = hmac.new(PUSH_RELAY_AUTH_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(supplied, expected)
+    if not hmac.compare_digest(supplied, expected):
+        return False
+    # KHANDAQ (audit A2): consume the signature so a captured signed URL can't be replayed to 200
+    # repeatedly within the freshness window. Each valid signature is accepted exactly once.
+    with _used_sigs_lock:
+        now = time.time()
+        for k, t in list(_used_sigs.items()):
+            if now - t > AUTH_MAX_SKEW_SEC:
+                del _used_sigs[k]
+        if expected in _used_sigs:
+            return False
+        _used_sigs[expected] = now
+    return True
 
 
 def _get_access_token() -> str:
@@ -450,16 +513,17 @@ def wake():
     # Coalesce wake-push spam: if we already delivered a wake to this token within the window, skip
     # the FCM send (no redundant "New message" banner) but keep the stats/online-now accurate and
     # report success so the caller stops retrying this cycle. Messages still arrive on the prior wake.
-    if _should_coalesce(token):
+    # KHANDAQ (audit A6): claim the coalesce slot ATOMICALLY before sending (no check-then-send race).
+    if not _claim_coalesce_slot(token):
         _record_stats(token, client_ip)
         return jsonify({"success": 1, "coalesced": 1}), 200
 
     ok, detail = _send_wake(token, sender_pubkey)
     if not ok:
+        _release_coalesce_slot(token)  # send failed → let the retry through
         log.warning("wake fail from %s: %s", client_ip, detail)
         return jsonify({"error": detail}), 503 if "not configured" in detail else 502
 
-    _mark_push_sent(token)
     _record_stats(token, client_ip)
     return jsonify({"success": 1}), 200
 

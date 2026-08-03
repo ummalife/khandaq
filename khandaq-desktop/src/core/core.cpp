@@ -1839,6 +1839,11 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         if (ngcIncomingAssemblies.contains(key)) {
             return;
         }
+        // KHANDAQ (audit A38): cap concurrent incoming assemblies — a peer flooding BEGINs for distinct
+        // msgIds would otherwise pin unbounded memory (a received-bitmap + buffer per assembly).
+        if (ngcIncomingAssemblies.size() >= 16) {
+            return;
+        }
         const QString fileName = ngcParseFilename(data + 44, 255);
         const uint64_t totalSize = ngcReadU64Be(data + 299);
         const uint32_t chunkPayload = ngcReadU32Be(data + 307);
@@ -1853,7 +1858,11 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         // and later FILE_CHUNK seeks (chunkIndex*chunkPayload) run far past totalSize (sparse-file disk
         // exhaustion). Require totalChunks to match ceil(totalSize/chunkPayload) and fit in int.
         const uint64_t expectedChunks = (totalSize + chunkPayload - 1) / chunkPayload;
-        if (totalChunks != expectedChunks || totalChunks > 0x7FFFFFFFu) {
+        // KHANDAQ (audit A38): also bound the chunk COUNT to what the MAX chunk size allows for the MAX
+        // file, so a peer using a tiny chunkPayload can't force a huge received-bitmap allocation
+        // (QVector<bool> is 1 byte/entry, not bit-packed). Legit senders use chunkPayload == the max.
+        const uint64_t maxChunks = (KHANDAQ_MAX_FILE_TRANSFER_BYTES + NGC_CHUNK_PAYLOAD_MAX - 1) / NGC_CHUNK_PAYLOAD_MAX;
+        if (totalChunks != expectedChunks || totalChunks > maxChunks || totalChunks > 0x7FFFFFFFu) {
             return;
         }
 

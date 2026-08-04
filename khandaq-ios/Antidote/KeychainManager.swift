@@ -184,7 +184,18 @@ private extension KeychainManager {
             case (.none, .some(let data)):
                 var query = genericQueryWithKey(key)
                 query[kSecValueData as String] = data as AnyObject?
-                let status = SecItemAdd(query as CFDictionary, nil)
+                // KHANDAQ (audit A37): set ...ThisDeviceOnly ONLY at creation (keeps push/background
+                // decrypt working, excludes iCloud sync + encrypted backups).
+                query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                var status = SecItemAdd(query as CFDictionary, nil)
+                if status == errSecDuplicateItem {
+                    // KHANDAQ (logout-after-update self-heal): a stale pre-A37 item (stored with a different
+                    // accessibility, so our read didn't match it, but the SAME class+service+account primary
+                    // key) still occupies the slot → SecItemAdd collides. Delete that orphan by primary key
+                    // and re-add with the correct accessibility so the password actually persists this time.
+                    SecItemDelete(genericQueryWithKey(key) as CFDictionary)
+                    status = SecItemAdd(query as CFDictionary, nil)
+                }
                 if status != noErr {
                     log("Error when setting keychain data for key \(key), status \(status)")
                     keychainOk = false
@@ -206,10 +217,12 @@ private extension KeychainManager {
         query[kSecClass as String] = kSecClassGenericPassword
         query[kSecAttrService as String] = Constants.ActiveAccountDataService as AnyObject?
         query[kSecAttrAccount as String] = key as AnyObject?
-        // KHANDAQ (audit A37): ...ThisDeviceOnly keeps background/push decrypt working but excludes the
-        // item from iCloud Keychain sync and encrypted device backups (the Tox key never leaves the device).
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
+        // KHANDAQ (logout-after-update fix): accessibility is set ONLY at creation time (in setData's add
+        // branch), NEVER in this shared query. When kSecAttrAccessible lived here it became a SEARCH
+        // predicate on reads/updates/deletes — so after the A37 update to ...ThisDeviceOnly, reads no
+        // longer matched a pre-A37 item stored with AfterFirstUnlock → the profile password read back nil
+        // → the login screen appeared on every launch. Accessibility is NOT part of a generic-password
+        // primary key, so leaving it out here is correct; it is applied when the item is created below.
         return query
     }
 }

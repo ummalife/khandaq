@@ -107,6 +107,35 @@ public class MainApplication extends Application
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
 
+        // KHANDAQ (crash-on-launch guard): ARM the UncaughtExceptionHandler FIRST — before any of the
+        // init below (DbSecretKeyStorage upgrade-repair, notification channels, push, network). It used
+        // to be installed at the very END of onCreate, so a throw in that init (e.g. an invalidated
+        // Android Keystore key after an OS/app update) bounced the app silently back to the launcher
+        // with NO CrashActivity — the "won't open after update" splash->exit symptom. Reading the crash
+        // counters here too keeps the crash circuit-breaker accurate for such early failures.
+        crashes = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getInt("crashes", 0);
+        if (crashes > 10000)
+        {
+            crashes = 0;
+            PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).edit().putInt("crashes",
+                                                                                                      crashes).commit();
+        }
+        last_crash_time = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getLong(
+                "last_crash_time", 0);
+        prevlast_crash_time = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getLong(
+                "prevlast_crash_time", 0);
+        if (CATCH_EXCEPTIONS)
+        {
+            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler()
+            {
+                @Override
+                public void uncaughtException(Thread thread, Throwable e)
+                {
+                    handleUncaughtException(thread, e);
+                }
+            });
+        }
+
         // KHANDAQ (crash fix): install the emoji provider in the Application, not only in MainActivity.
         // MIUI/low-memory can kill the process and relaunch STRAIGHT into MessageListActivity (chat
         // resume from recents / a notification tap) without MainActivity ever running — its
@@ -150,34 +179,9 @@ public class MainApplication extends Application
             e.printStackTrace();
         }
 
-        crashes = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getInt("crashes", 0);
-
-        if (crashes > 10000)
-        {
-            crashes = 0;
-            PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).edit().putInt("crashes",
-                                                                                                      crashes).commit();
-        }
-
         Log.i(TAG, "MainApplication:" + randnum + ":" + "crashes[load]=" + crashes);
-        last_crash_time = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getLong(
-                "last_crash_time", 0);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "last_crash_time[load]=" + last_crash_time);
-        prevlast_crash_time = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getLong(
-                "prevlast_crash_time", 0);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "prevlast_crash_time[load]=" + prevlast_crash_time);
-
-        if (CATCH_EXCEPTIONS)
-        {
-            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler()
-            {
-                @Override
-                public void uncaughtException(Thread thread, Throwable e)
-                {
-                    handleUncaughtException(thread, e);
-                }
-            });
-        }
     }
 
     @Override

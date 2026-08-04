@@ -362,9 +362,26 @@ public final class DbSecretKeyStorage
         if (previousVersion > 0 && currentVersion > previousVersion)
         {
             Log.i(TAG, "app upgrade detected: " + previousVersion + " -> " + currentVersion);
-            repairAfterAppUpgrade(context, prefs);
+            try
+            {
+                repairAfterAppUpgrade(context, prefs);
+            }
+            catch (Throwable t)
+            {
+                // KHANDAQ (crash-on-launch guard): the upgrade repair is BEST-EFFORT. On some
+                // devices the Android Keystore or the encrypted device-backup file can throw after
+                // an OS/app update (invalidated/rotated key, KeyStoreException/ProviderException,
+                // I/O). This runs from MainApplication.onCreate BEFORE the app-wide
+                // UncaughtExceptionHandler is armed, so an unguarded throw here bounced the app
+                // straight back to the launcher — the exact silent "splash -> won't open after
+                // update" symptom. Swallow it: the real DB secret key still resolves later through
+                // the normal unlock/heal path, so losing this one repair pass is non-fatal.
+                Log.i(TAG, "repairAfterAppUpgrade failed (non-fatal): " + t.getMessage());
+            }
         }
 
+        // Always advance the stored version code — even if the repair above threw — so the repair
+        // is attempted at most once per upgrade and can never wedge the app into a boot loop.
         if (previousVersion != currentVersion)
         {
             prefs.edit().putInt(PREFS_INSTALLED_VERSION_CODE, currentVersion).commit();

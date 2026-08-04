@@ -1041,7 +1041,9 @@ extension ChatPrivateController: UITableViewDataSource {
 
                 // KHANDAQ (#208): own text with a msgV3 hash is editable — but not replies (would
                 // corrupt the reply wire header, matching Android) nor location messages.
-                let editHashOK = (messageText.msgv3HashHex ?? "").count == 64
+                // KHANDAQ: Saved Messages rows never get a msgV3 hash (no peer to ACK), so gating Edit on a
+                // 64-char hash hid the Edit action there. Saved edits are local-only, so allow them regardless.
+                let editHashOK = chat.isSavedMessages || (messageText.msgv3HashHex ?? "").count == 64
                 outgoingModel.canEdit = editHashOK && outgoingModel.replyMeta == nil && !outgoingModel.hasLocation
                 // KHANDAQ (#H2): the «изменено» marker is rendered as a small dim suffix by the cell
                 // (see ChatBaseTextCell), NOT appended to the text — so it reads as a system note, not

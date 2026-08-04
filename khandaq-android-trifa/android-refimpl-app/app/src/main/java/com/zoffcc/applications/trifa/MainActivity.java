@@ -384,6 +384,10 @@ public class MainActivity extends AppCompatActivity
     static Context context_s = null;
     static MainActivity main_activity_s = null;
     static volatile boolean main_activity_resumed = false;
+    // KHANDAQ (#H3 parity): wall-clock of the last onResume, used to suppress the new-message ring for
+    // the first ~3s after the app becomes active (the reconnect/backlog flush would otherwise ring
+    // "on entry, nothing new").
+    static volatile long main_activity_resumed_ts = 0L;
     static AudioManager audio_manager_s = null;
     static Resources resources = null;
     static DisplayMetrics metrics = null;
@@ -3477,6 +3481,7 @@ public class MainActivity extends AppCompatActivity
     {
         HelperGeneric.logI(TAG, "onResume");
         main_activity_resumed = true;
+        main_activity_resumed_ts = System.currentTimeMillis();
         super.onResume();
         refreshFriendListFragmentReferences();
         ProfileTabConnectionIndicator.updateAsync();

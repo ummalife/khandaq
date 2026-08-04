@@ -240,7 +240,11 @@ private extension NotificationCoordinator {
                     for index in insertions {
                         let request = requests[index]
 
-                        self.audioPlayer.playSound(.NewMessage)
+                        // KHANDAQ (#H3 parity): don't ring for friend-requests flushed from the Realm backlog
+                        // during the first 3s after the app became active (was ringing "on entry").
+                        if Date().timeIntervalSince(self.lastBecameActiveDate) >= 3.0 {
+                            self.audioPlayer.playSound(.NewMessage)
+                        }
                         self.enqueueNotification(.friendRequest(request))
                     }
                     self.updateBadges()

@@ -58,7 +58,10 @@ class UserDefaultsManager {
 
     var UDPEnabled: Bool {
         get {
-            return boolForKey(Keys.UDPEnabled, defaultValue: false)
+            // KHANDAQ (#5 slow-connect fix): default UDP ON to match Android and get fast DHT connect.
+            // With UDP off, tox_bootstrap (UDP DHT) is a no-op and first connect is slow. The Advanced
+            // toggle still lets privacy-conscious users turn it back off (setBool persists their choice).
+            return boolForKey(Keys.UDPEnabled, defaultValue: true)
         }
         set {
             setBool(newValue, forKey: Keys.UDPEnabled)

@@ -462,7 +462,14 @@ public class HelperMsgNotification
 
                     if (appInForeground || is_viewing_friend_chat(nf_key))
                     {
-                        play_message_sound_only();
+                        // KHANDAQ (#H3 parity): suppress the ring for the first 3s after the app becomes
+                        // active. On entry the Tox backlog / offline-queue flushes and each flushed message
+                        // runs this callback, which rang "on entry, nothing new". A message that genuinely
+                        // arrives while already foregrounded (>3s after resume) still rings normally.
+                        if ((System.currentTimeMillis() - MainActivity.main_activity_resumed_ts) >= 3000L)
+                        {
+                            play_message_sound_only();
+                        }
                         return;
                     }
 

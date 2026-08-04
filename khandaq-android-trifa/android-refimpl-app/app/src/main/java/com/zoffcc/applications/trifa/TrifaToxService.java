@@ -2305,8 +2305,16 @@ public class TrifaToxService extends Service
     // while the message is still undelivered (read==false → we stop the moment a read/delivery receipt
     // arrives). The push relay coalesces duplicates, and a duplicate wake is harmless (it only wakes the
     // peer, it does not resend the message), so this is safe to retry.
-    static final int PUSH_WAKE_MAX_ATTEMPTS = 5;
-    static final long[] PUSH_WAKE_BACKOFF_MS = {10_000L, 45_000L, 120_000L, 300_000L, 720_000L};
+    // KHANDAQ: attempt N is due at sent_timestamp + PUSH_WAKE_BACKOFF_MS[N]. Extended past the old 12-min
+    // cliff with an hourly tail up to ~6h, so an unread message to a peer that stays offline for a long
+    // time keeps getting occasional FCM wakes instead of giving up after 12 min. Stops immediately on the
+    // read/delivery receipt (readEq(false) filter). Duplicate wakes are harmless (relay coalesces; a wake
+    // only wakes, never resends the message).
+    static final long[] PUSH_WAKE_BACKOFF_MS = {
+            10_000L, 45_000L, 120_000L, 300_000L, 720_000L,        // 10s, 45s, 2m, 5m, 12m
+            1_800_000L, 3_600_000L, 7_200_000L, 14_400_000L, 21_600_000L // 30m, 1h, 2h, 4h, 6h
+    };
+    static final int PUSH_WAKE_MAX_ATTEMPTS = PUSH_WAKE_BACKOFF_MS.length; // 10
 
     static void resend_push_for_v3_messages()
     {

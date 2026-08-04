@@ -243,7 +243,6 @@
             android:background="@android:color/transparent"
             android:backgroundTint="@null"
             android:cursorVisible="true"
-            android:ellipsize="end"
             android:gravity="center_vertical"
             android:imeOptions="flagNoPersonalizedLearning|actionSend"
             android:includeFontPadding="false"

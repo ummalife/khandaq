@@ -34,24 +34,33 @@ final class ChatInputBarHelper
             return;
         }
 
-        inputField.setOnClickListener(new View.OnClickListener()
+        // KHANDAQ (paste fix): use a NON-consuming touch listener instead of an OnClickListener.
+        // setOnClickListener makes the field clickable and swallows the tap as a click, so the
+        // framework's insertion/paste floating toolbar never appears (tap-to-paste was dead).
+        // A touch listener that returns false still lets the Editor show the caret + Paste bubble,
+        // while we opportunistically ask the IME to open (Yandex-on-A16 workaround preserved).
+        inputField.setOnTouchListener(new View.OnTouchListener()
         {
             @Override
-            public void onClick(View v)
+            public boolean onTouch(View v, android.view.MotionEvent event)
             {
-                try
+                if (event.getActionMasked() == android.view.MotionEvent.ACTION_UP)
                 {
-                    final android.view.inputmethod.InputMethodManager imm =
-                            (android.view.inputmethod.InputMethodManager) v.getContext().
-                                    getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                    if (imm != null)
+                    try
                     {
-                        imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                        final android.view.inputmethod.InputMethodManager imm =
+                                (android.view.inputmethod.InputMethodManager) v.getContext().
+                                        getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                        if (imm != null)
+                        {
+                            imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
                     }
                 }
-                catch (Exception ignored)
-                {
-                }
+                return false; // never consume — let the Editor handle selection/caret/paste
             }
         });
     }

@@ -4141,7 +4141,14 @@ public class HelperGeneric
 
             if (db_result == -1)
             {
-                // error on inserting message into db, most likely msgV3 double message
+                // error on inserting message into db, most likely msgV3 double message.
+                // KHANDAQ (dup fix): still ACK the duplicate. Otherwise the sender keeps resending (up to
+                // MAX_TEXTMSG_RESEND_COUNT) because it never got a receipt — which is exactly what produced
+                // the "same message 5 times" reconnect bursts. ACKing the dup tells the sender to stop.
+                if (msgV3hash_hex_string != null)
+                {
+                    HelperMessage.send_msgv3_high_level_ack(friend_number, msgV3hash_hex_string);
+                }
                 return;
             }
 

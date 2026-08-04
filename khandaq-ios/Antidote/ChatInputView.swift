@@ -335,8 +335,20 @@ extension ChatInputView: UITextViewDelegate {
             return true
         }
 
-        let updatedText = nsCurrent.replacingCharacters(in: range, with: text)
-        return updatedText.count <= Constants.MAX_TEXT_INPUT_CHARS
+        let nsUpdated = nsCurrent.replacingCharacters(in: range, with: text) as NSString
+        if nsUpdated.length <= Constants.MAX_TEXT_INPUT_CHARS {
+            return true
+        }
+
+        // KHANDAQ (paste fix): an over-limit paste used to be dropped ENTIRELY (return false), which reads
+        // as "paste doesn't work" for long clipboard content. Instead clamp — keep as much as fits up to the
+        // limit, place the caret at the end, and drive the normal change handler (height + send-button).
+        // Length math is UTF-16 (NSString) to match the incoming NSRange.
+        let clamped = nsUpdated.substring(to: Constants.MAX_TEXT_INPUT_CHARS)
+        textView.text = clamped
+        textView.selectedRange = NSRange(location: (clamped as NSString).length, length: 0)
+        textViewDidChange(textView)
+        return false
     }
 }
 

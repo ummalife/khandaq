@@ -593,6 +593,19 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             {
                 return true;
             }
+
+            // KHANDAQ (dup fix): also dedupe by the msgV3 hash. The old check only used msg_id_hash (the
+            // msgV2 field, empty for msgV3), so resend/reconnect bursts of the SAME msgV3 message — which
+            // race the DB-level dedup — rendered as "the same message 5 times in a row". Same hash + same
+            // peer + same direction == the same message.
+            if (candidate.msg_idv3_hash != null && !candidate.msg_idv3_hash.isEmpty()
+                    && candidate.msg_idv3_hash.equalsIgnoreCase(existing.msg_idv3_hash)
+                    && candidate.tox_friendpubkey != null
+                    && candidate.tox_friendpubkey.equalsIgnoreCase(existing.tox_friendpubkey)
+                    && candidate.direction == existing.direction)
+            {
+                return true;
+            }
         }
 
         return false;

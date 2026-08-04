@@ -80,61 +80,49 @@ public class MainApplication extends Application
     @Override
     public void onCreate()
     {
-        // implementation of dark mode
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext());
-        updateTheme(sp);
-        sp.registerOnSharedPreferenceChangeListener(sp_change_listener);
+        // KHANDAQ (crash-on-launch guard, 10389): theme + locale init are guarded. A throw here — e.g.
+        // Lingver/AppCompat locale init or PreferenceManager on some OEM / Android-16 firmwares — used to
+        // kill the launch before the UI (or even the crash handler) could show. Now the app survives it.
+        try
+        {
+            SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext());
+            updateTheme(sp);
+            sp.registerOnSharedPreferenceChangeListener(sp_change_listener);
+        }
+        catch (Throwable ignored)
+        {
+        }
 
-        // Lingver.init(this, Locale.ENGLISH);
-        //
-        if (Locale.getDefault().getLanguage().equals(new Locale("ar").getLanguage()))
+        try
         {
-            // RTL is not fully working yet, so use english for now
-            Lingver.init(this, Locale.ENGLISH);
+            // Lingver.init(this, Locale.ENGLISH);
+            if (Locale.getDefault().getLanguage().equals(new Locale("ar").getLanguage()))
+            {
+                // RTL is not fully working yet, so use english for now
+                Lingver.init(this, Locale.ENGLISH);
+            }
+            else if (Locale.getDefault().getLanguage().equals(new Locale("fa").getLanguage()))
+            {
+                // RTL is not fully working yet, so use english for now
+                Lingver.init(this, Locale.ENGLISH);
+            }
+            else
+            {
+                Lingver.init(this, Locale.getDefault());
+            }
+            AppLocaleHelper.syncAppCompatLocalesFromLingver();
         }
-        else if (Locale.getDefault().getLanguage().equals(new Locale("fa").getLanguage()))
+        catch (Throwable ignored)
         {
-            // RTL is not fully working yet, so use english for now
-            Lingver.init(this, Locale.ENGLISH);
         }
-        else
-        {
-            Lingver.init(this, Locale.getDefault());
-        }
-        AppLocaleHelper.syncAppCompatLocalesFromLingver();
 
         randnum = (int) (Math.random() * 1000d);
         Log.i(TAG, "MainApplication:" + randnum + ":" + "onCreate");
         super.onCreate();
 
-        // KHANDAQ (crash-on-launch guard): ARM the UncaughtExceptionHandler FIRST — before any of the
-        // init below (DbSecretKeyStorage upgrade-repair, notification channels, push, network). It used
-        // to be installed at the very END of onCreate, so a throw in that init (e.g. an invalidated
-        // Android Keystore key after an OS/app update) bounced the app silently back to the launcher
-        // with NO CrashActivity — the "won't open after update" splash->exit symptom. Reading the crash
-        // counters here too keeps the crash circuit-breaker accurate for such early failures.
-        crashes = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getInt("crashes", 0);
-        if (crashes > 10000)
-        {
-            crashes = 0;
-            PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).edit().putInt("crashes",
-                                                                                                      crashes).commit();
-        }
-        last_crash_time = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getLong(
-                "last_crash_time", 0);
-        prevlast_crash_time = PreferenceManager.getDefaultSharedPreferences(this.getApplicationContext()).getLong(
-                "prevlast_crash_time", 0);
-        if (CATCH_EXCEPTIONS)
-        {
-            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler()
-            {
-                @Override
-                public void uncaughtException(Thread thread, Throwable e)
-                {
-                    handleUncaughtException(thread, e);
-                }
-            });
-        }
+        // KHANDAQ: the crash handler is already armed in attachBaseContext (the earliest point, before any
+        // ContentProvider); re-arm here idempotently as a belt-and-suspenders guarantee.
+        armCrashHandler(this.getApplicationContext());
 
         // KHANDAQ (crash fix): install the emoji provider in the Application, not only in MainActivity.
         // MIUI/low-memory can kill the process and relaunch STRAIGHT into MessageListActivity (chat
@@ -187,10 +175,67 @@ public class MainApplication extends Application
     @Override
     protected void attachBaseContext(Context base)
     {
-        applyDarkModeFromPref(PreferenceManager.getDefaultSharedPreferences(base).getString("dark_mode_pref", "0"));
+        try
+        {
+            applyDarkModeFromPref(PreferenceManager.getDefaultSharedPreferences(base).getString("dark_mode_pref", "0"));
+        }
+        catch (Throwable ignored)
+        {
+        }
         super.attachBaseContext(base);
-        MultiDex.install(this);
+        // KHANDAQ (crash-on-launch guard, 10389): arm the UncaughtExceptionHandler at the EARLIEST possible
+        // point — here, right after super.attachBaseContext, which runs BEFORE every ContentProvider.onCreate
+        // (Firebase, androidx.startup/WorkManager, our FileProviders) and before Application.onCreate. A throw
+        // anywhere in that pre-onCreate window used to bounce the app silently back to the launcher with NO
+        // CrashActivity (the "won't open after update" splash->exit seen on some OEM / Android-16 devices).
+        armCrashHandler(base);
+        try
+        {
+            MultiDex.install(this);
+        }
+        catch (Throwable ignored)
+        {
+        }
         warmUpMediaCodecsAsync();
+    }
+
+    /** KHANDAQ: read the crash-counter prefs and install the process-wide UncaughtExceptionHandler.
+     *  Fully guarded + idempotent, so it can be called as early as attachBaseContext and re-called from
+     *  onCreate as a belt-and-suspenders guarantee. */
+    private void armCrashHandler(final Context ctx)
+    {
+        try
+        {
+            final SharedPreferences p = PreferenceManager.getDefaultSharedPreferences(ctx);
+            crashes = p.getInt("crashes", 0);
+            if (crashes > 10000)
+            {
+                crashes = 0;
+                p.edit().putInt("crashes", 0).commit();
+            }
+            last_crash_time = p.getLong("last_crash_time", 0);
+            prevlast_crash_time = p.getLong("prevlast_crash_time", 0);
+        }
+        catch (Throwable ignored)
+        {
+        }
+        if (CATCH_EXCEPTIONS)
+        {
+            try
+            {
+                Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler()
+                {
+                    @Override
+                    public void uncaughtException(Thread thread, Throwable e)
+                    {
+                        handleUncaughtException(thread, e);
+                    }
+                });
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
     }
 
     /**

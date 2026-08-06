@@ -60,33 +60,25 @@ class ChatListController: UIViewController {
         updateViewsVisibility()
         refreshFilterBadges()
 
-        // KHANDAQ design (Figma): icon buttons sit in grey circles; the Edit/Done button in a grey pill.
-        let addButton = ThemeChrome.makeCircleNavButton(
-                theme: theme, systemImage: "plus", fallback: nil,
-                target: self, action: #selector(ChatListController.addButtonPressed))
-        addButton.accessibilityLabel = String(localized: "group_add_button")
-
-        let themeButton: UIBarButtonItem
-        if let image = themeToggleImage() {
-            themeButton = ThemeChrome.makeCircleNavButton(
-                theme: theme, image: image,
-                target: self, action: #selector(ChatListController.themeTogglePressed))
-        }
-        else {
-            themeButton = UIBarButtonItem(
-                title: ThemeAppearance.isDarkMode ? "☾" : "☀︎",
+        // KHANDAQ (#iOS nav polish): clean, native-style nav bar — no heavy grey circles/pills that
+        // clutter the header. Just tinted glyphs (Apple/Telegram look): «+» in the accent colour (an
+        // action), the theme toggle in a subdued neutral (it's a switch, not an action), «Править» as
+        // plain accent text.
+        let addButton = UIBarButtonItem(
+                image: navBarSymbol("plus"),
                 style: .plain,
                 target: self,
-                action: #selector(ChatListController.themeTogglePressed)
-            )
-        }
-        themeButton.accessibilityLabel = String(localized: "theme_toggle_accessibility")
-        defaultRightBarItems = [addButton, themeButton]
+                action: #selector(ChatListController.addButtonPressed))
+        addButton.tintColor = theme.colorForType(.LinkText)
+        addButton.accessibilityLabel = String(localized: "group_add_button")
+
+        // KHANDAQ (#iOS nav polish): the light/dark theme toggle was removed from the header — theme
+        // switching already lives in Settings, so the header stays clean with just «+» (and «Править»).
+        defaultRightBarItems = [addButton]
         navigationItem.rightBarButtonItems = defaultRightBarItems
 
-        let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
-        editButtonItem.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
-        editButtonItem.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
+        // «Править»: no grey pill — plain accent text.
+        editButtonItem.tintColor = theme.colorForType(.LinkText)
 
         // KHANDAQ (Figma): edit-mode nav — Отмена (left) + red Удалить (right, enabled on selection).
         cancelEditButton = UIBarButtonItem(
@@ -94,8 +86,7 @@ class ChatListController: UIViewController {
             style: .plain,
             target: self,
             action: #selector(ChatListController.cancelEditingPressed))
-        cancelEditButton.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
-        cancelEditButton.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
+        cancelEditButton.tintColor = theme.colorForType(.LinkText)
 
         deleteSelectedButton = UIBarButtonItem(
             title: String(localized: "alert_delete"),
@@ -103,8 +94,6 @@ class ChatListController: UIViewController {
             target: self,
             action: #selector(ChatListController.deleteSelectedPressed))
         deleteSelectedButton.tintColor = .systemRed
-        deleteSelectedButton.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
-        deleteSelectedButton.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)
 
         setupGlobalSearch()
     }
@@ -143,18 +132,13 @@ class ChatListController: UIViewController {
         definesPresentationContext = true
     }
 
-    @objc func themeTogglePressed() {
-        ThemeAppearance.isDarkMode.toggle()
-    }
-
-    func themeToggleImage() -> UIImage? {
+    // KHANDAQ (#iOS nav polish): a clean SF Symbol glyph for a bare (frameless) nav bar button.
+    func navBarSymbol(_ name: String) -> UIImage? {
         guard #available(iOS 13.0, *) else {
             return nil
         }
-
-        let symbolName = ThemeAppearance.isDarkMode ? "moon.fill" : "sun.max.fill"
-        let config = UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
-        return UIImage(systemName: symbolName, withConfiguration: config)
+        let config = UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)
+        return UIImage(systemName: name, withConfiguration: config)
     }
 
     override func viewWillAppear(_ animated: Bool) {

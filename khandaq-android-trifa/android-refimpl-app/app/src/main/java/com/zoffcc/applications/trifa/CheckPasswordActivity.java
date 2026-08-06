@@ -90,6 +90,21 @@ public class CheckPasswordActivity extends AppCompatActivity
             }
         });
 
+        // KHANDAQ (#9): Back on the login screen — single-profile app has nowhere to navigate back to,
+        // so minimise the app instead of leaving it sitting unlocked-but-visible.
+        final View backButton = findViewById(R.id.login_back);
+        if (backButton != null)
+        {
+            backButton.setOnClickListener(v -> moveTaskToBack(true));
+        }
+
+        // KHANDAQ (#5a): recovery entry point for a forgotten password.
+        final View forgotLink = findViewById(R.id.forgot_password_link);
+        if (forgotLink != null)
+        {
+            forgotLink.setOnClickListener(v -> showRecoveryDialog());
+        }
+
         try
         {
             /* if the database secret key is saved in preferences, it means the user did NOT want to set a password.
@@ -122,6 +137,61 @@ public class CheckPasswordActivity extends AppCompatActivity
             Log.i(TAG, "EE:002");
         }
         Log.i(TAG, "006");
+    }
+
+    // KHANDAQ (#5a): explain why a lost password can't be recovered (data is password-encrypted) and
+    // offer to start over. The profile is single-instance, so "start over" wipes the current DB.
+    private void showRecoveryDialog()
+    {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.recovery_dialog_title)
+                .setMessage(R.string.recovery_dialog_message)
+                .setPositiveButton(R.string.recovery_create_new, (d, w) -> confirmWipeAndRestart())
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void confirmWipeAndRestart()
+    {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.recovery_confirm_wipe_title)
+                .setMessage(R.string.recovery_confirm_wipe_message)
+                .setPositiveButton(R.string.recovery_confirm_wipe_yes, (d, w) -> performRecoveryWipe())
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    // KHANDAQ (#5a): mirror ProfileDetailsActivity.performProfileWipe — flag a pending wipe, then end
+    // the process so StartMainActivityWrapper deletes the encrypted DB in a fresh process (no open
+    // file handles) and routes into the onboarding (create / import) flow. Existing DB gone → set_pattern.
+    private void performRecoveryWipe()
+    {
+        try
+        {
+            MainActivity.manually_log_out();
+        }
+        catch (Exception ignored)
+        {
+        }
+        try
+        {
+            android.preference.PreferenceManager.getDefaultSharedPreferences(this).edit()
+                    .putBoolean(ProfileDetailsActivity.PREF__pending_profile_wipe, true)
+                    .putBoolean("PW_SET_SCREEN_DONE", false)
+                    .commit();
+            TRIFAGlobals.PREF__DB_secrect_key__user_hash = "";
+        }
+        catch (Exception ignored)
+        {
+        }
+        try
+        {
+            finishAffinity();
+        }
+        catch (Exception ignored)
+        {
+        }
+        System.exit(0);
     }
 
     private void attemptUnlock_new(Context c, boolean auto_generated_pass, String pass)

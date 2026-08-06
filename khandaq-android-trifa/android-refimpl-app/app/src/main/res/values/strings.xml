@@ -28,6 +28,15 @@
     <string name="onboarding_back">Back</string>
     <string name="onboarding_login_title">Log in to profile</string>
     <string name="onboarding_login_btn">Log in</string>
+    <string name="back">Back</string>
+    <string name="onboarding_forgot_password">Forgot your password?</string>
+    <string name="recovery_dialog_title">Forgot your password?</string>
+    <string name="recovery_dialog_message">Your profile is protected by your password, and without it the messages cannot be decrypted — that\'s how Khandaq encryption works. The password cannot be recovered or reset.\n\nYou can start over with a new profile or restore a backup (.tox). Doing so permanently deletes the current messages and contacts from this device.</string>
+    <string name="recovery_create_new">Create a new profile</string>
+    <string name="recovery_import_backup">Import a profile (.tox)</string>
+    <string name="recovery_confirm_wipe_title">Delete the current profile?</string>
+    <string name="recovery_confirm_wipe_message">This cannot be undone. All messages and contacts on this device will be deleted. Continue?</string>
+    <string name="recovery_confirm_wipe_yes">Delete and start over</string>
     <string name="import_step_1">Save your .tox profile file to this device (e.g. in Downloads, or from email or a messenger)</string>
     <string name="import_step_2">Tap the “Import profile” button below</string>
     <string name="import_step_3">Pick the .tox file in the file picker — your profile will be imported</string>
@@ -47,6 +56,11 @@
     <string name="settings_notif_preview">Notification preview</string>
     <string name="settings_group_system">Group system messages</string>
     <string name="settings_advanced">Advanced settings</string>
+    <string name="settings_section_appearance">APPEARANCE</string>
+    <string name="settings_section_notifications">NOTIFICATIONS</string>
+    <string name="settings_section_data">PROFILE &amp; DATA</string>
+    <string name="settings_section_advanced">ADVANCED</string>
+    <string name="settings_section_about">ABOUT</string>
     <string name="profile_logout">Log out</string>
     <string name="profile_logout_confirm">Log out of this profile?</string>
     <!-- Profile → Details (PIN / change password / delete) -->
@@ -971,6 +985,8 @@
     <string name="media_label_photo">Photo</string>
     <string name="emoji">Emoji</string>
     <string name="media_send_caption_hint">Add a caption…</string>
+    <string name="media_send_edit_photo">Edit photo</string>
+    <string name="media_send_edit_failed">Couldn\'t edit photo</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">Video</string>
     <string name="media_label_audio">Audio</string>

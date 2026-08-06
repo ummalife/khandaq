@@ -137,6 +137,15 @@ final class FavoritesChatHelper
     {
         final Intent intent = new Intent(context, MessageListActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        // KHANDAQ (crash fix): openChat is also called from NON-Activity contexts — e.g. add_friend_real
+        // passing the app/service context when the user pastes their OWN Tox ID (self-add → open Favorites).
+        // startActivity() from a non-Activity context throws "requires the FLAG_ACTIVITY_NEW_TASK flag" and
+        // crashed the app. Add NEW_TASK only when the context isn't an Activity, so Activity callers keep
+        // their existing task behaviour.
+        if (!(context instanceof android.app.Activity))
+        {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
         intent.putExtra("friendnum", -1L);
         intent.putExtra("friend_pubkey", CHAT_ID);
         context.startActivity(intent);

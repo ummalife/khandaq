@@ -413,6 +413,15 @@ public class MessageListActivity extends AppCompatActivity
         ml_status_icon = (ImageView) findViewById(R.id.ml_status_icon);
         ml_phone_icon = (ImageButton) findViewById(R.id.ml_phone_icon);
         ml_video_icon = (ImageButton) findViewById(R.id.ml_video_icon);
+        // KHANDAQ (#4): Saved Messages (Избранное) is a self-chat — no call affordance at all. The
+        // header phone icon defaults to VISIBLE in the layout and was only hidden by the async
+        // presence update, so a call button flashed (and stayed) in Saved. Hide both header call
+        // icons immediately here, before first draw.
+        if (FavoritesChatHelper.isFavoritesChat(friend_pubkey))
+        {
+            ml_phone_icon.setVisibility(View.GONE);
+            ml_video_icon.setVisibility(View.GONE);
+        }
         apply_chat_header();
         ml_attach_button_01 = (ImageButton) findViewById(R.id.ml_button_01);
         ml_button_recaudio = (ImageButton) findViewById(R.id.ml_button_recaudio);
@@ -3090,6 +3099,12 @@ public class MessageListActivity extends AppCompatActivity
         }
         else if (id == R.id.action_chat_video)
         {
+            // KHANDAQ (#4): never place a (video) call to Saved Messages, even if the overflow item
+            // ever slips through the onCreateOptionsMenu gate (e.g. a menu built before the pubkey).
+            if (FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
+            {
+                return true;
+            }
             start_call_to_friend(findViewById(R.id.toolbar));
             return true;
         }
@@ -3142,7 +3157,8 @@ public class MessageListActivity extends AppCompatActivity
         {
             profileTap.setVisibility(View.VISIBLE);
         }
-        if (ml_phone_icon != null)
+        // KHANDAQ (#4): don't resurrect the call icon in Saved Messages when leaving search.
+        if (ml_phone_icon != null && !FavoritesChatHelper.isFavoritesChat(get_friend_pubkey()))
         {
             ml_phone_icon.setVisibility(View.VISIBLE);
         }

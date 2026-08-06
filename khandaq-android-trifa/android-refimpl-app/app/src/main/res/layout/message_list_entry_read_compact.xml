@@ -127,9 +127,8 @@
 
                     <LinearLayout
                         android:id="@+id/m_container"
-                        android:layout_width="0dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
                         android:background="@drawable/rounded_orange_bg"
                         android:minHeight="0dp"
                         android:orientation="vertical">

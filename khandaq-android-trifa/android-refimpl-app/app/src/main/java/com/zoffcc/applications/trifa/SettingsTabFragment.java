@@ -14,10 +14,15 @@ import android.view.ViewGroup;
 import android.widget.CompoundButton;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.material.switchmaterial.SwitchMaterial;
+
+import com.zoffcc.applications.trifa.ToxProfileImportHelper.ImportMode;
 
 /**
  * KHANDAQ Settings tab (Figma 2031:11056): grouped-card list with inline toggles. Export/import,
@@ -28,6 +33,37 @@ public class SettingsTabFragment extends Fragment
 {
     private View settingsContent;
     private View prefsContainer;
+
+    // KHANDAQ (#2): profile export/import run their own SAF pickers from Settings directly, so the
+    // «Техническое обслуживание» screen no longer flashes in between. Launchers MUST be registered
+    // before the fragment reaches STARTED → do it in onCreate().
+    private ActivityResultLauncher<String[]> importProfileLauncher;
+    private ActivityResultLauncher<String> exportProfileLauncher;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState)
+    {
+        super.onCreate(savedInstanceState);
+
+        importProfileLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri ->
+        {
+            final AppCompatActivity a = (AppCompatActivity) getActivity();
+            if (a != null && uri != null)
+            {
+                ToxProfileImportHelper.handlePickedUri(a, uri, ImportMode.REPLACE_EXISTING, null);
+            }
+        });
+
+        exportProfileLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("application/octet-stream"), uri ->
+                {
+                    final AppCompatActivity a = (AppCompatActivity) getActivity();
+                    if (a != null && uri != null)
+                    {
+                        ToxProfileImportHelper.handleExportDestination(a, uri);
+                    }
+                });
+    }
 
     @Nullable
     @Override
@@ -47,8 +83,8 @@ public class SettingsTabFragment extends Fragment
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(requireContext());
 
         // --- navigation rows ---
-        bindRow(view, R.id.setting_export, () -> openMaintenance(ToxProfileImportHelper.EXTRA_OPEN_EXPORT_PICKER));
-        bindRow(view, R.id.setting_import, () -> openMaintenance(ToxProfileImportHelper.EXTRA_OPEN_IMPORT_PICKER));
+        bindRow(view, R.id.setting_export, this::startProfileExport);
+        bindRow(view, R.id.setting_import, this::startProfileImport);
         bindRow(view, R.id.setting_advanced,
                 () -> showPreferenceFragment(new SettingsActivity.GeneralPreferenceFragment()));
         bindRow(view, R.id.setting_faq, this::openFaq);
@@ -170,16 +206,29 @@ public class SettingsTabFragment extends Fragment
         return mode == Configuration.UI_MODE_NIGHT_YES;
     }
 
-    private void openMaintenance(final String extra)
+    // KHANDAQ (#2): export runs the SAF CreateDocument picker straight from Settings (confirm dialog →
+    // system file picker), no «Техническое обслуживание» screen in between.
+    private void startProfileExport()
     {
-        final MainActivity activity = (MainActivity) getActivity();
-        if (activity == null || Callstate.state != 0)
+        final AppCompatActivity activity = (AppCompatActivity) getActivity();
+        if (activity == null || Callstate.state != 0 || exportProfileLauncher == null)
         {
             return;
         }
-        final Intent intent = new Intent(activity, MaintenanceActivity.class);
-        intent.putExtra(extra, true);
-        activity.startActivity(intent);
+        ToxProfileImportHelper.promptExportSavedata(activity,
+                () -> exportProfileLauncher.launch(ToxProfileImportHelper.EXPORT_SUGGESTED_FILENAME));
+    }
+
+    // KHANDAQ (#2): import runs the replace-confirm dialog then the SAF OpenDocument picker directly.
+    private void startProfileImport()
+    {
+        final AppCompatActivity activity = (AppCompatActivity) getActivity();
+        if (activity == null || Callstate.state != 0 || importProfileLauncher == null)
+        {
+            return;
+        }
+        ToxProfileImportHelper.showReplaceImportConfirmation(activity,
+                () -> importProfileLauncher.launch(ToxProfileImportHelper.TOX_IMPORT_MIME_TYPES));
     }
 
     private void openFaq()

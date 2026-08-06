@@ -203,9 +203,20 @@ public class StartMainActivityWrapper extends AppCompatActivity
             final boolean existingDb = DbSecretKeyStorage.hasExistingUserDatabase(this);
             set_pattern = !pw_set_screen_done && !existingDb;
 
+            // KHANDAQ (#8 logout): a skip-password (auto-generated-key) profile must also honour an
+            // explicit logout on cold start. CheckPasswordActivity auto-unlocks a no-password profile
+            // WITHOUT checking the logged-in flag (prefersManualPasswordUnlock==false short-circuits
+            // its || gate), so after «Выйти» + process kill the next launch walked straight back into
+            // the account. Route a logged-out no-password profile to onboarding (welcome → create /
+            // import) instead. Manual-password profiles are unaffected — they still go to
+            // CheckPasswordActivity, whose own flag-gate already blocks auto-unlock after logout.
+            final boolean loggedOutNoPw = existingDb
+                    && !DbSecretKeyStorage.prefersManualPasswordUnlock(this)
+                    && !DbSecretKeyStorage.isSessionLoggedIn(this);
+
             Log.i(TAG, "0011");
 
-            if (set_pattern)
+            if (set_pattern || loggedOutNoPw)
             {
                 /* this is the first time the user starts this app
                  * show the KHANDAQ onboarding intro, which leads into SetPasswordActivity

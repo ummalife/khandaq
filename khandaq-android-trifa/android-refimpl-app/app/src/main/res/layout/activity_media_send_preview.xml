@@ -41,6 +41,19 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <!-- KHANDAQ (#7): crop/rotate the current photo before sending (hidden for video pages). -->
+    <ImageButton
+        android:id="@+id/media_preview_edit"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/media_send_edit_photo"
+        android:padding="12dp"
+        android:src="@drawable/ic_baseline_edit_24"
+        app:tint="@android:color/white" />
+
     <!-- Bottom bar: thumbnails + [emoji · caption · round send] -->
     <LinearLayout
         android:layout_width="match_parent"

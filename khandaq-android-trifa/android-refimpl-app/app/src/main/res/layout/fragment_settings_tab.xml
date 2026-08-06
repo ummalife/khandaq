@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- KHANDAQ Settings (Figma 2031:11056): grouped-card list with inline toggles. The prefs container
-     is kept for the sub-screens (Расширенные настройки → General prefs). -->
+<!-- KHANDAQ Settings (Figma 2031:11056) — KHANDAQ (#3): Telegram/Bip-style grouped sections. Each
+     section = a titled header above a rounded card. All row/switch ids are preserved so
+     SettingsTabFragment.java binds unchanged (no behaviour change vs the flat card list). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -17,10 +18,165 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingTop="16dp"
-            android:paddingBottom="16dp">
+            android:paddingTop="8dp"
+            android:paddingBottom="24dp">
 
-            <!-- Card 1 -->
+            <!-- ============ ОФОРМЛЕНИЕ ============ -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="28dp"
+                android:layout_marginEnd="28dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_section_appearance"
+                android:textColor="@color/khandaq_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.03" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_profile_card">
+
+                <!-- Тёмная тема -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="6dp">
+
+                    <TextView
+                        android:id="@+id/label_dark_theme"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/settings_dark_theme"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switch_dark_theme"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:saveEnabled="false"
+                        android:clickable="true"
+                        android:focusable="true"
+                        app:useMaterialThemeColors="false"
+                        app:thumbTint="@color/khandaq_switch_thumb"
+                        app:trackTint="@color/khandaq_switch_track" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ============ УВЕДОМЛЕНИЯ ============ -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="28dp"
+                android:layout_marginEnd="28dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_section_notifications"
+                android:textColor="@color/khandaq_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.03" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_profile_card">
+
+                <!-- Превью уведомлений -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="6dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/settings_notif_preview"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switch_notif_preview"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:saveEnabled="false"
+                        android:clickable="true"
+                        android:focusable="true"
+                        app:useMaterialThemeColors="false"
+                        app:thumbTint="@color/khandaq_switch_thumb"
+                        app:trackTint="@color/khandaq_switch_track" />
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="0.5dp"
+                    android:layout_marginHorizontal="16dp" android:background="@color/md_grey_300_seperator" />
+
+                <!-- Загрузка вложений (Figma) -->
+                <LinearLayout
+                    android:id="@+id/setting_attachment_download"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="14dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/settings_attachment_download"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/setting_attachment_download_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:textColor="@color/onboarding_hint"
+                        android:textSize="14sp" />
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:importantForAccessibility="no" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ============ ПРОФИЛЬ И ДАННЫЕ ============ -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="28dp"
+                android:layout_marginEnd="28dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_section_data"
+                android:textColor="@color/khandaq_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.03" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -101,113 +257,28 @@
                         android:textSize="13sp"
                         android:lineSpacingExtra="2sp" />
                 </LinearLayout>
+            </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="0.5dp"
-                    android:layout_marginHorizontal="16dp" android:background="@color/md_grey_300_seperator" />
+            <!-- ============ ДОПОЛНИТЕЛЬНО ============ -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="28dp"
+                android:layout_marginEnd="28dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_section_advanced"
+                android:textColor="@color/khandaq_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.03" />
 
-                <!-- Загрузка вложений (Figma) -->
-                <LinearLayout
-                    android:id="@+id/setting_attachment_download"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/settings_attachment_download"
-                        android:textColor="@color/onboarding_title"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:id="@+id/setting_attachment_download_value"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="6dp"
-                        android:textColor="@color/onboarding_hint"
-                        android:textSize="14sp" />
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_chevron_right"
-                        android:importantForAccessibility="no" />
-                </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="0.5dp"
-                    android:layout_marginHorizontal="16dp" android:background="@color/md_grey_300_seperator" />
-
-                <!-- Тёмная тема -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="6dp">
-
-                    <TextView
-                        android:id="@+id/label_dark_theme"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/settings_dark_theme"
-                        android:textColor="@color/onboarding_title"
-                        android:textSize="16sp" />
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/switch_dark_theme"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:saveEnabled="false"
-                        android:clickable="true"
-                        android:focusable="true"
-                        app:useMaterialThemeColors="false"
-                        app:thumbTint="@color/khandaq_switch_thumb"
-                        app:trackTint="@color/khandaq_switch_track" />
-                </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="0.5dp"
-                    android:layout_marginHorizontal="16dp" android:background="@color/md_grey_300_seperator" />
-
-                <!-- Превью уведомлений -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="6dp">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/settings_notif_preview"
-                        android:textColor="@color/onboarding_title"
-                        android:textSize="16sp" />
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/switch_notif_preview"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:saveEnabled="false"
-                        android:clickable="true"
-                        android:focusable="true"
-                        app:useMaterialThemeColors="false"
-                        app:thumbTint="@color/khandaq_switch_thumb"
-                        app:trackTint="@color/khandaq_switch_track" />
-                </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="0.5dp"
-                    android:layout_marginHorizontal="16dp" android:background="@color/md_grey_300_seperator" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_profile_card">
 
                 <!-- Расширенные настройки -->
                 <LinearLayout
@@ -238,12 +309,24 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Card 2 -->
+            <!-- ============ О ПРИЛОЖЕНИИ ============ -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="28dp"
+                android:layout_marginEnd="28dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_section_about"
+                android:textColor="@color/khandaq_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.03" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="16dp"
                 android:orientation="vertical"
                 android:background="@drawable/bg_profile_card">
 

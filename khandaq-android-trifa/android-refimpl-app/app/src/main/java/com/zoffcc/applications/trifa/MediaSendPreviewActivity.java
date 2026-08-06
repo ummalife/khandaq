@@ -18,6 +18,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.github.chrisbanes.photoview.PhotoView;
@@ -43,6 +44,10 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     private TextView counterView;
     private ViewPager2 pager;
     private ThumbnailAdapter thumbAdapter;
+    // KHANDAQ (#7): crop/rotate editor before send.
+    private PreviewAdapter previewAdapter;
+    private ImageButton editButton;
+    private int editingPosition = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -66,13 +71,15 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         pager = findViewById(R.id.media_preview_pager);
         final RecyclerView thumbs = findViewById(R.id.media_preview_thumbs);
 
-        pager.setAdapter(new PreviewAdapter(this, uris));
+        previewAdapter = new PreviewAdapter(this, uris);
+        pager.setAdapter(previewAdapter);
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback()
         {
             @Override
             public void onPageSelected(int position)
             {
                 updateCounter(position);
+                updateEditButtonVisibility(position);
                 if (thumbAdapter != null)
                 {
                     thumbAdapter.setSelected(position);
@@ -94,6 +101,11 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         final ImageButton backButton = findViewById(R.id.media_preview_close);
         final ImageButton sendButton = findViewById(R.id.media_preview_send);
         final ImageView emojiButton = findViewById(R.id.media_preview_emoji);
+
+        // KHANDAQ (#7): crop/rotate the current photo before sending.
+        editButton = findViewById(R.id.media_preview_edit);
+        editButton.setOnClickListener(v -> launchCropEditor(pager.getCurrentItem()));
+        updateEditButtonVisibility(0);
 
         final View.OnClickListener cancelListener = v ->
         {
@@ -130,6 +142,87 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             captionField.requestFocus();
             emojiPopup.toggle();
         });
+    }
+
+    // KHANDAQ (#7): show the edit (crop/rotate) button only for image pages, never for video.
+    private void updateEditButtonVisibility(final int position)
+    {
+        if (editButton == null || uris == null || position < 0 || position >= uris.size())
+        {
+            return;
+        }
+        final boolean isVideo = MediaSendPreviewHelper.isVideoUri(this, uris.get(position));
+        editButton.setVisibility(isVideo ? View.GONE : View.VISIBLE);
+    }
+
+    // KHANDAQ (#7): open uCrop (free crop + rotate/scale gestures) on the current photo; the result
+    // returns to onActivityResult as UCrop.REQUEST_CROP and replaces that page's uri in place.
+    private void launchCropEditor(final int position)
+    {
+        if (uris == null || position < 0 || position >= uris.size())
+        {
+            return;
+        }
+        final Uri source = uris.get(position);
+        if (MediaSendPreviewHelper.isVideoUri(this, source))
+        {
+            return;
+        }
+        try
+        {
+            editingPosition = position;
+            final Uri dest = Uri.fromFile(new java.io.File(getCacheDir(),
+                    "edit_crop_" + position + "_" + System.nanoTime() + ".jpg"));
+            final com.yalantis.ucrop.UCrop.Options options = new com.yalantis.ucrop.UCrop.Options();
+            options.setToolbarColor(getResources().getColor(R.color.colorPrimaryDark));
+            options.setStatusBarColor(getResources().getColor(R.color.colorPrimaryDark));
+            options.setActiveControlsWidgetColor(getResources().getColor(R.color.colorPrimary));
+            options.setFreeStyleCropEnabled(true); // any aspect ratio; rotate/scale gestures on by default
+            options.setCompressionFormat(Bitmap.CompressFormat.JPEG);
+            options.setCompressionQuality(90);
+            final Intent crop = com.yalantis.ucrop.UCrop.of(source, dest)
+                    .withMaxResultSize(2560, 2560)
+                    .withOptions(options)
+                    .getIntent(this);
+            startActivityForResult(crop, com.yalantis.ucrop.UCrop.REQUEST_CROP);
+        }
+        catch (Exception e)
+        {
+            editingPosition = -1;
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data)
+    {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != com.yalantis.ucrop.UCrop.REQUEST_CROP)
+        {
+            return;
+        }
+        final int pos = editingPosition;
+        editingPosition = -1;
+        if (resultCode == Activity.RESULT_OK)
+        {
+            final Uri cropped = (data == null) ? null : com.yalantis.ucrop.UCrop.getOutput(data);
+            if (cropped != null && pos >= 0 && pos < uris.size())
+            {
+                uris.set(pos, cropped);
+                if (previewAdapter != null)
+                {
+                    previewAdapter.notifyItemChanged(pos);
+                }
+                if (thumbAdapter != null)
+                {
+                    thumbAdapter.notifyItemChanged(pos);
+                }
+            }
+        }
+        else if (data != null && com.yalantis.ucrop.UCrop.getError(data) != null)
+        {
+            Toast.makeText(this, R.string.media_send_edit_failed, Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override

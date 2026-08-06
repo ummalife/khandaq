@@ -553,7 +553,9 @@ private extension GroupInfoController {
         }
         alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default) { [unowned self] _ in
             if let text = alert.textFields?.first?.text, let parsed = Int32(text), parsed > 0 {
-                self.peerLimitValue = parsed
+                // KHANDAQ (#iOS group member limit): clamp to the Tox NGC ceiling (uint16 maxpeers).
+                // Values > 65535 would silently wrap in the (uint16_t) cast on the way to toxcore.
+                self.peerLimitValue = min(parsed, 65535)
             }
             self.savePeerLimitIfNeeded()
             self.tableView.reloadData()

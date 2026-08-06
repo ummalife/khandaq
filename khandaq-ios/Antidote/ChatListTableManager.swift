@@ -208,6 +208,8 @@ extension ChatListTableManager: UITableViewDataSource {
                 }
             }
 
+            model.isFavorite = ChatFavoritesStore.isFavorite(chat: chat)
+
             let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
             cell.setupWithTheme(theme, model: model)
             return cell
@@ -287,6 +289,7 @@ extension ChatListTableManager: UITableViewDataSource {
 
         model.isUnread = chatShowsUnreadIndicator(for: chat)
         model.unreadCount = unreadMessageCount(for: chat)   // KHANDAQ (#30): numeric badge
+        model.isFavorite = ChatFavoritesStore.isFavorite(chat: chat)
 
         let cell = tableView.dequeueReusableCell(withIdentifier: ChatListCell.staticReuseIdentifier) as! ChatListCell
         cell.setupWithTheme(theme, model: model)

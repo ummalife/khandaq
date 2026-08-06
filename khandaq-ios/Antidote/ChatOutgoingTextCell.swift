@@ -55,6 +55,11 @@ class ChatOutgoingTextCell: ChatBaseTextCell {
             $0.top.equalTo(movableContentView).offset(ChatBaseTextCell.Constants.BubbleVerticalOffset)
             $0.bottom.equalTo(movableContentView).offset(-ChatBaseTextCell.Constants.BubbleVerticalOffset)
             $0.trailing.equalTo(movableContentView).offset(-ChatBaseTextCell.Constants.BubbleHorizontalOffset)
+            // KHANDAQ (#iOS status-spacing): reserve a minimum bubble width so the delivery checkmark
+            // (bottom-right overlay) never crowds a SHORT outgoing message. Long/multi-line bubbles are
+            // already wider, so this only affects short texts. Outgoing-only — the shared BubbleView and
+            // incoming cells are untouched.
+            $0.width.greaterThanOrEqualTo(76)
         }
 
         statusImageView.snp.makeConstraints {

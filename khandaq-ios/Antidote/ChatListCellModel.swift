@@ -20,4 +20,7 @@ class ChatListCellModel: BaseCellModel {
     var isUnread: Bool = false
     var unreadCount: Int = 0
     var isDraft: Bool = false
+    // KHANDAQ (#iOS favorite-marker): the chat is in the user's Favorites (ChatFavoritesStore) — the row
+    // shows a small star so it's visible without opening the «Избранные» filter tab.
+    var isFavorite: Bool = false
 }

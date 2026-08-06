@@ -1662,29 +1662,55 @@ private extension ChatGroupController {
             return
         }
 
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 44))
-        let label = UILabel()
-        label.font = UIFont.preferredFont(forTextStyle: .footnote)
-        label.textColor = theme.colorForType(.BusyStatus)
-        label.textAlignment = .center
-        label.numberOfLines = 2
-
+        let bannerText: String
         let attempt = submanagerGroups.groupJoinAttempt(for: chat)
         if attempt > 0 || submanagerGroups.isGroupJoinRetryRunning(for: chat) {
-            let displayAttempt = max(attempt, 1)
-            label.text = String(localized: "group_connecting_banner_format", displayAttempt)
+            bannerText = String(localized: "group_connecting_banner_format", max(attempt, 1))
         }
         else {
-            label.text = String(localized: "group_disconnected_banner")
+            bannerText = String(localized: "group_disconnected_banner")
         }
 
-        container.addSubview(label)
+        // KHANDAQ (#iOS group-connecting note): a subtle centered rounded chip (same surface as the 1:1
+        // offline note / ChatFauxOfflineHeaderView) instead of raw red text that clipped its 2nd line.
+        // Dark translucent pill + light 12pt text, measured at a capped width so the long
+        // "…отправятся после соединения." wraps instead of being cut off.
+        let maxLabelWidth: CGFloat = 290
+        let hInset: CGFloat = 12, vInset: CGFloat = 6, sideMargin: CGFloat = 16, topGap: CGFloat = 10
+
+        let container = UIView()
+        let chip = UIView()
+        chip.backgroundColor = UIColor(white: 0.0, alpha: 0.28)
+        chip.layer.cornerRadius = 13
+        chip.layer.masksToBounds = true
+
+        let label = UILabel()
+        label.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
+        label.textColor = UIColor(white: 1.0, alpha: 0.9)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.preferredMaxLayoutWidth = maxLabelWidth
+        label.text = bannerText
+
+        container.addSubview(chip)
+        chip.addSubview(label)
         label.snp.makeConstraints {
-            $0.edges.equalToSuperview().inset(UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12))
+            $0.edges.equalTo(chip).inset(UIEdgeInsets(top: vInset, left: hInset, bottom: vInset, right: hInset))
+            $0.width.lessThanOrEqualTo(maxLabelWidth)
         }
-        container.layoutIfNeeded()
-        let height = label.systemLayoutSizeFitting(UILayoutFittingCompressedSize).height + 16
+        chip.snp.makeConstraints {
+            $0.top.equalTo(container).offset(topGap)
+            $0.bottom.equalTo(container).offset(-topGap)
+            $0.centerX.equalTo(container)
+            $0.leading.greaterThanOrEqualTo(container).offset(sideMargin)
+            $0.trailing.lessThanOrEqualTo(container).offset(-sideMargin)
+        }
+
+        // Size the header from the label measured at the capped width — never clipped.
+        let labelSize = label.sizeThatFits(CGSize(width: maxLabelWidth, height: .greatestFiniteMagnitude))
+        let height = ceil(labelSize.height) + vInset * 2 + topGap * 2
         container.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: max(height, 36))
+        container.layoutIfNeeded()
         // KHANDAQ (#15): the table is vertically flipped, so flip the header back to keep it upright.
         container.transform = tableView.transform
         tableView.tableHeaderView = container

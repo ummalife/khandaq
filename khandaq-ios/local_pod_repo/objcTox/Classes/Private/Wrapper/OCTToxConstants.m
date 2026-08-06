@@ -31,4 +31,7 @@ const NSUInteger kOCTToxGroupChatIdHexLength = 2 * TOX_GROUP_CHAT_ID_SIZE;
 const NSUInteger kOCTToxGroupMaxMessageLength = TOX_GROUP_MAX_MESSAGE_LENGTH;
 const NSUInteger kOCTToxGroupMaxGroupNameLength = TOX_GROUP_MAX_GROUP_NAME_LENGTH;
 const NSUInteger kOCTToxGroupMaxPartLength = TOX_GROUP_MAX_PART_LENGTH;
-const int32_t kOCTDefaultGroupPeerLimit = 100;
+// KHANDAQ (#iOS group member limit): default public-group cap raised 100 -> 1000 (tester: "лимит
+// маловат"). This is only the DEFAULT; the founder can set 1..65535 in the group settings. The Tox NGC
+// protocol ceiling is 65535 (uint16 maxpeers, no clamp in toxcore).
+const int32_t kOCTDefaultGroupPeerLimit = 1000;

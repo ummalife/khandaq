@@ -29,6 +29,8 @@ class ChatListCell: BaseCell {
     fileprivate var messageLabel: UILabel!
     fileprivate var dateLabel: UILabel!
     fileprivate var arrowImageView: UIImageView!
+    // KHANDAQ (#iOS favorite-marker): star shown after the name for favorited chats.
+    fileprivate var favoriteImageView: UIImageView!
     // KHANDAQ (#30): numeric unread-count badge (Telegram-style pill) on the message row.
     fileprivate var unreadBadge: PaddedLabel!
     // KHANDAQ design: collapses to 0 height for chat rows (name + message only).
@@ -49,6 +51,17 @@ class ChatListCell: BaseCell {
 
         nicknameLabel.text = chatModel.nickname
         nicknameLabel.textColor = theme.colorForType(.NormalText)
+
+        // KHANDAQ (#iOS favorite-marker): small star after the name for favorited chats (nil image = no
+        // star = 0 width, so the row is unchanged for non-favorites). SF Symbol → iOS 13+, nil on older.
+        if chatModel.isFavorite, #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 12.0, weight: .semibold)
+            favoriteImageView.image = UIImage(systemName: "star.fill", withConfiguration: config)
+            favoriteImageView.tintColor = theme.colorForType(.LinkText)
+        }
+        else {
+            favoriteImageView.image = nil
+        }
 
         // KHANDAQ design (Figma): a chat row is exactly two lines — name + last message. The online /
         // last-seen presence is shown in Контакты, not here, so the presence line is always collapsed.
@@ -103,6 +116,14 @@ class ChatListCell: BaseCell {
         dateLabel.font = UIFont.systemFont(ofSize: 12.0)
         contentView.addSubview(dateLabel)
 
+        // KHANDAQ (#iOS favorite-marker): small star after the name for favorited chats. No explicit width,
+        // so a nil image (non-favorite) collapses to 0 and the date sits where it does today.
+        favoriteImageView = UIImageView()
+        favoriteImageView.contentMode = .scaleAspectFit
+        favoriteImageView.setContentHuggingPriority(.required, for: .horizontal)
+        favoriteImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
+        contentView.addSubview(favoriteImageView)
+
         let image = UIImage(named: "right-arrow")!.flippedToCorrectLayout()
 
         arrowImageView = UIImageView(image: image)
@@ -149,8 +170,13 @@ class ChatListCell: BaseCell {
             presenceHeightConstraint = $0.height.equalTo(Constants.PresenceLabelHeight).constraint
         }
 
+        favoriteImageView.snp.makeConstraints {
+            $0.leading.equalTo(nicknameLabel.snp.trailing).offset(4.0)
+            $0.centerY.equalTo(nicknameLabel)
+        }
+
         dateLabel.snp.makeConstraints {
-            $0.leading.greaterThanOrEqualTo(nicknameLabel.snp.trailing).offset(Constants.NicknameToDateMinOffset)
+            $0.leading.greaterThanOrEqualTo(favoriteImageView.snp.trailing).offset(Constants.NicknameToDateMinOffset)
             $0.trailing.equalTo(contentView).offset(Constants.RightOffset)
             $0.top.equalTo(nicknameLabel)
             $0.height.equalTo(nicknameLabel)

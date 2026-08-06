@@ -118,6 +118,29 @@ public class ToolbarActionMode implements ActionMode.Callback
             reactItem.setVisible(HelperMessageReaction.canReactToCurrentSelection());
         }
 
+        // KHANDAQ (#Saved): hide "В избранное" (forward-to-self) when we are ALREADY inside the
+        // Favorites/Saved chat — re-saving a Saved message into Saved is meaningless. Only the 1:1 view
+        // can be the Favorites chat, so gate on the same null-checks the forward click-handler uses.
+        final MenuItem forwardVisItem = menu.findItem(R.id.action_forward);
+        if (forwardVisItem != null)
+        {
+            boolean inFavoritesChat = false;
+            try
+            {
+                if (MainActivity.message_list_activity != null
+                        && MainActivity.group_message_list_activity == null
+                        && MainActivity.conference_message_list_activity == null)
+                {
+                    inFavoritesChat = FavoritesChatHelper.isFavoritesChat(
+                            MainActivity.message_list_activity.get_friend_pubkey());
+                }
+            }
+            catch (Exception ignored)
+            {
+            }
+            forwardVisItem.setVisible(!inFavoritesChat);
+        }
+
         action_active = false;
         return true;
     }

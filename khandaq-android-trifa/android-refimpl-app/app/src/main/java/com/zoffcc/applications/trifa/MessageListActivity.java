@@ -2860,6 +2860,29 @@ public class MessageListActivity extends AppCompatActivity
             return -1L;
         }
 
+        // KHANDAQ (#crop-send): the in-app photo editor (uCrop) yields a file:// URI, and
+        // DocumentFile.fromSingleUri(...).length() returns 0 for file:// (SAF is for content://). Without
+        // this the edited photo was wrongly rejected as "empty" in a normal 1:1 chat. Resolve the real
+        // size from the filesystem path (copy_outgoing_file uses openInputStream, which handles file://).
+        if (file_size < 1L)
+        {
+            final String fileUriStr = (uri != null) ? uri.toString() : filepath;
+            if ((fileUriStr != null) && fileUriStr.startsWith("file:"))
+            {
+                try
+                {
+                    final java.io.File f = new java.io.File(android.net.Uri.parse(fileUriStr).getPath());
+                    if (f.isFile())
+                    {
+                        file_size = f.length();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+        }
+
         if (file_size < 1)
         {
             HelperGeneric.logI(TAG, "file length 0 ?");

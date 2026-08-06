@@ -6400,6 +6400,14 @@ public class MainActivity extends AppCompatActivity
                     // KHANDAQ: friend just came online — re-arm unacked outgoing messages so they are
                     // resent and re-acknowledged (re-syncs delivery status, clears stale "failed").
                     HelperMessage.rearm_unacked_direct_messages_on_reconnect(f.tox_public_key_string);
+                    // KHANDAQ (#pending-delivery): flush NEVER-SENT messages (message_id == -1) that were
+                    // typed while this contact had not accepted the friend request yet. Tox can't deliver a
+                    // message before the friend connection exists, so they sit on a clock forever; the three
+                    // resend nudges above all filter message_id > -1 and skip them. TOX_CONNECTION_real was
+                    // just persisted (line above) so resend_unsent_text_messages()'s is_friend_online_real
+                    // check now returns online for this friend and does a fresh, proven send. Runs at the
+                    // exact accept moment instead of waiting on (and racing) the 15s background poll.
+                    TrifaToxService.resend_unsent_text_messages();
                 }
             }
 

@@ -356,6 +356,22 @@ final class FavoritesChatHelper
                     return documentFile.length();
                 }
             }
+            else if (filepath.startsWith("file:"))
+            {
+                // KHANDAQ (#crop-send): the in-app photo editor (uCrop) hands us a file:// URI
+                // (file:///data/.../cache/edit_crop_*.jpg). new File("file://...") is not a real path, so
+                // size came back < 1 and sendLocalOutgoingFile aborted with "unknown size" — the EDITED
+                // photo silently never appeared in the Saved chat. Resolve the real filesystem path.
+                final String realPath = android.net.Uri.parse(filepath).getPath();
+                if (!TextUtils.isEmpty(realPath))
+                {
+                    final java.io.File file = new java.io.File(realPath);
+                    if (file.isFile())
+                    {
+                        return file.length();
+                    }
+                }
+            }
             else
             {
                 java.io.File file = new java.io.File(filepath, filename);
@@ -666,10 +682,25 @@ final class FavoritesChatHelper
             {
                 return null;
             }
-            final java.io.File tmpFile = new java.io.File(SD_CARD_TMP_DIR, tmpName);
+            java.io.File tmpFile = new java.io.File(SD_CARD_TMP_DIR, tmpName);
             if (!tmpFile.isFile() || tmpFile.length() < 1L)
             {
                 return null;
+            }
+            // KHANDAQ (#Saved-voice): copy_vfs_file_to_real_file names the temp "<md5>_fav" with NO
+            // extension, dropping the original ".file.m4a" voice marker (and any real extension). The Saved
+            // copy then fails isVoiceMessagePath()/mime detection, so a forwarded voice note renders in the
+            // plain player as 0:00 + a flat waveform. Keep the original basename (which carries the marker)
+            // so the forwarded copy is still recognized. Unique via the md5 temp prefix; falls back to the
+            // bare temp if the rename fails.
+            final String safeOrig = fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+            if (!TextUtils.isEmpty(safeOrig))
+            {
+                final java.io.File named = new java.io.File(SD_CARD_TMP_DIR, tmpName + "_" + safeOrig);
+                if (tmpFile.renameTo(named))
+                {
+                    tmpFile = named;
+                }
             }
             return new LocalFileSource(tmpFile.getParent(), tmpFile.getName(), tmpFile.length());
         }

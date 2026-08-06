@@ -2168,12 +2168,24 @@ public class HelperGeneric
         {
             return "";
         }
-        String normalized = raw.replace("\u200B", "").
-                replace("\u200C", "").
-                replace("\u200D", "").
-                replace("\uFEFF", "").
-                trim();
-        return normalized;
+        // KHANDAQ (#emoji): strip the stray zero-width residue EmojiEditText leaves, but do NOT blanket
+        // remove U+200D (ZERO WIDTH JOINER). An INTERIOR ZWJ is what fuses multi-part emoji (family/
+        // profession/flag/handshake ZWJ sequences); removing it silently split them into a different or
+        // broken emoji (tester: "wrong smiley"). So strip ZWSP (U+200B) / ZWNJ (U+200C) / BOM (U+FEFF)
+        // everywhere, and only trim ZWJ (with whitespace) at the string EDGES where the residue actually
+        // sits -- an interior ZWJ that glues an emoji sequence is preserved.
+        final String s = raw.replace("\u200B", "").replace("\u200C", "").replace("\uFEFF", "");
+        int start = 0;
+        int end = s.length();
+        while (start < end && (s.charAt(start) == '\u200D' || Character.isWhitespace(s.charAt(start))))
+        {
+            start++;
+        }
+        while (end > start && (s.charAt(end - 1) == '\u200D' || Character.isWhitespace(s.charAt(end - 1))))
+        {
+            end--;
+        }
+        return s.substring(start, end);
     }
 
     public static boolean has_sendable_chat_text(final CharSequence raw)

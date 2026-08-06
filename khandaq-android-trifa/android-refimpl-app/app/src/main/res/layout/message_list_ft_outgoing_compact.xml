@@ -142,7 +142,7 @@
                         android:src="@null"
                         android:visibility="gone" />
 
-                    <TextView
+                    <com.luseen.autolinklibrary.EmojiTextViewLinks
                         android:id="@+id/ft_caption_text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"

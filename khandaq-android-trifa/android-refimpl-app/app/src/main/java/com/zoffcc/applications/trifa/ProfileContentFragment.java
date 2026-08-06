@@ -522,6 +522,12 @@ public class ProfileContentFragment extends Fragment
                 // (bounce to PIN → back to profile, avatar unchanged). Restrict to images only.
                 intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*"});
             }
+            // KHANDAQ (#avatar-pin): the system photo picker is an external app, so it backgrounds us and
+            // the app-lock would prompt for the PIN on return from an intentional in-app action. Suppress
+            // the lock for exactly this one foreground return (same flag the chat photo/file pickers use;
+            // the gate consumes+clears it whether the user picks or cancels). Only here — NOT before the
+            // in-app uCrop/field-edit launches, which never background the app.
+            AppLockHelper.suppressNextLock();
             startActivityForResult(intent, MEDIAPICK_ID_002);
         });
 

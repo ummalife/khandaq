@@ -5,6 +5,7 @@ import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import com.luseen.autolinklibrary.EmojiTextViewLinks;
 
 import com.zoffcc.applications.sorm.GroupMessage;
 import com.zoffcc.applications.sorm.Message;
@@ -269,7 +270,7 @@ public class ChatCaptionHelper
 
     private static void show_caption_in_file_row(final RecyclerView.ViewHolder holder, final String caption)
     {
-        final TextView tv = holder.itemView.findViewById(R.id.ft_caption_text);
+        final EmojiTextViewLinks tv = holder.itemView.findViewById(R.id.ft_caption_text);
         if (tv == null)
         {
             return;
@@ -281,6 +282,11 @@ public class ChatCaptionHelper
         }
         tv.setText(caption);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, MESSAGE_TEXT_SIZE[PREF__global_font_size]);
+        // KHANDAQ (#emoji-caption): render the caption with the app's Google-sprite emoji (ft_caption_text
+        // is now an EmojiTextViewLinks, not a plain TextView that fell back to the device font) and boost a
+        // single-emoji caption to the sticker size — so 🦍 sent with a photo shows the SAME emoji the user
+        // typed, at a readable size, instead of a tiny device-native glyph that looked like a different one.
+        ChatBubbleUiHelper.configure_message_emoji_size(tv, caption, PREF__global_font_size, false);
         tv.setVisibility(View.VISIBLE);
     }
 

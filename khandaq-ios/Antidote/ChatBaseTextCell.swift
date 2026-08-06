@@ -70,40 +70,10 @@ class ChatBaseTextCell: ChatMovableDateCell {
 
         bubbleView.textColor = theme.colorForType(.NormalText)
 
-        // KHANDAQ (#H2): render «изменено» as a small, dim suffix so it reads as a system note — not as
-        // if the sender typed it. (Previously appended to the message text at full size/colour.)
-        appendEditedMarkerIfNeeded(textModel, theme: theme)
-    }
-
-    /// KHANDAQ (#H2): append a small, dim «(изменено)» run after the message. Works for plain, search-
-    /// highlight and mention text (reads the current attributed/plain content). Runs BEFORE the group
-    /// sender-header styling (subclasses call that after super), which preserves this trailing run.
-    private func appendEditedMarkerIfNeeded(_ textModel: ChatBaseTextCellModel, theme: Theme) {
-        guard textModel.edited, !textModel.hasLocation else {
-            return
-        }
-        let baseFont = bubbleView.font ?? UIFont.preferredFont(forTextStyle: .body)
-        let result: NSMutableAttributedString
-        if let attributed = bubbleView.attributedText, attributed.length > 0 {
-            result = NSMutableAttributedString(attributedString: attributed)
-        }
-        else {
-            result = NSMutableAttributedString(string: bubbleView.text ?? "", attributes: [
-                .foregroundColor: theme.colorForType(.NormalText),
-                .font: baseFont,
-            ])
-        }
-        // KHANDAQ (#H2 rework): style the marker like the timestamp/status metadata — italic + the
-        // grey ChatInformationText colour (same as the time/checkmark), no parentheses — so it clearly
-        // reads as a system note rather than text the sender typed into the message.
-        let marker = NSAttributedString(
-            string: "  " + String(localized: "message_edited_marker"),
-            attributes: [
-                .font: UIFont.italicSystemFont(ofSize: max(baseFont.pointSize - 3.0, 11.0)),
-                .foregroundColor: theme.colorForType(.ChatInformationText),
-            ])
-        result.append(marker)
-        bubbleView.attributedText = result
+        // KHANDAQ (#iOS edited-marker): «изменено» is now rendered as its OWN metadata sub-row inside
+        // the bubble (BubbleView.bindEdited) — no longer appended inline into the message body, so it
+        // reads as a system note instead of text the sender typed onto the end of the message.
+        bubbleView.bindEdited(textModel.edited && !textModel.hasLocation)
     }
 
     /// KHANDAQ (Figma): tint the group sender header line ("Name · Role") with the per-peer color.

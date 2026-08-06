@@ -381,7 +381,9 @@ class ChatPrivateController: PortraitChatController {
         else {
             model.locationLatitude = nil
             model.locationLongitude = nil
-            model.message = body
+            // KHANDAQ (#iOS forward): clean stacked/legacy "↪ Переслано от (null)" headers at display time
+            // (incoming cross-platform / pre-fix forwards can't be re-sent). No-op for non-forward bodies.
+            model.message = MessageReplyHelper.normalizeForwardedHeader(body)
         }
     }
 
@@ -2582,10 +2584,16 @@ private extension ChatPrivateController {
             return
         }
         
+        // KHANDAQ (#iOS offline-note): measure the wrapped label at the TRUE table width and ceil the
+        // fractional height, otherwise the multi-line note lost its last line ("…Ему" truncation).
+        let width = tableView?.bounds.width ?? headerView.frame.width
         headerView.setNeedsLayout()
         headerView.layoutIfNeeded()
-        let height = headerView.systemLayoutSizeFitting(UILayoutFittingCompressedSize).height
-        headerView.frame.size.height = height
+        let target = CGSize(width: width, height: 0)
+        let height = ceil(headerView.systemLayoutSizeFitting(target,
+                                                             withHorizontalFittingPriority: .required,
+                                                             verticalFittingPriority: .fittingSizeLevel).height)
+        headerView.frame = CGRect(x: 0, y: 0, width: width, height: height)
         tableView?.tableHeaderView = headerView
     }
 

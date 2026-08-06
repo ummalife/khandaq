@@ -602,6 +602,7 @@
 "chat_copy_action" = "Copy";
 "chat_select_action" = "Select";
 "chat_forwarded_from_format" = "↪ Forwarded from %@";
+"chat_forwarded_noname" = "↪ Forwarded";
 "saved_messages_title" = "Saved Messages";
 "chat_reply_cancel" = "Cancel reply";
 "chat_reply_header" = "In reply to %@";

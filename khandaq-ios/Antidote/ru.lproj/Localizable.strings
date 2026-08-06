@@ -605,6 +605,7 @@
 "chat_copy_action" = "Скопировать";
 "chat_select_action" = "Выбрать";
 "chat_forwarded_from_format" = "↪ Переслано от %@";
+"chat_forwarded_noname" = "↪ Переслано";
 "saved_messages_title" = "Избранное";
 "chat_reply_cancel" = "Отменить ответ";
 "chat_reply_header" = "В ответ %@";

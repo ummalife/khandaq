@@ -1000,7 +1000,8 @@ extension ChatGroupController: UITableViewDataSource {
             let cell = tableView.dequeueReusableCell(withIdentifier: ChatOutgoingTextCell.staticReuseIdentifier, for: indexPath) as! ChatOutgoingTextCell
             let model = ChatOutgoingTextCellModel()
             let parsed = GroupMentionHelper.parse(message.messageText?.text)
-            model.message = parsed.bodyText
+            // KHANDAQ (#iOS forward): clean stacked/legacy "↪ Переслано от (null)" at display (no-op otherwise).
+            model.message = MessageReplyHelper.normalizeForwardedHeader(parsed.bodyText)
             // KHANDAQ: render shared location as a map bubble in groups too (parity with 1:1 +
             // Android — both use the "khandaq-location:lat,lon" wire format).
             if let location = LocationMessage.parse(parsed.bodyText) {
@@ -1038,13 +1039,13 @@ extension ChatGroupController: UITableViewDataSource {
             model.locationLongitude = location.longitude
         }
         else if let header = peerHeader(for: message) {
-            model.message = "\(header)\n\(body)"
+            model.message = "\(header)\n\(MessageReplyHelper.normalizeForwardedHeader(body))"
             // KHANDAQ (Figma): per-peer colored sender header, keyed by the frozen display name.
             model.senderHeaderLength = header.count
             model.senderColor = GroupPeerColors.color(forName: peerName(for: message) ?? header)
         }
         else {
-            model.message = body
+            model.message = MessageReplyHelper.normalizeForwardedHeader(body)
         }
         model.replyMeta = parsed.reply
         attachReplyQuoteHandler(to: model, messages: messages)
@@ -1313,6 +1314,12 @@ extension ChatGroupController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, shouldShowMenuForRowAt indexPath: IndexPath) -> Bool {
+        // KHANDAQ (#iOS longpress): on iOS 13+ the unified Telegram popup (reaction bar + action card in
+        // ONE presentation, via the long-press recognizer) is the only menu — suppress the legacy
+        // horizontal UIMenuController here so reactions never surface separately from the actions.
+        if #available(iOS 13.0, *) {
+            return false
+        }
         guard !tableView.isEditing else {
             return false
         }

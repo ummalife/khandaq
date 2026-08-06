@@ -161,6 +161,57 @@ enum MessageReplyHelper {
         return nil
     }
 
+    // KHANDAQ (#iOS forward): a peer/legacy name that arrived as "(null)"/"null"/empty is not a real name.
+    static func cleanForwardName(_ raw: String) -> String? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty || t == "(null)" || t.lowercased() == "null" { return nil }
+        return t
+    }
+
+    // KHANDAQ (#iOS forward): the "↪ Переслано от …" attribution is plain text baked into the body at
+    // send time. Drop ALL contiguous leading "↪ " header lines, returning the real body — used before
+    // RE-forwarding so headers never stack ("↪ … \n ↪ … \n body").
+    static func stripForwardedHeader(_ text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        while let first = lines.first, first.trimmingCharacters(in: .whitespaces).hasPrefix("↪ ") {
+            lines.removeFirst()
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    // KHANDAQ (#iOS forward): collapse stacked/legacy "↪ Переслано от …" headers into exactly ONE clean
+    // header at DISPLAY time, so incoming cross-platform / pre-fix "(null)" and re-forward stacking are
+    // cleaned even without re-sending. Peels every contiguous leading "↪ " line, takes the outermost
+    // forwarder name, sanitizes "(null)"/empty away, and re-emits a single header (bare "↪ Переслано" /
+    // "↪ Forwarded" when there is no real name). Bodies without a "↪ " prefix pass through unchanged.
+    static func normalizeForwardedHeader(_ text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        guard let firstLine = lines.first,
+              firstLine.trimmingCharacters(in: .whitespaces).hasPrefix("↪ ") else {
+            return text
+        }
+        let outerHeader = firstLine.trimmingCharacters(in: .whitespaces)
+        while let f = lines.first, f.trimmingCharacters(in: .whitespaces).hasPrefix("↪ ") {
+            lines.removeFirst()
+        }
+        let body = lines.joined(separator: "\n")
+        var name: String? = nil
+        for prefix in ["↪ Переслано от ", "↪ Forwarded from "] {
+            if outerHeader.hasPrefix(prefix) {
+                name = cleanForwardName(String(outerHeader.dropFirst(prefix.count)))
+                break
+            }
+        }
+        let header: String
+        if let name = name {
+            header = String(format: String(localized: "chat_forwarded_from_format"), name)
+        }
+        else {
+            header = String(localized: "chat_forwarded_noname")
+        }
+        return body.isEmpty ? header : header + "\n" + body
+    }
+
     private static func parseHeader(_ headerBody: String) -> ReplyMeta? {
         let parts = headerBody.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
         guard parts.count >= 4,

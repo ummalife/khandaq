@@ -22,6 +22,10 @@ class BubbleView: UIView {
     let replyQuoteView = ChatReplyQuoteView()
     // KHANDAQ (#192): reaction chips rendered as a compact line under the text ("❤️ 2  👍").
     fileprivate let reactionsLabel = UILabel()
+    // KHANDAQ (#iOS edited-marker): «изменено» rendered as its OWN bottom metadata sub-row (like the
+    // reactions line) instead of being appended inline into the body — so it reads as a system note,
+    // not as text the sender typed onto the end of their message.
+    fileprivate let editedLabel = UILabel()
     var onReactionsTap: (() -> Void)?
     // KHANDAQ (#100): keep the quote view's tap handler in sync no matter the assignment order.
     // The cell sets onReplyQuoteTap AFTER calling bindReplyQuote, so without this didSet the quote's
@@ -59,6 +63,8 @@ class BubbleView: UIView {
         set {
             textView.textColor = newValue
             reactionsLabel.textColor = newValue.withAlphaComponent(0.9)
+            // subdued so «изменено» reads as metadata (mirrors the timestamp/status tint intent).
+            editedLabel.textColor = newValue.withAlphaComponent(0.5)
         }
     }
 
@@ -121,6 +127,13 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
+    // KHANDAQ (#iOS edited-marker): show/hide the «изменено» metadata row (its own bottom sub-row).
+    func bindEdited(_ isEdited: Bool) {
+        editedLabel.text = String(localized: "message_edited_marker")
+        editedLabel.isHidden = !isEdited
+        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
+    }
+
     fileprivate func ensureMapImageView() {
         guard mapImageView == nil else {
             return
@@ -162,7 +175,9 @@ class BubbleView: UIView {
                 $0.top.equalTo(replyQuoteView.snp.bottom).offset(Constants.TextViewVerticalOffset)
             }
 
-            if reactionsLabel.isHidden {
+            // KHANDAQ (#iOS edited-marker): the bubble bottom is now the lowest visible of
+            // {textView, reactionsLabel, editedLabel} — only pin textView to bottom when BOTH are hidden.
+            if reactionsLabel.isHidden && editedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-Constants.TextViewVerticalOffset)
             }
             $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
@@ -177,7 +192,24 @@ class BubbleView: UIView {
             $0.top.equalTo(textView.snp.bottom)
             $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
             $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
-            if !reactionsLabel.isHidden {
+            // pin to bottom only when it's the last visible row (no edited marker below it).
+            if !reactionsLabel.isHidden && editedLabel.isHidden {
+                $0.bottom.equalTo(self).offset(-4.0)
+            }
+        }
+
+        // KHANDAQ (#iOS edited-marker): «изменено» sits on its OWN row below the text (and below the
+        // reactions line when present), left-aligned so it never collides with the outgoing checkmark.
+        editedLabel.snp.remakeConstraints {
+            if reactionsLabel.isHidden {
+                $0.top.equalTo(textView.snp.bottom).offset(1.0)
+            }
+            else {
+                $0.top.equalTo(reactionsLabel.snp.bottom).offset(1.0)
+            }
+            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            if !editedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-4.0)
             }
         }
@@ -231,6 +263,10 @@ class BubbleView: UIView {
         reactionsLabel.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(handleReactionsTap)))
         addSubview(reactionsLabel)
+
+        editedLabel.font = UIFont.italicSystemFont(ofSize: 11.0)
+        editedLabel.isHidden = true
+        addSubview(editedLabel)
 
         textView.snp.makeConstraints {
             $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)
@@ -454,12 +490,16 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         var cardX = rect.minX
         // align the card to the bubble side, clamped on screen
         cardX = max(12, min(cardX, hostW - cardW - 12))
-        // KHANDAQ (#G5 review): place below the bubble but never above the bar's bottom (fix #4: a short
-        // top-pinned bubble had the card overlap the bar), and never off the bottom (fix #3: a low bubble
-        // clipped the Delete row); if the card is taller than the space, clamp to the top (rows visible).
-        var cardY = max(rect.maxY + 8, barY + barH + 8)
-        if cardY + cardH > bottomSafe { cardY = bottomSafe - cardH }
-        if cardY < topSafe { cardY = topSafe }
+        // KHANDAQ (context-menu-overlap): for the newest/last bubble there is no room BELOW it for the
+        // tall action card; the old `bottomSafe - cardH` clamp slid the card UP over the message and
+        // covered it. Instead flip the card ABOVE the reaction bar so the last bubble stays fully visible.
+        let cardY: CGFloat
+        if bottomSafe - rect.maxY >= cardH + 8 {
+            cardY = max(rect.maxY + 8, barY + barH + 8)   // room below: keep below the bubble (unchanged)
+        }
+        else {
+            cardY = max(topSafe, barY - 8 - cardH)        // no room below: place above the reaction bar
+        }
         card.frame = CGRect(x: cardX, y: cardY, width: cardW, height: cardH)
 
         for (v, t) in [(bar as UIView, CGAffineTransform(scaleX: 0.6, y: 0.6)),

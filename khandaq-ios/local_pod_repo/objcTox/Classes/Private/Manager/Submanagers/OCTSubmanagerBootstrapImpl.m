@@ -9,8 +9,8 @@
 #import "OCTRealmManager.h"
 #import "OCTSettingsStorageObject.h"
 
-static const NSTimeInterval kDidConnectDelay = 2.0; // in seconds
-static const NSTimeInterval kIterationTime = 5.0; // in seconds
+static const NSTimeInterval kDidConnectDelay = 1.0; // in seconds (KHANDAQ #iOS slow-connect: was 2.0)
+static const NSTimeInterval kIterationTime = 3.0; // in seconds (KHANDAQ #iOS slow-connect: was 5.0)
 static const NSTimeInterval kUrgentIterationTime = 1.0; // in seconds
 static const NSUInteger kNodesPerIteration = 20;
 static const NSUInteger kUrgentNodesPerIteration = 30;
@@ -158,19 +158,43 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     // also dropped the self-hosted bootstrap*.khandaq.org nodes). We no longer depend on our own
     // bootstrap nodes for joining the network. NB: this is the DHT bootstrap — push.khandaq.org (the FCM
     // wake relay) is a separate service and is unaffected.
-    NSArray<NSDictionary<NSString *, NSString *> *> *publicNodes = @[
+    // KHANDAQ (#iOS slow-connect): fire IP-LITERAL nodes FIRST in their own tox-queue block. These take
+    // no getaddrinfo, so tox_iterate (which shares this serial queue) is never stalled on DNS — the old
+    // hostname-only burst did 12 blocking DNS lookups on the iterate queue and delayed first connect to
+    // ~18s. IP literals are the real ones from nodes.json (keep in sync when nodes.json is regenerated).
+    NSArray<NSDictionary *> *ipNodes = @[
+        @{ @"host": @"139.162.110.188", @"key": @"F76A11284547163889DDC89A7738CF271797BF5E5E220643E97AD3C7E7903D55", @"tcp": @[@3389, @33445, @443] },
+        @{ @"host": @"144.217.167.73",  @"key": @"7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C", @"tcp": @[@3389, @33445] },
+        @{ @"host": @"172.105.109.31",  @"key": @"D46E97CF995DC1820B92B7D899E152A217D36ABE22730FEA4B6BF1BFC06C617C", @"tcp": @[@33445] },
+        @{ @"host": @"43.198.227.166",  @"key": @"AD13AB0D434BCE6C83FE2649237183964AE3341D0AFB3BE1694B18505E4E135E", @"tcp": @[@33445, @3389] },
+        @{ @"host": @"188.245.84.166",  @"key": @"96B66D300BA2B59B98FC42DB1325E7092388F0379593E680ABDBEA03B9C9CE03", @"tcp": @[@443, @3389, @33445] },
+    ];
+
+    [tox performBlockOnToxQueue:^{
+        for (NSDictionary *node in ipNodes) {
+            NSString *host = node[@"host"];
+            NSString *key = node[@"key"];
+            NSError *error = nil;
+            [tox bootstrapFromHost:host port:33445 publicKey:key error:&error];
+            for (NSNumber *p in node[@"tcp"]) {
+                [tox addTCPRelayWithHost:host port:p.intValue publicKey:key error:&error];
+            }
+        }
+    }];
+
+    // Hostname fallback — deferred to its OWN block so its DNS never blocks the IP burst above or an
+    // interleaved tox_iterate tick.
+    NSArray<NSDictionary<NSString *, NSString *> *> *hostNodes = @[
         @{ @"host": @"tox.abilinski.com", @"key": @"10C00EB250C3233E343E2AEBA07115A5C28920E9C8D29492F6D00B29049EDC7E" },
         @{ @"host": @"tox1.mf-net.eu",    @"key": @"B3E5FA80DC8EBD1149AD2AB35ED8B85BD546DEDE261CA593234C619249419506" },
         @{ @"host": @"tox2.mf-net.eu",    @"key": @"70EA214FDE161E7432530605213F18F7427DC773E276B3E317A07531F548545F" },
         @{ @"host": @"tox.initramfs.io",  @"key": @"3F0A45A268367C1BEA652F258C85F4A66DA76BCAA667A49E770BCC4917AB6A25" },
     ];
-
     [tox performBlockOnToxQueue:^{
-        for (NSDictionary<NSString *, NSString *> *node in publicNodes) {
+        for (NSDictionary<NSString *, NSString *> *node in hostNodes) {
             NSString *host = node[@"host"];
             NSString *key = node[@"key"];
             NSError *error = nil;
-
             [tox bootstrapFromHost:host port:33445 publicKey:key error:&error];
             [tox addTCPRelayWithHost:host port:33445 publicKey:key error:&error];
             [tox addTCPRelayWithHost:host port:3389 publicKey:key error:&error];
@@ -238,7 +262,11 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
 
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
-    if (realmManager.settingsStorage.bootstrapDidConnect) {
+    // KHANDAQ (#iOS slow-connect): the didConnectDelay exists to avoid hammering when ALREADY online.
+    // On a cold launch we are offline (bootstrapDidConnect is a persisted flag, not live state), so the
+    // old code needlessly waited 2s before touching the DNS-free IP nodes. Only delay when actually
+    // connected right now; otherwise bootstrap immediately.
+    if (realmManager.settingsStorage.bootstrapDidConnect && [self.dataSource managerIsToxConnected]) {
         OCTLogVerbose(@"did connect before, waiting %g seconds", self.didConnectDelay);
         [self tryToBootstrapAfter:self.didConnectDelay];
     }

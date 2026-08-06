@@ -28,7 +28,6 @@ class FriendCardController: StaticTableController {
     fileprivate let nameModel: StaticTableDefaultCellModel
     fileprivate let statusMessageModel: StaticTableDefaultCellModel
     fileprivate let publicKeyModel: StaticTableDefaultCellModel
-    fileprivate let capabilitiesModel: StaticTableDefaultCellModel
 
     init(theme: Theme, friend: OCTFriend, submanagerObjects: OCTSubmanagerObjects) {
         self.submanagerObjects = submanagerObjects
@@ -43,7 +42,6 @@ class FriendCardController: StaticTableController {
         nameModel = StaticTableDefaultCellModel()
         statusMessageModel = StaticTableDefaultCellModel()
         publicKeyModel = StaticTableDefaultCellModel()
-        capabilitiesModel = StaticTableDefaultCellModel()
 
         super.init(theme: theme, style: .plain, model: [
             [
@@ -58,9 +56,8 @@ class FriendCardController: StaticTableController {
             [
                 publicKeyModel,
             ],
-            [
-                capabilitiesModel,
-            ],
+            // KHANDAQ (#iOS): the "Tox Capabilities" row (MSGV2/H264/FTV2 …) is internal debug info that
+            // means nothing to users — removed from the contact card.
         ])
 
         updateModels()
@@ -144,17 +141,7 @@ private extension FriendCardController {
         publicKeyModel.value = sanitizeAddressInput(friend.publicKey)
         publicKeyModel.userInteractionEnabled = false
         publicKeyModel.canCopyValue = true
-
-        capabilitiesModel.title = "Tox Capabilities"
-        let capabilities = friend.capabilities2 ?? ""
-        if (capabilities.count > 0) {
-            let caps = NSNumber(value: UInt64(capabilities) ?? 0)
-            capabilitiesModel.value = capabilitiesToString(caps)
-        } else {
-            capabilitiesModel.value = "BASIC"
-        }
-        capabilitiesModel.userInteractionEnabled = false
-
+        // KHANDAQ (#iOS): "Tox Capabilities" row removed — internal debug info, not shown to users.
     }
 
     func capabilitiesToString(_ cap: NSNumber) -> String {

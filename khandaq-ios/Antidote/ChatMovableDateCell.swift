@@ -481,7 +481,9 @@ enum MessageForwarder {
             // KHANDAQ (#39/#32): forward the clean visible body, NOT the original reply/mention wire
             // markup. Re-sending the raw text made the forward masquerade as a reply (leaked quote) and
             // left a tappable quote that could fuzzy-jump to an unrelated local message on the receiver.
-            let body = MessageReplyHelper.plainBody(for: message) ?? raw
+            // KHANDAQ (#iOS forward): strip any existing "↪ Переслано от …" header so re-forwards don't
+            // stack headers (and don't carry a stale "(null)" from a cross-platform/legacy sender).
+            let body = MessageReplyHelper.stripForwardedHeader(MessageReplyHelper.plainBody(for: message) ?? raw)
             // KHANDAQ (#39): Telegram-style "Forwarded from <name>" attribution line above the body.
             let header = String(format: String(localized: "chat_forwarded_from_format"),
                                 forwardSourceName(for: message, manager: manager))
@@ -529,7 +531,9 @@ enum MessageForwarder {
     private static func saveLocally(_ message: OCTMessageAbstract, to chat: OCTChat, manager: OCTManager) {
         if let raw = message.messageText?.text, !raw.isEmpty {
             // KHANDAQ (#39): store the clean body, not the reply/mention wire markup.
-            manager.objects.addSavedTextMessage(MessageReplyHelper.plainBody(for: message) ?? raw, to: chat)
+            // KHANDAQ (#iOS forward): also strip any "↪ Переслано от …" header so Saved copies aren't doubled.
+            manager.objects.addSavedTextMessage(
+                MessageReplyHelper.stripForwardedHeader(MessageReplyHelper.plainBody(for: message) ?? raw), to: chat)
             return
         }
 

@@ -35,7 +35,9 @@ class ChatFauxOfflineHeaderView: UIView {
 private extension ChatFauxOfflineHeaderView {
     func createViews(theme: Theme) {
         chip = UIView()
-        chip.backgroundColor = theme.colorForType(.ChatIncomingBubble)
+        // KHANDAQ (#iOS offline-note): a translucent DARK pill (not the white incoming-bubble colour) so
+        // it reads as a Telegram-style system note on BOTH themes and is never a white block on light.
+        chip.backgroundColor = UIColor(white: 0.0, alpha: 0.45)
         chip.layer.cornerRadius = 14.0
         chip.layer.masksToBounds = true
         addSubview(chip)
@@ -44,7 +46,7 @@ private extension ChatFauxOfflineHeaderView {
         label.text = String(localized: "chat_pending_faux_offline_messages")
         label.font = UIFont.khandaqFontWithSize(14.0, weight: .medium)
         label.textAlignment = .center
-        label.textColor = theme.colorForType(.ChatInformationText)
+        label.textColor = UIColor(white: 1.0, alpha: 0.95)
         label.numberOfLines = 0
         label.preferredMaxLayoutWidth = Constants.maxLabelWidth
         chip.addSubview(label)

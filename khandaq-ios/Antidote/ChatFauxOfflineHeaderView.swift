@@ -7,9 +7,9 @@ import SnapKit
 
 fileprivate struct Constants {
     static let verticalOffset = 10.0
-    static let maxLabelWidth: CGFloat = 300.0
-    static let chipHInset: CGFloat = 14.0
-    static let chipVInset: CGFloat = 8.0
+    static let maxLabelWidth: CGFloat = 290.0
+    static let chipHInset: CGFloat = 12.0
+    static let chipVInset: CGFloat = 6.0
 }
 
 class ChatFauxOfflineHeaderView: UIView {
@@ -35,18 +35,19 @@ class ChatFauxOfflineHeaderView: UIView {
 private extension ChatFauxOfflineHeaderView {
     func createViews(theme: Theme) {
         chip = UIView()
-        // KHANDAQ (#iOS offline-note): a translucent DARK pill (not the white incoming-bubble colour) so
-        // it reads as a Telegram-style system note on BOTH themes and is never a white block on light.
-        chip.backgroundColor = UIColor(white: 0.0, alpha: 0.45)
-        chip.layer.cornerRadius = 14.0
+        // KHANDAQ (#iOS offline-note): a SUBTLE translucent dark pill — light enough that it doesn't
+        // stand out as a dark blob over the chat doodle, but still legible. Small, quiet system note.
+        chip.backgroundColor = UIColor(white: 0.0, alpha: 0.28)
+        chip.layer.cornerRadius = 13.0
         chip.layer.masksToBounds = true
         addSubview(chip)
 
         label = UILabel()
         label.text = String(localized: "chat_pending_faux_offline_messages")
-        label.font = UIFont.khandaqFontWithSize(14.0, weight: .medium)
+        // Smaller + light weight so it reads as a low-key hint, not a headline.
+        label.font = UIFont.khandaqFontWithSize(12.0, weight: .light)
         label.textAlignment = .center
-        label.textColor = UIColor(white: 1.0, alpha: 0.95)
+        label.textColor = UIColor(white: 1.0, alpha: 0.9)
         label.numberOfLines = 0
         label.preferredMaxLayoutWidth = Constants.maxLabelWidth
         chip.addSubview(label)

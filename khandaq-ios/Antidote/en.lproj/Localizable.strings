@@ -630,6 +630,9 @@
 "group_invite_friend_failed" = "Could not invite friend.";
 "group_invite_friend_not_found" = "Friend not found.";
 "group_invite_friends_empty" = "No connected friends to invite.";
+"group_invite_picker_title" = "Invite friends";
+"group_invite_confirm_format" = "Invite (%d)";
+"group_invite_multi_success_format" = "Invites sent: %d";
 "group_error_password" = "Invalid group password.";
 "group_file_attach" = "File";
 "group_share_location" = "Share location";

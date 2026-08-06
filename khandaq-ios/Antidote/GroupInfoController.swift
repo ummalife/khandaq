@@ -741,36 +741,43 @@ private extension GroupInfoController {
             return
         }
 
-        let alert = UIAlertController(title: String(localized: "group_invite_friend_action"), message: nil, preferredStyle: .actionSheet)
-
-        for friend in connectedFriends {
-            let title = friend.name?.isEmpty == false ? friend.name! : friend.publicKey
-            alert.addAction(UIAlertAction(title: title, style: .default) { [unowned self] _ in
-                self.inviteFriend(friend)
-            })
+        // KHANDAQ (#iOS group multi-invite): pick SEVERAL connected contacts at once instead of a
+        // one-at-a-time action sheet. Uses the reliable friend-connection invite path
+        // (tox_group_invite_friend) — no UDP peer discovery needed.
+        let picker = GroupInviteFriendsController(theme: theme, friends: connectedFriends)
+        picker.onConfirm = { [weak self] chosen in
+            self?.navigationController?.popViewController(animated: true)
+            self?.inviteFriends(chosen)
         }
-
-        alert.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
-
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = tableView
-            popover.sourceRect = tableView.rectForRow(at: IndexPath(row: 0, section: GroupInfoSection.invite.rawValue))
-        }
-
-        present(alert, animated: true, completion: nil)
+        navigationController?.pushViewController(picker, animated: true)
     }
 
-    func inviteFriend(_ friend: OCTFriend) {
-        do {
-            try submanagerGroups.inviteFriend(withNumber: friend.friendNumber,
-                                              toGroupNumber: OCTToxGroupNumber(chat.groupNumber))
-            let alert = UIAlertController(title: nil, message: String(localized: "group_invite_friend_success"), preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
-            presentSuccessAlert(alert)
+    func inviteFriends(_ friends: [OCTFriend]) {
+        guard chat.groupNumber >= 0, !friends.isEmpty else {
+            return
         }
-        catch let error as NSError {
-            handleErrorWithType(.inviteFriendToGroup, error: error)
+
+        var sent = 0
+        for friend in friends {
+            do {
+                try submanagerGroups.inviteFriend(withNumber: friend.friendNumber,
+                                                  toGroupNumber: OCTToxGroupNumber(chat.groupNumber))
+                sent += 1
+            }
+            catch let error as NSError {
+                handleErrorWithType(.inviteFriendToGroup, error: error)
+            }
         }
+
+        guard sent > 0 else {
+            return
+        }
+
+        let alert = UIAlertController(title: nil,
+                                      message: String(localized: "group_invite_multi_success_format", sent),
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "alert_ok"), style: .default, handler: nil))
+        presentSuccessAlert(alert)
     }
 
     func presentSuccessAlert(_ alert: UIAlertController) {
@@ -899,5 +906,105 @@ private extension OCTToxGroupVoiceState {
             case .founder:
                 return String(localized: "group_voice_founder")
         }
+    }
+}
+
+/// KHANDAQ (#iOS group multi-invite): a lightweight multi-select friend picker for inviting several
+/// connected contacts to a group at once. Defined here (not a standalone file) so it joins the app
+/// target without a project-file edit, mirroring the inline-helper pattern used elsewhere.
+private final class GroupInviteFriendsController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    var onConfirm: (([OCTFriend]) -> Void)?
+
+    private let theme: Theme
+    private let friends: [OCTFriend]
+    private var selected = Set<Int>()
+    private var tableView: UITableView!
+    private let cellReuseIdentifier = "GroupInviteFriendCell"
+
+    init(theme: Theme, friends: [OCTFriend]) {
+        self.theme = theme
+        self.friends = friends
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        title = String(localized: "group_invite_picker_title")
+        view.backgroundColor = theme.colorForType(.NormalBackground)
+
+        tableView = UITableView(frame: .zero, style: .plain)
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.backgroundColor = theme.colorForType(.NormalBackground)
+        tableView.separatorColor = theme.colorForType(.SeparatorsAndBorders)
+        tableView.tableFooterView = UIView()
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellReuseIdentifier)
+        view.addSubview(tableView)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: confirmTitle(),
+                                                            style: .done,
+                                                            target: self,
+                                                            action: #selector(confirmTapped))
+        updateConfirmButton()
+    }
+
+    private func confirmTitle() -> String {
+        return String(localized: "group_invite_confirm_format", selected.count)
+    }
+
+    private func updateConfirmButton() {
+        navigationItem.rightBarButtonItem?.title = confirmTitle()
+        navigationItem.rightBarButtonItem?.isEnabled = !selected.isEmpty
+    }
+
+    @objc private func confirmTapped() {
+        guard !selected.isEmpty else {
+            return
+        }
+        let chosen = selected.sorted().map { friends[$0] }
+        onConfirm?(chosen)
+    }
+
+    // MARK: UITableViewDataSource
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return friends.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: cellReuseIdentifier, for: indexPath)
+        let friend = friends[indexPath.row]
+        cell.textLabel?.text = friend.name?.isEmpty == false ? friend.name! : friend.publicKey
+        cell.textLabel?.textColor = theme.colorForType(.NormalText)
+        cell.backgroundColor = theme.colorForType(.NormalBackground)
+        cell.tintColor = theme.colorForType(.LinkText)
+        cell.accessoryType = selected.contains(indexPath.row) ? .checkmark : .none
+        cell.selectionStyle = .none
+        return cell
+    }
+
+    // MARK: UITableViewDelegate
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: false)
+        if selected.contains(indexPath.row) {
+            selected.remove(indexPath.row)
+        } else {
+            selected.insert(indexPath.row)
+        }
+        tableView.reloadRows(at: [indexPath], with: .none)
+        updateConfirmButton()
     }
 }

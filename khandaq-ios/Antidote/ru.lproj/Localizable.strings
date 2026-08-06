@@ -634,6 +634,9 @@
 "group_invite_friend_failed" = "Не удалось пригласить друга.";
 "group_invite_friend_not_found" = "Друг не найден.";
 "group_invite_friends_empty" = "Нет подключённых друзей для приглашения.";
+"group_invite_picker_title" = "Кого пригласить";
+"group_invite_confirm_format" = "Пригласить (%d)";
+"group_invite_multi_success_format" = "Приглашения отправлены: %d";
 "group_file_attach" = "Файл";
 "group_share_location" = "Поделиться геопозицией";
 "group_live_audio_toggle" = "Живое аудио";

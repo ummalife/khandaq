@@ -177,16 +177,12 @@ enum ThemeChrome {
     // "Править"). Applied selectively per screen, NOT globally, so back buttons stay plain as in
     // the design.
     static func makeCircleNavButton(theme: Theme, image: UIImage?, target: Any?, action: Selector, tint: UIColor? = nil) -> UIBarButtonItem {
-        // KHANDAQ (#G9): cleaner nav circle — a soft system fill (adapts light/dark) instead of the
-        // flat grey pill, a touch larger, with a slightly larger/lighter glyph so it reads crisp and
-        // matches the native Liquid Glass tab bar rather than looking heavy.
+        // KHANDAQ (#iOS nav polish): frameless nav button — NO grey circle (the tester found the circle/
+        // pill chrome cluttered the header). Just the tinted glyph, native/Telegram-clean, consistent
+        // across every screen that uses this helper (Contacts, back button, add-friend, …).
         let size: CGFloat = 32.0
         let button = UIButton(type: .system)
-        if #available(iOS 13.0, *) {
-            button.backgroundColor = UIColor.secondarySystemFill
-        } else {
-            button.backgroundColor = theme.colorForType(.TabSelection)
-        }
+        button.backgroundColor = .clear
         button.tintColor = tint ?? theme.colorForType(.LinkText)
         button.layer.cornerRadius = size / 2.0
         button.layer.masksToBounds = true
@@ -217,14 +213,9 @@ enum ThemeChrome {
         let height: CGFloat = 30.0
         let cap = height / 2.0
         let size = CGSize(width: cap * 2.0 + 1.0, height: height)
-        // KHANDAQ (#G9): match the softened nav circles — a subtle system fill instead of flat grey.
-        let fill: UIColor
-        if #available(iOS 13.0, *) {
-            let trait = UITraitCollection(userInterfaceStyle: ThemeAppearance.isDarkMode ? .dark : .light)
-            fill = UIColor.secondarySystemFill.resolvedColor(with: trait)
-        } else {
-            fill = theme.colorForType(.TabSelection)
-        }
+        // KHANDAQ (#iOS nav polish): no grey pill behind Edit/Done — a CLEAR background so the button is
+        // plain tinted text (native/Telegram-clean), consistent with the frameless nav glyphs.
+        let fill: UIColor = .clear
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { _ in
             let rect = CGRect(origin: .zero, size: size)

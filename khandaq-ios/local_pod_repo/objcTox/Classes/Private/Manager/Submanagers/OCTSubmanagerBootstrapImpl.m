@@ -162,12 +162,20 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     // no getaddrinfo, so tox_iterate (which shares this serial queue) is never stalled on DNS — the old
     // hostname-only burst did 12 blocking DNS lookups on the iterate queue and delayed first connect to
     // ~18s. IP literals are the real ones from nodes.json (keep in sync when nodes.json is regenerated).
+    // KHANDAQ (#iOS faster-connect): burst EXPANDED 5→10 nodes, all re-verified UDP-up + TCP-reachable
+    // against nodes.tox.chat on 2026-08-06 (dropped the dead 172.105.109.31). More simultaneous getnodes
+    // requests seed the DHT close-list faster → shorter first-connect. nodes.json regenerated to match.
     NSArray<NSDictionary *> *ipNodes = @[
-        @{ @"host": @"139.162.110.188", @"key": @"F76A11284547163889DDC89A7738CF271797BF5E5E220643E97AD3C7E7903D55", @"tcp": @[@3389, @33445, @443] },
+        @{ @"host": @"139.162.110.188", @"key": @"F76A11284547163889DDC89A7738CF271797BF5E5E220643E97AD3C7E7903D55", @"tcp": @[@443, @3389, @33445] },
         @{ @"host": @"144.217.167.73",  @"key": @"7E5668E0EE09E19F320AD47902419331FFEE147BB3606769CFBE921A2A2FD34C", @"tcp": @[@3389, @33445] },
-        @{ @"host": @"172.105.109.31",  @"key": @"D46E97CF995DC1820B92B7D899E152A217D36ABE22730FEA4B6BF1BFC06C617C", @"tcp": @[@33445] },
-        @{ @"host": @"43.198.227.166",  @"key": @"AD13AB0D434BCE6C83FE2649237183964AE3341D0AFB3BE1694B18505E4E135E", @"tcp": @[@33445, @3389] },
+        @{ @"host": @"43.198.227.166",  @"key": @"AD13AB0D434BCE6C83FE2649237183964AE3341D0AFB3BE1694B18505E4E135E", @"tcp": @[@3389, @33445] },
         @{ @"host": @"188.245.84.166",  @"key": @"96B66D300BA2B59B98FC42DB1325E7092388F0379593E680ABDBEA03B9C9CE03", @"tcp": @[@443, @3389, @33445] },
+        @{ @"host": @"172.104.215.182", @"key": @"DA2BD927E01CD05EBCC2574EBE5BEBB10FF59AE0B2105A7D1E2B40E49BB20239", @"tcp": @[@3389, @33445, @443] },
+        @{ @"host": @"144.172.88.203",  @"key": @"2016A0F2797EE3A8B004BA623F11AAFC8146F1B8F45107232A1A1AECCE856674", @"tcp": @[@33445, @443] },
+        @{ @"host": @"188.214.122.30",  @"key": @"2A9F7A620581D5D1B09B004624559211C5ED3D1D712E8066ACDB0896A7335705", @"tcp": @[@33445, @3389] },
+        @{ @"host": @"95.181.230.108",  @"key": @"B5FFECB4E4C26409EBB88DB35793E7B39BFA3BA12AC04C096950CB842E3E130A", @"tcp": @[@33445, @3389] },
+        @{ @"host": @"3.0.24.15",       @"key": @"E20ABCF38CDBFFD7D04B29C956B33F7B27A3BB7AF0618101617B036E4AEA402D", @"tcp": @[@33445] },
+        @{ @"host": @"86.107.187.54",   @"key": @"2C0F90965134C7BEFAFE72B077A19221628D7045BB51C1165A2C75CDB2B32634", @"tcp": @[@3389, @33445] },
     ];
 
     [tox performBlockOnToxQueue:^{

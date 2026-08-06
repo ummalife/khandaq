@@ -90,6 +90,13 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate let networkReachabilityMonitor = ToxNetworkReachabilityMonitor()
     fileprivate var qualityObserver: NSObjectProtocol?
     fileprivate var degradedNagTimer: Timer?
+    // KHANDAQ (#iOS connect-pill): the "Соединение…" pill clears via the connectionStatusUpdate delegate,
+    // which fires only on a TRANSITION. A fast cold connect (fresh live DHT nodes) can flip 0→UDP before
+    // the delegate is observing, so the transition is lost and the pill hangs even though tox is online.
+    // This one-shot reconcile timer polls the LIVE status for the first seconds and clears the pill if we
+    // never saw the connected transition. `didReportConnectedPill` makes it idempotent (no green re-flash).
+    fileprivate var connectPillReconcileTimer: Timer?
+    fileprivate var didReportConnectedPill = false
 
     init(theme: Theme, window: UIWindow, toxManager: OCTManager) {
         self.theme = theme
@@ -151,6 +158,7 @@ class ActiveSessionCoordinator: NSObject {
         NotificationCenter.default.removeObserver(self, name: .khandaqManualReconnectRequested, object: nil)
         networkReachabilityMonitor.stop()
         degradedNagTimer?.invalidate()
+        connectPillReconcileTimer?.invalidate()
         if let qualityObserver = qualityObserver {
             NotificationCenter.default.removeObserver(qualityObserver)
         }
@@ -201,6 +209,31 @@ class ActiveSessionCoordinator: NSObject {
     fileprivate func stopDegradedNag() {
         degradedNagTimer?.invalidate()
         degradedNagTimer = nil
+    }
+
+    // KHANDAQ (#iOS connect-pill): poll the live tox status ~1×/s for the first ~12s after launch. If we
+    // reach online but never got the connected transition (it flipped before the delegate observed it),
+    // clear the pill here. Idempotent via didReportConnectedPill; self-cancels once online or on timeout.
+    fileprivate func startConnectPillReconcile() {
+        connectPillReconcileTimer?.invalidate()
+        var ticks = 0
+        connectPillReconcileTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            ticks += 1
+            let online = self.toxManager.user.connectionStatus != .none
+            if online && !self.didReportConnectedPill {
+                self.didReportConnectedPill = true
+                SelfConnectionTracker.update(isOnline: true)
+                self.notificationCoordinator.setConnectionState(.connected, animated: true)
+            }
+            if self.didReportConnectedPill || ticks >= 40 {
+                timer.invalidate()
+                self.connectPillReconcileTimer = nil
+            }
+        }
     }
 
     fileprivate func handleNetworkPathChange() {
@@ -288,9 +321,18 @@ extension ActiveSessionCoordinator: TopCoordinatorProtocol {
         // Show the connecting pill immediately on launch — connectionStatusUpdate only fires on a
         // *change*, so the initial offline→connecting period would otherwise have no indicator.
         SelfConnectionTracker.update(isOnline: toxManager.user.connectionStatus != .none)
-        if toxManager.user.connectionStatus == .none {
+        if toxManager.user.connectionStatus != .none {
+            // Already online at startup (e.g. warm relaunch) — reflect it now; the transition delegate
+            // won't fire because there's no change to observe.
+            didReportConnectedPill = true
+            notificationCoordinator.setConnectionState(.connected, animated: false)
+        }
+        else {
             notificationCoordinator.setConnectionState(
                 networkReachabilityMonitor.isReachable ? .connecting : .offline, animated: false)
+            // KHANDAQ (#iOS connect-pill): catch a fast connect whose 0→UDP transition lands before the
+            // delegate observes it — reconcile the pill against the live status until we go online.
+            startConnectPillReconcile()
         }
 
         if case .iPhone = InterfaceIdiom.current() {
@@ -475,11 +517,19 @@ extension ActiveSessionCoordinator: OCTSubmanagerUserDelegate {
                 networkReachabilityMonitor.isReachable ? .connecting : .offline
             notificationCoordinator.setConnectionState(state, animated: true)
 
+            // KHANDAQ (#iOS connect-pill): went offline — allow the reconcile poll to clear the pill again
+            // if the next reconnect's transition is also missed.
+            didReportConnectedPill = false
+            startConnectPillReconcile()
+
             NetworkDiagnosticsLog.log("self_offline", detail: "rebootstrap")
             ConnectionQualityMonitor.shared.onBootstrapStarted()
             toxManager.bootstrap.rebootstrapOnNetworkChange()
         } else {
             // Connected → flash green "Online", then auto-hide.
+            didReportConnectedPill = true
+            connectPillReconcileTimer?.invalidate()
+            connectPillReconcileTimer = nil
             notificationCoordinator.setConnectionState(.connected, animated: true)
             ConnectionQualityMonitor.shared.onBootstrapFinished(connected: true)
         }

@@ -258,6 +258,28 @@ class ChatMovableDateCell: BaseCell {
 
         super.setSelected(selected, animated: animated)
     }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        // KHANDAQ (#iOS multi-select): the day-separator reserved band pushes the bubble
+        // (movableContentView) DOWN inside the cell, but UIKit centers the multi-select checkmark on the
+        // whole cell — so the FIRST message of a day rendered its checkmark too high, floating up into the
+        // date-pill band, while every other row was fine (tester: «первая отметка высоко находится, а
+        // последующие норм»). Re-center the system edit control on movableContentView so it lines up with
+        // the bubble. For rows WITHOUT a separator movableContentView.frame == contentView.frame, so the
+        // target equals the current (correct) position — a provable no-op, no regression. It also no-ops
+        // safely if UIKit ever renames the control (nothing matches → nothing moves).
+        guard isEditing, movableContentView != nil else {
+            return
+        }
+        let targetY = movableContentView.frame.midY
+        for sub in subviews where NSStringFromClass(type(of: sub)).contains("EditControl") {
+            if abs(sub.center.y - targetY) > 0.5 {
+                sub.center = CGPoint(x: sub.center.x, y: targetY)
+            }
+        }
+    }
 }
 
 // Accessibility

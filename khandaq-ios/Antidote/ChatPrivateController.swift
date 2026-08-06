@@ -116,7 +116,7 @@ class ChatPrivateController: PortraitChatController {
     // KHANDAQ (#G5): pinned-message banner (Telegram-style) shown atop the chat.
     fileprivate var pinnedBannerView: UIView?
     fileprivate var pinnedBannerLabel: UILabel?
-    fileprivate static let pinnedBannerHeight: CGFloat = 46.0
+    fileprivate static let pinnedBannerHeight: CGFloat = 56.0
 
     fileprivate var chatInputViewManager: ChatInputViewManager!
     fileprivate let replyController = ChatReplyController()
@@ -1630,8 +1630,14 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             // No pin, or the pinned message was deleted — hide and drop a stale pin.
             if pinnedId != nil { ChatPinStore.clearPin(forChat: chat.uniqueIdentifier) }
             pinnedBannerView?.isHidden = true
-            tableView?.contentInset.top = 0
-            tableView?.verticalScrollIndicatorInsets.top = 0
+            // KHANDAQ (#iOS Saved gap): the table is y-flipped (d:-1), so contentInset.top renders at
+            // the VISUAL BOTTOM (the small gap above the input bar) while contentInset.BOTTOM renders at
+            // the VISUAL TOP (under the pinned banner). Reserve/clear the banner space on .bottom ONLY —
+            // the old code touched .top, which both wiped the base input gap here AND (when a pin was
+            // active) shoved the whole conversation up off the input bar, leaving a big empty band above
+            // the keyboard (tester: «в избранном большое расстояние до строки ввода»).
+            tableView?.contentInset.bottom = 0
+            tableView?.verticalScrollIndicatorInsets.bottom = 0
             return
         }
 
@@ -1639,8 +1645,8 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         pinnedBannerLabel?.text = text
         pinnedBannerView?.isHidden = false
         view.bringSubview(toFront: pinnedBannerView!)
-        tableView?.contentInset.top = ChatPrivateController.pinnedBannerHeight
-        tableView?.verticalScrollIndicatorInsets.top = ChatPrivateController.pinnedBannerHeight
+        tableView?.contentInset.bottom = ChatPrivateController.pinnedBannerHeight
+        tableView?.verticalScrollIndicatorInsets.bottom = ChatPrivateController.pinnedBannerHeight
     }
 
     private static func pinnedPreview(for message: OCTMessageAbstract) -> String {
@@ -1660,10 +1666,20 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         guard pinnedBannerView == nil else {
             return
         }
+        // KHANDAQ (#iOS pin polish): the pinned bar is now a floating rounded CARD (like the profile
+        // cards), not a flat full-width white strip — cleaner and consistent with the rest of the UI.
         let banner = UIView()
-        banner.backgroundColor = theme.colorForType(.NormalBackground)
+        banner.backgroundColor = .clear
         banner.isUserInteractionEnabled = true
         banner.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pinnedBannerTapped)))
+
+        let card = UIView()
+        card.backgroundColor = theme.colorForType(.NormalBackground)
+        card.layer.cornerRadius = 12.0
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.08
+        card.layer.shadowRadius = 4.0
+        card.layer.shadowOffset = CGSize(width: 0, height: 1)
 
         let accent = UIView()
         accent.backgroundColor = theme.colorForType(.LinkText)
@@ -1688,14 +1704,11 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         close.tintColor = theme.colorForType(.NormalText)
         close.addTarget(self, action: #selector(pinnedBannerClosePressed), for: .touchUpInside)
 
-        let separator = UIView()
-        separator.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
-
-        banner.addSubview(accent)
-        banner.addSubview(title)
-        banner.addSubview(label)
-        banner.addSubview(close)
-        banner.addSubview(separator)
+        banner.addSubview(card)
+        card.addSubview(accent)
+        card.addSubview(title)
+        card.addSubview(label)
+        card.addSubview(close)
         view.addSubview(banner)
 
         banner.snp.makeConstraints {
@@ -1703,30 +1716,32 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             $0.leading.trailing.equalTo(view)
             $0.height.equalTo(ChatPrivateController.pinnedBannerHeight)
         }
+        card.snp.makeConstraints {
+            $0.leading.equalTo(banner).offset(8.0)
+            $0.trailing.equalTo(banner).offset(-8.0)
+            $0.top.equalTo(banner).offset(4.0)
+            $0.bottom.equalTo(banner).offset(-6.0)
+        }
         accent.snp.makeConstraints {
-            $0.leading.equalTo(banner).offset(12.0)
-            $0.top.equalTo(banner).offset(8.0)
-            $0.bottom.equalTo(banner).offset(-8.0)
+            $0.leading.equalTo(card).offset(12.0)
+            $0.top.equalTo(card).offset(8.0)
+            $0.bottom.equalTo(card).offset(-8.0)
             $0.width.equalTo(3.0)
         }
         close.snp.makeConstraints {
-            $0.trailing.equalTo(banner).offset(-14.0)
-            $0.centerY.equalTo(banner)
+            $0.trailing.equalTo(card).offset(-12.0)
+            $0.centerY.equalTo(card)
             $0.width.height.equalTo(24.0)
         }
         title.snp.makeConstraints {
             $0.leading.equalTo(accent.snp.trailing).offset(10.0)
-            $0.top.equalTo(banner).offset(6.0)
+            $0.top.equalTo(card).offset(6.0)
             $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0)
         }
         label.snp.makeConstraints {
             $0.leading.equalTo(accent.snp.trailing).offset(10.0)
             $0.top.equalTo(title.snp.bottom).offset(1.0)
             $0.trailing.lessThanOrEqualTo(close.snp.leading).offset(-10.0)
-        }
-        separator.snp.makeConstraints {
-            $0.leading.trailing.bottom.equalTo(banner)
-            $0.height.equalTo(0.5)
         }
 
         pinnedBannerView = banner

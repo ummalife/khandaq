@@ -17,6 +17,9 @@ def common_pods
     pod 'SnapKit', '~> 5.6.0'
     pod 'Yaml', '~> 3.4.4'
     pod 'Firebase/Messaging', '~> 8.15.0'
+    # KHANDAQ (iOS photo editor parity with Android uCrop): crop/rotate/aspect-ratio editor shown
+    # before sending a photo. modular_headers so Swift can `import TOCropViewController` without use_frameworks!.
+    pod 'TOCropViewController', '~> 2.7', :modular_headers => true
 end
 
 target :Antidote do

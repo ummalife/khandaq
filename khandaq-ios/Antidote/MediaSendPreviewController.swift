@@ -6,6 +6,7 @@ import AVFoundation
 import MobileCoreServices
 import Photos
 import SnapKit
+import TOCropViewController
 import UIKit
 
 enum MediaSendPreviewItem {
@@ -26,7 +27,8 @@ protocol MediaSendPreviewControllerDelegate: AnyObject {
 final class MediaSendPreviewController: KeyboardNotificationController, UITextViewDelegate {
     weak var delegate: MediaSendPreviewControllerDelegate?
 
-    private let items: [MediaSendPreviewItem]
+    // KHANDAQ (iOS photo editor): `var` so the crop editor can write the edited image back in place.
+    private var items: [MediaSendPreviewItem]
     private var currentIndex = 0
     private var previewRequestToken = UUID()
 
@@ -38,6 +40,9 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 
     private let closeButton = UIButton(type: .system)
     private let checkButton = UIButton(type: .system)
+    // KHANDAQ (iOS photo editor): crop/rotate/aspect-ratio editor (TOCropViewController) — parity with
+    // Android's uCrop. Shown only for photos.
+    private let editButton = UIButton(type: .system)
     private let counterLabel = UILabel()
     private let imageView = UIImageView()
     private let playIconView = UILabel()
@@ -109,6 +114,21 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         checkButton.backgroundColor = Self.brandTeal
         checkButton.layer.cornerRadius = 22
 
+        // KHANDAQ (iOS photo editor): round dark "crop" button, top-right next to the confirm check.
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+            editButton.setImage(UIImage(systemName: "crop.rotate", withConfiguration: config), for: .normal)
+            editButton.tintColor = .white
+        }
+        else {
+            editButton.setTitle("✂", for: .normal)
+            editButton.setTitleColor(.white, for: .normal)
+            editButton.titleLabel?.font = .systemFont(ofSize: 20, weight: .medium)
+        }
+        editButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        editButton.layer.cornerRadius = 22
+        editButton.isHidden = true
+
         counterLabel.textColor = .white
         counterLabel.font = .systemFont(ofSize: 14, weight: .medium)
         counterLabel.textAlignment = .center
@@ -144,6 +164,7 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         view.addSubview(playIconView)
         view.addSubview(closeButton)
         view.addSubview(checkButton)
+        view.addSubview(editButton)
         view.addSubview(counterLabel)
         view.addSubview(bottomBar)
         bottomBar.addSubview(emojiButton)
@@ -177,6 +198,12 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         checkButton.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide.snp.top).offset(8)
             make.trailing.equalToSuperview().offset(-8)
+            make.width.height.equalTo(44)
+        }
+
+        editButton.snp.makeConstraints { make in
+            make.centerY.equalTo(checkButton)
+            make.trailing.equalTo(checkButton.snp.leading).offset(-10)
             make.width.height.equalTo(44)
         }
 
@@ -231,6 +258,19 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         checkButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         emojiButton.addTarget(self, action: #selector(emojiTapped), for: .touchUpInside)
+        editButton.addTarget(self, action: #selector(editTapped), for: .touchUpInside)
+    }
+
+    @objc private func editTapped() {
+        guard case .image(let image, _) = items[currentIndex] else {
+            return
+        }
+        dismissKeyboard()
+        let cropController = TOCropViewController(image: image)
+        cropController.delegate = self
+        cropController.modalPresentationStyle = .fullScreen
+        // uCrop parity: default toolbar exposes aspect-ratio presets + rotate + reset.
+        present(cropController, animated: true)
     }
 
     @objc private func emojiTapped() {
@@ -297,8 +337,10 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         case .image(let image, _):
             imageView.image = image
             playIconView.isHidden = true
+            editButton.isHidden = false
         case .video(let url, _):
             playIconView.isHidden = false
+            editButton.isHidden = true
             imageView.image = nil
             Self.previewQueue.async {
                 let frame = Self.previewFrame(for: url)
@@ -361,5 +403,29 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
         } catch {
             return nil
         }
+    }
+}
+
+// KHANDAQ (iOS photo editor): TOCropViewController parity with Android's uCrop — crop/rotate/aspect ratios
+// on a photo before sending. The edited image is written back into the (now var) items array and flows out
+// through the existing confirm path, so both 1:1 and group send get it with no send-path changes.
+extension MediaSendPreviewController: TOCropViewControllerDelegate {
+    func cropViewController(_ cropViewController: TOCropViewController,
+                            didCropToImage image: UIImage,
+                            withRect cropRect: CGRect,
+                            angle: Int) {
+        if case .image(_, let fileName) = items[currentIndex] {
+            items[currentIndex] = .image(image, fileName: fileName)
+        }
+        cropViewController.dismiss(animated: true) { [weak self] in
+            guard let self = self else {
+                return
+            }
+            self.showItem(at: self.currentIndex)
+        }
+    }
+
+    func cropViewController(_ cropViewController: TOCropViewController, didFinishCancelled cancelled: Bool) {
+        cropViewController.dismiss(animated: true)
     }
 }

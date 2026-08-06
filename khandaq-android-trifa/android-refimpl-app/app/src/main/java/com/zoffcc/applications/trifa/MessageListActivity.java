@@ -857,8 +857,10 @@ public class MessageListActivity extends AppCompatActivity
                             // HelperGeneric.logI(TAG, "onCreate:record_audio:file=" + audio_rec_filename_final);
                             try
                             {
+                                // KHANDAQ: best-out-of-the-box — encode 1:1 voice notes at 64 kbps AAC (was
+                                // the library default), matching the group path for clearer voice messages.
                                 mAudioRecorder.prepareRecord(MediaRecorder.AudioSource.MIC, MediaRecorder.OutputFormat.MPEG_4,
-                                                             MediaRecorder.AudioEncoder.AAC, mAudioFile);
+                                                             MediaRecorder.AudioEncoder.AAC, 44100, 64000, mAudioFile);
                             }
                             catch (Exception prepare_error)
                             {

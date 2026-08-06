@@ -1956,9 +1956,11 @@ public class GroupMessageListActivity extends AppCompatActivity
                     final File mAudioFile = new File(audio_rec_filename_final);
                     try
                     {
+                        // KHANDAQ: best-out-of-the-box — encode voice messages at 64 kbps AAC (was 20 kbps),
+                        // clearly clearer voice notes for a negligible size increase.
                         mAudioRecorder.prepareRecord(MediaRecorder.AudioSource.MIC,
                                                      MediaRecorder.OutputFormat.MPEG_4,
-                                                     MediaRecorder.AudioEncoder.AAC, 44100, 20000,
+                                                     MediaRecorder.AudioEncoder.AAC, 44100, 64000,
                                                      mAudioFile);
                     }
                     catch (Exception prepare_error)

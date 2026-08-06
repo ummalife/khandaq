@@ -497,8 +497,8 @@ public class MainActivity extends AppCompatActivity
     private static final String ALLOWED_CHARACTERS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!§$%&()=?,.;:-_+";
     static boolean PREF__software_echo_cancel = false;
     static int PREF__higher_video_quality = 0;
-    static int PREF__higher_audio_quality = 1;
-    static int PREF__video_call_quality = 0;
+    static int PREF__higher_audio_quality = 2;
+    static int PREF__video_call_quality = 2;
     static int PREF__X_audio_play_buffer_custom = 0;
     static int PREF__udp_enabled = 0; // 0 -> Tox TCP mode, 1 -> Tox UDP mode
     static int PREF__audiosource = 2; // 1 -> VOICE_COMMUNICATION, 2 -> VOICE_RECOGNITION
@@ -1019,23 +1019,28 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "1"));
+            // KHANDAQ: best-out-of-the-box default — HIGH video-call quality (was Med). Not exposed in the
+            // UI, so this is effectively the default for everyone. The network layer still caps the bitrate
+            // per connection (Wi-Fi/cellular/3G), so this only raises quality where the link can carry it.
+            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "2"));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__video_call_quality = 1;
+            PREF__video_call_quality = 2;
         }
 
 
         try
         {
-            PREF__higher_audio_quality = Integer.parseInt(settings.getString("higher_audio_quality", "1"));
+            // KHANDAQ: best-out-of-the-box default — HIGHEST voice-call audio quality (Opus 64 kbps, was
+            // ~20). Tiny bandwidth cost, clearly better call clarity.
+            PREF__higher_audio_quality = Integer.parseInt(settings.getString("higher_audio_quality", "2"));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__higher_audio_quality = 1;
+            PREF__higher_audio_quality = 2;
         }
 
         if (PREF__higher_audio_quality == 2)
@@ -3791,22 +3796,27 @@ public class MainActivity extends AppCompatActivity
 
         try
         {
-            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "1"));
+            // KHANDAQ: best-out-of-the-box default — HIGH video-call quality (was Med). Not exposed in the
+            // UI, so this is effectively the default for everyone. The network layer still caps the bitrate
+            // per connection (Wi-Fi/cellular/3G), so this only raises quality where the link can carry it.
+            PREF__video_call_quality = Integer.parseInt(settings.getString("video_call_quality", "2"));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__video_call_quality = 1;
+            PREF__video_call_quality = 2;
         }
 
         try
         {
-            PREF__higher_audio_quality = Integer.parseInt(settings.getString("higher_audio_quality", "1"));
+            // KHANDAQ: best-out-of-the-box default — HIGHEST voice-call audio quality (Opus 64 kbps, was
+            // ~20). Tiny bandwidth cost, clearly better call clarity.
+            PREF__higher_audio_quality = Integer.parseInt(settings.getString("higher_audio_quality", "2"));
         }
         catch (Exception e)
         {
             e.printStackTrace();
-            PREF__higher_audio_quality = 1;
+            PREF__higher_audio_quality = 2;
         }
 
         if (PREF__higher_audio_quality == 2)

@@ -411,8 +411,8 @@ final class MediaSendPreviewController: KeyboardNotificationController, UITextVi
 // through the existing confirm path, so both 1:1 and group send get it with no send-path changes.
 extension MediaSendPreviewController: TOCropViewControllerDelegate {
     func cropViewController(_ cropViewController: TOCropViewController,
-                            didCropToImage image: UIImage,
-                            withRect cropRect: CGRect,
+                            didCropTo image: UIImage,
+                            with cropRect: CGRect,
                             angle: Int) {
         if case .image(_, let fileName) = items[currentIndex] {
             items[currentIndex] = .image(image, fileName: fileName)

@@ -3260,6 +3260,15 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     // b) the other party ending the call
     static void on_call_ended_actions()
     {
+        // KHANDAQ (#6): stop the video render thread + drop any queued frame so nothing draws into a
+        // recycled bitmap after the call ends.
+        try
+        {
+            MainActivity.stopVideoRenderThread();
+        }
+        catch (Throwable ignored)
+        {
+        }
         try
         {
             close_calling_activity();

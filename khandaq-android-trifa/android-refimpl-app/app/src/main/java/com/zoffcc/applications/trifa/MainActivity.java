@@ -604,6 +604,16 @@ public class MainActivity extends AppCompatActivity
     static Bitmap video_frame_image = null;
     static boolean video_frame_image_valid = false;
     static int buffer_size_in_bytes = 0;
+    // KHANDAQ (#6): incoming video is decoded + delivered on the ToxAV *iterate* thread, which ALSO
+    // runs the audio-receive callback. Doing the RenderScript YUV->RGB conversion inline there
+    // starved audio ("peer hears me, I don't hear them") and froze video. We now snapshot the YUV on
+    // the iterate thread (fast memcpy, never blocking — tryAcquire) and do the heavy conversion +
+    // bitmap draw on a dedicated single-consumer render thread with drop-oldest scheduling.
+    static android.os.HandlerThread video_render_thread = null;
+    static android.os.Handler video_render_handler = null;
+    static byte[] video_snapshot_buf = null;   // reusable YUV snapshot handed to the render thread
+    static int video_snapshot_len = 0;
+    static final Object video_render_lock = new Object();
     // YUV conversion -------
 
     // ---- lookup cache ----
@@ -5161,96 +5171,174 @@ public class MainActivity extends AppCompatActivity
             count_video_frame_received++;
         }
 
-        try
+        // KHANDAQ (#6): snapshot the YUV on the iterate thread WITHOUT ever blocking it, then hand the
+        // heavy RenderScript conversion + bitmap draw to a dedicated render thread. tryAcquire means a
+        // render pass still in flight just drops this frame instead of stalling the toxav iterate
+        // thread — which also carries the audio-receive callback (root cause of one-way audio + freeze).
+        if (semaphore_videoout_bitmap.tryAcquire())
         {
             try
             {
-                //Log.i("semaphore_01","acquire:05");
-                semaphore_videoout_bitmap.acquire();
-                //Log.i("semaphore_01","acquire:05:OK");
-            }
-            catch (InterruptedException e)
-            {
-                //Log.i("semaphore_01","release:05");
-                semaphore_videoout_bitmap.release();
-                //Log.i("semaphore_01","release:05:OK");
-                return;
-            }
-
-            if ((video_frame_image_valid == true) && (video_frame_image != null))
-            {
-                if (!video_frame_image.isRecycled())
+                if (video_frame_image_valid && video_buffer_1 != null && buffer_size_in_bytes > 0)
                 {
-                    alloc_in.copyFrom(video_buffer_1.array());
-                    yuvToRgb.setInput(alloc_in);
-                    yuvToRgb.forEach(alloc_out);
-                    alloc_out.copyTo(video_frame_image);
+                    if (video_snapshot_buf == null || video_snapshot_buf.length < buffer_size_in_bytes)
+                    {
+                        video_snapshot_buf = new byte[buffer_size_in_bytes];
+                    }
+                    // video_buffer_1 is a direct buffer that native fills each frame — copy it out with
+                    // get() (a direct buffer has no backing array on Android, so .array() would throw).
+                    video_buffer_1.rewind();
+                    video_buffer_1.get(video_snapshot_buf, 0, buffer_size_in_bytes);
+                    video_snapshot_len = buffer_size_in_bytes;
+                }
+                else
+                {
+                    video_snapshot_len = 0;
                 }
             }
-
-            //Log.i("semaphore_01","release:06");
-            semaphore_videoout_bitmap.release();
-            //Log.i("semaphore_01","release:06:OK");
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-
-            try
+            catch (Throwable t)
             {
-                //Log.i("semaphore_01","release:07");
+                video_snapshot_len = 0;
+            }
+            finally
+            {
                 semaphore_videoout_bitmap.release();
-                //Log.i("semaphore_01","release:07:OK");
             }
-            catch (Exception e2)
+
+            if (video_snapshot_len > 0)
             {
+                ensureVideoRenderThread();
+                if (video_render_handler != null)
+                {
+                    final long ts_for_render = incoming_video_frame_ts;
+                    // drop-oldest: only the freshest frame stays queued for the render thread
+                    video_render_handler.removeCallbacksAndMessages(null);
+                    video_render_handler.post(new Runnable()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            render_video_frame_off_thread(ts_for_render);
+                        }
+                    });
+                }
             }
         }
+    }
 
-        Runnable myRunnable = new Runnable()
+    // KHANDAQ (#6): lazily start a single-consumer render thread that owns the RenderScript YUV->RGB
+    // conversion + bitmap draw, keeping it off the ToxAV iterate/audio thread.
+    static void ensureVideoRenderThread()
+    {
+        if (video_render_handler != null)
         {
-            @Override
-            public void run()
+            return;
+        }
+        synchronized (video_render_lock)
+        {
+            if (video_render_handler == null)
+            {
+                video_render_thread = new android.os.HandlerThread("khandaq-video-render");
+                video_render_thread.start();
+                video_render_handler = new android.os.Handler(video_render_thread.getLooper());
+            }
+        }
+    }
+
+    // KHANDAQ (#6): tear the render thread down when a call ends so no queued frame can draw into a
+    // recycled bitmap and the thread doesn't linger.
+    static void stopVideoRenderThread()
+    {
+        synchronized (video_render_lock)
+        {
+            if (video_render_handler != null)
+            {
+                video_render_handler.removeCallbacksAndMessages(null);
+            }
+            if (video_render_thread != null)
             {
                 try
                 {
+                    video_render_thread.quitSafely();
+                }
+                catch (Throwable ignored)
+                {
+                }
+                video_render_thread = null;
+            }
+            video_render_handler = null;
+        }
+    }
+
+    // KHANDAQ (#6): runs on the dedicated render thread. Converts the snapshotted YUV to RGB under the
+    // same semaphore that guards (re)allocation, then posts the bitmap to the call view on the UI thread.
+    static void render_video_frame_off_thread(final long incoming_video_frame_ts)
+    {
+        boolean drawn = false;
+        try
+        {
+            semaphore_videoout_bitmap.acquire();
+        }
+        catch (InterruptedException e)
+        {
+            return;
+        }
+        try
+        {
+            if (video_frame_image_valid && video_frame_image != null && !video_frame_image.isRecycled()
+                && alloc_in != null && alloc_out != null && yuvToRgb != null
+                && video_snapshot_buf != null && video_snapshot_len > 0)
+            {
+                alloc_in.copyFrom(video_snapshot_buf);
+                yuvToRgb.setInput(alloc_in);
+                yuvToRgb.forEach(alloc_out);
+                alloc_out.copyTo(video_frame_image);
+                drawn = true;
+            }
+        }
+        catch (Throwable t)
+        {
+            t.printStackTrace();
+        }
+        finally
+        {
+            semaphore_videoout_bitmap.release();
+        }
+
+        if (drawn && main_handler_s != null)
+        {
+            main_handler_s.post(new Runnable()
+            {
+                @Override
+                public void run()
+                {
                     try
                     {
-                        //Log.i("semaphore_01","acquire:08");
                         semaphore_videoout_bitmap.acquire();
-                        //Log.i("semaphore_01","acquire:08:OK");
                     }
                     catch (InterruptedException e)
                     {
-                        //Log.i("semaphore_01","release:08");
-                        semaphore_videoout_bitmap.release();
-                        //Log.i("semaphore_01","release:08:OK");
                         return;
                     }
-
-                    if (video_frame_image_valid == true && CallingActivity.mContentView != null)
+                    try
                     {
-                        CallingActivity.mContentView.setBitmap(video_frame_image);
-                        Callstate.java_video_play_delay = System.currentTimeMillis() - incoming_video_frame_ts;
+                        if (video_frame_image_valid && CallingActivity.mContentView != null
+                            && video_frame_image != null && !video_frame_image.isRecycled())
+                        {
+                            CallingActivity.mContentView.setBitmap(video_frame_image);
+                            Callstate.java_video_play_delay = System.currentTimeMillis() - incoming_video_frame_ts;
+                        }
                     }
-
-                    //Log.i("semaphore_01","release:09");
-                    semaphore_videoout_bitmap.release();
-                    //Log.i("semaphore_01","release:09:OK");
+                    catch (Throwable t)
+                    {
+                        t.printStackTrace();
+                    }
+                    finally
+                    {
+                        semaphore_videoout_bitmap.release();
+                    }
                 }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                    //Log.i("semaphore_01","release:10");
-                    semaphore_videoout_bitmap.release();
-                    //Log.i("semaphore_01","release:10:OK");
-                }
-            }
-        };
-
-        if (main_handler_s != null)
-        {
-            main_handler_s.post(myRunnable);
+            });
         }
     }
 

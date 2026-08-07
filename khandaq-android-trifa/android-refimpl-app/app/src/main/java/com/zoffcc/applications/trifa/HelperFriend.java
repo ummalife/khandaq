@@ -613,7 +613,14 @@ public class HelperFriend
             MainActivity.cache_pubkey_fnum.clear();
         }
         long result = MainActivity.tox_friend_by_public_key(friend_public_key_string);
-        MainActivity.cache_pubkey_fnum.put(friend_public_key_string, result);
+        // KHANDAQ (audit #32): do NOT cache the not-found sentinel (UINT32_MAX_JAVA) or a negative. A later
+        // add_friend for this pubkey does not invalidate the cache, so a cached sentinel would keep being
+        // returned and callers that only check ">= 0" would treat UINT32_MAX as a valid friendnum ->
+        // messages to the freshly-added contact resolve to a bogus friend and are never delivered.
+        if ((result >= 0) && (result != UINT32_MAX_JAVA))
+        {
+            MainActivity.cache_pubkey_fnum.put(friend_public_key_string, result);
+        }
         return result;
     }
 

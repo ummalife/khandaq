@@ -3914,21 +3914,29 @@ public class HelperGeneric
             //Log.i(TAG, "update_savedata_file:delta_ms="
             //           + (System.currentTimeMillis() - update_savedata_file_wrapper_last_ts));
             //update_savedata_file_wrapper_last_ts = System.currentTimeMillis();
+            // KHANDAQ (audit #7): make the savedata mutex exception-safe. Previously a Throwable from the
+            // native update_savedata_file()/sha256 skipped release() -> permit never returned -> every
+            // future persist deadlocks (Tox identity silently stops being saved); and an InterruptedException
+            // from acquire() (permit NOT obtained) still hit release() -> permit count inflates to 2 -> two
+            // threads write savedata.tox concurrently -> corrupted/lost identity. Acquire outside the try;
+            // return on interrupt WITHOUT releasing; release exactly once in finally.
             try
             {
                 MainActivity.semaphore_tox_savedata.acquire();
-                long start_timestamp = System.currentTimeMillis();
-                MainActivity.update_savedata_file(TrifaSetPatternActivity.bytesToString(
-                        TrifaSetPatternActivity.sha256(TrifaSetPatternActivity.StringToBytes2(PREF__DB_secrect_key))));
-                long end_timestamp = System.currentTimeMillis();
-                MainActivity.semaphore_tox_savedata.release();
-                // Log.i(TAG,
-                //      "update_savedata_file() took:" + (((float) (end_timestamp - start_timestamp)) / 1000f) + "s");
             }
             catch (InterruptedException e)
             {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            try
+            {
+                MainActivity.update_savedata_file(TrifaSetPatternActivity.bytesToString(
+                        TrifaSetPatternActivity.sha256(TrifaSetPatternActivity.StringToBytes2(PREF__DB_secrect_key))));
+            }
+            finally
+            {
                 MainActivity.semaphore_tox_savedata.release();
-                e.printStackTrace();
             }
         }
         else

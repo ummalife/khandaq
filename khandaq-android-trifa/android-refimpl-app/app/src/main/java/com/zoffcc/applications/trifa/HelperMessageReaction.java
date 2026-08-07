@@ -684,12 +684,21 @@ public class HelperMessageReaction
             }
 
             final String actor = senderPubkey.toUpperCase(Locale.ENGLISH);
-            final String newJson = applyActor(gm.reactions, actor, emoji, add);
-            orma.updateGroupMessage().idEq(gm.id).reactions(newJson).execute();
-            gm.reactions = newJson;
-            updateGroupMessageInUi(gm);
+            final String oldJson = gm.reactions;
+            final String newJson = applyActor(oldJson, actor, emoji, add);
+            // KHANDAQ (audit #17): NGC reaction packets are best-effort broadcast AND re-broadcast/history-
+            // relayed, so the same packet arrives more than once. applyActor is idempotent, so a duplicate
+            // yields the SAME json — mirror the 1:1 path (#F6) and skip the redundant DB/UI write and,
+            // crucially, the repeated group notification.
+            final boolean changed = (newJson == null) ? (oldJson != null) : !newJson.equals(oldJson);
+            if (changed)
+            {
+                orma.updateGroupMessage().idEq(gm.id).reactions(newJson).execute();
+                gm.reactions = newJson;
+                updateGroupMessageInUi(gm);
+            }
 
-            if (add)
+            if (add && changed)
             {
                 notifyGroupReaction(groupIdentifier, senderPubkey, emoji);
             }

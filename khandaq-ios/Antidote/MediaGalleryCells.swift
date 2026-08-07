@@ -21,6 +21,7 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
 
     private(set) var isVideoCell = false
     private var videoURL: URL?
+    private var currentPhotoURL: URL?   // KHANDAQ (audit #14): drop stale async photo loads on reuse
 
     // KHANDAQ (#207): single tap toggles the gallery chrome (top bar + action row) so a photo
     // can be viewed edge-to-edge; the owning gallery VC supplies the toggle.
@@ -97,6 +98,7 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
         scrollView.zoomScale = 1
         isVideoCell = false
         videoURL = nil
+        currentPhotoURL = nil
         playButton.isHidden = true
         unavailableLabel.isHidden = true
     }
@@ -115,10 +117,14 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
         } else {
             scrollView.maximumZoomScale = 4
             playButton.isHidden = true
+            let photoURL = item.url
+            currentPhotoURL = photoURL
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let img = UIImage(contentsOfFile: item.url.path)
+                let img = UIImage(contentsOfFile: photoURL.path)
                 DispatchQueue.main.async {
-                    guard let self = self, !self.isVideoCell else { return }
+                    // KHANDAQ (audit #14): the cell may have been reused for another item while this
+                    // decode was in flight — only paint if it's still bound to the same photo.
+                    guard let self = self, !self.isVideoCell, self.currentPhotoURL == photoURL else { return }
                     self.imageView.image = img
                     self.unavailableLabel.isHidden = (img != nil)
                 }
@@ -182,6 +188,7 @@ final class ThumbCell: UICollectionViewCell {
     static let reuseId = "ThumbCell"
 
     private let imageView = UIImageView()
+    private var currentURL: URL?   // KHANDAQ (audit #14): drop stale async thumb loads on reuse
     private let videoBadge = UILabel()
 
     override init(frame: CGRect) {
@@ -207,6 +214,7 @@ final class ThumbCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         imageView.image = nil
+        currentURL = nil
     }
 
     func configure(with item: GalleryItem, selected: Bool) {
@@ -214,9 +222,14 @@ final class ThumbCell: UICollectionViewCell {
         videoBadge.isHidden = !item.isVideo
         let url = item.url
         let isVideo = item.isVideo
+        currentURL = url
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let img = isVideo ? MediaPageCell.videoFrame(for: url) : UIImage(contentsOfFile: url.path)
-            DispatchQueue.main.async { self?.imageView.image = img }
+            // KHANDAQ (audit #14): only paint if the cell is still bound to this url (not reused).
+            DispatchQueue.main.async {
+                guard let self = self, self.currentURL == url else { return }
+                self.imageView.image = img
+            }
         }
     }
 }

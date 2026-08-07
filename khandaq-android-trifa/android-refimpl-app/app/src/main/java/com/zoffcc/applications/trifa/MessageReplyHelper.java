@@ -149,7 +149,10 @@ final class MessageReplyHelper
 
     private static String truncatePreview(final String text)
     {
-        return previewForDisplay(null, text, 200);
+        // KHANDAQ (audit #18): strip the footer/header sentinels so a quoted message whose body literally
+        // contains "[KQ/end]" can't make parse() split the preview at the wrong offset (garbled render).
+        final String cleaned = text == null ? "" : text.replace(FOOTER, "").replace(HEADER_PREFIX, "");
+        return previewForDisplay(null, cleaned, 200);
     }
 
     private static String sanitizeField(final String value)
@@ -158,7 +161,10 @@ final class MessageReplyHelper
         {
             return "";
         }
-        return value.replace('|', ' ').replace('\n', ' ').replace('\r', ' ').trim();
+        // KHANDAQ (audit #18): also strip the reply sentinels so a sender name containing ']' (HEADER_SUFFIX)
+        // or a '[KQ..' token can't truncate the header early on parse (indexOf(']')) or forge a quote.
+        return value.replace(FOOTER, "").replace(HEADER_PREFIX, "").replace(HEADER_SUFFIX, "")
+                .replace('|', ' ').replace('\n', ' ').replace('\r', ' ').trim();
     }
 
     private static String trimLeading(final String value)

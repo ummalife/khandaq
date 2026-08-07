@@ -223,12 +223,26 @@ public class HelperMessageDelete
     /** Called from insert_into_message_db for a fresh INCOMING message: drop it if tombstoned. */
     static boolean consume_pending_delete(final Message m)
     {
-        if (m == null || m.direction != 0 || m.msg_idv3_hash == null || m.msg_idv3_hash.isEmpty()
-            || m.tox_friendpubkey == null)
+        if (m == null || m.direction != 0 || m.tox_friendpubkey == null)
         {
             return false;
         }
-        return pending_tombstones.remove(m.tox_friendpubkey + ":" + m.msg_idv3_hash) != null;
+        // KHANDAQ (audit #27): a delete tombstone that arrived before its original keys on the anchor it
+        // received — msg_idv3_hash for TEXT, ft_id_anchor_hex for a FILE/media/voice. The old code only
+        // matched the text hash (and early-returned when it was empty), so an offline-flushed FILE delete
+        // that arrived before the file message was never consumed on insert -> the retracted media
+        // resurfaced on the receiver. Match either anchor.
+        if (m.msg_idv3_hash != null && !m.msg_idv3_hash.isEmpty()
+            && pending_tombstones.remove(m.tox_friendpubkey + ":" + m.msg_idv3_hash) != null)
+        {
+            return true;
+        }
+        if (m.ft_id_anchor_hex != null && !m.ft_id_anchor_hex.isEmpty()
+            && pending_tombstones.remove(m.tox_friendpubkey + ":" + m.ft_id_anchor_hex) != null)
+        {
+            return true;
+        }
+        return false;
     }
 
     private static void deleteLocalFriendMessage(final Message m)

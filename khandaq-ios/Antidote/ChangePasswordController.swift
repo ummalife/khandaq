@@ -101,7 +101,11 @@ extension ChangePasswordController {
         let hud = JGProgressHUD(style: .dark)
         hud?.show(in: view)
 
-        DispatchQueue.global(qos: .default).async { [unowned self] in
+        // KHANDAQ (audit #15): re-encrypting a large Tox savedata takes seconds; the nav-bar Cancel
+        // button (outside the HUD-covered view) can pop+dealloc this controller mid-op. [unowned self]
+        // would then EXC_BAD_ACCESS — use [weak self] and bail if it's gone.
+        DispatchQueue.global(qos: .default).async { [weak self] in
+            guard let self = self else { return }
             let result = self.toxManager.changeEncryptPassword(newPassword, oldPassword: oldPassword)
 
             if result {
@@ -111,7 +115,8 @@ extension ChangePasswordController {
                 }
             }
 
-            DispatchQueue.main.async { [unowned self] in
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 hud?.dismiss()
 
                 if result {

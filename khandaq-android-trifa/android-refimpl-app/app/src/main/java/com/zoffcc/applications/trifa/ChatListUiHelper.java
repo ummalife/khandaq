@@ -91,6 +91,33 @@ final class ChatListUiHelper
         return count;
     }
 
+    // KHANDAQ (audit #24): short-TTL cached CONFERENCE unread count — mirrors cached_group_unread_count so
+    // the synchronous SQLCipher COUNT isn't re-run per row on every scroll bind (main-thread jank/ANR).
+    static int cached_conference_unread_count(final String conferenceIdentifier)
+    {
+        if (conferenceIdentifier == null)
+        {
+            return 0;
+        }
+        final String key = "c:" + conferenceIdentifier;
+        final Integer cached = peek_unread_cache(key);
+        if (cached != null)
+        {
+            return cached;
+        }
+        int count = 0;
+        try
+        {
+            count = TrifaToxService.orma.selectFromConferenceMessage()
+                    .conference_identifierEq(conferenceIdentifier).is_newEq(true).count();
+        }
+        catch (Exception ignored)
+        {
+        }
+        put_unread_cache(key, count);
+        return count;
+    }
+
     static void invalidate_unread_count_friend(final String friendPubkey)
     {
         if (friendPubkey != null)

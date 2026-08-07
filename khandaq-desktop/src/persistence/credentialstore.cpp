@@ -56,7 +56,10 @@ bool CredentialStore::save(const QString& profile, const QString& password)
                                                           static_cast<UInt32>(secret.size()),
                                                           secret.constData(), &item);
     if (item != nullptr) {
-        SecKeychainItemFreeContent(nullptr, item);
+        // KHANDAQ (audit #10): `item` is a live SecKeychainItemRef (a CoreFoundation object).
+        // SecKeychainItemFreeContent's 2nd arg is a data pointer it free()s — passing a CF object ran
+        // free() on a live CF allocation (heap corruption / crash). Release it the CF way.
+        CFRelease(item);
     }
 
     return status == errSecSuccess;

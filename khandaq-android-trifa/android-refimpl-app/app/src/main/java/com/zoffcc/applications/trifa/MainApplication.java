@@ -484,11 +484,24 @@ public class MainApplication extends Application
             e2.printStackTrace();
         }
 
-        ActivityManager am = (ActivityManager) this.getSystemService(ACTIVITY_SERVICE);
-        List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
-        ComponentName componentInfo = taskInfo.get(0).topActivity;
-        Log.i(TAG, "MainApplication:" + randnum + ":" + "componentInfo=" + componentInfo + " class=" +
-                   componentInfo.getClassName());
+        // KHANDAQ (audit #19): diagnostic-only log. getRunningTasks(1) returns an EMPTY list when the tox
+        // foreground-service crashes with no activity in the task stack (topActivity can also be null on
+        // some OEMs). An IndexOutOfBounds/NPE here would propagate out of uncaughtException and SKIP the
+        // CrashActivity + killProcess recovery below -> app hangs / won't reopen. Never let it gate recovery.
+        try
+        {
+            ActivityManager am = (ActivityManager) this.getSystemService(ACTIVITY_SERVICE);
+            List<ActivityManager.RunningTaskInfo> taskInfo = am.getRunningTasks(1);
+            if (taskInfo != null && !taskInfo.isEmpty() && taskInfo.get(0).topActivity != null)
+            {
+                ComponentName componentInfo = taskInfo.get(0).topActivity;
+                Log.i(TAG, "MainApplication:" + randnum + ":" + "componentInfo=" + componentInfo + " class=" +
+                           componentInfo.getClassName());
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
 
         try
         {

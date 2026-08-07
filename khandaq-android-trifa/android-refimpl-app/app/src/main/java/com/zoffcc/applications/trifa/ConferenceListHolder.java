@@ -221,15 +221,9 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
 
         imageView2.setVisibility(View.INVISIBLE);
 
-        int new_messages_count = 0;
-        try
-        {
-            new_messages_count = orma.selectFromConferenceMessage().
-                    conference_identifierEq(fl.conference_identifier).is_newEq(true).count();
-        }
-        catch (Exception ignored)
-        {
-        }
+        // KHANDAQ (audit #24): use the short-TTL cache instead of a synchronous SQLCipher COUNT per row
+        // bind (the COUNT re-ran during fling scrolling -> main-thread stutter / ANR on old devices).
+        int new_messages_count = ChatListUiHelper.cached_conference_unread_count(fl.conference_identifier);
         ChatListUiHelper.bind_unread_badge(unread_count, new_messages_count);
         apply_telegram_chat_row(fl);
     }

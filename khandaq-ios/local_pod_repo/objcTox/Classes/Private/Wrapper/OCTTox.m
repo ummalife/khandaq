@@ -756,7 +756,10 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
 {
     NSParameterAssert(bytes);
 
-    if (bytes.length == 0 || bytes.length >= 300) {
+    // KHANDAQ (audit #26): 300 was a stale legacy bound (short control frames). It silently blocked
+    // SENDING a 1:1 message-edit packet (type 186) longer than ~259B — matching Android's 1300B edit
+    // budget. Bound by the real tox custom-packet ceiling instead.
+    if (bytes.length == 0 || bytes.length > TOX_MAX_CUSTOM_PACKET_SIZE) {
         return NO;
     }
 
@@ -796,7 +799,7 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
             break;
     }
 
-    TOX_ERR_FRIEND_SEND_MESSAGE cError;
+    __block TOX_ERR_FRIEND_SEND_MESSAGE cError;
 
     char *cMessage2 = cMessage;
     size_t length2 = length;
@@ -842,7 +845,15 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
         }
     }
 
-    OCTToxMessageId result = tox_friend_send_message(self.tox, friendNumber, cType, (const uint8_t *)cMessage2, length2, &cError);
+    // KHANDAQ (audit #4): toxcore is NOT thread-safe. This 1:1 send ran tox_friend_send_message on the
+    // caller's NSOperationQueue thread while tox_iterate fires on the dedicated tox serial queue —
+    // concurrent tox_* calls corrupt messenger/DHT state (dropped/dup message or a crash inside
+    // toxcore). Serialize onto the tox queue like every other mutating wrapper (addFriend/group send).
+    // performSyncBlockOnToxQueue runs inline if already on the tox queue, so this is reentrancy-safe.
+    __block OCTToxMessageId result = 0;
+    [self performSyncBlockOnToxQueue:^{
+        result = tox_friend_send_message(self.tox, friendNumber, cType, (const uint8_t *)cMessage2, length2, &cError);
+    }];
 
     if (cMessage2_alloc)
     {
@@ -3805,11 +3816,15 @@ void connectionStatusCallback(Tox *cTox, TOX_CONNECTION cStatus, void *userData)
     });
 }
 
+static NSString *OCTToxUTF8StringFromBytes(const uint8_t *bytes, size_t length);
+
 void friendNameCallback(Tox *cTox, uint32_t friendNumber, const uint8_t *cName, size_t length, void *userData)
 {
     OCTTox *tox = (__bridge OCTTox *)(userData);
 
-    NSString *name = [NSString stringWithCString:(const char *)cName encoding:NSUTF8StringEncoding];
+    // KHANDAQ (audit #31): tox passes a NON-NUL-terminated `length`-byte buffer; stringWithCString reads
+    // until a NUL, over-reading adjacent heap (garbage name persisted to Realm, or a crash). Bound to `length`.
+    NSString *name = OCTToxUTF8StringFromBytes(cName, length);
 
     dispatch_async(dispatch_get_main_queue(), ^{
         OCTLogCInfo(@"nameChangeCallback with name %@, friend number %d", tox, name, friendNumber);
@@ -3824,7 +3839,8 @@ void friendStatusMessageCallback(Tox *cTox, uint32_t friendNumber, const uint8_t
 {
     OCTTox *tox = (__bridge OCTTox *)(userData);
 
-    NSString *message = [NSString stringWithCString:(const char *)cMessage encoding:NSUTF8StringEncoding];
+    // KHANDAQ (audit #31): length-bounded decode of the non-NUL-terminated tox buffer (see friendNameCallback).
+    NSString *message = OCTToxUTF8StringFromBytes(cMessage, length);
 
     dispatch_async(dispatch_get_main_queue(), ^{
         OCTLogCInfo(@"statusMessageCallback with status message %@, friend number %d", tox, message, friendNumber);
@@ -4121,7 +4137,9 @@ void friendLosslessPacketCallback(
     size_t length,
     void *userData)
 {
-    if ((length <= 1) || (length >= 300)) {
+    // KHANDAQ (audit #26): raise the stale 300B cap to the tox custom-packet ceiling so long 1:1
+    // message-edit packets (type 186) from Android/iOS are RECEIVED instead of silently dropped.
+    if ((length <= 1) || (length > TOX_MAX_CUSTOM_PACKET_SIZE)) {
         return;
     }
 

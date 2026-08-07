@@ -38,11 +38,14 @@ public class AppLockHelper
     // This suppresses exactly one lock check — the return from that picker. Real backgrounding
     // (no pending internal picker) still locks normally.
     private static volatile boolean suppress_next_lock = false;
+    private static volatile long suppress_next_lock_ts = 0L;   // KHANDAQ (audit #25): scope the suppression in time
+    private static final long SUPPRESS_LOCK_WINDOW_MS = 60_000L;
 
     /** Call just before startActivityForResult() for an in-app picker so the return doesn't re-lock. */
     static void suppressNextLock()
     {
         suppress_next_lock = true;
+        suppress_next_lock_ts = System.currentTimeMillis();
     }
 
     static boolean isEnabled(final Context c)
@@ -188,10 +191,17 @@ public class AppLockHelper
                     was_backgrounded = false;
                     // KHANDAQ (#12): we just came back from our own picker (file/camera/gallery/audio) —
                     // that's not a real "left the app", so don't demand the PIN/password.
+                    // KHANDAQ (audit #25): only honor the suppression if we came back within a short window
+                    // of the picker launch. Otherwise a picker that aborted before actually backgrounding
+                    // leaves the flag set and the NEXT genuine backgrounding consumes it -> a one-time
+                    // app-lock bypass. Clear the flag either way.
                     if (suppress_next_lock)
                     {
                         suppress_next_lock = false;
-                        return;
+                        if (System.currentTimeMillis() - suppress_next_lock_ts < SUPPRESS_LOCK_WINDOW_MS)
+                        {
+                            return;
+                        }
                     }
                     try
                     {

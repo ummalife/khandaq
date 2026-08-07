@@ -139,6 +139,17 @@ static void ngc_decoder_output_callback(void *decompressionOutputRefCon, void *s
     const uint16_t out_w = g_ngc_decode_output.width;
     const uint16_t out_h = g_ngc_decode_output.height;
 
+    // KHANDAQ (audit #5): a malicious group peer controls the H.264 SPS, so VideoToolbox may emit a
+    // CVImageBuffer SMALLER than our fixed out_w/out_h clamp. The memcpy loops below would then read
+    // far past the decoded plane (heap OOB -> crash, or adjacent-heap disclosure rendered into the
+    // remote video). Drop any frame whose real Y plane is smaller than what we copy.
+    const size_t real_y_w = CVPixelBufferGetWidthOfPlane(imageBuffer, 0);
+    const size_t real_y_h = CVPixelBufferGetHeightOfPlane(imageBuffer, 0);
+    if (real_y_w < out_w || real_y_h < out_h) {
+        CVPixelBufferUnlockBaseAddress(imageBuffer, kCVPixelBufferLock_ReadOnly);
+        return;
+    }
+
     for (uint16_t row = 0; row < out_h; row++) {
         memcpy(g_ngc_decode_output.y + row * out_w, src_y + row * src_y_stride, out_w);
     }

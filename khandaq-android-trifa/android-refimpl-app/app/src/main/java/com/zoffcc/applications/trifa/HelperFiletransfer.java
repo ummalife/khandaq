@@ -1744,22 +1744,36 @@ public class HelperFiletransfer
                 File fin_regular_file = new File(filepath + "/" +  filename);
                 in = new java.io.FileInputStream(fin_regular_file);
             }
-            BufferedOutputStream out = new BufferedOutputStream(
-                    new FileOutputStream(SD_CARD_FILES_OUTGOING_WRAPPER_DIR + "/" + filename2));
-
-            // KHANDAQ (perf): 256KB chunks instead of 4KB — far fewer read/write syscalls on the
-            // content:// -> file copy (the group send still runs this on the UI thread; the 1:1 path
-            // now runs it on a background executor).
-            final int chunk_size = 256 * 1024;
-            byte[] buffer = new byte[chunk_size];
-            int read;
-            while ((read = in.read(buffer)) != -1)
+            // KHANDAQ (audit #21): openInputStream can return null for some providers.
+            if (in == null)
             {
-                out.write(buffer, 0, read);
+                Log.i(TAG, "copy_outgoing_file_to_sdcard_dir:in==null");
+                return null;
             }
-            in.close();
-            out.flush();
-            out.close();
+            // KHANDAQ (audit #21): close BOTH streams in a finally. Previously a mid-copy failure (storage
+            // full, provider dies) skipped the close calls -> the content-provider fd + the output fd leaked;
+            // repeated failures exhaust the per-process fd limit (EMFILE) and break all file I/O until restart.
+            BufferedOutputStream out = null;
+            try
+            {
+                out = new BufferedOutputStream(
+                        new FileOutputStream(SD_CARD_FILES_OUTGOING_WRAPPER_DIR + "/" + filename2));
+
+                // KHANDAQ (perf): 256KB chunks instead of 4KB — far fewer read/write syscalls.
+                final int chunk_size = 256 * 1024;
+                byte[] buffer = new byte[chunk_size];
+                int read;
+                while ((read = in.read(buffer)) != -1)
+                {
+                    out.write(buffer, 0, read);
+                }
+                out.flush();
+            }
+            finally
+            {
+                try { in.close(); } catch (Exception ignored) {}
+                if (out != null) { try { out.close(); } catch (Exception ignored) {} }
+            }
             // now write that contents of the virtual file to the actual file on SD card ----------------
 
             File file2 = new File(SD_CARD_FILES_OUTGOING_WRAPPER_DIR, filename2);

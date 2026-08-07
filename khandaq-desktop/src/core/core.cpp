@@ -1584,6 +1584,7 @@ struct NgcIncomingAssembly {
     uint32_t chunkPayload = 0;
     uint32_t receivedCount = 0;
     QVector<bool> received;
+    qint64 lastActivityMs = 0;   // KHANDAQ (audit #29): last BEGIN/CHUNK activity, for stale eviction
 };
 
 QHash<QString, NgcIncomingAssembly> ngcIncomingAssemblies;
@@ -1843,6 +1844,22 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         if (ngcIncomingAssemblies.contains(key)) {
             return;
         }
+        // KHANDAQ (audit #29): evict stalled assemblies (no BEGIN/CHUNK activity for >60s) + delete their
+        // scratch files BEFORE the cap check. Without this a peer sending 16 BEGINs and no chunks pins the
+        // cap permanently (every later legitimate chunked file rejected) and leaves up to 16 pre-sized
+        // 200MB scratch files (~3.2GB real disk on non-sparse filesystems) until app restart.
+        {
+            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+            auto sweepIt = ngcIncomingAssemblies.begin();
+            while (sweepIt != ngcIncomingAssemblies.end()) {
+                if (nowMs - sweepIt.value().lastActivityMs > 60000) {
+                    QFile::remove(sweepIt.value().outPath);
+                    sweepIt = ngcIncomingAssemblies.erase(sweepIt);
+                } else {
+                    ++sweepIt;
+                }
+            }
+        }
         // KHANDAQ (audit A38): cap concurrent incoming assemblies — a peer flooding BEGINs for distinct
         // msgIds would otherwise pin unbounded memory (a received-bitmap + buffer per assembly).
         if (ngcIncomingAssemblies.size() >= 16) {
@@ -1898,6 +1915,7 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         }
         outFile.close();
 
+        asm_.lastActivityMs = QDateTime::currentMSecsSinceEpoch();   // KHANDAQ (audit #29)
         ngcIncomingAssemblies.insert(key, asm_);
         qDebug() << "NGC chunked file begin:" << fileName << totalSize << "bytes" << totalChunks << "chunks";
         return;
@@ -1914,9 +1932,15 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return;
         }
         NgcIncomingAssembly& asm_ = it.value();
+        asm_.lastActivityMs = QDateTime::currentMSecsSinceEpoch();   // KHANDAQ (audit #29): keep alive on activity
         const uint32_t chunkIndex = ngcReadU32Be(data + 40);
         const uint32_t chunkSize = ngcReadU32Be(data + 44);
+        // KHANDAQ (audit #30): also bound chunkSize by the declared chunkPayload. Without it a peer that
+        // announced a small chunkPayload could send an oversized chunk (up to NGC_CHUNK_PAYLOAD_MAX),
+        // growing the pre-sized scratch file past totalSize and overwriting neighbouring chunk slots ->
+        // the delivered group file is inflated / corrupted.
         if (chunkIndex >= asm_.totalChunks || chunkSize == 0
+            || chunkSize > asm_.chunkPayload
             || NGC_FILE_CHUNK_HEADER_SIZE + chunkSize > length) {
             return;
         }

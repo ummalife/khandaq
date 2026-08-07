@@ -17,7 +17,10 @@ build_yasm="1"
 ## ----------------------
 _FFMPEG_VERSION_="n6.0"
 _OPUS_VERSION_="v1.3.1"
-_VPX_VERSION_="v1.8.0"
+# KHANDAQ (audit #8): v1.8.0 (2019) predates CVE-2023-5217 (VP8 heap overflow, exploited in the wild)
+# and CVE-2024-5197 (VP8 int/heap overflow) — both reachable from a remote A/V-call peer's VP8 bitstream.
+# v1.14.1 is the first tag with both fixed. Requires a native-so CI rebuild of all 4 ABIs to take effect.
+_VPX_VERSION_="v1.14.1"
 _LIBSODIUM_VERSION_="1.0.18"
 _X264_VERSION_="31e19f92f00c7003fa115047ce50978bc98c3a0d"
 _ANDROID_SDK_TOOLS="7583922"

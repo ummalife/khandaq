@@ -495,6 +495,15 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
+    // KHANDAQ (audit #6): a crafted BEGIN with a huge totalChunks (e.g. 0xFFFFFFFF) passes the >=1
+    // check, then the received[] pre-fill loop below tries to append ~4 billion NSNumbers -> OOM
+    // crash (remotely triggerable by any group peer). Require totalChunks to exactly match the count
+    // implied by the (already size-capped) totalSize / chunkPayload.
+    uint64_t expectedChunks = (totalSize + chunkPayload - 1) / chunkPayload;
+    if ((uint64_t)totalChunks != expectedChunks) {
+        return;
+    }
+
     NSString *directory = self.incomingFilesDirectoryBlock(groupNumber);
 
     if (directory.length == 0) {
@@ -715,6 +724,19 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     assembly.nackRounds++;
     if (assembly.nackRounds > kOCTNgcNackMaxRounds) {
         [self stopNackTimerForAssembly:assembly];
+        // KHANDAQ (audit #13): evict the stalled state + partial file. Without this the assembly (its
+        // received[] array) and the truncated on-disk file leak for the process lifetime, AND because
+        // BEGIN dedups on assemblyKey a later re-broadcast of the same msgId returns early — so the
+        // transfer can never recover and the bubble stays stuck 'loading' forever.
+        @synchronized (self.assemblies) {
+            if (self.assemblies[assemblyKey] == assembly) {
+                [self.assemblies removeObjectForKey:assemblyKey];
+            }
+        }
+        @synchronized (self.orphanChunks) {
+            [self.orphanChunks removeObjectForKey:assemblyKey];
+        }
+        [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
         return;
     }
 

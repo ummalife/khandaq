@@ -601,6 +601,7 @@ public class MainActivity extends AppCompatActivity
     static ScriptIntrinsicYuvToRGB yuvToRgb = null;
     static Allocation alloc_in = null;
     static Allocation alloc_out = null;
+    static RenderScript rs_video = null;   // KHANDAQ (audit #22): held so it can be destroyed on the next re-alloc
     static Bitmap video_frame_image = null;
     static boolean video_frame_image_valid = false;
     static int buffer_size_in_bytes = 0;
@@ -4334,13 +4335,23 @@ public class MainActivity extends AppCompatActivity
             }
             video_buffer_1 = ByteBuffer.allocateDirect(buffer_size_in_bytes);
             set_JNI_video_buffer(video_buffer_1, frame_width_px, frame_height_px);
-            RenderScript rs = RenderScript.create(context_s);
-            yuvToRgb = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs));
-            Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs)).setX(frame_width_px).setY(frame_height_px);
+            // KHANDAQ (audit #22): destroy the PREVIOUS RenderScript context + intrinsic + allocations before
+            // creating new ones. Every incoming-video resolution change (remote bitrate adaptation) used to
+            // leak a whole native RS context + intrinsic + 2 Allocations -> native memory climbs until GC
+            // finalizers eventually reclaim it, risking native OOM / render stalls on long calls.
+            try {
+                if (alloc_in != null) { alloc_in.destroy(); alloc_in = null; }
+                if (alloc_out != null) { alloc_out.destroy(); alloc_out = null; }
+                if (yuvToRgb != null) { yuvToRgb.destroy(); yuvToRgb = null; }
+                if (rs_video != null) { rs_video.destroy(); rs_video = null; }
+            } catch (Throwable ignored) {}
+            rs_video = RenderScript.create(context_s);
+            yuvToRgb = ScriptIntrinsicYuvToRGB.create(rs_video, Element.U8_4(rs_video));
+            Type.Builder yuvType = new Type.Builder(rs_video, Element.U8(rs_video)).setX(frame_width_px).setY(frame_height_px);
             yuvType.setYuvFormat(ImageFormat.YV12);
-            alloc_in = Allocation.createTyped(rs, yuvType.create(), Allocation.USAGE_SCRIPT);
-            Type.Builder rgbaType = new Type.Builder(rs, Element.RGBA_8888(rs)).setX(frame_width_px).setY(frame_height_px);
-            alloc_out = Allocation.createTyped(rs, rgbaType.create(), Allocation.USAGE_SCRIPT);
+            alloc_in = Allocation.createTyped(rs_video, yuvType.create(), Allocation.USAGE_SCRIPT);
+            Type.Builder rgbaType = new Type.Builder(rs_video, Element.RGBA_8888(rs_video)).setX(frame_width_px).setY(frame_height_px);
+            alloc_out = Allocation.createTyped(rs_video, rgbaType.create(), Allocation.USAGE_SCRIPT);
             video_frame_image = Bitmap.createBitmap(frame_width_px, frame_height_px, Bitmap.Config.ARGB_8888);
             video_frame_image_valid = (video_frame_image != null);
             if (video_frame_image == null)

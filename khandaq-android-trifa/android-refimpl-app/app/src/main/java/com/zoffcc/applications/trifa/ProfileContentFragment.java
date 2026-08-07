@@ -590,6 +590,23 @@ public class ProfileContentFragment extends Fragment
         configureConsumerProfileUi(view);
     }
 
+    @Override
+    public void onDestroyView()
+    {
+        // KHANDAQ (audit #34): the static profile_handler_s holds this non-static Handler (-> Fragment ->
+        // Activity/Context), leaking them across logout/re-login and config-change recreation. Drop pending
+        // delayed messages and clear the static on teardown.
+        try
+        {
+            if (profile_handler != null) { profile_handler.removeCallbacksAndMessages(null); }
+            if (profile_handler_s == profile_handler) { profile_handler_s = null; }
+        }
+        catch (Throwable ignored)
+        {
+        }
+        super.onDestroyView();
+    }
+
     private void configureConsumerProfileUi(final View root)
     {
         // Consumer profile: avatar, nick, status, save, QR, Copy ID only.
@@ -1264,6 +1281,24 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
         }
     }
 
+    // KHANDAQ (audit #23): truncate to a UTF-8 BYTE budget at a char boundary (never mid-surrogate).
+    static String truncateUtf8(String s, int maxBytes)
+    {
+        if (s == null) { return ""; }
+        try
+        {
+            if (s.getBytes("UTF-8").length <= maxBytes) { return s; }
+            int end = s.length();
+            while (end > 0 && s.substring(0, end).getBytes("UTF-8").length > maxBytes) { end--; }
+            if (end > 0 && Character.isHighSurrogate(s.charAt(end - 1))) { end--; }
+            return s.substring(0, end);
+        }
+        catch (Exception e)
+        {
+            return s.substring(0, Math.min(s.length(), maxBytes));
+        }
+    }
+
     void saveProfileChanges(boolean showToast)
     {
         if (!is_tox_started)
@@ -1279,9 +1314,11 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
                 return;
             }
 
-            global_my_name = nick.substring(0, Math.min(nick.length(), TOX_MAX_NAME_LENGTH));
-            global_my_status_message = mystatus_message_edittext.getText().toString().substring(0, Math.min(
-                    mystatus_message_edittext.getText().toString().length(), TOX_MAX_STATUS_MESSAGE_LENGTH));
+            // KHANDAQ (audit #23): TOX_MAX_*_LENGTH are UTF-8 BYTE limits — truncate on bytes, not chars,
+            // so an Arabic/Persian name isn't rejected by tox after the local UI already persisted it.
+            global_my_name = truncateUtf8(nick, TOX_MAX_NAME_LENGTH);
+            global_my_status_message = truncateUtf8(mystatus_message_edittext.getText().toString(),
+                    TOX_MAX_STATUS_MESSAGE_LENGTH);
             tox_self_set_name(global_my_name);
             tox_self_set_status_message(global_my_status_message);
             HelperGroup.sync_self_display_name_to_all_groups(global_my_name);

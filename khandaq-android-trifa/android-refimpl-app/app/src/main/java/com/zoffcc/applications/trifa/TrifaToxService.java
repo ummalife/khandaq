@@ -1298,7 +1298,10 @@ public class TrifaToxService extends Service
                 long tox_iteration_interval_ms = tox_iteration_interval();
                 HelperGeneric.logI(TAG, "tox_iteration_interval_ms=" + tox_iteration_interval_ms);
 
-                MainActivity.tox_iterate();
+                // KHANDAQ (audit #20): guard the startup iterate like the main-loop one (#202) — a native
+                // Error or a Throwable from a friend/group callback fired here would otherwise kill the tox
+                // thread and hit the global crash screen instead of surviving (tox offline until relaunch).
+                try { MainActivity.tox_iterate(); } catch (Throwable t) { t.printStackTrace(); }
 
                 // -------- add log friend --------
                 // -------- add log friend --------
@@ -1499,7 +1502,9 @@ public class TrifaToxService extends Service
                                 global_self_last_went_offline_timestamp = System.currentTimeMillis();
                                 tox_notification_change_wrapper(TOX_CONNECTION_a,"");
                                 bootstrap_me(true);
-                                tox_iterate();
+                                // KHANDAQ (audit #20): the battery-wake iterate sits in a try that only
+                                // catches Interrupted/Exception — a native Error escapes and kills the thread.
+                                try { tox_iterate(); } catch (Throwable t) { t.printStackTrace(); }
                                 check_if_still_bootstrapping();
                             }
                             else

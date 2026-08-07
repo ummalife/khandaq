@@ -686,7 +686,9 @@ extension ChatPrivateController {
             {
                 // HINT: friend is not online, show call waiting screen
                 callwaiting_running = true
-                let window = UIApplication.shared.keyWindow!
+                // KHANDAQ (audit #12): don't force-unwrap keyWindow — nil during a scene transition /
+                // interruption would crash. Bail out of the call-waiting UI instead.
+                guard let window = UIApplication.shared.keyWindow else { return }
                 CallWaitingView = UIView(frame: window.bounds)
                 window.addSubview(CallWaitingView)
                 CallWaitingView.backgroundColor = .black
@@ -792,7 +794,11 @@ extension ChatPrivateController {
 
                         while true {
 
-                            DispatchQueue.main.async {
+                            // KHANDAQ (audit #12): read the Realm friend status SYNCHRONOUSLY on main —
+                            // the previous `.async` write to a var read on this background thread was a
+                            // data race and always left connection_status2 one iteration stale (first
+                            // read saw the initial .none), adding a needless extra second of waiting.
+                            DispatchQueue.main.sync {
                                 connection_status2 = ConnectionStatus(connectionStatus: friend.connectionStatus)
                             }
 
@@ -885,7 +891,10 @@ extension ChatPrivateController {
             return
         }
 
-        let toRemove = selectedRows.map { self.messages[$0.row] }
+        // KHANDAQ (audit #3): $0.row is a DISPLAY index; when a message-search filter is active it
+        // differs from the storage index, so map through the display→storage translation (as the group
+        // controller does) — otherwise «Удалить у всех»/forward would target an unrelated message.
+        let toRemove = selectedRows.map { self.messageEntry(atDisplayIndex: $0.row).message }
         let hasOwn = toRemove.contains { $0.isOutgoing() }
 
         // KHANDAQ (#205): scope choice for the multi-select delete (mirrors the single-message path).
@@ -911,7 +920,9 @@ extension ChatPrivateController {
         guard let selectedRows = tableView?.indexPathsForSelectedRows, !selectedRows.isEmpty else {
             return
         }
-        let ordered = selectedRows.sorted { $0.row < $1.row }.map { self.messages[$0.row] }
+        // KHANDAQ (audit #3): display→storage translation (see delete path) so forward sends the
+        // actually-selected messages even while a search filter is active.
+        let ordered = selectedRows.sorted { $0.row < $1.row }.map { self.messageEntry(atDisplayIndex: $0.row).message }
         let source: UIView = editMessagesToolbar ?? view
         toggleTableViewEditing(false, animated: true)
         MessageForwarder.presentForwardPicker(forMessages: ordered, from: self, sourceView: source)
@@ -1567,9 +1578,14 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
                                     barButtonItem: nil,
                                     sourceView: cell,
                                     deleteForMe: { [unowned self] in
+            // KHANDAQ (audit #11): the peer may retract this message (incoming KQ delete invalidates the
+            // Realm row) while the scope sheet is open; touching an invalidated object throws an
+            // uncatchable RLMException. Bail if it's gone.
+            guard !message.isInvalidated else { return }
             self.submanagerChats.removeMessages([message])
         }, deleteForEveryone: { [unowned self] in
             // KHANDAQ (#179): own message is also retracted on the peer (KQ delete packet).
+            guard !message.isInvalidated else { return }
             self.submanagerChats.deleteMessage(forBoth: message)
         })
     }
@@ -1814,6 +1830,9 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
             if trimmed.isEmpty || trimmed == current {
                 return
             }
+            // KHANDAQ (audit #11): message may have been retracted by the peer while the edit alert was
+            // open — an invalidated Realm object throws an uncatchable RLMException on use.
+            guard !message.isInvalidated else { return }
             self.submanagerChats.editMessage(message, newText: trimmed)
         })
         present(alert, animated: true, completion: nil)
@@ -1843,7 +1862,9 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         reactionPopup.present(in: view, aboveRect: rect,
                               currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
                               dark: ThemeAppearance.isDarkMode) { [weak self] emoji in
-            self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
+            // KHANDAQ (audit #11): the message can be retracted by the peer while the reaction bar is open.
+            guard let self = self, !message.isInvalidated else { return }
+            self.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
         }
     }
 }
@@ -2011,7 +2032,9 @@ private extension ChatPrivateController {
                                   dark: ThemeAppearance.isDarkMode, actions: actions,
                                   bubbleSnapshot: snapshot,
                                   onPick: { [weak self] emoji in
-                                      self?.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
+                                      // KHANDAQ (audit #11): guard against a peer-retracted (invalidated) message.
+                                      guard let self = self, !message.isInvalidated else { return }
+                                      self.submanagerChats.toggleReaction(onMessage: message, emoji: emoji)
                                   },
                                   onDismiss: { editable?.willHideMenu() })
     }

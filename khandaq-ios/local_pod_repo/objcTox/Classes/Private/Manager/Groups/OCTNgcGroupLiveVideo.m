@@ -268,7 +268,11 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
 
     for (NSUInteger row = 0; row < height; row++) {
         for (NSUInteger col = 0; col < width; col++) {
-            const int32_t yIndex = (int32_t)row * yStride + (int32_t)col;
+            // KHANDAQ (audit #1): the Y plane is packed TIGHTLY at `width` by the native decode
+            // callback, but yStride is the decoder's PADDED source stride (e.g. 512 for a 480-wide
+            // plane). Indexing with yStride over a width-packed buffer reads out of bounds every frame
+            // (and skews the image). Index with the packed width; u/v already use width/2 below.
+            const int32_t yIndex = (int32_t)row * (int32_t)width + (int32_t)col;
             const int32_t uvRow = (int32_t)(row / 2);
             const int32_t uvCol = (int32_t)(col / 2);
             const int32_t uvIndex = uvRow * (int32_t)(width / 2) + uvCol;

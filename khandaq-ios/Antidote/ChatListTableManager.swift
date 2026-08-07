@@ -136,7 +136,13 @@ class ChatListTableManager: NSObject {
     }
 
     func toggleFavorite(at indexPath: IndexPath) {
-        let chat = chatAtFilteredRow(indexPath.row)
+        toggleFavorite(chatAtFilteredRow(indexPath.row))
+    }
+
+    // KHANDAQ (audit #33): toggle a chat resolved AT menu/swipe-creation time, not re-derived from a
+    // stale indexPath inside a deferred closure — an incoming message can reorder the list meanwhile,
+    // making indexPath.row point at a different chat (or falling through to chats.firstObject).
+    func toggleFavorite(_ chat: OCTChat) {
         ChatFavoritesStore.toggle(chat: chat)
         tableView.reloadData()
         delegate?.chatListTableManagerWasUpdated(self)
@@ -351,7 +357,7 @@ extension ChatListTableManager: UITableViewDelegate {
             ? String(localized: "chat_filter_remove_favorite")
             : String(localized: "chat_filter_add_favorite")
         let favoriteAction = UIContextualAction(style: .normal, title: favoriteTitle) { [unowned self] _, _, completion in
-            self.toggleFavorite(at: indexPath)
+            self.toggleFavorite(chat)
             completion(true)
         }
         favoriteAction.backgroundColor = theme.colorForType(.LinkText)
@@ -409,7 +415,7 @@ extension ChatListTableManager: UITableViewDelegate {
             }
         ) { [weak self] _ in
             let favoriteAction = UIAction(title: favoriteTitle, image: UIImage(systemName: isFavorite ? "star.slash" : "star")) { _ in
-                self?.toggleFavorite(at: indexPath)
+                self?.toggleFavorite(chat)
             }
             return UIMenu(children: [favoriteAction])
         }
@@ -623,7 +629,11 @@ private extension ChatListTableManager {
             let chat = chats[index]
             if chat.isGroup && chat.uniqueIdentifier == chatUniqueIdentifier {
                 submanagerGroups.refreshPeers(for: chat)
-                tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
+                // KHANDAQ (audit #2): `index` is a position in the UNFILTERED chats Results; the table
+                // shows a filtered + pinned subset, so it is NOT a valid table row — reloadRows(row:index)
+                // can crash (out-of-range) or reload the wrong chat. Reload the whole guarded table.
+                guard tableView.window != nil else { return }
+                tableView.reloadData()
                 return
             }
         }
@@ -636,7 +646,8 @@ private extension ChatListTableManager {
                     return
                 }
 
-                tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
+                // KHANDAQ (audit #2): unfiltered index is not a table row — reload the whole table.
+                tableView.reloadData()
                 return
             }
         }

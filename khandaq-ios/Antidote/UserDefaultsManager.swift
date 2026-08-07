@@ -18,10 +18,11 @@ struct ChatFavoritesStore {
     private static let userDefaults = UserDefaultsManager()
 
     static func favoriteKey(for chat: OCTChat) -> String {
-        if chat.isGroup, let groupId = chat.groupChatIdHex, !groupId.isEmpty {
-            return "group:" + groupId.lowercased()
-        }
-        return "chat:" + chat.uniqueIdentifier
+        // KHANDAQ (audit #16): key on the STABLE uniqueIdentifier. The old scheme keyed groups on
+        // groupChatIdHex, which is empty right after create/join and only fills to 64 chars once the
+        // NGC id syncs — so a group favorited early was stored under "chat:<uid>" but later looked up
+        // under "group:<hex>", silently dropping the star and orphaning the entry.
+        return (chat.isGroup ? "group:" : "chat:") + chat.uniqueIdentifier
     }
 
     static func isFavorite(chat: OCTChat) -> Bool {

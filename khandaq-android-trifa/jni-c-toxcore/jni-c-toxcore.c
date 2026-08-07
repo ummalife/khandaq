@@ -701,11 +701,23 @@ Tox *create_tox(int udp_enabled, int orbot_enabled, const char *proxy_host, uint
         options.udp_enabled = false; // set TCP as default mode for android !!
     }
 
-    // NGC public groups need UDP or connected TCP relay for DHT announce; UDP is more reliable.
-    options.udp_enabled = true;
-    options.local_discovery_enabled = true;
-
-    options.hole_punching_enabled = true;
+    // KHANDAQ (audit #9): NGC public groups want UDP for DHT announce, BUT UDP cannot traverse the SOCKS5
+    // proxy, so force-enabling it under Orbot leaked the user's real IP via direct DHT packets from the
+    // real interface — full deanonymization of someone who explicitly chose Tor. When Orbot is on, stay
+    // TCP-relay-only even though NGC public-group announce degrades; anonymity must win over reachability.
+    // (Native change — needs a jni-c-toxcore.so CI rebuild to take effect.)
+    if (orbot_enabled == 1)
+    {
+        options.udp_enabled = false;
+        options.local_discovery_enabled = false;
+        options.hole_punching_enabled = false;
+    }
+    else
+    {
+        options.udp_enabled = true;
+        options.local_discovery_enabled = true;
+        options.hole_punching_enabled = true;
+    }
     options.dht_announcements_enabled = true;
     // options.tcp_port = tcp_port;
     options.tcp_port = 0; // TCP relay is disabled !!

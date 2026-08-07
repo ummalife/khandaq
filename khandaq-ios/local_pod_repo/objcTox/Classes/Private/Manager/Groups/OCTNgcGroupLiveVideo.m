@@ -468,7 +468,13 @@ static const CFTimeInterval kOCTNgcRemoteFrameTimeoutSec = 5.0;
     int32_t yStride = 0;
     int32_t uStride = 0;
     int32_t vStride = 0;
-    const int decodeWidth = (int)kOCTNgcVideoWidth + 32;
+    // KHANDAQ (audit #1, re-verify): decodeWidth is the native OUTPUT packing width written into yBuf
+    // (which is malloc'd kOCTNgcVideoWidth*kOCTNgcVideoHeight = 480*640). The stray +32 made native pack Y
+    // at 512/row into a 480-wide buffer -> a 32B/row heap OOB WRITE, and it forced imageFromY (indexing by
+    // width=480) and audit #5's plane-dim guard out of alignment (dropping every real 480-wide frame). It
+    // does NOT affect the VideoToolbox decoder format (that is SPS-driven), so match it to the buffer/local
+    // path at 480: no OOB write, correct row*width indexing, #5 admits real frames.
+    const int decodeWidth = (int)kOCTNgcVideoWidth;
     const bool decoded = toxav_ngc_video_decode(_videoCoder, (uint8_t *)payload, payloadLength,
                                                 decodeWidth, kOCTNgcVideoHeight,
                                                 yBuf, uBuf, vBuf,

@@ -1939,8 +1939,14 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         // announced a small chunkPayload could send an oversized chunk (up to NGC_CHUNK_PAYLOAD_MAX),
         // growing the pre-sized scratch file past totalSize and overwriting neighbouring chunk slots ->
         // the delivered group file is inflated / corrupted.
+        const qint64 offset = static_cast<qint64>(chunkIndex) * asm_.chunkPayload;
+        // KHANDAQ (audit #30): bound each chunk by chunkPayload AND by totalSize. The chunkPayload bound
+        // alone still let the LAST chunk (chunkSize==chunkPayload instead of the true remainder) write past
+        // totalSize when totalSize isn't a multiple of chunkPayload -> in.readAll() delivered an inflated,
+        // corrupted file. Clamping the write-end to totalSize closes it for every chunk.
         if (chunkIndex >= asm_.totalChunks || chunkSize == 0
             || chunkSize > asm_.chunkPayload
+            || static_cast<uint64_t>(offset) + chunkSize > asm_.totalSize
             || NGC_FILE_CHUNK_HEADER_SIZE + chunkSize > length) {
             return;
         }
@@ -1952,7 +1958,6 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         if (!outFile.open(QIODevice::ReadWrite)) {
             return;
         }
-        const qint64 offset = static_cast<qint64>(chunkIndex) * asm_.chunkPayload;
         outFile.seek(offset);
         outFile.write(reinterpret_cast<const char*>(data + NGC_FILE_CHUNK_HEADER_SIZE),
                       static_cast<qint64>(chunkSize));

@@ -500,7 +500,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     // crash (remotely triggerable by any group peer). Require totalChunks to exactly match the count
     // implied by the (already size-capped) totalSize / chunkPayload.
     uint64_t expectedChunks = (totalSize + chunkPayload - 1) / chunkPayload;
-    if ((uint64_t)totalChunks != expectedChunks) {
+    // KHANDAQ (audit #6, re-verify): the equality alone is not enough — chunkPayload is attacker-controlled
+    // (only validated >= 1), so totalSize=200MB + chunkPayload=1 still passes with expectedChunks=200M and
+    // OOMs the received[] pre-fill. Every real Khandaq sender uses kOCTNgcChunkPayloadMax, so a legit 200MB
+    // file needs at most ~5.7k chunks; cap generously so a tiny chunkPayload can't inflate the array.
+    uint64_t maxLegitChunks = (kOCTNgcMaxFileTransferBytes + kOCTNgcChunkPayloadMax - 1) / kOCTNgcChunkPayloadMax;
+    if ((uint64_t)totalChunks != expectedChunks || expectedChunks > maxLegitChunks) {
         return;
     }
 

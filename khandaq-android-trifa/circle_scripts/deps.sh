@@ -952,7 +952,11 @@ if [ "$full""x" == "1x" ]; then
     # --- LIBVPX ---
     cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
     cd $_s_;wget 'https://raw.githubusercontent.com/cmeng-git/vpx-android/de613e367ea86190955a836c3c0f2bc0f260562f/patches/10.libvpx_configure.sh.patch' -O aa.patch
-    cd $_s_; patch -p1 < aa.patch
+    # KHANDAQ (audit #8, re-verify): fail-fast. This vpx-android configure.sh patch was pinned to libvpx
+    # 1.8.0; against the 1.14.1 bump its hunks may not apply. Previously a failed/partial apply was silently
+    # ignored -> the arm64 .so misconfigured its toolchain. On a CI rebuild failure, update the patch to a
+    # vpx-android commit targeting 1.14.x (or drop it if 1.14.1's configure selects the aarch64 toolchain).
+    cd $_s_; patch -p1 < aa.patch || exit 1
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 $CF2 $CF3 -I${_NDK_}/sources/android/cpufeatures "; \

@@ -95,21 +95,12 @@ public class MainApplication extends Application
 
         try
         {
-            // Lingver.init(this, Locale.ENGLISH);
-            if (Locale.getDefault().getLanguage().equals(new Locale("ar").getLanguage()))
-            {
-                // RTL is not fully working yet, so use english for now
-                Lingver.init(this, Locale.ENGLISH);
-            }
-            else if (Locale.getDefault().getLanguage().equals(new Locale("fa").getLanguage()))
-            {
-                // RTL is not fully working yet, so use english for now
-                Lingver.init(this, Locale.ENGLISH);
-            }
-            else
-            {
-                Lingver.init(this, Locale.getDefault());
-            }
+            // KHANDAQ (RTL): follow the device/user locale for ALL languages, including Arabic (ar)
+            // and Farsi (fa). These were previously coerced to English "because RTL is not fully
+            // working"; the app now declares supportsRtl=true and the chat surface is start/end-based,
+            // so Arabic/Farsi users get a native right-to-left UI. Only ar/fa users are affected —
+            // every other locale keeps the exact LTR behaviour it had before.
+            Lingver.init(this, Locale.getDefault());
             AppLocaleHelper.syncAppCompatLocalesFromLingver();
         }
         catch (Throwable ignored)

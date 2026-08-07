@@ -195,7 +195,7 @@ public class GroupPeerInfoActivity extends AppCompatActivity
                                                         get_group_peernum_from_peer_pubkey(group_id, peer_pubkey),
                                                         new_role);
                     Log.i(TAG, "setting new role to: " + new_role + " result=" + result);
-                    update_savedata_file_wrapper();
+                    HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): role/kick already applied to live tox; persist off-thread
 
                     if (result == 1)
                     {
@@ -565,7 +565,7 @@ public class GroupPeerInfoActivity extends AppCompatActivity
 
             final int result = tox_group_mod_kick_peer(group_num, peer_num);
             Log.i(TAG, "kicking peer. result=" + result);
-            update_savedata_file_wrapper();
+            HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): kick already applied to live tox; persist off-thread
 
             if (result >= 0)
             {

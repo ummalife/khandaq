@@ -63,8 +63,10 @@
                             android:layout_height="wrap_content"
                             android:layout_gravity="center"
                             android:layout_marginLeft="40dp"
+                            android:layout_marginStart="40dp"
                             android:layout_marginRight="40dp"
-                            android:gravity="left"
+                            android:layout_marginEnd="40dp"
+                            android:gravity="start"
                             android:maxLength="20"
                             android:text="@string/layout___peer_name"
                             android:textColor="@color/tg_chat_preview"
@@ -86,6 +88,7 @@
                         android:layout_gravity="top"
                         android:layout_marginTop="@dimen/message_entry_datetime_bottom_padding_small"
                         android:layout_marginRight="20dp"
+                        android:layout_marginEnd="20dp"
                         android:layout_marginBottom="7dp"
                         android:gravity="top"
                         android:padding="0dp"
@@ -120,6 +123,7 @@
                         android:layout_height="30dp"
                         android:layout_marginTop="14dp"
                         android:layout_marginRight="0dp"
+                        android:layout_marginEnd="0dp"
                         android:layout_weight="1"
                         android:alpha="0.5"
                         android:src="@drawable/arrow_bg2"
@@ -169,7 +173,9 @@
                     android:layout_height="2dp"
                     android:layout_gravity="center_vertical"
                     android:layout_marginLeft="10dp"
+                    android:layout_marginStart="10dp"
                     android:layout_marginRight="10dp"
+                    android:layout_marginEnd="10dp"
                     android:layout_weight="100"
                     android:background="@color/tg_date_separator_line" />
 
@@ -196,7 +202,9 @@
                     android:layout_height="2dp"
                     android:layout_gravity="center_vertical"
                     android:layout_marginLeft="10dp"
+                    android:layout_marginStart="10dp"
                     android:layout_marginRight="10dp"
+                    android:layout_marginEnd="10dp"
                     android:layout_weight="100"
                     android:background="@color/tg_date_separator_line" />
 

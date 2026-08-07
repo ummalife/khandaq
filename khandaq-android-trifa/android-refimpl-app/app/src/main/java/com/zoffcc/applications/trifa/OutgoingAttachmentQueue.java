@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
@@ -29,6 +31,18 @@ public final class OutgoingAttachmentQueue
     private static final long GROUP_FILE_TIMEOUT_MS = 45 * 60 * 1000L;
 
     private static final Handler MAIN = main_handler_s != null ? main_handler_s : new Handler(Looper.getMainLooper());
+
+    // KHANDAQ (ANR): group staging (add_attachment_from_uri -> resolve size + copy_outgoing_file_to_sdcard_dir,
+    // up to KHANDAQ_MAX_FILE_TRANSFER_BYTES) must not run on the UI thread. Unlike the 1:1 path — where
+    // add_attachment_from_uri returns immediately and the copy runs async — the group handle is produced
+    // synchronously inside the staging loop, so we push the whole batch onto a dedicated single-thread
+    // executor. Order is preserved (single thread) and every UI touch inside stageGroupBatch already
+    // marshals to MAIN, so nothing changes user-visibly except the frozen frame going away.
+    private static final ExecutorService GROUP_STAGE_EXEC = Executors.newSingleThreadExecutor(r -> {
+        final Thread t = new Thread(r, "outgoing-group-stage");
+        t.setDaemon(true);
+        return t;
+    });
 
     private static final ConcurrentHashMap<String, ConcurrentLinkedQueue<GroupMessageListActivity.GroupOutgoingFileHandle>> groupSendQueues =
             new ConcurrentHashMap<>();
@@ -78,7 +92,8 @@ public final class OutgoingAttachmentQueue
 
         final Context appContext = context.getApplicationContext();
         final String key = groupQueueKey(groupId, activityPeer);
-        runOnMain(() -> stageGroupBatch(appContext, uris, groupId, activityPeer, key, caption));
+        // KHANDAQ (ANR): stage off the UI thread (the heavy file copy lives inside stageGroupBatch).
+        GROUP_STAGE_EXEC.execute(() -> stageGroupBatch(appContext, uris, groupId, activityPeer, key, caption));
     }
 
     public static void enqueueFriendUri(final Context context, final Uri uri,

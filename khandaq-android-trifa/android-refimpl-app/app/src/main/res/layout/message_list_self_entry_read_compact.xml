@@ -29,6 +29,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="top"
                 android:layout_marginLeft="20dp"
+                android:layout_marginStart="20dp"
                 android:layout_marginTop="@dimen/message_entry_datetime_bottom_padding_small"
                 android:layout_marginBottom="8dp"
                 android:gravity="top"
@@ -59,7 +60,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="0dp"
+                android:layout_marginStart="0dp"
                 android:layout_marginRight="0dp"
+                android:layout_marginEnd="0dp"
                 android:maxWidth="280dp"
                 android:background="@drawable/rounded_blue_bg"
                 android:minHeight="0dp"
@@ -77,6 +80,7 @@
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_marginLeft="0dp"
+                android:layout_marginStart="0dp"
                 android:layout_marginTop="14dp"
                 android:layout_weight="1"
                 android:alpha="0.5"
@@ -114,7 +118,9 @@
             android:layout_height="2dp"
             android:layout_gravity="center_vertical"
             android:layout_marginLeft="10dp"
+            android:layout_marginStart="10dp"
             android:layout_marginRight="10dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="100"
             android:background="@color/tg_date_separator_line" />
 
@@ -141,7 +147,9 @@
             android:layout_height="2dp"
             android:layout_gravity="center_vertical"
             android:layout_marginLeft="10dp"
+            android:layout_marginStart="10dp"
             android:layout_marginRight="10dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="100"
             android:background="@color/tg_date_separator_line" />
 

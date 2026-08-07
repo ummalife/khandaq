@@ -8,12 +8,14 @@
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:layout_marginRight="0dp"
+        android:layout_marginEnd="0dp"
         android:orientation="vertical">
 
         <LinearLayout
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:layout_marginRight="20dp"
+            android:layout_marginEnd="20dp"
             android:background="@android:color/holo_red_light"
             android:minHeight="50dp"
             android:orientation="horizontal">
@@ -24,6 +26,7 @@
                 android:layout_height="20dp"
                 android:layout_alignParentTop="true"
                 android:layout_marginRight="6dip"
+                android:layout_marginEnd="6dip"
                 android:padding="2dp"
                 android:scaleType="centerInside"
                 android:src="@drawable/circle_red"/>
@@ -33,7 +36,9 @@
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
                 android:layout_alignParentRight="true"
+                android:layout_alignParentEnd="true"
                 android:layout_toRightOf="@id/m_icon"
+                android:layout_toEndOf="@id/m_icon"
                 android:ellipsize="marquee"
                 android:textColorLink="@color/textblock_link_color_for_red"
                 android:text="** ERROR **"

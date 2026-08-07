@@ -29,7 +29,9 @@
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="20dp"
+                android:layout_marginStart="20dp"
                 android:layout_marginRight="0dp"
+                android:layout_marginEnd="0dp"
                 android:layout_weight="6"
                 android:minHeight="0dp"
 
@@ -47,6 +49,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:paddingLeft="10dp"
+                        android:paddingStart="10dp"
                         android:text="..."
                         android:textColor="@color/message_bubble_text"
                         android:textColorLink="@color/textblock_link_color_for_blue"
@@ -58,6 +61,7 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_marginLeft="6dip"
+                        android:layout_marginStart="6dip"
                         android:padding="2dp"
                         android:scaleType="centerInside"
                         android:src="@drawable/circle_red" />
@@ -68,6 +72,7 @@
                     android:layout_width="fill_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginRight="0dp"
+                    android:layout_marginEnd="0dp"
                     android:orientation="horizontal">
 
                     <com.daimajia.numberprogressbar.NumberProgressBar
@@ -77,7 +82,9 @@
                         android:layout_gravity="center_vertical|center_horizontal"
                         android:minHeight="24dp"
                         android:paddingLeft="10dp"
+                        android:paddingStart="10dp"
                         android:paddingRight="10dp"
+                        android:paddingEnd="10dp"
                         android:visibility="visible"
 
                         app:progress_max="100"
@@ -97,6 +104,7 @@
                     android:layout_width="fill_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginRight="0dp"
+                    android:layout_marginEnd="0dp"
                     android:orientation="vertical"
                     android:visibility="gone">
 
@@ -134,7 +142,9 @@
                         android:layout_width="fill_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="0dp"
+                        android:layout_marginStart="0dp"
                         android:layout_marginRight="0dp"
+                        android:layout_marginEnd="0dp"
                         android:background="@android:color/transparent"
                         android:minHeight="1dp"
                         android:padding="0dp"
@@ -147,8 +157,10 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="10dp"
+                        android:layout_marginStart="10dp"
                         android:layout_marginTop="4dp"
                         android:layout_marginRight="10dp"
+                        android:layout_marginEnd="10dp"
                         android:layout_marginBottom="6dp"
                         android:autoLink="web"
                         android:textColor="@color/message_bubble_text"
@@ -172,6 +184,7 @@
                     android:layout_width="fill_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginRight="20dp"
+                    android:layout_marginEnd="20dp"
                     android:minHeight="65dp"
                     android:orientation="horizontal"
                     android:visibility="gone">
@@ -181,8 +194,10 @@
                         android:layout_width="65dp"
                         android:layout_height="match_parent"
                         android:layout_marginLeft="25dp"
+                        android:layout_marginStart="25dp"
                         android:layout_marginTop="8dp"
                         android:layout_marginRight="25dp"
+                        android:layout_marginEnd="25dp"
                         android:layout_marginBottom="8dp"
                         android:layout_weight="1"
                         android:background="@android:color/transparent"
@@ -204,8 +219,10 @@
                         android:layout_width="65dp"
                         android:layout_height="match_parent"
                         android:layout_marginLeft="25dp"
+                        android:layout_marginStart="25dp"
                         android:layout_marginTop="8dp"
                         android:layout_marginRight="25dp"
+                        android:layout_marginEnd="25dp"
                         android:layout_marginBottom="8dp"
                         android:layout_weight="1"
                         android:background="@android:color/transparent"
@@ -224,6 +241,7 @@
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_marginLeft="0dp"
+                android:layout_marginStart="0dp"
                 android:layout_marginTop="14dp"
                 android:layout_weight="1"
                 android:alpha="0.5"
@@ -304,7 +322,9 @@
             android:layout_height="2dp"
             android:layout_gravity="center_vertical"
             android:layout_marginLeft="10dp"
+            android:layout_marginStart="10dp"
             android:layout_marginRight="10dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="100"
             android:background="@color/tg_date_separator_line" />
 
@@ -331,7 +351,9 @@
             android:layout_height="2dp"
             android:layout_gravity="center_vertical"
             android:layout_marginLeft="10dp"
+            android:layout_marginStart="10dp"
             android:layout_marginRight="10dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="100"
             android:background="@color/tg_date_separator_line" />
 

@@ -1611,6 +1611,13 @@ public class GroupMessageListActivity extends AppCompatActivity
             try
             {
                 HelperGroup.on_group_chat_foreground(fg_group_id);
+                // KHANDAQ (ANR): ensure_group_in_tox runs a native tox_group_join + a PBKDF2 savedata
+                // persist (HelperGroup.ensure_group_in_tox) that froze onResume on every group
+                // foreground. Its return is unused here, and set_group_connection_status_icon() self-
+                // posts to the main handler, so fold both into this existing background thread rather
+                // than blocking the UI thread.
+                ensure_group_in_tox(fg_group_id);
+                set_group_connection_status_icon();
             }
             catch (Exception e)
             {
@@ -1619,15 +1626,6 @@ public class GroupMessageListActivity extends AppCompatActivity
         }, "group-foreground").start();
         set_peer_count_header();
         start_group_connect_header_refresh();
-        try
-        {
-            ensure_group_in_tox(group_id);
-            set_group_connection_status_icon();
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
-        }
         try
         {
             update_group_all_users();

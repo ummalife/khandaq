@@ -21,11 +21,12 @@
             android:visibility="gone">
 
             <TextView
-                android:gravity="left"
+                android:gravity="start"
                 android:id="@+id/peer_name_text"
                 android:layout_gravity="center"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="65dp"
+                android:layout_marginStart="65dp"
                 android:layout_width="match_parent"
                 android:text="@string/layout___peer_name"
                 android:textColor="#EFEFEF"
@@ -56,6 +57,7 @@
                 android:id="@+id/img_corner"
                 android:layout_height="30dp"
                 android:layout_marginRight="0dp"
+                android:layout_marginEnd="0dp"
                 android:layout_marginTop="14dp"
                 android:layout_weight="1"
                 android:layout_width="30dp"
@@ -65,7 +67,9 @@
                 android:id="@+id/m_container"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="0dp"
+                android:layout_marginStart="0dp"
                 android:layout_marginRight="20dp"
+                android:layout_marginEnd="20dp"
                 android:layout_weight="6"
                 android:layout_width="fill_parent"
                 android:minHeight="0dp"
@@ -76,6 +80,7 @@
                     android:layout_alignParentTop="true"
                     android:layout_height="20dp"
                     android:layout_marginRight="6dip"
+                    android:layout_marginEnd="6dip"
                     android:layout_width="20dp"
                     android:padding="2dp"
                     android:scaleType="centerInside"
@@ -97,6 +102,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginRight="0dp"
+                    android:layout_marginEnd="0dp"
                     android:orientation="horizontal">
 
                     <com.daimajia.numberprogressbar.NumberProgressBar
@@ -106,7 +112,9 @@
                         android:layout_gravity="center_vertical|center_horizontal"
                         android:minHeight="24dp"
                         android:paddingLeft="10dp"
+                        android:paddingStart="10dp"
                         android:paddingRight="10dp"
+                        android:paddingEnd="10dp"
                         android:visibility="gone"
 
                         app:progress_max="100"
@@ -125,6 +133,7 @@
                     android:id="@+id/ft_preview_container"
                     android:layout_height="wrap_content"
                     android:layout_marginRight="0dp"
+                    android:layout_marginEnd="0dp"
                     android:layout_width="match_parent"
                     android:orientation="vertical"
                     android:visibility="visible">
@@ -152,7 +161,9 @@
                         android:id="@+id/ft_preview_image"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="0dp"
+                        android:layout_marginStart="0dp"
                         android:layout_marginRight="0dp"
+                        android:layout_marginEnd="0dp"
                         android:layout_width="match_parent"
                         android:minHeight="1dp"
                         android:padding="0dp"
@@ -165,8 +176,10 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginLeft="10dp"
+                        android:layout_marginStart="10dp"
                         android:layout_marginTop="4dp"
                         android:layout_marginRight="10dp"
+                        android:layout_marginEnd="10dp"
                         android:layout_marginBottom="6dp"
                         android:autoLink="web"
                         android:textColor="@color/message_bubble_text"
@@ -223,6 +236,7 @@
                 android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/message_entry_datetime_bottom_padding"
             android:layout_marginRight="20dp"
+            android:layout_marginEnd="20dp"
             android:layout_marginTop="4dp"
                 android:layout_width="wrap_content"
                 android:padding="0dp"
@@ -250,7 +264,9 @@
             android:layout_gravity="center_vertical"
             android:layout_height="2dp"
             android:layout_marginLeft="10dp"
+            android:layout_marginStart="10dp"
             android:layout_marginRight="10dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="100"
             android:layout_width="wrap_content" />
 
@@ -277,7 +293,9 @@
             android:layout_gravity="center_vertical"
             android:layout_height="2dp"
             android:layout_marginLeft="10dp"
+            android:layout_marginStart="10dp"
             android:layout_marginRight="10dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="100"
             android:layout_width="wrap_content" />
 

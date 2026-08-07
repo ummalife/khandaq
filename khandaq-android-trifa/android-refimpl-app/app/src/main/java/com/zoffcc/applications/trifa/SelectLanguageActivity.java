@@ -48,12 +48,10 @@ public class SelectLanguageActivity extends ListActivity
             String[] lang_key_and_names = new String[]{
                  "_default_" + ":\n" + "System Default",
                         "en" + ":\n" + "English",
-                     // RTL is not fully working yet, so use english for now
-                     // "ar" + ":\n" + "Arabic",
+                        "ar" + ":\n" + "Arabic - العربية",
                         "de" + ":\n" + "German - Deutsch",
                         "es" + ":\n" + "Spanish",
-                     // RTL is not fully working yet, so use english for now
-                     // "fa" + ":\n" + "Persian",
+                        "fa" + ":\n" + "Persian - فارسی",
                         "fr" + ":\n" + "French",
                         "hi" + ":\n" + "Hindu",
                         "hu" + ":\n" + "Hungarian",

@@ -399,7 +399,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
                 {
                     tox_conference_delete(f2.tox_conference_number);
                     cache_confid_confnum.clear();
-                    update_savedata_file_wrapper(); // after deleteing a conference
+                    HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): conference already deleted in live tox; persist off-thread
                 }
 
                 set_conference_inactive(f2.conference_identifier);
@@ -461,7 +461,7 @@ public class ConferenceListHolder extends RecyclerView.ViewHolder implements Vie
                 {
                     tox_conference_delete(f2.tox_conference_number);
                     cache_confid_confnum.clear();
-                    update_savedata_file_wrapper(); // after deleteing a conference
+                    HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): conference already deleted in live tox; persist off-thread
                 }
 
                 Log.i(TAG, "onMenuItemClick:info:33");

@@ -17,19 +17,19 @@ build_yasm="1"
 ## ----------------------
 _FFMPEG_VERSION_="n6.0"
 _OPUS_VERSION_="v1.3.1"
-# KHANDAQ (audit #8 — SECURITY TODO, kept at v1.8.0 until a CI 4-ABI rebuild validates the bump):
-# v1.8.0 (2019) predates CVE-2023-5217 (VP8 heap overflow, exploited in the wild) and CVE-2024-5197
-# (VP8 int/heap overflow) — both reachable from a remote A/V-call peer's VP8 bitstream. v1.14.1 is the
-# first tag fixing both. A trial bump BREAKS this script (verified by static review, not shippable blind):
-#   1) 1.14.1 REMOVED libvpx's `--sdk-path=` configure flag -> `die_unknown` -> configure exits 1 on ALL
-#      four `--sdk-path="$_NDK_"` sites (lines ~397/966/1545/1967); remove them (the android-gcc target
-#      uses the standalone NDK toolchain via CC/AS/sysroot in the env).
-#   2) the arm64 vpx-android configure.sh patch (10.libvpx_configure.sh.patch @ de613e36) is pinned to
-#      1.8.0 and won't apply to 1.14.1 -> drop it (1.14.1 has native arm64-android-gcc) and fail-fast the
-#      `patch` apply.
-#   3) NDK r13b (clang 3.8, 2016) building libvpx 1.14.1 (2024) is unvalidated — likely needs an NDK bump.
-# => Real fix = a CI 4-ABI native .so rebuild (owner/CI). The shipped app currently uses the PREBUILT .so,
-#    so this file's version does not change what ships today; it only gates the next native rebuild.
+# KHANDAQ (audit #8): pinned libvpx v1.8.0 (2019) predates two CVEs. Rather than bump to 1.14.1 (which
+# BREAKS this script — 1.14.1 removed the `--sdk-path=` configure flag used at all 4 ABI sites, plus the
+# arm64 vpx-android configure patch is pinned to 1.8.0 and NDK-r13b/1.14.1 compat is unvalidated), we
+# BACKPORT the one CVE that is actually reachable, as a targeted patch onto 1.8.0 (see the 4 libvpx-clone
+# sites below applying patches/khandaq-libvpx-cve-2024-5197.patch):
+#   * CVE-2024-5197 — integer overflow in vpx_img_alloc()/vpx_img_wrap() from large d_w/d_h. The DECODER
+#     allocates output buffers sized from the (attacker-controlled) decoded frame dims -> under-alloc ->
+#     heap overflow. IN threat model -> BACKPORTED (dimension guard).
+#   * CVE-2023-5217 — VP8 ENCODER heap overflow via mid-encode thread-count/resize config changes. Our
+#     toxav encoder runs a fixed local config; a remote peer cannot drive it -> NOT in our threat model ->
+#     deliberately NOT backported (an encoder patch would add risk for no benefit here).
+# Needs a CI 4-ABI native .so rebuild (android-native-so.yml) for the patch to take effect; the shipped
+# app uses the PREBUILT .so, so this file does not change what ships today, only the next native rebuild.
 _VPX_VERSION_="v1.8.0"
 _LIBSODIUM_VERSION_="1.0.18"
 _X264_VERSION_="31e19f92f00c7003fa115047ce50978bc98c3a0d"
@@ -398,6 +398,10 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBVPX ---
     cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
+    # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
+    # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
+    cd $_s_/libvpx && patch -p1 < /root/work/patches/khandaq-libvpx-cve-2024-5197.patch || exit 1; cd $_s_
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 $CF2 $CF3 -I${_NDK_}/sources/android/cpufeatures "; \
@@ -961,6 +965,10 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBVPX ---
     cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
+    # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
+    # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
+    cd $_s_/libvpx && patch -p1 < /root/work/patches/khandaq-libvpx-cve-2024-5197.patch || exit 1; cd $_s_
     cd $_s_;wget 'https://raw.githubusercontent.com/cmeng-git/vpx-android/de613e367ea86190955a836c3c0f2bc0f260562f/patches/10.libvpx_configure.sh.patch' -O aa.patch
     # KHANDAQ (audit #8): fail-fast on a bad patch apply (was silently ignored -> misconfigured arm64 .so).
     # Harmless at the pinned v1.8.0 (patch matches); if/when the libvpx CVE bump lands, this catches a
@@ -1545,6 +1553,10 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBVPX ---
     cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
+    # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
+    # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
+    cd $_s_/libvpx && patch -p1 < /root/work/patches/khandaq-libvpx-cve-2024-5197.patch || exit 1; cd $_s_
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 $CF2 $CF3 -I${_NDK_}/sources/android/cpufeatures "; \
@@ -1967,6 +1979,10 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBVPX ---
     cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
+    # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
+    # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
+    cd $_s_/libvpx && patch -p1 < /root/work/patches/khandaq-libvpx-cve-2024-5197.patch || exit 1; cd $_s_
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";export CXXFLAGS=" -g -O3 $CF2 $CF3 -I${_NDK_}/sources/android/cpufeatures "; \

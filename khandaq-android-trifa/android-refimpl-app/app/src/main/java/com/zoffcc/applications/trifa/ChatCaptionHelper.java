@@ -63,6 +63,12 @@ public class ChatCaptionHelper
         {
             return false;
         }
+        // a shared location renders as its own map bubble — never fold it into the
+        // previous media's caption (iOS parity: `LocationMessage.parse(text) == nil`)
+        if (HelperLocationMessage.parse(text_msg.text) != null)
+        {
+            return false;
+        }
         if (text_msg.direction != file_msg.direction)
         {
             return false;
@@ -178,6 +184,10 @@ public class ChatCaptionHelper
             return false;
         }
         if ((text_msg.text == null) || (text_msg.text.trim().length() == 0))
+        {
+            return false;
+        }
+        if (HelperLocationMessage.parse(text_msg.text) != null)
         {
             return false;
         }

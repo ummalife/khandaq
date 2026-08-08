@@ -12,7 +12,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CompoundButton;
-import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -100,14 +99,10 @@ public class SettingsTabFragment extends Fragment
         final SwitchMaterial darkSwitch = view.findViewById(R.id.switch_dark_theme);
         if (darkSwitch != null)
         {
+            // Telegram-style: the row is always «Тёмная тема» (static label from the layout);
+            // switch ON = dark active, OFF = light. Tester feedback: the old dynamic
+            // current-theme label read inverted («Светлая тема» + OFF while light was active).
             darkSwitch.setChecked(isNightModeActive());
-            // Tester request: name the CURRENT theme, so switch-off clearly means "Светлая тема".
-            final TextView themeLabel = view.findViewById(R.id.label_dark_theme);
-            if (themeLabel != null)
-            {
-                themeLabel.setText(isNightModeActive() ? R.string.settings_dark_theme
-                                                       : R.string.settings_light_theme);
-            }
             darkSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
             {
                 @Override

@@ -1073,19 +1073,30 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
     {
         try
         {
-            mytoxid_imageview.setImageBitmap(encodeAsBitmap("tox:" + MainActivity.get_my_toxid()));
             // HINT: https://toktok.ltd/spec.html#messenger -> "Tox ID:"
             // 32 	long term public key
             // 4 	nospam
             // 2 	checksum
-            String my_tox_id_temp = MainActivity.get_my_toxid();
+            final String my_tox_id_temp = MainActivity.get_my_toxid();
 
             if (my_tox_id_temp == null)
             {
-                // on error use Echobots ToxID
-                // TODO: do something else here
-                my_tox_id_temp = "76518406F6A9F2217E8DC487CC783C25CC16A15EB36FF32E335A235342C48A39218F515C39A6";
+                // KHANDAQ (#245): until Tox is up there is no ID to show. This used to fall back to a
+                // hardcoded third-party demo bot's ToxID (TRIfA legacy) and present it as MyID, QR code
+                // included — so anyone who copied it handed out the BOT's address instead of their own
+                // and could never be added. Show a placeholder and no QR until the real ID exists.
+                if (mytoxid_textview != null)
+                {
+                    mytoxid_textview.setText(R.string.myid_not_ready);
+                }
+                if (mytoxid_imageview != null)
+                {
+                    mytoxid_imageview.setImageBitmap(null);
+                }
+                return;
             }
+
+            mytoxid_imageview.setImageBitmap(encodeAsBitmap("tox:" + my_tox_id_temp));
 
             // KHANDAQ (Figma): MyID = uniform muted monospace (textColor @color/onboarding_desc),
             // no per-segment pkey/nospam/checksum coloring.
@@ -1098,19 +1109,17 @@ Toast.makeText(requireContext(), getString(R.string.profile_avatar_error_generic
         {
             e.printStackTrace();
 
-            try
+            // KHANDAQ (#245): the QR failed to render — still show the real ID as text, and leave no
+            // stale/placeholder QR behind that someone could scan.
+            if (mytoxid_imageview != null)
             {
-                mytoxid_imageview.setImageBitmap(encodeAsBitmap("123")); // in case something goes wrong
-                if (mytoxid_textview != null)
-                {
-                    mytoxid_textview.setText(MainActivity.get_my_toxid());
-                }
+                mytoxid_imageview.setImageBitmap(null);
             }
-            catch (WriterException e2)
+            if (mytoxid_textview != null)
             {
-                e2.printStackTrace();
+                final String id = MainActivity.get_my_toxid();
+                mytoxid_textview.setText(id != null ? id : getString(R.string.myid_not_ready));
             }
-
         }
         catch (Exception e3)
         {

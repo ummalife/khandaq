@@ -1003,6 +1003,11 @@ public class TrifaToxService extends Service
                 // that manually_log_out() armed, without leaving it stuck true forever.
                 manually_logged_out = false;
 
+                // KHANDAQ (#245): the ID only exists once Tox is up. If the user is already sitting on the
+                // profile screen it is showing the "loading" placeholder, so refresh it now instead of
+                // making them leave and come back.
+                try { ProfileActivity.update_toxid_display_s(); } catch (Exception ignored) {}
+
                 Runnable myRunnable = new Runnable()
                 {
                     @Override

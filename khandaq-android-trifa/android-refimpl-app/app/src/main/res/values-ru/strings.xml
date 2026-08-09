@@ -1028,4 +1028,31 @@
     <string name="group_peer_kick_success">%1$s удалён из группы.</string>
     <string name="group_peer_kick_failed">Не удалось удалить участника. Попробуйте позже.</string>
     <string name="message_edited_marker">изменено</string>
+
+    <!-- KHANDAQ (#248): completed localization -->
+    <string name="connection_quality_strong">Связь: хорошая</string>
+    <string name="connection_quality_medium">Связь: стабильная</string>
+    <string name="connection_quality_weak">Связь: слабая</string>
+    <string name="connection_quality_offline">Связь: нет соединения</string>
+    <string name="connection_reconnect_toast">Переподключение…</string>
+    <string name="message_tap_failed_to_retry">Нажмите на красный значок, чтобы отправить снова</string>
+    <string name="friend_request_dialog_title">Запрос в контакты</string>
+    <string name="friend_request_accept">Принять</string>
+    <string name="friend_request_decline">Отклонить</string>
+    <string name="delete_group_title">Удалить группу?</string>
+    <string name="delete_group_message">Удалить эту группу и все сообщения?</string>
+    <string name="file_transfer_upload_failed">Не удалось отправить</string>
+    <string name="file_transfer_cancel">Отменить передачу</string>
+    <string name="file_transfer_progress_with_speed">%1$s / %2$s · %3$d%% · %4$s</string>
+    <string name="group_header_reconnecting_peers">Переподключаемся к участникам…</string>
+    <string name="group_info_members_empty">Пока нет участников</string>
+    <string name="group_info_section_manage">Управление группой</string>
+    <string name="group_info_copy_invite">Скопировать ID группы</string>
+    <string name="group_info_invite_short_id">Нажмите, чтобы скопировать · ID %1$s</string>
+    <string name="group_info_debug_section">Для разработчика</string>
+    <string name="group_info_debug_dump_peers">Выгрузить офлайн-участников (отладка)</string>
+    <string name="group_info_reconnect">Переподключиться</string>
+    <string name="group_info_voice_state_set">Применить настройки голоса</string>
+    <string name="settings_language">Язык</string>
+    <string name="settings_language_title">Язык приложения</string>
 </resources>

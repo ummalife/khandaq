@@ -71,6 +71,50 @@
                         app:thumbTint="@color/khandaq_switch_thumb"
                         app:trackTint="@color/khandaq_switch_track" />
                 </LinearLayout>
+
+                <!-- KHANDAQ (#248): Язык — рядом с темой, первое, что видно в настройках.
+                     Раньше выбор языка жил на служебном экране обслуживания. -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@color/md_grey_300_seperator" />
+
+                <LinearLayout
+                    android:id="@+id/setting_language"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="14dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/settings_language"
+                        android:textColor="@color/onboarding_title"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/setting_language_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:textColor="@color/onboarding_hint"
+                        android:textSize="14sp" />
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:importantForAccessibility="no" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- ============ УВЕДОМЛЕНИЯ ============ -->

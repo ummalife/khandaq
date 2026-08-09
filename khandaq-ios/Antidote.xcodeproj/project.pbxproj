@@ -333,6 +333,8 @@
 		116634F21C7B945A0072C980 /* StaticTableMultiChoiceButtonCellModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116634F11C7B945A0072C980 /* StaticTableMultiChoiceButtonCellModel.swift */; };
 		116634F31C7B945A0072C980 /* StaticTableMultiChoiceButtonCellModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116634F11C7B945A0072C980 /* StaticTableMultiChoiceButtonCellModel.swift */; };
 		11687F2E1DC64F0D0029B93F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FA0ED31BC5842800F3DA5B /* AppDelegate.swift */; };
+		AA11BB22CC33DD44EE550001 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE550002 /* AppLanguage.swift */; };
+		AA11BB22CC33DD44EE550003 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE550002 /* AppLanguage.swift */; };
 		116DCE321CAAF47100B693EC /* TopCoordinatorProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116DCE311CAAF47100B693EC /* TopCoordinatorProtocol.swift */; };
 		116DCE331CAAF47100B693EC /* TopCoordinatorProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116DCE311CAAF47100B693EC /* TopCoordinatorProtocol.swift */; };
 		116DCE3B1CAAF85300B693EC /* NSURLExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116DCE3A1CAAF85300B693EC /* NSURLExtension.swift */; };
@@ -1045,6 +1047,7 @@
 		11F83BDA1CAFB2A20074FE11 /* SwiftSupport.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SwiftSupport.swift; sourceTree = "<group>"; };
 		11FA0ED21BC5842800F3DA5B /* Antidote-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Antidote-Bridging-Header.h"; sourceTree = "<group>"; };
 		11FA0ED31BC5842800F3DA5B /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE550002 /* AppLanguage.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
 		11FA0ED91BC584D900F3DA5B /* AppCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		11FA0EDD1BC58DCC00F3DA5B /* CoordinatorProtocol.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CoordinatorProtocol.swift; sourceTree = "<group>"; };
 		11FA0EE01BC591FC00F3DA5B /* Logger.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
@@ -1756,6 +1759,7 @@
 				1164763A19794D3300DB20B8 /* Antidote-Info.plist */,
 				11F08D171DE0610B00F80F5F /* InfoPlist.strings */,
 				11FA0ED31BC5842800F3DA5B /* AppDelegate.swift */,
+				AA11BB22CC33DD44EE550002 /* AppLanguage.swift */,
 				KHNDQPUSH001A1B2C3D4E5F60001 /* KhandaqPush.swift */,
 				KHNDQPUSH003A1B2C3D4E5F60003 /* KhandaqPushManager.swift */,
 				1164764419794D3300DB20B8 /* Images.xcassets */,
@@ -2368,6 +2372,7 @@
 				111782D21DC64796000C1721 /* BaseCell.swift in Sources */,
 				111783171DC647C1000C1721 /* LoginGenericCreateController.swift in Sources */,
 				11687F2E1DC64F0D0029B93F /* AppDelegate.swift in Sources */,
+				AA11BB22CC33DD44EE550001 /* AppLanguage.swift in Sources */,
 				KHNDQPUSH006A1B2C3D4E5F60006 /* KhandaqPush.swift in Sources */,
 				KHNDQPUSH008A1B2C3D4E5F60008 /* KhandaqPushManager.swift in Sources */,
 				111783311DC647E4000C1721 /* UIAlertControllerExtension.swift in Sources */,
@@ -2485,6 +2490,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA11BB22CC33DD44EE550003 /* AppLanguage.swift in Sources */,
 				11628E721CA580ED008C097E /* ChatGenericFileCell.swift in Sources */,
 				116634AF1C6F40820072C980 /* ChatOutgoingCallCellModel.swift in Sources */,
 				116634B21C7087A80072C980 /* UIApplicationExtension.swift in Sources */,
@@ -3311,7 +3317,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142970;
+				CURRENT_PROJECT_VERSION = 142971;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -3346,7 +3352,7 @@
 				CLANG_STATIC_ANALYZER_MODE = deep;
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 142970;
+				CURRENT_PROJECT_VERSION = 142971;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;

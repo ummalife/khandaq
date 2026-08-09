@@ -266,8 +266,15 @@ android {
         minSdkVersion 21
         //noinspection OldTargetApi
         targetSdkVersion 36
-        versionCode 10397
-        versionName "0.2.27"
+        versionCode 10398
+        versionName "0.2.28"
+
+        // KHANDAQ (#248): ship exactly the four languages we actually maintain. The upstream tree
+        // carries ~28 more locale folders inherited from TRIfA, most of them a few dozen strings
+        // deep — a German or French phone would have landed on a mostly-English screen sprinkled
+        // with stray translations. Dropping them makes "unsupported system language" fall back to
+        // English cleanly (and shrinks the APK).
+        resConfigs "en", "ru", "ar", "zh-rCN"
 
         renderscriptTargetApi 21
         renderscriptSupportModeEnabled true

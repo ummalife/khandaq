@@ -765,3 +765,5 @@
 "media_file_unavailable" = "Файл недоступен";
 
 "chat_react_action" = "Реакция";
+"settings_language" = "Язык";
+"settings_language_title" = "Язык приложения";

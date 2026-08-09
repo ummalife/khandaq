@@ -121,11 +121,72 @@ public class SettingsTabFragment extends Fragment
             });
         }
 
+        bindLanguageRow(view);
+
         bindPrefSwitch(view, R.id.switch_notif_preview, prefs, "notification_show_content", false);
         // KHANDAQ: the 'Системные сообщения групп' toggle was removed from the UI (user request);
         // the pref keeps its default (hidden), no switch to bind.
 
         bindAttachmentDownloadRow(view, prefs);
+    }
+
+    // KHANDAQ (#248): language picker right under the theme switch — the first place anyone looks.
+    // It used to live on the maintenance screen behind several taps, listing 16 half-translated
+    // languages; we now ship four and name each one in its own script.
+    private static final String[] LANG_NATIVE_NAMES = {"English", "Русский", "العربية", "中文"};
+
+    private void bindLanguageRow(final View root)
+    {
+        final View row = root.findViewById(R.id.setting_language);
+        final android.widget.TextView value = root.findViewById(R.id.setting_language_value);
+        if ((row == null) || (value == null))
+        {
+            return;
+        }
+
+        value.setText(nativeNameForCurrentLanguage());
+
+        row.setOnClickListener(v ->
+        {
+            if (Callstate.state != 0)
+            {
+                return; // never restart the UI mid-call
+            }
+            final int current = indexOfCurrentLanguage();
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.settings_language_title)
+                    .setSingleChoiceItems(LANG_NATIVE_NAMES, current, (d, which) ->
+                    {
+                        d.dismiss();
+                        if (which == current)
+                        {
+                            return;
+                        }
+                        final androidx.appcompat.app.AppCompatActivity a =
+                                (androidx.appcompat.app.AppCompatActivity) getActivity();
+                        if (a != null)
+                        {
+                            AppLocaleHelper.applyLocaleAndRestart(a, AppLocaleHelper.SUPPORTED_LANG_CODES[which]);
+                        }
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+        });
+    }
+
+    private static int indexOfCurrentLanguage()
+    {
+        final String code = AppLocaleHelper.currentLangCode();
+        for (int i = 0; i < AppLocaleHelper.SUPPORTED_LANG_CODES.length; i++)
+        {
+            if (AppLocaleHelper.SUPPORTED_LANG_CODES[i].equals(code)) { return i; }
+        }
+        return 0;
+    }
+
+    private static String nativeNameForCurrentLanguage()
+    {
+        return LANG_NATIVE_NAMES[indexOfCurrentLanguage()];
     }
 
     // KHANDAQ (Figma "Загрузка вложений"): picker Никогда / Только Wi-Fi / Всегда, bound to the global

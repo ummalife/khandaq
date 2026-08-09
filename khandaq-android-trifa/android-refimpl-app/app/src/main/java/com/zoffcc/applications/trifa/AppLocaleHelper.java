@@ -20,8 +20,58 @@ public final class AppLocaleHelper
 {
     private static final String TAG = "trifa.AppLocaleHelper";
 
+    /** KHANDAQ (#248): the languages we actually ship translations for (see resConfigs in build.gradle).
+     *  Order is the order shown in the picker. */
+    public static final String[] SUPPORTED_LANG_CODES = {"en", "ru", "ar", "zh-rCN"};
+
     private AppLocaleHelper()
     {
+    }
+
+    /** KHANDAQ (#248): the locale a fresh install should start in — the phone's language when we speak
+     *  it, English otherwise. Without this, an unsupported system language (say German) left the app
+     *  believing it was German: strings fell back to English anyway, but the picker and the per-app
+     *  language setting disagreed with what the user actually saw. */
+    public static Locale startupLocaleFor(final Locale systemLocale)
+    {
+        try
+        {
+            if (systemLocale != null)
+            {
+                final String lang = systemLocale.getLanguage();
+                for (final String code : SUPPORTED_LANG_CODES)
+                {
+                    if (localeForCode(code).getLanguage().equals(lang))
+                    {
+                        // Chinese: we ship Simplified only, so any zh variant maps to it.
+                        return "zh".equals(lang) ? Locale.SIMPLIFIED_CHINESE : localeForCode(code);
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "startupLocaleFor:EE:" + e.getMessage());
+        }
+        return Locale.ENGLISH;
+    }
+
+    /** The code ("en"/"ru"/"ar"/"zh-rCN") currently in effect, for showing in the settings row. */
+    public static String currentLangCode()
+    {
+        try
+        {
+            final Locale l = Lingver.getInstance().getLocale();
+            final String lang = l.getLanguage();
+            for (final String code : SUPPORTED_LANG_CODES)
+            {
+                if (localeForCode(code).getLanguage().equals(lang)) { return code; }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return "en";
     }
 
     /** Persist locale, sync AppCompat per-app language API, then restart to MainActivity. */

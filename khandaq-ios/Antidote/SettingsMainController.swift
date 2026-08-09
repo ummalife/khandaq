@@ -25,6 +25,7 @@ class SettingsMainController: StaticTableController {
     fileprivate let importProfileModel = StaticTableDefaultCellModel()
     fileprivate let autodownloadImagesModel = StaticTableInfoCellModel()
     fileprivate let darkThemeModel = StaticTableSwitchCellModel()
+    fileprivate let languageModel = StaticTableInfoCellModel()   // KHANDAQ (#248)
     fileprivate let notificationsModel = StaticTableSwitchCellModel()
     fileprivate let groupSystemMessagesModel = StaticTableSwitchCellModel()
     fileprivate let longerbgModel = StaticTableSwitchCellModel()
@@ -44,6 +45,7 @@ class SettingsMainController: StaticTableController {
             autodownloadImagesModel: autodownloadImagesModel,
             longerbgModel: longerbgModel,
             darkThemeModel: darkThemeModel,
+            languageModel: languageModel,
             notificationsModel: notificationsModel,
             groupSystemMessagesModel: groupSystemMessagesModel,
             dateonmessagemodeModel: dateonmessagemodeModel,
@@ -101,6 +103,12 @@ private extension SettingsMainController{
         }
 
         // KHANDAQ design (Figma): the theme switch lives in Settings ("Тёмная тема").
+        // KHANDAQ (#248): language sits right under the theme switch — the first place anyone looks.
+        languageModel.title = String(localized: "settings_language")
+        languageModel.value = AppLanguage.nativeName(for: AppLanguage.current)
+        languageModel.showArrow = true
+        languageModel.didSelectHandler = changeAppLanguage
+
         darkThemeModel.title = String(localized: "settings_dark_theme")
         darkThemeModel.on = ThemeAppearance.isDarkMode
         darkThemeModel.valueChangedHandler = darkThemeValueChanged
@@ -169,6 +177,49 @@ private extension SettingsMainController{
         delegate?.settingsMainControllerChangeAutodownloadImages(self)
     }
 
+    // KHANDAQ (#248): pick the app language. Each option is written in its own language, and the
+    // whole UI is rebuilt right after so the change is visible without restarting the app.
+    func changeAppLanguage(_: StaticTableBaseCell) {
+        let sheet = UIAlertController(title: String(localized: "settings_language_title"),
+                                      message: nil,
+                                      preferredStyle: .actionSheet)
+
+        for code in AppLanguage.supportedCodes {
+            let name = AppLanguage.nativeName(for: code)
+            let mark = (code == AppLanguage.current) ? " ✓" : ""
+            sheet.addAction(UIAlertAction(title: name + mark, style: .default) { [weak self] _ in
+                guard code != AppLanguage.current else { return }
+                AppLanguage.set(code)
+                self?.reloadAfterLanguageChange()
+            })
+        }
+        sheet.addAction(UIAlertAction(title: String(localized: "alert_cancel"), style: .cancel, handler: nil))
+
+        // iPad needs an anchor for action sheets.
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        present(sheet, animated: true, completion: nil)
+    }
+
+    func reloadAfterLanguageChange() {
+        // Rebuild from the window down: titles, tab bar and layout direction are all decided when
+        // views are created, so refreshing this screen alone would leave the rest in the old language.
+        guard let window = view.window ?? UIApplication.shared.keyWindow else {
+            updateModels()
+            reloadTableView()
+            return
+        }
+        NotificationCenter.default.post(name: Notification.Name("KhandaqAppLanguageChanged"), object: nil)
+        UIView.transition(with: window, duration: 0.25, options: .transitionCrossDissolve, animations: {
+            window.rootViewController?.view.setNeedsLayout()
+        }, completion: nil)
+        updateModels()
+        reloadTableView()
+    }
+
     func showAdvancedSettings(_: StaticTableBaseCell) {
         delegate?.settingsMainControllerShowAdvancedSettings(self)
     }
@@ -188,6 +239,7 @@ private extension SettingsMainController {
                               autodownloadImagesModel: StaticTableInfoCellModel,
                               longerbgModel: StaticTableSwitchCellModel,
                               darkThemeModel: StaticTableSwitchCellModel,
+                              languageModel: StaticTableInfoCellModel,
                               notificationsModel: StaticTableSwitchCellModel,
                               groupSystemMessagesModel: StaticTableSwitchCellModel,
                               dateonmessagemodeModel: StaticTableSwitchCellModel,
@@ -202,6 +254,7 @@ private extension SettingsMainController {
         #if DEBUG
         let toggles: [StaticTableBaseCellModel] = [
             darkThemeModel,
+            languageModel,
             notificationsModel,
             groupSystemMessagesModel,
             dateonmessagemodeModel,
@@ -218,6 +271,7 @@ private extension SettingsMainController {
         #else
         let toggles: [StaticTableBaseCellModel] = [
             darkThemeModel,
+            languageModel,
             notificationsModel,
             groupSystemMessagesModel,
         ]

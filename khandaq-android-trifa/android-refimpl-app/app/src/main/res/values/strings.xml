@@ -1136,4 +1136,6 @@
     <string name="group_peer_kick_failed">Could not remove this member. Try again later.</string>
 
     <string name="message_edited_marker">edited</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_title">App language</string>
 </resources>

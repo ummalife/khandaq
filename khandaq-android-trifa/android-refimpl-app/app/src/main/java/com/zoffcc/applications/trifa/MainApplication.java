@@ -100,7 +100,10 @@ public class MainApplication extends Application
             // working"; the app now declares supportsRtl=true and the chat surface is start/end-based,
             // so Arabic/Farsi users get a native right-to-left UI. Only ar/fa users are affected —
             // every other locale keeps the exact LTR behaviour it had before.
-            Lingver.init(this, Locale.getDefault());
+            // KHANDAQ (#248): on a fresh install start in the phone's language if we ship it
+            // (English, Russian, Arabic, Chinese) and in English otherwise. Lingver only uses this
+            // default until the user picks a language, after which its stored choice wins.
+            Lingver.init(this, AppLocaleHelper.startupLocaleFor(Locale.getDefault()));
             AppLocaleHelper.syncAppCompatLocalesFromLingver();
         }
         catch (Throwable ignored)

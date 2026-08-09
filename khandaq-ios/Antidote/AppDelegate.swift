@@ -80,6 +80,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
+        // KHANDAQ (#248): resolve the app language before a single view exists, so the first frame
+        // is already in the right language and layout direction.
+        AppLanguage.applyAtLaunch()
+
         window = UIWindow(frame: UIScreen.main.bounds)
         window?.backgroundColor = ThemeAppearance.placeholderBackgroundColor
 

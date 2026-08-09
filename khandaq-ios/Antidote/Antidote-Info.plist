@@ -4,6 +4,16 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<!-- KHANDAQ (#248): the four languages we maintain. The bundle still carries older upstream
+	     .lproj folders; this list is what iOS matches the phone's language against, so an
+	     unsupported system language falls back to English instead of a partial translation. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ru</string>
+		<string>ar</string>
+		<string>zh</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Khandaq</string>
 	<key>CFBundleDocumentTypes</key>
@@ -49,7 +59,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>142970</string>
+	<string>142971</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>KhandaqPushRelayAuthSecret</key>

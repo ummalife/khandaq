@@ -3210,19 +3210,67 @@ public class MainActivity extends AppCompatActivity
         android.content.SharedPreferences prefs = null;
         try { prefs = PreferenceManager.getDefaultSharedPreferences(this); } catch (Exception ignored) {}
 
-        boolean sd_existed = sd.exists();
-        if (!sd_existed && broken.exists()
-                && (prefs == null || !prefs.getBoolean("kq_broken_restore_tried", false)))
+        // KHANDAQ (#244): the identity anchor — the own public key of the profile that last loaded
+        // successfully. Its ONLY job is to make "we already had an identity" a hard, checkable fact,
+        // so no code path can quietly mint a fresh keypair over a profile whose savedata merely
+        // failed to load (all friends would be unreachable — the real "my ID changed" reports).
+        final String anchor = own_pubkey_anchor(prefs);
+
+        boolean sd_usable = is_usable_savedata(sd);
+        if (!sd_usable)
         {
-            try
+            // Recover from the parked copy whenever it holds real bytes. The old one-shot
+            // "kq_broken_restore_tried" guard is gone: it turned the SECOND failed start into a
+            // permanent give-up, and the third start then minted a new keypair (#244, reproduced).
+            final java.io.File parked = newest_usable_parked_savedata(broken);
+            if (parked != null)
             {
-                if (prefs != null) { prefs.edit().putBoolean("kq_broken_restore_tried", true).apply(); }
-                if (broken.renameTo(sd)) { sd_existed = true; }
-                HelperGeneric.logI(TAG, "init_tox_with_heal: restored parked savedata.tox.broken");
+                try
+                {
+                    if (copy_file(parked, sd))
+                    {
+                        sd_usable = is_usable_savedata(sd);
+                        HelperGeneric.logI(TAG, "init_tox_with_heal: restored parked savedata from "
+                                                + parked.getName() + " usable=" + sd_usable);
+                    }
+                }
+                catch (Exception e) { e.printStackTrace(); }
             }
-            catch (Exception e) { e.printStackTrace(); }
         }
 
+        // Nothing loadable left, but this device DID have an identity: refuse to start Tox at all.
+        // Calling init() here would create a brand-new keypair, report success, and the first
+        // persist would overwrite the profile for good. Failing loudly keeps the door open for a
+        // manual restore / import instead.
+        if (!sd_usable && !TextUtils.isEmpty(anchor))
+        {
+            // A transient cause (a kill mid-write, the DB key not ready yet, a racing writer) is by far
+            // the likeliest reason, and every one of those heals itself on a later start — so refuse now
+            // and let the user try again. Only after the profile has been provably absent across many
+            // consecutive launches is there nothing left to protect; then fall through and let a new
+            // profile be created rather than leaving the app permanently unusable.
+            final int fails = bump_identity_block_count(prefs);
+            if (fails < IDENTITY_BLOCK_GIVEUP_LAUNCHES)
+            {
+                identity_load_blocked = true;
+                HelperGeneric.logI(TAG, "init_tox_with_heal: REFUSING to mint a new identity — no usable"
+                                        + " savedata but anchor exists (attempt " + fails + "/"
+                                        + IDENTITY_BLOCK_GIVEUP_LAUNCHES + ")");
+                return false;
+            }
+            HelperGeneric.logI(TAG, "init_tox_with_heal: profile absent for " + fails
+                                    + " launches — giving up on recovery, creating a new identity");
+            try
+            {
+                if (prefs != null)
+                {
+                    prefs.edit().remove("kq_own_tox_pubkey").putInt("kq_identity_block_count", 0).apply();
+                }
+            }
+            catch (Exception ignored) {}
+        }
+
+        final boolean sd_existed = sd_usable;
         final String primary_pass = savedata_passphrase_for(PREF__DB_secrect_key);
         init(app_files_directory, udp, localdisc, orbot, orbot_host, orbot_port, primary_pass, ipv6,
              force_udp, ngc_video_bitrate, ngc_video_max_quantizer, ngc_audio_bitrate,
@@ -3230,7 +3278,7 @@ public class MainActivity extends AppCompatActivity
 
         if (get_my_toxid() != null)
         {
-            if (prefs != null) { try { prefs.edit().putBoolean("kq_broken_restore_tried", false).apply(); } catch (Exception ignored) {} }
+            if (!accept_loaded_identity(prefs, anchor)) { return false; }
             register_khandaq_lossless_pktids();
             return true;
         }
@@ -3251,8 +3299,8 @@ public class MainActivity extends AppCompatActivity
                          ngc_audio_samplerate, ngc_audio_channels);
                     if (get_my_toxid() != null)
                     {
+                        if (!accept_loaded_identity(prefs, anchor)) { return false; }
                         try { update_savedata_file(primary_pass); } catch (Exception ignored) {}
-                        if (prefs != null) { try { prefs.edit().putBoolean("kq_broken_restore_tried", false).apply(); } catch (Exception ignored) {} }
                         register_khandaq_lossless_pktids();
                         HelperGeneric.logI(TAG, "init_tox_with_heal: recovered identity via candidate key + re-synced savedata");
                         return true;
@@ -3263,6 +3311,143 @@ public class MainActivity extends AppCompatActivity
         }
 
         HelperGeneric.logI(TAG, "init_tox_with_heal: could not load identity with any key candidate");
+        return false;
+    }
+
+    // KHANDAQ (#244): a savedata file only counts as loadable if it actually holds a profile. A
+    // zero-byte (or few-byte) file is the debris of an interrupted write, NOT a corrupt profile —
+    // treating it as one is what started the identity-loss chain.
+    private static final int MIN_USABLE_SAVEDATA_BYTES = 32;
+
+    /** How many launches in a row may find no profile at all before we accept it is really gone. */
+    private static final int IDENTITY_BLOCK_GIVEUP_LAUNCHES = 10;
+
+    private static int bump_identity_block_count(final android.content.SharedPreferences prefs)
+    {
+        try
+        {
+            if (prefs == null) { return 1; }
+            final int next = prefs.getInt("kq_identity_block_count", 0) + 1;
+            prefs.edit().putInt("kq_identity_block_count", next).apply();
+            return next;
+        }
+        catch (Exception e) { return 1; }
+    }
+
+    /** Set once the app refused to load/keep an identity; blocks every savedata write (see
+     *  HelperGeneric.update_savedata_file_wrapper) so a half-started session cannot overwrite a
+     *  recoverable profile. */
+    static volatile boolean identity_load_blocked = false;
+
+    private static boolean is_usable_savedata(final java.io.File f)
+    {
+        try { return (f != null) && f.exists() && f.isFile() && (f.length() >= MIN_USABLE_SAVEDATA_BYTES); }
+        catch (Exception e) { return false; }
+    }
+
+    /** The newest parked profile copy that still holds real bytes: "savedata.tox.broken" plus any
+     *  timestamped "savedata.tox.broken.<ts>" written by later failures. */
+    private java.io.File newest_usable_parked_savedata(final java.io.File legacy_broken)
+    {
+        java.io.File best = is_usable_savedata(legacy_broken) ? legacy_broken : null;
+        try
+        {
+            final java.io.File dir = new java.io.File(app_files_directory);
+            final java.io.File[] all = dir.listFiles();
+            if (all != null)
+            {
+                for (final java.io.File f : all)
+                {
+                    if (!f.getName().startsWith("savedata.tox.broken")) { continue; }
+                    if (!is_usable_savedata(f)) { continue; }
+                    if ((best == null) || (f.lastModified() > best.lastModified())) { best = f; }
+                }
+            }
+        }
+        catch (Exception e) { e.printStackTrace(); }
+        return best;
+    }
+
+    /** Copy (never move) so the parked original survives a failed recovery attempt. */
+    private static boolean copy_file(final java.io.File src, final java.io.File dst)
+    {
+        java.io.FileInputStream in = null;
+        java.io.FileOutputStream out = null;
+        try
+        {
+            in = new java.io.FileInputStream(src);
+            out = new java.io.FileOutputStream(dst);
+            final byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) { out.write(buf, 0, n); }
+            out.flush();
+            try { out.getFD().sync(); } catch (Exception ignored) {}
+            return true;
+        }
+        catch (Exception e) { e.printStackTrace(); return false; }
+        finally
+        {
+            try { if (in != null) { in.close(); } } catch (Exception ignored) {}
+            try { if (out != null) { out.close(); } } catch (Exception ignored) {}
+        }
+    }
+
+    private String own_pubkey_anchor(final android.content.SharedPreferences prefs)
+    {
+        try { return (prefs == null) ? "" : prefs.getString("kq_own_tox_pubkey", ""); }
+        catch (Exception e) { return ""; }
+    }
+
+    /** True once a profile has ever loaded on this device, i.e. savedata.tox is the only copy of a
+     *  real identity and must never be moved aside or replaced behind the user's back (#244). */
+    static boolean has_identity_anchor(final android.content.Context ctx)
+    {
+        try
+        {
+            if (ctx == null) { return false; }
+            return !TextUtils.isEmpty(PreferenceManager.getDefaultSharedPreferences(ctx)
+                                              .getString("kq_own_tox_pubkey", ""));
+        }
+        catch (Exception e) { return false; }
+    }
+
+    /** Gate between "Tox came up" and "this session may run". Stores the anchor on first success;
+     *  on a mismatch the loaded profile is a freshly minted one standing in for the real identity,
+     *  so the session is blocked instead of being persisted over the old profile. */
+    private boolean accept_loaded_identity(final android.content.SharedPreferences prefs, final String anchor)
+    {
+        String pub = null;
+        try
+        {
+            final String toxid = get_my_toxid();
+            if ((toxid != null) && (toxid.length() >= 64)) { pub = toxid.substring(0, 64).toUpperCase(); }
+        }
+        catch (Exception e) { e.printStackTrace(); }
+
+        if (pub == null)
+        {
+            return false;
+        }
+
+        if (TextUtils.isEmpty(anchor) || anchor.equalsIgnoreCase(pub))
+        {
+            try
+            {
+                if (prefs != null)
+                {
+                    prefs.edit().putString("kq_own_tox_pubkey", pub)
+                         .putInt("kq_identity_block_count", 0).apply();
+                }
+            }
+            catch (Exception ignored) {}
+            identity_load_blocked = false;
+            return true;
+        }
+
+        identity_load_blocked = true;
+        HelperGeneric.logI(TAG, "init_tox_with_heal: identity MISMATCH — loaded " + pub.substring(0, 8)
+                                + " but anchor is " + anchor.substring(0, Math.min(8, anchor.length()))
+                                + "; blocking session so savedata is not overwritten");
         return false;
     }
 

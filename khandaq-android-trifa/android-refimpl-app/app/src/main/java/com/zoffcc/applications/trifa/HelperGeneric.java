@@ -3909,6 +3909,16 @@ public class HelperGeneric
 
     static void update_savedata_file_wrapper()
     {
+        // KHANDAQ (#244): last line of defence. If startup refused the loaded identity (no usable
+        // savedata although this device had a profile, or the loaded key differs from the anchor),
+        // the live tox instance holds a keypair that is NOT the user's — persisting it would
+        // overwrite the real profile and orphan every contact. Never write in that state.
+        if (MainActivity.identity_load_blocked)
+        {
+            Log.i(TAG, "update_savedata_file(): BLOCKED: identity not verified");
+            return;
+        }
+
         if (is_tox_started == true)
         {
             //Log.i(TAG, "update_savedata_file:delta_ms="

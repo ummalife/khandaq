@@ -936,14 +936,27 @@ public class TrifaToxService extends Service
                 // crash-looping the app forever. Park the broken file and restart clean instead.
                 if (get_my_toxid() == null)
                 {
-                    HelperGeneric.logI(TAG, "tox_thread_start_fg:tox init FAILED (NULL tox), parking broken savedata");
+                    HelperGeneric.logI(TAG, "tox_thread_start_fg:tox init FAILED (NULL tox)");
                     try
                     {
-                        final File broken_savedata = new File(MainActivity.app_files_directory, "savedata.tox");
-                        if (broken_savedata.exists())
+                        // KHANDAQ (#244): park the profile ONLY when this device never had a working
+                        // identity — the #153 case, where a password-encrypted .tox was imported and
+                        // blocks every startup, so moving it aside is the only way in. Once an identity
+                        // HAS loaded here before, savedata.tox is the sole copy of the user's keypair:
+                        // parking it made the next starts find no profile and mint a fresh keypair,
+                        // permanently orphaning every contact (#244, reproduced on device). Keep the
+                        // file, fail loudly, stay recoverable. Park under a timestamped name so an
+                        // earlier good parked copy is never clobbered either.
+                        final File current_savedata = new File(MainActivity.app_files_directory, "savedata.tox");
+                        if (current_savedata.exists() && !MainActivity.has_identity_anchor(context_s))
                         {
-                            broken_savedata.renameTo(
-                                    new File(MainActivity.app_files_directory, "savedata.tox.broken"));
+                            current_savedata.renameTo(new File(MainActivity.app_files_directory,
+                                                               "savedata.tox.broken." + System.currentTimeMillis()));
+                            HelperGeneric.logI(TAG, "tox_thread_start_fg:parked unloadable savedata (no prior identity)");
+                        }
+                        else if (current_savedata.exists())
+                        {
+                            HelperGeneric.logI(TAG, "tox_thread_start_fg:KEEPING savedata (identity anchor present)");
                         }
                     }
                     catch (Exception e)

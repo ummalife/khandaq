@@ -1675,6 +1675,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 R.id.video_box_aec,
                 R.id.audio_bar_in_v,
                 R.id.audio_bar_out_v,
+                // KHANDAQ (#246): the legacy floating speaker toggle. The bottom control row has carried
+                // a speaker button since #F2a, so this one is a second copy of the same control — and on
+                // an audio call (dark screen, no avatar covering it) it sits there as a big blue disc.
+                R.id.video_speaker_aec,
         };
         for (int id : legacy_ids)
         {
@@ -2947,7 +2951,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         CallingActivity.video_add_delay_slider_infotext_01.setVisibility(View.VISIBLE);
                         CallingActivity.video_add_delay_slider_seekbar_01.setVisibility(View.VISIBLE);
                         CallingActivity.video_box_aec.setVisibility(View.VISIBLE);
-                        CallingActivity.video_speaker_aec.setVisibility(View.VISIBLE);
+                        // KHANDAQ (#246): the legacy floating speaker toggle stays hidden — the bottom
+                        // control row owns that control now (see hide_legacy_call_debug_ui).
+                        CallingActivity.video_speaker_aec.setVisibility(View.GONE);
                     }
                     catch (Exception e)
                     {
@@ -2981,7 +2987,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             CallingActivity.video_add_delay_slider_infotext_01.setVisibility(View.INVISIBLE);
                             CallingActivity.video_add_delay_slider_seekbar_01.setVisibility(View.INVISIBLE);
                             CallingActivity.video_box_aec.setVisibility(View.VISIBLE);
-                            CallingActivity.video_speaker_aec.setVisibility(View.VISIBLE);
+                            CallingActivity.video_speaker_aec.setVisibility(View.GONE); // KHANDAQ (#246)
 
                         }
                         else

@@ -285,6 +285,11 @@
 
             </FrameLayout>
 
+            <!-- KHANDAQ (#246): hidden. This was the ORIGINAL speaker toggle, sized and placed for the
+                 video overlay; in audio calls the caller avatar used to cover it. #F2a added a speaker
+                 button to the bottom control row (always reachable, both call types), so on a plain
+                 dark audio-call screen this one simply showed up again as a second, bigger, floating
+                 copy of the same control. The bottom-row button is now the only speaker toggle. -->
             <FrameLayout
                 android:id="@+id/video_speaker_aec"
                 android:layout_width="56dp"
@@ -293,6 +298,7 @@
                 android:layout_marginTop="40dp"
                 android:layout_marginRight="16dp"
                 android:background="@null"
+                android:visibility="gone"
                 android:elevation="2dp">
 
                 <!-- KHANDAQ (modern call screen): speaker toggle as a clean round icon (was an ugly
@@ -561,12 +567,15 @@
         <!-- KHANDAQ (#F2a): loudspeaker toggle in the bottom control row. The only prior speaker
              toggle lived in the video overlay and was painted UNDER the full-screen caller avatar
              in audio calls (invisible). This one lives with mute/decline so it's always reachable. -->
+        <!-- KHANDAQ (#246): transparent like every other control in this row (mute, camera switch,
+             decline). A filled blue disc made the speaker read as a different, louder kind of control
+             than its neighbours; the icon itself already shows on/off. -->
         <ImageButton
             android:id="@+id/audio_speaker_button"
             android:layout_width="@dimen/calling_activity_bottom_buttons_small_height"
             android:layout_height="@dimen/calling_activity_bottom_buttons_small_height"
             android:layout_gravity="center_vertical"
-            android:background="@drawable/circle_blue"
+            android:background="@android:color/transparent"
             android:clickable="true"
             android:keepScreenOn="true"
             android:padding="10dp"

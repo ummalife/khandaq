@@ -169,6 +169,10 @@ typedef struct
 
 static const char *savedata_filename = "savedata.tox";
 static const char *savedata_tmp_filename = "savedata.tox.tmp";
+// KHANDAQ (#244): smallest byte count that can plausibly hold a real profile (a bare Tox save is
+// well past this; anything shorter is truncated-write debris). Kept in sync with
+// MainActivity.MIN_USABLE_SAVEDATA_BYTES on the Java side.
+#define TOX_SAVEDATA_MIN_USABLE_BYTES 32
 static int toxav_video_thread_stop = 0;
 static int toxav_audio_thread_stop = 0;
 static int toxav_iterate_thread_stop = 0;
@@ -749,6 +753,21 @@ Tox *create_tox(int udp_enabled, int orbot_enabled, const char *proxy_host, uint
         long fsize = ftell(f);
         dbg(0, "create_tox:1009:1:ftell:savedata size=%ld", fsize);
         fseek(f, 0, SEEK_SET);
+
+        // KHANDAQ (#244): a file too small to hold a profile is the debris of an interrupted write,
+        // never a profile. Loading it anyway is actively dangerous: an 8-byte unencrypted file still
+        // carries a valid state cookie, so tox_load() SUCCEEDS with zero sections and hands back a
+        // freshly generated keypair — the identity silently changes and every contact is orphaned.
+        // Refuse instead, so the Java side can restore a parked copy (or fail loudly).
+        if (fsize < (long)TOX_SAVEDATA_MIN_USABLE_BYTES)
+        {
+            dbg(0, "create_tox:ERROR:savedata too small (%ld bytes), refusing to load", fsize);
+            fclose(f);
+            free(full_path_filename);
+            pthread_mutex_destroy(&group_audio___mutex);
+            return NULL;
+        }
+
         uint8_t *savedata_enc = calloc(1, fsize);
         if (savedata_enc == NULL)
         {
@@ -949,24 +968,52 @@ void update_savedata_file(const Tox *tox, const uint8_t *passphrase, size_t pass
         }
     }
 
+    // KHANDAQ (#244): this write publishes the user's identity — a partial or unflushed one that
+    // reaches savedata.tox makes the profile unloadable on the next start, and an unloadable
+    // profile used to end in a brand-new keypair (all contacts orphaned). Every step is therefore
+    // checked, the bytes are forced to disk before the rename makes them visible, and the temp file
+    // is per-thread so two concurrent writers cannot truncate each other's file and then rename the
+    // debris over a healthy profile (the tmp path used to be a single fixed name for all threads).
+    snprintf(full_path_filename_tmp, (size_t)MAX_FULL_PATH_LENGTH,
+#ifdef __MINGW32__
+             "%s\\%s.%d.%ld",
+#else
+             "%s/%s.%d.%ld",
+#endif
+             app_data_dir, savedata_tmp_filename, (int)getpid(), (long)pthread_self());
+
+    const void *write_buf = save_unencrypted ? (const void *)savedata : (const void *)savedata_enc;
+    const size_t write_len = save_unencrypted ? size : size_enc;
+
     FILE *f = fopen(full_path_filename_tmp, "wb");
-    if (save_unencrypted)
+    if (f == NULL)
     {
-        fwrite((const void *)savedata, size, 1, f);
+        dbg(0, "update_savedata_file:ERROR:cannot open tmp file for writing");
+        free(savedata);
+        free(savedata_enc);
+        free(full_path_filename);
+        free(full_path_filename_tmp);
+        return;
     }
-    else
-    {
-        fwrite((const void *)savedata_enc, size_enc, 1, f);
-    }
+
+    const size_t written = fwrite(write_buf, write_len, 1, f);
+    const int flush_res = fflush(f);
+    int sync_res = 0;
+#ifndef __MINGW32__
+    sync_res = fsync(fileno(f));
+#endif
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
-    // dbg(0, "update_savedata_file:ftell:savedata size=%ld", fsize);
     fseek(f, 0, SEEK_SET);
-    fclose(f);
+    const int close_res = fclose(f);
 
-    if (fsize < 1)
+    if ((written != 1) || (flush_res != 0) || (sync_res != 0) || (close_res != 0)
+        || (fsize < (long)write_len))
     {
-        dbg(9, "update_savedata_file:ERROR:fsize < 1");
+        dbg(0, "update_savedata_file:ERROR:incomplete write (written=%d flush=%d sync=%d close=%d size=%ld/%d)"
+               " - keeping the previous savedata",
+            (int)written, flush_res, sync_res, close_res, fsize, (int)write_len);
+        unlink(full_path_filename_tmp);
         free(savedata);
         free(savedata_enc);
         free(full_path_filename);

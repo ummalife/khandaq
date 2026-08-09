@@ -50,6 +50,7 @@ typedef OCTMessageAbstract *(^OCTNgcGroupHistSyncInsertSyncedFileBlock)(OCTChat 
                                                                          NSString *fileUTI,
                                                                          uint32_t peerId,
                                                                          NSString *peerName,
+                                                                         NSString *senderPubkeyHex,
                                                                          NSString *msgIdHashHex,
                                                                          NSTimeInterval dateInterval);
 typedef NSString *(^OCTNgcGroupHistSyncIncomingFilesDirectoryBlock)(uint32_t groupNumber);

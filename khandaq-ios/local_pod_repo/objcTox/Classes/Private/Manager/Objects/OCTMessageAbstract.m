@@ -30,6 +30,15 @@
         return NO;
     }
 
+    // KHANDAQ (audit F-6): a history-synced row is by definition someone else's message (the sync
+    // handler drops packets carrying our own pubkey). Its groupSenderPeerId is 0 whenever the author
+    // is not in our roster at insert time — offline, already left, or an outright forged pubkey — and
+    // the peer-id test below then rendered that message as OUR OWN outgoing bubble, which also made it
+    // look editable / deletable-for-everyone by us.
+    if (self.groupHistorySync) {
+        return NO;
+    }
+
     if (self.groupSenderPeerId > 0) {
         return NO;
     }

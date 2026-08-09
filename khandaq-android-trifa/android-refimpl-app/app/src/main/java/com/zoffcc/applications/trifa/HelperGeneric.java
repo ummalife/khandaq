@@ -4904,6 +4904,14 @@ public class HelperGeneric
         // tox thread stopped (the old order stopped tox first, then bailed out).
         if (f_src == null || !f_src.exists() || f_src.length() < 64L)
         {
+            // KHANDAQ (audit #15): this method owns f_src (a plaintext savedata staging copy) and
+            // deletes it after the copy below; the reject path used to return without deleting it.
+            if (f_src != null)
+            {
+                //noinspection ResultOfMethodCallIgnored
+                f_src.delete();
+            }
+
             AlertDialog.Builder builder = new AlertDialog.Builder(context);
             builder.setTitle(context.getString(R.string.settings_import_tox_profile));
             builder.setMessage(context.getString(R.string.settings_import_tox_profile_invalid_file));
@@ -4978,19 +4986,24 @@ public class HelperGeneric
                 io_file_copy(f_src, f_dst);
 
                 ls_file(f_dst);
-
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+            finally
+            {
                 try
                 {
-                    // delete unencrypted import file
+                    // KHANDAQ (audit #15): delete the unencrypted import file on every path — a failed
+                    // io_file_copy() used to skip this and leave the private key in the app cache, and
+                    // the dialog below ends the process, so nothing later would have cleaned it up.
+                    //noinspection ResultOfMethodCallIgnored
                     f_src.delete();
                 }
                 catch (Exception ignored)
                 {
                 }
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
             }
 
             // back on the UI thread: dismiss progress and show the final restart dialog

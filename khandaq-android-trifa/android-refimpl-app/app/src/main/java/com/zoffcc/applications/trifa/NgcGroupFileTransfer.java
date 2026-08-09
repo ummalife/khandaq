@@ -38,6 +38,7 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_by_publi
 import static com.zoffcc.applications.trifa.MainActivity.tox_group_peer_get_connection_status;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.KHANDAQ_MAX_FILE_TRANSFER_BYTES;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_FILE_DIR;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_last_activity_incoming_ft_ts;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.VFS_PREFIX;
@@ -63,6 +64,38 @@ public final class NgcGroupFileTransfer
     static final int CHUNK_PAYLOAD_MAX = TOX_MAX_NGC_FILE_AND_HEADER_SIZE - FILE_CHUNK_HEADER;
 
     private static final int MAX_ORPHAN_CHUNKS = 512;
+    /**
+     * KHANDAQ (audit A): chunks a real file can ever need — the largest file we accept, carried at the
+     * largest payload a packet can hold. totalChunks/chunkPayload in a BEGIN are attacker-chosen bytes:
+     * matching totalChunks against ceil(totalSize/chunkPayload) alone still lets chunkPayload=1 declare
+     * 209_715_200 chunks for a "200 MB" file and OOM-kill us on the received[] allocation. Same bound as
+     * iOS (kOCTNgcMaxFileTransferBytes / kOCTNgcChunkPayloadMax) and desktop (maxChunks): 200 MB / 36952
+     * = 5676 chunks, so an honest 200 MB file still transfers.
+     */
+    private static final long MAX_LEGIT_CHUNKS =
+            (KHANDAQ_MAX_FILE_TRANSFER_BYTES + CHUNK_PAYLOAD_MAX - 1) / CHUNK_PAYLOAD_MAX;
+    /**
+     * KHANDAQ (audit B): distinct msg_ids we buffer pre-BEGIN chunks for. The legitimate chunk-before-BEGIN
+     * race is one transfer racing its own BEGIN by milliseconds; without a cap any peer grows the map by a
+     * key (and ~37 KB per packet) per forged msg_id for the whole process lifetime. Mirrors iOS' 8.
+     */
+    private static final int MAX_ORPHAN_ASSEMBLIES = 8;
+    /** Orphans older than this can no longer be racing a live BEGIN — drop them (iOS: 60 s). */
+    private static final long ORPHAN_CHUNK_TTL_MS = 60_000L;
+    /**
+     * Hard ceiling over ALL orphan keys. The per-key cap alone allows 8 * 512 * ~37 KB. Honest orphans are
+     * milliseconds old when their BEGIN lands, so shedding the globally OLDEST first drops a flooder's
+     * backlog and leaves the racing transfer's freshly queued chunks intact.
+     */
+    private static final long ORPHAN_TOTAL_BYTES_MAX = 16L * 1024L * 1024L;
+    /** Bytes currently held in {@link #orphanChunks}. Guarded by {@code synchronized (orphanChunks)}. */
+    private static long orphanBytes = 0L;
+    /**
+     * KHANDAQ (audit B): in-memory incoming assemblies. Each costs a boolean[] plus a VFS file, and a peer
+     * can open one per forged msg_id that never completes. Eviction is STATE-only — the partial file, its
+     * .rxmap and the DB row all stay, so the transfer rebuilds and resumes via restoreAssemblyFromMessage.
+     */
+    private static final int MAX_INCOMING_ASSEMBLIES = 24;
 
     private static final long GROUP_SEND_CONN_WAIT_MS = 45_000L;
     // KHANDAQ: minimum gap between selective NACKs for the same file. Lowered from 12s so a stalled
@@ -78,6 +111,9 @@ public final class NgcGroupFileTransfer
     private static final java.util.Set<String> inflightChunkedSends = ConcurrentHashMap.newKeySet();
     /** Diagnostic: counts every incoming chunk packet that reaches the callback (delivery vs processing). */
     private static final java.util.concurrent.atomic.AtomicLong recvChunkPktCount =
+            new java.util.concurrent.atomic.AtomicLong();
+    /** Diagnostic: chunks dropped because they came from a peer that does not own the transfer. */
+    private static final java.util.concurrent.atomic.AtomicLong rejectedForeignChunkCount =
             new java.util.concurrent.atomic.AtomicLong();
     /** Abort a send if a single chunk can't be queued within this window — frees the executor for other files. */
     private static final long CHUNK_SEND_STALL_MS = 20_000L;
@@ -631,13 +667,22 @@ public final class NgcGroupFileTransfer
             final int chunkPayload = readU32Be(data, 307);
             final int totalChunks = readU32Be(data, 311);
 
-            final int expectedChunks = (int) ((totalSize + chunkPayload - 1L) / chunkPayload);
+            // Validate the scalars BEFORE deriving anything from them — chunkPayload is the divisor below.
             if (totalSize < 1 || totalSize > KHANDAQ_MAX_FILE_TRANSFER_BYTES || totalChunks < 1
-                    || chunkPayload < 1 || chunkPayload > CHUNK_PAYLOAD_MAX
-                    || totalChunks != expectedChunks)
+                    || chunkPayload < 1 || chunkPayload > CHUNK_PAYLOAD_MAX)
             {
                 HelperGeneric.logI(TAG, "handleBegin:reject totalSize=" + totalSize + " chunks="
-                        + totalChunks + " expected=" + expectedChunks + " payload=" + chunkPayload);
+                        + totalChunks + " payload=" + chunkPayload);
+                return;
+            }
+            // KHANDAQ (audit A): the declared count must be exactly the one the (already size-capped) file
+            // implies AND no larger than a real file can need — otherwise a single BEGIN with chunkPayload=1
+            // sizes received[] from an attacker-chosen 32-bit count and OOM-kills the app. See MAX_LEGIT_CHUNKS.
+            final long expectedChunks = (totalSize + chunkPayload - 1L) / chunkPayload;
+            if (totalChunks != expectedChunks || expectedChunks > MAX_LEGIT_CHUNKS)
+            {
+                HelperGeneric.logI(TAG, "handleBegin:reject chunks=" + totalChunks + " expected="
+                        + expectedChunks + " max=" + MAX_LEGIT_CHUNKS + " payload=" + chunkPayload);
                 return;
             }
 
@@ -654,21 +699,48 @@ public final class NgcGroupFileTransfer
                 return;
             }
 
+            final String beginFromPubkey = peerPubkeyOf(groupNumber, peerId);
+
             final IncomingAssembly existingAsm = assemblies.get(assemblyKey);
+            boolean replaceExisting = false;
             if (existingAsm != null)
             {
-                if (existingAsm.totalSize == totalSize && existingAsm.totalChunks == totalChunks)
+                // KHANDAQ (audit #5): msg_id_hash is public inside the group, so any member can forge a
+                // BEGIN for someone else's transfer. While chunks are actually flowing, only the declared
+                // sender may touch the assembly — a foreign BEGIN with a different size wiped the victim's
+                // progress. Once the flow has stalled we do NOT refuse: a peer that grabs the msg_id and
+                // then goes quiet must never be able to lock the genuine sender out of it for good.
+                if (!isBoundSender(existingAsm, beginFromPubkey, peerId))
+                {
+                    if (isReceivingActively(existingAsm))
+                    {
+                        HelperGeneric.logI(TAG, "handleBegin:drop foreign peer=" + peerId + " msg="
+                                + msgIdHex.substring(0, 8));
+                        return;
+                    }
+                    HelperGeneric.logI(TAG, "handleBegin:rebind stalled assembly to peer=" + peerId + " msg="
+                            + msgIdHex.substring(0, 8) + " progress=" + existingAsm.receivedCount + "/"
+                            + existingAsm.totalChunks);
+                    // Deferred: the checks below can still reject this BEGIN (see replaceExisting), and
+                    // isBoundSender does not bind — nothing here touches existingAsm until they all pass.
+                    replaceExisting = true;
+                }
+                else if (existingAsm.totalSize == totalSize && existingAsm.totalChunks == totalChunks)
                 {
                     // Same file already being assembled — NEVER wipe progress on a duplicate BEGIN
                     // (resend requests make the sender re-emit BEGIN; resetting here lost all prior chunks).
                     HelperGeneric.logI(TAG, "handleBegin:dup-skip msg=" + msgIdHex.substring(0, 8)
                             + " progress=" + existingAsm.receivedCount + "/" + existingAsm.totalChunks);
-                    flushOrphanChunks(groupNumber, peerId, assemblyKey);
+                    flushOrphanChunks(groupNumber, assemblyKey);
                     return;
                 }
-                // Different size/chunks for the same msgId — genuinely stale, replace it.
-                assemblies.remove(assemblyKey);
-                orphanChunks.remove(assemblyKey);
+                else
+                {
+                    // Different size/chunks for the same msgId, from the sender this assembly belongs to —
+                    // genuinely stale, replace it right away (as before).
+                    assemblies.remove(assemblyKey);
+                    dropOrphanList(assemblyKey);
+                }
             }
 
             final GroupMessage dbMessage = HelperGroup.find_group_message_by_msg_id_hash(groupId, msgIdHex);
@@ -680,6 +752,17 @@ public final class NgcGroupFileTransfer
                 }
                 if (isGroupMessageMediaReady(dbMessage, null))
                 {
+                    return;
+                }
+                // KHANDAQ (audit #5): the row already names who sent this file, and only that peer ever
+                // serves it (handleIncomingFileRequest answers just for its own messages). A BEGIN from
+                // anyone else would fill the file with content of their choosing while the row keeps the
+                // original sender's name. "-1" on either side is "unknown", not an identity to match.
+                if (isRealPubkey(dbMessage.tox_group_peer_pubkey) && isRealPubkey(beginFromPubkey)
+                        && !dbMessage.tox_group_peer_pubkey.equalsIgnoreCase(beginFromPubkey))
+                {
+                    HelperGeneric.logI(TAG, "handleBegin:drop foreign-origin peer=" + peerId + " msg="
+                            + msgIdHex.substring(0, 8));
                     return;
                 }
             }
@@ -704,19 +787,21 @@ public final class NgcGroupFileTransfer
                     meta.groupId = groupId;
                     meta.groupNumber = groupNumber;
                     meta.peerId = peerId;
-                    try
-                    {
-                        meta.senderPubkey = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
-                    }
-                    catch (Exception ignored)
-                    {
-                    }
+                    meta.senderPubkey = beginFromPubkey;
                     HelperGroup.handle_incoming_group_file_begin(groupNumber, peerId, groupId, msgId, meta);
                     // handle_incoming_group_file_begin seeds progress=0 ("0% downloading"); undo it so the
                     // row renders as not-downloaded (snapshot pct<0 → FAILED → download affordance).
                     HelperGroup.clear_ngc_file_transfer_progress(groupId, msgIdHex);
                 }
                 return;
+            }
+
+            if (replaceExisting)
+            {
+                // Drop the old assembly only HERE: every check above can still reject this BEGIN, and a
+                // rejected BEGIN must not cost the running transfer its state.
+                assemblies.remove(assemblyKey);
+                dropOrphanList(assemblyKey);
             }
 
             final IncomingAssembly asm = createAssembly(groupNumber, peerId, groupId, msgId, msgIdHex,
@@ -726,7 +811,7 @@ public final class NgcGroupFileTransfer
                 return;
             }
 
-            assemblies.put(assemblyKey, asm);
+            putAssembly(assemblyKey, asm);
 
             HelperGeneric.logI(TAG, "handleBegin:recv gn=" + groupNumber + " peer=" + peerId + " msg="
                     + msgIdHex.substring(0, 8) + " size=" + totalSize + " chunks=" + totalChunks);
@@ -744,7 +829,7 @@ public final class NgcGroupFileTransfer
             }
 
             HelperGroup.arm_ngc_incoming_file_timeout(groupId, msgIdHex);
-            flushOrphanChunks(groupNumber, peerId, assemblyKey);
+            flushOrphanChunks(groupNumber, assemblyKey);
         }
         catch (Exception e)
         {
@@ -808,12 +893,16 @@ public final class NgcGroupFileTransfer
 
                 if (asm == null)
                 {
-                    queueOrphanChunk(assemblyKey, data, length);
+                    queueOrphanChunk(assemblyKey, peerId, peerPubkeyOf(groupNumber, peerId), data, length);
                     return;
                 }
             }
 
-            applyChunk(groupNumber, peerId, assemblyKey, asm, msgId, data, length);
+            // Resolve the delivering peer only once we know we keep the chunk — peer_ids get reassigned,
+            // the pubkey is the stable identity. Doing it above would cost a JNI call plus a string per
+            // broadcast chunk of a file this peer never downloads (manual / Wi-Fi-only policy).
+            applyChunk(groupNumber, peerId, peerPubkeyOf(groupNumber, peerId), assemblyKey, asm, msgId,
+                       data, length);
         }
         catch (Exception e)
         {
@@ -821,9 +910,97 @@ public final class NgcGroupFileTransfer
         }
     }
 
-    private static void applyChunk(final long groupNumber, final long peerId, final String assemblyKey,
-                                   IncomingAssembly asm, final byte[] msgId, final byte[] data, final int length)
+    /**
+     * KHANDAQ: a peer pubkey we may bind a transfer to. The JNI hands back the literal string "-1"
+     * (== TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY) when the toxcore lookup fails, and system-message rows carry
+     * that same "-1" — it means "no identity", never a peer that owns something.
+     */
+    private static boolean isRealPubkey(final String pubkey)
     {
+        return (pubkey != null) && !pubkey.isEmpty() && !TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(pubkey);
+    }
+
+    /** Peer pubkey for a group peer number, or {@code null} when it cannot be resolved. */
+    private static String peerPubkeyOf(final long groupNumber, final long peerId)
+    {
+        if (peerId < 0)
+        {
+            return null;
+        }
+        try
+        {
+            final String pubkey = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            return isRealPubkey(pubkey) ? pubkey : null;
+        }
+        catch (Exception ignored)
+        {
+            return null;
+        }
+    }
+
+    /** Chunks are still landing for this assembly — same "healthy transfer" window the NACK timer uses. */
+    private static boolean isReceivingActively(final IncomingAssembly asm)
+    {
+        return (asm.receivedCount > 0)
+                && ((System.currentTimeMillis() - asm.lastChunkTs) < INCOMING_PROGRESS_STALL_MS);
+    }
+
+    /**
+     * KHANDAQ (audit #5): the peer this assembly was declared for — the BEGIN sender, or the peer the
+     * stored row names when we resumed from the DB. The msg_id travels in every group message, so without
+     * this any member could push chunks into another member's transfer and corrupt the file they receive.
+     * PURE predicate — it must stay free of side effects: handleIncomingBegin calls it before checks that
+     * can still reject the BEGIN, and a rejected BEGIN must never re-bind the assembly to its sender.
+     * Binding happens where a packet is accepted (createAssembly / applyChunk's adopt block).
+     * NOTE: callers must never turn a "false" here into a permanent refusal — see their comments.
+     */
+    private static boolean isBoundSender(final IncomingAssembly asm, final String fromPubkey, final long fromPeerId)
+    {
+        if (isRealPubkey(asm.senderPubkey) && isRealPubkey(fromPubkey))
+        {
+            return asm.senderPubkey.equalsIgnoreCase(fromPubkey);
+        }
+        // No identity to compare (lookup failed for one side, or nothing was ever bound) — fall back to the
+        // peer number seen at BEGIN, which is all we have.
+        return asm.peerId < 0 || asm.peerId == fromPeerId;
+    }
+
+    private static void applyChunk(final long groupNumber, final long peerId, final String fromPubkey,
+                                   final String assemblyKey, IncomingAssembly asm, final byte[] msgId,
+                                   final byte[] data, final int length)
+    {
+        // KHANDAQ (audit #5): drop packets from anyone but the peer this transfer belongs to — ONLY the
+        // foreign packet, the real transfer keeps running (no failure marking, no timeout reset), so an
+        // injector cannot kill the download either.
+        boolean adoptSender = false;
+        if (!isBoundSender(asm, fromPubkey, peerId))
+        {
+            // Idle time is NOT a reason to open a bound assembly: a pause of INCOMING_PROGRESS_STALL_MS is
+            // routine on mobile (and a DB-restored assembly starts at lastChunkTs = 0, i.e. always looks
+            // stalled), so any member could otherwise append bytes to someone else's download — permanently,
+            // since received[idx] then blocks the honest resend of that index. The genuine sender is not
+            // locked out: a full resend always leads with a BEGIN, which re-binds a stalled assembly in
+            // handleIncomingBegin (itself guarded by the DB-row origin check).
+            if (isReceivingActively(asm) || isRealPubkey(asm.senderPubkey))
+            {
+                final long n = rejectedForeignChunkCount.incrementAndGet();
+                if ((n & 63L) == 1L)
+                {
+                    HelperGeneric.logI(TAG, "handleChunk:drop foreign peer=" + peerId + " dropped=" + n);
+                }
+                return;
+            }
+            // No identity was ever established here (pubkey lookup failed at BEGIN and the stored row names
+            // nobody) — bind to the peer that actually delivers, once the packet proves itself valid below.
+            adoptSender = true;
+        }
+        else if (!isRealPubkey(asm.senderPubkey) && isRealPubkey(fromPubkey))
+        {
+            // Same assembly without an identity, but from the peer number we already had: record its pubkey
+            // now that it resolves, so later peer_id reassignment cannot re-attribute the transfer.
+            adoptSender = true;
+        }
+
         final int chunkIndex = readU32Be(data, 40);
         final int chunkSize = readU32Be(data, 44);
         if (chunkIndex < 0 || chunkIndex >= asm.totalChunks || chunkSize < 1
@@ -832,6 +1009,16 @@ public final class NgcGroupFileTransfer
             HelperGeneric.logI(TAG, "handleChunk:reject idx=" + chunkIndex + " size=" + chunkSize
                     + " len=" + length + " total=" + asm.totalChunks);
             return;
+        }
+
+        if (adoptSender)
+        {
+            if (isRealPubkey(fromPubkey))
+            {
+                asm.senderPubkey = fromPubkey;
+            }
+            asm.peerId = peerId;
+            HelperGeneric.logI(TAG, "handleChunk:bind unowned assembly to peer=" + peerId);
         }
 
         if (asm.received[chunkIndex])
@@ -866,7 +1053,7 @@ public final class NgcGroupFileTransfer
             HelperGeneric.flush_close_vfs_write_cache(asm.outPath);
             deleteReceivedBitmap(asm.outPath);
             assemblies.remove(assemblyKey);
-            orphanChunks.remove(assemblyKey);
+            dropOrphanList(assemblyKey);
             HelperGroup.disarm_ngc_incoming_file_timeout(asm.groupId, msgIdHex);
             HelperGroup.clear_ngc_file_transfer_failed(asm.groupId, msgIdHex);
             HelperGroup.handle_incoming_group_file_complete(groupNumber, peerId, asm);
@@ -946,16 +1133,23 @@ public final class NgcGroupFileTransfer
         asm.groupId = groupId;
         asm.groupNumber = groupNumber;
         asm.peerId = peerId;
+        asm.createdTs = System.currentTimeMillis();
         // KHANDAQ: lock in the sender's pubkey now (peerId is valid for the actual sender at this
         // moment); later peer_id reassignment must not re-attribute the transfer to someone else.
         if (peerId >= 0)
         {
-            try
+            asm.senderPubkey = peerPubkeyOf(groupNumber, peerId);
+        }
+        if (!isRealPubkey(asm.senderPubkey))
+        {
+            // KHANDAQ (audit #5): resumed from the DB (no live BEGIN peer) — the stored row already names
+            // the peer that sent this file, and only that peer ever (re)sends its chunks. Bind to it so the
+            // resumed transfer is protected too, instead of accepting chunks from whoever answers first.
+            // A row holding "-1" (system message / failed lookup) names nobody and must not be bound to.
+            if ((dbMessage != null) && (dbMessage.direction == 0)
+                    && isRealPubkey(dbMessage.tox_group_peer_pubkey))
             {
-                asm.senderPubkey = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
-            }
-            catch (Exception ignored)
-            {
+                asm.senderPubkey = dbMessage.tox_group_peer_pubkey;
             }
         }
         // Restore partial progress persisted in a previous session so we resume instead of re-downloading.
@@ -1193,7 +1387,9 @@ public final class NgcGroupFileTransfer
     private static IncomingAssembly restoreAssemblyFromMessage(final long groupNumber, final String groupId,
                                                                final byte[] msgId, final GroupMessage message)
     {
-        if (message == null || message.filesize < 1)
+        // KHANDAQ (audit A): the stored filesize sizes received[] exactly like the BEGIN does, so bound it
+        // the same way — the send path never produces a group file above KHANDAQ_MAX_FILE_TRANSFER_BYTES.
+        if (message == null || message.filesize < 1 || message.filesize > KHANDAQ_MAX_FILE_TRANSFER_BYTES)
         {
             return null;
         }
@@ -1210,33 +1406,256 @@ public final class NgcGroupFileTransfer
             return null;
         }
 
-        assemblies.put(assemblyKey(groupNumber, msgId), asm);
+        putAssembly(assemblyKey(groupNumber, msgId), asm);
         return asm;
     }
 
-    private static void queueOrphanChunk(final String assemblyKey, final byte[] data, final int length)
+    /**
+     * KHANDAQ (audit B): bound the number of in-memory assemblies. Anything evicted here keeps its partial
+     * file, its .rxmap (flushed first) and its DB row, so the next chunk / NACK rebuilds it and the download
+     * resumes where it stopped — no message, file or unread state is lost.
+     */
+    private static void putAssembly(final String assemblyKey, final IncomingAssembly asm)
     {
-        final OrphanChunk orphan = new OrphanChunk();
-        orphan.data = Arrays.copyOf(data, length);
-        orphan.length = length;
-
-        List<OrphanChunk> list = orphanChunks.get(assemblyKey);
-        if (list == null)
-        {
-            list = new ArrayList<>();
-            orphanChunks.put(assemblyKey, list);
-        }
-
-        if (list.size() >= MAX_ORPHAN_CHUNKS)
-        {
-            list.remove(0);
-        }
-        list.add(orphan);
+        evictStaleAssemblies(assemblyKey, isRealPubkey(asm.senderPubkey) ? asm.senderPubkey : null);
+        assemblies.put(assemblyKey, asm);
     }
 
-    private static void flushOrphanChunks(final long groupNumber, final long peerId, final String assemblyKey)
+    private static void evictStaleAssemblies(final String keepKey, final String incomingSenderPubkey)
+    {
+        int guard = MAX_INCOMING_ASSEMBLIES + 8;
+        while (assemblies.size() >= MAX_INCOMING_ASSEMBLIES && guard-- > 0)
+        {
+            // Make the peer that is filling the map pay first: evict its own least recently fed transfer
+            // before touching anyone else's (same idea as the orphan-key eviction).
+            String victim = pickEvictableAssemblyKey(keepKey, incomingSenderPubkey);
+            if (victim == null)
+            {
+                victim = pickEvictableAssemblyKey(keepKey, null);
+            }
+            if (victim == null)
+            {
+                return;
+            }
+            final IncomingAssembly stale = assemblies.remove(victim);
+            if (stale == null)
+            {
+                continue;
+            }
+            if (stale.receivedCount > 0)
+            {
+                persistReceivedBitmap(stale); // keep the bytes already downloaded
+            }
+            dropOrphanList(victim);
+            HelperGeneric.logI(TAG, "assemblies:evict " + victim + " progress=" + stale.receivedCount
+                    + "/" + stale.totalChunks);
+        }
+    }
+
+    /** Least recently fed assembly; {@code senderPubkey != null} restricts the search to that sender. */
+    private static String pickEvictableAssemblyKey(final String keepKey, final String senderPubkey)
+    {
+        String victimKey = null;
+        long victimTs = Long.MAX_VALUE;
+        for (final Map.Entry<String, IncomingAssembly> entry : assemblies.entrySet())
+        {
+            final IncomingAssembly a = entry.getValue();
+            if (a == null || entry.getKey().equals(keepKey))
+            {
+                continue;
+            }
+            if (senderPubkey != null
+                    && !(isRealPubkey(a.senderPubkey) && senderPubkey.equalsIgnoreCase(a.senderPubkey)))
+            {
+                continue;
+            }
+            // createdTs keeps a freshly opened (still chunk-less) assembly from looking infinitely stale.
+            final long ts = Math.max(a.lastChunkTs, a.createdTs);
+            if (ts < victimTs)
+            {
+                victimTs = ts;
+                victimKey = entry.getKey();
+            }
+        }
+        return victimKey;
+    }
+
+    private static void queueOrphanChunk(final String assemblyKey, final long peerId, final String fromPubkey,
+                                         final byte[] data, final int length)
+    {
+        final long now = System.currentTimeMillis();
+
+        synchronized (orphanChunks)
+        {
+            pruneExpiredOrphanChunks(now);
+
+            List<OrphanChunk> list = orphanChunks.get(assemblyKey);
+            if (list == null)
+            {
+                // KHANDAQ (audit B): a NEW key is the only growth an attacker fully controls (one per
+                // forged msg_id). Cap the keys and evict a key fed by THIS peer first, so a flooder sheds
+                // its own backlog before an honest transfer that is racing its BEGIN loses anything.
+                while (orphanChunks.size() >= MAX_ORPHAN_ASSEMBLIES)
+                {
+                    String staleKey = leastRecentlyFedOrphanKey(fromPubkey, peerId, true);
+                    if (staleKey == null)
+                    {
+                        staleKey = leastRecentlyFedOrphanKey(null, -1L, false);
+                    }
+                    if (staleKey == null)
+                    {
+                        return;
+                    }
+                    removeOrphanListLocked(staleKey);
+                }
+                list = new ArrayList<>();
+                orphanChunks.put(assemblyKey, list);
+            }
+
+            final OrphanChunk orphan = new OrphanChunk();
+            orphan.data = Arrays.copyOf(data, length);
+            orphan.length = length;
+            // KHANDAQ (audit #5): remember who sent it — these are replayed once the BEGIN lands, and until
+            // then anyone in the group can queue chunks under a foreign msg_id.
+            orphan.peerId = peerId;
+            orphan.senderPubkey = fromPubkey;
+            orphan.queuedTs = now;
+
+            if (list.size() >= MAX_ORPHAN_CHUNKS)
+            {
+                orphanBytes -= list.remove(0).length;
+            }
+            list.add(orphan);
+            orphanBytes += length;
+
+            // Ceiling across all keys — see ORPHAN_TOTAL_BYTES_MAX.
+            while (orphanBytes > ORPHAN_TOTAL_BYTES_MAX && dropOldestOrphanLocked())
+            {
+            }
+        }
+    }
+
+    // ---- orphan-map maintenance. Everything below runs under synchronized (orphanChunks); only
+    // dropOrphanList / flushOrphanChunks take that lock themselves. ----
+
+    /** Drop orphans that can no longer be racing a live BEGIN. Lists are append-ordered, so head = oldest. */
+    private static void pruneExpiredOrphanChunks(final long now)
+    {
+        final java.util.Iterator<Map.Entry<String, List<OrphanChunk>>> it = orphanChunks.entrySet().iterator();
+        while (it.hasNext())
+        {
+            final List<OrphanChunk> list = it.next().getValue();
+            while (!list.isEmpty() && (now - list.get(0).queuedTs) > ORPHAN_CHUNK_TTL_MS)
+            {
+                orphanBytes -= list.remove(0).length;
+            }
+            if (list.isEmpty())
+            {
+                it.remove();
+            }
+        }
+        if (orphanBytes < 0L)
+        {
+            orphanBytes = 0L;
+        }
+    }
+
+    /** @return {@code false} when nothing is left to drop. */
+    private static boolean dropOldestOrphanLocked()
+    {
+        String oldestKey = null;
+        long oldestTs = Long.MAX_VALUE;
+        for (final Map.Entry<String, List<OrphanChunk>> entry : orphanChunks.entrySet())
+        {
+            final List<OrphanChunk> list = entry.getValue();
+            if (!list.isEmpty() && list.get(0).queuedTs < oldestTs)
+            {
+                oldestTs = list.get(0).queuedTs;
+                oldestKey = entry.getKey();
+            }
+        }
+        if (oldestKey == null)
+        {
+            return false;
+        }
+        final List<OrphanChunk> list = orphanChunks.get(oldestKey);
+        orphanBytes -= list.remove(0).length;
+        if (list.isEmpty())
+        {
+            orphanChunks.remove(oldestKey);
+        }
+        return true;
+    }
+
+    /**
+     * Key whose last queued chunk is oldest. {@code restrictToSender} limits the search to keys last fed by
+     * the given peer, so the eviction hits the flooder's own entries before anybody else's.
+     */
+    private static String leastRecentlyFedOrphanKey(final String fromPubkey, final long peerId,
+                                                    final boolean restrictToSender)
+    {
+        String staleKey = null;
+        long staleTs = Long.MAX_VALUE;
+        for (final Map.Entry<String, List<OrphanChunk>> entry : orphanChunks.entrySet())
+        {
+            final List<OrphanChunk> list = entry.getValue();
+            if (list.isEmpty())
+            {
+                continue;
+            }
+            final OrphanChunk last = list.get(list.size() - 1);
+            if (restrictToSender)
+            {
+                final boolean sameSender = (isRealPubkey(fromPubkey) && isRealPubkey(last.senderPubkey))
+                        ? fromPubkey.equalsIgnoreCase(last.senderPubkey)
+                        : (last.peerId == peerId);
+                if (!sameSender)
+                {
+                    continue;
+                }
+            }
+            if (last.queuedTs < staleTs)
+            {
+                staleTs = last.queuedTs;
+                staleKey = entry.getKey();
+            }
+        }
+        return staleKey;
+    }
+
+    private static List<OrphanChunk> removeOrphanListLocked(final String assemblyKey)
     {
         final List<OrphanChunk> list = orphanChunks.remove(assemblyKey);
+        if (list != null)
+        {
+            for (final OrphanChunk o : list)
+            {
+                orphanBytes -= o.length;
+            }
+            if (orphanBytes < 0L)
+            {
+                orphanBytes = 0L;
+            }
+        }
+        return list;
+    }
+
+    /** Forget any buffered pre-BEGIN chunks for this transfer (keeps {@link #orphanBytes} honest). */
+    private static void dropOrphanList(final String assemblyKey)
+    {
+        synchronized (orphanChunks)
+        {
+            removeOrphanListLocked(assemblyKey);
+        }
+    }
+
+    private static void flushOrphanChunks(final long groupNumber, final String assemblyKey)
+    {
+        final List<OrphanChunk> list;
+        synchronized (orphanChunks)
+        {
+            list = removeOrphanListLocked(assemblyKey);
+        }
         if (list == null || list.isEmpty())
         {
             return;
@@ -1248,9 +1667,18 @@ public final class NgcGroupFileTransfer
             return;
         }
 
+        final long now = System.currentTimeMillis();
         for (OrphanChunk orphan : list)
         {
-            applyChunk(groupNumber, peerId, assemblyKey, asm, asm.msgId, orphan.data, orphan.length);
+            // Expired while it waited — the sender re-sends it on the next NACK, so nothing is lost.
+            if ((now - orphan.queuedTs) > ORPHAN_CHUNK_TTL_MS)
+            {
+                continue;
+            }
+            // Replay with the origin recorded at queue time, not the peer that delivered the BEGIN —
+            // applyChunk drops the ones that came from somebody else.
+            applyChunk(groupNumber, orphan.peerId, orphan.senderPubkey, assemblyKey, asm, asm.msgId,
+                       orphan.data, orphan.length);
         }
     }
 
@@ -2258,11 +2686,18 @@ public final class NgcGroupFileTransfer
         String senderPubkey;
         /** Set on each freshly stored chunk — used to detect a stalled (vs actively progressing) transfer. */
         volatile long lastChunkTs;
+        /** When this assembly was opened — an assembly that never got a chunk still has an age to rank by. */
+        long createdTs;
     }
 
     private static final class OrphanChunk
     {
         byte[] data;
         int length;
+        /** Origin of the queued chunk — checked against the assembly when the BEGIN finally arrives. */
+        long peerId;
+        String senderPubkey;
+        /** Queue time — orphans past ORPHAN_CHUNK_TTL_MS can no longer belong to a BEGIN still in flight. */
+        long queuedTs;
     }
 }

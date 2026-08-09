@@ -132,6 +132,21 @@ static void ngc_decoder_output_callback(void *decompressionOutputRefCon, void *s
         return;
     }
 
+    // KHANDAQ (audit #8): the decode session pins its output format (see ngc_update_decoder_format),
+    // but validate it here too - the copy loops below only understand planar/bi-planar 4:2:0. For a
+    // non-planar buffer CVPixelBufferGetBaseAddressOfPlane() returns NULL and the chroma loop would
+    // dereference it. Neither call needs the base address to be locked.
+    const OSType pixel_format = CVPixelBufferGetPixelFormatType(imageBuffer);
+    const size_t plane_count = CVPixelBufferGetPlaneCount(imageBuffer);
+    const bool is_nv12 = pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
+                         pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+    const bool is_i420 = pixel_format == kCVPixelFormatType_420YpCbCr8Planar ||
+                         pixel_format == kCVPixelFormatType_420YpCbCr8PlanarFullRange;
+
+    if (!((is_nv12 && plane_count == 2) || (is_i420 && plane_count >= 3))) {
+        return;
+    }
+
     CVPixelBufferLockBaseAddress(imageBuffer, kCVPixelBufferLock_ReadOnly);
 
     const uint8_t *src_y = CVPixelBufferGetBaseAddressOfPlane(imageBuffer, 0);
@@ -150,11 +165,21 @@ static void ngc_decoder_output_callback(void *decompressionOutputRefCon, void *s
         return;
     }
 
+    // Same reasoning for the chroma planes: the loops below read out_w/2 x out_h/2 samples from
+    // every plane after the first, whatever their real size is.
+    for (size_t plane = 1; plane < plane_count; plane++) {
+        if (CVPixelBufferGetWidthOfPlane(imageBuffer, plane) < (size_t)(out_w / 2) ||
+            CVPixelBufferGetHeightOfPlane(imageBuffer, plane) < (size_t)(out_h / 2)) {
+            CVPixelBufferUnlockBaseAddress(imageBuffer, kCVPixelBufferLock_ReadOnly);
+            return;
+        }
+    }
+
     for (uint16_t row = 0; row < out_h; row++) {
         memcpy(g_ngc_decode_output.y + row * out_w, src_y + row * src_y_stride, out_w);
     }
 
-    if (CVPixelBufferGetPlaneCount(imageBuffer) >= 3) {
+    if (plane_count >= 3) {
         const uint8_t *src_u = CVPixelBufferGetBaseAddressOfPlane(imageBuffer, 1);
         const uint8_t *src_v = CVPixelBufferGetBaseAddressOfPlane(imageBuffer, 2);
         const size_t src_u_stride = CVPixelBufferGetBytesPerRowOfPlane(imageBuffer, 1);
@@ -343,7 +368,22 @@ static bool ngc_update_decoder_format(struct ToxAV_NGC_vcoders *vc, const uint8_
     VTDecompressionOutputCallbackRecord cb = {0};
     cb.decompressionOutputCallback = ngc_decoder_output_callback;
 
-    return VTDecompressionSessionCreate(kCFAllocatorDefault, format, NULL, NULL, &cb, &vc->decoder) == noErr;
+    // KHANDAQ (audit #8): with NULL destination attributes VideoToolbox derives the output pixel
+    // format from the attacker-controlled SPS, while ngc_decoder_output_callback() assumes a planar
+    // 4:2:0 layout. Pin the output to NV12 4:2:0 (video- or full-range, we copy both the same way):
+    // that is what the H.264 decoder natively emits on iOS, so honest 480x640 senders are unaffected
+    // and no format conversion is forced on the session.
+    NSDictionary *destination_attributes = @{
+        (__bridge NSString *)kCVPixelBufferPixelFormatTypeKey: @[
+            @(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+            @(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange),
+        ],
+        (__bridge NSString *)kCVPixelBufferIOSurfacePropertiesKey: @{},
+    };
+
+    return VTDecompressionSessionCreate(kCFAllocatorDefault, format, NULL,
+                                        (__bridge CFDictionaryRef)destination_attributes,
+                                        &cb, &vc->decoder) == noErr;
 }
 
 static bool ngc_annexb_to_avcc(const uint8_t *annexb, uint32_t annexb_len, uint8_t **out_buf, uint32_t *out_len)

@@ -55,6 +55,10 @@ class EnterPinController: UIViewController {
         }
     }
 
+    // KHANDAQ (audit #11): the coordinator switches the keypad off while a brute-force lockout is
+    // running and back on when it expires, so the wait cannot be skipped by tapping through.
+    var inputEnabled: Bool = true
+
     // KHANDAQ (Figma): the set-PIN sheet (from profile) has a круглая close (X) button top-left.
     var closeHandler: (() -> Void)? {
         didSet {
@@ -108,6 +112,10 @@ class EnterPinController: UIViewController {
 
 extension EnterPinController: PinInputViewDelegate {
     func pinInputView(_ view: PinInputView, numericButtonPressed i: Int) {
+        guard inputEnabled else {
+            return
+        }
+
         guard enteredString.count < Constants.PinLength else {
             return
         }

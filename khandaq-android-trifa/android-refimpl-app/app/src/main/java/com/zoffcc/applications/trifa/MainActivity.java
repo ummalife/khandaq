@@ -208,7 +208,6 @@ import static com.zoffcc.applications.trifa.HelperGroup.set_group_active;
 import static com.zoffcc.applications.trifa.HelperGroup.sync_group_message_history;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupnum__wrapper;
-import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_name__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_name;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.update_group_in_db_privacy_state;
@@ -7239,13 +7238,15 @@ public class MainActivity extends AppCompatActivity
                         {
                         }
 
-                        String peer_name = null;
-                        final String peer_name_saved = tox_group_peer_get_name__wrapper(real_conference_id, real_sender_peer_pubkey);
-                        if (peer_name_saved != null)
-                        {
-                            // HINT: use saved name instead of name from sync message
-                            peer_name = peer_name_saved;
-                        }
+                        // KHANDAQ (audit F-6): the relay payload carries no peer name at all (it is
+                        // "<64 hex sender pubkey><8 hex msgid>:<text>"), and the wrapper never returns null —
+                        // it hands back the short hex id when it knows nothing. The old "!= null" test was
+                        // therefore dead and persisted that hex id as the display name. Use the same resolver
+                        // as the NGC sync path: a real local name wins, otherwise pass null instead of
+                        // asserting a hex id as this sender's name.
+                        final String peer_name = HelperGroup.resolve_synced_peer_name(real_conference_id,
+                                                                                      real_sender_peer_pubkey,
+                                                                                      sender_peer_num, null);
 
                         group_message_add_from_sync(real_conference_id, syncer_pubkey, sender_peer_num, real_sender_peer_pubkey,
                                                     TRIFA_MSG_TYPE_TEXT.value, real_sender_text, real_text_length,

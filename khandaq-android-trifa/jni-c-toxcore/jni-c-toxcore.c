@@ -8243,6 +8243,25 @@ Java_com_zoffcc_applications_trifa_MainActivity_toxav_1ngc_1video_1decode(JNIEnv
         return (jint)-21;
     }
 
+    // KHANDAQ (audit F2): toxav_ngc_video_decode() gets raw pinned pointers with no capacity and fills
+    // them using the decoder's own strides. Make sure the java arrays really are y=width*height and
+    // u/v=(width/2)*(height/2) before handing them over, so a caller that allocates differently can not
+    // turn a peer video frame into a heap overflow.
+    if ((width < 2) || (height < 2) || (width > 8192) || (height > 8192))
+    {
+        return (jint)-21;
+    }
+
+    const jlong y_bytes_needed = (jlong)width * (jlong)height;
+    const jlong uv_bytes_needed = (jlong)(width / 2) * (jlong)(height / 2);
+
+    if (((jlong)(*env)->GetArrayLength(env, y) < y_bytes_needed)
+            || ((jlong)(*env)->GetArrayLength(env, u) < uv_bytes_needed)
+            || ((jlong)(*env)->GetArrayLength(env, v) < uv_bytes_needed))
+    {
+        return (jint)-21;
+    }
+
     jbyte *y_c = (*env)->GetByteArrayElements(env, y, 0);
     jbyte *u_c = (*env)->GetByteArrayElements(env, u, 0);
     jbyte *v_c = (*env)->GetByteArrayElements(env, v, 0);

@@ -27,6 +27,25 @@ static const size_t kOCTNgcFileBeginHeader = 6 + 1 + 1 + 32 + 4 + 255 + 8 + 4 + 
 static const size_t kOCTNgcFileChunkHeader = 6 + 1 + 1 + 32 + 4 + 4;
 static const size_t kOCTNgcChunkPayloadMax = kOCTNgcMaxPacketSize - kOCTNgcFileChunkHeader;
 static const NSUInteger kOCTNgcMaxOrphanChunks = 64;
+// KHANDAQ (audit F-4): orphan chunks (chunks that beat their BEGIN) were kept per assembly key with no
+// TTL and no cap on the number of keys, so any peer could grow the map for the whole process lifetime
+// by sending chunks under msgIds whose BEGIN never arrives. The legit race lasts milliseconds.
+static const NSUInteger kOCTNgcMaxOrphanAssemblies = 8;
+static const NSTimeInterval kOCTNgcOrphanChunkTTL = 60.0;
+// KHANDAQ (audit A38): cap the number of concurrent incoming assemblies, like the desktop client does
+// (core.cpp, same limit). Until now an assembly was only deduped on its key, so one group member could
+// open as many DISTINCT assemblies as it liked — each one costs a received[] array, a pre-truncated
+// partial file in the group's incoming directory, and a NACK timer that broadcasts a request packet to
+// the whole group every 2.5s (that amplification is worse than the memory). Only files above
+// kOCTNgcMaxFileSize are chunked, so a real slot is one member actively uploading a photo/video; a
+// lively group has a handful of those at once and 16 leaves roughly double that headroom.
+static const NSUInteger kOCTNgcMaxIncomingAssemblies = 16;
+// Same 60s window the audit #13 stall eviction uses (kOCTNgcNackMaxRounds x 2.5s): an assembly that has
+// not taken a chunk for this long is dead and is swept before the cap is measured.
+static const NSTimeInterval kOCTNgcAssemblyStaleTimeout = 60.0;
+// Floor for sacrificing a PARTIALLY received assembly to admit a new one: never touch a transfer that
+// has moved recently — losing a file the user is already receiving is worse than missing the new one.
+static const NSTimeInterval kOCTNgcAssemblyIdleTimeout = 20.0;
 
 NSString *const kOCTNgcGroupFileTransferErrorDomain = @"OCTNgcGroupFileTransferErrorDomain";
 
@@ -47,6 +66,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) NSMutableData *msgId;
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *received;
 @property (nonatomic, assign) int receivedCount;
+// KHANDAQ (audit A38): time of the BEGIN or of the last chunk actually stored, used to pick which
+// assembly to drop when the cap is hit and to sweep dead ones.
+@property (nonatomic, assign) NSTimeInterval lastActivityTime;
+// KHANDAQ (audit F-5): the peer that sent the BEGIN owns this assembly; chunks from anyone else are dropped.
+@property (nonatomic, assign) uint32_t originPeerId;
+@property (nonatomic, copy) NSString *originPublicKeyHex;
 // KHANDAQ (#15): NACK retransmit state.
 @property (nonatomic, assign) uint32_t groupNumber;
 @property (nonatomic, strong) dispatch_source_t nackTimer;
@@ -71,6 +96,12 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
 @interface OCTNgcOrphanChunk : NSObject
 @property (nonatomic, copy) NSData *data;
+// KHANDAQ (audit F-5): remember who sent it — these are replayed once the BEGIN lands, and until then
+// anyone in the group can queue chunks under a foreign msgId.
+@property (nonatomic, assign) uint32_t originPeerId;
+@property (nonatomic, copy) NSString *originPublicKeyHex;
+// KHANDAQ (audit F-4): queue time, so stale entries can be evicted instead of living forever.
+@property (nonatomic, assign) NSTimeInterval timestamp;
 @end
 
 @implementation OCTNgcOrphanChunk
@@ -121,6 +152,28 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     return self;
 }
 
+// KHANDAQ (audit A38): a running NACK timer retains its assembly and the assembly retains the timer, so
+// an assembly still in flight when this object goes away (logout / profile switch) would keep the
+// dispatch source firing every 2.5s for the whole process lifetime. Cancelling releases the handler and
+// breaks that cycle; the partial files go with it — an incomplete assembly can never be resumed.
+- (void)dealloc
+{
+    NSArray<OCTNgcIncomingAssembly *> *pending = nil;
+
+    @synchronized (_assemblies) {
+        pending = _assemblies.allValues;
+        [_assemblies removeAllObjects];
+    }
+
+    for (OCTNgcIncomingAssembly *assembly in pending) {
+        [self stopNackTimerForAssembly:assembly];
+
+        if (assembly.outPath.length > 0) {
+            [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
+        }
+    }
+}
+
 #pragma mark - Public
 
 + (BOOL)shouldUseChunkedTransferForFileSize:(uint64_t)fileSize
@@ -157,6 +210,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
 - (void)handleIncomingPacketWithGroupNumber:(uint32_t)groupNumber
                                      peerId:(uint32_t)peerId
+                           peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                        data:(NSData *)data
 {
     if (data.length < 8) {
@@ -182,13 +236,22 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     dispatch_async(self.sendQueue, ^{
         switch (pkt) {
             case kOCTNgcPktFileSingle:
-                [self handleIncomingSingleWithGroupNumber:groupNumber peerId:peerId data:data];
+                [self handleIncomingSingleWithGroupNumber:groupNumber
+                                                   peerId:peerId
+                                         peerPublicKeyHex:peerPublicKeyHex
+                                                     data:data];
                 break;
             case kOCTNgcPktFileBegin:
-                [self handleIncomingBeginWithGroupNumber:groupNumber peerId:peerId data:data];
+                [self handleIncomingBeginWithGroupNumber:groupNumber
+                                                  peerId:peerId
+                                        peerPublicKeyHex:peerPublicKeyHex
+                                                    data:data];
                 break;
             case kOCTNgcPktFileChunk:
-                [self handleIncomingChunkWithGroupNumber:groupNumber peerId:peerId data:data];
+                [self handleIncomingChunkWithGroupNumber:groupNumber
+                                                  peerId:peerId
+                                        peerPublicKeyHex:peerPublicKeyHex
+                                                    data:data];
                 break;
             case kOCTNgcPktFileRequest:
                 [self handleIncomingRequestWithGroupNumber:groupNumber peerId:peerId data:data];
@@ -435,6 +498,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
 - (void)handleIncomingSingleWithGroupNumber:(uint32_t)groupNumber
                                      peerId:(uint32_t)peerId
+                           peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                        data:(NSData *)data
 {
     if (data.length <= kOCTNgcSingleFileHeader || data.length > kOCTNgcMaxPacketSize) {
@@ -464,11 +528,20 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    self.incomingCompleteBlock(groupNumber, peerId, [localName lastPathComponent], localName, fileSize, msgIdHex);
+    // KHANDAQ (audit F-5): a single-packet file carries an attacker-choosable msgId just like a chunked
+    // one, so hand the delivering peer's key up with it — the row it lands on is matched on that key.
+    self.incomingCompleteBlock(groupNumber,
+                               peerId,
+                               peerPublicKeyHex,
+                               [localName lastPathComponent],
+                               localName,
+                               fileSize,
+                               msgIdHex);
 }
 
 - (void)handleIncomingBeginWithGroupNumber:(uint32_t)groupNumber
                                     peerId:(uint32_t)peerId
+                          peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                       data:(NSData *)data
 {
     if (data.length < kOCTNgcFileBeginHeader) {
@@ -515,6 +588,13 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
+    // KHANDAQ (audit A38): bound the number of concurrent assemblies BEFORE allocating anything for this
+    // one. Last check before the file is created, so neither a malformed BEGIN nor one we cannot store
+    // anyway can cause eviction churn.
+    if (! [self makeRoomForNewIncomingAssembly]) {
+        return;
+    }
+
     NSString *localName = [OCTFileTools createNewFilePathInDirectory:directory fileName:fileName];
     NSString *outPath = localName;
 
@@ -525,6 +605,9 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:outPath];
 
     if (! handle) {
+        // KHANDAQ (audit A38): the empty file already exists — don't leave it behind in the group's
+        // incoming directory when the assembly never starts.
+        [[NSFileManager defaultManager] removeItemAtPath:outPath error:nil];
         return;
     }
 
@@ -542,6 +625,10 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     assembly.totalChunks = (int)totalChunks;
     assembly.chunkPayload = (int)chunkPayload;
     assembly.msgId = [msgId mutableCopy];
+    // KHANDAQ (audit F-5): bind the assembly to the peer that opened it.
+    assembly.originPeerId = peerId;
+    assembly.originPublicKeyHex = peerPublicKeyHex;
+    assembly.lastActivityTime = [NSDate timeIntervalSinceReferenceDate];   // KHANDAQ (audit A38)
     assembly.received = [NSMutableArray arrayWithCapacity:totalChunks];
 
     for (uint32_t i = 0; i < totalChunks; i++) {
@@ -552,7 +639,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         self.assemblies[assemblyKey] = assembly;
     }
 
-    [self flushOrphanChunksForAssemblyKey:assemblyKey groupNumber:groupNumber peerId:peerId];
+    [self flushOrphanChunksForAssemblyKey:assemblyKey groupNumber:groupNumber];
 
     // KHANDAQ (#15): start the NACK retransmit timer if the file is still incomplete after applying
     // any orphan chunks. The receiver periodically asks the sender to re-send missing chunks.
@@ -570,6 +657,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         dispatch_async(dispatch_get_main_queue(), ^{
             self.incomingBeginBlock(groupNumber,
                                     peerId,
+                                    assembly.originPublicKeyHex,
                                     displayName,
                                     assembly.outPath,
                                     assembly.totalSize,
@@ -580,6 +668,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
 - (void)handleIncomingChunkWithGroupNumber:(uint32_t)groupNumber
                                     peerId:(uint32_t)peerId
+                          peerPublicKeyHex:(NSString *)peerPublicKeyHex
                                       data:(NSData *)data
 {
     if (data.length < kOCTNgcFileChunkHeader + 1) {
@@ -595,28 +684,62 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     }
 
     if (! assembly) {
-        [self queueOrphanChunkWithAssemblyKey:assemblyKey data:data];
+        [self queueOrphanChunkWithAssemblyKey:assemblyKey
+                                       peerId:peerId
+                             peerPublicKeyHex:peerPublicKeyHex
+                                         data:data];
         return;
     }
 
     [self applyIncomingChunkWithGroupNumber:groupNumber
                                      peerId:peerId
+                           peerPublicKeyHex:peerPublicKeyHex
                                 assemblyKey:assemblyKey
                                   assembly:assembly
                                        data:data];
 }
 
+// KHANDAQ (audit F-5): an assembly belongs to exactly ONE peer — the one that started it. The msgId
+// travels in the clear in every group message, so without this check any member could push chunks into
+// another member's transfer and corrupt the file they receive. Match on the public key whenever both
+// sides are known: peerId is toxcore's transient per-group index and is re-assigned when a peer
+// reconnects, so a peerId-only match would reject the rest of a legitimate transfer after a reconnect.
+- (BOOL)isChunkFromOriginPeerId:(uint32_t)peerId
+               peerPublicKeyHex:(NSString *)peerPublicKeyHex
+                       assembly:(OCTNgcIncomingAssembly *)assembly
+{
+    if (assembly.originPublicKeyHex.length > 0 && peerPublicKeyHex.length > 0) {
+        return [assembly.originPublicKeyHex caseInsensitiveCompare:peerPublicKeyHex] == NSOrderedSame;
+    }
+
+    // Key unavailable on one side (peer left mid-transfer) — fall back to the peer number seen at BEGIN.
+    return peerId == assembly.originPeerId;
+}
+
 - (void)applyIncomingChunkWithGroupNumber:(uint32_t)groupNumber
                                    peerId:(uint32_t)peerId
+                         peerPublicKeyHex:(NSString *)peerPublicKeyHex
                               assemblyKey:(NSString *)assemblyKey
                                 assembly:(OCTNgcIncomingAssembly *)assembly
                                      data:(NSData *)data
 {
+    // KHANDAQ (audit F-5): drop ONLY the foreign packet — the real transfer keeps running (nothing is
+    // marked received, the NACK state is untouched), so an injector cannot kill the download either.
+    if (! [self isChunkFromOriginPeerId:peerId peerPublicKeyHex:peerPublicKeyHex assembly:assembly]) {
+        return;
+    }
+
     uint32_t chunkIndex = [self readU32BEFromData:data offset:40];
     uint32_t chunkSize = [self readU32BEFromData:data offset:44];
+    uint64_t offset = (uint64_t)chunkIndex * (uint64_t)assembly.chunkPayload;
 
-    if (chunkIndex >= assembly.totalChunks || chunkSize < 1 ||
-        (kOCTNgcFileChunkHeader + chunkSize) > data.length) {
+    // KHANDAQ (audit F-4): the chunk has to fit the geometry the BEGIN declared *and* the packet we
+    // actually received. Without the chunkPayload/totalSize bounds a peer can write past the size we
+    // truncated the file to; offset is 64-bit so a high chunkIndex cannot wrap.
+    if (chunkIndex >= (uint32_t)assembly.totalChunks || chunkSize < 1 ||
+        chunkSize > (uint32_t)assembly.chunkPayload ||
+        (kOCTNgcFileChunkHeader + (uint64_t)chunkSize) > data.length ||
+        (offset + chunkSize) > assembly.totalSize) {
         return;
     }
 
@@ -630,7 +753,6 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
-    uint64_t offset = (uint64_t)chunkIndex * assembly.chunkPayload;
     [handle seekToFileOffset:offset];
     NSData *payload = [data subdataWithRange:NSMakeRange(kOCTNgcFileChunkHeader, chunkSize)];
     [handle writeData:payload];
@@ -639,6 +761,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     @synchronized (assembly) {
         assembly.received[chunkIndex] = @YES;
         assembly.receivedCount++;
+        assembly.lastActivityTime = [NSDate timeIntervalSinceReferenceDate];   // KHANDAQ (audit A38)
     }
 
     if (self.transferProgressBlock) {
@@ -665,13 +788,113 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
         NSString *msgIdHex = [OCTTox binToHexString:assembly.msgId.bytes length:assembly.msgId.length];
         NSString *displayName = assembly.displayFilename.length > 0 ? assembly.displayFilename : assembly.filename;
+        // KHANDAQ (audit F-5): report the BEGIN opener, not whoever happened to deliver the last chunk
+        // — they are the same peer by the guard above, but the opener is what the row was stamped with.
         self.incomingCompleteBlock(groupNumber,
                                    peerId,
+                                   assembly.originPublicKeyHex,
                                    displayName,
                                    assembly.outPath,
                                    assembly.totalSize,
                                    msgIdHex);
     }
+}
+
+// KHANDAQ (audit #13 / A38): the single teardown path for an incoming assembly that will never complete.
+// Stops the NACK timer (it retains the assembly, so leaving it running leaks both and keeps broadcasting
+// requests), drops the assembly and any orphan chunks queued under its key, and removes the partial file.
+// Never call it for a COMPLETED assembly: there outPath is the file handed to incomingCompleteBlock.
+- (void)discardIncomingAssembly:(OCTNgcIncomingAssembly *)assembly forKey:(NSString *)assemblyKey
+{
+    [self stopNackTimerForAssembly:assembly];
+
+    @synchronized (self.assemblies) {
+        if (self.assemblies[assemblyKey] == assembly) {
+            [self.assemblies removeObjectForKey:assemblyKey];
+        }
+    }
+
+    @synchronized (self.orphanChunks) {
+        [self.orphanChunks removeObjectForKey:assemblyKey];
+    }
+
+    if (assembly.outPath.length > 0) {
+        [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
+    }
+}
+
+// KHANDAQ (audit A38): free a slot for an incoming BEGIN, or refuse it. Returns NO only when every slot
+// is held by a transfer that has taken a chunk recently — killing one of those to admit a new file would
+// lose a file the user is already receiving, which is worse than missing the new one.
+- (BOOL)makeRoomForNewIncomingAssembly
+{
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    NSDictionary<NSString *, OCTNgcIncomingAssembly *> *snapshot = nil;
+
+    @synchronized (self.assemblies) {
+        snapshot = [self.assemblies copy];
+    }
+
+    // 1) Sweep what is provably dead first, on the same 60s stall window the audit #13 eviction uses.
+    // This also covers assemblies whose NACK timer never ran them out (its ticks only accumulate while
+    // the transfer is stalled, and it stops firing while the app is suspended).
+    NSMutableDictionary<NSString *, OCTNgcIncomingAssembly *> *live = [snapshot mutableCopy];
+
+    for (NSString *key in snapshot) {
+        OCTNgcIncomingAssembly *assembly = snapshot[key];
+
+        if ((now - assembly.lastActivityTime) > kOCTNgcAssemblyStaleTimeout) {
+            [self discardIncomingAssembly:assembly forKey:key];
+            [live removeObjectForKey:key];
+        }
+    }
+
+    if (live.count < kOCTNgcMaxIncomingAssemblies) {
+        return YES;
+    }
+
+    // 2) Still full: sacrifice the least useful slot. A BEGIN that never took a single chunk is the
+    // flood signature and costs the user nothing, so those go first, oldest one out.
+    NSString *victimKey = nil;
+    OCTNgcIncomingAssembly *victim = nil;
+
+    for (NSString *key in live) {
+        OCTNgcIncomingAssembly *candidate = live[key];
+
+        if (candidate.receivedCount > 0) {
+            continue;
+        }
+
+        if (! victim || candidate.lastActivityTime < victim.lastActivityTime) {
+            victimKey = key;
+            victim = candidate;
+        }
+    }
+
+    // 3) Only if every slot has received data do we consider a partial transfer, and then only one that
+    // has been silent for kOCTNgcAssemblyIdleTimeout — a peer sending BEGIN + one chunk each can pin the
+    // cap for that long at most, while a transfer that is actually moving is never dropped.
+    if (! victim) {
+        for (NSString *key in live) {
+            OCTNgcIncomingAssembly *candidate = live[key];
+
+            if ((now - candidate.lastActivityTime) < kOCTNgcAssemblyIdleTimeout) {
+                continue;
+            }
+
+            if (! victim || candidate.lastActivityTime < victim.lastActivityTime) {
+                victimKey = key;
+                victim = candidate;
+            }
+        }
+    }
+
+    if (! victim) {
+        return NO;
+    }
+
+    [self discardIncomingAssembly:victim forKey:victimKey];
+    return YES;
 }
 
 #pragma mark - NACK (selective retransmit)
@@ -733,15 +956,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         // received[] array) and the truncated on-disk file leak for the process lifetime, AND because
         // BEGIN dedups on assemblyKey a later re-broadcast of the same msgId returns early — so the
         // transfer can never recover and the bubble stays stuck 'loading' forever.
-        @synchronized (self.assemblies) {
-            if (self.assemblies[assemblyKey] == assembly) {
-                [self.assemblies removeObjectForKey:assemblyKey];
-            }
-        }
-        @synchronized (self.orphanChunks) {
-            [self.orphanChunks removeObjectForKey:assemblyKey];
-        }
-        [[NSFileManager defaultManager] removeItemAtPath:assembly.outPath error:nil];
+        [self discardIncomingAssembly:assembly forKey:assemblyKey];
         return;
     }
 
@@ -851,12 +1066,42 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     [handle closeFile];
 }
 
-- (void)queueOrphanChunkWithAssemblyKey:(NSString *)assemblyKey data:(NSData *)data
+- (void)queueOrphanChunkWithAssemblyKey:(NSString *)assemblyKey
+                                 peerId:(uint32_t)peerId
+                       peerPublicKeyHex:(NSString *)peerPublicKeyHex
+                                   data:(NSData *)data
 {
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+
     @synchronized (self.orphanChunks) {
+        [self pruneExpiredOrphanChunksAtTime:now];
+
         NSMutableArray *list = self.orphanChunks[assemblyKey];
 
         if (! list) {
+            // KHANDAQ (audit F-4): cap the number of assemblies we hold chunks for, and make the peer
+            // that is filling the map pay for it: evict the oldest key fed by THIS peer first, so a
+            // flood of msgIds that never get a BEGIN recycles its own slots instead of pushing out the
+            // orphans of the honest sender racing its own BEGIN (a millisecond-scale race). Only when
+            // this peer holds no slot at all do we fall back to the global least-recently-fed key.
+            while (self.orphanChunks.count >= kOCTNgcMaxOrphanAssemblies) {
+                NSString *staleKey = [self leastRecentlyFedOrphanKeyFromPeerId:peerId
+                                                              peerPublicKeyHex:peerPublicKeyHex
+                                                                     anyOrigin:NO];
+
+                if (! staleKey) {
+                    staleKey = [self leastRecentlyFedOrphanKeyFromPeerId:peerId
+                                                        peerPublicKeyHex:peerPublicKeyHex
+                                                               anyOrigin:YES];
+                }
+
+                if (! staleKey) {
+                    break;
+                }
+
+                [self.orphanChunks removeObjectForKey:staleKey];
+            }
+
             list = [NSMutableArray array];
             self.orphanChunks[assemblyKey] = list;
         }
@@ -867,13 +1112,78 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 
         OCTNgcOrphanChunk *orphan = [OCTNgcOrphanChunk new];
         orphan.data = [data copy];
+        orphan.originPeerId = peerId;
+        orphan.originPublicKeyHex = peerPublicKeyHex;
+        orphan.timestamp = now;
         [list addObject:orphan];
     }
 }
 
+// Both helpers below must be called with self.orphanChunks locked.
+- (void)pruneExpiredOrphanChunksAtTime:(NSTimeInterval)now
+{
+    NSMutableArray<NSString *> *emptyKeys = nil;
+
+    for (NSString *key in self.orphanChunks) {
+        NSMutableArray<OCTNgcOrphanChunk *> *list = self.orphanChunks[key];
+
+        // Chunks are appended in arrival order, so the head is always the oldest.
+        while (list.count > 0 && (now - list.firstObject.timestamp) > kOCTNgcOrphanChunkTTL) {
+            [list removeObjectAtIndex:0];
+        }
+
+        if (list.count == 0) {
+            if (! emptyKeys) {
+                emptyKeys = [NSMutableArray array];
+            }
+
+            [emptyKeys addObject:key];
+        }
+    }
+
+    if (emptyKeys) {
+        [self.orphanChunks removeObjectsForKeys:emptyKeys];
+    }
+}
+
+// Returns the key whose most recent chunk is the OLDEST — restricted to keys last fed by the given
+// peer unless anyOrigin is YES. Same peer match as the assembly binding: stable key when both sides
+// know it, transient peer number otherwise.
+- (NSString *)leastRecentlyFedOrphanKeyFromPeerId:(uint32_t)peerId
+                                 peerPublicKeyHex:(NSString *)peerPublicKeyHex
+                                        anyOrigin:(BOOL)anyOrigin
+{
+    NSString *staleKey = nil;
+    NSTimeInterval staleTimestamp = 0;
+
+    for (NSString *key in self.orphanChunks) {
+        OCTNgcOrphanChunk *last = self.orphanChunks[key].lastObject;
+
+        if (! last) {
+            continue;
+        }
+
+        if (! anyOrigin) {
+            BOOL sameOrigin = (last.originPublicKeyHex.length > 0 && peerPublicKeyHex.length > 0)
+                ? ([last.originPublicKeyHex caseInsensitiveCompare:peerPublicKeyHex] == NSOrderedSame)
+                : (last.originPeerId == peerId);
+
+            if (! sameOrigin) {
+                continue;
+            }
+        }
+
+        if (! staleKey || last.timestamp < staleTimestamp) {
+            staleKey = key;
+            staleTimestamp = last.timestamp;
+        }
+    }
+
+    return staleKey;
+}
+
 - (void)flushOrphanChunksForAssemblyKey:(NSString *)assemblyKey
                             groupNumber:(uint32_t)groupNumber
-                                 peerId:(uint32_t)peerId
 {
     NSMutableArray<OCTNgcOrphanChunk *> *list = nil;
 
@@ -896,9 +1206,18 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;
     }
 
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+
     for (OCTNgcOrphanChunk *orphan in list) {
+        if ((now - orphan.timestamp) > kOCTNgcOrphanChunkTTL) {
+            continue;
+        }
+
+        // KHANDAQ (audit F-5): replay with the origin recorded at queue time, not the peer that delivered
+        // the BEGIN — applyIncomingChunk drops the ones that came from somebody else.
         [self applyIncomingChunkWithGroupNumber:groupNumber
-                                         peerId:peerId
+                                         peerId:orphan.originPeerId
+                               peerPublicKeyHex:orphan.originPublicKeyHex
                                     assemblyKey:assemblyKey
                                       assembly:assembly
                                            data:orphan.data];

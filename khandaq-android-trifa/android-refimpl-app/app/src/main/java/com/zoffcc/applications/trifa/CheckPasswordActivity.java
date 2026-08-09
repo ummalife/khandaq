@@ -297,6 +297,11 @@ public class CheckPasswordActivity extends AppCompatActivity
                 return;
             }
 
+            // KHANDAQ (audit #8): the user just TYPED the profile password — that is an authentication,
+            // so the cold-start gate must not ask for the PIN on top of it (one gate, as before).
+            // Only this path marks it: the auto-unlock in onCreate() takes no user input at all and is
+            // exactly the hole the cold-start gate exists to cover.
+            AppLockHelper.markProcessUnlocked();
             finishUnlock(try_password_hash);
         }
 

@@ -159,7 +159,13 @@ extension AppCoordinator: RunningCoordinatorDelegate {
 
 extension AppCoordinator: LoginCoordinatorDelegate {
     func loginCoordinatorDidLogin(_ coordinator: LoginCoordinator, manager: OCTManager, password: String) {
-        KeychainManager().toxPasswordForActiveAccount = password
+        let keychainManager = KeychainManager()
+        keychainManager.toxPasswordForActiveAccount = password
+        // KHANDAQ (audit #11): the profile password is strictly stronger than the 4-digit pin, so a
+        // successful password login is proof the owner is here — drop any running pin lockout, else the
+        // owner can be refused for up to an hour with no way out.
+        keychainManager.failedPinAttemptsNumber = nil
+        keychainManager.pinLockedUntil = nil
 
         recreateActiveCoordinator(manager: manager, skipAuthorizationChallenge: true)
     }

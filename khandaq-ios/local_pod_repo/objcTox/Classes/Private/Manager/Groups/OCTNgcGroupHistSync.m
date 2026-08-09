@@ -27,6 +27,7 @@ static const size_t kOCTNgcHistMaxPeerNameBytes = 25;
 static const size_t kOCTNgcHistMaxFilenameBytes = 255;
 static const size_t kOCTNgcHistMagicLength = 6;
 static const size_t kOCTNgcHistMaxFilePayload = 36701;
+static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
 
 @interface OCTNgcGroupHistSync ()
 @property (nonatomic, copy) OCTNgcGroupHistSyncSendPrivatePacketBlock sendPrivatePacketBlock;
@@ -50,6 +51,7 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
 @property (nonatomic, copy) OCTNgcGroupHistSyncDeliveryReceiptBlock deliveryReceiptBlock;
 @property (nonatomic, copy) OCTNgcGroupHistSyncFileSyncConfirmationBlock fileSyncConfirmationBlock;
 @property (nonatomic, strong) dispatch_queue_t syncQueue;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastServedRequestTimes;
 @end
 
 @implementation OCTNgcGroupHistSync
@@ -121,6 +123,7 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
     _deliveryReceiptBlock = [deliveryReceiptBlock copy];
     _fileSyncConfirmationBlock = [fileSyncConfirmationBlock copy];
     _syncQueue = dispatch_queue_create("ngc-group-hist-sync", DISPATCH_QUEUE_SERIAL);
+    _lastServedRequestTimes = [NSMutableDictionary new];
 
     return self;
 }
@@ -274,6 +277,31 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
             return;
         }
 
+        // KHANDAQ (audit F-6): each request makes us rebuild and re-send the WHOLE history to that
+        // peer, and nothing stopped one peer from asking in a loop. An honest client asks once per
+        // join, so ignore repeats from the same peer inside a short window. Serialised on syncQueue.
+        // Keyed on the STABLE pubkey: NGC re-issues peer ids on leave/rejoin, so a peer-id key handed
+        // a rejoin loop a fresh full dump every time. Fall back to the peer id while the roster has
+        // not resolved the key yet, so an honest request is never dropped for lack of one.
+        NSString *requestPubkey = [self.peerPublicKeyBlock(groupNumber, peerId) uppercaseString];
+        NSString *requestKey = requestPubkey.length > 0
+            ? [NSString stringWithFormat:@"%u:%@", groupNumber, requestPubkey]
+            : [NSString stringWithFormat:@"%u:id%u", groupNumber, peerId];
+        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+        NSNumber *lastServed = self.lastServedRequestTimes[requestKey];
+
+        if (lastServed && (now - lastServed.doubleValue) < kOCTNgcHistRequestCooldown) {
+            OCTLogInfo(@"NGC hist request throttled group=%u peer=%u", groupNumber, peerId);
+            return;
+        }
+
+        if (self.lastServedRequestTimes.count > 256) {
+            // keep the bookkeeping bounded (one entry per peer per group)
+            [self.lastServedRequestTimes removeAllObjects];
+        }
+
+        self.lastServedRequestTimes[requestKey] = @(now);
+
         [self syncHistoryToPeerWithGroupNumber:groupNumber peerId:peerId];
     });
 }
@@ -371,7 +399,24 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
         return nil;
     }
 
+    // KHANDAQ (audit F-6): only a genuinely OUTGOING row may leave under OUR OWN key. A history-synced
+    // row is someone else's message, and its groupSenderPeerId is 0 whenever the author was not in our
+    // roster at insert time — offline, already left, or a pubkey an attacker made up. Claiming self
+    // there re-broadcast that row to the whole group signed-by-implication as ours (the receivers drop
+    // packets carrying their own key, so this was the ONLY way to forge a message as us).
+    //
+    // KHANDAQ (audit F-6, round 4): never re-serve a synced TEXT row at all. The only author identity we
+    // keep for one is the VOLATILE groupSenderPeerId captured at insert time, and NGC re-issues peer ids
+    // on leave/rejoin — so resolving it here could hand the row to the whole group under a DIFFERENT,
+    // currently present member's key. That is an honest client minting exactly the forged attribution
+    // this finding is about. We cannot verify the author of a second-hand text row, so we do not pass it
+    // on; the peers that received the message live still serve it, which is where history comes from.
     uint32_t senderPeerId = message.groupSenderPeerId;
+
+    if (message.groupHistorySync) {
+        return nil;
+    }
+
     NSString *senderPubkeyHex = senderPeerId == 0
         ? self.selfPublicKeyBlock(groupNumber)
         : self.peerPublicKeyBlock(groupNumber, senderPeerId);
@@ -476,6 +521,17 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
     // author cannot be determined reliably, do not serve the file at all.
     uint32_t senderPeerId = message.groupSenderPeerId;
     NSString *senderPubkeyHex = messageFile.groupSenderPubkey;
+
+    // KHANDAQ (audit F-6, round 5): NEVER re-serve a second-hand file, matching the synced-TEXT rule
+    // above and Android's was_synced skip. The author pubkey frozen on a synced row is an UNSIGNED claim
+    // made by the peer that synced it to us; we cannot check it, so passing the file on would make us
+    // corroborate that claim to the whole group (and bump the row's sync_confirmations on Android
+    // receivers). Round 4 still served such a row while its claimed author was in the live peer list —
+    // that tests presence, not authorship, and an attacker simply names a member who is present, so it
+    // is gone. We only hand out history we received first-hand: live rows and our own.
+    if (message.groupHistorySync) {
+        return nil;
+    }
 
     if (senderPubkeyHex.length == 0) {
         if (senderPeerId == 0) {
@@ -686,6 +742,7 @@ static const size_t kOCTNgcHistMaxFilePayload = 36701;
                                fileUTI,
                                senderPeerId,
                                peerName,
+                               senderPubkeyHex,
                                msgIdHashHex,
                                (NSTimeInterval)timestamp);
 }

@@ -56,6 +56,11 @@ jobs:
           ls -1 /root/work/patches/
           echo "=== confirm #201 media-resend patch is wired into deps.sh ==="
           grep -c apply_khandaq_media_resend.py /root/work/circle_scripts/deps.sh
+          echo "=== confirm audit F2 NGC-video chroma patch is wired into deps.sh (4 ABIs) ==="
+          # wiring only -- that the patch actually RAN is checked against the cloned trees after the build
+          f2_sites=$(grep -c apply_khandaq_toxav_ngc_chroma.py /root/work/circle_scripts/deps.sh)
+          echo "wired at $f2_sites site(s)"
+          [ "$f2_sites" -eq 4 ]
 
       - name: build native deps + patched toxcore + libjni-c-toxcore.so (deps.sh)
         id: build
@@ -84,12 +89,34 @@ jobs:
           path: |
             /root/work/artefacts/android/libs/**/libjni-c-toxcore.so
 
-      - name: fail the job if the build step failed AND no arm64 .so was produced
+      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard
         if: always()
         run: |
+          rc=0
+          # the build step is continue-on-error (so a late-ABI failure still uploads the earlier ABIs);
+          # this gate is what turns "deps.sh died" into a red job.
           if [ -f /root/work/artefacts/android/libs/arm64-v8a/libjni-c-toxcore.so ]; then
             echo "arm64-v8a libjni-c-toxcore.so produced OK"
-            exit 0
+          else
+            echo "ERROR: no arm64-v8a .so produced"
+            rc=1
           fi
-          echo "no arm64-v8a .so produced"
-          exit 1
+          # grepping deps.sh only proves the wiring; grep the CLONED toxcore trees to prove the patch ran.
+          # deps.sh clones per ABI into /root/work/{build,arm64_build,x86_build,x86_64_build}/c-toxcore.
+          trees=0
+          for f in /root/work/*build*/c-toxcore/toxav/toxav.c; do
+            [ -f "$f" ] || continue
+            trees=$((trees+1))
+            if grep -q 'KHANDAQ (audit F2)' "$f"; then
+              echo "audit-F2 chroma guard present in $f"
+            else
+              echo "ERROR: audit-F2 chroma guard MISSING in $f -- .so would ship the overflow"
+              rc=1
+            fi
+          done
+          echo "checked $trees patched toxcore tree(s)"
+          if [ "$trees" -eq 0 ]; then
+            echo "ERROR: no cloned c-toxcore tree found -- deps.sh never reached the patch step"
+            rc=1
+          fi
+          exit $rc

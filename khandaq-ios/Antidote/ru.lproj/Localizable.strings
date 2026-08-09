@@ -79,6 +79,10 @@
 "pin_failed_attempts" = "Неудачных попыток: %@";
 /* PIN screen message shown on log out */
 "pin_logout_message" = "Слишком много неудачных попыток. Вы вышли.";
+/* PIN screen text shown while entering is blocked after too many failed attempts */
+"pin_locked_out" = "Ввод PIN-кода заблокирован";
+/* PIN screen details, %@ is the remaining time */
+"pin_locked_out_remaining" = "Повторите через %@";
 /* PIN screen screen */
 "pin_enabled" = "PIN-код включен";
 /* PIN screen screen */

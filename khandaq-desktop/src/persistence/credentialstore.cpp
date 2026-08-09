@@ -71,9 +71,17 @@ bool CredentialStore::save(const QString& profile, const QString& password)
     target.push_back(L'\0');
     // KHANDAQ: UserName must be NUL-terminated — the 7-char "account" copy had no terminator, so
     // CredWriteW read past the buffer for the user name.
-    std::vector<wchar_t> user(L"account", L"account" + 7);
+    // KHANDAQ (audit #12): the two `L"account"` literals are not guaranteed to name the same array
+    // object (literal pooling is implementation-defined), so the pointer pair was not a range.
+    // One named object, like `targetW` above.
+    const std::wstring userW = L"account";
+    std::vector<wchar_t> user(userW.begin(), userW.end());
     user.push_back(L'\0');
-    std::vector<wchar_t> secret(password.toStdWString().begin(), password.toStdWString().end());
+    // KHANDAQ (audit #12): two toStdWString() calls returned two distinct temporaries, so begin()
+    // and end() came from different containers — mismatched iterators, undefined behaviour on every
+    // credential save. Materialise one wstring and iterate that.
+    const std::wstring secretW = password.toStdWString();
+    std::vector<wchar_t> secret(secretW.begin(), secretW.end());
 
     CREDENTIALW cred = {};
     cred.Type = CRED_TYPE_GENERIC;

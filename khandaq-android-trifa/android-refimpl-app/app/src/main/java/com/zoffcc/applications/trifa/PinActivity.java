@@ -18,7 +18,8 @@ import org.khandaq.messenger.R;
  * {@link #EXTRA_MODE} extra:
  *   MODE_SET    — from Profile → Детали: enter a 4-digit PIN, confirm it, then persist its salted hash.
  *                 Returns RESULT_OK only after a successful set, so the caller enables the lock only then.
- *   MODE_UNLOCK — from {@link AppLockHelper} after a background timeout: verify the PIN to return to app.
+ *   MODE_UNLOCK — from {@link AppLockHelper} after a background timeout, or on a not-yet-unlocked
+ *                 fresh process: verify the PIN to return to the app.
  */
 public class PinActivity extends AppCompatActivity
 {
@@ -130,6 +131,9 @@ public class PinActivity extends AppCompatActivity
         {
             if (AppLockHelper.verifyPin(this, pin))
             {
+                // KHANDAQ (audit #8): this process is now unlocked. Must happen BEFORE finish() —
+                // the screen underneath gets onStart() again and would otherwise re-raise the gate.
+                AppLockHelper.markProcessUnlocked();
                 finish();
             }
             else

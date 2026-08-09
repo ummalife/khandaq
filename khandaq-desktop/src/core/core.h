@@ -97,6 +97,7 @@ public:
     QVector<uint32_t> getGroupPeerList(int groupId) const override;
     QString getGroupPeerName(int groupId, int peerId) const override;
     ToxPk getGroupPeerPk(int groupId, int peerId) const override;
+    bool isGroupPeerPresent(int groupId, const ToxPk& peerPk) const;
     QStringList getGroupPeerNames(int groupId) const override;
     QString getGroupName(int groupId) const;
     bool getGroupAvEnabled(int groupId) const override;

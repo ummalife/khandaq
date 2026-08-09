@@ -5086,7 +5086,18 @@ public class HelperGroup
             // HelperGeneric.logI(TAG, "conference_message_add_from_sync:new_msg_id=" + new_msg_id);
         }
 
-        ensure_group_peer_recorded(group_identifier, group_num_, peer_pubkey, peer_name);
+        // KHANDAQ (audit F-6): nothing in a sync packet is signed, so the author pubkey and the peer name
+        // in it are whatever the syncing peer chose to put there. They may drive THIS row's display value
+        // (above), but they must not create rows in the persistent peer table — that would let one peer
+        // invent group members, and (for a row whose peer_name is still empty) put a name of its choosing
+        // on one. So only record a peer that toxcore currently lists in the group, and let
+        // ensure_group_peer_recorded resolve the name itself instead of taking the one off the wire.
+        // Peers not in the peer list stay unrecorded: the message row keeps its own tox_group_peername,
+        // which the list holders already fall back to when name resolution only yields a short hex id.
+        if (peer_number2 >= 0)
+        {
+            ensure_group_peer_recorded(group_identifier, group_num_, peer_pubkey, null);
+        }
 
         HelperFriend.refresh_chat_list_group_row_wrapper(group_identifier);
         HelperFriend.add_all_friends_clear_wrapper(0);
@@ -9392,6 +9403,22 @@ public class HelperGroup
                         try
                         {
                             GroupMessage gm = (GroupMessage) i1.next();
+                            // KHANDAQ (audit F-6, round 5): NEVER re-serve a second-hand row. A was_synced
+                            // row reached us through history sync, and the author pubkey on it is an
+                            // UNSIGNED claim by whoever synced it — we have no way to check it. Passing it
+                            // on makes us corroborate that claim to the rest of the group and bumps the
+                            // row's sync_confirmations on every receiver, which is exactly what turns a
+                            // one-hop injection into history the whole group agrees on. Round 4 still let
+                            // such a row through while its claimed author was in the live peer list; that
+                            // is not a check on the CLAIM (an attacker names a member who is present), so
+                            // it is gone. We only ever hand out history we received FIRST-HAND: our own
+                            // rows and rows delivered live are was_synced=false and are unaffected.
+                            // Cost: a device that holds a message only second-hand no longer heals other
+                            // peers with it, so history reaches a joiner one hop at a time (see attestation).
+                            if (gm.was_synced)
+                            {
+                                continue;
+                            }
                             if (!gm.tox_group_peer_pubkey.equalsIgnoreCase("-1"))
                             {
                                 //HelperGeneric.logI(TAG, "sync_group_message_history:sync:sent_ts="
@@ -9756,6 +9783,36 @@ public class HelperGroup
         }
     }
 
+    /**
+     * Display name for a peer whose message reached us through history sync. The name in the packet is
+     * unsigned and attacker-chosen, so a name we know locally (live from toxcore, else GroupPeerDB) wins;
+     * the synced one is only a fallback for when we have no real name and would show a hex id instead.
+     * Callers with no name on the wire at all (toxproxy relay sync) pass null for name_from_packet.
+     */
+    static String resolve_synced_peer_name(final String group_identifier, final String sender_pubkey,
+                                           final long sender_peer_num, final String name_from_packet)
+    {
+        // the wrapper never returns null for a real pubkey: when it knows nothing it hands back the short
+        // hex id, so that (not a null check) is the test for "we actually have a name for this pubkey"
+        final String local_name = tox_group_peer_get_name__wrapper(group_identifier, sender_pubkey, sender_peer_num);
+        if (!TextUtils.isEmpty(local_name) && !is_short_hex_peer_id(local_name, sender_pubkey))
+        {
+            return local_name;
+        }
+
+        final String from_packet = pick_non_hex_group_peer_name(name_from_packet, sender_pubkey);
+        return (from_packet != null) ? from_packet : name_from_packet;
+    }
+
+    // KHANDAQ (audit F-6): a per-syncer rate limit on incoming history sync was tried here and removed
+    // again on review. It could not bind the attack it targeted — the counter is keyed by the syncer's
+    // NGC pubkey, which is minted fresh on every rejoin, so a flooder just rotates identity, and any
+    // bound on the tracking table is either unbounded memory or fillable with ephemeral keys. Meanwhile
+    // the only threshold that is safe for an honest peer sits far above what already hurts us (one
+    // honest syncer legitimately bursts ~10k-30k packets/min right after a public-group join), so the
+    // limiter bought no real protection while risking silently dropped history. Storage/CPU abuse of
+    // this path has to be bounded where the cost is (per-group history caps), not by counting packets.
+
     static void handle_incoming_sync_group_message(final long group_number, final long peer_id, final byte[] data, final long length)
     {
         try
@@ -9945,17 +10002,9 @@ public class HelperGroup
                     return;
                 }
 
-                final String peer_name_saved = tox_group_peer_get_name__wrapper(group_identifier,
-                        original_sender_peerpubkey, sender_peer_num);
-                final String peer_name_from_sync = pick_non_hex_group_peer_name(peer_name, original_sender_peerpubkey);
-                if (peer_name_from_sync != null)
-                {
-                    peer_name = peer_name_from_sync;
-                }
-                else if (peer_name_saved != null && !is_short_hex_peer_id(peer_name_saved, original_sender_peerpubkey))
-                {
-                    peer_name = peer_name_saved;
-                }
+                // KHANDAQ (audit F-6): a locally known name beats the unsigned one carried in the packet.
+                peer_name = resolve_synced_peer_name(group_identifier, original_sender_peerpubkey, sender_peer_num,
+                                                     peer_name);
 
                 group_message_add_from_sync(group_identifier, syncer_pubkey, sender_peer_num, original_sender_peerpubkey,
                                             TRIFA_MSG_TYPE_TEXT.value, message_str, message_str.length(),
@@ -10062,7 +10111,7 @@ public class HelperGroup
             {
                 ByteBuffer name_buffer = ByteBuffer.allocateDirect(TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES);
                 name_buffer.put(data, 8 + 32 + 32 + 4, TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES);
-                final String peer_name = utf8_string_from_bytes_with_padding(name_buffer,
+                String peer_name = utf8_string_from_bytes_with_padding(name_buffer,
                                                                              TOX_NGC_HISTORY_SYNC_MAX_PEERNAME_BYTES,
                                                                              "peer");
                 HelperGeneric.logI(TAG,"handle_incoming_sync_group_file:peer_name str=" + peer_name);
@@ -10108,6 +10157,11 @@ public class HelperGroup
                 catch(Exception e)
                 {
                 }
+
+                // KHANDAQ (audit F-6): same as for synced text — a locally known name beats the packet one.
+                // Resolved only after the duplicate check, so re-synced files cost no extra name lookup.
+                peer_name = resolve_synced_peer_name(group_identifier, original_sender_peerpubkey, sender_peer_num,
+                                                     peer_name);
 
                 group_file_add_from_sync(group_identifier, syncer_pubkey, sender_peer_num, original_sender_peerpubkey,
                                             file_byte_buf, filename, peer_name,

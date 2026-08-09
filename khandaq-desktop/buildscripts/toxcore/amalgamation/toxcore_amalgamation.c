@@ -78934,6 +78934,16 @@ bool toxav_ngc_video_decode(void *vngc, uint8_t *encoded_frame_bytes, uint32_t e
                     //printf("toxav_ngc_video_decode:error:012\n");
                     av_frame_free(&frame);
                     continue;
+                } else if (((frame->format != AV_PIX_FMT_YUV420P) && (frame->format != AV_PIX_FMT_YUVJ420P))
+                        || (frame->linesize[1] < 1) || (frame->linesize[2] < 1)
+                        || (frame->linesize[1] > (width / 2)) || (frame->linesize[2] > (width / 2))) {
+                    // KHANDAQ (audit F2): the caller's u/v buffers are only (width/2)*(height/2) bytes, but the
+                    // memcpys below use the DECODER's chroma stride. A peer sending a 4:4:4 (or 4:2:2 / 10 bit) SPS
+                    // makes ffmpeg emit chroma planes as wide as the luma plane, so we would copy far past both
+                    // buffers (heap overflow). Only accept 8 bit 4:2:0 with a chroma stride that actually fits.
+                    //printf("toxav_ngc_video_decode:error:012a\n");
+                    av_frame_free(&frame);
+                    continue;
                 } else {
                     *ystride = frame->linesize[0];
                     *ustride = frame->linesize[1];
@@ -78949,6 +78959,20 @@ bool toxav_ngc_video_decode(void *vngc, uint8_t *encoded_frame_bytes, uint32_t e
                 // ------ GOT a VIDEO FRAME ------
             } else if ((frame->format == 23) && (frame->linesize[0] > 1)
                     && (frame->linesize[1] > 1) && (frame->data[0]) && (frame->data[1])) {
+                    // KHANDAQ (audit A29): same bounds guard as the planar branch - reject a peer frame
+                    // whose stride/height exceed the caller's y/u/v buffers before the memcpy (heap overflow).
+                    if ((width < frame->linesize[0]) || (height != frame->height)) {
+                        av_frame_free(&frame);
+                        continue;
+                    }
+                    // KHANDAQ (audit F2): the de-interleave loop below writes (height/2) rows of (linesize[1]/2)
+                    // bytes into u, and the same amount into v starting one byte in, while both buffers are only
+                    // (width/2)*(height/2) bytes. A peer frame with a wide chroma stride overflows them, so bound
+                    // what this branch actually copies.
+                    if ((((frame->height / 2) * (frame->linesize[1] / 2)) + 1) > ((width / 2) * (height / 2))) {
+                        av_frame_free(&frame);
+                        continue;
+                    }
                     *ystride = frame->linesize[0];
                     *ustride = frame->linesize[1] / 2;
                     *vstride = frame->linesize[1] / 2;

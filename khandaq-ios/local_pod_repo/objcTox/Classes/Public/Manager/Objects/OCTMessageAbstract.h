@@ -82,6 +82,13 @@
  * KHANDAQ (#55): stable LOWERCASE pubkey hex of the counterparty (the OTHER peer in a private
  * thread). The thread/identity is keyed by this so it survives volatile NGC peer-id reuse. nil for
  * legacy rows or when unresolved (group offline) — callers then fall back to groupPrivatePeerId.
+ *
+ * KHANDAQ (audit, round 5): for an INCOMING group row (groupSenderPeerId != 0) this is the frozen
+ * pubkey of the message's AUTHOR — which for an incoming private message is exactly the counterparty
+ * above, so the meaning is unchanged there, and it now carries the same identity for a public group
+ * TEXT row (there is no other stable author key on OCTMessageText; groupPeerName is a nickname the
+ * author can change and anyone can copy). The 0x42 retract / 0x41 edit gates authenticate against it.
+ * Outgoing rows keep the old meaning (the recipient) and are never matched by those gates.
  */
 @property (nullable) NSString *groupPrivatePeerPubkey;
 

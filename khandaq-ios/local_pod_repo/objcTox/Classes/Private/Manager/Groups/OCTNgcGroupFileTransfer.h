@@ -17,8 +17,13 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferError) {
 
 typedef BOOL (^OCTNgcGroupFileTransferSendPacketBlock)(uint32_t groupNumber, NSData *packet, NSError **error);
 
+// KHANDAQ (audit F-5): senderPublicKeyHex is the STABLE key of the peer this file really came from
+// (the BEGIN opener for a chunked transfer, the delivering peer for a single-packet one). The msgId is
+// public inside the group, so the row it lands on must be matched on the key, not on the msgId alone.
+// nil when toxcore cannot resolve the peer right now — callers then keep the pre-existing behaviour.
 typedef void (^OCTNgcGroupFileTransferIncomingFileBlock)(uint32_t groupNumber,
                                                          uint32_t peerId,
+                                                         NSString *_Nullable senderPublicKeyHex,
                                                          NSString *fileName,
                                                          NSString *filePath,
                                                          uint64_t fileSize,
@@ -26,6 +31,7 @@ typedef void (^OCTNgcGroupFileTransferIncomingFileBlock)(uint32_t groupNumber,
 
 typedef void (^OCTNgcGroupFileTransferIncomingBeginBlock)(uint32_t groupNumber,
                                                           uint32_t peerId,
+                                                          NSString *_Nullable senderPublicKeyHex,
                                                           NSString *fileName,
                                                           NSString *filePath,
                                                           uint64_t fileSize,
@@ -48,8 +54,11 @@ typedef void (^OCTNgcGroupFileTransferProgressBlock)(uint32_t groupNumber,
                     incomingFileBlock:(OCTNgcGroupFileTransferIncomingFileBlock)incomingFileBlock
     NS_UNAVAILABLE;
 
+// KHANDAQ (audit F-5): peerPublicKeyHex identifies the peer that actually delivered the packet, so a
+// chunked assembly can be bound to the peer that opened it (peerId alone is re-assigned on reconnect).
 - (void)handleIncomingPacketWithGroupNumber:(uint32_t)groupNumber
                                      peerId:(uint32_t)peerId
+                           peerPublicKeyHex:(nullable NSString *)peerPublicKeyHex
                                        data:(NSData *)data;
 
 - (void)sendFileAtPath:(NSString *)filePath

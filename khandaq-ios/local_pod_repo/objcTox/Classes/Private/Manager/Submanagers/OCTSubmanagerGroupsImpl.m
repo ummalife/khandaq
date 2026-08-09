@@ -86,6 +86,13 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 - (nullable NSString *)groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)groupNumber
                                                     peerId:(uint32_t)peerId
                                                       chat:(OCTChat *)chat;
+// KHANDAQ (audit, round 5): stable author key frozen on an incoming group TEXT row (same reason as
+// above — the receive callback calls it before its definition further down).
+- (void)freezeGroupTextSenderPubkeyOnMessage:(OCTMessageAbstract *)message
+                            senderPublicKeyHex:(NSString *)senderPublicKeyHex
+                                   groupNumber:(OCTToxGroupNumber)groupNumber
+                                        peerId:(uint32_t)peerId
+                                          chat:(OCTChat *)chat;
 @end
 
 @implementation OCTSubmanagerGroupsImpl
@@ -2199,12 +2206,22 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     }
 
     if (! alreadyStored) {
-        [realmManager addGroupMessageWithText:message
-                                         type:type
-                                         chat:chat
-                                       peerId:peerId
-                                     peerName:peerName
-                                    messageId:messageId];
+        OCTMessageAbstract *stored = [realmManager addGroupMessageWithText:message
+                                                                      type:type
+                                                                      chat:chat
+                                                                    peerId:peerId
+                                                                  peerName:peerName
+                                                                 messageId:messageId];
+        // KHANDAQ (audit, round 5): freeze the author's STABLE key on the row, mirroring what #82 does
+        // for file rows. Until now a text row recorded its author only as the frozen display name (a
+        // nickname anyone can copy) plus the volatile peer id, so the 0x42/0x41 gates had nothing
+        // unforgeable to authenticate against. This key comes from toxcore for the peer that actually
+        // delivered the packet, so it cannot be claimed by another member.
+        [self freezeGroupTextSenderPubkeyOnMessage:stored
+                                senderPublicKeyHex:senderPubkeyHex
+                                       groupNumber:groupNumber
+                                            peerId:peerId
+                                              chat:chat];
     }
 
     if (messageId > 0) {
@@ -2423,6 +2440,83 @@ partMessage:(NSString *)partMessage
                groupNumber, peerId, (long)exitType, name);
 }
 
+// KHANDAQ (audit, round 5): shared author test for the 0x42 retract / 0x41 edit gates.
+//
+// A row that RECORDS its author (frozen stable pubkey) is bound STRICTLY to that key — nothing else
+// unlocks it. A row that records NO author keeps the pre-existing, weaker rule, because "no recorded
+// author" does not mean "attacker": the author key only started being frozen on file rows in this
+// batch, so EVERY media row a live user received through history sync before upgrading carries none.
+// Refusing those outright made the sender's own, legitimate "delete for everyone" a silent no-op
+// forever — a regression against shipped behaviour that hurts honest users, which no forgery vector
+// justifies. Legacy rows therefore stay exactly as retractable as they are today; only new rows get
+// the strict binding. An exact author match always wins over the legacy fallback.
+- (nullable OCTMessageAbstract *)groupFileRowForRetractionInResults:(RLMResults<OCTMessageAbstract *> *)results
+                                                        senderPubkey:(NSString *)senderPubkey
+{
+    OCTMessageAbstract *legacy = nil;
+
+    for (OCTMessageAbstract *candidate in results) {
+        // KHANDAQ (audit, round 6): OUR OWN outgoing media is never retractable by a remote peer, so it
+        // is out of this gate entirely. The local row is created with peerId 0 and gets NO
+        // groupSenderPubkey (only the incoming handlers freeze a sender), so on a fresh install it is
+        // author-less — and the legacy fallback below would then hand it to whoever echoes our own
+        // groupMsgIdHashHex back at us, which every group member can read off our file packets. We
+        // retract our own messages locally (deleteGroupMessageForBoth), never through here. Same test
+        // as -isOutgoing: peerId 0 alone is not "ours", a history-synced row carries 0 whenever its
+        // author was unresolvable at insert time, and those rows keep the legacy behaviour below.
+        // (The TEXT branch of this gate already excludes them at the predicate: groupSenderPeerId != 0.)
+        if (candidate.groupSenderPeerId == 0 && ! candidate.groupHistorySync) {
+            continue;
+        }
+
+        NSString *rowPubkey = candidate.messageFile.groupSenderPubkey;
+
+        if (rowPubkey.length == 0) {
+            if (! legacy) {
+                legacy = candidate; // pre-batch row: no author on file, behave as before
+            }
+            continue;
+        }
+
+        if (senderPubkey.length > 0 && [rowPubkey caseInsensitiveCompare:senderPubkey] == NSOrderedSame) {
+            return candidate;
+        }
+    }
+
+    return legacy;
+}
+
+// KHANDAQ (audit, round 5): TEXT counterpart of the above. The old rule matched the requester's
+// CURRENT display name against the name frozen on the row, and a display name is neither unique nor
+// authenticated — any member who renamed itself to the victim's nickname could retract (or edit) the
+// victim's messages. Bind to the author pubkey frozen on the row instead (groupPrivatePeerPubkey; see
+// its header note), and keep the name rule ONLY for rows that carry no frozen key, i.e. every row
+// written before this build. peerName may legitimately be empty (author no longer resolvable) — then
+// only an authored row can match, which is strictly better than the old "refuse everything".
+- (nullable OCTMessageAbstract *)groupTextRowForRetractionInResults:(RLMResults<OCTMessageAbstract *> *)results
+                                                        senderPubkey:(NSString *)senderPubkey
+                                                            peerName:(NSString *)peerName
+{
+    OCTMessageAbstract *legacy = nil;
+
+    for (OCTMessageAbstract *candidate in results) {
+        NSString *rowPubkey = candidate.groupPrivatePeerPubkey;
+
+        if (rowPubkey.length > 0) {
+            if (senderPubkey.length > 0 && [rowPubkey caseInsensitiveCompare:senderPubkey] == NSOrderedSame) {
+                return candidate;
+            }
+            continue; // author on file and it is not the requester — a matching name proves nothing
+        }
+
+        if (! legacy && peerName.length > 0 && [candidate.messageText.groupPeerName isEqualToString:peerName]) {
+            legacy = candidate; // pre-batch row: no author on file, behave as before
+        }
+    }
+
+    return legacy;
+}
+
 // KHANDAQ (#179): delete-for-both broadcast (KQ family, mirrors Android HelperMessageDelete):
 // [0..5]=0x667788113435 [6]=ver(1) [7]=0x42 [8..11]=message_id u32 BE [12..15]=ts u32 BE.
 // Returns YES when the packet was a delete (consumed), regardless of whether a row matched.
@@ -2449,10 +2543,23 @@ partMessage:(NSString *)partMessage
         return YES;
     }
 
+    // the requester's STABLE identity, resolved once for both branches (empty when toxcore can no
+    // longer map the peer id — then only the legacy, author-less rows below can still match).
+    // KHANDAQ (audit, round 7): use the SAME two-source resolver the stamping side uses. Every group
+    // callback hops to the main queue before we run, so by now toxcore may already have dropped the peer
+    // id and the direct lookup answers nothing. Stamping then falls back to the roster while checking did
+    // not — so in that window an honest author's own "delete for everyone" resolved to an empty key,
+    // failed to match the row it had itself authored, and silently no-opped on that recipient while
+    // succeeding on the others: a half-deleted message. The roster is consulted only when no live peer
+    // holds the id (a recycled id is by definition known to toxcore), so it cannot widen the gate.
+    NSString *senderPubkey = [self groupStableSenderPubkeyHexForGroupNumber:groupNumber peerId:peerId chat:chat];
+
     OCTMessageAbstract *found = nil;
     if (isFile) {
-        // file/media/voice: the groupMsgIdHashHex is globally unique, so the hash alone identifies
-        // the transfer — no author disambiguation needed (like the reaction file path).
+        // KHANDAQ (audit): the groupMsgIdHashHex identifies the TRANSFER, not its author, and it rides in
+        // the clear in every group file packet — matching on the hash alone let ANY member retract
+        // anybody's media. Bind the retraction to the stable sender key frozen on the row (#82 live path
+        // / audit F-6 history-sync path both stamp it) when the row has one.
         NSMutableString *hashHex = [NSMutableString stringWithCapacity:64];
         for (int i = 9; i < 41; i++) {
             [hashHex appendFormat:@"%02x", b[i]];
@@ -2460,7 +2567,10 @@ partMessage:(NSString *)partMessage
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
                                   chat.uniqueIdentifier, hashHex];
-        found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+        // scan, don't take firstObject: a payload refused because its sender did not match is filed as
+        // ITS own row under the same hash (audit F-5), so the first row may be a stranger's.
+        found = [self groupFileRowForRetractionInResults:[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate]
+                                             senderPubkey:senderPubkey];
     }
     else {
         const uint32_t messageId = ((uint32_t)b[8] << 24) | ((uint32_t)b[9] << 16)
@@ -2468,16 +2578,19 @@ partMessage:(NSString *)partMessage
         if (messageId == 0) {
             return YES;
         }
-        // authenticate by the sender's STABLE identity: resolve the same frozen peer name that was
-        // stamped on the row at insert time — only the author's own messages can be retracted
+        // authenticate by the sender's STABLE identity (the frozen peer NAME this used to match on is a
+        // nickname: any member could rename itself to the victim's name and retract the victim's texts).
+        // The name is still resolved, but only as the fallback for rows written before the key existed.
         NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
-        if (peerName.length == 0) {
+        if (peerName.length == 0 && senderPubkey.length == 0) {
             return YES;
         }
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                                  @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
-                                  chat.uniqueIdentifier, (int32_t)messageId, peerName];
-        found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+                                  @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND groupSenderPeerId != 0",
+                                  chat.uniqueIdentifier, (int32_t)messageId];
+        found = [self groupTextRowForRetractionInResults:[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate]
+                                             senderPubkey:senderPubkey
+                                                 peerName:peerName];
     }
     if (found) {
         OCTLogInfo(@"group delete: removing retracted %@ message", isFile ? @"file" : @"text");
@@ -2833,7 +2946,20 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 - (void)deleteGroupMessageForBoth:(OCTMessageAbstract *)message inChat:(OCTChat *)chat
 {
     do {
-        if (! message || ! chat || message.groupSenderPeerId != 0) { // own outgoing only
+        // KHANDAQ (audit F-6): peerId 0 alone is not "ours" — a history-synced row carries 0 whenever
+        // its author was unresolvable at insert time, and retracting it would broadcast a 0x42 for
+        // someone else's message under OUR key. Local delete still works via the caller's else branch.
+        //
+        // KHANDAQ (audit, round 5): kept as-is after re-checking the "lost my DB, rejoined, my own
+        // messages came back through history sync" case — it cannot produce a row here. A relaying peer
+        // only re-serves rows it received LIVE (OCTNgcGroupHistSync buildSyncMessagePacket... returns nil
+        // for groupHistorySync rows) and stamps them with the original author's key, and our own receive
+        // side drops any sync packet carrying our own pubkey (handleIncomingSyncMessage/File). So a row
+        // we authored never gets re-inserted as a synced row while our identity is unchanged; if the
+        // identity DID change, the message is not ours to retract for others anyway. Nothing an honest
+        // user can still edit/retract is lost — the UI does not even offer these actions on such a row,
+        // since -isOutgoing is NO for it.
+        if (! message || ! chat || message.groupSenderPeerId != 0 || message.groupHistorySync) { // own outgoing only
             break;
         }
         OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
@@ -2895,7 +3021,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
 // own message (addressed by group+message_id+frozen author name, like the 0x42 text delete).
 - (void)editGroupMessage:(OCTMessageAbstract *)message inChat:(OCTChat *)chat newText:(NSString *)newText
 {
-    if (! message || ! chat || message.groupSenderPeerId != 0 || message.messageText == nil) {
+    // KHANDAQ (audit F-6): same "peerId 0 is not proof it is ours" narrowing as the 0x42 retract above,
+    // and kept for the same reason (see the round-5 note there: our own messages never come back as
+    // history-synced rows, so this bail costs an honest user nothing).
+    if (! message || ! chat || message.groupSenderPeerId != 0 || message.groupHistorySync || message.messageText == nil) {
         return; // own outgoing text only
     }
     int32_t messageId = (int32_t)message.messageText.messageId;
@@ -2966,15 +3095,23 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     if (! chat) {
         return YES;
     }
-    // authenticate by the author's frozen peer name (only the author can edit their own message)
+    // authenticate by the author's STABLE key, exactly like the 0x42 text retract — the frozen peer NAME
+    // this used to match on is a spoofable nickname, and rewriting someone else's message is at least as
+    // damaging as deleting it. Rows with no frozen key (pre-batch) keep the old name rule.
+    // KHANDAQ (audit, round 7): two-source resolver, same as the 0x42 gate — a peer id toxcore has
+    // already forgotten by the time this main-queue callback runs otherwise resolved to an empty key and
+    // the author's own edit silently no-opped on that recipient. See the resolver's own header note.
+    NSString *senderPubkey = [self groupStableSenderPubkeyHexForGroupNumber:groupNumber peerId:peerId chat:chat];
     NSString *peerName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat];
-    if (peerName.length == 0) {
+    if (peerName.length == 0 && senderPubkey.length == 0) {
         return YES;
     }
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND messageText.groupPeerName == %@ AND groupSenderPeerId != 0",
-                              chat.uniqueIdentifier, (int32_t)messageId, peerName];
-    OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
+                              @"chatUniqueIdentifier == %@ AND messageText.messageId == %d AND groupSenderPeerId != 0",
+                              chat.uniqueIdentifier, (int32_t)messageId];
+    OCTMessageAbstract *found = [self groupTextRowForRetractionInResults:[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate]
+                                                            senderPubkey:senderPubkey
+                                                                peerName:peerName];
     if (! found || found.messageText == nil) {
         return YES;
     }
@@ -3030,7 +3167,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     }
 
     [self setupFileTransferIfNeeded];
-    [self.fileTransfer handleIncomingPacketWithGroupNumber:groupNumber peerId:peerId data:data];
+    [self.fileTransfer handleIncomingPacketWithGroupNumber:groupNumber
+                                                    peerId:peerId
+                                          peerPublicKeyHex:peerPublicKeyHex
+                                                      data:data];
 }
 
 - (void)tox:(OCTTox *)tox groupCustomPrivatePacketWithGroupNumber:(OCTToxGroupNumber)groupNumber
@@ -3074,7 +3214,10 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         return;
     }
     [self setupFileTransferIfNeeded];
-    [self.fileTransfer handleIncomingPacketWithGroupNumber:groupNumber peerId:peerId data:data];
+    [self.fileTransfer handleIncomingPacketWithGroupNumber:groupNumber
+                                                    peerId:peerId
+                                          peerPublicKeyHex:peerPublicKeyHex
+                                                      data:data];
 
     [self setupHistSyncIfNeeded];
     [self.histSync handleIncomingPrivatePacketWithGroupNumber:groupNumber peerId:peerId data:data];
@@ -3687,6 +3830,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }
         incomingBeginBlock:^(uint32_t groupNumber,
                              uint32_t peerId,
+                             NSString *senderPublicKeyHex,
                              NSString *fileName,
                              NSString *filePath,
                              uint64_t fileSize,
@@ -3699,6 +3843,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             [self handleIncomingGroupFileBeginWithGroupNumber:groupNumber
                                                        peerId:peerId
+                                          senderPublicKeyHex:senderPublicKeyHex
                                                      fileName:fileName
                                                      filePath:filePath
                                                      fileSize:fileSize
@@ -3706,6 +3851,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }
         incomingCompleteBlock:^(uint32_t groupNumber,
                                 uint32_t peerId,
+                                NSString *senderPublicKeyHex,
                                 NSString *fileName,
                                 NSString *filePath,
                                 uint64_t fileSize,
@@ -3718,6 +3864,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             [self handleIncomingGroupFileCompleteWithGroupNumber:groupNumber
                                                           peerId:peerId
+                                             senderPublicKeyHex:senderPublicKeyHex
                                                         fileName:fileName
                                                         filePath:filePath
                                                         fileSize:fileSize
@@ -3995,10 +4142,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
-            if (peerId > 0 && peerName.length > 0) {
-                [realmManager upsertGroupPeerForChat:chat peerId:peerId peerName:peerName];
-            }
-
+            // KHANDAQ (audit F-6): the peer name inside a history-sync packet is UNAUTHENTICATED — the
+            // relaying member types whatever it wants there. Writing it into the shared peer table
+            // renamed that peer EVERYWHERE (member list, live messages, "X сменил имя" notices), so one
+            // member could impersonate another across the whole UI. The name now stays on this row only
+            // (messageText.groupPeerName below); real peer names keep coming from toxcore's own roster.
             return [realmManager addGroupSyncedMessageWithText:text
                                                           type:type
                                                           chat:chat
@@ -4014,6 +4162,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                     NSString *fileUTI,
                                                     uint32_t peerId,
                                                     NSString *peerName,
+                                                    NSString *senderPubkeyHex,
                                                     NSString *msgIdHashHex,
                                                     NSTimeInterval dateInterval) {
             __strong typeof(weakSelf) self = weakSelf;
@@ -4043,8 +4192,20 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return nil;
             }
 
-            if (peerId > 0 && peerName.length > 0) {
-                [realmManager upsertGroupPeerForChat:chat peerId:peerId peerName:peerName];
+            // KHANDAQ (audit F-6): same as the synced-text path — never let the packet's peer name into
+            // the shared peer table. Prefer the name toxcore itself vouches for (resolved by the stable
+            // pubkey), and fall back to the packet's claim only when the author is not in our roster;
+            // either way it is frozen on this row alone.
+            NSString *frozenPeerName = peerName;
+
+            if (peerId > 0) {
+                NSString *rosterName = [self groupPeerNameByPubkeyForGroupNumber:(OCTToxGroupNumber)chat.groupNumber
+                                                                          peerId:peerId
+                                                                            chat:chat];
+
+                if (rosterName.length > 0) {
+                    frozenPeerName = rosterName;
+                }
             }
 
             return [realmManager addGroupSyncedMessageWithFileName:fileName
@@ -4053,7 +4214,8 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                           fileType:OCTMessageFileTypeReady
                                                               chat:chat
                                                             peerId:peerId
-                                                          peerName:peerName
+                                                          peerName:frozenPeerName
+                                                   senderPubkeyHex:senderPubkeyHex
                                                            fileUTI:fileUTI
                                                 groupMsgIdHashHex:msgIdHashHex
                                                       dateInterval:dateInterval];
@@ -4147,6 +4309,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
 - (void)handleIncomingGroupFileBeginWithGroupNumber:(uint32_t)groupNumber
                                              peerId:(uint32_t)peerId
+                                 senderPublicKeyHex:(NSString *)senderPublicKeyHex
                                            fileName:(NSString *)fileName
                                            filePath:(NSString *)filePath
                                            fileSize:(uint64_t)fileSize
@@ -4159,13 +4322,46 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
-    OCTMessageAbstract *existing = [realmManager groupMessageWithGroupMsgIdHashHex:msgIdHex chat:chat];
+    // KHANDAQ (audit F-5): only the peer a row already names may re-open (resume) it. The in-memory
+    // BEGIN dedup stops a second BEGIN only while the assembly lives — after the NACK eviction (see
+    // OCTNgcGroupFileTransfer) the row is still 'Loading' with no assembly behind it, and a foreign peer
+    // could then re-point it at its own file name/path/sender. The ownership test belongs in the lookup,
+    // not after it: the msg-id hash is public AND not unique (a refused COMPLETE files its payload as
+    // its own row under the same hash), so firstObject can return a stranger's row. Asking for OUR
+    // sender's row means a genuine resume still lands here, while a foreign hash collision simply falls
+    // through and gets a row of its own below — no legitimate transfer is dropped. Rows with no frozen
+    // key (legacy/unresolved sender) keep matching any sender, as before.
+    OCTMessageAbstract *existing = [realmManager groupMessageWithGroupMsgIdHashHex:msgIdHex
+                                                                      senderPubkey:senderPublicKeyHex
+                                                                              chat:chat];
 
     if (existing) {
         if (existing.messageFile.fileType == OCTMessageFileTypeReady) {
+            // A finished row is never re-opened. This is also what absorbs a re-served copy of our OWN
+            // file (#170): our row is Ready as soon as the upload succeeded, so the own-outgoing guard
+            // below is never reached for it and no duplicate is created.
             return;
         }
 
+        // KHANDAQ (audit, round 7): a foreign BEGIN may NEVER adopt our own outgoing row. Our msgIdHex
+        // rides in the clear in our own BEGIN and in every CHUNK we broadcast, and our row is created
+        // with peerId 0 and NO frozen author key (only the incoming handlers freeze one) — so it is
+        // exactly the row the author-less branch of the lookup above hands out. It stays adoptable for a
+        // long time: Loading for the whole upload, Canceled forever if a connected send failed. Adopting
+        // it rewrote our file name/path, stamped the ATTACKER's peer id and froze the ATTACKER's key onto
+        // it — which then satisfied the 0x42 retract gate (peerId != 0 and the row's key == the
+        // requester's) and deleted our own photo on our own device. Same "ours" test as the retract gate:
+        // peerId 0 alone is not ours, a history-synced row can carry 0 when its author was unresolvable.
+        // Dropping the match here (instead of returning) keeps the foreign BEGIN honest — it falls
+        // through and gets a row of its own, attributed to its real sender.
+        if (existing.groupSenderPeerId == 0 && ! existing.groupHistorySync) {
+            OCTLogWarn(@"NGC group file BEGIN targeting our own outgoing row refused group=%u peer=%u",
+                       groupNumber, peerId);
+            existing = nil;
+        }
+    }
+
+    if (existing) {
         NSString *fileUTI = [self fileUTIFromFileName:fileName];
 
         [realmManager updateObject:existing.messageFile withBlock:^(OCTMessageFile *file) {
@@ -4180,7 +4376,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             abstract.groupSenderPeerId = peerId;
             abstract.dateInterval = abstract.dateInterval;
         }];
-        [self freezeGroupFileSenderOnMessage:existing groupNumber:groupNumber peerId:peerId chat:chat];
+        [self freezeGroupFileSenderOnMessage:existing
+                                 groupNumber:groupNumber
+                                      peerId:peerId
+                          senderPublicKeyHex:senderPublicKeyHex
+                                        chat:chat];
         return;
     }
 
@@ -4206,7 +4406,11 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                      fileUTI:fileUTI
                           groupMsgIdHashHex:msgIdHex
                        groupTransferProgress:0.0f];
-    [self freezeGroupFileSenderOnMessage:beginMessage groupNumber:groupNumber peerId:peerId chat:chat];
+    [self freezeGroupFileSenderOnMessage:beginMessage
+                             groupNumber:groupNumber
+                                  peerId:peerId
+                      senderPublicKeyHex:senderPublicKeyHex
+                                    chat:chat];
 }
 
 - (void)handleIncomingGroupFileProgressWithGroupNumber:(uint32_t)groupNumber
@@ -4231,6 +4435,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
 - (void)handleIncomingGroupFileCompleteWithGroupNumber:(uint32_t)groupNumber
                                                 peerId:(uint32_t)peerId
+                                    senderPublicKeyHex:(NSString *)senderPublicKeyHex
                                               fileName:(NSString *)fileName
                                               filePath:(NSString *)filePath
                                               fileSize:(uint64_t)fileSize
@@ -4246,9 +4451,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     // KHANDAQ (#15): find the loading bubble AND mark it ready atomically on the realm's own queue
     // (the old split lookup-then-update used a stale default realm, so byHash/byContent missed the
     // BEGIN message and a duplicate "ready" copy was created — the stuck grey image + a loaded one).
+    // KHANDAQ (audit F-5): the msg-id hash is public inside the group, so the row lookup alone lets any
+    // member finish somebody else's transfer with its own payload. Pass the key of the peer this file
+    // really came from — the row keeps the sender frozen at BEGIN and refuses a different one.
     BOOL handled = [realmManager markGroupIncomingFileReadyInChat:chat
                                                         msgIdHash:msgIdHex
                                                            peerId:peerId
+                                                     senderPubkey:senderPublicKeyHex
                                                          fileName:fileName
                                                          filePath:filePath
                                                          fileSize:fileSize];
@@ -4277,11 +4486,16 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                      fileUTI:fileUTI
                           groupMsgIdHashHex:msgIdHex
                        groupTransferProgress:1.0f];
-    [self freezeGroupFileSenderOnMessage:completeMessage groupNumber:groupNumber peerId:peerId chat:chat];
+    [self freezeGroupFileSenderOnMessage:completeMessage
+                             groupNumber:groupNumber
+                                  peerId:peerId
+                      senderPublicKeyHex:senderPublicKeyHex
+                                    chat:chat];
 }
 
 - (void)handleIncomingGroupFileWithGroupNumber:(uint32_t)groupNumber
                                         peerId:(uint32_t)peerId
+                            senderPublicKeyHex:(NSString *)senderPublicKeyHex
                                       fileName:(NSString *)fileName
                                       filePath:(NSString *)filePath
                                       fileSize:(uint64_t)fileSize
@@ -4289,6 +4503,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 {
     [self handleIncomingGroupFileCompleteWithGroupNumber:groupNumber
                                                   peerId:peerId
+                                     senderPublicKeyHex:senderPublicKeyHex
                                                 fileName:fileName
                                                 filePath:filePath
                                                 fileSize:fileSize
@@ -5149,6 +5364,38 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     return nil;
 }
 
+// KHANDAQ (audit, round 6): resolve the STABLE key of the peer a packet came from, for freezing it as
+// the row's author. Every toxcore group callback hops to the main queue before we run, so the peer id
+// can already be gone from toxcore's list by then and the direct lookup answers nothing — the row is
+// stored author-less, and an author-less row falls into the LEGACY branch of the 0x42/0x41 gates,
+// where any member can retract it. The roster is the second source: its rows are keyed by peer id and
+// dropped only by -removeGroupPeersForChat:notInPeerIds: inside refreshPeersForChat (main queue too,
+// so it cannot interleave with us). It is consulted ONLY after toxcore came up empty, i.e. when no
+// live peer holds that id — a recycled id is by definition known to toxcore and answered above — so
+// the roster row can only be the departed original sender. Returns nil when neither source knows the
+// id, which needs toxcore to have delivered a packet from a peer it and our roster both already
+// forgot; the caller logs that case so it can be counted in the field instead of guessed at.
+- (nullable NSString *)groupStableSenderPubkeyHexForGroupNumber:(OCTToxGroupNumber)groupNumber
+                                                         peerId:(uint32_t)peerId
+                                                           chat:(OCTChat *)chat
+{
+    NSString *pubkey = [[self.dataSource managerGetTox] groupPeerPublicKeyHexForGroupNumber:groupNumber
+                                                                                     peerId:peerId
+                                                                                      error:nil];
+
+    if (pubkey.length > 0) {
+        return pubkey;
+    }
+
+    if (! chat) {
+        return nil;
+    }
+
+    OCTGroupPeer *peer = [[self.dataSource managerGetRealmManager] groupPeerForChat:chat peerId:peerId];
+
+    return peer.peerPublicKeyHex.length > 0 ? peer.peerPublicKeyHex : nil;
+}
+
 // KHANDAQ (#82/#83): freeze the FILE sender's display name + stable pubkey onto the message at
 // receipt, mirroring the text path (resolved by pubkey, not the volatile peerId). Only stamps when
 // empty, so a later BEGIN-resume / COMPLETE for the same transfer never overwrites the original
@@ -5157,6 +5404,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 - (void)freezeGroupFileSenderOnMessage:(OCTMessageAbstract *)message
                            groupNumber:(OCTToxGroupNumber)groupNumber
                                 peerId:(uint32_t)peerId
+                    senderPublicKeyHex:(NSString *)senderPublicKeyHex
                                   chat:(OCTChat *)chat
 {
     if (! message.messageFile) {
@@ -5167,7 +5415,21 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     if (peerName.length == 0) {
         peerName = [NSString stringWithFormat:@"Peer %u", peerId];
     }
-    NSString *pubkey = [[[self.dataSource managerGetTox] groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil] lowercaseString];
+    // KHANDAQ (audit F-5): prefer the key captured when the packet was delivered. Re-resolving it from
+    // the volatile peerId here can stamp the wrong key if the peer number was recycled in between, and
+    // that key is now what guards the row against a foreign sender finishing the transfer.
+    NSString *pubkey = [senderPublicKeyHex lowercaseString];
+    if (pubkey.length == 0) {
+        // KHANDAQ (audit, round 6): toxcore first, then the roster — see the resolver's note. A row we
+        // leave author-less here is one ANY member can retract via the legacy branch of the 0x42 gate,
+        // so it is worth the second lookup. BEGIN and COMPLETE both call this method and it only stamps
+        // an empty field, so a transfer whose BEGIN could not resolve still gets stamped at COMPLETE.
+        pubkey = [[self groupStableSenderPubkeyHexForGroupNumber:groupNumber peerId:peerId chat:chat] lowercaseString];
+    }
+
+    if (pubkey.length == 0) {
+        OCTLogWarn(@"NGC group file row stored with no author key group=%u peer=%u", groupNumber, peerId);
+    }
 
     [[self.dataSource managerGetRealmManager] updateObject:message.messageFile withBlock:^(OCTMessageFile *file) {
         if (file.groupPeerName.length == 0) {
@@ -5175,6 +5437,44 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }
         if (pubkey.length > 0 && file.groupSenderPubkey.length == 0) {
             file.groupSenderPubkey = pubkey;
+        }
+    }];
+}
+
+// KHANDAQ (audit, round 5): freeze the TEXT sender's stable pubkey onto an incoming group row, the
+// counterpart of freezeGroupFileSenderOnMessage above. OCTMessageText has no key column of its own and
+// this batch adds no schema, so the row-level groupPrivatePeerPubkey carries it — for an INCOMING row
+// that field already means "the other peer's stable key" (see its header note), which is the author.
+// Only stamps when empty, so a later touch never re-attributes an existing message.
+//
+// KHANDAQ (audit, round 6): takes the group/peer/chat too, so that when the key captured at delivery
+// is empty it can go through the same two-source resolver the file path uses. A text row has no
+// second event to be stamped by later (unlike a file's BEGIN/COMPLETE pair): whatever it is stamped
+// with here is final, and staying author-less is what drops it into the legacy branch of the gates.
+- (void)freezeGroupTextSenderPubkeyOnMessage:(OCTMessageAbstract *)message
+                            senderPublicKeyHex:(NSString *)senderPublicKeyHex
+                                   groupNumber:(OCTToxGroupNumber)groupNumber
+                                        peerId:(uint32_t)peerId
+                                          chat:(OCTChat *)chat
+{
+    if (! message || message.groupPrivatePeerPubkey.length > 0) {
+        return;
+    }
+
+    NSString *pubkey = [senderPublicKeyHex lowercaseString];
+
+    if (pubkey.length == 0) {
+        pubkey = [[self groupStableSenderPubkeyHexForGroupNumber:groupNumber peerId:peerId chat:chat] lowercaseString];
+    }
+
+    if (pubkey.length == 0) {
+        OCTLogWarn(@"NGC group text row stored with no author key group=%u peer=%u", groupNumber, peerId);
+        return;
+    }
+
+    [[self.dataSource managerGetRealmManager] updateObject:message withBlock:^(OCTMessageAbstract *theMessage) {
+        if (theMessage.groupPrivatePeerPubkey.length == 0) {
+            theMessage.groupPrivatePeerPubkey = pubkey;
         }
     }];
 }

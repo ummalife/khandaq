@@ -49,19 +49,24 @@ import static com.zoffcc.applications.trifa.MainActivity.MAIN_DB_NAME;
 import static com.zoffcc.applications.trifa.MainActivity.MAIN_VFS_NAME;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__DB_secrect_key;
 import static com.zoffcc.applications.trifa.MainActivity.PREF__window_security;
-import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_FILES_EXPORT_DIR;
 import static com.zoffcc.applications.trifa.MainActivity.SD_CARD_FULL_FILES_EXPORT_DIR;
 import static com.zoffcc.applications.trifa.MainActivity.export_savedata_file_unsecure;
 import static com.zoffcc.applications.trifa.MainActivity.manually_log_out;
 
 public class ExportActivity extends AppCompatActivity
 {
-
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_export);
+
+        // KHANDAQ (audit #15): the bundle written here holds the Tox PRIVATE KEY in the clear, so stale
+        // copies must not pile up — but the sweep deliberately does NOT run on entering this screen.
+        // This is also the screen that shows the database password, so the normal flow is
+        // "export -> leave -> come back to copy the password": sweeping on entry would delete the very
+        // bundle the user just made. The wipe therefore happens where it cannot destroy a finished
+        // export: right before a new export writes, and on any failed/aborted export.
 
         if (PREF__window_security)
         {
@@ -97,8 +102,12 @@ public class ExportActivity extends AppCompatActivity
                 {
                     AlertDialog.Builder builder = new AlertDialog.Builder(v.getContext());
                     builder.setTitle(R.string.maintenance_export_all_files_title);
+                    // KHANDAQ (audit #15): this used to name SD_CARD_FILES_EXPORT_DIR (= .../vfs_export/)
+                    // + SD_CARD_FULL_FILES_EXPORT_DIR, a directory nothing is ever written to. The user
+                    // could neither find the bundle nor delete the plaintext key in it. Name the real path.
+                    final String shown_dir = full_export_dir_path(v.getContext());
                     builder.setMessage(v.getContext().getString(R.string.maintenance_export_all_files_message,
-                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_FULL_FILES_EXPORT_DIR));
+                            (shown_dir != null) ? shown_dir : SD_CARD_FULL_FILES_EXPORT_DIR));
 
                     builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
                     {
@@ -118,6 +127,82 @@ public class ExportActivity extends AppCompatActivity
                 }
             }
         });
+    }
+
+    /**
+     * the one true location of the "export all files" bundle. the confirmation dialog and the writer
+     * must not disagree about it, so both ask here. null if external storage is not available.
+     */
+    static String full_export_dir_path(final Context context)
+    {
+        final File ext_dir = context.getExternalFilesDir(null);
+
+        if (ext_dir == null)
+        {
+            return null;
+        }
+
+        return ext_dir.getAbsolutePath() + SD_CARD_FULL_FILES_EXPORT_DIR;
+    }
+
+    /**
+     * delete everything a previous "export all files" run left in the bundle directory, above all
+     * unsecure_export_savedata.tox (plaintext Tox private key). best effort, never throws.
+     */
+    static void sweep_full_export_dir(final Context context)
+    {
+        try
+        {
+            final String dir_path = full_export_dir_path(context);
+
+            if (dir_path == null)
+            {
+                return;
+            }
+
+            final File[] stale = new File(dir_path).listFiles();
+
+            if (stale == null)
+            {
+                return;
+            }
+
+            for (File f : stale)
+            {
+                if (f.isDirectory())
+                {
+                    sweep_dir_recursive(f);
+                }
+
+                //noinspection ResultOfMethodCallIgnored
+                f.delete();
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private static void sweep_dir_recursive(final File dir)
+    {
+        final File[] children = dir.listFiles();
+
+        if (children == null)
+        {
+            return;
+        }
+
+        for (File f : children)
+        {
+            if (f.isDirectory())
+            {
+                sweep_dir_recursive(f);
+            }
+
+            //noinspection ResultOfMethodCallIgnored
+            f.delete();
+        }
     }
 
     public static void export_all_files(final Context context)
@@ -155,17 +240,39 @@ public class ExportActivity extends AppCompatActivity
         @Override
         protected Boolean doInBackground(Void... args)
         {
+            boolean export_complete = false;
+
             try
             {
-                String export_dir_string = c.getExternalFilesDir(null).getAbsolutePath() + SD_CARD_FULL_FILES_EXPORT_DIR;
+                // KHANDAQ (audit #15): unlike the rest of this bundle (SQLCipher DB + IOCipher VFS,
+                // both encrypted) the .tox file below is the Tox PRIVATE KEY in the clear, and it lives
+                // on EXTERNAL storage. Wipe the whole previous bundle before writing a new one, so no
+                // stale key survives and a run that dies mid-way cannot pass old data off as fresh.
+                sweep_full_export_dir(c);
+
+                String export_dir_string = full_export_dir_path(c);
+
+                if (export_dir_string == null)
+                {
+                    throw new java.io.IOException("no external files dir");
+                }
 
                 // make directory
                 File export_dir = new File(export_dir_string);
                 export_dir.mkdirs();
 
                 // first export the tox save file unencrypted
-                final String export_tox_file = export_dir_string + "/" + "unsecure_export_savedata.tox";
-                export_savedata_file_unsecure("_", export_tox_file);
+                File export_tox_file = new File(export_dir_string + "/" + "unsecure_export_savedata.tox");
+                export_savedata_file_unsecure("_", export_tox_file.getAbsolutePath());
+
+                // KHANDAQ (audit #15): the JNI returns without writing anything when tox_global is NULL
+                // (it races the tox teardown that onPreExecute kicks off). That used to still produce a
+                // "export complete" toast and a bundle with no identity in it, which only shows up when
+                // the user tries to import it on the new device. Fail loudly instead.
+                if ((!export_tox_file.exists()) || (export_tox_file.length() < ToxProfileImportHelper.MIN_SAVEDATA_BYTES))
+                {
+                    throw new java.io.IOException("savedata not written");
+                }
 
                 // now export all other files
                 final ArrayList<String> files_to_export = new ArrayList<>();
@@ -195,12 +302,25 @@ public class ExportActivity extends AppCompatActivity
                     {
                     }
                 }
+
+                export_complete = true;
             }
             catch (Exception e)
             {
                 e.printStackTrace();
                 display_toast(c.getString(R.string.maintenance_export_failed), true, 0);
                 return false;
+            }
+            finally
+            {
+                // KHANDAQ (audit #15): on success the plaintext savedata IS the deliverable — the user
+                // collects the bundle by hand over USB/a file manager, so it has to stay until the next
+                // export or the next entry into this screen sweeps it. A failed export has no
+                // deliverable, so nothing of it — least of all the private key — may survive.
+                if (!export_complete)
+                {
+                    sweep_full_export_dir(c);
+                }
             }
 
             return true;

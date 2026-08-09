@@ -34,7 +34,8 @@ public final class ToxProfileImportHelper
     static final String EXTRA_OPEN_IMPORT_PICKER = "open_import_picker";
     static final String EXTRA_OPEN_EXPORT_PICKER = "open_export_picker";
     static final String EXPORT_SUGGESTED_FILENAME = "khandaq-profile.tox";
-    private static final long MIN_SAVEDATA_BYTES = 64L;
+    // package-visible: ExportActivity applies the same "did the JNI actually write a savedata" floor
+    static final long MIN_SAVEDATA_BYTES = 64L;
     static final String[] TOX_IMPORT_MIME_TYPES = new String[] {
             "application/octet-stream",
             "application/x-tox",
@@ -105,6 +106,12 @@ public final class ToxProfileImportHelper
 
         try
         {
+            // KHANDAQ (audit #15): the JNI returns without writing when tox_global is NULL, so a staging
+            // file left by an earlier run (process killed between write and delete) would be copied out
+            // as if it were fresh. Same pre-delete as ExportActivity's bundle sweep.
+            //noinspection ResultOfMethodCallIgnored
+            staging.delete();
+
             export_savedata_file_unsecure("_", staging.getAbsolutePath());
 
             if (!staging.exists() || staging.length() < MIN_SAVEDATA_BYTES)
@@ -129,8 +136,6 @@ public final class ToxProfileImportHelper
                 }
             }
 
-            staging.delete();
-
             final String label = resolveUriDisplayLabel(context, destinationUri);
             new AlertDialog.Builder(context)
                     .setTitle(R.string.settings_export_tox_profile)
@@ -142,6 +147,15 @@ public final class ToxProfileImportHelper
         {
             Log.e(TAG, "export failed: " + e.getMessage(), e);
             Toast.makeText(context, R.string.settings_export_tox_profile_failed, Toast.LENGTH_LONG).show();
+        }
+        finally
+        {
+            // KHANDAQ (audit #15): the staging file is the Tox PRIVATE KEY in the clear. It used to be
+            // deleted only on the success path, so the early return on a short/missing export and every
+            // failure between the JNI write and the copy (unopenable destination, I/O error) left it
+            // sitting in the app cache. Delete it on every exit instead.
+            //noinspection ResultOfMethodCallIgnored
+            staging.delete();
         }
     }
 
@@ -257,9 +271,14 @@ public final class ToxProfileImportHelper
 
         ensureStoragePathsInitialized(activity);
 
+        final File importStaging = new File(activity.getCacheDir(), "import_savedata.tox");
+        // KHANDAQ (audit #15): true once import_toxsave_file_unsecure() has taken ownership of the
+        // staging file — it copies and then deletes it on its own background thread, so deleting it
+        // here would pull the profile out from under the import. Every other exit must delete it.
+        boolean handedOver = false;
+
         try
         {
-            final File importStaging = new File(activity.getCacheDir(), "import_savedata.tox");
             if (!copyUriToFile(activity, uri, importStaging))
             {
                 showImportError(activity, activity.getString(R.string.settings_import_tox_profile_invalid_file));
@@ -269,7 +288,6 @@ public final class ToxProfileImportHelper
             final int validity = validateToxSaveFile(importStaging);
             if (validity != TOXSAVE_OK)
             {
-                importStaging.delete();
                 showImportError(activity, activity.getString(
                         (validity == TOXSAVE_ENCRYPTED) ? R.string.settings_import_tox_profile_encrypted_file
                                                         : R.string.settings_import_tox_profile_invalid_file));
@@ -280,6 +298,9 @@ public final class ToxProfileImportHelper
             {
                 case FIRST_LAUNCH:
                     io_file_copy(importStaging, savedataDestination(activity));
+                    // deleted here as well as in the finally: onFirstLaunchSuccess may never return
+                    // (it can restart the process), and then no finally would run.
+                    //noinspection ResultOfMethodCallIgnored
                     importStaging.delete();
                     if (onFirstLaunchSuccess != null)
                     {
@@ -289,6 +310,7 @@ public final class ToxProfileImportHelper
 
                 case REPLACE_EXISTING:
                     import_toxsave_file_unsecure(activity, importStaging);
+                    handedOver = true;
                     break;
             }
         }
@@ -296,6 +318,15 @@ public final class ToxProfileImportHelper
         {
             Log.e(TAG, "import failed: " + e.getMessage(), e);
             showImportError(activity, activity.getString(R.string.settings_import_tox_profile_failed));
+        }
+        finally
+        {
+            if (!handedOver)
+            {
+                // plaintext private key: gone on the invalid/encrypted early returns and on any throw
+                //noinspection ResultOfMethodCallIgnored
+                importStaging.delete();
+            }
         }
     }
 

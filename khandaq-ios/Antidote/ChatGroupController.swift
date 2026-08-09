@@ -1586,6 +1586,13 @@ private extension ChatGroupController {
 
     func peerHeader(for message: OCTMessageAbstract) -> String? {
         guard message.groupSenderPeerId > 0 else {
+            // KHANDAQ (audit F-6): a history-synced row whose author isn't in our roster right now has
+            // peer id 0, so there is no role to look up — show the name frozen on the row rather than
+            // an anonymous bubble.
+            if message.groupHistorySync, let frozen = peerName(for: message), !frozen.isEmpty {
+                return frozen
+            }
+
             return nil
         }
 

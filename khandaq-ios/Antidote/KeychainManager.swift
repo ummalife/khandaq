@@ -10,6 +10,7 @@ private struct Constants {
 
     static let toxPasswordForActiveAccount = "toxPasswordForActiveAccount"
     static let failedPinAttemptsNumber = "failedPinAttemptsNumber"
+    static let pinLockedUntil = "pinLockedUntil"
 }
 
 class KeychainManager {
@@ -33,10 +34,25 @@ class KeychainManager {
         }
     }
 
+    /// Unix time (in seconds) until which pin entering stays blocked after too many failed attempts.
+    ///
+    /// KHANDAQ (audit #11): lives in the keychain next to the attempts counter so it survives the
+    /// log out that follows a batch of wrong pins — the keychain password logs the user straight back
+    /// in, so without a persisted deadline an attacker just repeats batches of ten with no delay.
+    var pinLockedUntil: Int? {
+        get {
+            return getIntForKey(Constants.pinLockedUntil)
+        }
+        set {
+            setInt(newValue, forKey: Constants.pinLockedUntil)
+        }
+    }
+
     /// Removes all data related to active account.
     func deleteActiveAccountData() {
         toxPasswordForActiveAccount = nil
         failedPinAttemptsNumber = nil
+        pinLockedUntil = nil
     }
 }
 

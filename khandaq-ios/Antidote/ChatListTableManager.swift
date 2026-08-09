@@ -748,7 +748,20 @@ private extension ChatListTableManager {
             return false
         }
 
-        return !lastMessage.isOutgoing()
+        return messageCountsAsUnread(lastMessage)
+    }
+
+    // KHANDAQ (audit F-6): a history-synced row whose author could not be resolved at insert time
+    // carries groupSenderPeerId == 0 — exactly the shape isOutgoing() used to misread as "ours".
+    // Correcting the alignment (it IS someone else's message) would otherwise make those rows start
+    // counting, so a long-idle group would jump to a brand-new unread number purely on update. Keep
+    // them out of the badge; attributable synced rows (peerId > 0) count exactly as they always did.
+    func messageCountsAsUnread(_ message: OCTMessageAbstract) -> Bool {
+        if message.isOutgoing() || message.groupSystemMessage {
+            return false
+        }
+
+        return !(message.groupHistorySync && message.groupSenderPeerId == 0)
     }
 
     func visibleRowCount() -> Int {
@@ -839,7 +852,7 @@ private extension ChatListTableManager {
             }
             // KHANDAQ (#41): only genuine incoming messages count — skip outgoing and "X joined"
             // system notices (isOutgoing() returns NO for system messages, so guard explicitly).
-            if !message.isOutgoing() && !message.groupSystemMessage {
+            if messageCountsAsUnread(message) {
                 count += 1
             }
         }

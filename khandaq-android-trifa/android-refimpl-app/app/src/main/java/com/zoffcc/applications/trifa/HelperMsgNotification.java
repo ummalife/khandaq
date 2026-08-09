@@ -626,11 +626,19 @@ public class HelperMsgNotification
         }
     }
 
+    private static volatile long pending_notification_chat_key_ts = 0L;
+    // KHANDAQ (audit #8): how long a chat-open may wait behind the app lock. The tap already cleared
+    // the notification, so a key that is still pending long after the tap must be dropped rather than
+    // popping a chat open out of context on some later, unrelated unlock. Generous enough that the
+    // honest path (cold start -> password -> DB mount -> MainActivity) never loses the chat-open.
+    private static final long PENDING_OPEN_CHAT_MAX_AGE_MS = 120_000L;
+
     static void store_pending_open_chat_key(final String key)
     {
         if ((key != null) && (key.length() > 1))
         {
             TRIFAGlobals.pending_notification_chat_key = key;
+            pending_notification_chat_key_ts = System.currentTimeMillis();
         }
     }
 
@@ -662,6 +670,23 @@ public class HelperMsgNotification
     {
         final String key = TRIFAGlobals.pending_notification_chat_key;
         if ((key == null) || (key.length() < 2) || (c == null))
+        {
+            return;
+        }
+        // KHANDAQ (audit #8): a stale deferral must not surface later out of context — the tap that
+        // stored this key already dismissed the notification, so an expired key is dropped and the user
+        // reopens the chat from the list.
+        if ((System.currentTimeMillis() - pending_notification_chat_key_ts) > PENDING_OPEN_CHAT_MAX_AGE_MS)
+        {
+            TRIFAGlobals.pending_notification_chat_key = null;
+            return;
+        }
+        // KHANDAQ (audit #8): a notification tap on a locked app runs this from MainActivity.onResume,
+        // which would open the chat ON TOP of the PIN screen the app-lock just raised. The question is
+        // "is a gate up / owed right now", not "was this process ever unlocked" — on a warm process the
+        // background gate fires with process_unlocked already true. Keep the key pending instead of
+        // dropping it: MainActivity resumes again when the PIN screen finishes, and the chat opens then.
+        if (AppLockHelper.isGateUp(c))
         {
             return;
         }

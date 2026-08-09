@@ -16,10 +16,12 @@ import java.security.SecureRandom;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.PREF__DB_secrect_key__user_hash;
 
 /**
- * KHANDAQ (Profile → Детали): optional app lock. When enabled, the app asks for the password
- * again after it has been in the background longer than the configured timeout. Enforcement is
- * additive — it reuses the existing, tested CheckPasswordActivity unlock screen and never touches
- * the cold-start / keystore flow, so it cannot lock the user out beyond the normal password gate.
+ * KHANDAQ (Profile → Детали): optional app lock. When enabled, the app asks to unlock again after
+ * it has been in the background longer than the configured timeout, and on every screen of a fresh
+ * process until the user has authenticated (audit #8 — process death is "left the app").
+ * Enforcement is additive — it reuses the existing, tested unlock screens (PinActivity, and the
+ * legacy CheckPasswordActivity on the warm path of PIN-less profiles) and never touches the
+ * keystore / DB-key flow, so it cannot lock the user out beyond the normal password gate.
  */
 public class AppLockHelper
 {
@@ -33,6 +35,22 @@ public class AppLockHelper
     private static int started_count = 0;
     private static long backgrounded_at_ms = 0L;
     private static boolean was_backgrounded = false;
+    // KHANDAQ (audit #8): the lock was armed only on a foreground TRANSITION, so a COLD process start
+    // (reboot, force-stop, OEM low-memory kill, or a process that so far existed only for the service /
+    // push-wake) walked straight into content — a notification tap can land on MessageListActivity and
+    // CheckPasswordActivity auto-unlocks a still logged-in session. A static is exactly the right
+    // storage: it resets with the process, i.e. "this process has never been unlocked".
+    // NOT a one-shot: a startup burst starts more than one activity (notification chat, share target,
+    // deep link), and the second one must not sail through behind the first. Cleared only by a real
+    // authentication — see markProcessUnlocked().
+    private static volatile boolean process_unlocked = false;
+    // KHANDAQ (audit #8, round 3): "an unlock screen is currently up / owed". process_unlocked alone
+    // answers "has this process EVER been unlocked", which is the wrong question on a WARM process —
+    // the service keeps us alive, so the app is normally unlocked-but-backgrounded, and after the
+    // background gate fires the flag is still true while the PIN screen is waiting. Anything that
+    // reveals content (further activity starts, the deferred notification chat-open) must key off
+    // this instead. Cleared only by a real authentication — see markProcessUnlocked().
+    private static volatile boolean gate_raised = false;
     // KHANDAQ (#12): set right before the app launches its OWN picker (file/camera/gallery/audio).
     // The system picker sends us to the background, and coming back would otherwise trip the lock.
     // This suppresses exactly one lock check — the return from that picker. Real backgrounding
@@ -178,6 +196,49 @@ public class AppLockHelper
                 || (a instanceof CreateProfileActivity);
     }
 
+    /**
+     * Screens that must not trigger the cold-start lock. The auth / onboarding screens ARE the gate —
+     * mirroring isAuthScreen() here is what keeps PinActivity from re-launching itself in a loop — and
+     * the full-screen call UI or the crash screen can be the first activity of a push-woken process and
+     * has to stay usable. They show no chat content, and the process stays locked behind them, so the
+     * next content screen still gets the PIN.
+     */
+    private static boolean isColdStartLockExempt(final Activity a)
+    {
+        return isAuthScreen(a) || (a instanceof CallingActivity) || (a instanceof CallingWaitingActivity)
+                || (a instanceof CrashActivity);
+    }
+
+    /**
+     * The user authenticated in this process: PIN verified, or the manual profile password typed in.
+     * Until this is called, every non-exempt activity start re-raises the gate.
+     */
+    static void markProcessUnlocked()
+    {
+        process_unlocked = true;
+        gate_raised = false;
+        // The background episode is settled by this authentication too — otherwise a profile that
+        // unlocks through CheckPasswordActivity would be asked for the PIN right on top of the
+        // password it just typed (the flag is no longer consumed by the auth screens themselves).
+        was_backgrounded = false;
+    }
+
+    /**
+     * True while an unlock gate is up or still owed — callers must not reveal chat content yet.
+     * Two cases: we raised the PIN screen and it has not been satisfied, or this process has never
+     * been unlocked at all. The never-unlocked case deliberately re-checks the prefs so a profile
+     * without an armed PIN can never be held back by it (e.g. if the lifecycle callbacks never ran
+     * in this process).
+     */
+    static boolean isGateUp(final Context c)
+    {
+        if (gate_raised)
+        {
+            return true;
+        }
+        return !process_unlocked && isEnabled(c) && hasPin(c);
+    }
+
     static void register(final Application app)
     {
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks()
@@ -186,8 +247,62 @@ public class AppLockHelper
             public void onActivityStarted(final Activity a)
             {
                 started_count++;
-                if (started_count == 1 && was_backgrounded)
+                // KHANDAQ (audit #8): nothing has been unlocked in this process yet — gate this screen,
+                // and keep gating every further one until the user actually authenticates. No timeout
+                // check: the process died, which is a stronger "left the app" than any background timer,
+                // and backgrounded_at_ms died with it. The #12/#25 picker suppression is deliberately not
+                // consulted here — it is a warm-return concept and its flag is false in a fresh process
+                // anyway, so it cannot swallow this check.
+                // KHANDAQ (audit #8, round 3): also gate while a raised PIN screen is still unsatisfied,
+                // not only while the process has never been unlocked. On a warm process the background
+                // gate can be up with process_unlocked == true, and a notification tap / deep link that
+                // starts a content activity would otherwise be brought to the front ON TOP of it.
+                if ((gate_raised || !process_unlocked) && !isColdStartLockExempt(a))
                 {
+                    // PIN only: the legacy password fallback auto-unlocks a still logged-in session on
+                    // purpose and re-launches MainActivity from its success path (see
+                    // CheckPasswordActivity), so launching it here would flash, dismiss and loop instead
+                    // of gating. Those profiles keep exactly the reach they had before this audit.
+                    if (isEnabled(a) && hasPin(a))
+                    {
+                        try
+                        {
+                            final Intent i = new Intent(a, PinActivity.class);
+                            i.putExtra(PinActivity.EXTRA_MODE, PinActivity.MODE_UNLOCK);
+                            // REORDER_TO_FRONT: a startup burst gates more than one screen — reuse the one
+                            // PIN screen instead of stacking a copy per screen (user would enter it twice).
+                            i.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                            a.startActivity(i);
+                            gate_raised = true;
+                        }
+                        catch (Exception ignored)
+                        {
+                        }
+                    }
+                    else
+                    {
+                        // Nothing to gate with. Settle it now, so we neither re-check the prefs on every
+                        // start nor demand a PIN the user only sets up later in this same session.
+                        process_unlocked = true;
+                        // Defensive: never leave a gate "owed" that can no longer be raised, or the
+                        // deferred notification chat-open would stay stuck forever.
+                        gate_raised = false;
+                    }
+                }
+                if (was_backgrounded)
+                {
+                    // KHANDAQ (audit #8, round 3): do NOT consume the flag on the exempt screens. The
+                    // message-notification PendingIntent lands on StartMainActivityWrapper, which is
+                    // exempt: it swallowed "we were backgrounded" and the content screen it launches
+                    // right after started ungated — the bypass on a WARM process, which is the common
+                    // case here because TrifaToxService keeps the process alive. Hold the flag until a
+                    // real screen shows up. started_count is no longer tested for the same reason: the
+                    // wrapper is still started when MainActivity starts, so the content screen would
+                    // see started_count == 2 and skip the check.
+                    if (isAuthScreen(a))
+                    {
+                        return;
+                    }
                     was_backgrounded = false;
                     // KHANDAQ (#12): we just came back from our own picker (file/camera/gallery/audio) —
                     // that's not a real "left the app", so don't demand the PIN/password.
@@ -205,7 +320,7 @@ public class AppLockHelper
                     }
                     try
                     {
-                        if (isAuthScreen(a) || !isEnabled(a))
+                        if (!isEnabled(a))
                         {
                             return;
                         }
@@ -232,6 +347,14 @@ public class AppLockHelper
                             }
                             i.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
                             a.startActivity(i);
+                            if (pin)
+                            {
+                                // KHANDAQ (audit #8, round 3): a gate is now up — every further start is
+                                // gated too and the notification chat-open defers instead of drawing over
+                                // the PIN screen. Only for the PIN: the password fallback auto-unlocks a
+                                // still logged-in session, so it is not a gate we can hold anything on.
+                                gate_raised = true;
+                            }
                         }
                     }
                     catch (Exception ignored)

@@ -156,13 +156,30 @@
 - (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
                                                               chat:(OCTChat *)chat;
 
+/**
+ * KHANDAQ (audit F-5): the msg-id hash does NOT identify one row — a payload refused because it came
+ * from the wrong sender is filed as ITS own row under the same hash. Pass the stable key of the peer
+ * being handled to get the row that belongs to that peer. A nil key, or a row with no key frozen on it
+ * (legacy / unresolved sender), falls back to the plain lookup above.
+ */
+- (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                                      senderPubkey:(nullable NSString *)senderPubkey
+                                                              chat:(OCTChat *)chat;
+
 - (nullable OCTMessageAbstract *)groupIncompleteFileMessageForChat:(OCTChat *)chat
                                                             peerId:(uint32_t)peerId
                                                           fileName:(NSString *)fileName;
 
+/**
+ * KHANDAQ (audit F-5): senderPubkey is the stable key of the peer that actually delivered the file.
+ * A row whose sender was frozen at BEGIN is only completed by that same peer; NO is returned for
+ * anybody else, so the caller files their payload as its own message instead of into this row.
+ * Pass nil when the key is unknown — the row is then completed as before.
+ */
 - (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
                                msgIdHash:(NSString *)msgIdHash
                                   peerId:(uint32_t)peerId
+                            senderPubkey:(nullable NSString *)senderPubkey
                                 fileName:(NSString *)fileName
                                 filePath:(NSString *)filePath
                                 fileSize:(uint64_t)fileSize;
@@ -226,6 +243,7 @@
                                                      chat:(OCTChat *)chat
                                                    peerId:(uint32_t)peerId
                                                  peerName:(nullable NSString *)peerName
+                                          senderPubkeyHex:(nullable NSString *)senderPubkeyHex
                                                   fileUTI:(nullable NSString *)fileUTI
                                        groupMsgIdHashHex:(nullable NSString *)groupMsgIdHashHex
                                              dateInterval:(NSTimeInterval)dateInterval;

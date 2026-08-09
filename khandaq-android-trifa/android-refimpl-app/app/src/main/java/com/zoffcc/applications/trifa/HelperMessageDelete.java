@@ -176,7 +176,9 @@ public class HelperMessageDelete
             final String anchorHex =
                     HelperGeneric.bytesToHex(data, isFile ? 5 : 4, 32).toUpperCase(Locale.ENGLISH);
             final String senderPubkey = HelperFriend.tox_friend_get_public_key__wrapper(friend_number);
-            if (senderPubkey == null)
+            // KHANDAQ (audit): the JNI hands back the literal "-1" when the lookup fails, and that is
+            // also the pubkey system-message rows carry — it means "no identity", never an author.
+            if (!isRealPeerPubkey(senderPubkey))
             {
                 return;
             }
@@ -482,7 +484,9 @@ public class HelperMessageDelete
             final String senderPubkey =
                     HelperGroup.tox_group_peer_get_public_key__wrapper(group_number, peer_id);
             final String groupIdentifier = HelperGroup.tox_group_by_groupnum__wrapper(group_number);
-            if (senderPubkey == null || groupIdentifier == null)
+            // KHANDAQ (audit): "-1" is what the JNI returns when the peer lookup fails AND what
+            // system-message rows store — an unresolvable requester may never match an author.
+            if (!isRealPeerPubkey(senderPubkey) || groupIdentifier == null)
             {
                 return;
             }
@@ -492,16 +496,30 @@ public class HelperMessageDelete
             {
                 if (isFile)
                 {
-                    // msg_id_hash is globally unique — match on it directly (no author disambiguation).
+                    // KHANDAQ (audit): msg_id_hash is globally unique but it rides in the CLEAR in every
+                    // group file packet — it identifies the transfer, not its author. Matching on the hash
+                    // alone let ANY member retract anybody's media. Bind to the sender pubkey the row froze
+                    // at insert (live BEGIN, single-packet and history-sync all stamp it), exactly like the
+                    // text branch binds via tox_group_peer_pubkeyEq.
                     final String hashHex = HelperGeneric.bytesToHex(data, 9, 32).toUpperCase(Locale.ENGLISH);
                     final List<GroupMessage> list = orma.selectFromGroupMessage().
                             group_identifierEq(groupIdentifier).
                             msg_id_hashEq(hashHex).
                             orderByIdDesc().
                             toList();
-                    if (list != null && !list.isEmpty())
+                    if (list != null)
                     {
-                        gm = list.get(0);
+                        // scan instead of take-first: a file refused because its sender did not match is
+                        // filed as its OWN row under the same hash, so the newest row may be a stranger's
+                        for (final GroupMessage candidate : list)
+                        {
+                            if (candidate != null && candidate.direction == 0
+                                && isSamePeerPubkey(candidate.tox_group_peer_pubkey, senderPubkey))
+                            {
+                                gm = candidate;
+                                break;
+                            }
+                        }
                     }
                 }
                 else
@@ -530,6 +548,13 @@ public class HelperMessageDelete
             if (gm == null || gm.direction != 0)
             {
                 // unknown original (or our own echo) — silent drop, deletes never create state
+                return;
+            }
+            // KHANDAQ (audit): single authorship gate for BOTH anchors — you can only retract what you
+            // wrote. The text branch already filters in SQL; re-asserting here is free and keeps the two
+            // branches from drifting apart again.
+            if (!isSamePeerPubkey(gm.tox_group_peer_pubkey, senderPubkey))
+            {
                 return;
             }
 
@@ -564,6 +589,24 @@ public class HelperMessageDelete
     }
 
     // ---------------------------------- utils ----------------------------------
+
+    /**
+     * KHANDAQ (audit): a pubkey we may bind a retraction to. Both JNI peer-pubkey lookups return the
+     * literal string "-1" (== TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY) on failure, and system-message rows
+     * store that same "-1" — it means "no identity", so it must never compare equal to anything.
+     */
+    private static boolean isRealPeerPubkey(final String pubkey)
+    {
+        return (pubkey != null) && !pubkey.isEmpty()
+               && !TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(pubkey);
+    }
+
+    /** Row author == requesting peer? Case-insensitive: rows are stamped uppercase, sync may not be. */
+    private static boolean isSamePeerPubkey(final String rowPubkey, final String senderPubkey)
+    {
+        return isRealPeerPubkey(rowPubkey) && isRealPeerPubkey(senderPubkey)
+               && rowPubkey.equalsIgnoreCase(senderPubkey);
+    }
 
     private static byte[] hexToBytes(final String s)
     {

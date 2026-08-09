@@ -60,6 +60,10 @@
 "pin_failed_attempts" = "المحاولات الفاشلة: %@";
 /* PIN screen message shown on log out */
 "pin_logout_message" = "الكثير من المحاولات الفاشلة. لقد تم تسجيل خروجك.";
+/* PIN screen text shown while entering is blocked after too many failed attempts */
+"pin_locked_out" = "تم حظر إدخال رمز PIN";
+/* PIN screen details, %@ is the remaining time */
+"pin_locked_out_remaining" = "أعد المحاولة بعد %@";
 /* PIN screen screen */
 "pin_enabled" = "تفعيل PIN";
 /* PIN screen screen */

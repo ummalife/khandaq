@@ -1372,6 +1372,31 @@ ToxPk Core::getGroupPeerPk(int groupId, int peerId) const
 }
 
 /**
+ * @brief Is this public key currently a member of the group?
+ *
+ * Conservative on purpose: only an explicit PEER_NOT_FOUND counts as "gone" — any other failure is an
+ * unknown, and reporting "gone" for it would overstate what we know.
+ *
+ * KHANDAQ (audit F-5): deliberately NOT used to decide who owns an NGC file assembly. Absence from the
+ * peer list is not evidence that a sender is finished with a transfer: toxcore drops a peer after
+ * GC_CONFIRMED_PEER_TIMEOUT (~58s) of silence, which an ordinary link blip or a suspended device produces,
+ * and letting that reassign a live transfer locked honest senders out of their own files. Ownership is
+ * decided by the bound public key alone (see ngcSenderMatchesAssembly).
+ */
+bool Core::isGroupPeerPresent(int groupId, const ToxPk& peerPk) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    if (peerPk.isEmpty()) {
+        return false;
+    }
+
+    Tox_Err_Group_Peer_Query error;
+    (void)tox_group_peer_by_public_key(tox.get(), static_cast<uint32_t>(groupId), peerPk.getData(), &error);
+    return error != TOX_ERR_GROUP_PEER_QUERY_PEER_NOT_FOUND;
+}
+
+/**
  * @brief Get the names of the peers of a group
  */
 QStringList Core::getGroupPeerNames(int groupId) const
@@ -1572,13 +1597,28 @@ uint32_t chatIdHash32(const uint8_t* chatId)
 //   pkt 0x13 (chunked data):            msg_id(32) chunk_index(4) chunk_size(4) data[...]
 //   pkt 0x03 (history-sync file, private): msg_id(32) orig_sender_pk(32) ts(4)
 //                                          peer_name(25) filename(255) data[1..36701]
+// KHANDAQ (audit F-6): this client is a history-sync CONSUMER only — it never emits 0x01 (request),
+// 0x02 (sync text) or 0x03, so a row it received via sync is never re-served to anyone, under our key
+// or any other. Keep it that way: a sender here would have to carry the original author's identity,
+// which the local history DB does not record (it has no "was synced" column, unlike Android/iOS).
+// Re-verified round 5: every tox_group_send_custom_packet call site below emits 0x11/0x12/0x13 as a
+// BROADCAST of a file this device is sending itself, and 0x02 is not even parsed on the receive side.
 const uint8_t NGC_MAGIC[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
 constexpr uint8_t NGC_VERSION = 0x01;
 constexpr size_t NGC_SYNC_FILE_HEADER_SIZE = 6 + 1 + 1 + 32 + 32 + 4 + 25 + 255; // 356
 
+// KHANDAQ (audit #29): an assembly with no BEGIN/CHUNK activity for this long is stale — it is swept at
+// the next BEGIN, and (see ngcAssemblyReceivingActively) it no longer counts as "someone's live download".
+constexpr qint64 NGC_ASSEMBLY_STALL_MS = 60000;
+
 struct NgcIncomingAssembly {
     QString fileName;
     QString outPath;
+    ToxPk senderPk;              // KHANDAQ (audit F-5): peer that opened this assembly with BEGIN.
+                                 // MAY BE EMPTY: the pk lookup can fail for a peer we did just receive
+                                 // from, and refusing the transfer for that is worse than not knowing.
+    qint64 senderPeerId = -1;    // KHANDAQ (audit F-5): peer NUMBER seen at BEGIN; the only identity we
+                                 // have while senderPk is empty. -1 = never recorded.
     uint64_t totalSize = 0;
     uint32_t totalChunks = 0;
     uint32_t chunkPayload = 0;
@@ -1685,6 +1725,36 @@ QString ngcParseFilename(const uint8_t* field, size_t fieldLen)
         name = QStringLiteral("file.bin");
     }
     return name;
+}
+
+/**
+ * KHANDAQ (audit F-5): does this packet come from the peer the assembly belongs to?
+ *
+ * PURE predicate, no side effects — both the BEGIN and the CHUNK path call it before checks that can still
+ * reject the packet, and a rejected packet must never re-bind the assembly.
+ *
+ * Once a REAL pk is bound it is the only authority: an unresolvable sender pk is NOT a licence to fall back
+ * to the peer NUMBER here. Peer numbers are recycled by toxcore, so that fallback accepted a chunk from a
+ * stranger that inherited the bound number and then attributed the completed file to the BOUND (victim) pk
+ * — a forged sender on a file the victim never sent. The number is all the identity we have only while no
+ * pk was ever resolved (senderPk empty); there it stays, since refusing those would fail the transfer of
+ * every peer whose pk lookup happened to fail at BEGIN.
+ *
+ * A sender that really did lose its binding (rejoin under a new NGC key, resend after a long stall) is not
+ * locked out: re-binding lives in the BEGIN path, and a full resend always leads with a BEGIN.
+ */
+bool ngcSenderMatchesAssembly(const NgcIncomingAssembly& asm_, const ToxPk& fromPk, uint32_t fromPeerId)
+{
+    if (!asm_.senderPk.isEmpty()) {
+        return asm_.senderPk == fromPk;
+    }
+    return asm_.senderPeerId < 0 || asm_.senderPeerId == static_cast<qint64>(fromPeerId);
+}
+
+/** Chunks are still landing for this assembly, i.e. it is somebody's live download. */
+bool ngcAssemblyReceivingActively(const NgcIncomingAssembly& asm_, qint64 nowMs)
+{
+    return asm_.receivedCount > 0 && (nowMs - asm_.lastActivityMs) < NGC_ASSEMBLY_STALL_MS;
 }
 
 bool shouldRunGroupMaintenance(uint32_t groupNum, std::unordered_map<uint32_t, int64_t>& map, int64_t minIntervalMs)
@@ -1841,28 +1911,15 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         }
         const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
         const QString key = ngcAssemblyKey(groupId, msgId);
-        if (ngcIncomingAssemblies.contains(key)) {
-            return;
-        }
-        // KHANDAQ (audit #29): evict stalled assemblies (no BEGIN/CHUNK activity for >60s) + delete their
-        // scratch files BEFORE the cap check. Without this a peer sending 16 BEGINs and no chunks pins the
-        // cap permanently (every later legitimate chunked file rejected) and leaves up to 16 pre-sized
-        // 200MB scratch files (~3.2GB real disk on non-sparse filesystems) until app restart.
-        {
-            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-            auto sweepIt = ngcIncomingAssemblies.begin();
-            while (sweepIt != ngcIncomingAssemblies.end()) {
-                if (nowMs - sweepIt.value().lastActivityMs > 60000) {
-                    QFile::remove(sweepIt.value().outPath);
-                    sweepIt = ngcIncomingAssemblies.erase(sweepIt);
-                } else {
-                    ++sweepIt;
-                }
-            }
-        }
-        // KHANDAQ (audit A38): cap concurrent incoming assemblies — a peer flooding BEGINs for distinct
-        // msgIds would otherwise pin unbounded memory (a received-bitmap + buffer per assembly).
-        if (ngcIncomingAssemblies.size() >= 16) {
+        // KHANDAQ (audit F-5): bind the assembly to the peer that opened it. Assemblies are keyed only
+        // by (group, msgId) and the BEGIN is broadcast to the whole group, so without this any other
+        // member could inject chunks into — or complete — someone else's transfer.
+        // An unresolvable pk must NOT refuse the transfer (it did, and that killed honest files): the
+        // lookup can fail for the very peer we just received from, and this client has no resend path, so
+        // one failed lookup lost the whole file. We then bind by peer number and adopt the pk in the CHUNK
+        // path as soon as it resolves — same "cannot verify != foreign" rule as ngcSenderMatchesAssembly.
+        const ToxPk beginSender = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+        if (!beginSender.isEmpty() && beginSender == getSelfPublicKey()) {
             return;
         }
         const QString fileName = ngcParseFilename(data + 44, 255);
@@ -1887,8 +1944,88 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return;
         }
 
+        // KHANDAQ (audit F-5): RE-BINDING LIVES HERE, not in the CHUNK path. The msgId is broadcast, so any
+        // member can forge a BEGIN for a transfer that is not theirs — but a repeat BEGIN used to be dropped
+        // outright, which left the chunk path to guess when an assembly could change hands, and it guessed
+        // from peer presence: a sender that merely went quiet for GC_CONFIRMED_PEER_TIMEOUT (~58s — a link
+        // blip, a sleeping laptop, a backgrounded phone) falls out of toxcore's peer list, and any member
+        // could then take the transfer over. Splitting it the other way is both safer and closer to how an
+        // honest sender actually recovers, since a full resend always leads with a BEGIN:
+        //   - chunks are still landing  -> live download, nobody may restart it (not even its own sender:
+        //                                  wiping progress is what a resend is trying to avoid);
+        //   - nothing is arriving       -> the peer that is actually delivering may re-declare it.
+        // The only thing mutated here is the keep-alive on a duplicate BEGIN from the assembly's own
+        // sender; a rejected BEGIN must never cost the previous assembly its state, so the actual swap
+        // happens only once every check has passed (further below).
+        bool replaceExisting = false;
+        {
+            const auto existing = ngcIncomingAssemblies.find(key);
+            if (existing != ngcIncomingAssemblies.end()) {
+                const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+                if (!ngcSenderMatchesAssembly(existing.value(), beginSender, peerId)) {
+                    // A BEGIN from anyone else may only claim a slot the stale sweep below was going to
+                    // free anyway — same threshold, so it takes nothing that was still someone's. That
+                    // covers the live download (chunks landing => idle is short), and also the moment
+                    // between an honest BEGIN and its first chunk, where "not receiving actively" alone
+                    // would have let a member racing the broadcast msgId hijack the transfer outright.
+                    if (nowMs - existing.value().lastActivityMs < NGC_ASSEMBLY_STALL_MS) {
+                        return;
+                    }
+                    replaceExisting = true;   // stalled: re-bind to the peer that is really delivering
+                } else if (existing.value().totalSize == totalSize
+                           && existing.value().totalChunks == totalChunks
+                           && existing.value().chunkPayload == chunkPayload) {
+                    // Same file, same parameters, from the peer this assembly belongs to: NEVER wipe the
+                    // progress on a duplicate BEGIN (senders re-emit it to let a receiver rebuild), and do
+                    // count it as activity — this is the honest sender proving it is alive, which is what
+                    // keeps a half-received file out of the stale sweep while its resend spins up.
+                    // Only PROGRESS may be kept alive this way: refreshing an assembly that has never
+                    // taken a chunk would let a peer re-BEGIN every 59s to pin a cap slot and a pre-sized
+                    // scratch file indefinitely — the very thing the sweep exists to prevent (audit #29).
+                    // Nothing is lost by letting those expire: the next BEGIN rebuilds them from scratch.
+                    if (existing.value().receivedCount > 0) {
+                        existing.value().lastActivityMs = nowMs;
+                    }
+                    return;
+                } else {
+                    // Our own sender restated DIFFERENT parameters for this msgId. Keeping the old ones
+                    // silently mis-parsed every following chunk against a stale chunkPayload/totalChunks
+                    // (wrong offsets, wrong completion point) — reparameterise instead.
+                    replaceExisting = true;
+                }
+            }
+        }
+
+        // KHANDAQ (audit #29): evict stalled assemblies (no BEGIN/CHUNK activity for >60s) + delete their
+        // scratch files BEFORE the cap check. Without this a peer sending 16 BEGINs and no chunks pins the
+        // cap permanently (every later legitimate chunked file rejected) and leaves up to 16 pre-sized
+        // 200MB scratch files (~3.2GB real disk on non-sparse filesystems) until app restart.
+        {
+            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+            auto sweepIt = ngcIncomingAssemblies.begin();
+            while (sweepIt != ngcIncomingAssemblies.end()) {
+                if (nowMs - sweepIt.value().lastActivityMs > NGC_ASSEMBLY_STALL_MS) {
+                    QFile::remove(sweepIt.value().outPath);
+                    sweepIt = ngcIncomingAssemblies.erase(sweepIt);
+                } else {
+                    ++sweepIt;
+                }
+            }
+        }
+        // KHANDAQ (audit A38): cap concurrent incoming assemblies — a peer flooding BEGINs for distinct
+        // msgIds would otherwise pin unbounded memory (a received-bitmap + buffer per assembly).
+        // A BEGIN that re-declares a key we already hold overwrites it and grows the table by nothing, so
+        // it is not capped — otherwise a full table would block the one packet an honest sender uses to
+        // recover. contains(key) here means "we decided to replace it": a repeat BEGIN we did not accept
+        // returned above, and the sweep only ever removes entries.
+        if (ngcIncomingAssemblies.size() >= 16 && !ngcIncomingAssemblies.contains(key)) {
+            return;
+        }
+
         NgcIncomingAssembly asm_;
         asm_.fileName = fileName;
+        asm_.senderPk = beginSender;   // KHANDAQ (audit F-5) — may be empty, see senderPeerId
+        asm_.senderPeerId = static_cast<qint64>(peerId);
         asm_.totalSize = totalSize;
         asm_.totalChunks = totalChunks;
         asm_.chunkPayload = chunkPayload;
@@ -1905,6 +2042,17 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         // display name handed to the UI.
         asm_.outPath = saveDir + QDir::separator()
                        + QString::fromLatin1(msgId.toHex()) + QStringLiteral(".part");
+
+        // KHANDAQ (audit F-5): this BEGIN has now passed every check, so it may finally displace the
+        // stalled assembly it re-declares. The scratch path is derived from the msgId, so the fresh
+        // Truncate below reuses the same file and drops the old bytes; only a differing path (a name
+        // scheme change across versions) would leak, hence the explicit remove.
+        if (replaceExisting) {
+            const auto stale = ngcIncomingAssemblies.constFind(key);
+            if (stale != ngcIncomingAssemblies.constEnd() && stale.value().outPath != asm_.outPath) {
+                QFile::remove(stale.value().outPath);
+            }
+        }
 
         QFile outFile(asm_.outPath);
         if (!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -1932,7 +2080,35 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return;
         }
         NgcIncomingAssembly& asm_ = it.value();
-        asm_.lastActivityMs = QDateTime::currentMSecsSinceEpoch();   // KHANDAQ (audit #29): keep alive on activity
+        // KHANDAQ (audit F-5): only the peer this assembly belongs to may feed it. Every rejection below
+        // returns BEFORE the keep-alive, so a foreign chunk can neither hold a dead assembly open nor —
+        // since it is the honest sender's own chunks that refresh the timer — get the honest one reaped.
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const ToxPk chunkSender = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+        bool adoptSender = false;
+        if (!ngcSenderMatchesAssembly(asm_, chunkSender, peerId)) {
+            // A bound assembly is NEVER re-opened here. Neither idle time nor the sender's absence from
+            // the peer list is evidence of anything: a peer drops out of toxcore's list after
+            // GC_CONFIRMED_PEER_TIMEOUT (~58s) for reasons that have nothing to do with the transfer — a
+            // flaky link, a laptop suspending, a phone going to background — and treating that as "the
+            // binding is dead, let whoever delivers adopt it" handed honest transfers to any member that
+            // pushed a chunk during the gap, after which the real sender's own chunks were rejected under
+            // its own key: the file could never complete, and its content was a mix of both peers'
+            // attributed to the adopter. So: once a REAL pk is bound, a chunk from anyone else is dropped,
+            // full stop. This costs the honest sender nothing it cannot recover — re-binding happens in
+            // the BEGIN path above, and a full resend always leads with a BEGIN.
+            if (ngcAssemblyReceivingActively(asm_, nowMs) || !asm_.senderPk.isEmpty()) {
+                return;
+            }
+            // No identity was ever established (the pk lookup failed at BEGIN, so only a peer NUMBER was
+            // recorded) and nothing is arriving: bind to the peer that actually delivers, once the packet
+            // has proven itself well-formed below.
+            adoptSender = true;
+        } else if (asm_.senderPk.isEmpty() && !chunkSender.isEmpty()) {
+            // Same peer number we bound at BEGIN, and its pk resolves now: record it, so a later peer-id
+            // reuse cannot re-attribute the finished file to whoever inherited the number.
+            adoptSender = true;
+        }
         const uint32_t chunkIndex = ngcReadU32Be(data + 40);
         const uint32_t chunkSize = ngcReadU32Be(data + 44);
         // KHANDAQ (audit #30): also bound chunkSize by the declared chunkPayload. Without it a peer that
@@ -1950,6 +2126,16 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             || NGC_FILE_CHUNK_HEADER_SIZE + chunkSize > length) {
             return;
         }
+        // KHANDAQ (audit F-5): bind only on a packet that has proven itself well-formed — a malformed
+        // chunk must never re-own an assembly. Duplicates still count as activity: an honest sender that
+        // re-broadcasts what we already have is alive, and reaping its assembly would fail the transfer.
+        if (adoptSender) {
+            if (!chunkSender.isEmpty()) {
+                asm_.senderPk = chunkSender;
+            }
+            asm_.senderPeerId = static_cast<qint64>(peerId);
+        }
+        asm_.lastActivityMs = nowMs;   // KHANDAQ (audit #29): keep alive on activity from our sender
         if (asm_.received.at(static_cast<int>(chunkIndex))) {
             return;
         }
@@ -1975,7 +2161,9 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         // file on every exit path (it was previously left on disk on all of them).
         const QString scratchPath = asm_.outPath;
         const QString displayName = asm_.fileName;
-        const ToxPk sender = getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId));
+        // KHANDAQ (audit F-5): attribute the file to the pk recorded at BEGIN, not to whoever holds
+        // peerId now — toxcore reuses peer ids after a rejoin, so re-resolving can name another member.
+        const ToxPk sender = asm_.senderPk;
         ngcIncomingAssemblies.remove(key);
         if (sender == getSelfPublicKey()) {
             QFile::remove(scratchPath);
@@ -2005,24 +2193,50 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             || length > NGC_SYNC_FILE_HEADER_SIZE + NGC_SINGLE_PKT_MAX_FILESIZE) {
             return;
         }
-        const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
-        if (ngcFileMsgIdSeen(msgId)) {
-            return;
-        }
-        const ToxPk origSender(QByteArray(reinterpret_cast<const char*>(data + 40), 32));
-        if (origSender == getSelfPublicKey()) {
-            return; // our own message echoed back via history sync
-        }
         uint32_t ts = 0;
         for (int i = 0; i < 4; ++i) {
             ts = (ts << 8) | data[72 + i];
         }
+        // KHANDAQ (audit F-6): enforce the same acceptance window as the mobile clients (at most 5 min
+        // into the future, at most 200 min into the past). The senders only ever sync rows younger than
+        // 130 min, so no honest packet can fall outside it — but without the check this client accepted
+        // any epoch value, letting an injected file be stamped 1970 or 2106 and pinned to the top/bottom
+        // of the chat log forever, and leaving the three platforms disagreeing about what history exists.
+        // Checked BEFORE ngcFileMsgIdSeen() below: a rejected packet must not burn its msg id, or a
+        // forged copy would suppress the honest file that carries the same id.
+        const int64_t nowSecs = QDateTime::currentMSecsSinceEpoch() / 1000;
+        const int64_t tsSecs = static_cast<int64_t>(ts);
+        if (tsSecs > nowSecs + 5 * 60 || tsSecs < nowSecs - 200 * 60) {
+            return;
+        }
+        const QByteArray msgId(reinterpret_cast<const char*>(data + 8), 32);
+        if (ngcFileMsgIdSeen(msgId)) {
+            return;
+        }
+        // KHANDAQ (audit F-6): orig_sender_pk is unauthenticated — the syncing peer picks it freely, so a
+        // malicious member can attribute a synced file to anyone. The wire format has no signature and
+        // adding one would break the shipped clients, so this pk is treated as a per-message display
+        // value only: it must never feed a peer-name/peer-identity table. In particular the peer_name(25)
+        // field of this packet is deliberately NOT parsed — the sender name shown in the chat log is
+        // resolved locally from the group's own peer list. Keep it that way.
+        const QByteArray origSenderRaw(reinterpret_cast<const char*>(data + 40), 32);
+        if (origSenderRaw == QByteArray(32, '\0')) {
+            return; // all-zero pk is no member; it would show up as a phantom sender in history
+        }
+        const ToxPk origSender(origSenderRaw);
+        if (origSender == getSelfPublicKey()) {
+            return; // our own message echoed back via history sync
+        }
         const QString fileName = ngcParseFilename(data + 101, 255);
         const QByteArray fileData(reinterpret_cast<const char*>(data + NGC_SYNC_FILE_HEADER_SIZE),
                                   static_cast<int>(length - NGC_SYNC_FILE_HEADER_SIZE));
-        QDateTime when = ts > 0 ? QDateTime::fromSecsSinceEpoch(ts) : QDateTime::currentDateTime();
+        const QDateTime when = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(tsSecs));
+        // KHANDAQ (audit F-6): log the peer that actually delivered the packet next to the claimed
+        // orig sender — the only trace we have when the two disagree.
         qDebug() << "NGC sync file received: group" << groupId << "orig sender"
-                 << origSender.toString().left(8) << fileName << fileData.size() << "bytes";
+                 << origSender.toString().left(8) << "via peer"
+                 << getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId)).toString().left(8)
+                 << fileName << fileData.size() << "bytes";
         emit groupFileReceived(static_cast<int>(groupId), origSender, fileName, fileData, when);
         return;
     }

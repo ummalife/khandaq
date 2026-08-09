@@ -60,6 +60,16 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>142972</string>
+	<!-- KHANDAQ (privacy): FirebaseCore 8.15 pulls FirebaseCoreDiagnostics, which POSTs SDK
+	     configuration/usage telemetry to Google on every foreground unless this is NO
+	     (FIRApp -logCoreTelemetryIfEnabled). We advertise "no analytics", so turn it off.
+	     The global switch is also what FCM auto-init falls back to when neither the user
+	     default nor the plist key is set (FIRMessaging +isAutoInitEnabledWithUserDefaults),
+	     so the messaging key below must stay YES or push tokens stop being minted. -->
+	<key>FirebaseDataCollectionDefaultEnabled</key>
+	<false/>
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>KhandaqPushRelayAuthSecret</key>

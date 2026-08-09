@@ -1261,8 +1261,11 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         return;
     }
 
+    // KHANDAQ (audit F-6): "ours" is peerId 0 AND not history-synced — a synced row whose author was
+    // unresolvable at insert time also carries peerId 0, so a foreign ack could land on it and our own
+    // message never went ticked. groupHistorySync is @NO on every pre-existing row (migration 20).
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND messageText != nil AND messageText.messageId == %u",
+                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND groupHistorySync == NO AND messageText != nil AND messageText.messageId == %u",
                               chat.uniqueIdentifier, messageId];
     OCTMessageAbstract *message = [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
 
@@ -1296,8 +1299,10 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         return;
     }
 
+    // KHANDAQ (audit F-6): same "ours" narrowing as the text variant above — a synced file row can also
+    // carry peerId 0, and letting an ack land there left our own file stuck without its delivery tick.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND messageFile != nil AND messageFile.groupMsgIdHashHex ==[c] %@",
+                              @"chatUniqueIdentifier == %@ AND groupSenderPeerId == 0 AND groupHistorySync == NO AND messageFile != nil AND messageFile.groupMsgIdHashHex ==[c] %@",
                               chat.uniqueIdentifier, msgIdHashHex];
     OCTMessageAbstract *message = [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
 
@@ -1626,6 +1631,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
                                                      chat:(OCTChat *)chat
                                                    peerId:(uint32_t)peerId
                                                  peerName:(NSString *)peerName
+                                          senderPubkeyHex:(NSString *)senderPubkeyHex
                                                   fileUTI:(NSString *)fileUTI
                                        groupMsgIdHashHex:(NSString *)groupMsgIdHashHex
                                              dateInterval:(NSTimeInterval)dateInterval
@@ -1646,6 +1652,14 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageFile.fileUTI = fileUTI;
     messageFile.groupMsgIdHashHex = groupMsgIdHashHex.length > 0 ? groupMsgIdHashHex : nil;
     messageFile.groupTransferProgress = 1.0f;
+    // KHANDAQ (audit F-6): freeze the sender label on the ROW (mirrors #82 and the synced-text path).
+    // peerName was silently dropped here, so the file cell had to resolve its author through the shared
+    // peer table — which is exactly why history sync used to poison that table with an unverified name.
+    messageFile.groupPeerName = peerName.length > 0 ? peerName : nil;
+    // KHANDAQ (audit F-6): and freeze the STABLE pubkey from the packet, like the live path (#82) does.
+    // Without it the #170 re-serve had nothing to attribute this row to and fell back to the volatile
+    // peerId — or, at peerId 0, to our own key. Lowercased to match the live path's stamp.
+    messageFile.groupSenderPubkey = senderPubkeyHex.length > 0 ? senderPubkeyHex.lowercaseString : nil;
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     // KHANDAQ (#60): same non-future clamp as the synced-text path (see addGroupSyncedMessageWithText).
@@ -1675,6 +1689,17 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
 - (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
                                                               chat:(OCTChat *)chat
 {
+    return [self groupMessageWithGroupMsgIdHashHex:groupMsgIdHashHex senderPubkey:nil chat:chat];
+}
+
+// KHANDAQ (audit F-5): the hash no longer selects a single row — a file refused because its sender did
+// not match is filed as ITS own row under the same hash, so plain firstObject could hand a caller the
+// stranger's row and any sender check layered on top would then be evaluating the wrong row. Resolve
+// ownership here instead, at the lookup.
+- (nullable OCTMessageAbstract *)groupMessageWithGroupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                                      senderPubkey:(NSString *)senderPubkey
+                                                              chat:(OCTChat *)chat
+{
     if (groupMsgIdHashHex.length == 0 || chat.uniqueIdentifier.length == 0) {
         return nil;
     }
@@ -1682,7 +1707,8 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
                               chat.uniqueIdentifier, groupMsgIdHashHex];
 
-    return [OCTMessageAbstract objectsWithPredicate:predicate].firstObject;
+    return [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                       inResults:[OCTMessageAbstract objectsWithPredicate:predicate]];
 }
 
 - (nullable OCTMessageAbstract *)groupIncompleteFileMessageForChat:(OCTChat *)chat
@@ -1704,9 +1730,32 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     return [[OCTMessageAbstract objectsWithPredicate:predicate] sortedResultsUsingKeyPath:@"dateInterval" ascending:NO].firstObject;
 }
 
+// KHANDAQ (audit F-5): the msg-id hash rides in the clear in every group packet, so looking a row up by
+// it alone let ANY member land its own payload on somebody else's loading bubble (both the chunked and
+// the single-packet path end there). A row froze its sender's stable key at BEGIN, so skip the rows a
+// different key is frozen on — the caller then files that file as its own message instead of dropping
+// it. Rows with no frozen key (legacy, or a peer toxcore could not resolve) keep the old behaviour.
+- (nullable OCTMessageAbstract *)groupFileRowOwnedBySenderPubkey:(NSString *)senderPubkey
+                                                       inResults:(RLMResults<OCTMessageAbstract *> *)results
+{
+    for (OCTMessageAbstract *candidate in results) {
+        NSString *rowPubkey = candidate.messageFile.groupSenderPubkey;
+
+        if (rowPubkey.length > 0 && senderPubkey.length > 0 &&
+            [rowPubkey caseInsensitiveCompare:senderPubkey] != NSOrderedSame) {
+            continue;
+        }
+
+        return candidate;
+    }
+
+    return nil;
+}
+
 - (BOOL)markGroupIncomingFileReadyInChat:(OCTChat *)chat
                                msgIdHash:(NSString *)msgIdHash
                                   peerId:(uint32_t)peerId
+                            senderPubkey:(NSString *)senderPubkey
                                 fileName:(NSString *)fileName
                                 filePath:(NSString *)filePath
                                 fileSize:(uint64_t)fileSize
@@ -1726,20 +1775,35 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         OCTMessageAbstract *existing = nil;
 
         if (msgIdHash.length > 0) {
-            existing = [[OCTMessageAbstract objectsInRealm:self.realm
-                                                     where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
-                         chat.uniqueIdentifier, msgIdHash] firstObject];
+            existing = [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                                   inResults:[OCTMessageAbstract objectsInRealm:self.realm
+                                                                                          where:@"chatUniqueIdentifier == %@ AND messageFile.groupMsgIdHashHex ==[c] %@",
+                                                              chat.uniqueIdentifier, msgIdHash]];
         }
 
         if (! existing && fileName.length > 0) {
-            existing = [[[OCTMessageAbstract objectsInRealm:self.realm
-                                                      where:@"chatUniqueIdentifier == %@ AND groupSenderPeerId == %u AND messageFile != nil AND messageFile.fileName ==[c] %@ AND messageFile.fileType != %d",
-                          chat.uniqueIdentifier, peerId, fileName, (int)OCTMessageFileTypeReady]
-                         sortedResultsUsingKeyPath:@"dateInterval" ascending:NO] firstObject];
+            existing = [self groupFileRowOwnedBySenderPubkey:senderPubkey
+                                                   inResults:[[OCTMessageAbstract objectsInRealm:self.realm
+                                                                                           where:@"chatUniqueIdentifier == %@ AND groupSenderPeerId == %u AND messageFile != nil AND messageFile.fileName ==[c] %@ AND messageFile.fileType != %d",
+                                                               chat.uniqueIdentifier, peerId, fileName, (int)OCTMessageFileTypeReady]
+                                                              sortedResultsUsingKeyPath:@"dateInterval" ascending:NO]];
         }
 
         if (! existing || ! existing.messageFile || existing.isInvalidated) {
             return;
+        }
+
+        // KHANDAQ (audit, round 7): COMPLETE counterpart of the BEGIN guard in
+        // -handleIncomingGroupFileBeginWithGroupNumber:. Both lookups above can land on OUR OWN outgoing
+        // row — the msg-id hash is public, and the fileName lookup is only peer-scoped, which does not
+        // exclude us when the incoming peer id is 0. Our own row carries no frozen author key, so the
+        // ownership scan cannot reject it either. Letting an incoming COMPLETE finish it replaced our own
+        // sent file's name/path/content with the sender's payload while the bubble still read as ours.
+        // A row that is already Ready keeps the old behaviour (handled = YES, no write): that is the
+        // #170 dedup which swallows a re-served copy of our own file instead of stacking a second one.
+        if (existing.groupSenderPeerId == 0 && ! existing.groupHistorySync &&
+            existing.messageFile.fileType != OCTMessageFileTypeReady) {
+            return; // handled stays NO — the caller files the payload as the real sender's own row
         }
 
         handled = YES;

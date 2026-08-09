@@ -2,15 +2,15 @@
 
 **Response date:** 9 August 2026
 **Responding to:** `review.md` — 2 critical, 8 high, 5 medium
-**Repository state:** master `b24469f5`; the remediation described here is **not yet committed** (see *Verifiability* below)
+**Repository state:** the remediation described here is commit **`aa828e69`** on `master` (signed), pushed 9 August 2026
 
 ---
 
 ## Verifiability — read this first
 
-The fixes described in this document are in a working tree, not yet pushed. **You cannot verify most of them from the public repository yet.** Where a claim refers to code that is already in `origin/master`, the commit hash is given and you can check it today. Where it refers to this batch, it is marked *(this batch, unpushed)*.
+Everything below is in `origin/master` and can be checked directly. The remediation batch is commit **`aa828e69`**; fixes that predate it carry their own hashes and dates, so you can tell at a glance what was already there before your report and what we did in response.
 
-We are sending the document in this state because you asked for a response, not because the work is finished shipping. The commit hash will follow.
+What is *not* yet verifiable is the native binary: `aa828e69` triggered the Android `.so` rebuild in CI, and until that run finishes and a Play release carries it, the shipped Android library still lacks the finding-2 guard.
 
 A second distinction runs through the whole document: **"fixed in source" is not "fixed for users."** The Android native library is built by CI from a separate upstream clone; desktop binaries are rebuilt and released manually. Where a fix has not reached installed apps, that is stated.
 
@@ -72,11 +72,11 @@ The read side (`OCTNgcGroupLiveVideo.m:271-278`) now indexes by width, never by 
 
 **Delivery, precisely:** the app has never had a public App Store release — App Store Connect shows only version 1.0 (never submitted) and 1.4.29 (waiting for review, carrying build 142969, which predates these fixes). The fix reached TestFlight in build **142972, uploaded 9 August** — not on the 7th, when the commits landed. So: testers are covered as of 9 August; there are no App Store users to cover yet; and the version currently queued for review does **not** contain the fix. We will not submit it until it does.
 
-**Also addressed since your report:** you asked that the decoder "require the expected dimensions and `YUV420P` format". The dimension guard was in place; the format was not — `VTDecompressionSessionCreate` was called with no `destinationImageBufferAttributes`, so the output format followed the attacker's SPS. That is now pinned to the planar/bi-planar 4:2:0 formats the copy code actually handles *(this batch, unpushed)*.
+**Also addressed since your report:** you asked that the decoder "require the expected dimensions and `YUV420P` format". The dimension guard was in place; the format was not — `VTDecompressionSessionCreate` was called with no `destinationImageBufferAttributes`, so the output format followed the attacker's SPS. That is now pinned to the planar/bi-planar 4:2:0 formats the copy code actually handles *(commit `aa828e69`)*.
 
 **Not done:** explicit buffer capacities in the iOS decoder API (Android does check capacities — see finding 2), and ASan/fuzz coverage. Neither exists. See *What remains open*.
 
-### 2 — Android group video: chroma-plane heap overflow — **MITIGATED in source, NOT delivered** *(this batch, unpushed)*
+### 2 — Android group video: chroma-plane heap overflow — **MITIGATED in source, NOT delivered** *(commit `aa828e69`)*
 
 Correct as filed, and it is the most serious item in the report. Android decodes NGC group video through FFmpeg's *software* H.264 decoder (`--disable-mediacodec` on all four ABIs, swscale disabled), created with no pixel-format restriction. The old guard bounded only the luma stride. A High 4:4:4 SPS (`chroma_format_idc = 3`) makes the decoder emit `YUV444P` with chroma strides equal to the luma width, so `(height / 2) × linesize[1] = 320 × 512 = 163 840` bytes are copied into an `81 920`-byte pinned Java array — ~80 KB past the end, twice per frame, from any peer in a public group. The Java-side sanity check runs *after* the native copy, so it never helped.
 
@@ -116,7 +116,7 @@ Splitting by date, because most of this predates you:
 
 **Remainder (MITIGATED, not CLOSED):** of the four limit classes you named — global, byte-budget, per-sender, TTL — we now have global and TTL on all platforms and a byte budget on Android. There is still **no per-sender quota** anywhere: one member can occupy the whole assembly cap. Worst case per client is now bounded by the cap times the maximum accepted transfer size rather than by your 200 MiB-per-transfer figure, but a per-sender limit is the right fix and is not implemented.
 
-### 5 — Group-file chunks not bound to the sending peer — **MITIGATED** *(this batch, unpushed)*
+### 5 — Group-file chunks not bound to the sending peer — **MITIGATED** *(commit `aa828e69`)*
 
 Confirmed on all three platforms and addressed on all three. An assembly records the originating peer's public key at BEGIN, and once a **real** key is bound, a chunk from anyone else is dropped unconditionally — regardless of idle time. Completion attributes the file to the recorded sender rather than re-resolving a transient peer id.
 
@@ -152,7 +152,7 @@ The write path is gone: the only function that ever wrote to `UserDefaults` can 
 
 **Why MITIGATED and not CLOSED:** your second observation still holds. `readKeychainData` returns nil for operational keychain errors as well as for "not found", and `getDataForKey` then falls through to a `UserDefaults` **read** which returns any legacy value before migrating it back into the keychain. On a device that still has a legacy value, a transient keychain error therefore still surfaces the plaintext secret. Closing this means distinguishing `errSecItemNotFound` from operational failures, which we have not done.
 
-### 8 — Android PIN bypassable on a cold start — **MITIGATED** *(this batch, unpushed)*
+### 8 — Android PIN bypassable on a cold start — **MITIGATED** *(commit `aa828e69`)*
 
 Confirmed, and the exposure was broader than described: because the foreground service keeps the process alive, the common case is a *warm* process, where the exempt startup wrapper consumed the "was backgrounded" flag so the following content screen was never gated. Notification taps and share intents entered the same way.
 
@@ -187,7 +187,7 @@ The underlying weakness you identified is real and remains: `KHANDAQ_PUSH_AUTH_S
 
 | Sub-point | Status |
 |---|---|
-| x264 from a mutable branch | **CLOSED** *(this batch, unpushed)* — pinned to an exact commit with a post-checkout assertion that fails the build on mismatch. This was the one genuinely unverified input |
+| x264 from a mutable branch | **CLOSED** *(commit `aa828e69`)* — pinned to an exact commit with a post-checkout assertion that fails the build on mismatch. This was the one genuinely unverified input |
 | Android release script emitting debug-signed APKs | **ALREADY CLOSED** (`c860d5bb`, 31 July) — the debug fallback is now a hard failure |
 | OpenSSL 1.1.1w, Qt 5.12.12, FFmpeg 4.4.5 | **ACCEPTED** — you are right that these are end-of-life or behind. For the record they are not *unverified*: each tarball is SHA-256 checked before use (`buildscripts/download/common.sh`). They are old, that is real maintenance debt on the Windows desktop build, and it does not affect the mobile clients |
 | docker-compose binary without checksum | **ACCEPTED** — reachable only when every apt path fails during node provisioning |
@@ -202,7 +202,7 @@ Read-only by default with write scoped to the push-triggered job; actions pinned
 
 ## Medium-severity findings
 
-### 11 — iOS PIN lockout resets after ten attempts — **MITIGATED** *(this batch, unpushed)*
+### 11 — iOS PIN lockout resets after ten attempts — **MITIGATED** *(commit `aa828e69`)*
 
 Confirmed. The counter is no longer cleared at the threshold; a persisted deadline with growing backoff (60 s → 5 min → 15 min → 1 h) applies, PIN entry is disabled the moment the deadline is set, and a successful profile-password login clears it so the owner is never stuck.
 
@@ -214,7 +214,7 @@ macOS was fixed before your report, in `f630a3af` (7 August): `CFRelease` on the
 
 **Windows: you were right and we were wrong, twice.** The expression built a vector from iterators belonging to two *separate* `toStdWString()` temporaries — a mismatched iterator range, undefined behaviour, exactly as you wrote. An internal check called it not-UB, and our first draft of this document repeated that. Both were wrong.
 
-It is fixed *(this batch, unpushed)*: one named `std::wstring`, then the vector built from it, matching the idiom the same function already used two lines above. A sweep of the file found a second instance of the same class — `std::vector<wchar_t> user(L"account", L"account" + 7)`, where the two string literals are not guaranteed to designate the same array object — fixed the same way. The stored-credential format is unchanged, so existing saved passwords still load.
+It is fixed *(commit `aa828e69`)*: one named `std::wstring`, then the vector built from it, matching the idiom the same function already used two lines above. A sweep of the file found a second instance of the same class — `std::vector<wchar_t> user(L"account", L"account" + 7)`, where the two string literals are not guaranteed to designate the same array object — fixed the same way. The stored-credential format is unchanged, so existing saved passwords still load.
 
 Verified by compiling the Windows arm on this macOS host: the production file is textually included into a forcing translation unit with `Q_OS_WIN` defined and minimal `windows.h`/`wincred.h` stubs, so the real `#elif defined(Q_OS_WIN)` branch is what the compiler sees — clean, zero warnings. A true MSVC build and an on-Windows round-trip of `CredWriteW`/`CredReadW` have not been run; the Windows CI job should confirm.
 
@@ -228,7 +228,7 @@ The runtime fetch was removed; there is no network path left to sign. A user-sup
 
 Hardening that landed **after your snapshot but before your report** (`bde5a2f0`, 3 August; `460f0baf` for the staging delete): the file is created `0600`, the plaintext buffer is wiped with `sodium_memzero` before free, and the staging copy in the app-private cache is deleted on the success path. To be exact: your revision is 1 August, so you would not have seen the `0600`/zeroing work — it was not done in response to you either.
 
-**Done in this batch, because you asked:** deletion moved into `finally` blocks so the staging copy cannot survive an exception or an early return, on both the export and import paths *(unpushed)*. Reviewing that, we found a second export flow we had not mentioned to you at all — an "export all files" path writing the plaintext key to external storage, where it persisted indefinitely. That is addressed too; *What remains open* states exactly what is left on disk and for how long.
+**Done in this batch, because you asked:** deletion moved into `finally` blocks so the staging copy cannot survive an exception or an early return, on both the export and import paths *(commit `aa828e69`)*. Reviewing that, we found a second export flow we had not mentioned to you at all — an "export all files" path writing the plaintext key to external storage, where it persisted indefinitely. That is addressed too; *What remains open* states exactly what is left on disk and for how long.
 
 **Correcting something we wrote earlier in this document:** the `.tox` format is *not* plaintext by necessity. The encrypted variant is equally interoperable, and this same JNI already writes and reads it for the local profile. Plaintext export is a default we chose, not a constraint the format imposes. Changing that default is the right fix and is not done.
 

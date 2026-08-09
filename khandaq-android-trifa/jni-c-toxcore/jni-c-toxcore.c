@@ -1028,8 +1028,16 @@ void update_savedata_file(const Tox *tox, const uint8_t *passphrase, size_t pass
     unlink(full_path_filename);
 #endif
 
-    int res_rename = rename(full_path_filename_tmp, full_path_filename);
-    // dbg(9, "update_savedata_file:rename src=%s dst=%s res=%d", full_path_filename_tmp, full_path_filename, res_rename);
+    const int res_rename = rename(full_path_filename_tmp, full_path_filename);
+
+    if (res_rename != 0)
+    {
+        // The identity was never published: the profile on disk is still the previous one. Say so —
+        // a silent failure here means later starts load stale state while the app believes it saved.
+        dbg(0, "update_savedata_file:ERROR:rename failed (errno=%d), savedata NOT updated", errno);
+        unlink(full_path_filename_tmp);
+    }
+
     free(savedata);
     free(savedata_enc);
     free(full_path_filename);

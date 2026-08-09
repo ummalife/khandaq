@@ -2512,6 +2512,18 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 HelperGeneric.logI(TAG, "cameraHasOpened:**************** CAMERA OPEN ****************");
                 Callstate.camera_opened = true;
+                // KHANDAQ (#247): the self-preview starts hidden (it would be an empty frame in an audio
+                // call) — reveal it now that there is a camera feeding it.
+                try
+                {
+                    if (CallingActivity.video_box_self_preview_01 != null)
+                    {
+                        CallingActivity.video_box_self_preview_01.setVisibility(View.VISIBLE);
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
                 try
                 {
                     if (cameraSurfacePreview == null)
@@ -3000,6 +3012,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                             CallingActivity.video_box_aec.setVisibility(View.INVISIBLE);
                             CallingActivity.video_speaker_aec.setVisibility(View.INVISIBLE);
                         }
+
+                        keep_legacy_osd_hidden();
                     }
                     catch (Exception e)
                     {
@@ -3009,6 +3023,27 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 }
             };
             CallingActivity.callactivity_handler_s.post(myRunnable);
+        }
+    }
+
+    /** KHANDAQ (#247): hide_legacy_call_debug_ui() runs once in onCreate, but toggle_osd_views brings
+     *  the same expert widgets back whenever the OSD is shown — which is why a plain audio call still
+     *  displayed the "AEC: 0" chip, the volume / video-delay sliders and the bitrate texts. Re-assert
+     *  the hidden set after every OSD toggle so they stay gone for end users. */
+    private static void keep_legacy_osd_hidden()
+    {
+        final View[] legacy = {
+                CallingActivity.video_box_right_top_01, CallingActivity.right_top_text_1,
+                CallingActivity.right_top_text_1b, CallingActivity.right_top_text_2,
+                CallingActivity.right_top_text_3, CallingActivity.right_top_text_4,
+                CallingActivity.box_right_volumeslider_01,
+                CallingActivity.video_add_delay_slider_infotext_01,
+                CallingActivity.video_add_delay_slider_seekbar_01,
+                CallingActivity.video_box_aec, CallingActivity.video_speaker_aec,
+        };
+        for (final View v : legacy)
+        {
+            try { if (v != null) { v.setVisibility(View.GONE); } } catch (Exception ignored) {}
         }
     }
 
@@ -3246,7 +3281,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 try
                 {
-                    CallingActivity.video_box_self_preview_01.setVisibility(View.VISIBLE);
+                    // KHANDAQ (#247): the self-preview only means something once the camera is actually
+                    // open. On an audio call it was an empty bordered rectangle parked in the corner.
+                    // (my_video_enabled defaults to 1 and stays 1 in audio calls, so it can't be used.)
+                    CallingActivity.video_box_self_preview_01.setVisibility(
+                            Callstate.camera_opened ? View.VISIBLE : View.GONE);
                     CallingActivity.video_box_left_top_01.setVisibility(View.VISIBLE);
                     // KHANDAQ (modern call screen): keep the debug bitrate/fps stats box hidden.
                     // CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);

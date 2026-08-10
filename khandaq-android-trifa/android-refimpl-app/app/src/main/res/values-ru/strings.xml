@@ -935,6 +935,7 @@
     <string name="group_video_join_title">Присоединиться к групповому видео?</string>
     <string name="group_video_join_message">Отправить своё видео и аудио всем в группе?</string>
     <string name="group_video_join_confirm">Да, начать видео</string>
+    <string name="group_video_join_failed">Не удалось начать групповое видео</string>
     <string name="group_video_join_decline">Нет</string>
     <string name="call_permission_mic_required">Для звонков нужен доступ к микрофону.</string>
     <string name="call_permission_camera_required">Для видеозвонков нужен доступ к камере.</string>

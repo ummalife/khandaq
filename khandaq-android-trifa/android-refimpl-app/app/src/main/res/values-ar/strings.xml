@@ -435,6 +435,7 @@
     <string name="group_video_join_title">الانضمام إلى فيديو المجموعة؟</string>
     <string name="group_video_join_message">إرسال الفيديو والصوت إلى الجميع في هذه المجموعة؟</string>
     <string name="group_video_join_confirm">نعم، بدء الفيديو</string>
+    <string name="group_video_join_failed">تعذّر بدء الفيديو الجماعي</string>
     <string name="group_video_join_decline">لا</string>
     <string name="group_send_voice_confirm_title">إرسال رسالة صوتية؟</string>
     <string name="group_send_voice_confirm_message">إرسال هذه الرسالة الصوتية إلى المجموعة؟</string>

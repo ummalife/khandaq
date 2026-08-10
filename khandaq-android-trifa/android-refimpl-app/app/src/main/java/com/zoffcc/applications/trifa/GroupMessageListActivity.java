@@ -5030,12 +5030,18 @@ public class GroupMessageListActivity extends AppCompatActivity
                 @Override
                 public void onClick(DialogInterface dialog, int which)
                 {
-                    if (!(view.getContext() instanceof GroupMessageListActivity))
+                    // KHANDAQ: this used to be a bare `view.getContext() instanceof ...` test and
+                    // returned silently when it failed. The menu path calls us with the toolbar, whose
+                    // context is a theme wrapper, not the Activity — so "start video" did nothing at
+                    // all: no video, no permission prompt, no error. Unwrap the wrapper instead.
+                    final GroupMessageListActivity activity = groupActivityFrom(view.getContext());
+
+                    if (activity == null)
                     {
+                        display_toast(getString(R.string.group_video_join_failed), true, 400);
                         return;
                     }
 
-                    final GroupMessageListActivity activity = (GroupMessageListActivity) view.getContext();
                     activity.ensureNgcVideoPermissions(new Runnable()
                     {
                         @Override
@@ -5052,6 +5058,26 @@ public class GroupMessageListActivity extends AppCompatActivity
             AlertDialog dialog = builder.create();
             dialog.show();
         }
+    }
+
+    /**
+     * KHANDAQ: a View's context is not always the Activity — anything inflated with its own theme
+     * (the toolbar, popup overlays) hands out a ContextThemeWrapper wrapping it. Walk the wrappers
+     * down to the Activity instead of testing the outermost one.
+     */
+    static GroupMessageListActivity groupActivityFrom(android.content.Context c)
+    {
+        while (c instanceof android.content.ContextWrapper)
+        {
+            if (c instanceof GroupMessageListActivity)
+            {
+                return (GroupMessageListActivity) c;
+            }
+
+            c = ((android.content.ContextWrapper) c).getBaseContext();
+        }
+
+        return null;
     }
 
     private boolean hasNgcVideoPermissions()

@@ -471,6 +471,7 @@
     <string name="group_video_join_title">加入群组视频？</string>
     <string name="group_video_join_message">向群组中的所有人发送您的视频和音频？</string>
     <string name="group_video_join_confirm">是，开始视频</string>
+    <string name="group_video_join_failed">无法开始群组视频</string>
     <string name="group_video_join_decline">否</string>
     <string name="group_send_voice_confirm_title">发送语音消息？</string>
     <string name="group_send_voice_confirm_message">将此语音消息发送到群组？</string>

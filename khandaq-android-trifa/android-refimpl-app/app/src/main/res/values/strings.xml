@@ -609,6 +609,7 @@
     <string name="group_video_join_title">Join group video?</string>
     <string name="group_video_join_message">Send your video and audio to everyone in this group?</string>
     <string name="group_video_join_confirm">Yes, start video</string>
+    <string name="group_video_join_failed">Could not start group video</string>
     <string name="group_video_join_decline">No</string>
     <string name="call_permission_mic_required">Microphone permission is required for calls.</string>
     <string name="call_permission_camera_required">Camera permission is required for video calls.</string>

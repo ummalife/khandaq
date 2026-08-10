@@ -266,8 +266,8 @@ android {
         minSdkVersion 21
         //noinspection OldTargetApi
         targetSdkVersion 36
-        versionCode 10398
-        versionName "0.2.28"
+        versionCode 10399
+        versionName "0.2.29"
 
         // KHANDAQ (#248): ship exactly the four languages we actually maintain. The upstream tree
         // carries ~28 more locale folders inherited from TRIfA, most of them a few dozen strings

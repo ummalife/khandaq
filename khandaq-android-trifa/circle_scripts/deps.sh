@@ -49,6 +49,27 @@ _ANDROID_NDK_UNPACKDIR_="android-ndk-r13b"
 #_ANDROID_NDK_UNPACKDIR_="android-ndk-r21e"
 
 _ANDOIRD_CMAKE_VER_="3.10.2.4988404"
+
+# KHANDAQ (audit): supply-chain pins for everything fetched over the network below.
+# The refs used above are TAGS or (for libsodium) a BRANCH -- both mutable upstream. Pin the exact commit
+# each ref resolved to at audit time and verify it after every clone (khq_verify_git_commit), so a moved
+# tag or a force-push fails the build loudly instead of silently changing the .so we ship to Play.
+_YASM_COMMIT_="ba463d3c26c0ece2e797b8d6381b161633b5971a"          # tag v1.3.0
+_FFMPEG_COMMIT_="ea3d24bbe3c58b171e55fe2151fc7ffaca3ab3d2"        # tag n6.0
+_VPX_COMMIT_="b85ac11737430a7f600ac4efb643d4833afd7428"           # tag v1.8.0
+_OPUS_COMMIT_="e85ed7726db5d677c9c0677298ea0cb9c65bdd23"          # tag v1.3.1
+# NOTE: libsodium "1.0.18" is refs/heads/1.0.18 -- a BRANCH, not a tag. Fully mutable, so this pin matters.
+_LIBSODIUM_COMMIT_="45b09a607d596e40adbff9ab812e47d85175c053"     # branch 1.0.18 (== tag 1.0.18-FINAL)
+
+# KHANDAQ (audit): gas-preprocessor.pl used to be fetched from the mutable `master` branch with no integrity
+# check and installed executable into the build container -- whoever controls that branch controls code that
+# builds the .so shipping to Play. Pinned to the commit master pointed at when audited; the bytes are
+# identical to what CI was already fetching, so this changes nothing about what builds today.
+_GAS_PREPROCESSOR_COMMIT_="d09971fad329d32df19f5bbafe88cf2f0ed04ed7"
+_GAS_PREPROCESSOR_HASH_="78ad06351ac8be513fb6e6291d9bb8f667899625c2649093e3b08f59fae950a2"
+# vpx-android arm64 configure patch: URL is already commit-pinned; the sha256 gate covers a hostile
+# mirror/redirect serving different bytes for that same URL.
+_VPX_ANDROID_PATCH_HASH_="4a2f4ac18136b794294fc9c8f32aafd697f7709710945705f641eb4959a25110"
 ## ----------------------
 
 # export ASAN_CLANG_FLAGS=" -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls "
@@ -87,6 +108,19 @@ redirect_cmd() {
     else
         "$@"
     fi
+}
+
+
+# KHANDAQ (audit): $1 = checked-out repo dir, $2 = pinned full sha1.
+# Cloning by tag/branch only pins a NAME; this pins the content. Fail the whole build on mismatch --
+# never fall back and never continue with an unexpected commit.
+khq_verify_git_commit() {
+    have_commit_=$(git -C "$1" rev-parse HEAD 2>/dev/null)
+    if [ "$have_commit_" != "$2" ]; then
+        echo "FATAL: $1 is at commit '$have_commit_' but '$2' is pinned -- refusing to build"
+        exit 1
+    fi
+    echo "pinned commit OK: $1 $2"
 }
 
 
@@ -133,7 +167,12 @@ for i in $pkgs ; do
 done
 
 
-wget "https://raw.githubusercontent.com/libav/gas-preprocessor/master/gas-preprocessor.pl" -O /usr/bin/gas-preprocessor.pl
+# KHANDAQ (audit): commit-pinned + sha256-gated, and only made executable AFTER it verifies.
+wget "https://raw.githubusercontent.com/libav/gas-preprocessor/$_GAS_PREPROCESSOR_COMMIT_/gas-preprocessor.pl" \
+    -O /usr/bin/gas-preprocessor.pl || exit 1
+echo "$_GAS_PREPROCESSOR_HASH_"'  /usr/bin/gas-preprocessor.pl' \
+    > /tmp/gas-preprocessor.pl.sha256
+sha256sum -c /tmp/gas-preprocessor.pl.sha256 || exit 1
 chmod a+rx /usr/bin/gas-preprocessor.pl
 
 
@@ -314,7 +353,8 @@ if [ "$full""x" == "1x" ]; then
     # --- YASM ---
     cd $_s_
     rm -Rf yasm
-    git clone --depth=1 --branch=v1.3.0 https://github.com/yasm/yasm.git
+    git clone --depth=1 --branch=v1.3.0 https://github.com/yasm/yasm.git || exit 1
+    khq_verify_git_commit "$_s_/yasm" "$_YASM_COMMIT_"
     cd $_s_/yasm/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -337,7 +377,8 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBAV ---
     cd $_s_;git clone https://github.com/FFmpeg/FFmpeg libav
-    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_"
+    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_" || exit 1
+    khq_verify_git_commit "$_s_/libav" "$_FFMPEG_COMMIT_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -381,7 +422,10 @@ if [ "$full""x" == "1x" ]; then
     # --- X264 ---
     # export CXXFLAGS=" -g -O3 $CF2 ";export CFLAGS=" -g -O3 $CF2 "
     cd $_s_;git clone https://code.videolan.org/videolan/x264.git
-    cd $_s_/x264/; git checkout "$_X264_VERSION_" # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    # KHANDAQ (audit): _X264_VERSION_ is already a full sha1, but the checkout must not fail silently --
+    # without this the build would just continue on whatever the default branch happens to be.
+    cd $_s_/x264/; git checkout "$_X264_VERSION_" || exit 1 # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    khq_verify_git_commit "$_s_/x264" "$_X264_VERSION_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -397,7 +441,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBVPX ---
-    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git || exit 1
+    khq_verify_git_commit "$_s_/libvpx" "$_VPX_COMMIT_"
     # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
     # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
     # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
@@ -427,7 +472,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- OPUS ---
-    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git
+    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git || exit 1
+    khq_verify_git_commit "$_s_/opus" "$_OPUS_COMMIT_"
     cd $_s_/opus/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -443,7 +489,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git || exit 1
+    khq_verify_git_commit "$_s_/libsodium" "$_LIBSODIUM_COMMIT_"
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -464,7 +511,9 @@ fi
 cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
-cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || git checkout "zoff99/zoxcore_local_fork"
+# KHANDAQ (audit): no fallback to the mutable branch. zoff99/zoxcore_local_fork has already moved past this
+# pin, so a failed checkout used to silently build unreviewed upstream code into the shipped .so.
+cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || exit 1
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
@@ -802,7 +851,8 @@ if [ "$full""x" == "1x" ]; then
         redirect_cmd curl https://dl.google.com/android/repository/commandlinetools-linux-${_ANDROID_SDK_TOOLS}_latest.zip -o sdk.zip
 
         cd $WRKSPACEDIR
-        redirect_cmd curl http://dl.google.com/android/repository/"$_ANDROID_NDK_FILE_" -o ndk.zip
+        # KHANDAQ (audit): https, not plaintext http (the ARM section already did; these three did not).
+        redirect_cmd curl https://dl.google.com/android/repository/"$_ANDROID_NDK_FILE_" -o ndk.zip
     fi
 
     cd $WRKSPACEDIR
@@ -881,7 +931,8 @@ if [ "$full""x" == "1x" ]; then
     # --- YASM ---
     cd $_s_
     rm -Rf yasm
-    git clone --depth=1 --branch=v1.3.0 https://github.com/yasm/yasm.git
+    git clone --depth=1 --branch=v1.3.0 https://github.com/yasm/yasm.git || exit 1
+    khq_verify_git_commit "$_s_/yasm" "$_YASM_COMMIT_"
     cd $_s_/yasm/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -904,7 +955,8 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBAV ---
     cd $_s_;git clone https://github.com/FFmpeg/FFmpeg libav
-    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_"
+    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_" || exit 1
+    khq_verify_git_commit "$_s_/libav" "$_FFMPEG_COMMIT_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -947,7 +999,10 @@ if [ "$full""x" == "1x" ]; then
     # --- X264 ---
     # export CXXFLAGS=" -g -O3 $CF2 ";export CFLAGS=" -g -O3 $CF2 "
     cd $_s_;git clone https://code.videolan.org/videolan/x264.git
-    cd $_s_/x264/; git checkout "$_X264_VERSION_" # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    # KHANDAQ (audit): _X264_VERSION_ is already a full sha1, but the checkout must not fail silently --
+    # without this the build would just continue on whatever the default branch happens to be.
+    cd $_s_/x264/; git checkout "$_X264_VERSION_" || exit 1 # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    khq_verify_git_commit "$_s_/x264" "$_X264_VERSION_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -967,12 +1022,18 @@ if [ "$full""x" == "1x" ]; then
 # ls -al /root/work//arm64_inst//toolchains//arm64/lib/gcc/aarch64-linux-android/4.9.x/include/arm_neon.h
 
     # --- LIBVPX ---
-    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git || exit 1
+    khq_verify_git_commit "$_s_/libvpx" "$_VPX_COMMIT_"
     # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
     # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
     # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
     cd $_s_/libvpx && patch -p1 < /root/work/patches/khandaq-libvpx-cve-2024-5197.patch || exit 1; cd $_s_
-    cd $_s_;wget 'https://raw.githubusercontent.com/cmeng-git/vpx-android/de613e367ea86190955a836c3c0f2bc0f260562f/patches/10.libvpx_configure.sh.patch' -O aa.patch
+    cd $_s_;wget 'https://raw.githubusercontent.com/cmeng-git/vpx-android/de613e367ea86190955a836c3c0f2bc0f260562f/patches/10.libvpx_configure.sh.patch' -O aa.patch || exit 1
+    # KHANDAQ (audit): the URL is commit-pinned, but nothing checked the bytes -- this patch rewrites
+    # libvpx's configure.sh, i.e. it is build-executable content. Gate it on sha256.
+    cd $_s_; echo "$_VPX_ANDROID_PATCH_HASH_"'  aa.patch' \
+        > aa.patch.sha256
+    cd $_s_; sha256sum -c aa.patch.sha256 || exit 1
     # KHANDAQ (audit #8): fail-fast on a bad patch apply (was silently ignored -> misconfigured arm64 .so).
     # Harmless at the pinned v1.8.0 (patch matches); if/when the libvpx CVE bump lands, this catches a
     # patch mismatch loudly instead of shipping a broken toolchain. See the _VPX_VERSION_ TODO above.
@@ -1004,7 +1065,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- OPUS ---
-    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git
+    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git || exit 1
+    khq_verify_git_commit "$_s_/opus" "$_OPUS_COMMIT_"
     cd $_s_/opus/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -1020,7 +1082,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git || exit 1
+    khq_verify_git_commit "$_s_/libsodium" "$_LIBSODIUM_COMMIT_"
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -1042,7 +1105,9 @@ fi
 cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
-cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || git checkout "zoff99/zoxcore_local_fork"
+# KHANDAQ (audit): no fallback to the mutable branch. zoff99/zoxcore_local_fork has already moved past this
+# pin, so a failed checkout used to silently build unreviewed upstream code into the shipped .so.
+cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || exit 1
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
@@ -1378,7 +1443,8 @@ if [ "$full""x" == "1x" ]; then
         redirect_cmd curl https://dl.google.com/android/repository/commandlinetools-linux-${_ANDROID_SDK_TOOLS}_latest.zip -o sdk.zip
 
         cd $WRKSPACEDIR
-        redirect_cmd curl http://dl.google.com/android/repository/"$_ANDROID_NDK_FILE_" -o ndk.zip
+        # KHANDAQ (audit): https, not plaintext http (the ARM section already did; these three did not).
+        redirect_cmd curl https://dl.google.com/android/repository/"$_ANDROID_NDK_FILE_" -o ndk.zip
     fi
 
     cd $WRKSPACEDIR
@@ -1495,7 +1561,8 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBAV ---
     cd $_s_;git clone https://github.com/FFmpeg/FFmpeg libav
-    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_"
+    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_" || exit 1
+    khq_verify_git_commit "$_s_/libav" "$_FFMPEG_COMMIT_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -1540,7 +1607,10 @@ if [ "$full""x" == "1x" ]; then
     # --- X264 ---
     # export CXXFLAGS=" -g -O3 $CF2 ";export CFLAGS=" -g -O3 $CF2 "
     cd $_s_;git clone https://code.videolan.org/videolan/x264.git
-    cd $_s_/x264/; git checkout "$_X264_VERSION_" # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    # KHANDAQ (audit): _X264_VERSION_ is already a full sha1, but the checkout must not fail silently --
+    # without this the build would just continue on whatever the default branch happens to be.
+    cd $_s_/x264/; git checkout "$_X264_VERSION_" || exit 1 # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    khq_verify_git_commit "$_s_/x264" "$_X264_VERSION_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -1558,7 +1628,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBVPX ---
-    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git || exit 1
+    khq_verify_git_commit "$_s_/libvpx" "$_VPX_COMMIT_"
     # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
     # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
     # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
@@ -1590,7 +1661,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- OPUS ---
-    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git
+    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git || exit 1
+    khq_verify_git_commit "$_s_/opus" "$_OPUS_COMMIT_"
     cd $_s_/opus/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -1606,7 +1678,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git || exit 1
+    khq_verify_git_commit "$_s_/libsodium" "$_LIBSODIUM_COMMIT_"
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -1627,7 +1700,9 @@ fi
 cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
-cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || git checkout "zoff99/zoxcore_local_fork"
+# KHANDAQ (audit): no fallback to the mutable branch. zoff99/zoxcore_local_fork has already moved past this
+# pin, so a failed checkout used to silently build unreviewed upstream code into the shipped .so.
+cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || exit 1
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"
@@ -1807,7 +1882,8 @@ if [ "$full""x" == "1x" ]; then
         redirect_cmd curl https://dl.google.com/android/repository/commandlinetools-linux-${_ANDROID_SDK_TOOLS}_latest.zip -o sdk.zip
 
         cd $WRKSPACEDIR
-        redirect_cmd curl http://dl.google.com/android/repository/"$_ANDROID_NDK_FILE_" -o ndk.zip
+        # KHANDAQ (audit): https, not plaintext http (the ARM section already did; these three did not).
+        redirect_cmd curl https://dl.google.com/android/repository/"$_ANDROID_NDK_FILE_" -o ndk.zip
     fi
 
     cd $WRKSPACEDIR
@@ -1924,7 +2000,8 @@ if [ "$full""x" == "1x" ]; then
 
     # --- LIBAV ---
     cd $_s_;git clone https://github.com/FFmpeg/FFmpeg libav
-    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_"
+    cd $_s_/libav/; git checkout "$_FFMPEG_VERSION_" || exit 1
+    khq_verify_git_commit "$_s_/libav" "$_FFMPEG_COMMIT_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -1969,7 +2046,10 @@ if [ "$full""x" == "1x" ]; then
     # --- X264 ---
     # export CXXFLAGS=" -g -O3 $CF2 ";export CFLAGS=" -g -O3 $CF2 "
     cd $_s_;git clone https://code.videolan.org/videolan/x264.git
-    cd $_s_/x264/; git checkout "$_X264_VERSION_" # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    # KHANDAQ (audit): _X264_VERSION_ is already a full sha1, but the checkout must not fail silently --
+    # without this the build would just continue on whatever the default branch happens to be.
+    cd $_s_/x264/; git checkout "$_X264_VERSION_" || exit 1 # 0a84d986e7020f8344f00752e3600b9769cc1e85 # stable
+    khq_verify_git_commit "$_s_/x264" "$_X264_VERSION_"
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
     cd "$_BLD_";
@@ -1987,7 +2067,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBVPX ---
-    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git
+    cd $_s_;git clone --depth=1 --branch="$_VPX_VERSION_" https://github.com/webmproject/libvpx.git || exit 1
+    khq_verify_git_commit "$_s_/libvpx" "$_VPX_COMMIT_"
     # KHANDAQ (audit #8): backport CVE-2024-5197 (integer overflow in vpx_img_alloc/vpx_img_wrap) onto the
     # pinned v1.8.0 as a targeted dimension guard — the upstream 1.14.x fix commits don't apply to 1.8.0's
     # long-diverged vpx_image.c. Reachable from an attacker-controlled decoded frame size. Fail-fast.
@@ -2021,7 +2102,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- OPUS ---
-    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git
+    cd $_s_;git clone --depth=1 --branch="$_OPUS_VERSION_" https://github.com/xiph/opus.git || exit 1
+    khq_verify_git_commit "$_s_/opus" "$_OPUS_COMMIT_"
     cd $_s_/opus/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -2037,7 +2119,8 @@ if [ "$full""x" == "1x" ]; then
 
 
     # --- LIBSODIUM ---
-    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git
+    cd $_s_;rm -Rf libsodium ; git clone --depth=1 --branch="$_LIBSODIUM_VERSION_" https://github.com/jedisct1/libsodium.git || exit 1
+    khq_verify_git_commit "$_s_/libsodium" "$_LIBSODIUM_COMMIT_"
     cd $_s_/libsodium/;autoreconf -fi
     rm -Rf "$_BLD_"
     mkdir -p "$_BLD_"
@@ -2058,7 +2141,9 @@ fi
 cd $_s_;rm -Rf c-toxcore
 
 cd $_s_;git clone https://github.com/zoff99/c-toxcore c-toxcore
-cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || git checkout "zoff99/zoxcore_local_fork"
+# KHANDAQ (audit): no fallback to the mutable branch. zoff99/zoxcore_local_fork has already moved past this
+# pin, so a failed checkout used to silently build unreviewed upstream code into the shipped .so.
+cd $_s_;cd c-toxcore;git checkout "2e7a0675c5fadc6c362e67cb66cc8925bdff8816" || exit 1
 cd "$_s_"/c-toxcore && if [ -f /root/work/patches/apply_khandaq_partb.py ]; then python3 /root/work/patches/apply_khandaq_partb.py toxcore/onion_client.c || exit 1; else echo "KHANDAQ(#201 CI): apply_khandaq_partb.py absent -- skipping onion_client patch"; fi ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_media_resend.py toxcore/group_connection.c || exit 1 ; cd "$_s_"

@@ -35,13 +35,17 @@ apt-get install -y --no-install-recommends \
   python3 python-is-python3 openjdk-11-jdk-headless libncurses5 unzip xz-utils \
   || { echo "apt install FAILED"; exit 1; }
 
-echo "[2/4] inject Khandaq NGC pure-TCP announce patch into each toxcore checkout ..."
-# after every "git checkout zoff99/zoxcore_local_fork", run the context-independent python patcher
-# against the freshly cloned c-toxcore. ABORT the build (exit 1) if it cannot apply, so we never
-# again silently ship an UNPATCHED .so (git apply was too strict about line/context drift).
-sed -i "/git checkout \"zoff99\/zoxcore_local_fork\"/a cd \"\$_s_\"/c-toxcore \&\& python3 /root/work/patches/apply_khandaq_patch.py toxcore/Messenger.c || exit 1 ; cd \"\$_s_\"" \
-  /root/work/circle_scripts/deps.sh
-echo "injected at $(grep -c "apply_khandaq_patch.py" /root/work/circle_scripts/deps.sh) site(s)"
+echo "[2/4] verify Khandaq NGC pure-TCP announce patch is wired into each toxcore checkout ..."
+# KHANDAQ (audit): this used to sed-inject the patcher after the "git checkout zoff99/zoxcore_local_fork"
+# fallback line. That fallback is gone (a failed checkout of the pinned commit must fail the build, not
+# silently build a mutable branch), and deps.sh now calls the patcher inline at all 4 ABI sites with
+# "|| exit 1". So assert the wiring instead of injecting it -- a missing call must still be a hard stop,
+# so we never silently ship an UNPATCHED .so.
+patch_sites=$(grep -c "apply_khandaq_patch.py toxcore/Messenger.c" /root/work/circle_scripts/deps.sh)
+echo "Messenger.c patcher wired at $patch_sites site(s)"
+if [ "$patch_sites" -ne 4 ]; then
+  echo "ERROR: expected the Messenger.c patcher at 4 ABI sites in deps.sh, found $patch_sites"; exit 1
+fi
 
 # media/NdkMediaFormat.h (FFmpeg --enable-mediacodec) requires NDK API >= 21. The 32-bit ABI
 # toolchains are built with --api 16 which lacks the media NDK headers -> build aborts. Bump to 21.

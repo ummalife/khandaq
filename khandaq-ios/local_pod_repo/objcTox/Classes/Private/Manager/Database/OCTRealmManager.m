@@ -1425,8 +1425,14 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         static const NSTimeInterval kHistoryWindowSeconds = 130 * 60;
         static const uint64_t kMaxSyncFileBytes = 36701;
         NSTimeInterval since = [[NSDate date] timeIntervalSince1970] - kHistoryWindowSeconds;
+        // KHANDAQ (audit): history sync serves the GROUP timeline only. A private member-to-member
+        // message lives in the same chat row set (groupPrivateMessage == YES) and was matched here, so
+        // asking us for history handed out other people's 1:1 threads to the whole group. System lines
+        // (join/leave/create) are local UI artifacts every client writes for itself; re-broadcasting
+        // them made them look like chat messages from us. Both are excluded at the source.
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
+                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND "
                                   @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
                                   chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
         RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
@@ -1461,8 +1467,13 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         static const NSTimeInterval kHistoryWindowSeconds = 130 * 60;
         static const uint64_t kMaxSyncFileBytes = 36701;
         NSTimeInterval since = [[NSDate date] timeIntervalSince1970] - kHistoryWindowSeconds;
+        // KHANDAQ (audit): this is the predicate history sync actually serves from — keep it identical
+        // to groupMessagesForHistorySyncInChat above, private and system rows excluded. A private DM
+        // (text AND its attached file payload) must never leave this device towards the group; the
+        // builder in OCTNgcGroupHistSync refuses one too, so neither layer alone can leak it.
         NSPredicate *predicate = [NSPredicate predicateWithFormat:
                                   @"chatUniqueIdentifier == %@ AND dateInterval > %f AND "
+                                  @"groupPrivateMessage == NO AND groupSystemMessage == NO AND "
                                   @"(messageText != nil OR (messageFile != nil AND messageFile.fileType == %d AND messageFile.fileSize <= %llu))",
                                   chat.uniqueIdentifier, since, (int)OCTMessageFileTypeReady, kMaxSyncFileBytes];
         RLMResults *results = [OCTMessageAbstract objectsInRealm:self.realm withPredicate:predicate];
@@ -1492,8 +1503,12 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     NSParameterAssert(chat);
     NSParameterAssert(text);
 
+    // KHANDAQ (audit): dedup only against the PUBLIC timeline. These checks answer "do we already have
+    // this group message"; a private thread is a different conversation, so matching one there both
+    // swallowed an honest public message and — because a match makes history sync answer with a
+    // delivery receipt — let a peer probe whether a given text exists in someone's private DMs.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
                               chat.uniqueIdentifier, messageId, text];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
@@ -1511,8 +1526,9 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         return NO;
     }
 
+    // KHANDAQ (audit): public-timeline scope, see the peerId variant above.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.messageId == %u AND messageText.text == %@",
                               chat.uniqueIdentifier, messageId, text];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
@@ -1537,8 +1553,9 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     // original groupSyncDedupTimestamp. This keeps the #42 cross-path dedup working for future-dated
     // re-syncs (clamp moved dateInterval to "now", so only the original-timestamp branch matches) while
     // legacy rows (groupSyncDedupTimestamp == 0) still match via dateInterval as before.
+    // KHANDAQ (audit): public-timeline scope, see the messageId variants above.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.text == %@ AND ((dateInterval >= %f AND dateInterval <= %f) OR (groupSyncDedupTimestamp > 0 AND groupSyncDedupTimestamp >= %f AND groupSyncDedupTimestamp <= %f))",
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.text == %@ AND ((dateInterval >= %f AND dateInterval <= %f) OR (groupSyncDedupTimestamp > 0 AND groupSyncDedupTimestamp >= %f AND groupSyncDedupTimestamp <= %f))",
                               chat.uniqueIdentifier, text, lower, upper, lower, upper];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
@@ -1568,8 +1585,9 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
         return [self groupTextMessageExistsInChat:chat text:text nearDateInterval:dateInterval windowSeconds:windowSeconds];
     }
 
+    // KHANDAQ (audit): public-timeline scope, see the messageId variants above.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText != nil AND messageText.text == %@ AND messageText.groupPeerName == %@ AND ((dateInterval >= %f AND dateInterval <= %f) OR (groupSyncDedupTimestamp > 0 AND groupSyncDedupTimestamp >= %f AND groupSyncDedupTimestamp <= %f))",
+                              @"chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND messageText != nil AND messageText.text == %@ AND messageText.groupPeerName == %@ AND ((dateInterval >= %f AND dateInterval <= %f) OR (groupSyncDedupTimestamp > 0 AND groupSyncDedupTimestamp >= %f AND groupSyncDedupTimestamp <= %f))",
                               chat.uniqueIdentifier, text, senderName, lower, upper, lower, upper];
     RLMResults *results = [self objectsWithClass:[OCTMessageAbstract class] predicate:predicate];
 
@@ -1610,6 +1628,12 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageAbstract.groupSenderPeerId = peerId;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
     messageAbstract.groupHistorySync = YES;
+    // KHANDAQ (audit): a history-sync packet carries no private marker and never will — the relaying
+    // peer is not the counterparty of anyone's 1:1 thread, so a synced row it hands us could only ever
+    // be an unverifiable claim that two OTHER members said something in private. Pin the row public
+    // here so no future field on the wire can promote second-hand content into a private thread.
+    messageAbstract.groupPrivateMessage = NO;
+    messageAbstract.groupPrivatePeerId = 0;
     messageAbstract.messageText = messageText;
 
     [self addObject:messageAbstract];
@@ -1672,6 +1696,9 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageAbstract.groupSenderPeerId = peerId;
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
     messageAbstract.groupHistorySync = YES;
+    // KHANDAQ (audit): same as the synced-text path — a synced row is always a PUBLIC group row.
+    messageAbstract.groupPrivateMessage = NO;
+    messageAbstract.groupPrivatePeerId = 0;
     messageAbstract.messageFile = messageFile;
 
     [self addObject:messageAbstract];

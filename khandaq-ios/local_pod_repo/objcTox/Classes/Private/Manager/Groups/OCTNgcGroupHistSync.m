@@ -379,6 +379,20 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
 
 - (nullable NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message groupNumber:(uint32_t)groupNumber
 {
+    // KHANDAQ (audit): a private member-to-member message is stored in the GROUP chat and is only
+    // separated from the timeline by this flag, so any selection that forgets it turns a 1:1 thread
+    // into a group broadcast. Refuse here as well as in the query (OCTRealmManager), and before the
+    // text/file split so the file payload of a private row cannot leave either.
+    if (message.groupPrivateMessage) {
+        return nil;
+    }
+
+    // KHANDAQ (audit): system lines (join/leave/create) are written locally by every client for
+    // itself; serving ours would show up on peers as an ordinary message from us.
+    if (message.groupSystemMessage) {
+        return nil;
+    }
+
     if (message.messageText) {
         return [self buildSyncMessagePacketForMessage:message groupNumber:groupNumber];
     }

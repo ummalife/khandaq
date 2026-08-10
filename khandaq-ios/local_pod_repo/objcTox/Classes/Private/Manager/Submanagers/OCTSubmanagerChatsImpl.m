@@ -1356,9 +1356,14 @@ serialize:
         return;
     }
     OCTChat *chat = [realmManager getOrCreateChatWithFriend:friend];
+    // KHANDAQ (audit): bind the edit to the message's AUTHOR, exactly like the 187 delete gate above.
+    // The msgv3 hash travels inside the original message, so the peer knows the id of the messages WE
+    // sent too; without this clause a friend could rewrite the text of our own outgoing messages in our
+    // history. Incoming rows are the only ones that carry senderUniqueIdentifier (outgoing is nil, see
+    // OCTMessageAbstract), so this is an exact test with no legacy/author-less case to fall back to.
     NSPredicate *predicate = [NSPredicate predicateWithFormat:
-                              @"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@",
-                              chat.uniqueIdentifier, msgv3HashHex];
+                              @"chatUniqueIdentifier == %@ AND messageText.msgv3HashHex == %@ AND senderUniqueIdentifier == %@",
+                              chat.uniqueIdentifier, msgv3HashHex, friend.uniqueIdentifier];
     OCTMessageAbstract *found = [[realmManager objectsWithClass:[OCTMessageAbstract class] predicate:predicate] firstObject];
     if (! found || found.messageText == nil) {
         return; // like reactions/deletes, an edit never creates state for an unknown original

@@ -1003,8 +1003,16 @@ public final class NgcGroupFileTransfer
 
         final int chunkIndex = readU32Be(data, 40);
         final int chunkSize = readU32Be(data, 44);
+        // KHANDAQ (internal audit L-1): chunkSize was bounded only by the packet length, so a chunk
+        // could carry more than the BEGIN declared as the payload size and write past the declared
+        // end of the file — the stored file then disagreed with its own metadata. iOS and desktop
+        // have had both bounds for a while; this brings Android in line. An honest sender always
+        // sends chunkSize <= chunkPayload and a short final chunk, so nothing legitimate is rejected.
+        final long chunkOffset = (long) chunkIndex * (long) asm.chunkPayload;
         if (chunkIndex < 0 || chunkIndex >= asm.totalChunks || chunkSize < 1
-                || (FILE_CHUNK_HEADER + chunkSize) > length)
+                || (FILE_CHUNK_HEADER + chunkSize) > length
+                || chunkSize > asm.chunkPayload
+                || (chunkOffset + (long) chunkSize) > asm.totalSize)
         {
             HelperGeneric.logI(TAG, "handleChunk:reject idx=" + chunkIndex + " size=" + chunkSize
                     + " len=" + length + " total=" + asm.totalChunks);

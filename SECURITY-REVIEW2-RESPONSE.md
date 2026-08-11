@@ -18,7 +18,7 @@ Thank you for the two things that mattered most: catching that our release job *
 | 2 | Release CI replaces dependency pins | **FIXED** |
 | 3 | 1:1 chunk assembly allocation | **FIXED** |
 | 4 | Push relay: unauthenticated posture + token in logs | **PARTLY FIXED** — logging and TLS closed; enforcement is a rollout |
-| 5 | Cancelled group files requestable after restart | **FIXED** |
+| 5 | Cancelled group files requestable after restart | **FIXED** — device-verified across an app restart |
 | 6 | Plaintext identity export | **FIXED** — encrypted backup is now the default; raw kept behind an explicit, honest warning |
 | 7 | Windows runtime dependencies | **PARTLY FIXED** — FFmpeg bumped; Qt/OpenSSL deferred |
 | 8 | iOS dependencies unlocked | **FIXED** |
@@ -190,7 +190,17 @@ What was actually run, not what was intended:
 
 Not verified, and we would rather you know it:
 
-- **The cancelled-transfer-survives-restart test (finding 5) was not completed on devices**, and chasing the reason turned up two product bugs of our own. First the two phones were on different networks (one on carrier LTE behind CGNAT, one on Wi-Fi); we put them on the same LAN. The group peer link then came up **one-way**: with the group open on both, the second phone reports both members online while the first still reports only itself, for minutes. The outgoing transfer therefore stays at "waiting for sender" on the sending phone, and the cancel control only exists while a transfer is actually running — so there was nothing to cancel. The asymmetry resolved after restarting the app — both sides then reported both members online. But the queued transfer **still did not resume**, and in that state the row offers **neither a cancel nor a retry control**, so a user has no way to act on it at all. Two separate defects, both pre-existing and both outside this batch: a group file queued while the peer was offline does not resume when the peer returns, and a waiting row is a dead end in the UI.
+- **The cancelled-transfer-survives-restart test (finding 5) now passes on devices.** Getting there took two detours worth reporting, because both are product bugs of ours.
 
-That is also the complete explanation for why finding 5 could not be exercised end to end: the persisted cancellation we added is reachable only from a running transfer, and this transfer cannot be made to run. The cancellation logic is covered by review and by unit tests; the device path is not.
+  The first attempt could not start a transfer at all. The two phones were on different networks (one on carrier LTE behind CGNAT, one on Wi-Fi); on the same LAN the group peer link then came up one-way, and that cleared only after restarting the app. Even then the already-queued transfer **did not resume**, and in that state the row offers **neither a cancel nor a retry control** — a dead end for the user. Both of those are pre-existing, outside this batch, and now tracked separately.
+
+  Sending a *fresh* file while the peer was online worked immediately, which is how the test finally ran:
+
+  1. 5.24 MB group file, chunked path, reached 26% and the cancel control appeared.
+  2. Cancelled. The row moved to the failed/retry state, and the log shows the tombstone actually written: `set_g_opts:(INSERT):key=kqngccancel_<group>|<msg_hash>`.
+  3. Force-stopped the app and relaunched.
+  4. **The cancelled row came back still cancelled** — failed/retry, not sending. The other queued transfer in the same chat was untouched, so the tombstone is per-message and not a blanket stop.
+
+  What we did **not** observe directly: a `FILE_REQUEST` from the peer being refused for that message. The gate is in the code and unit-tested, and the persisted tombstone it reads is confirmed present, but the remote-request path itself was not exercised.
+
 - There is still no fuzzing and no sanitizer coverage. The 40 tests cover the parsing bounds, the reassembly state machines and the history-sync budgets; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.

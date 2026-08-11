@@ -75,7 +75,28 @@ jobs:
             echo "wrote placeholder google-services.json (unsigned reference build)"
           fi
 
-      - name: Build release APK (regenerate witness checksums for the CI toolchain first)
+      - name: Verify committed dependency pins (gradle witness) — never regenerate them here
+        run: |
+          set -euo pipefail
+          cd khandaq-android-trifa/android-refimpl-app
+          chmod +x ./gradlew
+          w=app/witness.gradle
+          # audit2 #2: pinChecksums only walks the assertions it finds, so an empty or truncated witness file
+          # would make the gate pass vacuously. Require the committed pin list to still be there.
+          n=$(grep -cE "^[[:space:]]*'[^']+:[0-9a-f]{64}'," "$w" || true)
+          echo "committed dependency pins: $n"
+          if [ "$n" -lt 100 ]; then
+            echo "::error::witness.gradle holds only $n pins - refusing to build/attest a release from an unpinned tree" >&2
+            exit 1
+          fi
+          # audit2 #2: this step used to run "calculateChecksums || true", which emptied and rewrote witness.gradle
+          # from whatever this runner had just downloaded - i.e. a substituted maven artifact would have been
+          # re-pinned, built, signed and attested. The release path must ONLY verify, and must fail on mismatch.
+          # A legitimate dependency bump is a reviewed commit of app/witness.gradle (see gradle_witness_ng.gradle
+          # header / the manual "witness-checksums-update" workflow).
+          ./gradlew --no-daemon -PrunWitnessChecker=true :app:pinChecksums
+
+      - name: Build release APK
         env:
           KHANDAQ_UPLOAD_STORE_FILE: ${{ secrets.KHANDAQ_UPLOAD_STORE_FILE }}
           KHANDAQ_UPLOAD_PASSWORD: ${{ secrets.KHANDAQ_UPLOAD_PASSWORD }}
@@ -84,15 +105,19 @@ jobs:
           set -euo pipefail
           cd khandaq-android-trifa/android-refimpl-app
           chmod +x ./gradlew
-          # CI resolves some dependencies to different checksums than the committed gradle_witness values,
-          # so regenerate them (mirrors the existing android.yml) to keep the witness gate from blocking.
-          ./gradlew -q calculateChecksums || true
           ARGS=""
           if [ -n "${KHANDAQ_UPLOAD_STORE_FILE:-}" ]; then
             ARGS="-PKHANDAQ_UPLOAD_STORE_FILE=${KHANDAQ_UPLOAD_STORE_FILE} -PKHANDAQ_UPLOAD_PASSWORD=${KHANDAQ_UPLOAD_PASSWORD} -PKHANDAQ_UPLOAD_ALIAS=${KHANDAQ_UPLOAD_ALIAS}"
           fi
           ./gradlew --no-daemon :app:assembleRelease ${ARGS}
           find app/build/outputs/apk/release -name '*.apk'
+
+      # audit2 #2: belt and braces - if anything in the build graph ever rewrites the pins again, the artifact
+      # we are about to sign was not built against the reviewed pin list, so stop before attesting.
+      - name: Assert the dependency pins were not rewritten during the build
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- khandaq-android-trifa/android-refimpl-app/app/witness.gradle
 
       - name: Generate SHA256SUMS
         run: |

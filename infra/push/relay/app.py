@@ -7,6 +7,7 @@ import hmac
 import ipaddress
 import logging
 import os
+import sqlite3
 import time
 from collections import defaultdict
 from threading import Lock
@@ -67,13 +68,14 @@ _stats_lock = Lock()
 
 
 def _stats_conn():
-    import sqlite3
-
     os.makedirs(os.path.dirname(COALESCE_DB), exist_ok=True)
     conn = sqlite3.connect(COALESCE_DB, timeout=5)
     conn.execute("PRAGMA journal_mode=WAL")
     # last ACTUAL FCM send per token hash — used to coalesce wake-push spam (see wake()).
     conn.execute("CREATE TABLE IF NOT EXISTS pushsent (th TEXT PRIMARY KEY, ts INTEGER)")
+    # KHANDAQ (audit2 #10): consumed auth signatures, shared by ALL gunicorn workers (see
+    # _claim_signature). Same container filesystem -> one store for the whole -w N process pool.
+    conn.execute("CREATE TABLE IF NOT EXISTS usedsig (sig TEXT PRIMARY KEY, ts INTEGER)")
     return conn
 
 
@@ -229,9 +231,51 @@ def _auth_ok() -> bool:
 
 
 # KHANDAQ (audit A2): single-use signature cache — an accepted ts-bound HMAC is consumed so it cannot
-# be replayed inside the AUTH_MAX_SKEW_SEC window. (Single-process; for multi-worker back with SQLite.)
-_used_sigs: dict[str, float] = {}
-_used_sigs_lock = Lock()
+# be replayed inside the AUTH_MAX_SKEW_SEC window.
+# KHANDAQ (audit2 #10): this used to be an in-process dict, but the container runs gunicorn -w 2, so a
+# captured signature was accepted once PER WORKER. Back it with the SQLite file the relay already uses
+# (same container FS => shared by every worker): INSERT OR IGNORE on a PRIMARY KEY is atomic, so
+# exactly one caller — in one worker — can claim a given signature. Retention is bounded by the
+# freshness window: anything older than 2x the skew can no longer pass the ts check, so it is purged.
+_SIG_RETENTION_SEC = max(AUTH_MAX_SKEW_SEC, 60) * 2
+
+
+def _claim_signature(sig: str) -> bool:
+    """True if THIS request is the first to present `sig` (i.e. it is not a replay)."""
+    now = int(time.time())
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("DELETE FROM usedsig WHERE ts < ?", (now - _SIG_RETENTION_SEC,))
+                cur = conn.execute("INSERT OR IGNORE INTO usedsig VALUES (?, ?)", (sig, now))
+                claimed = cur.rowcount == 1  # 0 rows => the signature was already consumed
+                conn.commit()
+                return claimed
+            finally:
+                conn.close()
+    except Exception:
+        # KHANDAQ (audit3 #3): FAIL CLOSED. This is a security control (single-use signatures), not a
+        # best-effort cache like the coalesce slot: swallowing the error and returning True silently
+        # disabled replay protection for as long as the store stayed broken, with nothing in the log.
+        # Refuse the signature and shout, so a read-only/locked/corrupt DB is visible immediately.
+        #
+        # Blast radius, traced against the CURRENT rollout state (PUSH_AUTH_ENFORCE unset => SOFT):
+        #   * Unsigned requests — i.e. every field client today, since clients do not sign yet —
+        #     never reach this function at all: _auth_signature_valid() returns False at the
+        #     `not supplied or not ts` guard above, before any DB access. Unaffected.
+        #   * A SIGNED request that hits a DB error now gets False here, so _auth_signature_valid()
+        #     returns False, and _auth_ok() falls into the soft branch: it logs "push auth SOFT" and
+        #     returns True. The wake is STILL DELIVERED. In soft mode this change therefore cannot
+        #     reject any wake traffic — it can only add a SOFT line (which slightly inflates the
+        #     adoption counter; the log.exception below disambiguates "DB broken" from "old client").
+        #   * Only once PUSH_AUTH_ENFORCE=1 does a broken store turn into 401s. That is the intended
+        #     meaning of fail-closed, and the operator has this loud line saying exactly why.
+        log.exception(
+            "push auth: replay store UNAVAILABLE -> refusing signature (FAIL-CLOSED); "
+            "check that %s exists and is writable by the relay container", COALESCE_DB)
+        return False
 
 
 def _auth_signature_valid() -> bool:
@@ -269,16 +313,9 @@ def _auth_signature_valid() -> bool:
     if not hmac.compare_digest(supplied, expected):
         return False
     # KHANDAQ (audit A2): consume the signature so a captured signed URL can't be replayed to 200
-    # repeatedly within the freshness window. Each valid signature is accepted exactly once.
-    with _used_sigs_lock:
-        now = time.time()
-        for k, t in list(_used_sigs.items()):
-            if now - t > AUTH_MAX_SKEW_SEC:
-                del _used_sigs[k]
-        if expected in _used_sigs:
-            return False
-        _used_sigs[expected] = now
-    return True
+    # repeatedly within the freshness window. Each valid signature is accepted exactly once —
+    # KHANDAQ (audit2 #10): across ALL gunicorn workers, not just the one that served the original.
+    return _claim_signature(expected)
 
 
 def _get_access_token() -> str:

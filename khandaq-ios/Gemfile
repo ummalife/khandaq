@@ -1,4 +1,13 @@
+# KHANDAQ (audit #2, finding 8): pinned to the exact versions the iOS release is actually built
+# with, and Gemfile.lock is committed alongside, so a clean checkout cannot silently resolve
+# different release tooling.
+#
+# Honest caveat, because the lockfile alone would imply more than is true: nothing in CI or in
+# scripts/ runs `bundle exec` today — `pod` and `fastlane` are invoked directly from the versions
+# installed on the build machine (Homebrew). The versions below are those versions, so the Gemfile
+# now describes the real toolchain instead of floating; moving the build onto `bundle exec` is the
+# remaining half and is not done here.
 source 'https://rubygems.org'
 
-gem 'cocoapods'
-gem 'fastlane'
+gem 'cocoapods', '1.16.2'
+gem 'fastlane', '2.237.0'

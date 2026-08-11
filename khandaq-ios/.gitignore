@@ -29,7 +29,8 @@ xcshareddata
 .idea
 
 Pods
-Podfile.lock
+# KHANDAQ (audit #8): Podfile.lock is tracked on purpose — this is an application, not a
+# library, so release inputs must be reproducible. Do NOT re-add it to this ignore list.
 
 .bundle
 

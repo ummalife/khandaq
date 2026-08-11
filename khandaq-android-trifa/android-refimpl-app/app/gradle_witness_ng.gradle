@@ -10,6 +10,22 @@ import java.security.MessageDigest
 //
 // run: "gradlew -q calculateChecksums"
 // to generate new checksums. you need to put those manually into 'witness.gradle'
+//
+// KHANDAQ (audit2 #2) pin policy:
+//   * CI (any workflow) may only VERIFY: "gradlew :app:pinChecksums" (also auto-wired to every assemble* task).
+//   * refreshing the pins after a deliberate dependency bump is a reviewed source change:
+//       locally:  ./gradlew -q :app:calculateChecksums   (rewrites app/witness.gradle in place) -> review git diff -> commit
+//       from CI:  run the manual "witness-checksums-update" workflow, download its witness.gradle artifact, commit it.
+//     calculateChecksums hard-fails on a runner without -PallowWitnessRegen=true (see below).
+//
+// KHANDAQ (audit2 #2, round 2) what is NOT witnessed: jars that come out of the locally installed Android SDK
+//   (<sdk>/platforms/android-NN/android.jar, core-for-system-modules.jar, ...). They are not a supply-chain
+//   input we fetch - the SDK is provisioned and checksum-verified by sdkmanager / the runner image - and their
+//   makeKey() key is derived from the last 5 path components, so it encodes the machine's SDK path
+//   ("Android:sdk:platforms:android.jar" on a macOS dev box vs "android:sdk:platforms:android.jar" on a Linux
+//   runner) while dropping the API level, so it also changes with every platform revision. Pinning them made
+//   the verify step fail on any machine other than the one that generated the pins. They are now filtered out
+//   of calculateHashes(), so neither task sees them. Every real maven coordinate stays pinned and verified.
 // ----------------------------------------------------
 
 def witnessFile = file('witness.gradle')
@@ -83,14 +99,93 @@ static DependencyKey makeKey(String path) {
 }
 
 /**
+ * KHANDAQ (audit2 #2, round 2): every root under which the locally installed Android SDK may live.
+ * Jars found below one of these are provided by the SDK installation, not fetched from maven, so they are
+ * never witnessed (see the header). Order is "most authoritative first"; duplicates are folded.
+ */
+static List<String> androidSdkRoots(Project project) {
+    def roots = new LinkedHashSet<String>()
+    def add = { path ->
+        if (path != null && !path.toString().trim().isEmpty()) {
+            try {
+                roots.add(new File(path.toString().trim()).canonicalPath)
+            } catch (Exception ignored) {
+                // unreadable / bogus path - just cannot use it as a root
+            }
+        }
+    }
+    try {
+        def androidExtension = project.extensions.findByName('android')
+        if (androidExtension != null) add(androidExtension.sdkDirectory)
+    } catch (Exception ignored) {
+        // AGP not applied (or too old to expose sdkDirectory) - fall through to env / local.properties
+    }
+    add(System.getenv('ANDROID_HOME'))
+    add(System.getenv('ANDROID_SDK_ROOT'))
+    try {
+        def localProperties = project.rootProject.file('local.properties')
+        if (localProperties.exists()) {
+            def props = new Properties()
+            localProperties.withInputStream { props.load(it) }
+            add(props.getProperty('sdk.dir'))
+        }
+    } catch (Exception ignored) {
+        // no local.properties, or not readable
+    }
+    return new ArrayList<String>(roots)
+}
+
+static boolean isUnderAndroidSdk(String canonicalPath, List<String> sdkRoots) {
+    for (root in sdkRoots) {
+        if (canonicalPath.startsWith(root + System.getProperty('file.separator'))) return true
+    }
+    return false
+}
+
+/**
+ * Structural fallback for when no SDK root can be resolved, and the only way pinChecksums can recognise an
+ * obsolete SDK pin (there it holds a key, not a path). "<sdk>/platforms/<api>/<x>.jar" always makes a key of
+ * the shape "*:sdk:platforms:*.jar"; no maven coordinate has version 'platforms'.
+ */
+static boolean isLocalSdkKey(DependencyKey key) {
+    return key.name.equalsIgnoreCase('sdk') && key.version.equalsIgnoreCase('platforms')
+}
+
+/**
  * Set like this example in your build.gradle file:
  *
- * project.extensions.extraProperties['noWitness'] = 'android:sdk:platforms:android.jar,android:sdk:platforms:core-for-system-modules'
+ * project.extensions.extraProperties['noWitness'] = 'android:sdk:platforms'
  *
+ * Matching is case-insensitive prefix matching against "group:name:version:file".
  */
+
+/**
+ * KHANDAQ (audit2 #2, round 3): the 'noWitness' list, normalised, read from ONE place. It used to be parsed
+ * inside calculateChecksums only, i.e. it filtered what got WRITTEN but not what got HASHED - so pinChecksums
+ * still hashed the excluded artifacts and then reported them under "not pinned". That made the tool's own
+ * output disagree with its own policy (17 gradle transform outputs looked like unpinned dependencies). Both
+ * tasks now take the same list, so "not pinned" means only "a real dependency nobody pinned yet".
+ */
+static List<String> noWitnessPrefixes(Project project) {
+    def excludedProp = project.properties.get('noWitness')
+    if (excludedProp == null) {
+        return []
+    }
+    return excludedProp.toString().split(',').collect { it.trim().toLowerCase() }.findAll { !it.isEmpty() }
+}
+
+static boolean isNoWitness(DependencyKey key, List<String> prefixes) {
+    def all = key.all.toLowerCase()
+    for (prefix in prefixes) {
+        if (all.startsWith(prefix)) return true
+    }
+    return false
+}
 
 static Map<DependencyKey, String> calculateHashes(Project project) {
     def projectPath = project.file('.').canonicalPath
+    def sdkRoots = androidSdkRoots(project)
+    def noWitness = noWitnessPrefixes(project)
     def dependencies = new TreeMap<DependencyKey, String>()
     def addDependencies = {
         // Skip excluded configurations and their subconfigurations
@@ -117,6 +212,13 @@ static Map<DependencyKey, String> calculateHashes(Project project) {
                     // Skip files within project directory
                     if (!file.canonicalPath.startsWith(projectPath)) {
                         def key = makeKey(file.path)
+                        // KHANDAQ (audit2 #2, round 2): skip jars supplied by the installed Android SDK - their
+                        // key is machine/OS/revision dependent, so pinning them breaks every other machine.
+                        // (round 3) and anything the project declared as noWitness, so both tasks see the same set.
+                        if (isUnderAndroidSdk(file.canonicalPath, sdkRoots) || isLocalSdkKey(key)
+                                || isNoWitness(key, noWitness)) {
+                            return
+                        }
                         if (!dependencies.containsKey(key)) {
                             dependencies.put(key, calculateSha256(file))
                         }
@@ -177,13 +279,42 @@ tasks.register("pinChecksums") {
 
     doLast {
         def dependencies = calculateHashes project
-        project.dependencyVerification.verify.each { assertion ->
+        def assertions = project.dependencyVerification.verify
+        if (assertions == null || assertions.isEmpty()) {
+            // No pins loaded at all (e.g. a tree where app/witness.gradle was deleted, which this script then
+            // re-created empty). Do NOT fail the build here - that would break every local assemble* - but say
+            // so loudly. The release path additionally refuses to build when the committed pin list is missing
+            // (see the "Verify committed dependency pins" step in .github/workflows/release-provenance.yml).
+            println "pinChecksums:WARNING: app/witness.gradle holds no pins - NOTHING was verified"
+            return
+        }
+        def verified = 0
+        def obsolete = 0
+        def noWitness = noWitnessPrefixes(project)
+        def pinned = new HashSet<String>()
+        assertions.each { assertion ->
             def parts = assertion.tokenize(":")
             if (parts.size() != 5) {
                 throw new InvalidUserDataException("Invalid or obsolete integrity assertion '${assertion}'")
             }
             def (group, name, version, file, expectedHash) = parts
             def key = new DependencyKey(group, name, version, file)
+            // KHANDAQ (audit2 #2, round 2): pins left over from before SDK jars were dropped from witnessing.
+            // Ignoring them is not a weakening - the artifact is no longer hashed on ANY machine, so the line
+            // carries no information - but the pin list should be regenerated to get rid of them.
+            if (isLocalSdkKey(key)) {
+                println "Ignoring obsolete local-SDK pin ${key.all} (SDK jars are not witnessed - drop this line)"
+                obsolete++
+                return
+            }
+            // KHANDAQ (audit2 #2, round 3): same for a pin whose key the project now excludes via noWitness -
+            // calculateHashes no longer hashes it, so without this the assertion would fail as "No dependency".
+            if (isNoWitness(key, noWitness)) {
+                println "Ignoring excluded pin ${key.all} (matches noWitness - drop this line)"
+                obsolete++
+                return
+            }
+            pinned.add(key.all)
             println "Verifying ${key.all}"
             def hash = dependencies.get key
             if (hash == null) {
@@ -192,6 +323,18 @@ tasks.register("pinChecksums") {
             if (hash != expectedHash) {
                 throw new InvalidUserDataException("Checksum failed for ${key.all}")
             }
+            verified++
+        }
+        // Visibility only: this script verifies the pins it is given, it does not demand that every resolved
+        // artifact is pinned. Print what is unpinned so it cannot rot unnoticed.
+        def unpinned = dependencies.keySet().findAll { !pinned.contains(it.all) }
+        if (!unpinned.isEmpty()) {
+            println "pinChecksums:WARNING: ${unpinned.size()} resolved artifact(s) are not pinned in witness.gradle:"
+            unpinned.each { println "    ${it.all}" }
+        }
+        println "pinChecksums: verified ${verified} pinned dependencies (${obsolete} obsolete/excluded pin(s) ignored)"
+        if (verified < 1) {
+            throw new InvalidUserDataException("pinChecksums verified 0 dependencies - refusing to pass vacuously")
         }
     }
 }
@@ -200,6 +343,20 @@ project.task('calculateChecksums').doLast {
     group = 'Verification'
     description = 'prints checksums for dependencies that can be used later to pin those versions.'
 
+    // KHANDAQ (audit2 #2): regenerating the pin list IS a full bypass of the pin gate — whatever the runner
+    // downloaded (including a substituted maven artifact) would simply be re-pinned and then signed/attested.
+    // So on CI this task refuses to run unless a human explicitly asked for it via -PallowWitnessRegen=true
+    // (that is what the manual .github/workflows/witness-checksums-update.yml job does; its output is uploaded
+    // for review, never committed by CI). Local developer runs are unaffected.
+    def onCI = System.getenv('GITHUB_ACTIONS') != null || System.getenv('CI') != null
+    def allowRegen = project.hasProperty('allowWitnessRegen') ? project.property('allowWitnessRegen').toBoolean() : false
+    if (onCI && !allowRegen) {
+        throw new InvalidUserDataException(
+            "calculateChecksums refuses to rewrite witness.gradle on CI (audit2 #2). " +
+            "Builds must VERIFY the committed pins (pinChecksums). To refresh them deliberately, run the " +
+            "'witness-checksums-update' workflow (or pass -PallowWitnessRegen=true) and commit the reviewed diff.")
+    }
+
     def dependencies = calculateHashes project
     // HINT: add some magic at the start
     System.err.println "=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855:WITNESS:START:="
@@ -207,14 +364,17 @@ project.task('calculateChecksums').doLast {
     witnessFile.append("dependencyVerification {" + "\n")
     witnessFile.append("    verify = [" + "\n")
 
-    def excludedProp = project.properties.get('noWitness')
-    def excluded = excludedProp == null ? [] : excludedProp.split(',')
+    // KHANDAQ (audit2 #2, round 2): match case-insensitively. The key's first components come from the file
+    // system path, whose case differs per machine ("/Users/x/Library/Android/sdk" vs "/usr/local/lib/android/sdk"),
+    // so a case-sensitive prefix written for one OS silently stopped excluding on the other.
+    // (round 3) calculateHashes already dropped these; the loop below is kept as belt-and-braces.
+    def excluded = noWitnessPrefixes(project)
     println "calculateChecksums:noWitness: ${excluded}"
     dependencies.each { dep ->
         // println "DEBUG:C001:${dep.key.all} ---> ${dep.value}"
         boolean isExcluded = false
         for (excl in excluded) {
-            if (dep.key.all.startsWith(excl)) {
+            if (dep.key.all.toLowerCase().startsWith(excl)) {
                 isExcluded = true
                 break
             }

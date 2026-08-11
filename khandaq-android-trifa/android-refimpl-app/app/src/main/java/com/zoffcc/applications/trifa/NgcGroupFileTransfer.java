@@ -396,6 +396,13 @@ public final class NgcGroupFileTransfer
         {
             return;
         }
+        // KHANDAQ (audit2 #5): single gate in front of BEGIN + every chunk worker. The cancel is
+        // persisted now, so this also holds for the first send attempt after an app restart.
+        if (HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+        {
+            HelperGeneric.logI(TAG, "send:skip cancelled msg=" + g.msg_id_hash.substring(0, 8));
+            return;
+        }
         final String key = beginResendKey(g.group_identifier, g.msg_id_hash);
         if (!inflightChunkedSends.add(key))
         {
@@ -434,7 +441,16 @@ public final class NgcGroupFileTransfer
 
     static void sendGroupFileSmall(final GroupMessage g)
     {
-        SEND_EXECUTOR.execute(() -> HelperGroup.send_group_image(g));
+        SEND_EXECUTOR.execute(() ->
+        {
+            // KHANDAQ (audit2 #5): small files never pass through sendChunkWithRetry, so the
+            // cancellation gate has to sit here — checked at emit time, not at enqueue time.
+            if (g != null && HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
+            {
+                return;
+            }
+            HelperGroup.send_group_image(g);
+        });
     }
 
     private static void sendGroupFileChunkedOnWorker(final GroupMessage g, final long targetPeerId)
@@ -1997,6 +2013,16 @@ public final class NgcGroupFileTransfer
                 return;
             }
 
+            // KHANDAQ (audit2 #5): the outgoing row survives a cancel (we only stop sending, we do not
+            // delete the message), so a remote FILE_REQUEST could resurrect a cancelled file. The
+            // cancellation is persisted, hence this also holds on the first request after a restart.
+            // Non-cancelled files are untouched — the NACK/retry path below still runs normally.
+            if (HelperGroup.is_ngc_send_cancelled(groupId, msgIdHex))
+            {
+                HelperGeneric.logI(TAG, "handleFileRequest:cancelled msg=" + msgIdHex.substring(0, 8));
+                return;
+            }
+
             final boolean[] wanted = parseWantedChunks(data, length, outgoing.filesize);
             final long now = System.currentTimeMillis();
 
@@ -2457,6 +2483,13 @@ public final class NgcGroupFileTransfer
         final byte[] beginPkt = pendingPrivateBeginResend.remove(
                 beginResendKey(g.group_identifier, g.msg_id_hash));
         if (beginPkt == null)
+        {
+            return;
+        }
+        // KHANDAQ (audit2 #5): this BEGIN goes out via tox_group_send_custom_private_packet directly,
+        // bypassing the cancellation check inside sendChunkWithRetry — gate it explicitly and drop the
+        // queued packet instead of re-queueing it.
+        if (HelperGroup.is_ngc_send_cancelled(g.group_identifier, g.msg_id_hash))
         {
             return;
         }

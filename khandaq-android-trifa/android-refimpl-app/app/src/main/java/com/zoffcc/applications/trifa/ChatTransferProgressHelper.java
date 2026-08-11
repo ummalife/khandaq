@@ -226,6 +226,20 @@ final class ChatTransferProgressHelper
             return completeSnapshot(true);
         }
 
+        // KHANDAQ (audit2 #5): a user cancel now outlives the process, so it also needs a UI state that
+        // outlives it. FAILED is the phase that shows the retry button, and the retry button is the only
+        // affordance that lifts the cancel again (HelperGroup.retry_group_file_send). Without this the
+        // cancelled row would sit at "pending" forever after a restart with no way back.
+        // KHANDAQ (audit3 #3): ..._cached() is the memory-only variant — this runs while binding a row
+        // on the main thread, and the authoritative lookup does SQL under a lock that a chunk/tox thread
+        // also takes. On a cold cache it answers "not cancelled" for this frame and re-posts the row
+        // once the background lookup finds the tombstone. The sending paths keep the blocking variant,
+        // so nothing here decides whether bytes go out.
+        if (outgoing && HelperGroup.is_ngc_send_cancelled_by_user_cached(message.group_identifier, message.msg_id_hash))
+        {
+            return new Snapshot(Phase.FAILED, done, total, Math.max(pct, 0), speed, true, media);
+        }
+
         if (NgcGroupFileTransfer.shouldUseChunkedTransfer(total) && outgoing)
         {
             if (HelperGroup.is_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash)
@@ -810,7 +824,10 @@ final class ChatTransferProgressHelper
             {
                 if (outgoing)
                 {
-                    HelperGroup.cancel_ngc_file_send(message.group_identifier, message.msg_id_hash);
+                    // KHANDAQ (audit2 #5): user cancel must outlive the process — the plain
+                    // cancel_ngc_file_send() is session-only and the file became servable again
+                    // via FILE_REQUEST after the next app start.
+                    HelperGroup.cancel_ngc_file_send_by_user(message.group_identifier, message.msg_id_hash);
                 }
             }
 

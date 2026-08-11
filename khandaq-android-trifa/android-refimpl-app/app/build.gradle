@@ -480,6 +480,13 @@ dependencies {
     // ---------------------
 }
 
-project.extensions.extraProperties['noWitness'] = 'android:sdk:platforms,and:sdk:platforms:android,and:sdk:platforms:core-for-system-modules'
+// Jars from the installed Android SDK are not witnessed: they are not fetched from maven and their witness key
+// encodes the machine's SDK path (case included), so pinning them fails on every other machine. gradle_witness_ng
+// already filters them out by path; this stays as a belt-and-braces prefix filter (matched case-insensitively).
+// 'caches:transforms-4' is the gradle artifact-transform workspace (AGP's jetified-*.jar outputs). Those are
+// DERIVED from maven artifacts, not downloaded, and their key carries the transform workspace hash - which moves
+// with the AGP/gradle version - so pinning them would break the verify step on the next toolchain bump. Pin the
+// source coordinate, not the transform output.
+project.extensions.extraProperties['noWitness'] = 'android:sdk:platforms,caches:transforms-4'
 
 apply from: 'gradle_witness_ng.gradle'

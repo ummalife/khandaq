@@ -227,7 +227,7 @@ if WINE_DLL_DIR=$(wine_dll_lookup_dirs); then
   # Check that no dll is missing.
   # KHANDAQ (security D-7/8/9): api-ms-win-*.dll are Windows API-set "contract" DLLs that the OS
   # always resolves internally at runtime — they are never shipped/bundled. mingw-ldd can't find
-  # them in the wine DLL tree and reports them "not found", which is a false positive (FFmpeg 4.4.5
+  # them in the wine DLL tree and reports them "not found", which is a false positive (FFmpeg 4.4.x
   # pulls in a couple of WinRT api-sets). Ignore those and only fail on genuinely missing DLLs.
   if grep 'not found' dlls-required | grep -qvi 'api-ms-win-'
   then

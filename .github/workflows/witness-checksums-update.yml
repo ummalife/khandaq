@@ -1,0 +1,77 @@
+# KHANDAQ (audit2 #2): the ONLY place CI is allowed to regenerate the gradle-witness pin list.
+# Manual (workflow_dispatch) only, read-only permissions, and it never builds, signs or attests anything:
+# it just resolves the dependencies and uploads the regenerated app/witness.gradle as an artifact.
+# A human downloads it, diffs it against the committed file (every changed line is a dependency whose bytes
+# changed - each one has to be explainable by a version bump) and commits it. That keeps a legitimate
+# dependency bump possible while the release path (release-provenance.yml) only ever VERIFIES the pins.
+name: witness-checksums-update
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-java@d7793b545071e98d581d3bf084a51c3213318a07 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install compile SDK platform
+        run: |
+          set -euo pipefail
+          SDKMGR="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          yes | sudo "$SDKMGR" --install "platforms;android-36" --sdk_root="${ANDROID_SDK_ROOT}" || true
+
+      - name: Provide placeholder google-services.json (config only, nothing is shipped from here)
+        run: |
+          set -euo pipefail
+          f=khandaq-android-trifa/android-refimpl-app/app/google-services.json
+          if [ ! -f "$f" ]; then
+            cat > "$f" <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "khandaq-messenger",
+              "storage_bucket": "khandaq-messenger.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": { "package_name": "com.khandaq.messenger" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "PLACEHOLDER_NOT_A_REAL_KEY_checksum_regen_only" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+          fi
+
+      - name: Regenerate witness checksums (explicitly opted in)
+        run: |
+          set -euo pipefail
+          cd khandaq-android-trifa/android-refimpl-app
+          chmod +x ./gradlew
+          # -PallowWitnessRegen=true is the opt-in required by gradle_witness_ng.gradle on CI (audit2 #2).
+          ./gradlew --no-daemon -PallowWitnessRegen=true -q :app:calculateChecksums
+
+      - name: Show the diff a reviewer has to justify
+        run: |
+          set -euo pipefail
+          git --no-pager diff --stat -- khandaq-android-trifa/android-refimpl-app/app/witness.gradle
+          git --no-pager diff -- khandaq-android-trifa/android-refimpl-app/app/witness.gradle
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: witness-gradle-regenerated
+          path: khandaq-android-trifa/android-refimpl-app/app/witness.gradle

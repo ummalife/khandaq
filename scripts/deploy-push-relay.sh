@@ -30,39 +30,47 @@ ssh "$REMOTE" bash -s <<'REMOTE'
 set -euo pipefail
 CONF="/etc/nginx/sites-available/push.khandaq.org"
 ENABLED="/etc/nginx/sites-enabled/push.khandaq.org"
-if [[ ! -f /etc/letsencrypt/live/push.khandaq.org/fullchain.pem ]]; then
+BOOTSTRAP="/etc/nginx/sites-available/push.khandaq.org.http"
+LIVE="/etc/letsencrypt/live/push.khandaq.org/fullchain.pem"
+if [[ ! -f "$LIVE" ]]; then
+  # KHANDAQ (audit2 #4): the port-80 bootstrap vhost serves ONLY the ACME webroot. It must never
+  # proxy the relay, because wake URLs carry the FCM registration token (+ auth/ts) in the query.
   mkdir -p /var/www/push.khandaq.org
-  cat > /etc/nginx/sites-available/push.khandaq.org.http << 'EOF'
+  cat > "$BOOTSTRAP" << 'EOF'
 server {
     listen 80;
     listen [::]:80;
     server_name push.khandaq.org;
-    location / { proxy_pass http://127.0.0.1:8088; }
+    location /.well-known/acme-challenge/ { root /var/www/push.khandaq.org; }
+    # KHANDAQ (audit3 #2): this bootstrap vhost is live BEFORE the real conf, so the redacted
+    # log_format does not exist yet (referencing it here would fail nginx -t and break the deploy).
+    # Turn the access log off for the catch-all instead: a stray wake to http:// must not write its
+    # FCM token into the global combined log. The ACME location above keeps logging (path only).
+    location / { access_log off; return 404; }
 }
 EOF
-  ln -sf /etc/nginx/sites-available/push.khandaq.org.http /etc/nginx/sites-enabled/push.khandaq.org
+  ln -sf "$BOOTSTRAP" "$ENABLED"
   nginx -t && systemctl reload nginx
   certbot certonly --webroot -w /var/www/push.khandaq.org -d push.khandaq.org \
     --non-interactive --agree-tos --register-unsafely-without-email || true
 fi
-if [[ -f /etc/letsencrypt/live/push.khandaq.org/fullchain.pem ]]; then
-  cp /tmp/khandaq-push.nginx.conf "$CONF"
-  rm -f /etc/nginx/sites-enabled/push.khandaq.org.http
-else
-  echo "SSL cert missing — keeping HTTP-only vhost (add DNS push.khandaq.org first)"
-  cat > "$CONF" << 'EOF'
-server {
-    listen 80;
-    listen [::]:80;
-    server_name push.khandaq.org;
-    location / { proxy_pass http://127.0.0.1:8088; }
-}
-EOF
+# KHANDAQ (audit2 #4): no certificate -> FAIL the deploy. The old fallback installed an HTTP-only
+# proxy vhost, so a failed issuance silently left the relay answering wakes in cleartext forever.
+if [[ ! -f "$LIVE" ]]; then
+  rm -f "$ENABLED" "$BOOTSTRAP" /etc/nginx/sites-enabled/push.khandaq.org.http
+  systemctl reload nginx || true
+  echo "FATAL: no TLS certificate for push.khandaq.org — refusing to publish the relay over HTTP." >&2
+  echo "       Point DNS at this host, then re-run. The relay container is up but NOT exposed." >&2
+  exit 1
 fi
+cp /tmp/khandaq-push.nginx.conf "$CONF"
+rm -f "$BOOTSTRAP" /etc/nginx/sites-enabled/push.khandaq.org.http
 ln -sf "$CONF" "$ENABLED"
 nginx -t && systemctl reload nginx
 REMOTE
 
 echo "==> Verify"
-curl -fsSL "https://push.khandaq.org/health" 2>/dev/null || curl -fsSL "http://push.khandaq.org/health" || echo "DNS/cert pending"
+# KHANDAQ (audit2 #4): HTTPS only — never fall back to probing (or blessing) a cleartext endpoint.
+curl -fsSL "https://push.khandaq.org/health"
+echo
 echo "Done"

@@ -2139,7 +2139,8 @@ public class HelperGroup
             {
                 if (outgoing)
                 {
-                    retry_group_file_send(message);
+                    // KHANDAQ (audit2 #5): automatic path — must NOT lift a user cancel.
+                    resume_group_file_send(message);
                 }
                 else
                 {
@@ -2218,6 +2219,19 @@ public class HelperGroup
                 {
                     continue;
                 }
+                // KHANDAQ (audit2 #5): this is the auto-resume after a crash/restart, and it is the
+                // reason the tombstone is read lazily from the DB rather than kept in memory only.
+                // KHANDAQ (audit3 #2): describing the guard as "skips user cancels" was wrong — the
+                // call below is is_ngc_send_cancelled(), which skips a row for THREE reasons:
+                //   1. the user cancelled it -> persisted tombstone, must stay cancelled forever;
+                //   2. it was superseded in this session by a newer send for the same group
+                //      (cancelStaleOutgoingChunkedSends -> ngc_cancelled_sends). That map is memory
+                //      only, so after a restart such a row is not skipped and does auto-resume here;
+                //   3. the tombstone row could not be read at all right now (audit3 #1 fails closed).
+                //      Nothing is cached in that case, so the row is simply reconsidered the next time
+                //      this runs (group reconnect / peer online) instead of being sent blind.
+                // An honest interrupted upload is in none of those states and still reaches the
+                // scheduler below, which is what makes crash-then-resume work.
                 if (is_ngc_send_cancelled(gm.group_identifier, gm.msg_id_hash))
                 {
                     continue;
@@ -5401,7 +5415,49 @@ public class HelperGroup
     private static final ConcurrentHashMap<String, Boolean> ngc_outgoing_send_complete = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> ngc_transfer_speed_last_ts = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> ngc_transfer_speed_last_bytes = new ConcurrentHashMap<>();
+    // Session-only cancels ("a newer send superseded this one"). Values are always TRUE; an entry is
+    // dropped again by any resume/retry, so a superseded send still resumes on its own.
     private static final ConcurrentHashMap<String, Boolean> ngc_cancelled_sends = new ConcurrentHashMap<>();
+    // KHANDAQ (audit2 #5): in-memory mirror of the persisted USER cancels. This set is one-way:
+    // cancel_ngc_file_send_by_user() adds, and only retry_group_file_send() (the user "retry" button)
+    // removes. Nothing on the automatic-retry path may touch it.
+    private static final java.util.Set<String> ngc_user_cancelled_sends =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    // Keys whose tombstone row was looked up SUCCESSFULLY and was absent. Only memoises the negative
+    // answer; a positive one lands in ngc_user_cancelled_sends instead, and a failed read (audit3 #1)
+    // lands in neither, so it is retried. Keeps the per-chunk gate IO-free after the first look.
+    private static final java.util.Set<String> ngc_cancel_lookup_clean =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    // Serialises the authoritative mutations (user cancel / user retry) against the lazy tombstone
+    // lookup, which is the only place that writes the cache from a non-user thread. Without it the
+    // lookup's SQL read is a wide window in which a send thread can write its stale "not cancelled"
+    // answer over a cancel the user just tapped. On the READ side it is taken at most once per key,
+    // so the per-chunk gate stays lock-free after the first look. It IS taken on the UI thread, but
+    // only by the two user actions (cancel / retry), which also do a short read-back of the tombstone
+    // row while holding it — a tap already blocks, and correctness of the cancel wins over that.
+    private static final Object ngc_cancel_state_lock = new Object();
+    // KHANDAQ (audit2 #5): tombstone key prefix in the existing g_opts key/value table
+    // (TRIFADatabaseGlobalsNew) — persisting there needs no schema change / no migration.
+    private static final String NGC_CANCEL_TOMBSTONE_PREFIX = "kqngccancel_";
+    // KHANDAQ (audit3 #1): tri-state result of looking at the tombstone row. "row is not there" and
+    // "we could not find out" are NOT the same answer and must not be collapsed: the first means the
+    // send is live, the second means we do not know and therefore must not emit data.
+    private static final int NGC_TOMBSTONE_ABSENT = 0;
+    private static final int NGC_TOMBSTONE_PRESENT = 1;
+    private static final int NGC_TOMBSTONE_UNREADABLE = -1;
+    // KHANDAQ (audit3 #3): keys whose tombstone lookup was kicked off by the (non-blocking) UI path and
+    // has not come back yet. Purely a de-dup guard so a fast-scrolling list cannot queue the same read
+    // dozens of times; entries are removed when the lookup finishes, failure included.
+    private static final java.util.Set<String> ngc_cancel_lookup_inflight =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    // KHANDAQ (audit3 #3): the UI must never do the tombstone SQL itself — row binding runs on the main
+    // thread and the lookup takes ngc_cancel_state_lock, which a chunk/tox thread can be holding.
+    private static final java.util.concurrent.ExecutorService ngc_cancel_lookup_exec =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                final Thread t = new Thread(r, "ngc-cancel-lookup");
+                t.setDaemon(true);
+                return t;
+            });
     private static final ConcurrentHashMap<String, Boolean> ngc_file_transfer_failed = new ConcurrentHashMap<>();
     /** Last successfully sent chunk index for resume after disconnect (-1 = none). */
     private static final ConcurrentHashMap<String, Integer> ngc_outgoing_last_chunk_sent = new ConcurrentHashMap<>();
@@ -5528,6 +5584,11 @@ public class HelperGroup
         return ((float) (bytesDone - lastBytes) / (float) deltaMs) * 1000f;
     }
 
+    /**
+     * Session-only cancel: stops the send that is running right now. Used for internal
+     * "superseded by a newer send" cancels, which MUST still auto-resume after a restart.
+     * For a cancel the user asked for use {@link #cancel_ngc_file_send_by_user}.
+     */
     static void cancel_ngc_file_send(final String groupId, final String msgIdHash)
     {
         if (groupId == null || msgIdHash == null)
@@ -5540,25 +5601,368 @@ public class HelperGroup
         post_group_file_progress_refresh(groupId, msgIdHash);
     }
 
+    /**
+     * KHANDAQ (audit2 #5): user-initiated cancel of an outgoing group file. The cancel used to live
+     * only in the static map, so after an app restart the remote FILE_REQUEST handler happily served
+     * the still-persisted outgoing row again — the user believed the file was retracted. Persist a
+     * tombstone so the cancel survives the process.
+     * <p>
+     * The tombstone is one-way: nothing but {@link #retry_group_file_send} (the user's own "retry")
+     * lifts it again, so neither an automatic retry nor a slow cache reader can un-cancel it.
+     */
+    static void cancel_ngc_file_send_by_user(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        final String key = ngc_file_progress_key(groupId, msgIdHash);
+        synchronized (ngc_cancel_state_lock)
+        {
+            try
+            {
+                // In-memory first: even if the DB write below fails, the cancel holds for this session.
+                ngc_user_cancelled_sends.add(key);
+                ngc_cancel_lookup_clean.remove(key);
+                HelperGeneric.set_g_opts(ngc_cancel_tombstone_key(groupId, msgIdHash), "1");
+                // KHANDAQ (audit3 #1): set_g_opts() swallows its own failures, and a cancel that did
+                // not reach the DB is a cancel that dies at the next app start — exactly the bug the
+                // tombstone exists to fix. Confirm the row and write once more if it is missing.
+                if (read_persisted_ngc_cancel(groupId, msgIdHash) != NGC_TOMBSTONE_PRESENT)
+                {
+                    HelperGeneric.set_g_opts(ngc_cancel_tombstone_key(groupId, msgIdHash), "1");
+                    if (read_persisted_ngc_cancel(groupId, msgIdHash) != NGC_TOMBSTONE_PRESENT)
+                    {
+                        Log.i(TAG, "cancel_ngc_file_send_by_user:tombstone not persisted key=" + key);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "cancel_ngc_file_send_by_user:EE:" + e.getMessage());
+            }
+        }
+        cancel_ngc_file_send(groupId, msgIdHash);
+    }
+
+    /**
+     * The gate every emitting path uses: true for a persisted user cancel, for a session-only
+     * "superseded" cancel, and (audit3 #1) while the tombstone row cannot be read at all. Blocking on
+     * the first look per key — background/tox threads only.
+     */
     static boolean is_ngc_send_cancelled(final String groupId, final String msgIdHash)
     {
         if (groupId == null || msgIdHash == null)
         {
             return false;
         }
-        final Boolean v = ngc_cancelled_sends.get(ngc_file_progress_key(groupId, msgIdHash));
-        return v != null && v;
+        if (is_ngc_send_cancelled_by_user(groupId, msgIdHash))
+        {
+            return true;
+        }
+        return ngc_cancelled_sends.containsKey(ngc_file_progress_key(groupId, msgIdHash));
     }
 
+    /**
+     * KHANDAQ (audit2 #5): true when the USER cancelled this send (as opposed to it being superseded
+     * in-session). Answers from memory once the tombstone row has been looked at; the first lookup per
+     * key runs under {@link #ngc_cancel_state_lock}, so it can never write its stale answer over a
+     * cancel (or a user retry) that landed while it was inside SQL.
+     * <p>
+     * KHANDAQ (audit3 #1): this is the AUTHORITATIVE (blocking) answer — call it from sending paths
+     * only. It fails CLOSED: if the tombstone row cannot be read at all, we report "cancelled" and
+     * cache nothing, so the next call retries the read. The old code turned every read failure into
+     * "not cancelled" and then memoised it for the whole process lifetime, i.e. one transient sqlite
+     * error permanently un-cancelled a cancelled upload. Not sending a file we might have been allowed
+     * to send is recoverable (the honest send resumes as soon as the DB answers again); sending a file
+     * the user retracted is not.
+     * <p>
+     * For the UI use {@link #is_ngc_send_cancelled_by_user_cached}.
+     */
+    static boolean is_ngc_send_cancelled_by_user(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return false;
+        }
+        final String key = ngc_file_progress_key(groupId, msgIdHash);
+        if (ngc_user_cancelled_sends.contains(key))
+        {
+            return true;
+        }
+        if (ngc_cancel_lookup_clean.contains(key))
+        {
+            return false;
+        }
+        synchronized (ngc_cancel_state_lock)
+        {
+            // Re-check: a cancel may have landed while we were waiting for the lock.
+            if (ngc_user_cancelled_sends.contains(key))
+            {
+                return true;
+            }
+            if (ngc_cancel_lookup_clean.contains(key))
+            {
+                return false;
+            }
+            final int tombstone = read_persisted_ngc_cancel(groupId, msgIdHash);
+            if (tombstone == NGC_TOMBSTONE_PRESENT)
+            {
+                ngc_user_cancelled_sends.add(key);
+                return true;
+            }
+            if (tombstone == NGC_TOMBSTONE_ABSENT)
+            {
+                ngc_cancel_lookup_clean.add(key);
+                return false;
+            }
+            // NGC_TOMBSTONE_UNREADABLE: do NOT memoise either way, and hold the send back for now.
+            return true;
+        }
+    }
+
+    /**
+     * KHANDAQ (audit3 #3): non-blocking view for row binding on the main thread. It answers from the
+     * two in-memory sets only — no SQL, and it never takes {@link #ngc_cancel_state_lock}, which a
+     * chunk/tox thread may be holding. On a cache miss it returns "not cancelled" for this frame and
+     * kicks the authoritative lookup onto a background thread; when that lookup does find a tombstone
+     * it forces a refresh of exactly that row, so a cancelled send still lands on the FAILED phase
+     * (the phase carrying the retry button) shortly after the list first shows it.
+     * <p>
+     * This is deliberately weaker than {@link #is_ngc_send_cancelled_by_user}: the UI may briefly lie,
+     * the sending paths may not, so nothing that emits bytes may use this variant.
+     */
+    static boolean is_ngc_send_cancelled_by_user_cached(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return false;
+        }
+        final String key = ngc_file_progress_key(groupId, msgIdHash);
+        final Boolean cached = ngc_user_cancel_from_cache(key);
+        if (cached != null)
+        {
+            return cached;
+        }
+        schedule_ngc_cancel_lookup(groupId, msgIdHash, key);
+        return false;
+    }
+
+    /**
+     * The memoised tombstone answer, or null when this key has never been looked up (or the last look
+     * failed). Reads the two lock-free sets only — never SQL, never {@link #ngc_cancel_state_lock}.
+     */
+    private static Boolean ngc_user_cancel_from_cache(final String key)
+    {
+        if (ngc_user_cancelled_sends.contains(key))
+        {
+            return Boolean.TRUE;
+        }
+        if (ngc_cancel_lookup_clean.contains(key))
+        {
+            return Boolean.FALSE;
+        }
+        return null;
+    }
+
+    private static void schedule_ngc_cancel_lookup(final String groupId, final String msgIdHash,
+                                                   final String key)
+    {
+        if (!ngc_cancel_lookup_inflight.add(key))
+        {
+            return;
+        }
+        try
+        {
+            ngc_cancel_lookup_exec.execute(() ->
+            {
+                try
+                {
+                    // Ask the store directly rather than is_ngc_send_cancelled_by_user(): that one
+                    // answers "cancelled" for an UNREADABLE tombstone too (fail closed, correct for
+                    // the sending paths). Using it here would repaint the row, the rebind would miss
+                    // the cache again — nothing was cached — and schedule another lookup, spinning
+                    // this executor for as long as the database stays unreadable. Only a tombstone we
+                    // actually read changes what the row shows.
+                    final int state = read_persisted_ngc_cancel(groupId, msgIdHash);
+
+                    if (state == NGC_TOMBSTONE_PRESENT || ngc_user_cancel_from_cache(key))
+                    {
+                        // The throttle is reset first so this one-shot state change cannot be eaten
+                        // by the per-chunk refresh rate limit.
+                        ngc_progress_refresh_ts.remove(key);
+                        post_group_file_progress_refresh(groupId, msgIdHash);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.i(TAG, "schedule_ngc_cancel_lookup:EE:" + e.getMessage());
+                }
+                finally
+                {
+                    // Removed on failure too: an unreadable tombstone caches nothing, so the next bind
+                    // of this row is allowed to try again.
+                    ngc_cancel_lookup_inflight.remove(key);
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            ngc_cancel_lookup_inflight.remove(key);
+        }
+    }
+
+    private static String ngc_cancel_tombstone_key(final String groupId, final String msgIdHash)
+    {
+        return NGC_CANCEL_TOMBSTONE_PREFIX + ngc_file_progress_key(groupId, msgIdHash);
+    }
+
+    /**
+     * KHANDAQ (audit3 #1): reads the tombstone row and reports ABSENT / PRESENT / UNREADABLE.
+     * <p>
+     * It queries orma directly instead of going through HelperGeneric.get_g_opts(): that helper
+     * swallows every exception and returns null, which makes "no such row" and "the read blew up"
+     * indistinguishable — exactly the confusion this method exists to remove.
+     */
+    private static int read_persisted_ngc_cancel(final String groupId, final String msgIdHash)
+    {
+        try
+        {
+            if (orma == null)
+            {
+                // DB not open (yet): unknown, not "no cancel".
+                return NGC_TOMBSTONE_UNREADABLE;
+            }
+            final long rows = orma.selectFromTRIFADatabaseGlobalsNew().
+                    keyEq(ngc_cancel_tombstone_key(groupId, msgIdHash)).count();
+            return (rows > 0) ? NGC_TOMBSTONE_PRESENT : NGC_TOMBSTONE_ABSENT;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "read_persisted_ngc_cancel:EE:" + e.getMessage());
+            return NGC_TOMBSTONE_UNREADABLE;
+        }
+    }
+
+    /**
+     * Lifts a user cancel. The DB row and both in-memory sets are updated under the same lock the lazy
+     * lookup takes, so a send thread that is mid-lookup cannot re-memoise "cancelled" afterwards.
+     */
+    private static void clear_ngc_user_cancel(final String groupId, final String msgIdHash)
+    {
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        final String key = ngc_file_progress_key(groupId, msgIdHash);
+        synchronized (ngc_cancel_state_lock)
+        {
+            try
+            {
+                HelperGeneric.del_g_opts(ngc_cancel_tombstone_key(groupId, msgIdHash));
+                // KHANDAQ (audit3 #1): del_g_opts() swallows its own failures, so confirm the row is
+                // really gone and try once more if it is not — otherwise the tombstone would come back
+                // from the DB on the next launch and silently undo the retry the user just asked for.
+                if (read_persisted_ngc_cancel(groupId, msgIdHash) == NGC_TOMBSTONE_PRESENT)
+                {
+                    HelperGeneric.del_g_opts(ngc_cancel_tombstone_key(groupId, msgIdHash));
+                    if (read_persisted_ngc_cancel(groupId, msgIdHash) == NGC_TOMBSTONE_PRESENT)
+                    {
+                        Log.i(TAG, "clear_ngc_user_cancel:tombstone survived delete key=" + key);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "clear_ngc_user_cancel:EE:" + e.getMessage());
+            }
+            // In-memory always wins for this session: the user asked for the retry, so it runs now even
+            // if the row could not be removed.
+            ngc_user_cancelled_sends.remove(key);
+            ngc_cancel_lookup_clean.add(key);
+        }
+    }
+
+    /**
+     * USER "retry" on an outgoing group file — the ONLY path that may lift a user cancel. Do not call
+     * it from watchdogs / reconnect handlers: use {@link #resume_group_file_send} there.
+     */
     static void retry_group_file_send(final GroupMessage message)
     {
         if (message == null)
         {
             return;
         }
-        ngc_cancelled_sends.remove(ngc_file_progress_key(message.group_identifier, message.msg_id_hash));
-        clear_ngc_outgoing_send_complete(message.group_identifier, message.msg_id_hash);
-        clear_ngc_file_transfer_failed(message.group_identifier, message.msg_id_hash);
+        // KHANDAQ (audit2 #5): lift the user cancel first (DB row + both sets, atomically), then fall
+        // through to the ordinary resume — which now sees an uncancelled file.
+        clear_ngc_user_cancel(message.group_identifier, message.msg_id_hash);
+        resume_group_file_send(message);
+    }
+
+    /**
+     * KHANDAQ (audit2 #5): automatic resume of an interrupted outgoing send (stall watchdog, group
+     * reconnect, retry_pending_outgoing_group_files after a crash). It clears only the session-level
+     * state, never the user's cancel — an automatic retry used to run the very same body as the user's
+     * "retry" button and so silently un-cancelled a cancelled file.
+     */
+    static void resume_group_file_send(final GroupMessage message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+        final String groupId = message.group_identifier;
+        final String msgIdHash = message.msg_id_hash;
+        if (groupId == null || msgIdHash == null)
+        {
+            return;
+        }
+        final String key = ngc_file_progress_key(groupId, msgIdHash);
+        final Boolean cached = ngc_user_cancel_from_cache(key);
+        if (cached == null)
+        {
+            // KHANDAQ (audit3 #3): callers reach this from the main thread (the auto-retry post and
+            // the retry button), with one exception — the re-entry below, which already runs on the
+            // lookup thread and takes the cached branch. So on a cache miss the read must not be done
+            // here on the main thread
+            // (schedule_auto_retry_group_file posts here, onRetry is a tap), and the authoritative
+            // tombstone check does SQL under a lock a chunk/tox thread can be holding. On a cold cache
+            // do that read on the lookup thread and come back to the main thread for the send itself,
+            // so the thread the transfer starts on does not change. The tombstone keeps full authority:
+            // a cancelled — or unreadable, which we treat as cancelled — file simply never comes back.
+            try
+            {
+                ngc_cancel_lookup_exec.execute(() ->
+                {
+                    if (is_ngc_send_cancelled_by_user(groupId, msgIdHash))
+                    {
+                        return;
+                    }
+                    if (main_handler_s != null)
+                    {
+                        main_handler_s.post(() -> resume_group_file_send(message));
+                    }
+                    else
+                    {
+                        // No looper (service-only context): the answer is memoised now, so re-entering
+                        // here takes the synchronous path below and cannot recurse again.
+                        resume_group_file_send(message);
+                    }
+                });
+            }
+            catch (Exception e)
+            {
+                Log.i(TAG, "resume_group_file_send:EE:" + e.getMessage());
+            }
+            return;
+        }
+        if (cached)
+        {
+            return;
+        }
+        ngc_cancelled_sends.remove(key);
+        clear_ngc_outgoing_send_complete(groupId, msgIdHash);
+        clear_ngc_file_transfer_failed(groupId, msgIdHash);
         send_group_file(message);
     }
 

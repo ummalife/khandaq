@@ -124,7 +124,9 @@ Correct, and the cause is on the client: the signing secret is empty in both shi
 
 Two deliberate properties, both verified: the percentage is `null` rather than 100 when there has been no traffic, so an idle relay cannot read as "fully adopted"; and unlike the replay store this counter fails **open** and silently, because a broken counter must never start dropping pushes.
 
-The extractable shared secret is still a real design limit. Per-install capabilities are the right answer and are not in this batch.
+**Verified while writing this up, because it is the thing that would silently break the rollout:** all four implementations of the signature agree byte-for-byte — the relay (`app.py _auth_signature_valid`), Android (`KhandaqPush.java`), the iOS Swift helper (`KhandaqPush.swift`) and the objcTox path that actually sends the push (`OCTSubmanagerChatsImpl.m khandaqAppendRelayAuth`). All sign `id + "\n" + from + "\n" + ts` with HMAC-SHA256, lowercase hex, raw URL-decoded values, UTF-8. So nothing needs to be written for this finding — only provisioned. The sequence, including what to watch on `/health` before flipping enforcement, is written down in `PUSH-AUTH-SECRET-PROVISIONING.md`.
+
+The extractable shared secret is still a real design limit, and the provisioning document says so where the operator will read it: a key baked into a public binary raises the cost of abusing the relay, it is not client authentication. Per-install capabilities are the right answer and are not in this batch.
 
 ### 6 — Plaintext identity export — encrypted is now the default
 

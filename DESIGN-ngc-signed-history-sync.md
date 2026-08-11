@@ -137,12 +137,12 @@ Dual-emitting `0x01` and `0x02` for the same message would keep old clients fed,
 
 ---
 
-## 6. Open questions — these need your decision
+## 6. Decisions (answered by the owner, 11 Aug 2026)
 
-1. **Late joiners.** A peer that joins after an announcement has no key for older authors, so their history arrives `UNVERIFIED_NO_KEY`. Options: periodic re-announce (bandwidth, trivially simple), announce-on-request (one more packet type), or accept the gap. *Recommendation: periodic re-announce on a long timer, plus on join.*
-2. **Key rotation / reinstall.** A user who reinstalls generates a new HSK. Under "first announcement wins" their new key is refused until the grace period elapses, so their history reads unverified for that window. Is that acceptable, or should a currently-connected peer be allowed to replace its own key immediately? *Recommendation: allow immediate replacement only while the peer is connected in the group, and log it.*
-3. **Do we quarantine display before the protocol lands?** §4.5's marker can ship on its own. It removes the deception without removing the forgery. *Recommendation: yes, ship it first — but it is a change to the most-used screen in the app and needs device QA, so it should not be bundled with a release nobody can QA.*
-4. **Cross-platform scope.** Android, iOS and desktop all parse these packets, and signing must land on all three before it means anything. The version gate itself is no longer a question — §5 confirms all three. Worth noting for scheduling: desktop is a **history-sync consumer only** (`core.cpp:1600` says it never emits a request), so it needs verification but not signing, which makes it the cheapest of the three.
+1. **Late joiners — DECIDED: periodic re-announce, plus on join.** No new packet type; the announcement (§4.2) is simply re-sent on a long timer and whenever we join a group. Cost is a little bandwidth in large groups, which is the cheapest of the three options and the only one that needs no new attack surface. Implementation note: the timer must be jittered per client, or every member of a large group re-announces in lockstep.
+2. **Key rotation / reinstall — DECIDED: immediate replacement, but only while the peer is connected in the group.** The binding argument is the same one that makes the whole scheme work: a live packet is authenticated by the transport, so a currently-connected peer announcing a new key has already proved it is that Tox identity. An announcement from a peer NOT currently in the group's peer list does not replace anything. Every replacement is logged. This keeps reinstall from degrading the UX while giving an attacker no window in which the real owner is absent.
+3. **Quarantine display before the protocol — DONE.** Shipped ahead of the protocol; see §8 step 2.
+4. **Platform order — DECIDED: desktop first.** It is a history-sync **consumer only** (`core.cpp:1600` — it never emits a request), so it needs verification but not signing: the smallest change, and it proves the verification path before either mobile client starts emitting signatures. Then Android, then iOS. The version gate is settled for all three (§5).
 
 ---
 

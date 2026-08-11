@@ -96,9 +96,37 @@ Anything not `VERIFIED` renders with a marker on the bubble and is excluded from
 
 ---
 
-## 5. Backward compatibility — verified, not assumed
+## 5. Backward compatibility — verified on all three platforms
 
-`MainActivity.android_tox_callback_group_custom_packet_cb_method` matches every packet type on `data[6] == 0x1` and silently ignores anything else. So a shipped client receiving `version=0x02` does nothing at all — no mis-parse, no crash, no half-message.
+This was step 1 of §8 and it is **done**. Every shipped parser gates on the version byte and drops anything it does not recognise:
+
+| platform | check | file |
+|---|---|---|
+| Android | every branch requires `data[6] == 0x1`; unknown version falls to the `else` and is ignored | `MainActivity.android_tox_callback_group_custom_packet_cb_method` |
+| iOS — history sync | `if (bytes[6] != kOCTNgcHistLayer) return;`, `kOCTNgcHistLayer = 0x01` | `OCTNgcGroupHistSync.m:143` |
+| iOS — edit/delete/reaction | `b[6] != 0x01 → return NO` | `OCTSubmanagerGroupsImpl.m:2534, 2708` |
+| desktop | `data[6] != NGC_VERSION → return`, `NGC_VERSION = 0x01` | `core/core.cpp:1880` |
+
+So a shipped client receiving `version=0x02` does nothing at all — no mis-parse, no crash, no half-message. The version byte is a usable upgrade lever, and the design can rely on it.
+
+### 5.1 Packet-id registry (so the next feature does not collide)
+
+Ids observed in use today, under `version=0x01`:
+
+| id | meaning |
+|---|---|
+| `0x01` | history-sync request |
+| `0x02` | history-sync text |
+| `0x03` | history-sync file |
+| `0x11` | group file, single-packet |
+| `0x12` | chunked file BEGIN |
+| `0x13` | chunked file CHUNK |
+| `0x14` | chunked file REQUEST |
+| `0x21` | live audio |
+| `0x31` | live video |
+| `0x41` / `0x42` / `0x43` | message edit / delete / reaction |
+
+`0x50` is free, which is why §4.2 uses it. **Anything new must be added to this table in the same commit that introduces it** — the ids are spread across three codebases and there is no other place they are written down.
 
 That makes the rollout safe in both directions:
 
@@ -114,7 +142,7 @@ Dual-emitting `0x01` and `0x02` for the same message would keep old clients fed,
 1. **Late joiners.** A peer that joins after an announcement has no key for older authors, so their history arrives `UNVERIFIED_NO_KEY`. Options: periodic re-announce (bandwidth, trivially simple), announce-on-request (one more packet type), or accept the gap. *Recommendation: periodic re-announce on a long timer, plus on join.*
 2. **Key rotation / reinstall.** A user who reinstalls generates a new HSK. Under "first announcement wins" their new key is refused until the grace period elapses, so their history reads unverified for that window. Is that acceptable, or should a currently-connected peer be allowed to replace its own key immediately? *Recommendation: allow immediate replacement only while the peer is connected in the group, and log it.*
 3. **Do we quarantine display before the protocol lands?** §4.5's marker can ship on its own. It removes the deception without removing the forgery. *Recommendation: yes, ship it first — but it is a change to the most-used screen in the app and needs device QA, so it should not be bundled with a release nobody can QA.*
-4. **Cross-platform scope.** Android, iOS and desktop all parse these packets. Signing must land on all three before it means anything, and the iOS and desktop parsers need the same version gate confirmed the way §5 confirmed Android's.
+4. **Cross-platform scope.** Android, iOS and desktop all parse these packets, and signing must land on all three before it means anything. The version gate itself is no longer a question — §5 confirms all three. Worth noting for scheduling: desktop is a **history-sync consumer only** (`core.cpp:1600` says it never emits a request), so it needs verification but not signing, which makes it the cheapest of the three.
 
 ---
 
@@ -124,7 +152,7 @@ A group member can still forge history **as themselves** with a false timestamp,
 
 ## 8. Rough sequencing
 
-1. Confirm the version gate on iOS and desktop parsers (§5) — cheap, do it first.
+1. ~~Confirm the version gate on iOS and desktop parsers (§5).~~ **Done — all three gate on the version byte and ignore unknown values.**
 2. Unverified-display marker on NGC bubbles (§4.5), with device QA.
 3. HSK generation + storage + announcement, all three platforms, with verification disabled.
 4. Emit signed history, still accepting `0x01`.

@@ -468,9 +468,7 @@
 
 %1$s</string>
     <string name="maintenance_export_all_files_title">Export all encrypted files</string>
-    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
-
-%1$s</string>
+    <string name="maintenance_export_all_files_message">قاعدة البيانات والملفات مشفّرة، لكن مفتاح هوية Tox يُكتب بدون تشفير إلى:\n\n%1$s\n\nيمكن لأي شخص يقرأ هذا المجلد الاستيلاء على حسابك. يُفضّل استخدام النسخة الاحتياطية المشفّرة.</string>
     <string name="maintenance_export_confirm">Export</string>
     <string name="maintenance_show_passwords_title">Show passwords</string>
     <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>

@@ -55,11 +55,37 @@ import static com.zoffcc.applications.trifa.MainActivity.manually_log_out;
 
 public class ExportActivity extends AppCompatActivity
 {
+    /**
+     * KHANDAQ (audit2 #6): destination picker for the ENCRYPTED backup, so this screen can offer it as
+     * its default action instead of only writing the plaintext bundle. Same plumbing as
+     * MaintenanceActivity's — registered in onCreate because registerForActivityResult must run before
+     * the activity is STARTED.
+     */
+    private androidx.activity.result.ActivityResultLauncher<String> backup_create_launcher;
+    private char[] pending_backup_passphrase;
+
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_export);
+
+        backup_create_launcher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
+                        PasswordBackupHelper.MIME_TYPE),
+                uri ->
+                {
+                    final char[] pp = pending_backup_passphrase;
+                    pending_backup_passphrase = null;
+                    if (uri != null && pp != null)
+                    {
+                        PasswordBackupHelper.performBackup(ExportActivity.this, uri, pp);
+                    }
+                    else if (pp != null)
+                    {
+                        java.util.Arrays.fill(pp, '\0');   // picker cancelled — never leave it in memory
+                    }
+                });
 
         // KHANDAQ (audit #15): the bundle written here holds the Tox PRIVATE KEY in the clear, so stale
         // copies must not pile up — but the sweep deliberately does NOT run on entering this screen.
@@ -109,7 +135,21 @@ public class ExportActivity extends AppCompatActivity
                     builder.setMessage(v.getContext().getString(R.string.maintenance_export_all_files_message,
                             (shown_dir != null) ? shown_dir : SD_CARD_FULL_FILES_EXPORT_DIR));
 
-                    builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
+                    // KHANDAQ (audit2 #6): the encrypted backup is now the DEFAULT action of this dialog and
+                    // the raw bundle is the deliberate, explicitly-labelled alternative. The reviewer asked
+                    // to "make the existing password-encrypted backup format the default and deprecate raw
+                    // identity export"; that format already exists (PasswordBackupHelper / BackupHelper) and
+                    // carries the same three things this bundle does — Tox identity, DB key, DB + VFS — so
+                    // nothing is lost by steering here. The raw path is kept, not removed: other Tox clients
+                    // import a plain savedata file, and silently taking that away would strand users.
+                    builder.setPositiveButton(R.string.backup_password_title, new DialogInterface.OnClickListener()
+                    {
+                        public void onClick(DialogInterface dialog, int id)
+                        {
+                            start_encrypted_backup();
+                        }
+                    });
+                    builder.setNeutralButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
@@ -127,6 +167,25 @@ public class ExportActivity extends AppCompatActivity
                 }
             }
         });
+    }
+
+    /** KHANDAQ (audit2 #6): the encrypted route — ask for a passphrase, then for a destination. */
+    private void start_encrypted_backup()
+    {
+        try
+        {
+            PasswordBackupHelper.promptForBackupPassphrase(ExportActivity.this, passphrase ->
+            {
+                pending_backup_passphrase = passphrase;
+                backup_create_launcher.launch(PasswordBackupHelper.SUGGESTED_FILENAME);
+            });
+        }
+        catch (Exception e)
+        {
+            // Never silently fall back to writing plaintext — that is the whole point of this change.
+            android.util.Log.w("trifa.ExportActivity", "start_encrypted_backup failed: " + e.getMessage());
+            display_toast(getString(R.string.backup_failed), true, 400);
+        }
     }
 
     /**

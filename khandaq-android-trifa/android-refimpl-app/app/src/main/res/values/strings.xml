@@ -932,7 +932,7 @@
     <string name="maintenance_export_encrypted_chats_title">Export encrypted chats</string>
     <string name="maintenance_export_encrypted_chats_message">Encrypted chats will be exported unencrypted to:\n\n%1$s</string>
     <string name="maintenance_export_all_files_title">Export all encrypted files</string>
-    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:\n\n%1$s</string>
+    <string name="maintenance_export_all_files_message">The database and files are encrypted, but the Tox identity key is written UNENCRYPTED to:\n\n%1$s\n\nAnyone who can read that folder can take over your account. Prefer the encrypted backup.</string>
     <string name="maintenance_export_confirm">Export</string>
     <string name="maintenance_show_passwords_title">Show passwords</string>
     <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>

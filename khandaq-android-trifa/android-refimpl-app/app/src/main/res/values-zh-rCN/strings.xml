@@ -504,9 +504,7 @@
 
 %1$s</string>
     <string name="maintenance_export_all_files_title">Export all encrypted files</string>
-    <string name="maintenance_export_all_files_message">Encrypted files will be exported to:
-
-%1$s</string>
+    <string name="maintenance_export_all_files_message">数据库和文件已加密，但 Tox 身份密钥将以未加密形式写入：\n\n%1$s\n\n任何能读取该文件夹的人都可以接管你的账户。建议使用加密备份。</string>
     <string name="maintenance_export_confirm">Export</string>
     <string name="maintenance_show_passwords_title">Show passwords</string>
     <string name="maintenance_show_passwords_message">This will show the database and Tox passwords.</string>

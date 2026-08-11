@@ -8,7 +8,7 @@
 
 ## Summary
 
-Nothing is disputed — every finding reproduced. Of the ten: **six are fixed outright** (2, 3, 5, 8, 9, 10) and **four are partly fixed** (1, 4, 6, 7), with the remaining half of each named rather than glossed. **Nothing is left untouched.** The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 40 of them, gating the release.
+Nothing is disputed — every finding reproduced. Of the ten: **seven are fixed outright** (2, 3, 5, 6, 8, 9, 10) and **three are partly fixed** (1, 4, 7), with the remaining half of each named rather than glossed. **Nothing is left untouched.** The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 40 of them, gating the release.
 
 Thank you for the two things that mattered most: catching that our release job **re-pinned** dependencies instead of verifying them, and confirming which of our earlier fixes actually landed. Both changed what we did next.
 
@@ -19,7 +19,7 @@ Thank you for the two things that mattered most: catching that our release job *
 | 3 | 1:1 chunk assembly allocation | **FIXED** |
 | 4 | Push relay: unauthenticated posture + token in logs | **PARTLY FIXED** — logging and TLS closed; enforcement is a rollout |
 | 5 | Cancelled group files requestable after restart | **FIXED** |
-| 6 | Plaintext identity export | **PARTLY FIXED** — hardened, encrypted-by-default deferred |
+| 6 | Plaintext identity export | **FIXED** — encrypted backup is now the default; raw kept behind an explicit, honest warning |
 | 7 | Windows runtime dependencies | **PARTLY FIXED** — FFmpeg bumped; Qt/OpenSSL deferred |
 | 8 | iOS dependencies unlocked | **FIXED** |
 | 9 | Keychain errors vs "not found" | **FIXED** |
@@ -114,11 +114,19 @@ What remains open on this finding is therefore only the part that genuinely need
 
 Correct, and the cause is on the client: the signing secret is empty in both shipped app builds, so **no released client signs anything**. Enforcing today would silence notifications for every installed user. Order: ship signing clients → confirm coverage from relay telemetry → enforce. The extractable shared secret is a real design limit; per-install capabilities are the right answer and are not in this batch.
 
-### 6 — Plaintext identity export
+### 6 — Plaintext identity export — encrypted is now the default
 
-The export is `0600`, memory is zeroed, staging copies are deleted in `finally`, and stale bundles are wiped before a new export. The file itself is still plaintext, because it is the artefact the user collects and the format is what other clients import. Making the encrypted container the default is a user-facing change we want to do deliberately.
+You asked us to "make the existing password-encrypted backup format the default and deprecate raw identity export". Done, in that order.
 
-You are right that the format is not the constraint — the encrypted variant is equally interoperable, and this same code already writes it for the local profile.
+The encrypted container already existed (`PasswordBackupHelper` / `BackupHelper`, the AES-GCM path you listed under positive controls) and it carries the same three things the raw bundle does — Tox identity, database key, database and VFS. So the export screen now offers it as its **default action**, and the raw bundle is the deliberate, explicitly-labelled alternative behind the same dialog.
+
+We kept the raw path rather than removing it: a plain savedata file is what other Tox clients import, and silently taking that away would strand users mid-migration. "Deprecate", not "delete".
+
+**The dialog was also lying, and that is arguably the worse half of this finding.** Its text read *"Encrypted files will be exported to: …"* — while the file next to them holds the Tox private key in the clear. A user reading that had no way to know what they were writing to shared storage. It now states plainly that the identity key is written **unencrypted**, names the folder, and says what someone who reads that folder can do with it. Corrected in all four shipped locales (en, ru, ar, zh-CN).
+
+The pre-existing hardening stands: `0600`, memory zeroed, staging copies deleted in `finally`, stale bundles wiped before a new export.
+
+Not done: the raw file is still plaintext when the user explicitly chooses it. Making the *format itself* encrypted would break import on other Tox clients, which is the reason that path exists at all.
 
 ### 9 — Keychain tri-state (LOW) — now fixed
 

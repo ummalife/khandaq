@@ -567,7 +567,7 @@
     <string name="maintenance_export_encrypted_chats_title">Экспорт зашифрованных чатов</string>
     <string name="maintenance_export_encrypted_chats_message">Зашифрованные чаты будут экспортированы без шифрования в:\n\n%1$s</string>
     <string name="maintenance_export_all_files_title">Экспорт всех зашифрованных файлов</string>
-    <string name="maintenance_export_all_files_message">Зашифрованные файлы будут экспортированы в:\n\n%1$s</string>
+    <string name="maintenance_export_all_files_message">База и файлы зашифрованы, но ключ Tox-идентичности записывается БЕЗ ШИФРОВАНИЯ в:\n\n%1$s\n\nЛюбой, кто прочитает эту папку, сможет завладеть вашим аккаунтом. Лучше используйте зашифрованную резервную копию.</string>
     <string name="maintenance_export_confirm">Экспортировать</string>
     <string name="maintenance_show_passwords_title">Показать пароли</string>
     <string name="maintenance_show_passwords_message">Будут показаны пароли базы данных и Tox.</string>

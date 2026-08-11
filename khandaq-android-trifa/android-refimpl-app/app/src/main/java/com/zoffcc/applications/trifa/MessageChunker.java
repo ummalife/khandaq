@@ -35,7 +35,8 @@ public final class MessageChunker
      * (MAX_CRYPTO_DATA_SIZE minus our header). The adaptive sender never goes above 1024, so an honest
      * chunk always fits; anything larger is a forged length and is dropped before it is accounted for.
      */
-    private static final int CHUNK_PAYLOAD_MAX = MAX_CRYPTO_DATA_SIZE - HEADER_BYTES;
+    // KHANDAQ: package-private so MessageChunkerTest can assert the exact admission boundary.
+    static final int CHUNK_PAYLOAD_MAX = MAX_CRYPTO_DATA_SIZE - HEADER_BYTES;
     /**
      * KHANDAQ (audit2 #3): hard ceiling on one reassembled text message. The single-message limit is
      * TOX_MSGV3_MAX_MESSAGE_LENGTH (1334 B) and msgV2 text tops out at TOX_MESSAGEV2_MAX_TEXT_LENGTH
@@ -50,7 +51,8 @@ public final class MessageChunker
      * turned into a byte[total][] on the very first packet, so 13-byte packets with fresh msg_ids allocated
      * ~256-512 KiB each, forever. Same spirit as NgcGroupFileTransfer.MAX_LEGIT_CHUNKS.
      */
-    private static final int MAX_LEGIT_CHUNKS = MAX_MESSAGE_BYTES / CHUNK_PAYLOAD_MIN;
+    // KHANDAQ: package-private so MessageChunkerTest can assert the exact admission boundary.
+    static final int MAX_LEGIT_CHUNKS = MAX_MESSAGE_BYTES / CHUNK_PAYLOAD_MIN;
     /** Incomplete assemblies idle for longer than this can no longer belong to a message still arriving. */
     private static final long ASSEMBLY_IDLE_TTL_MS = 120_000L;
     /** In-flight incomplete messages one friend may hold: sendChunked is sequential, so 1 is honest; 4 is slack. */
@@ -154,6 +156,25 @@ public final class MessageChunker
         return -1;
     }
 
+    /**
+     * The chunk-header admission rule, as a pure predicate so it can be tested without a Tox stack.
+     *
+     * KHANDAQ (audit2 #3): every argument is attacker-chosen — {@code seq}/{@code total} are u16 fields an
+     * accepted contact wrote into the packet, {@code chunkLen} is derived from the packet length. This must
+     * answer before {@link #handleIncoming} allocates or accounts anything.
+     *
+     * @param seq      declared 0-based index of this chunk
+     * @param total    declared number of chunks in the message
+     * @param chunkLen payload bytes carried by this packet (packet length minus {@link #HEADER_BYTES})
+     * @return true only if all three can belong to a message a shipped sender could actually produce
+     */
+    static boolean isValidChunkHeader(final int seq, final int total, final int chunkLen)
+    {
+        return total >= 1 && total <= MAX_LEGIT_CHUNKS
+               && seq >= 0 && seq < total
+               && chunkLen >= 1 && chunkLen <= CHUNK_PAYLOAD_MAX;
+    }
+
     static void handleIncoming(final long friendNumber, final byte[] data, final int length)
     {
         if (data == null || length < HEADER_BYTES)
@@ -177,8 +198,7 @@ public final class MessageChunker
 
         // KHANDAQ (audit2 #3): seq/total/len are bytes an accepted contact chose. Reject them BEFORE any
         // allocation: a 13-byte packet used to declare total=65535 and cost us a 65535-entry array.
-        if (total < 1 || total > MAX_LEGIT_CHUNKS || seq < 0 || seq >= total || chunkLen < 1
-            || chunkLen > CHUNK_PAYLOAD_MAX)
+        if (!isValidChunkHeader(seq, total, chunkLen))
         {
             NetworkDiagnosticsLog.log("chunk_recv_bad_header",
                                       "fn=" + friendNumber + " seq=" + seq + " total=" + total + " len=" + chunkLen);
@@ -382,7 +402,8 @@ public final class MessageChunker
         return sb.toString();
     }
 
-    private static final class IncomingAssembly
+    // KHANDAQ: package-private so MessageChunkerTest can drive the reassembly state machine directly.
+    static final class IncomingAssembly
     {
         final long friendNumber;
         final int totalChunks;

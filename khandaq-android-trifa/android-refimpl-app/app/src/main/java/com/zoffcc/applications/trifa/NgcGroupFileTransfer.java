@@ -280,6 +280,47 @@ public final class NgcGroupFileTransfer
         return fileSize > TOX_MAX_NGC_FILESIZE;
     }
 
+    /**
+     * The file-chunk admission rule, as a pure predicate so it can be tested without a Tox stack or VFS.
+     *
+     * KHANDAQ (internal audit L-1): {@code chunkIndex} and {@code chunkSize} are u32 fields read straight
+     * out of a group packet, so they are fully attacker-chosen — and {@code readU32Be} hands back an int,
+     * which is NEGATIVE for anything above 2^31. Every bound below has to hold before the chunk is copied
+     * out of the packet or written into the file:
+     * <ul>
+     *   <li>index inside the count the BEGIN declared (a negative index would also index backwards);</li>
+     *   <li>the bytes are actually present in this packet;</li>
+     *   <li>the chunk is no larger than the payload size the BEGIN declared;</li>
+     *   <li>index*payload + size stays inside the declared file size — the bound that was missing, which
+     *       let a chunk write past the end of the file it claimed to belong to.</li>
+     * </ul>
+     * An honest sender always emits {@code chunkSize <= chunkPayload} and a short final chunk, so nothing
+     * a shipped client produces is rejected here.
+     *
+     * @param chunkIndex   declared 0-based chunk index (may be negative — see above)
+     * @param chunkSize    declared payload bytes of this chunk (may be negative — see above)
+     * @param packetLength total bytes actually received in this packet, header included
+     * @param totalChunks  chunk count declared by the BEGIN packet for this transfer
+     * @param chunkPayload payload size per chunk declared by the BEGIN packet
+     * @param totalSize    file size declared by the BEGIN packet
+     */
+    static boolean isValidFileChunkHeader(final int chunkIndex, final int chunkSize, final int packetLength,
+                                          final int totalChunks, final int chunkPayload, final long totalSize)
+    {
+        if (chunkIndex < 0 || chunkIndex >= totalChunks || chunkSize < 1)
+        {
+            return false;
+        }
+        if ((FILE_CHUNK_HEADER + chunkSize) > packetLength || chunkSize > chunkPayload)
+        {
+            return false;
+        }
+        // long arithmetic on purpose: index and payload are both bounded above, but their product is not
+        // guaranteed to fit an int, and an overflow here would wrap into a passing comparison.
+        final long chunkOffset = (long) chunkIndex * (long) chunkPayload;
+        return (chunkOffset + (long) chunkSize) <= totalSize;
+    }
+
     static boolean isReceiveComplete(final String groupId, final String msgIdHash)
     {
         if ((groupId == null) || (msgIdHash == null))
@@ -1024,11 +1065,8 @@ public final class NgcGroupFileTransfer
         // end of the file — the stored file then disagreed with its own metadata. iOS and desktop
         // have had both bounds for a while; this brings Android in line. An honest sender always
         // sends chunkSize <= chunkPayload and a short final chunk, so nothing legitimate is rejected.
-        final long chunkOffset = (long) chunkIndex * (long) asm.chunkPayload;
-        if (chunkIndex < 0 || chunkIndex >= asm.totalChunks || chunkSize < 1
-                || (FILE_CHUNK_HEADER + chunkSize) > length
-                || chunkSize > asm.chunkPayload
-                || (chunkOffset + (long) chunkSize) > asm.totalSize)
+        if (!isValidFileChunkHeader(chunkIndex, chunkSize, length, asm.totalChunks, asm.chunkPayload,
+                                    asm.totalSize))
         {
             HelperGeneric.logI(TAG, "handleChunk:reject idx=" + chunkIndex + " size=" + chunkSize
                     + " len=" + length + " total=" + asm.totalChunks);

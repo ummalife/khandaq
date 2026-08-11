@@ -96,6 +96,25 @@ jobs:
           # header / the manual "witness-checksums-update" workflow).
           ./gradlew --no-daemon -PrunWitnessChecker=true :app:pinChecksums
 
+      # audit2 closing note: the reviewer's sharpest point was that this app had zero JVM unit tests, so
+      # nothing caught a regression automatically. Tests nobody runs are not tests — a failure here stops
+      # the release before anything is built, signed or attested. The suite is pure-function (packet header
+      # bounds + reassembly state machines), so it needs no device, no network and cannot be flaky.
+      - name: Run JVM unit tests
+        run: |
+          set -euo pipefail
+          cd khandaq-android-trifa/android-refimpl-app
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest
+          # A green run over an empty suite would be the same vacuous pass the pin gate was fixed for.
+          total=$(grep -ho 'tests="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml \
+                  | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')
+          echo "unit tests executed: ${total:-0}"
+          if [ "${total:-0}" -lt 1 ]; then
+            echo "::error::testDebugUnitTest reported no executed tests - refusing to pass vacuously" >&2
+            exit 1
+          fi
+
       - name: Build release APK
         env:
           KHANDAQ_UPLOAD_STORE_FILE: ${{ secrets.KHANDAQ_UPLOAD_STORE_FILE }}

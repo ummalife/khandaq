@@ -8,7 +8,7 @@
 
 ## Summary
 
-Nothing is disputed — every finding reproduced. Of the ten: **five are fixed outright** (2, 3, 5, 8, 10), **three are partly fixed** with the remaining half named rather than glossed (4, 6, 7), and **two are open** (1, 9). The `.gitattributes` gap you noted separately is also fixed.
+Nothing is disputed — every finding reproduced. Of the ten: **six are fixed outright** (2, 3, 5, 8, 9, 10), **three are partly fixed** with the remaining half named rather than glossed (4, 6, 7), and **one is open** (1). The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 25 of them, gating the release.
 
 Thank you for the two things that mattered most: catching that our release job **re-pinned** dependencies instead of verifying them, and confirming which of our earlier fixes actually landed. Both changed what we did next.
 
@@ -22,9 +22,10 @@ Thank you for the two things that mattered most: catching that our release job *
 | 6 | Plaintext identity export | **PARTLY FIXED** — hardened, encrypted-by-default deferred |
 | 7 | Windows runtime dependencies | **PARTLY FIXED** — FFmpeg bumped; Qt/OpenSSL deferred |
 | 8 | iOS dependencies unlocked | **FIXED** |
-| 9 | Keychain errors vs "not found" | **OPEN** — accepted, small |
+| 9 | Keychain errors vs "not found" | **FIXED** |
 | 10 | Push replay protection process-local | **FIXED** |
 | — | No `.gitattributes` (CRLF) | **FIXED** |
+| — | Zero JVM unit tests | **FIXED** — 25 tests, mutation-checked, gating the release |
 
 ---
 
@@ -111,17 +112,30 @@ The export is `0600`, memory is zeroed, staging copies are deleted in `finally`,
 
 You are right that the format is not the constraint — the encrypted variant is equally interoperable, and this same code already writes it for the local profile.
 
-### 9 — Keychain tri-state (LOW)
+### 9 — Keychain tri-state (LOW) — now fixed
 
-Accepted, not yet done.
+Done, and tracing it confirmed your reading exactly. `readKeychainData` now returns `.found` / `.notFound` / `.failed(OSStatus)`, and the two consequences you predicted are both closed:
+
+- **Migration no longer runs on a failure.** Only `.notFound` triggers the legacy read. On `.failed` — a locked keychain before first unlock, an ACL/entitlement problem, a corrupt item — we serve the legacy value and leave it exactly where it is. Migration can be retried on any later launch; the profile password cannot be un-lost.
+- **The legacy copy is purged only on a confirmed write.** `setData` now returns success and the purge is conditional on it (or on the caller deleting the value, where dropping a plaintext copy is always right). Previously the purge ran unconditionally, so a failed migration write destroyed the only remaining copy — this was the concrete data-loss path in your finding.
+
+Two smaller things fell out of the same trace: an item that exists but comes back as the wrong type is now `.failed` rather than `.notFound`, so it cannot trigger migrate-and-purge either; and deleting is no longer skipped when the preceding read failed, so wiping an account is not silently a no-op. `SecItemDelete` returning `errSecItemNotFound` is now treated as success, which it is.
 
 ---
 
 ## On your closing observations
 
-**Zero unit tests** — correct, and the sharpest point in your report. Everything in these two rounds was verified by builds, adversarial review and manual device QA. That is why our own fixes needed three correction rounds: nothing catches a regression automatically. The first tests will target packet parsing and the assembly state machines, which is where both of your reviews found real defects.
+**Zero unit tests** — the sharpest point in your report, and no longer true. There are now 25, and they target exactly what you would expect: the 1:1 chunk-header admission rule, the reassembly state machine, and the NGC group-file chunk bounds — the three places where your two reviews and our own internal one found real defects.
 
-**Test target could not build offline** — noted; the Kotlin plugin is not vendored.
+To make them testable at all, the two admission rules were lifted out of their packet handlers into pure predicates (`MessageChunker.isValidChunkHeader`, `NgcGroupFileTransfer.isValidFileChunkHeader`) — same conditions, same order, no behaviour change. They are plain JUnit with no Robolectric: a test that needs an Android runtime to check an integer bound is a test that ends up skipped.
+
+**We then checked that the tests actually bite**, because a suite that passes against broken code is worse than none. Four bounds were deliberately reverted one at a time — the chunk-count ceiling, the duplicate-sequence guard, the "chunk larger than the declared payload" bound, and the long arithmetic in the offset calculation — and each mutation was caught (6 failures from 4 mutations; the two extra are second tests covering the same bound). Sources restored, 25/25 green.
+
+That last mutation is worth singling out because it is the kind of thing review misses: with `int` instead of `long`, `index * payload` overflows to a large negative offset, which then compares as comfortably inside the file. The test constructs exactly that case.
+
+`testDebugUnitTest` now runs in the release workflow, before anything is built or signed, and the step fails if the suite reports zero executed tests — the same vacuous-pass hole we had just closed on the pin gate.
+
+**Test target could not build offline** — noted; the Kotlin plugin is not vendored. It builds and runs online, which is where CI runs it.
 
 ---
 
@@ -130,9 +144,10 @@ Accepted, not yet done.
 What was actually run, not what was intended:
 
 - Android `:app:assembleRelease` (R8) — green, with the pin gate active: 338 verified.
+- Android `:app:testDebugUnitTest` — **25 executed, 0 failures, 0 skipped**, plus the mutation run described above.
 - iOS `xcodebuild` — `BUILD SUCCEEDED`.
 - `app/verify_pins_against_upstream.sh` — **338/338 against Google Maven / Maven Central / JitPack, 0 mismatches, 0 unresolved.**
 - FFmpeg 4.4.8 tarball: SHA-256 recomputed and GPG signature verified against the FFmpeg release key.
 - All six root workflow files parse; `bash -n` over every changed shell script; `app.py` parses.
 
-Not verified, and we would rather you know it: **none of this batch has been exercised on devices.** There is still no fuzzing, no sanitizer coverage and no unit test — see your closing point, which we agree with.
+Not verified, and we would rather you know it: **none of this batch has been exercised on devices**, and there is still no fuzzing and no sanitizer coverage. The 25 tests cover the parsing bounds and the reassembly state machines; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.

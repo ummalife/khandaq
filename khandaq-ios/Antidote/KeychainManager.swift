@@ -56,6 +56,15 @@ class KeychainManager {
     }
 }
 
+/// KHANDAQ (audit #2, finding 9): a keychain read has THREE outcomes, not two. Collapsing them into
+/// `Data?` made "the keychain is broken/locked" indistinguishable from "there is no such item", and the
+/// legacy-migration path treats the second as a cue to write and then purge its only other copy.
+private enum KeychainReadResult {
+    case found(Data)
+    case notFound
+    case failed(OSStatus)
+}
+
 private extension KeychainManager {
     func getIntForKey(_ key: String) -> Int? {
         guard let data = getDataForKey(key) else {
@@ -127,19 +136,32 @@ private extension KeychainManager {
     }
 
     func getDataForKey(_ key: String) -> Data? {
-        if let data = readKeychainData(forKey: key) {
-            return data
+        switch readKeychainData(forKey: key) {
+            case .found(let data):
+                return data
+
+            case .failed(let status):
+                // KHANDAQ (audit #2, finding 9): the keychain is UNAVAILABLE (locked before first unlock,
+                // entitlement/ACL problem, corrupt item...) — which is not the same as "there is no item".
+                // Previously this fell through to the migration below, which wrote into a store we cannot
+                // read and then dropped the legacy copy regardless of whether that write worked, losing
+                // the profile password outright. Serve the legacy value if one exists, and leave it
+                // exactly where it is: migration can be retried on any later launch, data loss cannot.
+                log("Keychain unavailable for key \(key) (status \(status)) — not migrating, legacy copy kept")
+                return UserDefaults.standard.data(forKey: fallbackStorageKey(key))
+
+            case .notFound:
+                // KHANDAQ (audit A37): migrate any LEGACY plaintext UserDefaults fallback into the keychain.
+                // It is purged only once setData CONFIRMS the write. New data never touches UserDefaults.
+                guard let legacy = UserDefaults.standard.data(forKey: fallbackStorageKey(key)) else {
+                    return nil
+                }
+                setData(legacy, forKey: key)
+                return legacy
         }
-        // KHANDAQ (audit A37): migrate any LEGACY plaintext UserDefaults fallback into the keychain, then
-        // it is purged (setData → writeFallbackData removes it). New data never touches UserDefaults.
-        if let legacy = UserDefaults.standard.data(forKey: fallbackStorageKey(key)) {
-            setData(legacy, forKey: key)
-            return legacy
-        }
-        return nil
     }
 
-    func readKeychainData(forKey key: String) -> Data? {
+    func readKeychainData(forKey key: String) -> KeychainReadResult {
         var query = genericQueryWithKey(key)
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         query[kSecReturnData as String] = kCFBooleanTrue
@@ -150,36 +172,54 @@ private extension KeychainManager {
         }
 
         if status == errSecItemNotFound {
-            return nil
+            return .notFound
         }
 
         guard status == noErr else {
             log("Error when getting keychain data for key \(key), status \(status)")
-            return nil
+            return .failed(status)
         }
 
         guard let data = queryResult as? Data else {
+            // The item exists but did not come back as Data. Treating this as .failed rather than
+            // .notFound matters: it must not trigger the migrate-and-purge path either.
             log("Unexpected data for key \(key)")
-            return nil
+            return .failed(errSecInternalError)
         }
 
-        return data
+        return .found(data)
     }
 
-    func writeFallbackData(_ newData: Data?, forKey key: String) {
-        // KHANDAQ (audit A37): NEVER persist sensitive data (Tox key / profile password) in plaintext
-        // UserDefaults — only purge any legacy copy. (A keychain-write failure now means the value isn't
-        // persisted this cycle, rather than being leaked in cleartext.)
-        _ = newData
+    /// Drops the LEGACY plaintext UserDefaults copy of `key`.
+    ///
+    /// KHANDAQ (audit A37): sensitive data (Tox key / profile password) is never written to UserDefaults —
+    /// this only ever removes. KHANDAQ (audit #2, finding 9): and it is now called only when the keychain
+    /// write was confirmed, or when the caller is deleting the value anyway.
+    func purgeLegacyFallback(forKey key: String) {
         UserDefaults.standard.removeObject(forKey: fallbackStorageKey(key))
     }
 
-    func setData(_ newData: Data?, forKey key: String) {
-        let oldKeychainData = readKeychainData(forKey: key)
+    @discardableResult
+    func setData(_ newData: Data?, forKey key: String) -> Bool {
+        let existing: Bool
+        switch readKeychainData(forKey: key) {
+            case .found:
+                existing = true
+            case .notFound:
+                existing = false
+            case .failed(let status):
+                // KHANDAQ (audit #2, finding 9): we do not know whether the item is there. Take the write
+                // path that copes with either — the add branch below self-heals on errSecDuplicateItem,
+                // and a delete is now issued unconditionally so that wiping an account is not silently
+                // skipped just because the preceding read failed.
+                log("Keychain read failed before write for key \(key), status \(status)")
+                existing = false
+        }
+
         var keychainOk = true
 
-        switch (oldKeychainData, newData) {
-            case (.some(_), .some(let data)):
+        switch (existing, newData) {
+            case (true, .some(let data)):
                 let query = genericQueryWithKey(key)
                 var attributesToUpdate = [String : AnyObject]()
                 attributesToUpdate[kSecValueData as String] = data as AnyObject?
@@ -189,15 +229,16 @@ private extension KeychainManager {
                     keychainOk = false
                 }
 
-            case (.some(_), .none):
+            case (_, .none):
                 let query = genericQueryWithKey(key)
                 let status = SecItemDelete(query as CFDictionary)
-                if status != noErr {
+                // Deleting something that is not there is the outcome we wanted, not a failure.
+                if status != noErr && status != errSecItemNotFound {
                     log("Error when deleting keychain data for key \(key), status \(status)")
                     keychainOk = false
                 }
 
-            case (.none, .some(let data)):
+            case (false, .some(let data)):
                 var query = genericQueryWithKey(key)
                 query[kSecValueData as String] = data as AnyObject?
                 // KHANDAQ (audit A37): set ...ThisDeviceOnly ONLY at creation (keeps push/background
@@ -216,16 +257,19 @@ private extension KeychainManager {
                     log("Error when setting keychain data for key \(key), status \(status)")
                     keychainOk = false
                 }
-
-            case (.none, .none):
-                break
         }
 
-        if keychainOk {
-            writeFallbackData(nil, forKey: key)
+        // KHANDAQ (audit #2, finding 9): purge the legacy plaintext copy ONLY once the keychain write is
+        // confirmed — or when the caller is deleting the value, where dropping the plaintext copy is
+        // always the right move. The previous version purged it either way, so a failed migration write
+        // destroyed the only remaining copy of the profile password.
+        if keychainOk || newData == nil {
+            purgeLegacyFallback(forKey: key)
         } else {
-            writeFallbackData(newData, forKey: key)
+            log("Keychain write FAILED for key \(key) — keeping the legacy fallback so the value survives")
         }
+
+        return keychainOk
     }
 
     func genericQueryWithKey(_ key: String) -> [String : AnyObject] {

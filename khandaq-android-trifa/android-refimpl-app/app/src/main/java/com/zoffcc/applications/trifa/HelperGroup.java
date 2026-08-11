@@ -5004,6 +5004,35 @@ public class HelperGroup
             return;
         }
 
+        // KHANDAQ (audit2 #1, storage half): history sync had no bound of its own — a peer could keep
+        // offering "history" indefinitely and every accepted record became a permanent DB row plus a
+        // notification. Budget it per group. Live traffic never passes through here, so a busy group is
+        // unaffected; only what arrives claiming to be OLD is capped.
+        final NgcHistorySyncBudget.State sync_budget = NgcHistorySyncBudget.stateFor(group_identifier);
+        if (!NgcHistorySyncBudget.isSeeded(sync_budget))
+        {
+            int already_stored = 0;
+            try
+            {
+                already_stored = orma.selectFromGroupMessage().
+                        group_identifierEq(group_identifier.toLowerCase(Locale.ROOT)).
+                        was_syncedEq(true).count();
+            }
+            catch (Exception e)
+            {
+                // Seed with 0 rather than leaving it unseeded: the budget then bounds what THIS run can
+                // ingest, which is the flood we care about. Leaving it unseeded would mean no row budget.
+                HelperGeneric.logI(TAG, "group_message_add_from_sync:sync budget seed failed:" + e.getMessage());
+            }
+            NgcHistorySyncBudget.seed(sync_budget, already_stored);
+        }
+        final int synced_text_bytes = message.getBytes(StandardCharsets.UTF_8).length;
+        if (!NgcHistorySyncBudget.fits(sync_budget, synced_text_bytes))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: history budget exhausted for group, dropping synced msg");
+            return;
+        }
+
         String groupname = null;
         try
         {
@@ -5113,8 +5142,21 @@ public class HelperGroup
             ensure_group_peer_recorded(group_identifier, group_num_, peer_pubkey, null);
         }
 
+        // KHANDAQ (audit2 #1): the row is stored, so book it against the per-group budget.
+        NgcHistorySyncBudget.recordAccepted(sync_budget, synced_text_bytes);
+
         HelperFriend.refresh_chat_list_group_row_wrapper(group_identifier);
         HelperFriend.add_all_friends_clear_wrapper(0);
+
+        // KHANDAQ (audit2 #1, notification half): rate-limited rather than suppressed. A message that
+        // genuinely arrived while we were offline still deserves to notify; it just must not be able to
+        // notify a hundred times. Rows past the limit are still stored and still update the unread badge
+        // (do_badge_update above is untouched) — only the notification is dropped.
+        if (do_notification && !NgcHistorySyncBudget.allowNotification(sync_budget, System.currentTimeMillis()))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: notification rate limit hit, storing silently");
+            do_notification = false;
+        }
 
         if (do_notification)
         {

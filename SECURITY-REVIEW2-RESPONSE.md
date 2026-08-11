@@ -8,13 +8,13 @@
 
 ## Summary
 
-Nothing is disputed — every finding reproduced. Of the ten: **six are fixed outright** (2, 3, 5, 8, 9, 10), **three are partly fixed** with the remaining half named rather than glossed (4, 6, 7), and **one is open** (1). The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 25 of them, gating the release.
+Nothing is disputed — every finding reproduced. Of the ten: **six are fixed outright** (2, 3, 5, 8, 9, 10) and **four are partly fixed** (1, 4, 6, 7), with the remaining half of each named rather than glossed. **Nothing is left untouched.** The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 40 of them, gating the release.
 
 Thank you for the two things that mattered most: catching that our release job **re-pinned** dependencies instead of verifying them, and confirming which of our earlier fixes actually landed. Both changed what we did next.
 
 | # | Finding | Status |
 |---|---|---|
-| 1 | History-sync sender impersonation | **OPEN** — needs a protocol change, design below |
+| 1 | History-sync sender impersonation | **PARTLY FIXED** — storage/notification bounds done; the author signature needs a protocol version |
 | 2 | Release CI replaces dependency pins | **FIXED** |
 | 3 | 1:1 chunk assembly allocation | **FIXED** |
 | 4 | Push relay: unauthenticated posture + token in logs | **PARTLY FIXED** — logging and TLS closed; enforcement is a rollout |
@@ -25,7 +25,7 @@ Thank you for the two things that mattered most: catching that our release job *
 | 9 | Keychain errors vs "not found" | **FIXED** |
 | 10 | Push replay protection process-local | **FIXED** |
 | — | No `.gitattributes` (CRLF) | **FIXED** |
-| — | Zero JVM unit tests | **FIXED** — 25 tests, mutation-checked, gating the release |
+| — | Zero JVM unit tests | **FIXED** — 40 tests, mutation-checked, gating the release |
 
 ---
 
@@ -100,7 +100,15 @@ Confirmed, and it is the same issue we listed as open in our previous response. 
 
 What we did do in the meantime, and what you can verify: unauthenticated sync packets can no longer write the persistent peer table; synced rows are never re-served, so a forgery cannot launder through an honest client; packets claiming to originate from us are rejected; and **private member-to-member messages are no longer served through history sync at all** — we found that leak ourselves between your two reviews and fixed it.
 
-Your point about storage bounds is taken and not yet done.
+**The second half of your finding — "the same path explicitly lacks rate/storage bounds, enabling database and notification flooding... impose per-group row/byte limits" — is done.** None of it needs the wire format to change, so there was no reason to hold it behind the signature work. `NgcHistorySyncBudget` applies three budgets per group, separated because they fail differently:
+
+- **Rows per group.** Counted against *synced* rows only, so a group's own live traffic is never rejected however busy the group is. Seeded once per run from the database; a failed count seeds as 0 rather than being skipped, because an unseeded counter would mean no row budget at all — which is the hole itself.
+- **Bytes per group per app run.** Deliberately not persisted. It bounds how much a single run can be made to ingest, which is the flooding case, without inventing a lifetime quota that would eventually refuse a legitimately long-lived group.
+- **Notifications per group per window.** Rate-limited, not suppressed: a message that genuinely arrived while the user was offline still deserves to notify, it just cannot notify a hundred times. Over-limit rows are still stored and still update the unread badge — only the notification is dropped.
+
+15 unit tests cover the decision logic, and they were mutation-checked the same way as the rest: dropping the row cap, making the seed non-idempotent, removing the backwards-clock guard, and making the group key case-sensitive each turned the suite red (7 failures from 4 mutants).
+
+What remains open on this finding is therefore only the part that genuinely needs a protocol version: the original-author signature.
 
 ### 4 (enforcement) — The relay accepts unsigned requests
 
@@ -125,11 +133,11 @@ Two smaller things fell out of the same trace: an item that exists but comes bac
 
 ## On your closing observations
 
-**Zero unit tests** — the sharpest point in your report, and no longer true. There are now 25, and they target exactly what you would expect: the 1:1 chunk-header admission rule, the reassembly state machine, and the NGC group-file chunk bounds — the three places where your two reviews and our own internal one found real defects.
+**Zero unit tests** — the sharpest point in your report, and no longer true. There are now 40, and they target exactly what you would expect: the 1:1 chunk-header admission rule, the reassembly state machine, the NGC group-file chunk bounds, and the new history-sync budgets — the places where your two reviews and our own internal one found real defects.
 
 To make them testable at all, the two admission rules were lifted out of their packet handlers into pure predicates (`MessageChunker.isValidChunkHeader`, `NgcGroupFileTransfer.isValidFileChunkHeader`) — same conditions, same order, no behaviour change. They are plain JUnit with no Robolectric: a test that needs an Android runtime to check an integer bound is a test that ends up skipped.
 
-**We then checked that the tests actually bite**, because a suite that passes against broken code is worse than none. Four bounds were deliberately reverted one at a time — the chunk-count ceiling, the duplicate-sequence guard, the "chunk larger than the declared payload" bound, and the long arithmetic in the offset calculation — and each mutation was caught (6 failures from 4 mutations; the two extra are second tests covering the same bound). Sources restored, 25/25 green.
+**We then checked that the tests actually bite**, because a suite that passes against broken code is worse than none. Four bounds were deliberately reverted one at a time — the chunk-count ceiling, the duplicate-sequence guard, the "chunk larger than the declared payload" bound, and the long arithmetic in the offset calculation — and each mutation was caught (6 failures from 4 mutations; the two extra are second tests covering the same bound). Sources restored, all green.
 
 That last mutation is worth singling out because it is the kind of thing review misses: with `int` instead of `long`, `index * payload` overflows to a large negative offset, which then compares as comfortably inside the file. The test constructs exactly that case.
 
@@ -144,10 +152,10 @@ That last mutation is worth singling out because it is the kind of thing review 
 What was actually run, not what was intended:
 
 - Android `:app:assembleRelease` (R8) — green, with the pin gate active: 338 verified.
-- Android `:app:testDebugUnitTest` — **25 executed, 0 failures, 0 skipped**, plus the mutation run described above.
+- Android `:app:testDebugUnitTest` — **40 executed, 0 failures, 0 skipped**, plus the two mutation runs described above (8 mutants, all caught).
 - iOS `xcodebuild` — `BUILD SUCCEEDED`.
 - `app/verify_pins_against_upstream.sh` — **338/338 against Google Maven / Maven Central / JitPack, 0 mismatches, 0 unresolved.**
 - FFmpeg 4.4.8 tarball: SHA-256 recomputed and GPG signature verified against the FFmpeg release key.
 - All six root workflow files parse; `bash -n` over every changed shell script; `app.py` parses.
 
-Not verified, and we would rather you know it: **none of this batch has been exercised on devices**, and there is still no fuzzing and no sanitizer coverage. The 25 tests cover the parsing bounds and the reassembly state machines; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.
+Not verified, and we would rather you know it: **none of this batch has been exercised on devices**, and there is still no fuzzing and no sanitizer coverage. The 40 tests cover the parsing bounds, the reassembly state machines and the history-sync budgets; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.

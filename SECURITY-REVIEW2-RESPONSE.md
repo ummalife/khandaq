@@ -136,6 +136,14 @@ We kept the raw path rather than removing it: a plain savedata file is what othe
 
 **The dialog was also lying, and that is arguably the worse half of this finding.** Its text read *"Encrypted files will be exported to: …"* — while the file next to them holds the Tox private key in the clear. A user reading that had no way to know what they were writing to shared storage. It now states plainly that the identity key is written **unencrypted**, names the folder, and says what someone who reads that folder can do with it. Corrected in all four shipped locales (en, ru, ar, zh-CN).
 
+**Then device QA turned up something that changes this finding's severity, and we would rather you hear it from us.** Walking the shipped UI to look at the new dialog, we could not reach it — and tracing why, the screen is not reachable at all:
+
+- `ExportActivity` is launched from exactly one place: the "reveal passwords" button in `MaintenanceActivity`.
+- `MaintenanceActivity` is started only by two static helpers in its own file, and nothing calls them. The new settings screen calls `ToxProfileImportHelper.promptExportSavedata` directly instead.
+- The one remaining route, the `MaintenanceActivity` header in `pref_headers.xml`, is never rendered: those headers are loaded by `SettingsActivity`, and the settings tab pushes `SettingsActivity.GeneralPreferenceFragment` directly without ever starting `SettingsActivity`.
+
+So in the shipped app **no user action reaches the plaintext bundle, or the screen that displays the database password.** The code is live, the path is not. That lowers the practical severity of what you found, and we are not treating it as a reason to relax: dead code that writes a private key in the clear is one wiring change away from being live again, which is precisely why the hardening and the encrypted default above stay in.
+
 The pre-existing hardening stands: `0600`, memory zeroed, staging copies deleted in `finally`, stale bundles wiped before a new export.
 
 Not done: the raw file is still plaintext when the user explicitly chooses it. Making the *format itself* encrypted would break import on other Tox clients, which is the reason that path exists at all.
@@ -178,4 +186,9 @@ What was actually run, not what was intended:
 - FFmpeg 4.4.8 tarball: SHA-256 recomputed and GPG signature verified against the FFmpeg release key.
 - All six root workflow files parse; `bash -n` over every changed shell script; `app.py` parses.
 
-Not verified, and we would rather you know it: **none of this batch has been exercised on devices**, and there is still no fuzzing and no sanitizer coverage. The 40 tests cover the parsing bounds, the reassembly state machines and the history-sync budgets; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.
+**Device QA (Samsung SM-A075F, Android 16, the release APK from this batch):** app installs over the previous build, opens its SQLCipher database, bootstraps, goes online (`self connection status=2`), restores pending delivery, crash buffer empty. Chats, groups and the chat screen render correctly; attaching a 3.15 MB file to a group creates the outgoing row on the chunked path as expected. This is also how we found that the plaintext export screen is unreachable (finding 6).
+
+Not verified, and we would rather you know it:
+
+- **The cancelled-transfer-survives-restart test (finding 5) was not completed on devices.** The transfer sits at "waiting for sender" because the second phone never joined the group during the session — a known flakiness in NGC group join over UDP DHT, unrelated to this batch — and the cancel control only appears once a transfer is actually running. The logic is covered by review and by the unit tests; the end-to-end path is not.
+- There is still no fuzzing and no sanitizer coverage. The 40 tests cover the parsing bounds, the reassembly state machines and the history-sync budgets; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.

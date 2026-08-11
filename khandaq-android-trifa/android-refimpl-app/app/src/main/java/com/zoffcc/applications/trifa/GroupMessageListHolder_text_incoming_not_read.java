@@ -510,6 +510,20 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
     }
 
     /**
+     * Whether a row must carry the "sender not verified" marker — pure, so it can be unit tested.
+     *
+     * The positive case is awkward to see on a device: it needs an incoming row that arrived via
+     * history sync, which needs a second live group peer. Extracting the decision means the rule
+     * itself is covered automatically even when the visual case is not reproducible.
+     *
+     * @param is_system_message system rows have no claimed author to be unverified about
+     */
+    static boolean should_mark_unverified_sender(final boolean is_system_message, final GroupMessage m)
+    {
+        return !is_system_message && m != null && m.was_synced;
+    }
+
+    /**
      * Shows the "relayed history, sender not verified" marker on the message's status slot.
      *
      * Deliberately fail-safe: any problem here must leave the bubble exactly as it was rather than
@@ -524,7 +538,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             {
                 return;
             }
-            if (is_system_message || m == null || !m.was_synced)
+            if (!should_mark_unverified_sender(is_system_message, m))
             {
                 return;
             }

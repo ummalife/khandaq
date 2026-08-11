@@ -84,7 +84,13 @@ You asked for **both** lockfiles. The second one did not exist, and while creati
 
 Bumped 4.4.5 → **4.4.8**, the current head of the branch. The digest is not copied from a release page: the tarball was downloaded and hashed (`c73848c4…c39c3`), and its detached `.asc` checked — *Good signature* from the FFmpeg release key `FCF986EA15E6E293A5644F10B4322F04D67658D8`.
 
-Qt 5.12 and OpenSSL 1.1.1 are a migration project, not a bump, and are deferred deliberately. Your own note about FFmpeg's exposure here being mostly local camera/video-device decoding is the reason we are comfortable sequencing it that way rather than the reverse.
+Qt 5.12 and OpenSSL 1.1.1 are deferred, and the reason is more specific than "it is a big job":
+
+**There is no OpenSSL bump available that is independent of Qt.** 1.1.1w is the *final* release of the 1.1.1 branch, so there is nothing newer to move to inside it, and Qt 5.12 cannot be built against OpenSSL 3 — so the only way off an unsupported OpenSSL is the Qt migration itself. Sequencing them as one project is not a preference, it is the dependency.
+
+We should also correct something we nearly told you: this is **not** blocked on the absence of a Windows CI. There is one — `.github/workflows/windows-build.yaml`, manual trigger, producing the installer, the zip and their SHA-256. So the migration can be verified when it is done; what it needs is the work and a real Windows QA pass, not infrastructure.
+
+Your own note that FFmpeg's exposure here is mostly local camera/video-device decoding is why we were comfortable doing that bump first and this second, rather than the reverse.
 
 ### `.gitattributes`
 
@@ -112,7 +118,13 @@ What remains open on this finding is therefore only the part that genuinely need
 
 ### 4 (enforcement) — The relay accepts unsigned requests
 
-Correct, and the cause is on the client: the signing secret is empty in both shipped app builds, so **no released client signs anything**. Enforcing today would silence notifications for every installed user. Order: ship signing clients → confirm coverage from relay telemetry → enforce. The extractable shared secret is a real design limit; per-install capabilities are the right answer and are not in this batch.
+Correct, and the cause is on the client: the signing secret is empty in both shipped app builds, so **no released client signs anything**. Enforcing today would silence notifications for every installed user. Order: ship signing clients → confirm coverage → enforce.
+
+**We said "confirm coverage from relay telemetry", then checked, and there was no such telemetry** — only a log line per unsigned request. That made the middle step a log-grep, for a number that decides whether flipping enforcement silences real users. So it is now counted: the relay tallies signed vs unsigned wake requests per UTC day and `/health` reports `auth_adoption` with the trailing-window percentage. No token, no IP, no request detail is stored — two integers per day, which is all the decision needs.
+
+Two deliberate properties, both verified: the percentage is `null` rather than 100 when there has been no traffic, so an idle relay cannot read as "fully adopted"; and unlike the replay store this counter fails **open** and silently, because a broken counter must never start dropping pushes.
+
+The extractable shared secret is still a real design limit. Per-install capabilities are the right answer and are not in this batch.
 
 ### 6 — Plaintext identity export — encrypted is now the default
 

@@ -76,6 +76,14 @@ def _stats_conn():
     # KHANDAQ (audit2 #10): consumed auth signatures, shared by ALL gunicorn workers (see
     # _claim_signature). Same container filesystem -> one store for the whole -w N process pool.
     conn.execute("CREATE TABLE IF NOT EXISTS usedsig (sig TEXT PRIMARY KEY, ts INTEGER)")
+    # KHANDAQ (audit2 #4): client-signing adoption, per UTC day. The rollout plan is "ship signing
+    # clients -> confirm coverage -> enforce", but the only evidence we had for the middle step was a
+    # log line per unsigned request, i.e. the operator had to grep for a number that decides whether
+    # turning on enforcement will silence real users. Count it instead. No token, no IP, no request
+    # detail is stored - two integers per day, which is all the decision needs.
+    conn.execute("CREATE TABLE IF NOT EXISTS authadopt ("
+                 "day TEXT PRIMARY KEY, signed INTEGER NOT NULL DEFAULT 0, "
+                 "unsigned INTEGER NOT NULL DEFAULT 0)")
     return conn
 
 
@@ -206,6 +214,59 @@ def _rate_ok(client_ip: str) -> bool:
     return True
 
 
+def _record_auth_adoption(signed: bool) -> None:
+    """
+    KHANDAQ (audit2 #4): tally signed vs unsigned wake requests for the enforcement decision.
+
+    Never let this affect the request. It is a counter for an operator, not a security control, so
+    unlike _claim_signature it fails OPEN and silently — a broken counter must not start dropping
+    pushes, and it must not spam the log on every request either.
+    """
+    column = "signed" if signed else "unsigned"
+    try:
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("INSERT OR IGNORE INTO authadopt (day) VALUES (?)", (day,))
+                conn.execute(f"UPDATE authadopt SET {column} = {column} + 1 WHERE day = ?", (day,))
+                # 60 days is plenty to watch a store rollout land, and keeps the table trivial.
+                conn.execute("DELETE FROM authadopt WHERE day < ?",
+                             (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 60 * 86400)),))
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+
+
+def _auth_adoption_summary() -> dict:
+    """Today's and the trailing window's signed/unsigned counts, for /health."""
+    try:
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                today = conn.execute("SELECT signed, unsigned FROM authadopt WHERE day = ?",
+                                     (day,)).fetchone() or (0, 0)
+                window = conn.execute("SELECT COALESCE(SUM(signed), 0), COALESCE(SUM(unsigned), 0) "
+                                      "FROM authadopt").fetchone() or (0, 0)
+            finally:
+                conn.close()
+        total = window[0] + window[1]
+        return {
+            "today_signed": today[0],
+            "today_unsigned": today[1],
+            "window_signed": window[0],
+            "window_unsigned": window[1],
+            # The number the enforcement decision actually turns on. null while there is no traffic,
+            # so an idle relay cannot read as "100% adopted".
+            "window_signed_pct": (round(window[0] * 100.0 / total, 2) if total else None),
+        }
+    except Exception:
+        return {"error": "unavailable"}
+
+
 def _auth_ok() -> bool:
     # KHANDAQ (audit A1): the relay must never run wide-open. docker-compose makes
     # PUSH_RELAY_AUTH_SECRET mandatory (:? -> the container refuses to start without it), so an
@@ -216,9 +277,11 @@ def _auth_ok() -> bool:
         return False
 
     if _auth_signature_valid():
+        _record_auth_adoption(True)
         return True
 
     # Secret set, but the request is unsigned/invalid.
+    _record_auth_adoption(False)
     if PUSH_AUTH_ENFORCE:
         return False  # hard enforce -> caller returns 401
 
@@ -482,6 +545,10 @@ def health():
         "auth_mode": (
             "off" if not PUSH_RELAY_AUTH_SECRET else ("enforce" if PUSH_AUTH_ENFORCE else "soft")
         ),
+        # KHANDAQ (audit2 #4): the number the "when do we set PUSH_AUTH_ENFORCE=1" decision turns on.
+        # Enforcing while shipped clients still send unsigned requests silences their notifications,
+        # so this must be read before flipping it — not guessed from log volume.
+        "auth_adoption": _auth_adoption_summary(),
     })
 
 

@@ -92,6 +92,15 @@ We should also correct something we nearly told you: this is **not** blocked on 
 
 Your own note that FFmpeg's exposure here is mostly local camera/video-device decoding is why we were comfortable doing that bump first and this second, rather than the reverse.
 
+**We have now scoped the migration rather than leaving it as "weeks"** — `DESIGN-qt6-openssl3-migration-scope.md`, produced by a parallel audit of the desktop codebase. Headline: **22–34 person-days, of which 8–14 is the Windows cross-toolchain alone.** The dominant cost is the build recipe, not the C++.
+
+Two of the findings are worth repeating here because they change the risk picture in opposite directions:
+
+- **Smaller than feared on the code side.** QtMultimedia — historically the largest Qt6 break — is not used at all (the stack is OpenAL + FFmpeg + `QPainter`), and there is **no direct OpenSSL usage anywhere in the desktop sources**: zero hits for `openssl/`, `EVP_*`, `SSL_*`. TLS is entirely Qt's; the app's own crypto is libsodium. Exactly one change needs real redesign — the removed `QNetworkConfigurationManager` in `core.cpp:315-318`.
+- **Larger than feared on the build side, and one defect the compiler will never report.** `src/widget/style.cpp:81` does `font.weight() * 8` to build CSS. Qt 5's weight scale is 0–99 (`Normal = 50`); Qt 6's is the CSS scale 1–1000 (`Normal = 400`). Under Qt 6 that line emits `font: 3200 …` into **all twelve QSS themes** — a silent, whole-app visual break. It sits two lines from `font.setWeight(int)`, whose int overload Qt 6 removed, so the same function contains both a compile error and a behavioural one.
+
+The recommended sequence starts with ~2 days of Qt-neutral cleanup shippable on 5.12 today, then a 5.12.12 → 5.15.2 pin bump — which converts most of this from a grep audit into compiler output via `QT_DISABLE_DEPRECATED_BEFORE`. Stated plainly in the document: 5.15 buys API de-risking but **not** the OpenSSL bump (the open-source archive stops at 5.15.2, and Qt 5 gained OpenSSL 3 support only in 5.15.9), so OpenSSL 3 still travels with Qt 6 exactly as we told you.
+
 ### `.gitattributes`
 
 Added; shell scripts and build files are pinned to LF.

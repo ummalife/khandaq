@@ -43,7 +43,6 @@ class QMenu;
 class QAction;
 class QWindow;
 class QActionGroup;
-class QSignalMapper;
 #endif
 
 class Nexus : public QObject

@@ -27,7 +27,8 @@ find_package(Qt5Core          REQUIRED)
 find_package(Qt5Gui           REQUIRED)
 find_package(Qt5LinguistTools REQUIRED)
 find_package(Qt5Network       REQUIRED)
-find_package(Qt5OpenGL        REQUIRED)
+# KHANDAQ (Qt6 prep, step 0): Qt5OpenGL was REQUIRED but unused - zero QOpenGL*/QGLWidget in
+# src/. Dropping it now means not having to port a dependency nothing calls to Qt6.
 find_package(Qt5Svg           REQUIRED)
 find_package(Qt5Test          REQUIRED)
 find_package(Qt5Widgets       REQUIRED)
@@ -45,7 +46,6 @@ add_dependency(
   Qt5::Core
   Qt5::Gui
   Qt5::Network
-  Qt5::OpenGL
   Qt5::Svg
   Qt5::Widgets
   Qt5::Xml)

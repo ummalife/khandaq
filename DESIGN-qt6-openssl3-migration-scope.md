@@ -108,3 +108,21 @@ not the C++. See §1.
 6. **Соберётся ли Qt 5.15.2 текущим кросс-рецептом.** Ожидаемо да (qmake-configure жив всю ветку 5.15), но не проверено; это первый эксперимент шага 1 и он дешёвый.
 7. **Linux и macOS вне оценки.** Живой CI ровно один (`.github/workflows/windows-build.yaml`; `khandaq-desktop/.github/…` в монорепо не запускается), i686 в нём тоже нет. Стоимость AppImage (`appimage/build.sh:79-82`), macOS (`brew --prefix qt@5`) и системных Qt5 в докерфайлах (`Dockerfile.ubuntu_lts:50` тянет `qt5-default`, удалённый из Ubuntu с 21.04 — образ, вероятно, уже сломан) **не измерена**.
 8. **Wayland/Linux-специфика:** в Qt6 `grabWindow` на Wayland возвращает null — скриншот-тул там просто перестанет работать. Для Windows-релиза нерелевантно, для Linux — отдельный вопрос без ответа.
+
+---
+
+## ПОПРАВКИ ПОСЛЕ ПРОВЕРКИ РУКАМИ (11 авг 2026)
+
+Синтез выше сделан агентами; ниже — то, что не подтвердилось при собственной проверке. **Читайте это до §4.**
+
+**ОШИБКА В ШАГЕ 0: `util/include/util/compatiblerecursivemutex.h` УДАЛЯТЬ НЕЛЬЗЯ.** План предлагает его удалить — это сломает сборку немедленно. Заголовок живой и используется в: `src/core/core.h:34,305`, `core.cpp:39,359`, `coreav.{h,cpp}`, `corefile.{h,cpp}`, `src/persistence/settings.h:34,713`, `settings.cpp:38,64`, `offlinemsgengine.h:27,68`, `audio/src/backend/{alsink,alsource,openal}.h`. Это шим для Qt < 5.14 (`QRecursiveMutex` появился в 5.14): под 5.15/Qt6 он вырождается в псевдоним и его можно **упростить**, но удаление — только вместе с заменой всех использований.
+
+**Уточнённые счётчики мёртвых инклюдов** (план говорил «6 и 6»):
+- `#include <QDesktopWidget>` — 9 файлов, из них **5 мёртвых** (`nexus.cpp`, `video/cameradevice.cpp`, `widget/widget.cpp`, `widget/form/settings/avform.cpp`, `chatlog/content/filetransferwidget.cpp`). Живые: `netcamview.cpp`, `imagepreviewwidget.cpp`, `userinterfaceform.cpp`, `screenshotgrabber.cpp`.
+- `#include <QSignalMapper>` — **5 инклюдов + 2 forward-декларации** (`nexus.h:46`, `groupinviteform.h:33`), использований — **ноль**. Все мёртвые, как и говорил синтез.
+
+**Сделано и проверено сборкой (эта часть шага 0 уже в репозитории):** удалены 5 мёртвых `QDesktopWidget`, 5 мёртвых `QSignalMapper` + 2 forward-декларации, мёртвый блок `execute_process(brew --prefix qt@5)` (переменная `QT_PREFIX_PATH` не читалась нигде и блок выполнялся даже там, где brew не существует), и `Qt5OpenGL` (`REQUIRED`, но `QOpenGL*`/`QGLWidget` — ноль вхождений).
+
+**НЕ сделано намеренно, и почему:** `CMAKE_CXX_STANDARD 17` и `cmake_minimum_required 3.16` в шаге 0 помечены «нулевой риск» — это верно только для нативной сборки. Оба влияют на **кросс-сборку под Windows** (mingw/gcc, другой стандарт библиотеки, другой CMake в контейнере), а её здесь проверить нечем: локально доступен только macOS/clang. Их нужно вносить отдельным изменением и подтверждать прогоном `windows-build.yaml`, а не за компанию с чисткой мёртвого кода.
+
+**Общий вывод про план:** оценка и порядок работ выглядят здраво, но каждый пункт «удалить X» нужно проверять `grep` перед исполнением — один из них был бы фатальным.

@@ -23,7 +23,6 @@
 #include <map>
 
 #include <QDebug>
-#include <QDesktopWidget>
 #include <QScreen>
 #include <QShowEvent>
 

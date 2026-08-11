@@ -36,7 +36,6 @@
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSet>
-#include <QSignalMapper>
 #include <QSizePolicy>
 #include <QTabWidget>
 #include <QWindow>

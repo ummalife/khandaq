@@ -30,7 +30,6 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QScrollArea;
-class QSignalMapper;
 class Settings;
 class Core;
 

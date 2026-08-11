@@ -88,10 +88,9 @@ if(APPLE)
   unset(_brew_prefix)
 endif()
 
-execute_process(
-  COMMAND brew --prefix qt@5
-  OUTPUT_VARIABLE QT_PREFIX_PATH
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+# KHANDAQ (Qt6 prep, step 0): removed a `brew --prefix qt@5` execute_process whose output
+# variable QT_PREFIX_PATH was never read anywhere in the build. It also ran on every configure,
+# including on Linux and in the Windows cross-build container where brew does not exist.
 
 project(khandaq)
 

@@ -26,7 +26,6 @@
 
 #include <QHBoxLayout>
 #include <QPushButton>
-#include <QSignalMapper>
 
 /**
  * @class GroupInviteWidget

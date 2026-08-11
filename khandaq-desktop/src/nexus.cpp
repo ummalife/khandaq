@@ -37,7 +37,6 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDebug>
-#include <QDesktopWidget>
 #include <QThread>
 
 #include <vpx/vpx_image.h>
@@ -47,7 +46,6 @@
 #ifdef Q_OS_MAC
 #include <QActionGroup>
 #include <QMenuBar>
-#include <QSignalMapper>
 #include <QWindow>
 #endif
 

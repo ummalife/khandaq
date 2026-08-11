@@ -25,7 +25,6 @@
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QDesktopServices>
-#include <QDesktopWidget>
 #include <QDir>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -41,7 +40,6 @@
 #include <QWindow>
 #ifdef Q_OS_MAC
 #include <QMenuBar>
-#include <QSignalMapper>
 #include <QWindow>
 #endif
 

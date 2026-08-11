@@ -8,7 +8,7 @@
 
 ## Summary
 
-Nothing is disputed — every finding reproduced. Of the ten: **seven are fixed outright** (2, 3, 5, 6, 8, 9, 10) and **three are partly fixed** (1, 4, 7), with the remaining half of each named rather than glossed. **Nothing is left untouched.** The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 40 of them, gating the release.
+Nothing is disputed — every finding reproduced. Of the ten: **seven are fixed outright** (2, 3, 5, 6, 8, 9, 10) and **three are partly fixed** (1, 4, 7), with the remaining half of each named rather than glossed. **Nothing is left untouched.** The `.gitattributes` gap you noted separately is fixed, and the "zero unit tests" observation you closed on is answered with 45 of them, gating the release.
 
 Thank you for the two things that mattered most: catching that our release job **re-pinned** dependencies instead of verifying them, and confirming which of our earlier fixes actually landed. Both changed what we did next.
 
@@ -25,7 +25,7 @@ Thank you for the two things that mattered most: catching that our release job *
 | 9 | Keychain errors vs "not found" | **FIXED** |
 | 10 | Push replay protection process-local | **FIXED** |
 | — | No `.gitattributes` (CRLF) | **FIXED** |
-| — | Zero JVM unit tests | **FIXED** — 40 tests, mutation-checked, gating the release |
+| — | Zero JVM unit tests | **FIXED** — 45 tests, mutation-checked, gating the release |
 
 ---
 
@@ -161,7 +161,7 @@ Two smaller things fell out of the same trace: an item that exists but comes bac
 
 ## On your closing observations
 
-**Zero unit tests** — the sharpest point in your report, and no longer true. There are now 40, and they target exactly what you would expect: the 1:1 chunk-header admission rule, the reassembly state machine, the NGC group-file chunk bounds, and the new history-sync budgets — the places where your two reviews and our own internal one found real defects.
+**Zero unit tests** — the sharpest point in your report, and no longer true. There are now 45, and they target exactly what you would expect: the 1:1 chunk-header admission rule, the reassembly state machine, the NGC group-file chunk bounds, and the new history-sync budgets — the places where your two reviews and our own internal one found real defects.
 
 To make them testable at all, the two admission rules were lifted out of their packet handlers into pure predicates (`MessageChunker.isValidChunkHeader`, `NgcGroupFileTransfer.isValidFileChunkHeader`) — same conditions, same order, no behaviour change. They are plain JUnit with no Robolectric: a test that needs an Android runtime to check an integer bound is a test that ends up skipped.
 
@@ -180,7 +180,7 @@ That last mutation is worth singling out because it is the kind of thing review 
 What was actually run, not what was intended:
 
 - Android `:app:assembleRelease` (R8) — green, with the pin gate active: 338 verified.
-- Android `:app:testDebugUnitTest` — **40 executed, 0 failures, 0 skipped**, plus the two mutation runs described above (8 mutants, all caught).
+- Android `:app:testDebugUnitTest` — **45 executed, 0 failures, 0 skipped**, plus the mutation runs described above (9 mutants, all caught).
 - iOS `xcodebuild` — `BUILD SUCCEEDED`.
 - `app/verify_pins_against_upstream.sh` — **338/338 against Google Maven / Maven Central / JitPack, 0 mismatches, 0 unresolved.**
 - FFmpeg 4.4.8 tarball: SHA-256 recomputed and GPG signature verified against the FFmpeg release key.
@@ -188,19 +188,22 @@ What was actually run, not what was intended:
 
 **Device QA (Samsung SM-A075F, Android 16, the release APK from this batch):** app installs over the previous build, opens its SQLCipher database, bootstraps, goes online (`self connection status=2`), restores pending delivery, crash buffer empty. Chats, groups and the chat screen render correctly; attaching a 3.15 MB file to a group creates the outgoing row on the chunked path as expected. This is also how we found that the plaintext export screen is unreachable (finding 6).
 
+**The cancelled-transfer-survives-restart test (finding 5) passes on devices.** Getting there took two detours worth reporting, because both are product bugs of ours.
+
+The first attempt could not start a transfer at all. The two phones were on different networks (one on carrier LTE behind CGNAT, one on Wi-Fi); on the same LAN the group peer link then came up one-way, and that cleared only after restarting the app. Even then the already-queued transfer **did not resume**, and in that state the row offers **neither a cancel nor a retry control** — a dead end for the user. Both of those are pre-existing, outside this batch, and now tracked separately.
+
+Sending a *fresh* file while the peer was online worked immediately, which is how the test finally ran:
+
+1. 5.24 MB group file, chunked path, reached 26% and the cancel control appeared.
+2. Cancelled. The row moved to the failed/retry state, and the log shows the tombstone actually written: `set_g_opts:(INSERT):key=kqngccancel_<group>|<msg_hash>`.
+3. Force-stopped the app and relaunched.
+4. **The cancelled row came back still cancelled** — failed/retry, not sending. The other queued transfer in the same chat was untouched, so the tombstone is per-message and not a blanket stop.
+
+What we did **not** observe directly: a `FILE_REQUEST` from the peer being refused for that message. The gate is in the code and unit-tested, and the persisted tombstone it reads is confirmed present, but the remote-request path itself was not exercised.
+
 Not verified, and we would rather you know it:
 
-- **The cancelled-transfer-survives-restart test (finding 5) now passes on devices.** Getting there took two detours worth reporting, because both are product bugs of ours.
+- The unverified-sender marker (finding 1, step 2) is regression-checked only: it does not appear on any live row, but its positive case needs an incoming history-synced row, which we could not produce. Its rule is covered by unit tests instead.
 
-  The first attempt could not start a transfer at all. The two phones were on different networks (one on carrier LTE behind CGNAT, one on Wi-Fi); on the same LAN the group peer link then came up one-way, and that cleared only after restarting the app. Even then the already-queued transfer **did not resume**, and in that state the row offers **neither a cancel nor a retry control** — a dead end for the user. Both of those are pre-existing, outside this batch, and now tracked separately.
-
-  Sending a *fresh* file while the peer was online worked immediately, which is how the test finally ran:
-
-  1. 5.24 MB group file, chunked path, reached 26% and the cancel control appeared.
-  2. Cancelled. The row moved to the failed/retry state, and the log shows the tombstone actually written: `set_g_opts:(INSERT):key=kqngccancel_<group>|<msg_hash>`.
-  3. Force-stopped the app and relaunched.
-  4. **The cancelled row came back still cancelled** — failed/retry, not sending. The other queued transfer in the same chat was untouched, so the tombstone is per-message and not a blanket stop.
-
-  What we did **not** observe directly: a `FILE_REQUEST` from the peer being refused for that message. The gate is in the code and unit-tested, and the persisted tombstone it reads is confirmed present, but the remote-request path itself was not exercised.
-
-- There is still no fuzzing and no sanitizer coverage. The 40 tests cover the parsing bounds, the reassembly state machines and the history-sync budgets; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.
+- There is still no fuzzing and no sanitizer coverage.
+- Nothing in this batch has been exercised on iOS hardware; iOS verification is the build only. The 45 tests cover the parsing bounds, the reassembly state machines and the history-sync budgets; everything above them — the persistence, the transport, the UI states — is still only covered by builds, adversarial review and manual QA.

@@ -495,6 +495,48 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             ChatBubbleUiHelper.bind_text_message_bubble(textView_container, textView, false,
                     parsedGroup.bodyText, PREF__global_font_size, parsedGroup.reply != null, false);
         }
+
+        // KHANDAQ (audit2 #1, step 2 of DESIGN-ngc-signed-history-sync.md): a message relayed to us by
+        // history sync carries an author nobody signed for — the transport authenticates the SYNCING
+        // peer, not the claimed original sender. Until the signature lands (that needs a protocol
+        // version), the least we owe the user is to stop rendering such a row identically to a live,
+        // toxcore-authenticated one. This does not remove the forgery, it removes the deception.
+        //
+        // Placed last on purpose: hide_delivery_indicator(imageView) is called on three separate
+        // branches above, so anything set earlier would be wiped. The old Tox conference holder has
+        // used this same m_icon slot for a synced/direct dot for years — this is that affordance,
+        // brought to NGC groups, where the incoming path leaves the slot unused.
+        mark_unverified_sender(is_system_message, m);
+    }
+
+    /**
+     * Shows the "relayed history, sender not verified" marker on the message's status slot.
+     *
+     * Deliberately fail-safe: any problem here must leave the bubble exactly as it was rather than
+     * break a chat row, so it never throws. System messages are excluded — they have no claimed
+     * author to be unverified about.
+     */
+    private void mark_unverified_sender(final boolean is_system_message, final GroupMessage m)
+    {
+        try
+        {
+            if (imageView == null)
+            {
+                return;
+            }
+            if (is_system_message || m == null || !m.was_synced)
+            {
+                return;
+            }
+            imageView.setImageResource(R.drawable.circle_orange);
+            // Also the hook the UI test and accessibility read; the icon alone says nothing to either.
+            imageView.setContentDescription(context.getString(R.string.group_msg_sender_unverified));
+            imageView.setVisibility(View.VISIBLE);
+        }
+        catch (Exception e)
+        {
+            // never let a decoration take a chat row down
+        }
     }
 
     @Override

@@ -1139,4 +1139,5 @@
     <string name="message_edited_marker">edited</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_title">App language</string>
+    <string name="group_msg_sender_unverified">Relayed from history — sender not verified</string>
 </resources>

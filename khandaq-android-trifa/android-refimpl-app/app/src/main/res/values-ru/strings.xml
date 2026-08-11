@@ -1056,4 +1056,5 @@
     <string name="group_info_voice_state_set">Применить настройки голоса</string>
     <string name="settings_language">Язык</string>
     <string name="settings_language_title">Язык приложения</string>
+    <string name="group_msg_sender_unverified">Получено из истории — отправитель не подтверждён</string>
 </resources>

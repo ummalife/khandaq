@@ -92,7 +92,7 @@ A new `GroupMessage.author_verified` column: `VERIFIED`, `UNVERIFIED_LEGACY` (no
 
 Anything not `VERIFIED` renders with a marker on the bubble and is excluded from notification. Old Tox conference bubbles already carry an orange/green synced-vs-direct dot (`ConferenceMessageListHolder_text_incoming_not_read`), so there is precedent for the affordance; the NGC group holder has no such indicator today and needs one.
 
-**Note:** adding this marker to NGC bubbles is useful on its own and does not need the protocol change. It is the one piece of this document that could ship first.
+**Note:** adding this marker to NGC bubbles is useful on its own and does not need the protocol change. It is the one piece of this document that could ship first — and it has: see §8 step 2. What is shipped is the `UNVERIFIED_LEGACY` case only, since without signatures every synced row is that. `VERIFIED` / `UNVERIFIED_NO_KEY` arrive with the protocol.
 
 ---
 
@@ -153,7 +153,7 @@ A group member can still forge history **as themselves** with a false timestamp,
 ## 8. Rough sequencing
 
 1. ~~Confirm the version gate on iOS and desktop parsers (§5).~~ **Done — all three gate on the version byte and ignore unknown values.**
-2. Unverified-display marker on NGC bubbles (§4.5), with device QA.
+2. ~~Unverified-display marker on NGC bubbles (§4.5).~~ **Shipped for incoming text rows** (`GroupMessageListHolder_text_incoming_not_read.mark_unverified_sender`): a `was_synced` row now gets the orange marker in the status slot plus a localised content description. Regression-checked on device (no crash, no marker on non-synced rows); the positive case is not yet seen on screen because it needs a synced row, which needs a second peer.
 3. HSK generation + storage + announcement, all three platforms, with verification disabled.
 4. Emit signed history, still accepting `0x01`.
 5. Flip display: unsigned → `UNVERIFIED_LEGACY` marker.

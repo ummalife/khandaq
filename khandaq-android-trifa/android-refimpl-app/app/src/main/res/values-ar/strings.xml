@@ -1013,4 +1013,5 @@
     <string name="message_edited_marker">معدلة</string>
     <string name="settings_language">اللغة</string>
     <string name="settings_language_title">لغة التطبيق</string>
+    <string name="group_msg_sender_unverified">مُرحَّلة من السجل — لم يتم التحقق من المُرسِل</string>
 </resources>

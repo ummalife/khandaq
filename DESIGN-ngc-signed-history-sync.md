@@ -163,7 +163,11 @@ A group member can still forge history **as themselves** with a false timestamp,
 
 **Прогресс по шагу 3 (iOS, 13 авг 2026):** `OCTNgcHistSig.{h,m}` в objcTox рядом с `OCTNgcGroupHistSync.m`, SHA-256 через CommonCrypto (тот же `CC_SHA256`, что уже используется для HMAC пуша), без зависимостей от остального пода. Функция принимает `NSData` с уже закодированным UTF-8, а не `NSString` — `NSString` внутри UTF-16, и это самое вероятное расхождение iOS. **Все 8 векторов совпали**, проверено отдельным clang-harness'ом; мутация big-endian → little-endian красит 5 из 8. Подписи/проверки пока нет: `crypto_sign` приходит через под toxcore, это следующий шаг. Класс пока никем не вызывается, podspec подхватывает его автоматически (`Classes/**/*.{m,h}`).
 
-**Итог шага 3 по pre-image: Android, iOS, десктоп и Python-эталон дают одинаковые байты на всех восьми векторах.** Осталась подписывающая/проверяющая часть на всех трёх (libsodium через JNI на Android, через под на iOS; на десктопе уже есть).
+**Итог шага 3 по pre-image: Android, iOS, десктоп и Python-эталон дают одинаковые байты на всех восьми векторах.** **Проверка подписи: десктоп и iOS готовы, Android — нет, и причина конкретная.**
+
+- Десктоп: `crypto_sign_verify_detached` через уже линкуемый libsodium.
+- iOS: то же самое — `objcTox → toxcore → libsodium`, `#import <sodium.h>` резолвится в реальной сборке пода (проверено `xcodebuild`), логика проверена harness'ом: настоящая подпись проходит, подделанное сообщение и чужой подписант — нет, всё некорректное падает закрыто.
+- **Android — блокер, требующий решения:** Ed25519 там нет ни в одной форме. `java.security.Signature` даёт его только с **API 33**, а приложение шипится с **minSdk 21**; в зависимостях нет ни BouncyCastle, ни Tink, ни lazysodium; нативный JNI `crypto_sign` не экспортирует. Варианты: (а) добавить JNI-обёртку над libsodium, который toxcore и так линкует, — но `.so` собирается CI из свежего клона upstream, значит нужен патч-скрипт в `deps.sh` и прогон `android-native-so.yml`; (б) добавить Java-зависимость с Ed25519 — но это новый supply-chain вход, который придётся пинить в `witness.gradle` (то самое, что чинилось по находке #2). **Вариант (а) предпочтительнее: libsodium уже в бинарнике, новых зависимостей нет.**
 5. Flip display: unsigned → `UNVERIFIED_LEGACY` marker.
 6. When the fleet has turned over, stop accepting `0x01` history entirely.
 

@@ -6,6 +6,9 @@
 
 #import <CommonCrypto/CommonDigest.h>
 
+// Reached transitively: objcTox depends on toxcore, which depends on libsodium.
+#import <sodium.h>
+
 const NSUInteger kOCTNgcHistSigGroupIdSize = 32;
 const NSUInteger kOCTNgcHistSigPubKeySize = 32;
 const NSUInteger kOCTNgcHistSigMsgIdSize = 4;
@@ -78,4 +81,17 @@ NSData *OCTNgcHistSigAnnouncePreimage(NSData *toxPub, NSData *hskPub, uint64_t v
     appendBigEndian64(out, validFromTs);
 
     return out.length == kOCTNgcHistSigAnnouncePreimageSize ? [out copy] : nil;
+}
+
+BOOL OCTNgcHistSigVerify(NSData *preimage, NSData *signature, NSData *signerPub)
+{
+    // Fail closed on anything malformed. An old client cannot reach here - it sends version 0x01,
+    // which the dispatcher drops - so a malformed signature is never "legacy", it is an attack.
+    if (preimage.length == 0 || signature.length != kOCTNgcHistSigSignatureSize
+        || signerPub.length != kOCTNgcHistSigPubKeySize) {
+        return NO;
+    }
+
+    return crypto_sign_verify_detached(signature.bytes, preimage.bytes,
+                                       (unsigned long long)preimage.length, signerPub.bytes) == 0;
 }

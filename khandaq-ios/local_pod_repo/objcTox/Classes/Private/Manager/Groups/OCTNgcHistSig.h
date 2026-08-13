@@ -59,4 +59,16 @@ NSData *_Nullable OCTNgcHistSigHistPreimage(NSData *groupId, NSData *authorPub, 
 NSData *_Nullable OCTNgcHistSigAnnouncePreimage(NSData *toxPub, NSData *hskPub,
                                                 uint64_t validFromTs);
 
+/**
+ * Verifies an Ed25519 signature over a pre-image, via libsodium (reached through the toxcore pod).
+ *
+ * Fails CLOSED on every malformed input — nil or empty pre-image, wrong signature length, wrong key
+ * length. A packet carrying a signature we cannot even parse is an attack or a bug, never an old
+ * client: old clients send version 0x01, which the dispatcher drops long before this point.
+ *
+ * @return YES only if the signature verifies.
+ */
+BOOL OCTNgcHistSigVerify(NSData *_Nullable preimage, NSData *_Nullable signature,
+                         NSData *_Nullable signerPub);
+
 NS_ASSUME_NONNULL_END

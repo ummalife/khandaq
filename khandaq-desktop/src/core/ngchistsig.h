@@ -91,4 +91,61 @@ QByteArray announcePreimage(const QByteArray& toxPub, const QByteArray& hskPub,
  */
 bool verifySignature(const QByteArray& preimage, const QByteArray& signature,
                      const QByteArray& signerPub);
+
+/** Wire constants for the version-0x02 packets (see DESIGN-ngc-signed-history-sync.md §4). */
+static constexpr int HeaderSize = 8;      //!< magic(6) + version + pktid
+static constexpr int PeerNameSize = 25;
+static constexpr unsigned char VersionSigned = 0x02;
+static constexpr unsigned char PktHskAnnounce = 0x50;
+static constexpr unsigned char PktSignedText = 0x02;
+static constexpr int AnnouncePacketSize = HeaderSize + PubKeySize + 8 + SignatureSize;
+
+/**
+ * Largest text a signed history packet may carry — the SAME ceiling the unsigned path already
+ * enforces, so the signed variant cannot smuggle a larger body past a limit that exists for a reason.
+ */
+static constexpr int MaxTextBytes = 37000;
+
+/** A parsed announcement. Only produced when every bound held. */
+struct Announcement
+{
+    QByteArray hskPub;
+    uint64_t validFromTs = 0;
+    QByteArray signature;
+};
+
+/** A parsed signed-history text record. Only produced when every bound held. */
+struct SignedText
+{
+    QByteArray msgId;
+    QByteArray authorPub;
+    uint64_t timestamp = 0;
+    QByteArray peerNameRaw;
+    QByteArray textUtf8;
+    QByteArray signature;
+};
+
+/**
+ * Parses a history-signing-key announcement.
+ *
+ * @param length bytes actually received; passed separately because the caller's buffer may be larger
+ *               than the datagram, and trusting the buffer size would read stale bytes.
+ * @param out    filled only on success.
+ * @return true only if the packet is ours, of the signed version, of this kind, and EXACTLY the
+ *         expected length — this packet has no variable part, so a longer one is either something
+ *         else or an attempt to hide bytes after the signature.
+ */
+bool parseAnnouncement(const unsigned char* data, int length, Announcement& out);
+
+/**
+ * Parses a signed history text record.
+ *
+ * The declared text length is attacker-chosen and is guarded three ways: read unsigned, range
+ * checked against MaxTextBytes, and required to account for the packet exactly so no slack can hide
+ * bytes the signature does not cover.
+ *
+ * @return true only if every bound held.
+ */
+bool parseSignedText(const unsigned char* data, int length, SignedText& out);
+
 } // namespace NgcHistSig

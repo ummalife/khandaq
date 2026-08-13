@@ -60,6 +60,17 @@ private slots:
     void rejectsAWrongSigner();
     void rejectsMalformedInputs();
 
+    // packet parsing
+    void parsesAValidAnnouncement();
+    void rejectsAnnouncementWithWrongVersionOrIdOrMagic();
+    void rejectsAnnouncementWithTrailingBytes();
+    void parsesAValidSignedText();
+    void rejectsDeclaredLengthWithHighBitSet();
+    void rejectsDeclaredLengthAboveCeiling();
+    void rejectsDeclaredLengthNotMatchingTheBody();
+    void rejectsTruncatedSignedText();
+    void acceptsABodyAtExactlyTheCeiling();
+
 private:
     static QByteArray repeated(unsigned char byte, int n)
     {
@@ -262,6 +273,148 @@ void TestNgcHistSig::rejectsMalformedInputs()
     QVERIFY(NgcHistSig::histSyncPreimage(groupA, QByteArray(33, '\0'), msgId, tsBase, "x").isEmpty());
     QVERIFY(NgcHistSig::histSyncPreimage(groupA, authorA, QByteArray(3, '\0'), tsBase, "x").isEmpty());
     QVERIFY(NgcHistSig::announcePreimage(QByteArray(31, '\0'), authorA, tsBase).isEmpty());
+}
+
+
+// ------------------------------------------------------------------ packet parsing
+//
+// Parsing is where every review of this codebase found its real defects, so the version-0x02
+// packets get their bounds tested before anything emits them. Mirrors Android's
+// NgcHistSigParserTest so the two cannot drift.
+
+static QByteArray announcementPacket(unsigned char version, unsigned char pkt)
+{
+    QByteArray p;
+    p.append(QByteArray::fromHex("667788113435"));
+    p.append(static_cast<char>(version));
+    p.append(static_cast<char>(pkt));
+    p.append(QByteArray(NgcHistSig::PubKeySize, '\x11'));
+    for (int i = 0; i < 8; i++) {
+        p.append(static_cast<char>((1754870400ULL >> (56 - i * 8)) & 0xff));
+    }
+    p.append(QByteArray(NgcHistSig::SignatureSize, '\x5A'));
+    return p;
+}
+
+static QByteArray signedTextPacket(const QByteArray& body, uint64_t declaredLen)
+{
+    QByteArray p;
+    p.append(QByteArray::fromHex("667788113435"));
+    p.append(static_cast<char>(NgcHistSig::VersionSigned));
+    p.append(static_cast<char>(NgcHistSig::PktSignedText));
+    p.append(QByteArray::fromHex("deadbeef"));
+    p.append(QByteArray(NgcHistSig::PubKeySize, '\xAA'));
+    for (int i = 0; i < 8; i++) {
+        p.append(static_cast<char>((1754870400ULL >> (56 - i * 8)) & 0xff));
+    }
+    p.append(QByteArray(NgcHistSig::PeerNameSize, '\0'));
+    for (int i = 0; i < 4; i++) {
+        p.append(static_cast<char>((declaredLen >> (24 - i * 8)) & 0xff));
+    }
+    p.append(body);
+    p.append(QByteArray(NgcHistSig::SignatureSize, '\x5A'));
+    return p;
+}
+
+void TestNgcHistSig::parsesAValidAnnouncement()
+{
+    const auto p = announcementPacket(NgcHistSig::VersionSigned, NgcHistSig::PktHskAnnounce);
+    QCOMPARE(p.size(), NgcHistSig::AnnouncePacketSize);
+    NgcHistSig::Announcement a;
+    QVERIFY(NgcHistSig::parseAnnouncement(
+        reinterpret_cast<const unsigned char*>(p.constData()), p.size(), a));
+    QCOMPARE(a.hskPub, QByteArray(NgcHistSig::PubKeySize, '\x11'));
+    QCOMPARE(a.validFromTs, 1754870400ULL);
+}
+
+void TestNgcHistSig::rejectsAnnouncementWithWrongVersionOrIdOrMagic()
+{
+    NgcHistSig::Announcement a;
+    auto old = announcementPacket(0x01, NgcHistSig::PktHskAnnounce);
+    QVERIFY(!NgcHistSig::parseAnnouncement(
+        reinterpret_cast<const unsigned char*>(old.constData()), old.size(), a));
+
+    auto wrongId = announcementPacket(NgcHistSig::VersionSigned, 0x51);
+    QVERIFY(!NgcHistSig::parseAnnouncement(
+        reinterpret_cast<const unsigned char*>(wrongId.constData()), wrongId.size(), a));
+
+    auto badMagic = announcementPacket(NgcHistSig::VersionSigned, NgcHistSig::PktHskAnnounce);
+    badMagic[3] = 0x12;
+    QVERIFY(!NgcHistSig::parseAnnouncement(
+        reinterpret_cast<const unsigned char*>(badMagic.constData()), badMagic.size(), a));
+}
+
+void TestNgcHistSig::rejectsAnnouncementWithTrailingBytes()
+{
+    auto p = announcementPacket(NgcHistSig::VersionSigned, NgcHistSig::PktHskAnnounce);
+    p.append('\0');
+    NgcHistSig::Announcement a;
+    QVERIFY(!NgcHistSig::parseAnnouncement(
+        reinterpret_cast<const unsigned char*>(p.constData()), p.size(), a));
+}
+
+void TestNgcHistSig::parsesAValidSignedText()
+{
+    const QByteArray body = QString::fromUtf8("Привет 👋").toUtf8();
+    const auto p = signedTextPacket(body, static_cast<uint64_t>(body.size()));
+    NgcHistSig::SignedText t;
+    QVERIFY(NgcHistSig::parseSignedText(
+        reinterpret_cast<const unsigned char*>(p.constData()), p.size(), t));
+    QCOMPARE(t.textUtf8, body);
+    QCOMPARE(t.msgId, QByteArray::fromHex("deadbeef"));
+    QCOMPARE(t.timestamp, 1754870400ULL);
+}
+
+/** A 32-bit length with the top bit set must not become a negative int anywhere. */
+void TestNgcHistSig::rejectsDeclaredLengthWithHighBitSet()
+{
+    NgcHistSig::SignedText t;
+    for (uint64_t len : {0xFFFFFFFFULL, 0x80000000ULL}) {
+        const auto p = signedTextPacket(QByteArray("x"), len);
+        QVERIFY(!NgcHistSig::parseSignedText(
+            reinterpret_cast<const unsigned char*>(p.constData()), p.size(), t));
+    }
+}
+
+void TestNgcHistSig::rejectsDeclaredLengthAboveCeiling()
+{
+    const auto p = signedTextPacket(QByteArray("x"), NgcHistSig::MaxTextBytes + 1);
+    NgcHistSig::SignedText t;
+    QVERIFY(!NgcHistSig::parseSignedText(
+        reinterpret_cast<const unsigned char*>(p.constData()), p.size(), t));
+}
+
+void TestNgcHistSig::rejectsDeclaredLengthNotMatchingTheBody()
+{
+    NgcHistSig::SignedText t;
+    const QByteArray body("hello world");
+    for (int delta : {-1, 1}) {
+        const auto p = signedTextPacket(body, static_cast<uint64_t>(body.size() + delta));
+        QVERIFY(!NgcHistSig::parseSignedText(
+            reinterpret_cast<const unsigned char*>(p.constData()), p.size(), t));
+    }
+}
+
+void TestNgcHistSig::rejectsTruncatedSignedText()
+{
+    const QByteArray body("x");
+    const auto p = signedTextPacket(body, static_cast<uint64_t>(body.size()));
+    NgcHistSig::SignedText t;
+    for (int cut = 1; cut <= 70; cut++) {
+        QVERIFY2(!NgcHistSig::parseSignedText(
+                     reinterpret_cast<const unsigned char*>(p.constData()), p.size() - cut, t),
+                 qPrintable(QStringLiteral("accepted a packet truncated by %1").arg(cut)));
+    }
+}
+
+void TestNgcHistSig::acceptsABodyAtExactlyTheCeiling()
+{
+    const QByteArray body(NgcHistSig::MaxTextBytes, 'x');
+    const auto p = signedTextPacket(body, static_cast<uint64_t>(body.size()));
+    NgcHistSig::SignedText t;
+    QVERIFY(NgcHistSig::parseSignedText(
+        reinterpret_cast<const unsigned char*>(p.constData()), p.size(), t));
+    QCOMPARE(t.textUtf8.size(), NgcHistSig::MaxTextBytes);
 }
 
 QTEST_GUILESS_MAIN(TestNgcHistSig)

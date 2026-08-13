@@ -21,6 +21,8 @@
 
 #include <QCryptographicHash>
 
+#include <cstring>
+
 #include <sodium.h>
 
 namespace NgcHistSig
@@ -99,4 +101,95 @@ bool verifySignature(const QByteArray& preimage, const QByteArray& signature,
                                        reinterpret_cast<const unsigned char*>(signerPub.constData()))
         == 0;
 }
+
+namespace
+{
+const unsigned char kMagic[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
+
+/** Reads 8 bytes big-endian. Never memcpy'd: host order must not leak into a wire format. */
+uint64_t readBigEndian64(const unsigned char* p)
+{
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++) {
+        v = (v << 8) | static_cast<uint64_t>(p[i]);
+    }
+    return v;
+}
+
+/** Reads 4 bytes big-endian as UNSIGNED - a top-bit-set field must not become negative. */
+uint64_t readBigEndian32Unsigned(const unsigned char* p)
+{
+    uint64_t v = 0;
+    for (int i = 0; i < 4; i++) {
+        v = (v << 8) | static_cast<uint64_t>(p[i]);
+    }
+    return v;
+}
+
+bool isSignedPacket(const unsigned char* data, int length, unsigned char pktId)
+{
+    if (data == nullptr || length < NgcHistSig::HeaderSize) {
+        return false;
+    }
+    if (memcmp(data, kMagic, sizeof(kMagic)) != 0) {
+        return false;
+    }
+    return data[6] == NgcHistSig::VersionSigned && data[7] == pktId;
+}
+} // namespace
+
+bool parseAnnouncement(const unsigned char* data, int length, Announcement& out)
+{
+    // Exact length, not a minimum: this packet has no variable part, so anything longer is either a
+    // different packet or an attempt to hide bytes after the signature.
+    if (!isSignedPacket(data, length, PktHskAnnounce) || length != AnnouncePacketSize) {
+        return false;
+    }
+
+    int pos = HeaderSize;
+    out.hskPub = QByteArray(reinterpret_cast<const char*>(data + pos), PubKeySize);
+    pos += PubKeySize;
+    out.validFromTs = readBigEndian64(data + pos);
+    pos += 8;
+    out.signature = QByteArray(reinterpret_cast<const char*>(data + pos), SignatureSize);
+    return true;
+}
+
+bool parseSignedText(const unsigned char* data, int length, SignedText& out)
+{
+    const int fixedBefore = HeaderSize + MsgIdSize + PubKeySize + 8 + PeerNameSize + 4;
+    if (!isSignedPacket(data, length, PktSignedText) || length < fixedBefore + SignatureSize) {
+        return false;
+    }
+
+    int pos = HeaderSize;
+    out.msgId = QByteArray(reinterpret_cast<const char*>(data + pos), MsgIdSize);
+    pos += MsgIdSize;
+    out.authorPub = QByteArray(reinterpret_cast<const char*>(data + pos), PubKeySize);
+    pos += PubKeySize;
+    out.timestamp = readBigEndian64(data + pos);
+    pos += 8;
+    out.peerNameRaw = QByteArray(reinterpret_cast<const char*>(data + pos), PeerNameSize);
+    pos += PeerNameSize;
+
+    const uint64_t declaredTextLen = readBigEndian32Unsigned(data + pos);
+    pos += 4;
+
+    if (declaredTextLen > static_cast<uint64_t>(MaxTextBytes)) {
+        return false;
+    }
+    // The bytes must be present AND the signature must follow them exactly - no trailing slack in
+    // which to hide anything the signature does not cover.
+    if (static_cast<uint64_t>(pos) + declaredTextLen + SignatureSize
+        != static_cast<uint64_t>(length)) {
+        return false;
+    }
+
+    out.textUtf8 = QByteArray(reinterpret_cast<const char*>(data + pos),
+                              static_cast<int>(declaredTextLen));
+    pos += static_cast<int>(declaredTextLen);
+    out.signature = QByteArray(reinterpret_cast<const char*>(data + pos), SignatureSize);
+    return true;
+}
+
 } // namespace NgcHistSig

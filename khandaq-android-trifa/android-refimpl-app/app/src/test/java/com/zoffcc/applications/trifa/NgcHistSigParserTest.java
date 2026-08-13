@@ -229,6 +229,94 @@ public class NgcHistSigParserTest
         assertNull(NgcHistSigParser.parseSignedText(p, p.length));
     }
 
+    // ------------------------------------------------------------------ builder round-trip
+    //
+    // The builder and the parser are the two halves that must never drift. A layout change in one
+    // and not the other produces packets our own peers reject - and it would show up only in the
+    // field, between two clients, which is the hardest place to notice anything.
+
+    @Test
+    public void announcementSurvivesABuildParseRoundTrip()
+    {
+        final byte[] p = NgcHistSigParser.buildAnnouncement(HSK, TS, SIG);
+        assertNotNull(p);
+        assertEquals(NgcHistSigParser.ANNOUNCE_PACKET_SIZE, p.length);
+
+        final NgcHistSigParser.Announcement a = NgcHistSigParser.parseAnnouncement(p, p.length);
+        assertNotNull(a);
+        assertArrayEquals(HSK, a.hskPub);
+        assertEquals(TS, a.validFromTs);
+        assertArrayEquals(SIG, a.signature);
+    }
+
+    @Test
+    public void signedTextSurvivesABuildParseRoundTrip()
+    {
+        final byte[] name = new byte[NgcHistSigParser.PEERNAME_SIZE];
+        name[0] = 'a';
+        final byte[] body = "Привет, мир 👋".getBytes(StandardCharsets.UTF_8);
+
+        final byte[] p = NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, name, body, SIG);
+        assertNotNull(p);
+
+        final NgcHistSigParser.SignedText t = NgcHistSigParser.parseSignedText(p, p.length);
+        assertNotNull(t);
+        assertArrayEquals(MSG_ID, t.msgId);
+        assertArrayEquals(AUTHOR, t.authorPub);
+        assertEquals(TS, t.timestamp);
+        assertArrayEquals(name, t.peerNameRaw);
+        assertArrayEquals(body, t.textUtf8);
+        assertArrayEquals(SIG, t.signature);
+    }
+
+    /** Edge bodies round-trip too: empty, one byte, and exactly the ceiling. */
+    @Test
+    public void roundTripHoldsAtTheBodySizeEdges()
+    {
+        final byte[] name = new byte[NgcHistSigParser.PEERNAME_SIZE];
+        for (final int size : new int[]{0, 1, NgcHistSigParser.MAX_TEXT_BYTES})
+        {
+            final byte[] body = new byte[size];
+            final byte[] p = NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, name, body, SIG);
+            assertNotNull("build failed at size " + size, p);
+            final NgcHistSigParser.SignedText t = NgcHistSigParser.parseSignedText(p, p.length);
+            assertNotNull("parse failed at size " + size, t);
+            assertEquals(size, t.textUtf8.length);
+        }
+    }
+
+    /** The full unsigned 64-bit timestamp range must survive the round trip, including -1L. */
+    @Test
+    public void roundTripPreservesTheFullTimestampRange()
+    {
+        final byte[] name = new byte[NgcHistSigParser.PEERNAME_SIZE];
+        for (final long ts : new long[]{0L, 1L, 0x0000000100000001L, Long.MAX_VALUE, -1L})
+        {
+            final byte[] p = NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, ts, name,
+                                                              new byte[]{'x'}, SIG);
+            final NgcHistSigParser.SignedText t = NgcHistSigParser.parseSignedText(p, p.length);
+            assertNotNull(t);
+            assertEquals("timestamp " + ts, ts, t.timestamp);
+        }
+    }
+
+    /** The builder refuses what the parser would refuse, so we never emit a packet peers must drop. */
+    @Test
+    public void builderRefusesWhatTheParserWouldReject()
+    {
+        final byte[] name = new byte[NgcHistSigParser.PEERNAME_SIZE];
+        assertNull(NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, name,
+                                                    new byte[NgcHistSigParser.MAX_TEXT_BYTES + 1], SIG));
+        assertNull(NgcHistSigParser.buildSignedText(new byte[3], AUTHOR, TS, name, new byte[0], SIG));
+        assertNull(NgcHistSigParser.buildSignedText(MSG_ID, new byte[31], TS, name, new byte[0], SIG));
+        assertNull(NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, new byte[24], new byte[0], SIG));
+        assertNull(NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, name, new byte[0], new byte[63]));
+        assertNull(NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, name, null, SIG));
+        assertNull(NgcHistSigParser.buildAnnouncement(new byte[31], TS, SIG));
+        assertNull(NgcHistSigParser.buildAnnouncement(HSK, TS, new byte[65]));
+        assertNull(NgcHistSigParser.buildAnnouncement(null, TS, SIG));
+    }
+
     /** A body at exactly the ceiling is legitimate and must survive. */
     @Test
     public void acceptsABodyAtExactlyTheCeiling()

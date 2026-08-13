@@ -174,6 +174,96 @@ final class NgcHistSigParser
         return new SignedText(msgId, authorPub, ts, peerName, text, sig);
     }
 
+    // ---------------------------------------------------------------- builders
+    //
+    // Building is not sending. These produce the bytes; wiring them into an actual emit is the step
+    // that changes outgoing traffic and is deliberately not done here. Keeping them next to the
+    // parsers is the point: the round-trip test below is what stops the two drifting apart, which is
+    // the failure nobody notices until two clients disagree in the field.
+
+    /**
+     * @return the announcement packet, or null if a field has the wrong size — never a short buffer.
+     */
+    static byte[] buildAnnouncement(final byte[] hskPub, final long validFromTs, final byte[] signature)
+    {
+        if (hskPub == null || hskPub.length != NgcHistSig.PUBKEY_SIZE
+            || signature == null || signature.length != SIGNATURE_SIZE)
+        {
+            return null;
+        }
+
+        final byte[] out = new byte[ANNOUNCE_PACKET_SIZE];
+        int pos = writeHeader(out, PKT_HSK_ANNOUNCE);
+        pos = put(out, pos, hskPub);
+        pos = putBigEndian64(out, pos, validFromTs);
+        pos = put(out, pos, signature);
+        return pos == out.length ? out : null;
+    }
+
+    /**
+     * @return the signed-text packet, or null if a field has the wrong size or the body exceeds
+     *         {@link #MAX_TEXT_BYTES} — the same ceiling the parser enforces, checked on the way out
+     *         as well so this client can never emit something its own peers must reject.
+     */
+    static byte[] buildSignedText(final byte[] msgId, final byte[] authorPub, final long timestamp,
+                                  final byte[] peerNameRaw, final byte[] textUtf8,
+                                  final byte[] signature)
+    {
+        if (msgId == null || msgId.length != NgcHistSig.MSG_ID_SIZE
+            || authorPub == null || authorPub.length != NgcHistSig.PUBKEY_SIZE
+            || peerNameRaw == null || peerNameRaw.length != PEERNAME_SIZE
+            || textUtf8 == null || textUtf8.length > MAX_TEXT_BYTES
+            || signature == null || signature.length != SIGNATURE_SIZE)
+        {
+            return null;
+        }
+
+        final int total = HEADER_SIZE + NgcHistSig.MSG_ID_SIZE + NgcHistSig.PUBKEY_SIZE + 8
+                          + PEERNAME_SIZE + 4 + textUtf8.length + SIGNATURE_SIZE;
+        final byte[] out = new byte[total];
+        int pos = writeHeader(out, PKT_SIGNED_TEXT);
+        pos = put(out, pos, msgId);
+        pos = put(out, pos, authorPub);
+        pos = putBigEndian64(out, pos, timestamp);
+        pos = put(out, pos, peerNameRaw);
+        pos = putBigEndian32(out, pos, textUtf8.length);
+        pos = put(out, pos, textUtf8);
+        pos = put(out, pos, signature);
+        return pos == out.length ? out : null;
+    }
+
+    private static int writeHeader(final byte[] out, final byte pktId)
+    {
+        System.arraycopy(MAGIC, 0, out, 0, MAGIC.length);
+        out[6] = VERSION_SIGNED;
+        out[7] = pktId;
+        return HEADER_SIZE;
+    }
+
+    private static int put(final byte[] out, final int pos, final byte[] src)
+    {
+        System.arraycopy(src, 0, out, pos, src.length);
+        return pos + src.length;
+    }
+
+    private static int putBigEndian64(final byte[] out, final int pos, final long value)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            out[pos + i] = (byte) ((value >>> (56 - (i * 8))) & 0xffL);
+        }
+        return pos + 8;
+    }
+
+    private static int putBigEndian32(final byte[] out, final int pos, final long value)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            out[pos + i] = (byte) ((value >>> (24 - (i * 8))) & 0xffL);
+        }
+        return pos + 4;
+    }
+
     private static long readBigEndian64(final byte[] data, final int pos)
     {
         long v = 0;

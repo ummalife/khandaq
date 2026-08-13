@@ -42,6 +42,7 @@ auto_test(core core "${${PROJECT_NAME}_RESOURCES}" "mock_library")
 auto_test(core chatid "" "")
 auto_test(core toxid "" "")
 auto_test(core toxstring "" "")
+auto_test(core ngchistsig "" "")
 auto_test(core fileprogress "" "")
 auto_test(chatlog textformatter "" "")
 auto_test(net bsu "${${PROJECT_NAME}_RESOURCES}" "") # needs nodes list

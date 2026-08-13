@@ -288,6 +288,8 @@ set(${PROJECT_NAME}_SOURCES
   src/core/toxpk.h
   src/core/chatid.cpp
   src/core/chatid.h
+  src/core/ngchistsig.cpp
+  src/core/ngchistsig.h
   src/core/toxstring.cpp
   src/core/toxstring.h
   src/model/about/aboutfriend.cpp

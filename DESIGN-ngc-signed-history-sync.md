@@ -156,6 +156,8 @@ A group member can still forge history **as themselves** with a false timestamp,
 2. ~~Unverified-display marker on NGC bubbles (§4.5).~~ **Shipped for incoming text rows** (`GroupMessageListHolder_text_incoming_not_read.mark_unverified_sender`): a `was_synced` row now gets the orange marker in the status slot plus a localised content description. Regression-checked on device (no crash, no marker on non-synced rows); the positive case is not yet seen on screen because it needs a synced row, which needs a second peer.
 3. HSK generation + storage + announcement, all three platforms, with verification disabled.
 4. Emit signed history, still accepting `0x01`.
+
+**Прогресс по шагу 3 (десктоп, 13 авг 2026):** проверочная сторона реализована и сверена с эталоном — `src/core/ngchistsig.{h,cpp}` (построение обоих pre-image + `verifySignature` поверх libsodium `crypto_sign_verify_detached`), тест `test/core/ngchistsig_test.cpp`, зарегистрирован как `auto_test(core ngchistsig)`. **16/16 зелёные, включая все 8 замороженных векторов** — то есть C++ строит те же байты, что и `ngc_histsync_vectors.py`. Подписывания здесь нет намеренно: десктоп — только потребитель истории. Проверено мутацией: замена big-endian на little-endian в `appendBigEndian64` красит 5 векторов.
 5. Flip display: unsigned → `UNVERIFIED_LEGACY` marker.
 6. When the fleet has turned over, stop accepting `0x01` history entirely.
 

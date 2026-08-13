@@ -4565,6 +4565,72 @@ Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1send_1lossless_1pac
     }
 }
 
+/*
+ * KHANDAQ (external audit #2, finding 1): Ed25519 verification for NGC history-sync authorship.
+ *
+ * A history-sync packet names its original author in bytes nobody signed - the transport
+ * authenticates only the RELAYING peer - so any group member can forge attribution. The fix needs a
+ * signature check on the client, and Android had no way to do one: java.security.Signature exposes
+ * Ed25519 only from API 33 while this app ships minSdk 21, and there is no crypto dependency in the
+ * Java tree.
+ *
+ * libsodium is already linked into this library (see the sodium.h include above), so the primitive
+ * is here already - it just was not reachable from Java. This is that bridge and nothing more: no
+ * key handling, no packet parsing, no signing. The pre-image is built in Java (NgcHistSig.java) and
+ * is checked byte-for-byte against the frozen cross-platform vectors, so this function only has to
+ * answer one question about bytes it is handed.
+ *
+ * Fails CLOSED on every malformed input. A packet whose signature we cannot even parse is an attack
+ * or a bug, never an old client: old clients send protocol version 0x01, which is dropped long
+ * before this point.
+ *
+ * @return 0 when the signature verifies, -1 when it does not or an argument is malformed.
+ */
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_khandaq_1ed25519_1verify(JNIEnv *env, jobject thiz,
+        jbyteArray message, jint message_length, jbyteArray signature, jbyteArray public_key)
+{
+    TRACE_LOGGER();
+
+    if((message == NULL) || (signature == NULL) || (public_key == NULL) || (message_length < 1))
+    {
+        return (jint) - 1;
+    }
+
+    // Reject on declared-vs-actual length mismatch before touching the buffers: message_length
+    // arrives from Java and must never be trusted to describe the array we were given.
+    const jsize message_capacity = (*env)->GetArrayLength(env, message);
+    const jsize signature_length = (*env)->GetArrayLength(env, signature);
+    const jsize public_key_length = (*env)->GetArrayLength(env, public_key);
+
+    if((message_capacity < message_length) || (signature_length != crypto_sign_BYTES)
+            || (public_key_length != crypto_sign_PUBLICKEYBYTES))
+    {
+        return (jint) - 1;
+    }
+
+    jbyte *message2 = (*env)->GetByteArrayElements(env, message, 0);
+    jbyte *signature2 = (*env)->GetByteArrayElements(env, signature, 0);
+    jbyte *public_key2 = (*env)->GetByteArrayElements(env, public_key, 0);
+
+    int res = -1;
+
+    if((message2 != NULL) && (signature2 != NULL) && (public_key2 != NULL))
+    {
+        res = crypto_sign_verify_detached((const unsigned char *)signature2,
+                                          (const unsigned char *)message2,
+                                          (unsigned long long)message_length,
+                                          (const unsigned char *)public_key2);
+    }
+
+    /* JNI_ABORT: nothing was modified, so do not copy anything back */
+    if(public_key2 != NULL) { (*env)->ReleaseByteArrayElements(env, public_key, public_key2, JNI_ABORT); }
+    if(signature2 != NULL) { (*env)->ReleaseByteArrayElements(env, signature, signature2, JNI_ABORT); }
+    if(message2 != NULL) { (*env)->ReleaseByteArrayElements(env, message, message2, JNI_ABORT); }
+
+    return (jint)((res == 0) ? 0 : -1);
+}
+
 JNIEXPORT jlong JNICALL
 Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1add(JNIEnv *env, jobject thiz, jobject toxid_str,
         jobject message)

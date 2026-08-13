@@ -168,6 +168,14 @@ A group member can still forge history **as themselves** with a false timestamp,
 - Десктоп: `crypto_sign_verify_detached` через уже линкуемый libsodium.
 - iOS: то же самое — `objcTox → toxcore → libsodium`, `#import <sodium.h>` резолвится в реальной сборке пода (проверено `xcodebuild`), логика проверена harness'ом: настоящая подпись проходит, подделанное сообщение и чужой подписант — нет, всё некорректное падает закрыто.
 - **Android — блокер, требующий решения:** Ed25519 там нет ни в одной форме. `java.security.Signature` даёт его только с **API 33**, а приложение шипится с **minSdk 21**; в зависимостях нет ни BouncyCastle, ни Tink, ни lazysodium; нативный JNI `crypto_sign` не экспортирует. Варианты: (а) добавить JNI-обёртку над libsodium, который toxcore и так линкует, — но `.so` собирается CI из свежего клона upstream, значит нужен патч-скрипт в `deps.sh` и прогон `android-native-so.yml`; (б) добавить Java-зависимость с Ed25519 — но это новый supply-chain вход, который придётся пинить в `witness.gradle` (то самое, что чинилось по находке #2). **Вариант (а) предпочтительнее: libsodium уже в бинарнике, новых зависимостей нет.**
+
+**СДЕЛАНО (13 авг 2026), и оказалось проще ожидаемого.** Патч-скрипт не понадобился: JNI-исходник лежит **в нашем же репозитории** — `khandaq-android-trifa/jni-c-toxcore/jni-c-toxcore.c`, `deps.sh:554` просто копирует его в сборку (`cp -av /root/work/jni-c-toxcore`). И `sodium.h` там уже подключён (строка 65), то есть `crypto_sign_verify_detached` был доступен всё это время — не хватало только моста в Java.
+
+Добавлено: `Java_..._MainActivity_khandaq_1ed25519_1verify` в JNI + `public static native int khandaq_ed25519_verify(...)` в `MainActivity`. Ничего больше: ни работы с ключами, ни разбора пакетов, ни подписывания. Длины проверяются через `GetArrayLength` **до** обращения к буферам — `messageLength` приходит из Java и не может описывать чужой массив; освобождение через `JNI_ABORT`, потому что ничего не менялось.
+
+**R8 проверен:** в `proguard-rules.pro:21` уже стоит `-keepclasseswithmembernames … native <methods>`, значит имя нативного метода не переименуется и `UnsatisfiedLinkError` только-в-релизе не будет.
+
+**Осталось по Android ровно одно и оно требует CI:** новая функция появится в `libjni-c-toxcore.so` только после прогона `android-native-so.yml` (4 ABI). До этого вызов дал бы `UnsatisfiedLinkError` — поэтому её пока никто не вызывает.
 5. Flip display: unsigned → `UNVERIFIED_LEGACY` marker.
 6. When the fleet has turned over, stop accepting `0x01` history entirely.
 

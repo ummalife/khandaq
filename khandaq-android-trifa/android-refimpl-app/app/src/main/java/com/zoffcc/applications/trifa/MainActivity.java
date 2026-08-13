@@ -4583,6 +4583,25 @@ public class MainActivity extends AppCompatActivity
 
     public static native void export_savedata_file_unsecure(String tox_encrypt_passphrase_hash, String export_full_path_of_file);
 
+    /**
+     * KHANDAQ (external audit #2, finding 1): Ed25519 verification for NGC history-sync authorship.
+     *
+     * Android has no other way to do this: java.security.Signature exposes Ed25519 only from API 33
+     * while this app ships minSdk 21, and there is no crypto library in the Java dependency tree.
+     * libsodium is already linked into libjni-c-toxcore.so, so this only bridges what is present -
+     * it adds no dependency and nothing to pin in witness.gradle.
+     *
+     * The signed pre-image is built in {@link NgcHistSig}, whose bytes are checked against the
+     * frozen cross-platform vectors, so this call only answers one question about bytes it is given.
+     *
+     * @param message       the pre-image bytes
+     * @param messageLength how many of them are significant; must not exceed the array
+     * @param signature     64 bytes
+     * @param publicKey     32 bytes
+     * @return 0 when the signature verifies, -1 when it does not or an argument is malformed
+     */
+    public static native int khandaq_ed25519_verify(byte[] message, int messageLength, byte[] signature, byte[] publicKey);
+
     public static native String get_my_toxid();
 
     public static native String tox_get_all_tcp_relays();

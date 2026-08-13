@@ -71,4 +71,54 @@ NSData *_Nullable OCTNgcHistSigAnnouncePreimage(NSData *toxPub, NSData *hskPub,
 BOOL OCTNgcHistSigVerify(NSData *_Nullable preimage, NSData *_Nullable signature,
                          NSData *_Nullable signerPub);
 
+
+#pragma mark - version-0x02 packet parsing
+
+/** Wire constants (see DESIGN-ngc-signed-history-sync.md §4). */
+extern const NSUInteger kOCTNgcHistSigHeaderSize;      //!< 8 = magic(6) + version + pktid
+extern const NSUInteger kOCTNgcHistSigPeerNameSize;    //!< 25
+extern const uint8_t kOCTNgcHistSigVersionSigned;      //!< 0x02
+extern const uint8_t kOCTNgcHistSigPktHskAnnounce;     //!< 0x50
+extern const uint8_t kOCTNgcHistSigPktSignedText;      //!< 0x02
+extern const NSUInteger kOCTNgcHistSigAnnouncePacketSize; //!< 120
+
+/**
+ * Largest text a signed history packet may carry — the SAME ceiling the unsigned path enforces, so
+ * the signed variant cannot smuggle a larger body past a limit that exists for a reason.
+ */
+extern const NSUInteger kOCTNgcHistSigMaxTextBytes;    //!< 37000
+
+/** A parsed announcement. Only produced when every bound held. */
+@interface OCTNgcHistSigAnnouncement : NSObject
+@property (nonatomic, copy, readonly) NSData *hskPub;
+@property (nonatomic, assign, readonly) uint64_t validFromTs;
+@property (nonatomic, copy, readonly) NSData *signature;
+@end
+
+/** A parsed signed-history text record. Only produced when every bound held. */
+@interface OCTNgcHistSigSignedText : NSObject
+@property (nonatomic, copy, readonly) NSData *msgId;
+@property (nonatomic, copy, readonly) NSData *authorPub;
+@property (nonatomic, assign, readonly) uint64_t timestamp;
+@property (nonatomic, copy, readonly) NSData *peerNameRaw;
+@property (nonatomic, copy, readonly) NSData *textUtf8;
+@property (nonatomic, copy, readonly) NSData *signature;
+@end
+
+/**
+ * @param length bytes actually received; passed separately because the caller's buffer may be larger
+ *               than the datagram, and trusting the buffer size would read stale bytes.
+ * @return nil unless the packet is ours, of the signed version, of this kind, and EXACTLY the
+ *         expected length — the announcement has no variable part.
+ */
+OCTNgcHistSigAnnouncement *_Nullable OCTNgcHistSigParseAnnouncement(const uint8_t *_Nullable data,
+                                                                    NSInteger length);
+
+/**
+ * The declared text length is attacker-chosen and guarded three ways: read unsigned, range checked,
+ * and required to account for the packet exactly so no slack can hide bytes the signature misses.
+ */
+OCTNgcHistSigSignedText *_Nullable OCTNgcHistSigParseSignedText(const uint8_t *_Nullable data,
+                                                                NSInteger length);
+
 NS_ASSUME_NONNULL_END

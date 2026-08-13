@@ -5,6 +5,7 @@
 #import "OCTNgcHistSig.h"
 
 #import <CommonCrypto/CommonDigest.h>
+#import <string.h>
 
 // Reached transitively: objcTox depends on toxcore, which depends on libsodium.
 #import <sodium.h>
@@ -95,3 +96,116 @@ BOOL OCTNgcHistSigVerify(NSData *preimage, NSData *signature, NSData *signerPub)
     return crypto_sign_verify_detached(signature.bytes, preimage.bytes,
                                        (unsigned long long)preimage.length, signerPub.bytes) == 0;
 }
+
+#pragma mark - version-0x02 packet parsing
+
+const NSUInteger kOCTNgcHistSigHeaderSize = 8;
+const NSUInteger kOCTNgcHistSigPeerNameSize = 25;
+const uint8_t kOCTNgcHistSigVersionSigned = 0x02;
+const uint8_t kOCTNgcHistSigPktHskAnnounce = 0x50;
+const uint8_t kOCTNgcHistSigPktSignedText = 0x02;
+const NSUInteger kOCTNgcHistSigAnnouncePacketSize = 8 + 32 + 8 + 64; // 120
+const NSUInteger kOCTNgcHistSigMaxTextBytes = 37000;
+
+static const uint8_t kMagic[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
+
+@implementation OCTNgcHistSigAnnouncement
+- (instancetype)initWithHskPub:(NSData *)hskPub ts:(uint64_t)ts signature:(NSData *)signature
+{
+    self = [super init];
+    if (self) { _hskPub = [hskPub copy]; _validFromTs = ts; _signature = [signature copy]; }
+    return self;
+}
+@end
+
+@implementation OCTNgcHistSigSignedText
+- (instancetype)initWithMsgId:(NSData *)msgId author:(NSData *)author ts:(uint64_t)ts
+                     peerName:(NSData *)peerName text:(NSData *)text signature:(NSData *)signature
+{
+    self = [super init];
+    if (self) {
+        _msgId = [msgId copy]; _authorPub = [author copy]; _timestamp = ts;
+        _peerNameRaw = [peerName copy]; _textUtf8 = [text copy]; _signature = [signature copy];
+    }
+    return self;
+}
+@end
+
+/** Reads 8 bytes big-endian; never memcpy'd, so host order cannot leak into a wire format. */
+static uint64_t readBE64(const uint8_t *p)
+{
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++) { v = (v << 8) | (uint64_t)p[i]; }
+    return v;
+}
+
+/** Reads 4 bytes big-endian as UNSIGNED - a top-bit-set field must not become negative. */
+static uint64_t readBE32Unsigned(const uint8_t *p)
+{
+    uint64_t v = 0;
+    for (int i = 0; i < 4; i++) { v = (v << 8) | (uint64_t)p[i]; }
+    return v;
+}
+
+static BOOL isSignedPacket(const uint8_t *data, NSInteger length, uint8_t pktId)
+{
+    if (data == NULL || length < (NSInteger)kOCTNgcHistSigHeaderSize) { return NO; }
+    if (memcmp(data, kMagic, sizeof(kMagic)) != 0) { return NO; }
+    return data[6] == kOCTNgcHistSigVersionSigned && data[7] == pktId;
+}
+
+OCTNgcHistSigAnnouncement *OCTNgcHistSigParseAnnouncement(const uint8_t *data, NSInteger length)
+{
+    // Exact length, not a minimum: no variable part, so anything longer is either a different
+    // packet or an attempt to hide bytes after the signature.
+    if (!isSignedPacket(data, length, kOCTNgcHistSigPktHskAnnounce)
+        || length != (NSInteger)kOCTNgcHistSigAnnouncePacketSize) {
+        return nil;
+    }
+
+    NSUInteger pos = kOCTNgcHistSigHeaderSize;
+    NSData *hsk = [NSData dataWithBytes:data + pos length:kOCTNgcHistSigPubKeySize];
+    pos += kOCTNgcHistSigPubKeySize;
+    uint64_t ts = readBE64(data + pos);
+    pos += 8;
+    NSData *sig = [NSData dataWithBytes:data + pos length:kOCTNgcHistSigSignatureSize];
+    return [[OCTNgcHistSigAnnouncement alloc] initWithHskPub:hsk ts:ts signature:sig];
+}
+
+OCTNgcHistSigSignedText *OCTNgcHistSigParseSignedText(const uint8_t *data, NSInteger length)
+{
+    const NSInteger fixedBefore = (NSInteger)(kOCTNgcHistSigHeaderSize + kOCTNgcHistSigMsgIdSize
+                                              + kOCTNgcHistSigPubKeySize + 8
+                                              + kOCTNgcHistSigPeerNameSize + 4);
+    if (!isSignedPacket(data, length, kOCTNgcHistSigPktSignedText)
+        || length < fixedBefore + (NSInteger)kOCTNgcHistSigSignatureSize) {
+        return nil;
+    }
+
+    NSUInteger pos = kOCTNgcHistSigHeaderSize;
+    NSData *msgId = [NSData dataWithBytes:data + pos length:kOCTNgcHistSigMsgIdSize];
+    pos += kOCTNgcHistSigMsgIdSize;
+    NSData *author = [NSData dataWithBytes:data + pos length:kOCTNgcHistSigPubKeySize];
+    pos += kOCTNgcHistSigPubKeySize;
+    uint64_t ts = readBE64(data + pos);
+    pos += 8;
+    NSData *peerName = [NSData dataWithBytes:data + pos length:kOCTNgcHistSigPeerNameSize];
+    pos += kOCTNgcHistSigPeerNameSize;
+
+    uint64_t declaredTextLen = readBE32Unsigned(data + pos);
+    pos += 4;
+
+    if (declaredTextLen > (uint64_t)kOCTNgcHistSigMaxTextBytes) { return nil; }
+    // Bytes must be present AND the signature must follow them exactly - no trailing slack in which
+    // to hide anything the signature does not cover.
+    if ((uint64_t)pos + declaredTextLen + kOCTNgcHistSigSignatureSize != (uint64_t)length) {
+        return nil;
+    }
+
+    NSData *text = [NSData dataWithBytes:data + pos length:(NSUInteger)declaredTextLen];
+    pos += (NSUInteger)declaredTextLen;
+    NSData *sig = [NSData dataWithBytes:data + pos length:kOCTNgcHistSigSignatureSize];
+    return [[OCTNgcHistSigSignedText alloc] initWithMsgId:msgId author:author ts:ts
+                                                peerName:peerName text:text signature:sig];
+}
+

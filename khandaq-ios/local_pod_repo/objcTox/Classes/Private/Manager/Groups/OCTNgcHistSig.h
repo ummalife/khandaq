@@ -121,4 +121,22 @@ OCTNgcHistSigAnnouncement *_Nullable OCTNgcHistSigParseAnnouncement(const uint8_
 OCTNgcHistSigSignedText *_Nullable OCTNgcHistSigParseSignedText(const uint8_t *_Nullable data,
                                                                 NSInteger length);
 
+
+#pragma mark - version-0x02 packet building
+
+/**
+ * Building is not sending: these produce the bytes, wiring them into an emit is a separate step.
+ *
+ * Both builders refuse exactly what the parsers reject — a wrong-sized field, a body above
+ * kOCTNgcHistSigMaxTextBytes — so this client can never emit a packet its own peers must drop.
+ *
+ * @return the packet, or nil if any field is wrong. Never a short buffer.
+ */
+NSData *_Nullable OCTNgcHistSigBuildAnnouncement(NSData *hskPub, uint64_t validFromTs,
+                                                 NSData *signature);
+
+NSData *_Nullable OCTNgcHistSigBuildSignedText(NSData *msgId, NSData *authorPub, uint64_t timestamp,
+                                               NSData *peerNameRaw, NSData *textUtf8,
+                                               NSData *signature);
+
 NS_ASSUME_NONNULL_END

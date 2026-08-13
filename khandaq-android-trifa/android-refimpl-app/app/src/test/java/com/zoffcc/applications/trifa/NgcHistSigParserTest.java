@@ -317,6 +317,50 @@ public class NgcHistSigParserTest
         assertNull(NgcHistSigParser.buildAnnouncement(null, TS, SIG));
     }
 
+    // ------------------------------------------------------------------ cross-platform bytes
+    //
+    // These hex strings were produced by the iOS builder (OCTNgcHistSigBuildAnnouncement /
+    // BuildSignedText) from the same inputs. Pinning them here is what stops the two builders
+    // drifting: a layout change on one platform and not the other produces packets the other side
+    // rejects, and that only shows up in the field, between two users.
+
+    private static String hex(final byte[] b)
+    {
+        final StringBuilder sb = new StringBuilder(b.length * 2);
+        for (final byte x : b) { sb.append(String.format("%02x", x)); }
+        return sb.toString();
+    }
+
+    @Test
+    public void announcementBytesMatchTheIosBuilder()
+    {
+        final byte[] p = NgcHistSigParser.buildAnnouncement(HSK, TS, SIG);
+        assertEquals("6677881134350250"
+                     + "1111111111111111111111111111111111111111111111111111111111111111"
+                     + "0000000068993280"
+                     + "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+                     + "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+                     hex(p));
+    }
+
+    @Test
+    public void signedTextBytesMatchTheIosBuilder()
+    {
+        final byte[] name = new byte[NgcHistSigParser.PEERNAME_SIZE];
+        final byte[] body = "hello".getBytes(StandardCharsets.UTF_8);
+        final byte[] p = NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS, name, body, SIG);
+        assertEquals("6677881134350202"
+                     + "deadbeef"
+                     + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                     + "0000000068993280"
+                     + "00000000000000000000000000000000000000000000000000"
+                     + "00000005"
+                     + "68656c6c6f"
+                     + "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
+                     + "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+                     hex(p));
+    }
+
     /** A body at exactly the ceiling is legitimate and must survive. */
     @Test
     public void acceptsABodyAtExactlyTheCeiling()

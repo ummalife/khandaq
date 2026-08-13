@@ -209,3 +209,57 @@ OCTNgcHistSigSignedText *OCTNgcHistSigParseSignedText(const uint8_t *data, NSInt
                                                 peerName:peerName text:text signature:sig];
 }
 
+#pragma mark - version-0x02 packet building
+
+static void appendBE32(NSMutableData *out, uint64_t value)
+{
+    uint8_t b[4];
+    for (int i = 0; i < 4; i++) { b[i] = (uint8_t)((value >> (24 - (i * 8))) & 0xffULL); }
+    [out appendBytes:b length:sizeof(b)];
+}
+
+static void appendHeader(NSMutableData *out, uint8_t pktId)
+{
+    [out appendBytes:kMagic length:sizeof(kMagic)];
+    uint8_t v = kOCTNgcHistSigVersionSigned;
+    [out appendBytes:&v length:1];
+    [out appendBytes:&pktId length:1];
+}
+
+NSData *OCTNgcHistSigBuildAnnouncement(NSData *hskPub, uint64_t validFromTs, NSData *signature)
+{
+    if (hskPub.length != kOCTNgcHistSigPubKeySize
+        || signature.length != kOCTNgcHistSigSignatureSize) {
+        return nil;
+    }
+
+    NSMutableData *out = [NSMutableData dataWithCapacity:kOCTNgcHistSigAnnouncePacketSize];
+    appendHeader(out, kOCTNgcHistSigPktHskAnnounce);
+    [out appendData:hskPub];
+    appendBigEndian64(out, validFromTs);
+    [out appendData:signature];
+    return out.length == kOCTNgcHistSigAnnouncePacketSize ? [out copy] : nil;
+}
+
+NSData *OCTNgcHistSigBuildSignedText(NSData *msgId, NSData *authorPub, uint64_t timestamp,
+                                     NSData *peerNameRaw, NSData *textUtf8, NSData *signature)
+{
+    if (msgId.length != kOCTNgcHistSigMsgIdSize || authorPub.length != kOCTNgcHistSigPubKeySize
+        || peerNameRaw.length != kOCTNgcHistSigPeerNameSize || textUtf8 == nil
+        || textUtf8.length > kOCTNgcHistSigMaxTextBytes
+        || signature.length != kOCTNgcHistSigSignatureSize) {
+        return nil;
+    }
+
+    NSMutableData *out = [NSMutableData data];
+    appendHeader(out, kOCTNgcHistSigPktSignedText);
+    [out appendData:msgId];
+    [out appendData:authorPub];
+    appendBigEndian64(out, timestamp);
+    [out appendData:peerNameRaw];
+    appendBE32(out, (uint64_t)textUtf8.length);
+    [out appendData:textUtf8];
+    [out appendData:signature];
+    return [out copy];
+}
+

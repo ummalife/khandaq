@@ -33,11 +33,29 @@ jobs:
           docker run --rm -v "$PWD:/qtox" -w /qtox qtox_windows_builder:latest
           ./windows/cross-compile/build.sh --arch x86_64 --build-type Release --src-dir /qtox
 
+      # KHANDAQ: this used to look for package-prefix/setup-qtox.exe, the upstream qTox name. Our
+      # installer script defines INSTALLER_NAME "Khandaq-installer.exe" (windows/qtox64.nsi:11), so
+      # the test never matched, `|| true` swallowed it, the upload pattern matched nothing, and
+      # if-no-files-found: warn turned that into a warning. The result was a green build whose
+      # artifact silently contained the zip alone — no installer, and no checksum for either, while
+      # this file's own header promised all three. Checksums are now WRITTEN to a file and shipped
+      # rather than only printed into a log nobody reads.
       - name: Checksums
         if: always()
         run: |
+          set -euo pipefail
           ls -la package-prefix install-prefix 2>/dev/null || true
-          [ -f package-prefix/setup-qtox.exe ] && sha256sum package-prefix/setup-qtox.exe || true
+          rm -f SHA256SUMS.txt
+          if [ -f package-prefix/Khandaq-installer.exe ]; then
+            sha256sum package-prefix/Khandaq-installer.exe | tee -a SHA256SUMS.txt
+          else
+            echo "::error::installer missing: package-prefix/Khandaq-installer.exe"
+            exit 1
+          fi
+          for z in install-prefix/*.zip; do
+            [ -e "$z" ] || { echo "::error::no zip in install-prefix"; exit 1; }
+            sha256sum "$z" | tee -a SHA256SUMS.txt
+          done
 
       - name: Upload Windows artifacts
         if: always()
@@ -45,6 +63,9 @@ jobs:
         with:
           name: khandaq-windows-x86_64-release
           path: |
-            khandaq-desktop/package-prefix/setup-qtox.exe
+            khandaq-desktop/package-prefix/Khandaq-installer.exe
             khandaq-desktop/install-prefix/*.zip
-          if-no-files-found: warn
+            khandaq-desktop/SHA256SUMS.txt
+          # error, not warn: a rename must break the build rather than quietly ship a partial
+          # artifact, which is exactly how the installer went missing unnoticed.
+          if-no-files-found: error

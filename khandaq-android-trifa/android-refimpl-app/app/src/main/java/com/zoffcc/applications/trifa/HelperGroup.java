@@ -8027,7 +8027,12 @@ public class HelperGroup
                 // back and drops again is measured afresh rather than resetting instantly.
                 group_last_stuck_reset_ms.put(group_identifier, now_ms);
                 group_stuck_alone_since_ms.put(group_identifier, now_ms);
-                HelperGeneric.logI(TAG, "kickstart_group_connection:stuck-alone-reset id="
+                // Log.i rather than HelperGeneric.logI, which compiles out unless BuildConfig.DEBUG:
+                // this is the one line that says the #246 recovery fired, the bug it recovers from was
+                // reported from the field, and it was invisible there precisely because everything
+                // about group maintenance is debug-only. Rare by construction — the cooldown allows at
+                // most one per group per 10 minutes — and it names no user, only the group and counts.
+                Log.i(TAG, "kickstart_group_connection:stuck-alone-reset id="
                         + group_identifier_short(group_identifier, false) + " gn=" + group_num
                         + " online=" + tox_group_peer_count(group_num)
                         + " offline=" + tox_group_offline_peer_count(group_num));

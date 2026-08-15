@@ -4631,6 +4631,133 @@ Java_com_zoffcc_applications_trifa_MainActivity_khandaq_1ed25519_1verify(JNIEnv 
     return (jint)((res == 0) ? 0 : -1);
 }
 
+/*
+ * KHANDAQ (external audit #2, finding 1, step 2): Ed25519 keypair generation for the history-sync
+ * key (HSK).
+ *
+ * Same reason as the verify bridge above: java.security exposes Ed25519 only from API 33 and this
+ * app ships minSdk 21, so the primitive has to come from the libsodium already linked here. Exported
+ * alongside verify and sign deliberately - the native library is rebuilt by a heavy 4-ABI CI job, so
+ * a missing symbol costs a whole build cycle, not a recompile.
+ *
+ * @return 0 on success, -1 on any malformed argument. On failure BOTH output arrays are zeroed, so a
+ *         caller that ignores the return value cannot end up storing half a key and treating it as
+ *         an identity.
+ */
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_khandaq_1ed25519_1keypair(JNIEnv *env, jobject thiz,
+        jbyteArray public_key_out, jbyteArray secret_key_out)
+{
+    TRACE_LOGGER();
+
+    if((public_key_out == NULL) || (secret_key_out == NULL))
+    {
+        return (jint) - 1;
+    }
+
+    const jsize public_key_length = (*env)->GetArrayLength(env, public_key_out);
+    const jsize secret_key_length = (*env)->GetArrayLength(env, secret_key_out);
+
+    if((public_key_length != crypto_sign_PUBLICKEYBYTES)
+            || (secret_key_length != crypto_sign_SECRETKEYBYTES))
+    {
+        return (jint) - 1;
+    }
+
+    jbyte *public_key2 = (*env)->GetByteArrayElements(env, public_key_out, 0);
+    jbyte *secret_key2 = (*env)->GetByteArrayElements(env, secret_key_out, 0);
+
+    int res = -1;
+
+    if((public_key2 != NULL) && (secret_key2 != NULL))
+    {
+        res = crypto_sign_keypair((unsigned char *)public_key2, (unsigned char *)secret_key2);
+    }
+
+    if(res != 0)
+    {
+        if(public_key2 != NULL) { sodium_memzero(public_key2, (size_t)public_key_length); }
+
+        if(secret_key2 != NULL) { sodium_memzero(secret_key2, (size_t)secret_key_length); }
+    }
+
+    /* 0, not JNI_ABORT: the generated key has to be copied back into the Java arrays */
+    if(secret_key2 != NULL) { (*env)->ReleaseByteArrayElements(env, secret_key_out, secret_key2, 0); }
+
+    if(public_key2 != NULL) { (*env)->ReleaseByteArrayElements(env, public_key_out, public_key2, 0); }
+
+    return (jint)((res == 0) ? 0 : -1);
+}
+
+/*
+ * KHANDAQ (external audit #2, finding 1, step 3): Ed25519 detached signing over a pre-image.
+ *
+ * The pre-image is built in Java (NgcHistSig.java) and checked byte-for-byte against the frozen
+ * cross-platform vectors, so this function only signs bytes it is handed - it knows nothing about
+ * packets or key storage.
+ *
+ * The secret key is released with JNI_ABORT: it is input only, and nothing should ever write key
+ * material back into the caller's array. The signature buffer is the only thing copied back, and it
+ * is zeroed unless a full-length signature was produced, so a partial write cannot be mistaken for
+ * a valid one.
+ *
+ * @return 0 on success, -1 on any malformed argument or failure.
+ */
+JNIEXPORT jint JNICALL
+Java_com_zoffcc_applications_trifa_MainActivity_khandaq_1ed25519_1sign(JNIEnv *env, jobject thiz,
+        jbyteArray message, jint message_length, jbyteArray secret_key, jbyteArray signature_out)
+{
+    TRACE_LOGGER();
+
+    if((message == NULL) || (secret_key == NULL) || (signature_out == NULL) || (message_length < 1))
+    {
+        return (jint) - 1;
+    }
+
+    // Same rule as verify: message_length comes from Java and must never be trusted to describe the
+    // array we were actually given.
+    const jsize message_capacity = (*env)->GetArrayLength(env, message);
+    const jsize secret_key_length = (*env)->GetArrayLength(env, secret_key);
+    const jsize signature_length = (*env)->GetArrayLength(env, signature_out);
+
+    if((message_capacity < message_length) || (secret_key_length != crypto_sign_SECRETKEYBYTES)
+            || (signature_length != crypto_sign_BYTES))
+    {
+        return (jint) - 1;
+    }
+
+    jbyte *message2 = (*env)->GetByteArrayElements(env, message, 0);
+    jbyte *secret_key2 = (*env)->GetByteArrayElements(env, secret_key, 0);
+    jbyte *signature2 = (*env)->GetByteArrayElements(env, signature_out, 0);
+
+    int res = -1;
+    unsigned long long produced_length = 0;
+
+    if((message2 != NULL) && (secret_key2 != NULL) && (signature2 != NULL))
+    {
+        res = crypto_sign_detached((unsigned char *)signature2, &produced_length,
+                                   (const unsigned char *)message2,
+                                   (unsigned long long)message_length,
+                                   (const unsigned char *)secret_key2);
+    }
+
+    if((res != 0) || (produced_length != (unsigned long long)crypto_sign_BYTES))
+    {
+        res = -1;
+
+        if(signature2 != NULL) { sodium_memzero(signature2, (size_t)signature_length); }
+    }
+
+    /* signature: copy back. message + secret key: inputs, nothing to write back. */
+    if(signature2 != NULL) { (*env)->ReleaseByteArrayElements(env, signature_out, signature2, 0); }
+
+    if(secret_key2 != NULL) { (*env)->ReleaseByteArrayElements(env, secret_key, secret_key2, JNI_ABORT); }
+
+    if(message2 != NULL) { (*env)->ReleaseByteArrayElements(env, message, message2, JNI_ABORT); }
+
+    return (jint)((res == 0) ? 0 : -1);
+}
+
 JNIEXPORT jlong JNICALL
 Java_com_zoffcc_applications_trifa_MainActivity_tox_1friend_1add(JNIEnv *env, jobject thiz, jobject toxid_str,
         jobject message)

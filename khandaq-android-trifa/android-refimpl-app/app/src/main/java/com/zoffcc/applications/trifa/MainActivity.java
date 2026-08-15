@@ -4602,6 +4602,33 @@ public class MainActivity extends AppCompatActivity
      */
     public static native int khandaq_ed25519_verify(byte[] message, int messageLength, byte[] signature, byte[] publicKey);
 
+    /**
+     * KHANDAQ (external audit #2, finding 1, step 2): generates the history-sync key (HSK).
+     *
+     * Declared together with verify and sign on purpose: libjni-c-toxcore.so is produced by a heavy
+     * 4-ABI CI job, so a symbol discovered missing later costs a whole build cycle rather than a
+     * recompile.
+     *
+     * @param publicKeyOut 32 bytes, filled on success
+     * @param secretKeyOut 64 bytes, filled on success
+     * @return 0 on success, -1 on a malformed argument. On failure BOTH arrays are zeroed, so a
+     *         caller that ignores this cannot store half a key and treat it as an identity.
+     */
+    public static native int khandaq_ed25519_keypair(byte[] publicKeyOut, byte[] secretKeyOut);
+
+    /**
+     * KHANDAQ (external audit #2, finding 1, step 3): signs a pre-image built by {@link NgcHistSig}.
+     *
+     * @param message       the pre-image bytes
+     * @param messageLength how many of them are significant; must not exceed the array
+     * @param secretKey     64 bytes; never written back to
+     * @param signatureOut  64 bytes, filled on success and zeroed on failure so a partial write
+     *                      cannot be mistaken for a signature
+     * @return 0 on success, -1 on a malformed argument or failure
+     */
+    public static native int khandaq_ed25519_sign(byte[] message, int messageLength, byte[] secretKey,
+                                                  byte[] signatureOut);
+
     public static native String get_my_toxid();
 
     public static native String tox_get_all_tcp_relays();

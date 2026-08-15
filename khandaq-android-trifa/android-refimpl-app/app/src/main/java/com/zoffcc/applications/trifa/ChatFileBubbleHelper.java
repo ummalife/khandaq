@@ -408,7 +408,15 @@ final class ChatFileBubbleHelper
 
         if (cancelView != null)
         {
-            cancelView.setVisibility(phase == ChatTransferProgressHelper.Phase.TRANSFERRING ? View.VISIBLE : View.GONE);
+            // KHANDAQ (#247): this row is the chrome a plain (non-media) file actually shows, and it
+            // had the same dead end as the media overlay — cancel only while bytes were moving. A
+            // send queued against an absent peer never reaches TRANSFERRING, so the row offered
+            // nothing at all. Outgoing only: for an incoming PENDING row the sender simply has not
+            // offered the file yet, and there is no local transfer to abandon.
+            final boolean pendingOutgoingSend = ChatTransferProgressHelper.isAbandonableQueuedSend(
+                    phase, snap != null && snap.outgoing);
+            cancelView.setVisibility(phase == ChatTransferProgressHelper.Phase.TRANSFERRING
+                                     || pendingOutgoingSend ? View.VISIBLE : View.GONE);
         }
         if (retryView != null)
         {

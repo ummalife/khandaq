@@ -75,6 +75,27 @@ final class ChatTransferProgressHelper
         void onRetry();
     }
 
+    /**
+     * KHANDAQ (#247): is this a send the user should be able to abandon even though it never started?
+     *
+     * A file queued against a peer that is not reachable sits in PENDING, and PENDING used to be the
+     * one phase with no affordance at all — TRANSFERRING offers cancel, FAILED offers retry, PENDING
+     * offered nothing, so the row was a permanent dead end. Cancel is the right answer rather than
+     * retry: there is nothing to retry yet, and cancelling moves the row to FAILED via the persisted
+     * tombstone, which is exactly where retry already lives.
+     *
+     * Outgoing only. An incoming PENDING row means the sender has not offered the file yet — there is
+     * no local transfer to abandon, and its own retry path already covers it.
+     *
+     * Three renderers decide this — the inline buttons, the media overlay and the plain-file row —
+     * and before this they each answered it separately and each had the same gap. One definition so
+     * they cannot drift apart again.
+     */
+    static boolean isAbandonableQueuedSend(final Phase phase, final boolean outgoing)
+    {
+        return phase == Phase.PENDING && outgoing;
+    }
+
     private ChatTransferProgressHelper()
     {
     }
@@ -553,6 +574,35 @@ final class ChatTransferProgressHelper
                     });
                 }
             }
+            else if (isAbandonableQueuedSend(snap.phase, snap.outgoing))
+            {
+                // KHANDAQ (#247): media rows keep their buttons in the overlay, exactly as
+                // TRANSFERRING above does.
+                if (snap.showMediaOverlay)
+                {
+                    buttons.setVisibility(View.GONE);
+                }
+                else
+                {
+                    buttons.setVisibility(View.VISIBLE);
+                    cancelBtn.setVisibility(View.VISIBLE);
+                    if (okBtn != null)
+                    {
+                        okBtn.setVisibility(View.GONE);
+                    }
+                    final Drawable pendingCancelIcon = new IconicsDrawable(context).
+                            icon(GoogleMaterial.Icon.gmd_close).
+                            backgroundColor(android.graphics.Color.TRANSPARENT).
+                            color(android.graphics.Color.parseColor("#CCFFFFFF")).sizeDp(28);
+                    cancelBtn.setImageDrawable(pendingCancelIcon);
+                    cancelBtn.setOnClickListener(v -> {
+                        if (callbacks != null)
+                        {
+                            callbacks.onCancel();
+                        }
+                    });
+                }
+            }
             else
             {
                 buttons.setVisibility(View.GONE);
@@ -650,7 +700,11 @@ final class ChatTransferProgressHelper
         }
 
         View overlay = host.findViewById(R.id.ft_transfer_overlay);
-        if (overlay == null && snap.phase == Phase.TRANSFERRING && snap.showMediaOverlay)
+        // KHANDAQ (#247): also inflate for an outgoing PENDING row. The overlay used to appear only
+        // once bytes were moving, so a photo or video queued against an absent peer had no overlay at
+        // all and therefore no cancel — the media half of the same dead end fixed in apply().
+        if (overlay == null && snap.showMediaOverlay
+            && (snap.phase == Phase.TRANSFERRING || isAbandonableQueuedSend(snap.phase, snap.outgoing)))
         {
             overlay = LayoutInflater.from(context).inflate(R.layout.chat_media_transfer_overlay, host, false);
             if (preview instanceof ImageButton && host instanceof FrameLayout)
@@ -729,7 +783,11 @@ final class ChatTransferProgressHelper
         }
         if (cancel != null)
         {
-            cancel.setVisibility(snap.phase == Phase.TRANSFERRING ? View.VISIBLE : View.GONE);
+            // KHANDAQ (#247): visible while an outgoing transfer is merely queued too, so a media row
+            // waiting on an absent peer can be abandoned instead of sitting at "waiting" forever.
+            cancel.setVisibility(snap.phase == Phase.TRANSFERRING
+                                 || isAbandonableQueuedSend(snap.phase, snap.outgoing)
+                                 ? View.VISIBLE : View.GONE);
             cancel.setOnClickListener(v -> {
                 if (callbacks != null)
                 {

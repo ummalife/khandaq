@@ -1937,7 +1937,26 @@ public class HelperGroup
         }
         group_peer_last_online_ms.put(group_peer_seen_key(group_id, pubkey), System.currentTimeMillis());
         retry_pending_incoming_group_files_for_peer(group_id, pubkey);
+        // KHANDAQ (#247): outgoing needed the same trigger and did not have it. A peer coming back
+        // only ever revived INCOMING transfers; the outgoing sweep hung off on_group_connected, so a
+        // file queued while the group was already connected but the peer absent was never
+        // reconsidered — that callback had long since fired and does not fire again. The row then sat
+        // at "connecting" forever. retry_pending_outgoing_group_files' own comment already claims it
+        // runs on "group reconnect / peer online", so the intent was there; only the wiring was not.
+        if (should_run_group_maintenance(group_id, group_last_outgoing_file_sweep_ms,
+                                         GROUP_OUTGOING_FILE_SWEEP_MIN_INTERVAL_MS))
+        {
+            retry_pending_outgoing_group_files(group_id);
+        }
     }
+
+    // A peer sighting is a frequent event - NGC presence flickers constantly (see #84) - and the
+    // outgoing sweep costs a DB select plus a blocking tombstone lookup per row, so the new trigger
+    // is throttled per group rather than run on every sighting. 15s matches the per-message
+    // auto-retry cooldown the sweep feeds into, so a tighter interval could not act any sooner.
+    private static final long GROUP_OUTGOING_FILE_SWEEP_MIN_INTERVAL_MS = 15_000L;
+    private static final ConcurrentHashMap<String, Long> group_last_outgoing_file_sweep_ms =
+            new ConcurrentHashMap<>();
 
     static void record_group_peer_last_seen_on_exit(final long group_number, final long peer_id)
     {

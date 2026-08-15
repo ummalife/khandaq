@@ -182,6 +182,22 @@ static boolean isNoWitness(DependencyKey key, List<String> prefixes) {
     return false
 }
 
+/**
+ * KHANDAQ (#248): the only configuration-resolution failures allowed to pass silently.
+ *
+ * The *DependenciesMetadata family (implementationDependenciesMetadata and its api/compileOnly/
+ * runtimeOnly siblings) is internal AGP/Kotlin bookkeeping. It carries no artifact we pin, and it
+ * fails to resolve on incremental builds while resolving fine on a clean one — so failing the build
+ * on it would break ordinary work for no security gain.
+ *
+ * Everything else must fail loudly: a configuration that DOES carry jars and cannot be resolved
+ * would otherwise have its artifacts drop out of the pinned set while verification still reported
+ * success. That is a fail-open in the control added for external audit #2 finding 2.
+ */
+static boolean isBenignUnresolvable(String configurationName) {
+    return configurationName != null && configurationName.endsWith("DependenciesMetadata")
+}
+
 static Map<DependencyKey, String> calculateHashes(Project project) {
     def projectPath = project.file('.').canonicalPath
     def sdkRoots = androidSdkRoots(project)
@@ -190,6 +206,8 @@ static Map<DependencyKey, String> calculateHashes(Project project) {
     def addDependencies = {
         // Skip excluded configurations and their subconfigurations
         def scopedName = "${project.name}:${it.name}"
+        // Captured here because `it` is rebound inside the nested closures below.
+        def cfgName = it.name
         // println "DEBUG:Q001:${project.name}:${it.name}"
         it.hierarchy.each {
             def superScopedName = "${project.name}:${it.name}"
@@ -225,7 +243,15 @@ static Map<DependencyKey, String> calculateHashes(Project project) {
                     }
                 }
             } catch (Exception e) {
-                println "gradle_witness_ng_error:EEE-0001:${e.message}"
+                // KHANDAQ (#248): this used to only print. A configuration that failed to resolve
+                // therefore left the pinned set silently, and verification still reported success —
+                // fail-open in the very control that exists to catch a swapped dependency. Only the
+                // known-benign metadata family may pass; anything else stops the build.
+                println "gradle_witness_ng_error:EEE-0001:${cfgName}:${e.message}"
+                if (!isBenignUnresolvable(cfgName)) {
+                    throw new GradleException("gradle_witness_ng: configuration '${cfgName}' could not be"
+                            + " resolved, so its artifacts would silently leave the pinned set: ${e.message}")
+                }
             }
         }
     }

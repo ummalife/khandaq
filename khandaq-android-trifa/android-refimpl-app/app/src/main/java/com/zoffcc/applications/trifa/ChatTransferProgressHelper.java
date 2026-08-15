@@ -639,6 +639,21 @@ final class ChatTransferProgressHelper
         {
             return;
         }
+
+        // KHANDAQ (#247): this row carries its own cancel/retry, but the outgoing and 1:1 layouts
+        // ALSO contain the older ft_buttons_container, and apply() shows that one for the very same
+        // phases. Both were drawn at once, and the container's copy lands outside the bubble, over
+        // the chat wallpaper, because in this layout it belongs to the media-preview chrome rather
+        // than the file row. That was already true of FAILED rows before this change; extending the
+        // affordance to PENDING would have doubled it there too. Reaching this method at all means
+        // the attachment row IS the chrome for this message - it is only called for rows that are
+        // neither media nor audio - so the attachment row owns the actions and the container goes.
+        final View legacyButtons = itemRoot.findViewById(R.id.ft_buttons_container);
+        if (legacyButtons != null)
+        {
+            legacyButtons.setVisibility(View.GONE);
+        }
+
         final ImageButton cancel = row.findViewById(R.id.ft_file_cancel);
         final ImageButton retry = row.findViewById(R.id.ft_file_retry);
         if (cancel != null)

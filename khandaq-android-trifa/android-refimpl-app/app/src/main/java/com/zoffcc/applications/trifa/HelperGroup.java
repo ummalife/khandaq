@@ -5845,7 +5845,34 @@ public class HelperGroup
                     // the cache again — nothing was cached — and schedule another lookup, spinning
                     // this executor for as long as the database stays unreadable. Only a tombstone we
                     // actually read changes what the row shows.
-                    final int state = read_persisted_ngc_cancel(groupId, msgIdHash);
+                    //
+                    // KHANDAQ (#247, found by device QA): the result must be MEMOISED here, which it
+                    // was not. Reading the tombstone and only posting a refresh left the caches empty,
+                    // so the rebind asked again, got "not cancelled" again, and scheduled yet another
+                    // lookup — a cancelled row sat at "Ожидание отправителя" forever after an app
+                    // restart while this executor re-queried the DB on every bind. That is exactly the
+                    // state audit2 #5 introduced the tombstone to prevent ("a user cancel now outlives
+                    // the process, so it also needs a UI state that outlives it"); the non-blocking
+                    // variant added later quietly stopped delivering it.
+                    //
+                    // Memoised under ngc_cancel_state_lock, the same lock the blocking lookup and
+                    // clear_ngc_user_cancel take, so a retry that lifts the cancel while we are reading
+                    // either lands entirely before us (we then read ABSENT) or entirely after us (it
+                    // removes what we just wrote). UNREADABLE still memoises nothing, so a row is
+                    // reconsidered once the database can be read.
+                    final int state;
+                    synchronized (ngc_cancel_state_lock)
+                    {
+                        state = read_persisted_ngc_cancel(groupId, msgIdHash);
+                        if (state == NGC_TOMBSTONE_PRESENT)
+                        {
+                            ngc_user_cancelled_sends.add(key);
+                        }
+                        else if (state == NGC_TOMBSTONE_ABSENT)
+                        {
+                            ngc_cancel_lookup_clean.add(key);
+                        }
+                    }
 
                     if (state == NGC_TOMBSTONE_PRESENT || ngc_user_cancel_from_cache(key))
                     {

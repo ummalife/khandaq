@@ -7309,12 +7309,6 @@ public class HelperGroup
     // otherwise block the 180s escalation gate from ever firing
     private static final ConcurrentHashMap<String, Long> group_last_escalate_ms = new ConcurrentHashMap<>();
     private static final long GROUP_ALONE_ESCALATE_MS = 180_000L;
-    // KHANDAQ (#246): how long we have REALLY been alone. Deliberately NOT group_alone_since_ms:
-    // escalate_if_alone_too_long resets that one every period so its soft nudge cannot self-starve,
-    // which means it never grows past one period and can never express "stuck for 5 minutes".
-    // This one is cleared only when peers actually appear. See NgcStuckGroupPolicy.
-    private static final ConcurrentHashMap<String, Long> group_stuck_alone_since_ms = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Long> group_last_stuck_reset_ms = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, Boolean> group_message_resync_running = new ConcurrentHashMap<>();
     /** Last seen tox group message id per group_num (for gap detection). */
     private static final ConcurrentHashMap<Long, Long> last_group_tox_message_id = new ConcurrentHashMap<>();
@@ -7925,23 +7919,6 @@ public class HelperGroup
     }
 
     /**
-     * KHANDAQ (#246): mirrors the alone state onto an un-reset timer. Called from the same two
-     * places that maintain group_alone_since_ms, so the two never disagree about whether we are
-     * alone — they disagree only about for how long, which is the whole point.
-     */
-    private static void mark_group_alone(final String group_identifier, final boolean alone)
-    {
-        if (alone)
-        {
-            group_stuck_alone_since_ms.putIfAbsent(group_identifier, System.currentTimeMillis());
-        }
-        else
-        {
-            group_stuck_alone_since_ms.remove(group_identifier);
-        }
-    }
-
-    /**
      * If a public group stayed alone (peers<=1) longer than GROUP_ALONE_ESCALATE_MS, run a full
      * kickstart (tox_group_reconnect) in background: this resets toxcore's exponential onion
      * announce-search backoff and forces a fresh self-announce. Returns true if escalation fired.
@@ -7992,16 +7969,6 @@ public class HelperGroup
             return;
         }
 
-        // KHANDAQ (#246, found on a two-emulator repro): sample the group state BEFORE the burst
-        // below. Bootstrapping and waking the tox thread knocks a CONNECTED group into CONNECTING
-        // for a moment, so a stuck-group check made afterwards read conn=CONNECTING every single
-        // time and skipped — the policy was being evaluated after the very thing that changes what
-        // it is gating on. These three values are what the caller actually observed when it decided
-        // this group was alone.
-        final int conn_before_burst = tox_group_is_connected(group_num);
-        final long online_before_burst = tox_group_peer_count(group_num);
-        final long offline_before_burst = tox_group_offline_peer_count(group_num);
-
         perform_khandaq_bootstrap_burst();
         TrifaToxService.bootstrap_me(true);
         TrifaToxService.wakeup_tox_thread();
@@ -8022,41 +7989,14 @@ public class HelperGroup
         // that are genuinely in the ERROR state; for CONNECTED/CONNECTING groups just refresh the
         // DHT/bootstrap above and let toxcore finish connecting on its own (last-known-good behavior).
         final int conn_now = tox_group_is_connected(group_num);
-        // KHANDAQ (#246): the ERROR-only rule above is right for a group that is still finding its
-        // peers, but it never covers a group that FINISHED connecting and then saw its peers vanish
-        // one-way — CONNECTED with only ourselves online while toxcore still lists other members as
-        // offline. That state does not self-heal (QA: one device listed the other as online, the
-        // other listed only itself, and only an app restart cleared it), and the restart cure is
-        // precisely this handshake reset. Gates and their reasoning live in NgcStuckGroupPolicy;
-        // CONNECTING still never lands here, so the join regression that motivated the guard stays
-        // fixed.
-        final long now_ms = System.currentTimeMillis();
-        final boolean stuck_alone = NgcStuckGroupPolicy.shouldHardReset(
-                conn_before_burst == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value,
-                online_before_burst, offline_before_burst,
-                group_stuck_alone_since_ms.get(group_identifier),
-                group_last_stuck_reset_ms.get(group_identifier), now_ms);
-
-        if (conn_now == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_ERROR.value
-            || stuck_alone)
+        // KHANDAQ (#246): a stuck-group hard reset used to hang off this branch too. It was written
+        // against a misdiagnosis — the one-way peer split turned out to be a stale header, with the
+        // transport working the whole time (toxcore reported the peer present while the screen did
+        // not), so reconnecting the group addressed a layer that was never broken. Removed rather
+        // than left dormant: an unvalidated path that drops every peer and restarts the handshake is
+        // not something to carry on a hunch.
+        if (conn_now == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_ERROR.value)
         {
-            if (stuck_alone)
-            {
-                // Re-arm both timers BEFORE reconnecting: the cooldown must hold even if the
-                // reconnect below throws, and the stuck clock must restart so a group that comes
-                // back and drops again is measured afresh rather than resetting instantly.
-                group_last_stuck_reset_ms.put(group_identifier, now_ms);
-                group_stuck_alone_since_ms.put(group_identifier, now_ms);
-                // Log.i rather than HelperGeneric.logI, which compiles out unless BuildConfig.DEBUG:
-                // this is the one line that says the #246 recovery fired, the bug it recovers from was
-                // reported from the field, and it was invisible there precisely because everything
-                // about group maintenance is debug-only. Rare by construction — the cooldown allows at
-                // most one per group per 10 minutes — and it names no user, only the group and counts.
-                Log.i(TAG, "kickstart_group_connection:stuck-alone-reset id="
-                        + group_identifier_short(group_identifier, false) + " gn=" + group_num
-                        + " online=" + tox_group_peer_count(group_num)
-                        + " offline=" + tox_group_offline_peer_count(group_num));
-            }
             final int res = tox_group_reconnect(group_num);
             HelperGeneric.logI(TAG, "kickstart_group_connection:reconnect id=" + group_identifier + " gn=" + group_num
                     + " res=" + res + " conn=" + tox_group_is_connected(group_num) + " peers=" + tox_group_peer_count(group_num));
@@ -8473,7 +8413,6 @@ public class HelperGroup
         if (peer_count > 1L)
         {
             group_alone_since_ms.remove(group_identifier);
-            mark_group_alone(group_identifier, false);
             if (conn == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
             {
                 clear_group_connect_progress(group_identifier);
@@ -8482,7 +8421,6 @@ public class HelperGroup
         }
 
         group_alone_since_ms.putIfAbsent(group_identifier, System.currentTimeMillis());
-        mark_group_alone(group_identifier, true);
         if (conn == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value)
         {
             clear_group_connect_progress(group_identifier);
@@ -8526,7 +8464,7 @@ public class HelperGroup
             // Public groups already do exactly this (see maintain_all_groups, the CONNECTED branch),
             // so this restores parity rather than inventing behaviour. escalate_if_alone_too_long is
             // itself rate-limited to one pass per period, and the hard reset it can lead to is gated
-            // separately by NgcStuckGroupPolicy.
+            // itself rate-limited to one pass per period.
             escalate_if_alone_too_long(group_num, group_identifier);
         }
     }
@@ -8940,14 +8878,12 @@ public class HelperGroup
                 if (peer_count > 1L)
                 {
                     group_alone_since_ms.remove(group_identifier);
-                    mark_group_alone(group_identifier, false);
                     group_udp_hint_shown.remove(group_identifier); // recovered -> re-arm the hint
                     group_udp_hint_suppress_logged.remove(group_identifier);
                 }
                 else
                 {
                     group_alone_since_ms.putIfAbsent(group_identifier, System.currentTimeMillis());
-                    mark_group_alone(group_identifier, true);
                     if (group_connect_elapsed_ms(group_identifier) >= GROUP_FRIEND_FALLBACK_AFTER_MS)
                     {
                         if (should_run_group_maintenance(group_identifier, group_last_invite_request_ms, 15_000L))

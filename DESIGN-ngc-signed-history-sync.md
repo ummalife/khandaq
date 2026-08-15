@@ -1,6 +1,6 @@
 # Design — authenticated authorship for NGC history sync
 
-**Status:** proposal, awaiting sign-off. Nothing here is implemented.
+**Status:** частично реализовано — точное состояние в §0 ниже, ему и верить. Ничто из сделанного не меняет исходящий трафик: версию `0x02` не отправляет ни один клиент, так что радиус поражения нулевой. (Изначально документ был чистым предложением; строка «nothing here is implemented» устарела и вводила в заблуждение.)
 **Closes:** external audit #2, finding 1 (the half that needs a protocol version).
 **Author:** written 11 Aug 2026 as the follow-up promised in `SECURITY-REVIEW2-RESPONSE.md`. Lives at the repo root, not under `docs/`, because `docs/**` is gitignored here.
 

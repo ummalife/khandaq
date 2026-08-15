@@ -7497,6 +7497,11 @@ public class HelperGroup
             return;
         }
         clear_group_connect_progress(group_identifier);
+        // KHANDAQ (audit #2 finding 1, step 3): announce our history-signing key. Sent here because
+        // a peer can only learn it from a live packet, and rate-limited inside announceToGroup, so
+        // a flapping group cannot turn this into traffic. Every shipped client drops version 0x02,
+        // so this is inert until signing clients are rolled out.
+        announce_hsk_to_group(group_num, group_identifier, false);
         flush_pending_group_messages(group_identifier);
         retry_pending_outgoing_group_files(group_identifier);
         sync_group_peers_from_tox_to_db(group_num);
@@ -8407,6 +8412,33 @@ public class HelperGroup
 
     /** Bootstrap + wakeup without tox_group_reconnect (safe while waiting for DHT peers). */
     /** Private groups: reconnect on ERROR + friend-assisted join when alone (desktop parity). */
+    /**
+     * KHANDAQ (audit #2 finding 1, step 3): announces this profile's history-signing key into one
+     * group. Safe to call often — announceToGroup keeps its own per-group interval, and without a
+     * usable Tox identity or key it simply does nothing.
+     */
+    static void announce_hsk_to_group(final long group_num, final String group_identifier,
+                                      final boolean force)
+    {
+        try
+        {
+            if (group_num < 0 || group_identifier == null)
+            {
+                return;
+            }
+            final String self_tox_pub = NgcHskStore.toxPubFromToxId(MainActivity.get_my_toxid());
+            if (self_tox_pub == null)
+            {
+                return;
+            }
+            NgcHskAnnounce.announceToGroup(group_num, group_identifier, self_tox_pub, force);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "announce_hsk_to_group:EE:" + e.getMessage());
+        }
+    }
+
     static void maintain_private_group(final long group_num, @NonNull final String group_identifier,
                                        final int conn, final long peer_count)
     {
@@ -8859,6 +8891,14 @@ public class HelperGroup
                 final long peer_count = Math.max(0L, tox_group_peer_count(group_num));
                 final boolean is_public = MainActivity.tox_group_get_privacy_state(group_num) ==
                         ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value;
+
+                // KHANDAQ (audit #2 finding 1, step 3): periodic re-announcement, before the
+                // public/private split so both kinds get it. A peer that joins after us can only
+                // learn our signing key from a live packet, and on_group_connected fires only for
+                // us — so without this, anyone arriving later could never verify our history.
+                // announceToGroup holds a 10-minute per-group interval, so this costs one 120-byte
+                // packet per group per ten minutes at most.
+                announce_hsk_to_group(group_num, group_identifier, false);
 
                 if (!is_public)
                 {

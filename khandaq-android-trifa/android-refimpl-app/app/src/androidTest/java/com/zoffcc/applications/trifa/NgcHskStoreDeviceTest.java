@@ -11,6 +11,7 @@ import java.util.Arrays;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assume.assumeTrue;
@@ -159,6 +160,42 @@ public class NgcHskStoreDeviceTest
 
         // ...and the new one must now be the stored one.
         assertArrayEquals(forB.pub, NgcHskStore.ensureKeypair(OWNER_B).pub);
+    }
+
+    @Test
+    public void the_announcement_we_emit_parses_and_verifies_as_a_peer_would_check_it()
+    {
+        // The whole cryptographic path of step 3 except the socket: build the packet the way the
+        // group emitter does, then take it apart and check it exactly as the receiving side does.
+        // A peer that cannot verify our announcement can never verify our history either, and the
+        // failure would be silent — it looks like an unsigned old client.
+        assumeTrue("no open profile — g_opts unavailable", profileIsOpen());
+        clearRows();
+
+        final long validFrom = 1_755_000_000_000L;
+        final byte[] packet = NgcHskAnnounce.buildSelfAnnouncement(OWNER_A, validFrom);
+        assertNotNull("announcement could not be built", packet);
+        assertEquals(NgcHistSigParser.ANNOUNCE_PACKET_SIZE, packet.length);
+
+        final NgcHistSigParser.Announcement ann =
+                NgcHistSigParser.parseAnnouncement(packet, packet.length);
+        assertNotNull("our own packet did not survive our own parser", ann);
+        assertEquals(validFrom, ann.validFromTs);
+
+        // The receiver rebuilds the pre-image from the sender's TOX key (which it takes from the
+        // transport, not the payload) and the announced key, then verifies the self-signature.
+        final byte[] toxPub = NgcHskStore.fromHex(OWNER_A);
+        final byte[] preimage = NgcHistSig.announcePreimage(toxPub, ann.hskPub, ann.validFromTs);
+        assertNotNull(preimage);
+        assertEquals(0, MainActivity.khandaq_ed25519_verify(
+                preimage, preimage.length, ann.signature, ann.hskPub));
+
+        // And it must fail when the claimed Tox identity is not the one the signature covers —
+        // otherwise anyone could replay someone else's announcement under their own name.
+        final byte[] wrongPreimage =
+                NgcHistSig.announcePreimage(NgcHskStore.fromHex(OWNER_B), ann.hskPub, ann.validFromTs);
+        assertNotEquals(0, MainActivity.khandaq_ed25519_verify(
+                wrongPreimage, wrongPreimage.length, ann.signature, ann.hskPub));
     }
 
     @Test

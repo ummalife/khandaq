@@ -89,7 +89,18 @@ bool CredentialStore::save(const QString& profile, const QString& password)
     cred.UserName = user.data();
     cred.CredentialBlobSize = static_cast<DWORD>(secret.size() * sizeof(wchar_t));
     cred.CredentialBlob = reinterpret_cast<LPBYTE>(secret.data());
-    cred.Persist = CRED_PERSIST_CURRENT_USER; // KHANDAQ (audit A43): scope to this user, not all machine users
+    // KHANDAQ: audit A43 changed this to CRED_PERSIST_CURRENT_USER "to scope it to this user, not
+    // all machine users". That constant does not exist in the Windows API — wincred.h defines only
+    // CRED_PERSIST_SESSION, CRED_PERSIST_LOCAL_MACHINE and CRED_PERSIST_ENTERPRISE — so the Windows
+    // cross-build has not compiled since, which is why nobody noticed the premise was also wrong.
+    //
+    // Persist does not control WHO can read the credential. Credential Manager is per-user by
+    // construction: an entry written here lands in the calling user's vault and other users of the
+    // machine cannot read it. The flag controls LIFETIME instead — SESSION dies with the logon
+    // session, LOCAL_MACHINE keeps it for this user on this machine, ENTERPRISE additionally roams
+    // it with the user profile. LOCAL_MACHINE was therefore already exactly what A43 asked for, and
+    // it is also the least-roaming option that survives a reboot.
+    cred.Persist = CRED_PERSIST_LOCAL_MACHINE;
 
     return CredWriteW(&cred, 0) != FALSE;
 #else

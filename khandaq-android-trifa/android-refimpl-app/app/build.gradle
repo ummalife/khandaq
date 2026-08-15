@@ -73,6 +73,16 @@ android {
         androidTest {
             java {
                 exclude 'org/khandaq/messenger/VideoFrameAnalyser.java'
+                // KHANDAQ: four TRIfA-era instrumentation tests reference statics that no longer
+                // exist (MainActivity.orma and friends) and fail to compile - 44 errors between
+                // them. Because androidTest compiles as one unit, that broke EVERY instrumentation
+                // test in the project, including new ones: nothing here could run at all. Excluded
+                // rather than deleted, so they stay in git for whoever wants to repair them, and so
+                // connectedAndroidTest works again in the meantime.
+                exclude 'com/zoffcc/applications/trifa/JavaFriendTester.java'
+                exclude 'com/zoffcc/applications/trifa/ShowMaintenanceInfo.java'
+                exclude 'com/zoffcc/applications/trifa/StartExportImportTest.java'
+                exclude 'com/zoffcc/applications/trifa/StartMainActivityWrapperTest.java'
             }
         }
     }

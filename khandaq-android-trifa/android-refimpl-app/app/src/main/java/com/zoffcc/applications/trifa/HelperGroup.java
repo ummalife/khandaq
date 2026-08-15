@@ -7982,6 +7982,16 @@ public class HelperGroup
             return;
         }
 
+        // KHANDAQ (#246, found on a two-emulator repro): sample the group state BEFORE the burst
+        // below. Bootstrapping and waking the tox thread knocks a CONNECTED group into CONNECTING
+        // for a moment, so a stuck-group check made afterwards read conn=CONNECTING every single
+        // time and skipped — the policy was being evaluated after the very thing that changes what
+        // it is gating on. These three values are what the caller actually observed when it decided
+        // this group was alone.
+        final int conn_before_burst = tox_group_is_connected(group_num);
+        final long online_before_burst = tox_group_peer_count(group_num);
+        final long offline_before_burst = tox_group_offline_peer_count(group_num);
+
         perform_khandaq_bootstrap_burst();
         TrifaToxService.bootstrap_me(true);
         TrifaToxService.wakeup_tox_thread();
@@ -8012,8 +8022,8 @@ public class HelperGroup
         // fixed.
         final long now_ms = System.currentTimeMillis();
         final boolean stuck_alone = NgcStuckGroupPolicy.shouldHardReset(
-                conn_now == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value,
-                tox_group_peer_count(group_num), tox_group_offline_peer_count(group_num),
+                conn_before_burst == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value,
+                online_before_burst, offline_before_burst,
                 group_stuck_alone_since_ms.get(group_identifier),
                 group_last_stuck_reset_ms.get(group_identifier), now_ms);
 
@@ -8492,6 +8502,22 @@ public class HelperGroup
             {
                 escalate_if_alone_too_long(group_num, group_identifier);
             }
+        }
+        else if (conn == TRIFAGlobals.TOX_GROUP_CONNECTION_STATUS.TOX_GROUP_CONNECTION_STATUS_CONNECTED.value
+                 && peer_count <= 1L)
+        {
+            // KHANDAQ (#246, found by a two-emulator repro): this branch did not exist. A private
+            // group that had FINISHED connecting and then lost its peers was handled by nothing —
+            // ERROR reconnects, CONNECTING escalates, and CONNECTED fell off the end. So the alone
+            // escalation never ran in the one state it is for, and neither did the stuck-group reset
+            // that hangs off it, which is why the recovery looked dead on a real device while its
+            // unit tests passed: they cover the policy, not the path that reaches it.
+            //
+            // Public groups already do exactly this (see maintain_all_groups, the CONNECTED branch),
+            // so this restores parity rather than inventing behaviour. escalate_if_alone_too_long is
+            // itself rate-limited to one pass per period, and the hard reset it can lead to is gated
+            // separately by NgcStuckGroupPolicy.
+            escalate_if_alone_too_long(group_num, group_identifier);
         }
     }
 

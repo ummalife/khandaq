@@ -1435,9 +1435,24 @@ public class GroupMessageListActivity extends AppCompatActivity
             {
                 set_peer_count_header();
                 set_group_connection_status_icon();
-                if (should_refresh_group_connect_header(group_id) && group_handler != null)
+                // KHANDAQ (#246): keep refreshing for as long as this chat is on screen, not only
+                // while the group is joining or its mesh is degraded.
+                //
+                // The header is otherwise purely event-driven — the peer-join callback calls
+                // update_group_in_groupmessagelist, which ends at set_peer_count_header. An event
+                // that never arrives therefore freezes the count for good: reproduced by SIGSTOPing
+                // the peer's process, where toxcore recovered on its own (tox_peers=2, CONNECTED,
+                // fanout=1) while the header sat at "1 online" until the chat was re-entered. That
+                // is what "only restarting the app fixes it" really was — a stale header, not a
+                // broken mesh.
+                //
+                // Cheap: stop_group_connect_header_refresh runs in onPause, so nothing ticks when
+                // the chat is not visible, and the counts come from a 1.5s cache. The faster
+                // cadence is kept for the states that actually change quickly.
+                final long delay_ms = should_refresh_group_connect_header(group_id) ? 2000L : 5000L;
+                if (group_handler != null)
                 {
-                    group_handler.postDelayed(this, 2000L);
+                    group_handler.postDelayed(this, delay_ms);
                 }
             }
         };

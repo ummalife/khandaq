@@ -7961,8 +7961,18 @@ public class HelperGroup
         }
         // restart the alone-timer so the next escalation is a full period away
         group_alone_since_ms.put(group_identifier, System.currentTimeMillis());
-        HelperGeneric.logI(TAG, "escalate_if_alone_too_long:id=" + group_identifier_short(group_identifier, false)
-                + " gn=" + group_num + " -> kickstart (reset announce backoff)");
+        // Log.i, not logI: logI compiles out unless BuildConfig.DEBUG, and this is the one line that
+        // describes a group nobody can reach. #246 came from the field and could not be
+        // characterised for days precisely because every group diagnostic is debug-only — the QA
+        // header ("N участников · M онлайн") shows peer COUNTS, which say nothing about whether the
+        // group is CONNECTED or CONNECTING, and that distinction is what decides whether the
+        // stuck-group recovery may act. Rare by construction: this point is reached at most once per
+        // escalation period per group. Names no user — group id (shortened), state, counts.
+        Log.i(TAG, "escalate_if_alone_too_long:id=" + group_identifier_short(group_identifier, false)
+                + " gn=" + group_num + " conn=" + tox_group_is_connected(group_num)
+                + " online=" + tox_group_peer_count(group_num)
+                + " offline=" + tox_group_offline_peer_count(group_num)
+                + " -> kickstart (reset announce backoff)");
         send_group_invite_request_to_friends(group_identifier);
         final Thread t = new Thread(() -> kickstart_group_connection(group_num, group_identifier),
                 "grp-kick-" + group_num);

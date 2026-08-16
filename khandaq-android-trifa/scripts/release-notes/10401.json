@@ -1,0 +1,4 @@
+{
+  "en-US": "Hardens the authorship check added in the previous build. A verified mark now proves the exact message it appears on — its author, its time and its text — instead of only matching an identifier a sender chooses, so a relayed message cannot inherit someone else's verification. Everything else from 0.2.30 is unchanged: signed group history, the group member who could stay invisible until restart, and the group file that got stuck when sent while offline.",
+  "ru-RU": "Усиливает проверку авторства, добавленную в прошлой сборке. Отметка о подтверждении теперь доказывает именно то сообщение, на котором стоит, — его автора, время и текст, — а не совпадение идентификатора, который выбирает отправитель. Пересланное сообщение больше не может унаследовать чужое подтверждение. Остальное из 0.2.30 без изменений: подписанная история групп, участник, остававшийся невидимым до перезапуска, и застревавший файл, отправленный офлайн."
+}

@@ -8,6 +8,7 @@
 
 @class OCTChat;
 @class OCTMessageAbstract;
+@class OCTNgcSignedHistory;
 
 typedef BOOL (^OCTNgcGroupHistSyncIsBlockedPeerBlock)(uint32_t groupNumber, uint32_t peerId);
 typedef void (^OCTNgcGroupHistSyncDeliveryReceiptBlock)(OCTChat *chat, uint32_t messageId, uint32_t peerId);
@@ -60,6 +61,16 @@ typedef NSString *(^OCTNgcGroupHistSyncFileUTIBlock)(NSString *fileName);
 
 @property (nonatomic, copy, nullable) NSArray<NSData *> *(^historySyncPacketsForGroupBlock)(uint32_t groupNumber);
 
+/**
+ * KHANDAQ (external audit #2, finding 1, step 4) — signed history, wired in as an OPTIONAL twin.
+ *
+ * Nil means the whole version-0x02 layer is off: nothing is signed on the way out and 0x02 records
+ * are dropped on the way in exactly as before this property existed. That is deliberate — it keeps
+ * the signing layer switchable from the one place that owns it (the submanager) without a second
+ * flag that could disagree with it.
+ */
+@property (nonatomic, strong, nullable) OCTNgcSignedHistory *signedHistory;
+
 - (instancetype)initWithSendPrivatePacketBlock:(OCTNgcGroupHistSyncSendPrivatePacketBlock)sendPrivatePacketBlock
                           peerPublicKeyBlock:(OCTNgcGroupHistSyncPeerPublicKeyBlock)peerPublicKeyBlock
                             peerNameForPeerIdBlock:(OCTNgcGroupHistSyncPeerNameBlock)peerNameForPeerIdBlock
@@ -96,6 +107,26 @@ typedef NSString *(^OCTNgcGroupHistSyncFileUTIBlock)(NSString *fileName);
 - (void)scheduleBroadcastHistoryToAllPeersWithGroupNumber:(uint32_t)groupNumber;
 
 - (nullable NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message groupNumber:(uint32_t)groupNumber;
+
+/**
+ * The same build, additionally handing back the signed (version 0x02) twin of the very same row.
+ *
+ * The out-parameter exists so that the signed record can NEVER be derived from a second look at the
+ * message. Author, peer name, message id and timestamp would each have to be resolved again — through
+ * the volatile groupSenderPeerId, the live roster, the self-key fallback — and any of those can answer
+ * differently a moment later (NGC re-issues peer ids, a peer renames, a row is re-resolved after the
+ * author left). The signature would then attest to a row nobody sent, which is strictly worse than no
+ * signature at all: a receiver counts it as a FAILED verification, not as an old client.
+ *
+ * @param signedTwin receives the signed packet, or nil when there is none — a file row, someone else's
+ *                   text, or signedHistory being unset. NULL is allowed and means "unsigned only".
+ * @return the unsigned packet exactly as the selector above returns it. It, not the twin, is what
+ *         inserts the row on the far side, so it is emitted first and is never withheld because
+ *         signing failed.
+ */
+- (nullable NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message
+                                    groupNumber:(uint32_t)groupNumber
+                                     signedTwin:(NSData **)signedTwin;
 
 @end
 

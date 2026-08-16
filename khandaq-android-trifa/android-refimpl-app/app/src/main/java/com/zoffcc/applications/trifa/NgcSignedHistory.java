@@ -188,6 +188,27 @@ final class NgcSignedHistory
     /** g_opts row: kqhistver_<group>|<msgid>|<author> -> "1" once the signature has checked out. */
     static final String G_OPTS_VERIFIED_PREFIX = "kqhistver_";
 
+    /**
+     * What the verdict stores: the exact content the signature attested to.
+     *
+     * The row KEY can only be (group, msg_id, author) — that is all a rendered row can look itself
+     * up by. But msg_id is four attacker-chosen bytes, so a key alone would let a verdict earned by
+     * one message vouch for a different one: relay a genuine signed record, then relay an unsigned
+     * row carrying the same msg_id and author but any text at all, and the second row would render
+     * as verified. Storing the timestamp and the text hash the signature actually covered, and
+     * re-checking them against the row being rendered, is what makes the verdict a statement about
+     * THIS message rather than about a pair of identifiers.
+     */
+    static String verdictValue(final long timestampSeconds, final byte[] textUtf8)
+    {
+        final byte[] hash = NgcHistSig.sha256Public(textUtf8);
+        if (hash == null)
+        {
+            return null;
+        }
+        return timestampSeconds + ":" + NgcHskStore.toHex(hash);
+    }
+
     static String verifiedRowKey(final String groupIdentifier, final byte[] msgId, final byte[] authorPub)
     {
         if (groupIdentifier == null || msgId == null || authorPub == null)
@@ -267,7 +288,7 @@ final class NgcSignedHistory
             final String row = verifiedRowKey(groupIdentifier, st.msgId, st.authorPub);
             if (row != null)
             {
-                HelperGeneric.set_g_opts(row, "1");
+                HelperGeneric.set_g_opts(row, verdictValue(st.timestamp, st.textUtf8));
                 HelperGeneric.logI(TAG, "handleIncomingSignedText:verified gn=" + groupNum);
                 // The row this proves was inserted and drawn milliseconds ago by the unsigned copy,
                 // still carrying the unverified marker. Rebind so the marker actually goes away.
@@ -281,15 +302,19 @@ final class NgcSignedHistory
     }
 
     /**
-     * @return true when a signature has proved this row's author. Reads the memo written by
-     *         {@link #handleIncomingSignedText}; a missing row simply means "not proved", which is
-     *         every message today.
+     * @return true when a signature has proved THIS row — its author, its timestamp and its exact
+     *         text. A missing row simply means "not proved", which is every message today.
+     *
+     * The stored verdict is re-checked against the message being rendered rather than merely found:
+     * looking a row up by (group, msg_id, author) and trusting whatever is there would let a verdict
+     * earned by one message vouch for another that shares those four attacker-chosen id bytes.
      */
     static boolean isAuthorVerified(final GroupMessage m)
     {
         try
         {
-            if (m == null || m.group_identifier == null || m.tox_group_peer_pubkey == null)
+            if (m == null || m.group_identifier == null || m.tox_group_peer_pubkey == null
+                || m.text == null)
             {
                 return false;
             }
@@ -299,7 +324,15 @@ final class NgcSignedHistory
                 return false;
             }
             final String row = verifiedRowKey(m.group_identifier, msgIdBytes(m.message_id_tox), authorPub);
-            return row != null && "1".equals(HelperGeneric.get_g_opts(row));
+            if (row == null)
+            {
+                return false;
+            }
+            final String stored = HelperGeneric.get_g_opts(row);
+            // Seconds, exactly as the signed packet carried them and as the emitter derived them.
+            final String expected = verdictValue(m.sent_timestamp / 1000L,
+                                                 m.text.getBytes(StandardCharsets.UTF_8));
+            return expected != null && expected.equals(stored);
         }
         catch (Exception e)
         {

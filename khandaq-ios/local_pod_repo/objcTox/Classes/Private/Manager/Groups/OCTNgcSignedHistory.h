@@ -43,7 +43,23 @@ typedef BOOL (^OCTNgcSignedHistorySetValueBlock)(NSString *key, NSString *value)
                            setValueBlock:(OCTNgcSignedHistorySetValueBlock)setValueBlock;
 
 /**
+ * Resolves (and mints on first use) this group's signing key, caching it in memory.
+ *
+ * MUST be called before any buildSignedText… for that group, and MUST be called from outside the
+ * profile database's own queue. The store reaches the database through a serial queue, while the
+ * packets are built from inside an enumeration ALREADY running on that queue — looking the key up
+ * there is a dispatch_sync onto a queue the current thread owns, which libdispatch turns into an
+ * immediate crash and which would take the shipped unsigned history path down with it.
+ *
+ * @return YES if a key is available; when NO, buildSignedText… simply produces nothing.
+ */
+- (BOOL)prepareKeyForGroupNumber:(uint32_t)groupNumber;
+
+/**
  * Builds the signed packet for one of OUR OWN messages.
+ *
+ * Uses only the key cached by -prepareKeyForGroupNumber: and never touches the database, so it is
+ * safe to call from inside a database enumeration.
  *
  * @param authorPubHex the row's author. Anything that is not our own key in this group returns nil:
  *                     a signature is a claim about authorship and we can only make it about

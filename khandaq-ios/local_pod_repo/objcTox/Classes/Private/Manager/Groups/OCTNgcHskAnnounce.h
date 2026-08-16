@@ -29,8 +29,9 @@ typedef BOOL (^OCTNgcHskAnnounceSetValueBlock)(NSString *key, NSString *value);
  * peer that arrives later — the packet goes out while the peer list is still empty, and on Android
  * two clients started together learned nothing for the full ten-minute interval. A time window
  * cannot fix that: any window wide enough to collapse a join burst also swallows the join that
- * matters. So this tracks which peers have actually heard us, and a peer that has not triggers one
- * broadcast that marks everyone currently present.
+ * matters. So this tracks which peers have actually heard us, and a peer that has
+ * not yet triggers one broadcast. Each join costs its own broadcast here (Android additionally
+ * marks everyone currently present, which this class cannot do without a roster accessor).
  */
 @interface OCTNgcHskAnnounce : NSObject
 

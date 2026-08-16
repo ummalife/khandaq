@@ -17,6 +17,9 @@ static NSString *const kVerifiedRowPrefix = @"kqhistver_";
 @property (nonatomic, copy) OCTNgcSignedHistorySelfToxPubBlock selfToxPubBlock;
 @property (nonatomic, copy) OCTNgcSignedHistoryGetValueBlock getValueBlock;
 @property (nonatomic, copy) OCTNgcSignedHistorySetValueBlock setValueBlock;
+
+/** groupId(lowercase) -> secret key, resolved outside the database queue by -prepareKeyForGroupNumber:. */
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSData *> *secByGroup;
 @end
 
 @implementation OCTNgcSignedHistory
@@ -36,6 +39,7 @@ static NSString *const kVerifiedRowPrefix = @"kqhistver_";
         _selfToxPubBlock = [selfToxPubBlock copy];
         _getValueBlock = [getValueBlock copy];
         _setValueBlock = [setValueBlock copy];
+        _secByGroup = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -61,6 +65,32 @@ static NSData *peerNameField(NSString *peerName)
                           length:MIN(raw.length, kOCTNgcHistSigPeerNameSize)];
     }
     return out;
+}
+
+- (BOOL)prepareKeyForGroupNumber:(uint32_t)groupNumber
+{
+    NSString *groupId = self.groupIdBlock ? self.groupIdBlock(groupNumber) : nil;
+    NSString *ownerToxPub = self.selfToxPubBlock ? self.selfToxPubBlock() : nil;
+    if (groupId.length == 0 || ownerToxPub == nil) {
+        return NO;
+    }
+
+    NSData *pub = nil;
+    NSData *sec = nil;
+    if (! [OCTNgcHskStore ensureKeypairForGroup:groupId
+                                  currentToxPub:ownerToxPub
+                                       getBlock:self.getValueBlock
+                                       setBlock:self.setValueBlock
+                                         outPub:&pub
+                                         outSec:&sec]) {
+        OCTLogInfo(@"signedHistory: no signing key for group %u; rows will go out unsigned", groupNumber);
+        return NO;
+    }
+
+    @synchronized(self) {
+        self.secByGroup[groupId.lowercaseString] = sec;
+    }
+    return YES;
 }
 
 #pragma mark - emitting
@@ -99,14 +129,13 @@ static NSData *peerNameField(NSString *peerName)
         return nil;
     }
 
-    NSData *pub = nil;
     NSData *sec = nil;
-    if (! [OCTNgcHskStore ensureKeypairForGroup:groupId
-                                  currentToxPub:ownerToxPub
-                                       getBlock:self.getValueBlock
-                                       setBlock:self.setValueBlock
-                                         outPub:&pub
-                                         outSec:&sec]) {
+    @synchronized(self) {
+        sec = self.secByGroup[groupId.lowercaseString];
+    }
+    if (sec == nil) {
+        // -prepareKeyForGroupNumber: was not called, or found no key. Deliberately NOT resolved here:
+        // this runs inside the database's own queue and reaching the store would deadlock it.
         return nil;
     }
 

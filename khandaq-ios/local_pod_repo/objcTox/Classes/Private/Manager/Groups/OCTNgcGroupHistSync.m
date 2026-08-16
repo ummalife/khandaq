@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import "OCTNgcGroupHistSync.h"
+#import "OCTNgcSignedHistory.h"
 #import "OCTTox+Private.h"
 #import "OCTToxConstants.h"
 #import "OCTManagerConstants.h"
@@ -139,6 +140,16 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
     }
 
     const uint8_t *bytes = data.bytes;
+
+    // KHANDAQ (external audit #2, finding 1, step 4): signed records carry version 0x02 and would be
+    // thrown away by the layer check below, which knows only 0x01 — the whole receiving half would be
+    // dead code. Dispatch them first: the handler recognises its own packets by magic + version +
+    // pktid, so nothing that belongs to the 0x01 arms can be swallowed here, and a MALFORMED 0x02
+    // packet is consumed rather than falling through into length arithmetic written for another
+    // format. With signedHistory unset this is a message to nil and the old path is untouched.
+    if ([self.signedHistory handleIncomingPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
 
     if (bytes[6] != kOCTNgcHistLayer) {
         return;
@@ -379,6 +390,19 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
 
 - (nullable NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message groupNumber:(uint32_t)groupNumber
 {
+    return [self buildSyncPacketForMessage:message groupNumber:groupNumber signedTwin:NULL];
+}
+
+- (nullable NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message
+                                    groupNumber:(uint32_t)groupNumber
+                                     signedTwin:(NSData **)signedTwin
+{
+    // Clear it up front so every early return below leaves the caller with "no twin" rather than
+    // with whatever its variable happened to hold — a stale twin would be attached to the WRONG row.
+    if (signedTwin != NULL) {
+        *signedTwin = nil;
+    }
+
     // KHANDAQ (audit): a private member-to-member message is stored in the GROUP chat and is only
     // separated from the timeline by this flag, so any selection that forgets it turns a 1:1 thread
     // into a group broadcast. Refuse here as well as in the query (OCTRealmManager), and before the
@@ -394,10 +418,12 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
     }
 
     if (message.messageText) {
-        return [self buildSyncMessagePacketForMessage:message groupNumber:groupNumber];
+        return [self buildSyncMessagePacketForMessage:message groupNumber:groupNumber signedTwin:signedTwin];
     }
 
     if (message.messageFile) {
+        // No signed form for files exists yet (§4 covers text only), so a file row travels unsigned
+        // and *signedTwin stays nil — never a text twin left over from the previous row.
         return [self buildSyncFilePacketForMessage:message groupNumber:groupNumber];
     }
 
@@ -406,6 +432,7 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
 
 - (nullable NSData *)buildSyncMessagePacketForMessage:(OCTMessageAbstract *)message
                                           groupNumber:(uint32_t)groupNumber
+                                           signedTwin:(NSData **)signedTwin
 {
     OCTMessageText *messageText = message.messageText;
 
@@ -444,15 +471,23 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
     return [self buildSyncMessagePacketForMessageText:messageText
                                        senderPubkeyHex:senderPubkeyHex
                                               peerName:peerName
-                                         dateInterval:message.dateInterval];
+                                         dateInterval:message.dateInterval
+                                          groupNumber:groupNumber
+                                           signedTwin:signedTwin];
 }
 
 - (nullable NSData *)buildSyncMessagePacketForMessageText:(OCTMessageText *)messageText
                                            senderPubkeyHex:(NSString *)senderPubkeyHex
                                                   peerName:(NSString *)peerName
                                              dateInterval:(NSTimeInterval)dateInterval
+                                              groupNumber:(uint32_t)groupNumber
+                                               signedTwin:(NSData **)signedTwin
 {
-    NSData *textData = [messageText.text dataUsingEncoding:NSUTF8StringEncoding];
+    // Read the body ONCE. Everything below — the bytes that go on the wire and the bytes that get
+    // signed — comes from this one local, so the signature cannot end up covering a different string
+    // than the one that was actually sent.
+    NSString *text = messageText.text;
+    NSData *textData = [text dataUsingEncoding:NSUTF8StringEncoding];
 
     if (! textData || textData.length == 0 || textData.length > 37000) {
         return nil;
@@ -498,6 +533,27 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
                          inBuffer:bytes];
 
     memcpy(bytes + kOCTNgcHistSyncMsgHeader, textData.bytes, textData.length);
+
+    // KHANDAQ (external audit #2, finding 1, step 4): the signed twin is minted HERE, from the very
+    // locals that were just serialised above — senderPubkeyHex, messageId, dateInterval, peerName,
+    // text — and nowhere else. Resolving any of them a second time is the failure this placement
+    // exists to prevent: the author goes through the volatile groupSenderPeerId (NGC re-issues peer
+    // ids on leave/rejoin) and peerName through the live roster, so a second pass can legitimately
+    // answer differently and we would be signing a row we never sent.
+    //
+    // The timestamp is handed over at FULL width on purpose. The packet above transmits only its low
+    // four bytes; signing that truncation would produce a signature no other platform reconstructs.
+    //
+    // Only reached once the unsigned packet is complete, so signing can never suppress or alter the
+    // copy that actually inserts the row on the far side.
+    if (signedTwin != NULL && self.signedHistory) {
+        *signedTwin = [self.signedHistory buildSignedTextForGroupNumber:groupNumber
+                                                           authorPubHex:senderPubkeyHex
+                                                              messageId:messageId
+                                                              timestamp:(uint64_t)dateInterval
+                                                               peerName:peerName
+                                                                   text:text];
+    }
 
     return packet;
 }

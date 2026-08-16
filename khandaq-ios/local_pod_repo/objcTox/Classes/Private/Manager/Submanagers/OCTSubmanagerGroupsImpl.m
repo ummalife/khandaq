@@ -20,6 +20,7 @@
 #import "OCTNgcGroupHistSync.h"
 #import "OCTNgcHskAnnounce.h"
 #import "OCTNgcHskStore.h"
+#import "OCTNgcSignedHistory.h"
 #import "OCTNgcGroupLiveAudio.h"
 #import "OCTNgcGroupLiveVideo.h"
 #import "OCTSettingsStorageObject.h"
@@ -66,6 +67,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong) OCTNgcGroupLiveVideo *liveVideo;
 @property (nonatomic, strong) OCTNgcGroupHistSync *histSync;
 @property (nonatomic, strong) OCTNgcHskAnnounce *hskAnnounce;
+@property (nonatomic, strong) OCTNgcSignedHistory *signedHistory;
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryRunning;
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryCancelled;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupJoinAttemptByKey;
@@ -4038,6 +4040,69 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         }];
 }
 
+- (void)setupSignedHistoryIfNeeded
+{
+    if (self.signedHistory) {
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+
+    self.signedHistory = [[OCTNgcSignedHistory alloc]
+        initWithSendPrivateBlock:^BOOL(uint32_t groupNumber, uint32_t peerId, NSData *packet) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return NO;
+            }
+            // Unicast, like the unsigned history it travels beside: a broadcast would hand every
+            // member a copy of a row only the requesting peer asked for.
+            return [[self.dataSource managerGetTox] groupSendCustomPrivatePacket:packet
+                                                                     groupNumber:groupNumber
+                                                                          peerId:peerId
+                                                                        lossless:YES
+                                                                           error:nil];
+        }
+        groupIdBlock:^NSString *(uint32_t groupNumber) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetTox] groupChatIdHexForGroupNumber:groupNumber error:nil];
+        }
+        selfGroupPubBlock:^NSString *(uint32_t groupNumber) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetTox] groupSelfPublicKeyHexForGroupNumber:groupNumber
+                                                                                  error:nil];
+        }
+        selfToxPubBlock:^NSString *{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            // Same role as in the announcer: it decides only WHOSE stored key this is, so a changed
+            // profile re-mints instead of signing with a stranger's key. What the signature binds to
+            // is the per-group key above.
+            return [OCTNgcHskStore toxPubFromToxId:[[self.dataSource managerGetTox] userAddress]];
+        }
+        getValueBlock:^NSString *(NSString *key) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetRealmManager] ngcValueForKey:key];
+        }
+        setValueBlock:^BOOL(NSString *key, NSString *value) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return NO;
+            }
+            return [[self.dataSource managerGetRealmManager] setNgcValue:value forKey:key];
+        }];
+}
+
 - (void)setupHistSyncIfNeeded
 {
     if (self.histSync) {
@@ -4369,6 +4434,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                           groupNumber:(OCTToxGroupNumber)chat.groupNumber];
         }];
 
+    // KHANDAQ (external audit #2, finding 1, step 4): hand the sync layer the signer. Both objects are
+    // owned here so the signing layer has exactly one on/off point; with the property left nil nothing
+    // is signed and 0x02 records stay dropped, i.e. the pre-signing behaviour.
+    [self setupSignedHistoryIfNeeded];
+    self.histSync.signedHistory = self.signedHistory;
+
     self.histSync.historySyncPacketsForGroupBlock = ^NSArray<NSData *> *(uint32_t groupNumber) {
         __strong typeof(weakSelf) self = weakSelf;
 
@@ -4379,10 +4450,40 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         OCTNgcGroupHistSync *histSync = self.histSync;
         OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
-        return [realmManager groupHistorySyncPacketsForGroupNumber:groupNumber
-                                                 packetFromMessage:^NSData *(OCTMessageAbstract *message) {
-            return [histSync buildSyncPacketForMessage:message groupNumber:groupNumber];
+        // Resolve the signing key BEFORE entering Realm's queue below. The store reads and writes
+        // through that same serial queue, and the per-message block runs inside it — looking the key
+        // up there is a dispatch_sync onto the queue this thread already owns, which crashes the
+        // process and takes the shipped unsigned history path down with it.
+        [self.signedHistory prepareKeyForGroupNumber:groupNumber];
+        // Filled from inside the per-message block below, which Realm runs serially on its own queue,
+        // so no locking is needed and every twin belongs to the row built immediately before it.
+        NSMutableArray<NSData *> *signedPackets = [NSMutableArray new];
+
+        NSArray<NSData *> *packets = [realmManager groupHistorySyncPacketsForGroupNumber:groupNumber
+                                                                       packetFromMessage:^NSData *(OCTMessageAbstract *message) {
+            NSData *signedTwin = nil;
+            NSData *packet = [histSync buildSyncPacketForMessage:message
+                                                     groupNumber:groupNumber
+                                                      signedTwin:&signedTwin];
+
+            // Only when the unsigned copy actually goes out: a twin for a row the caller discarded
+            // would be a signature over a message the peer never receives, which reads on the far side
+            // as a signed record for a row that does not exist.
+            if (packet && signedTwin) {
+                [signedPackets addObject:signedTwin];
+            }
+
+            return packet;
         }];
+
+        if (signedPackets.count == 0) {
+            return packets;
+        }
+
+        // Signed copies go LAST. The unsigned packet is what inserts the row on every client in the
+        // field, and 0x02 is dropped outright by the ones that have not upgraded yet, so a verdict must
+        // never be able to arrive before the row it is about.
+        return [packets arrayByAddingObjectsFromArray:signedPackets];
     };
 }
 

@@ -133,6 +133,12 @@ final class NgcHistSig
         return pos + 8;
     }
 
+    /** The same digest the pre-image uses, so a verdict cannot be checked against a different one. */
+    static byte[] sha256Public(final byte[] data)
+    {
+        return sha256(data);
+    }
+
     private static byte[] sha256(final byte[] data)
     {
         try

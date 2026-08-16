@@ -169,8 +169,11 @@
             heard = [NSMutableSet set];
             self.heardByGroup[key] = heard;
         }
-        // The broadcast reached everyone present, so one join collapses a whole group waking up
-        // into a single packet rather than one per peer.
+        // Only the joining peer is marked, so a group of N waking up at once costs N broadcasts
+        // rather than one. That is a known cost, not an oversight: marking everyone present would
+        // need a peer-list accessor this class does not have, and guessing at the roster risks
+        // marking a peer that never received the packet — which would silence us towards it for
+        // good. Correctness over chattiness; the packet is 112 bytes.
         [heard addObject:peer];
     }
     return YES;

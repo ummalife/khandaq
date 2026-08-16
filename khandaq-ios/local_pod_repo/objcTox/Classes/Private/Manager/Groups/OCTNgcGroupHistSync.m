@@ -728,6 +728,7 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
                                   OCTToxMessageTypeNormal,
                                   senderPeerId,
                                   peerName,
+                                  senderPubkeyHex,
                                   messageId,
                                   (NSTimeInterval)timestamp);
 

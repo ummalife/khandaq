@@ -26,6 +26,11 @@ class BubbleView: UIView {
     // reactions line) instead of being appended inline into the body — so it reads as a system note,
     // not as text the sender typed onto the end of their message.
     fileprivate let editedLabel = UILabel()
+    // KHANDAQ (audit#2 finding 1): "relayed from history — sender not verified", its own bottom
+    // sub-row under the edited marker. The transport authenticates whoever RELAYED a history row,
+    // never the author it names, so until a signature says otherwise the name on the bubble is a
+    // claim and the UI has to say so in words rather than let it read as established.
+    fileprivate let unverifiedLabel = UILabel()
     var onReactionsTap: (() -> Void)?
     // KHANDAQ (#100): keep the quote view's tap handler in sync no matter the assignment order.
     // The cell sets onReplyQuoteTap AFTER calling bindReplyQuote, so without this didSet the quote's
@@ -134,6 +139,16 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
+    // KHANDAQ (audit#2 finding 1): show/hide the "sender not verified" note on relayed history rows.
+    func bindUnverifiedSender(_ isUnverified: Bool) {
+        unverifiedLabel.text = String(localized: "group_msg_sender_unverified")
+        unverifiedLabel.isHidden = !isUnverified
+        // Read out by VoiceOver as part of the bubble: the wording IS the feature, an icon alone
+        // would say nothing to anyone who cannot see it.
+        unverifiedLabel.accessibilityLabel = unverifiedLabel.text
+        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
+    }
+
     fileprivate func ensureMapImageView() {
         guard mapImageView == nil else {
             return
@@ -176,8 +191,9 @@ class BubbleView: UIView {
             }
 
             // KHANDAQ (#iOS edited-marker): the bubble bottom is now the lowest visible of
-            // {textView, reactionsLabel, editedLabel} — only pin textView to bottom when BOTH are hidden.
-            if reactionsLabel.isHidden && editedLabel.isHidden {
+            // {textView, reactionsLabel, editedLabel, unverifiedLabel} — only pin textView to the
+            // bottom when every one of them is hidden.
+            if reactionsLabel.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-Constants.TextViewVerticalOffset)
             }
             $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset)
@@ -192,8 +208,8 @@ class BubbleView: UIView {
             $0.top.equalTo(textView.snp.bottom)
             $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
             $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
-            // pin to bottom only when it's the last visible row (no edited marker below it).
-            if !reactionsLabel.isHidden && editedLabel.isHidden {
+            // pin to bottom only when it's the last visible row (nothing below it).
+            if !reactionsLabel.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-4.0)
             }
         }
@@ -209,7 +225,26 @@ class BubbleView: UIView {
             }
             $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
             $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            if !editedLabel.isHidden && unverifiedLabel.isHidden {
+                $0.bottom.equalTo(self).offset(-4.0)
+            }
+        }
+
+        // KHANDAQ (audit#2 finding 1): the unverified note is the LAST sub-row, so it owns the bubble
+        // bottom whenever it is visible.
+        unverifiedLabel.snp.remakeConstraints {
             if !editedLabel.isHidden {
+                $0.top.equalTo(editedLabel.snp.bottom).offset(1.0)
+            }
+            else if !reactionsLabel.isHidden {
+                $0.top.equalTo(reactionsLabel.snp.bottom).offset(1.0)
+            }
+            else {
+                $0.top.equalTo(textView.snp.bottom).offset(1.0)
+            }
+            $0.leading.equalTo(self).offset(Constants.TextViewHorizontalOffset + 4.0)
+            $0.trailing.lessThanOrEqualTo(self).offset(-Constants.TextViewHorizontalOffset)
+            if !unverifiedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-4.0)
             }
         }
@@ -267,6 +302,15 @@ class BubbleView: UIView {
         editedLabel.font = UIFont.italicSystemFont(ofSize: 11.0)
         editedLabel.isHidden = true
         addSubview(editedLabel)
+
+        // KHANDAQ (audit#2 finding 1): wraps rather than truncates — a marker nobody can read in full
+        // is a marker that does not warn. Coloured, not dimmed like «изменено»: this one is a caveat
+        // about the message, not a note about its history.
+        unverifiedLabel.font = UIFont.systemFont(ofSize: 11.0)
+        unverifiedLabel.numberOfLines = 0
+        unverifiedLabel.textColor = UIColor(red: 0.85, green: 0.47, blue: 0.10, alpha: 1.0)
+        unverifiedLabel.isHidden = true
+        addSubview(unverifiedLabel)
 
         textView.snp.makeConstraints {
             $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)

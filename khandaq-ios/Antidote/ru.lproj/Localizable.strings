@@ -402,6 +402,7 @@
 "chat_edit_action" = "Изменить";
 "message_edit_save" = "Сохранить";
 "message_edited_marker" = "изменено";
+"group_msg_sender_unverified" = "Получено из истории — отправитель не подтверждён";
 /* Delete button */
 "alert_delete" = "Удалить";
 /* Delete button */

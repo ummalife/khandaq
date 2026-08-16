@@ -33,6 +33,17 @@ typedef BOOL (^OCTNgcSignedHistorySetValueBlock)(NSString *key, NSString *value)
  * latent 2038-class truncation — and signing the truncated value would produce signatures nobody
  * could reproduce.
  */
+/**
+ * Posted on the main queue right after a verdict is stored, with the group's chat-id hex as `object`.
+ *
+ * The row a verdict proves was inserted and drawn milliseconds earlier by the unsigned copy that
+ * travels beside the signed one, and it still carries the "sender not verified" marker. The verdict
+ * lives in its own table, so no message-level Realm notification fires for it — without this, the
+ * marker would sit there, wrong, until the chat was reopened. (Android does the same thing through
+ * schedule_group_verified_refresh.)
+ */
+extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
+
 @interface OCTNgcSignedHistory : NSObject
 
 - (instancetype)initWithSendPrivateBlock:(OCTNgcSignedHistorySendPrivateBlock)sendPrivateBlock
@@ -99,10 +110,20 @@ typedef BOOL (^OCTNgcSignedHistorySetValueBlock)(NSString *key, NSString *value)
                                      peerId:(uint32_t)peerId
                                        data:(nullable NSData *)data;
 
-/** @return YES when a signature has proved this row's author. A missing row means "not proved". */
+/**
+ * @return YES when a signature has proved THIS row — its author, its timestamp and its exact text.
+ *         A missing row simply means "not proved", which is every message today.
+ *
+ * @param timestampSeconds the row's send time in SECONDS, exactly as the signed packet carried it.
+ * @param text             the body being rendered. Passed in and re-hashed on every read, because a
+ *                         verdict found under (group, msg_id, author) proves nothing on its own:
+ *                         msg_id is four bytes the sender chooses.
+ */
 - (BOOL)isAuthorVerifiedForGroupId:(nullable NSString *)groupId
                          messageId:(uint32_t)messageId
-                      authorPubHex:(nullable NSString *)authorPubHex;
+                      authorPubHex:(nullable NSString *)authorPubHex
+                         timestamp:(uint64_t)timestampSeconds
+                              text:(nullable NSString *)text;
 
 @end
 

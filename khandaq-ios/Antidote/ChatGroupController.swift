@@ -73,6 +73,8 @@ class ChatGroupController: PortraitChatController {
     fileprivate let mediaPixelSizeCache = NSCache<NSString, NSValue>()
     fileprivate var connectionStatusObserver: NSObjectProtocol?
     fileprivate var voicePlayerObserver: NSObjectProtocol?
+    /// KHANDAQ (audit#2 finding 1): fires when a signature proves a row that is already on screen.
+    fileprivate var signedHistoryVerdictObserver: NSObjectProtocol?
     fileprivate var membersDrawerView: GroupMembersDrawerView?
     fileprivate var membersDrawerDimmingView: UIView?
     fileprivate var membersDrawerLeadingConstraint: Constraint?
@@ -128,6 +130,9 @@ class ChatGroupController: PortraitChatController {
             NotificationCenter.default.removeObserver(observer)
         }
         if let observer = voicePlayerObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = signedHistoryVerdictObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -295,6 +300,26 @@ class ChatGroupController: PortraitChatController {
             object: nil,
             queue: .main) { [weak self] notification in
             self?.handleVoicePlayerStateChange(notification)
+        }
+
+        // KHANDAQ (audit#2 finding 1): a signature arrives a moment AFTER the row it proves, and the
+        // verdict lives outside the message object — no Realm notification fires for it. Without this
+        // the "sender not verified" note would sit there, now wrong, until the chat was reopened.
+        signedHistoryVerdictObserver = NotificationCenter.default.addObserver(
+            // Swift imports an NSString constant whose name ends in "Notification" as a member of
+            // NSNotification.Name, dropping the k-prefix and the suffix — the ObjC spelling is not
+            // available here at all.
+            forName: .octNgcSignedHistoryVerdictStored,
+            object: nil,
+            queue: .main) { [weak self] notification in
+            guard let self = self,
+                  let groupIdHex = notification.object as? String,
+                  groupIdHex.caseInsensitiveCompare(self.chat.groupChatIdHex ?? "") == .orderedSame else {
+                return
+            }
+            // Only the visible rows, and only their decoration: reloading the whole table here would
+            // fight the scroll position every time a sync burst lands.
+            self.tableView.reloadRows(at: self.tableView.indexPathsForVisibleRows ?? [], with: .none)
         }
     }
 
@@ -1055,6 +1080,12 @@ extension ChatGroupController: UITableViewDataSource {
         model.reactionsDisplay = ChatReactionsFormat.display(from: message.reactionsJSON)
         // KHANDAQ (#208/#H2): peer can edit their own group message → cell shows a small dim «изменено».
         model.edited = message.edited
+        // KHANDAQ (audit#2 finding 1): a history-synced row names an author the transport never
+        // authenticated — only the peer that RELAYED it. Say so on the bubble unless a signature over
+        // this exact message says otherwise. Live rows are unaffected: they arrive authenticated.
+        model.senderUnverified = message.groupHistorySync
+            && !message.groupSystemMessage
+            && !submanagerGroups.isGroupMessageAuthorVerified(message, in: chat)
         cell.delegate = self
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)

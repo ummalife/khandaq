@@ -95,6 +95,11 @@ class ChatBaseTextCellModel: ChatMovableDateCellModel {
     var canEdit: Bool = false
     /// KHANDAQ (#208): message was edited — render an «изменено» marker after the text.
     var edited: Bool = false
+    /// KHANDAQ (audit#2 finding 1): the row came out of someone else's history relay and no signature
+    /// proves who wrote it — render the "sender not verified" note. Android shows the same thing as an
+    /// orange dot in the status slot; here it is a metadata sub-row, because an incoming bubble has no
+    /// status slot to put a dot in.
+    var senderUnverified: Bool = false
 
     var hasLocation: Bool {
         locationLatitude != nil && locationLongitude != nil

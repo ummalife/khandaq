@@ -403,6 +403,7 @@
 "chat_edit_action" = "Edit";
 "message_edit_save" = "Save";
 "message_edited_marker" = "edited";
+"group_msg_sender_unverified" = "Relayed from history — sender not verified";
 /* Delete button */
 "alert_delete" = "Delete";
 /* Delete button */

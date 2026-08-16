@@ -42,6 +42,7 @@ typedef OCTMessageAbstract *(^OCTNgcGroupHistSyncInsertSyncedMessageBlock)(OCTCh
                                                                            OCTToxMessageType type,
                                                                            uint32_t peerId,
                                                                            NSString *peerName,
+                                                                           NSString *senderPubkeyHex,
                                                                            uint32_t messageId,
                                                                            NSTimeInterval dateInterval);
 typedef OCTMessageAbstract *(^OCTNgcGroupHistSyncInsertSyncedFileBlock)(OCTChat *chat,

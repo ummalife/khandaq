@@ -123,6 +123,27 @@ didReceiveInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
 
 - (NSUInteger)groupSystemMessageCountForChat:(OCTChat *)chat;
 
+/**
+ * Posted on the main queue, with the group's chat-id hex as `object`, when a signature has just
+ * proved a row that is probably already on screen wearing the "sender not verified" marker. The
+ * verdict is not part of the message object, so no Realm notification fires for it — an open chat
+ * has to be told to ask again. Declared here as well so the UI layer can observe it.
+ */
+extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
+
+/**
+ * KHANDAQ (audit#2 finding 1): does a signature prove who wrote this relayed row?
+ *
+ * Only history-synced rows can answer anything but NO, and only text ones: a live row is
+ * authenticated by the transport itself, and files carry no signed twin yet. The verdict is
+ * re-derived from the row being asked about — its timestamp and its exact text — so a verdict
+ * earned by one message can never vouch for another that reuses the same (group, msg_id, author).
+ *
+ * @return NO whenever the claim is merely unproved, which is every message until both sides run a
+ *         client that announces a signing key. "Unproved" is not "forged": the UI says so in words.
+ */
+- (BOOL)isGroupMessageAuthorVerified:(nullable OCTMessageAbstract *)message inChat:(nullable OCTChat *)chat;
+
 - (BOOL)isGroupPeerOnlineWithId:(uint32_t)peerId inChat:(OCTChat *)chat;
 
 - (NSTimeInterval)groupPeerLastSeenDateIntervalForPeerId:(uint32_t)peerId inChat:(OCTChat *)chat;

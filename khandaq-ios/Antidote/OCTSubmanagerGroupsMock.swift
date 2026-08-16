@@ -128,6 +128,12 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         return false
     }
 
+    /// KHANDAQ (audit#2 finding 1): the mock never has a verdict store, and "unproved" is the honest
+    /// answer for it — the same one the real thing gives for every row until both sides sign.
+    func isGroupMessageAuthorVerified(_ message: OCTMessageAbstract?, in chat: OCTChat?) -> Bool {
+        return false
+    }
+
     func groupPeerLastSeenDateInterval(forPeerId peerId: UInt32, in chat: OCTChat!) -> TimeInterval {
         return 0
     }

@@ -24,7 +24,7 @@
 // KHANDAQ (#82): 36 adds OCTMessageFile.groupPeerName + groupSenderPubkey (nullable strings).
 // KHANDAQ (#192): 37 adds OCTMessageAbstract.reactionsJSON (nullable string) + reactionsPending
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
-static const uint64_t kCurrentSchemeVersion = 41; // 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
+static const uint64_t kCurrentSchemeVersion = 42; // 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -1646,6 +1646,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
                                                  chat:(OCTChat *)chat
                                                peerId:(uint32_t)peerId
                                              peerName:(NSString *)peerName
+                                      senderPubkeyHex:(NSString *)senderPubkeyHex
                                             messageId:(OCTToxMessageId)messageId
                                          dateInterval:(NSTimeInterval)dateInterval
 {
@@ -1661,6 +1662,9 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
     messageText.type = type;
     messageText.messageId = messageId;
     messageText.groupPeerName = peerName.length > 0 ? peerName : nil;
+    // KHANDAQ (audit#2 finding 1): freeze the CLAIMED author. groupSenderPeerId is volatile (NGC
+    // re-issues peer ids on leave/rejoin), so it cannot be what a signature is checked against later.
+    messageText.groupSenderPubkey = senderPubkeyHex.length > 0 ? senderPubkeyHex.uppercaseString : nil;
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
     // KHANDAQ (#60): keep the ORIGINAL sender timestamp for dedup (stable across re-syncs), but show /

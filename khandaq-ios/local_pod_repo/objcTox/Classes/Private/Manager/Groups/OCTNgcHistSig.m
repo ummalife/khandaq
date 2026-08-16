@@ -51,6 +51,11 @@ static NSData *sha256(NSData *data)
     return [NSData dataWithBytes:digest length:sizeof(digest)];
 }
 
+NSData *OCTNgcHistSigSha256(NSData *data)
+{
+    return data == nil ? nil : sha256(data);
+}
+
 NSData *OCTNgcHistSigHistPreimage(NSData *groupId, NSData *authorPub, NSData *msgId,
                                   uint64_t timestamp, NSData *textUtf8)
 {

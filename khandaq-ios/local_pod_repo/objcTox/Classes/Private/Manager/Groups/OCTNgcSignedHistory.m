@@ -10,6 +10,8 @@
 
 static NSString *const kVerifiedRowPrefix = @"kqhistver_";
 
+NSString *const kOCTNgcSignedHistoryVerdictStoredNotification = @"kOCTNgcSignedHistoryVerdictStoredNotification";
+
 @interface OCTNgcSignedHistory ()
 @property (nonatomic, copy) OCTNgcSignedHistorySendPrivateBlock sendPrivateBlock;
 @property (nonatomic, copy) OCTNgcSignedHistoryGroupIdBlock groupIdBlock;
@@ -182,18 +184,44 @@ static NSData *peerNameField(NSString *peerName)
             [OCTNgcHskStore hexFromData:msgId], [OCTNgcHskStore hexFromData:authorPub]];
 }
 
+/**
+ * What a verdict is worth. The signature covers group, author, msg_id, timestamp AND sha256(text),
+ * so the verdict has to carry the last two: msg_id is four attacker-chosen bytes, and a verdict
+ * stored as a bare "1" under (group, msg_id, author) — which is what this used to be — would let a
+ * genuinely signed record vouch for a later unsigned row that merely reuses those bytes with a
+ * different body. That is exactly the impersonation this feature exists to stop. Same string Android
+ * stores (NgcSignedHistory.verdictValue), so the two platforms can be read side by side.
+ */
+static NSString *_Nullable verdictValue(uint64_t timestampSeconds, NSData *_Nullable textUtf8)
+{
+    NSData *hash = OCTNgcHistSigSha256(textUtf8);
+    if (hash == nil) {
+        return nil;
+    }
+    return [NSString stringWithFormat:@"%llu:%@", (unsigned long long)timestampSeconds,
+            [OCTNgcHskStore hexFromData:hash]];
+}
+
 - (BOOL)isAuthorVerifiedForGroupId:(nullable NSString *)groupId
                          messageId:(uint32_t)messageId
                       authorPubHex:(nullable NSString *)authorPubHex
+                         timestamp:(uint64_t)timestampSeconds
+                              text:(nullable NSString *)text
 {
     NSData *authorPub = [OCTNgcHskStore dataFromHex:authorPubHex];
-    if (groupId.length == 0 || authorPub.length != kOCTNgcHistSigPubKeySize) {
+    if (groupId.length == 0 || authorPub.length != kOCTNgcHistSigPubKeySize || text == nil) {
         return NO;
     }
     NSString *row = [self verifiedRowKeyForGroupId:groupId
                                              msgId:msgIdData(messageId)
                                          authorPub:authorPub];
-    return row != nil && [@"1" isEqualToString:(self.getValueBlock(row) ?: @"")];
+    if (row == nil) {
+        return NO;
+    }
+    // Re-derived from the row being rendered, never trusted from the store: finding *something*
+    // under the key is not evidence, matching what the signature covered is.
+    NSString *expected = verdictValue(timestampSeconds, [text dataUsingEncoding:NSUTF8StringEncoding]);
+    return expected != nil && [expected isEqualToString:(self.getValueBlock(row) ?: @"")];
 }
 
 #pragma mark - receiving
@@ -239,9 +267,16 @@ static NSData *peerNameField(NSString *peerName)
     }
 
     NSString *row = [self verifiedRowKeyForGroupId:groupId msgId:st.msgId authorPub:st.authorPub];
-    if (row != nil) {
-        self.setValueBlock(row, @"1");
+    NSString *verdict = verdictValue(st.timestamp, st.textUtf8);
+    if (row != nil && verdict != nil) {
+        self.setValueBlock(row, verdict);
         OCTLogInfo(@"signedHistory: verified a row in group %u", groupNumber);
+        // The row this proves is already on screen wearing the unverified marker; nothing else will
+        // tell the chat to look again, because the verdict is not part of the message object.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:kOCTNgcSignedHistoryVerdictStoredNotification
+                                                                object:groupId];
+        });
     }
     return YES;
 }

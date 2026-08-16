@@ -74,6 +74,10 @@ class ChatBaseTextCell: ChatMovableDateCell {
         // the bubble (BubbleView.bindEdited) — no longer appended inline into the message body, so it
         // reads as a system note instead of text the sender typed onto the end of the message.
         bubbleView.bindEdited(textModel.edited && !textModel.hasLocation)
+
+        // KHANDAQ (audit#2 finding 1): relayed history whose author nobody signed for. Shown on the
+        // location bubble too — a forwarded "here is where I am" is exactly the claim worth doubting.
+        bubbleView.bindUnverifiedSender(textModel.senderUnverified)
     }
 
     /// KHANDAQ (Figma): tint the group sender header line ("Name · Role") with the per-peer color.

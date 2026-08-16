@@ -50,6 +50,17 @@
 @property (nullable) NSString *groupPeerName;
 
 /**
+ * Public key of the author, frozen at insert time, uppercase hex (incoming group messages only).
+ *
+ * The same thing OCTMessageFile.groupSenderPubkey already stores, and for the same reason: the only
+ * other handle on the author is groupSenderPeerId, which NGC re-issues on leave/rejoin, so a later
+ * lookup can legitimately answer with a different person. On a history-synced row this is an
+ * UNSIGNED claim made by the peer that relayed it — it is what the signature check is checked
+ * AGAINST, never evidence on its own.
+ */
+@property (nullable) NSString *groupSenderPubkey;
+
+/**
  * Count of hist-sync delivery confirmations for outgoing group messages.
  */
 @property int32_t groupSyncConfirmations;

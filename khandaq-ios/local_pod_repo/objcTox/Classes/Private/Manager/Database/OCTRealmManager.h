@@ -251,6 +251,7 @@
                                                  chat:(OCTChat *)chat
                                                peerId:(uint32_t)peerId
                                              peerName:(nullable NSString *)peerName
+                                      senderPubkeyHex:(nullable NSString *)senderPubkeyHex
                                             messageId:(OCTToxMessageId)messageId
                                          dateInterval:(NSTimeInterval)dateInterval;
 

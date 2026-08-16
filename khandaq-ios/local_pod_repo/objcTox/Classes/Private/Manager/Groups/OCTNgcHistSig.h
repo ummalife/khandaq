@@ -56,6 +56,12 @@ NSData *_Nullable OCTNgcHistSigHistPreimage(NSData *groupId, NSData *authorPub, 
                                             uint64_t timestamp, NSData *textUtf8);
 
 /**
+ * sha256 of arbitrary bytes. Exposed for the verdict store, which has to bind a stored verdict to
+ * the exact text the signature covered — the same digest the pre-image above puts on the wire.
+ */
+NSData *_Nullable OCTNgcHistSigSha256(NSData *_Nullable data);
+
+/**
  * "KQ-HSK-ANNOUNCE-1" || senderGroupPub(32) || hskPub(32) || validFromTs(8 BE)
  *
  * @param senderGroupPub the announcer's public key IN THIS GROUP — what tox_group_peer_get_public_key

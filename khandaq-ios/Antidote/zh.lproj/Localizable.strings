@@ -541,6 +541,7 @@
 "chat_edit_action" = "编辑";
 "message_edit_save" = "保存";
 "message_edited_marker" = "已编辑";
+"group_msg_sender_unverified" = "来自历史转发 — 发送者未验证";
 "alert_ok" = "确定";
 "video_send_preparing" = "正在准备视频…";
 "video_send_preparation_failed" = "无法准备要发送的视频。";

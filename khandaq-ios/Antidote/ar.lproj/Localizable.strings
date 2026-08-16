@@ -541,6 +541,7 @@
 "chat_edit_action" = "تعديل";
 "message_edit_save" = "حفظ";
 "message_edited_marker" = "معدلة";
+"group_msg_sender_unverified" = "مُعاد من السجل — لم يتم التحقق من المرسل";
 "alert_ok" = "موافق";
 "video_send_preparing" = "جاري تحضير الفيديو…";
 "video_send_preparation_failed" = "تعذر تحضير الفيديو للإرسال.";

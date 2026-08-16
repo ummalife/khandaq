@@ -1157,6 +1157,38 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     return [[self.dataSource managerGetRealmManager] groupSystemMessageCountForChat:chat];
 }
 
+- (BOOL)isGroupMessageAuthorVerified:(OCTMessageAbstract *)message inChat:(OCTChat *)chat
+{
+    // Only a relayed row has an authorship question to answer: a live one was authenticated by the
+    // transport when it arrived, and a system message has no claimed author at all.
+    if (message == nil || chat == nil || ! message.groupHistorySync || message.groupSystemMessage) {
+        return NO;
+    }
+
+    OCTMessageText *messageText = message.messageText;
+    if (messageText.text.length == 0 || messageText.groupSenderPubkey.length == 0) {
+        // Rows inserted before schema 42 have no frozen author, so nothing can be checked against
+        // them. They stay unproved rather than being quietly credited.
+        return NO;
+    }
+
+    if (chat.groupChatIdHex.length == 0 || self.signedHistory == nil) {
+        return NO;
+    }
+
+    // The ORIGINAL sender timestamp, not dateInterval: the insert clamps dateInterval to "not in the
+    // future" (#60), so a clock-skewed sender's row is stored with a time the signature never
+    // covered. groupSyncDedupTimestamp keeps what actually came over the wire.
+    NSTimeInterval signedSeconds = message.groupSyncDedupTimestamp > 0 ? message.groupSyncDedupTimestamp
+                                                                       : message.dateInterval;
+
+    return [self.signedHistory isAuthorVerifiedForGroupId:chat.groupChatIdHex
+                                                messageId:messageText.messageId
+                                             authorPubHex:messageText.groupSenderPubkey
+                                                timestamp:(uint64_t)signedSeconds
+                                                     text:messageText.text];
+}
+
 - (BOOL)isGroupPeerOnlineWithId:(uint32_t)peerId inChat:(OCTChat *)chat
 {
     NSParameterAssert(chat);
@@ -4294,6 +4326,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                          OCTToxMessageType type,
                                                          uint32_t peerId,
                                                          NSString *peerName,
+                                                         NSString *senderPubkeyHex,
                                                          uint32_t messageId,
                                                          NSTimeInterval dateInterval) {
             __strong typeof(weakSelf) self = weakSelf;
@@ -4314,6 +4347,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                           chat:chat
                                                         peerId:peerId
                                                       peerName:peerName
+                                               senderPubkeyHex:senderPubkeyHex
                                                      messageId:messageId
                                                   dateInterval:dateInterval];
         }

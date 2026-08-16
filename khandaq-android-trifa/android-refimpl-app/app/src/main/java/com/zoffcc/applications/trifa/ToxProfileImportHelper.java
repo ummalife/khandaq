@@ -252,6 +252,12 @@ public final class ToxProfileImportHelper
 
     static void showImportError(@NonNull final Context context, @NonNull final String message)
     {
+        // KHANDAQ (#249 QA): every refusal here — encrypted file, bad magic, failed copy — used to
+        // reach the user as a dialog and NOTHING else, so a rejected import is indistinguishable in
+        // logcat from a picker whose result never came back. That cost a QA round: the staged .tox
+        // had been copied straight out of app storage, where savedata is always "toxEsave"-encrypted,
+        // instead of being produced by Settings → Export profile (which writes it in the clear).
+        Log.i(TAG, "import refused: " + message);
         new AlertDialog.Builder(context)
                 .setTitle(R.string.settings_import_tox_profile)
                 .setMessage(message)

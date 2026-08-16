@@ -269,6 +269,9 @@ final class NgcSignedHistory
             {
                 HelperGeneric.set_g_opts(row, "1");
                 HelperGeneric.logI(TAG, "handleIncomingSignedText:verified gn=" + groupNum);
+                // The row this proves was inserted and drawn milliseconds ago by the unsigned copy,
+                // still carrying the unverified marker. Rebind so the marker actually goes away.
+                HelperGroup.schedule_group_verified_refresh(groupIdentifier);
             }
         }
         catch (Exception e)

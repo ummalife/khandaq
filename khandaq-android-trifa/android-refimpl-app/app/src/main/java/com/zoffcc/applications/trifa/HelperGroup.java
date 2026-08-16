@@ -8473,6 +8473,45 @@ public class HelperGroup
         return NgcHskStore.toxPubFromToxId(MainActivity.get_my_toxid());
     }
 
+    /** Groups with a verified-authorship refresh already queued, so a burst costs one rebind. */
+    private static final java.util.Set<String> pending_verified_refresh =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+
+    /**
+     * KHANDAQ (audit #2 finding 1, step 3): rebinds an open group chat after signatures have proved
+     * some of its rows.
+     *
+     * A verdict lands a few milliseconds AFTER the unsigned copy inserted and drew the row (measured
+     * on device: 14:12:13.676 insert, 14:12:13.680 verified), so without this the "sender not
+     * verified" marker stays on screen until something else rebinds the list — the one case where
+     * the marker is both wrong and visible.
+     *
+     * Coalesced rather than throttled: a history sync verifies many rows at once, and a throttle
+     * that drops the LAST event in a burst would leave exactly the stale marker it is meant to
+     * clear. One queued refresh absorbs the whole burst; a verdict arriving later queues another.
+     */
+    static void schedule_group_verified_refresh(final String group_identifier)
+    {
+        if (group_identifier == null || main_handler_s == null)
+        {
+            return;
+        }
+        final String key = group_identifier.toLowerCase(Locale.ENGLISH);
+        if (!pending_verified_refresh.add(key))
+        {
+            return;
+        }
+        main_handler_s.postDelayed(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                pending_verified_refresh.remove(key);
+                update_group_in_groupmessagelist(key, true);
+            }
+        }, 900L);
+    }
+
     /** Announces to a peer that just joined, at most once per peer. See NgcHskAnnounce. */
     static void announce_hsk_to_new_peer(final long group_num, final String group_identifier,
                                          final String peer_pubkey)

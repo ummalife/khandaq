@@ -56,7 +56,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>142973</string>
+	<string>142975</string>
 	<key>FirebaseDataCollectionDefaultEnabled</key>
 	<false/>
 	<key>FirebaseMessagingAutoInitEnabled</key>

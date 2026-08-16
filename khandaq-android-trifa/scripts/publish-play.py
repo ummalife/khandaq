@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
-"""Upload an AAB to Google Play internal track via androidpublisher (draft)."""
-import json, os, sys, time, urllib.parse, urllib.request, urllib.error
+"""Upload an AAB to Google Play and assign it to tracks.
+
+Everything that changes per release is an argument, because the previous version of this
+script hardcoded one AAB path, one track pair and one release's notes — so every release
+either edited the script or silently shipped the wrong text.
+
+  ./publish-play.py --aab path/to/app-release.aab \
+      --name "10400 (0.2.30)" --notes-json notes.json \
+      --track internal --track alpha --track production:0.2
+
+A track may carry a rollout fraction (`production:0.2` = 20% staged). Without one the
+release goes out completed, i.e. to everyone on that track.
+"""
+import argparse, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 import jwt
 
 SA_PATH = os.path.expanduser("~/.config/googleplay/service-account.json")
 PACKAGE = "com.khandaq.messenger"
-AAB = "/Users/lucyok/Khandaq/secrets/khandaq-com-0.2.12-10378.aab"
 SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://androidpublisher.googleapis.com/androidpublisher/v3"
 UPLOAD = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3"
-TRACKS = ("internal", "alpha")
+
+# Play rejects longer notes with a generic error that does not name the field.
+MAX_NOTE_CHARS = 500
 
 
 def token():
@@ -37,16 +50,46 @@ def call(tok, method, url, body=None, ctype="application/json"):
         return json.loads(raw) if raw else {}
 
 
+def parse_track(spec):
+    """'production:0.2' -> ('production', 0.2); 'alpha' -> ('alpha', None)."""
+    if ":" not in spec:
+        return spec, None
+    name, frac = spec.split(":", 1)
+    frac = float(frac)
+    if not (0.0 < frac < 1.0):
+        sys.exit(f"rollout fraction for '{name}' must be between 0 and 1 (got {frac})")
+    return name, frac
+
+
+def load_notes(path):
+    notes = json.load(open(path))
+    too_long = {k: len(v) for k, v in notes.items() if len(v) > MAX_NOTE_CHARS}
+    if too_long:
+        # Checked before the upload so a bad string costs nothing but a re-run.
+        sys.exit(f"release notes over {MAX_NOTE_CHARS} chars: {too_long}")
+    return [{"language": k, "text": v} for k, v in notes.items()]
+
+
 def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--aab", required=True)
+    p.add_argument("--name", required=True, help='release name shown in the console, e.g. "10400 (0.2.30)"')
+    p.add_argument("--notes-json", required=True, help='{"en-US": "...", "ru-RU": "..."}')
+    p.add_argument("--track", action="append", required=True,
+                   help="track, optionally NAME:FRACTION for a staged rollout; repeatable")
+    args = p.parse_args()
+
+    tracks = [parse_track(t) for t in args.track]
+    notes = load_notes(args.notes_json)
+
     tok = token()
     print("token OK")
 
-    edit = call(tok, "POST", f"{API}/applications/{PACKAGE}/edits", {})
-    eid = edit["id"]
+    eid = call(tok, "POST", f"{API}/applications/{PACKAGE}/edits", {})["id"]
     print("edit:", eid)
 
-    print(f"uploading AAB ({os.path.getsize(AAB)//1024//1024} MB)...")
-    with open(AAB, "rb") as f:
+    print(f"uploading AAB ({os.path.getsize(args.aab)//1024//1024} MB)...")
+    with open(args.aab, "rb") as f:
         aab_bytes = f.read()
     up = call(tok, "POST",
               f"{UPLOAD}/applications/{PACKAGE}/edits/{eid}/bundles?uploadType=media",
@@ -54,23 +97,25 @@ def main():
     vc = up.get("versionCode")
     print("bundle uploaded, versionCode:", vc)
 
-    for track in TRACKS:
-        print(f"assigning versionCode {vc} to '{track}' (completed)...")
-        call(tok, "PUT", f"{API}/applications/{PACKAGE}/edits/{eid}/tracks/{track}", {
-            "track": track,
-            "releases": [{
-                "name": f"{vc} (0.2.12)",
-                "versionCodes": [str(vc)],
-                "status": "completed",
-                "releaseNotes": [
-                    {"language": "en-US", "text": "Critical fix: deleting a message (Delete for me / Delete for everyone, in 1:1 and groups) now actually removes it — the previous internal build showed \"Messages deleted\" but left the message in place. Everything else from the recent batch (location previews, swipe-to-reply, clean reply/edit, Saved forwarding) is included."},
-                    {"language": "ru-RU", "text": "Критический фикс: удаление сообщения («у меня» / «у всех», в личных и групповых чатах) теперь действительно удаляет — в прошлой internal-сборке был тост «Сообщение удалено», но сообщение оставалось. Всё остальное из недавнего батча (превью карт, свайп-ответ, чистые ответ/правка, пересылка в Избранное) включено."},
-                ],
-            }],
-        })
+    for name, frac in tracks:
+        release = {
+            "name": args.name,
+            "versionCodes": [str(vc)],
+            "releaseNotes": notes,
+        }
+        if frac is None:
+            release["status"] = "completed"
+            print(f"assigning {vc} to '{name}' (completed)...")
+        else:
+            release["status"] = "inProgress"
+            release["userFraction"] = frac
+            print(f"assigning {vc} to '{name}' (staged {frac:.0%})...")
+        call(tok, "PUT", f"{API}/applications/{PACKAGE}/edits/{eid}/tracks/{name}",
+             {"track": name, "releases": [release]})
 
     call(tok, "POST", f"{API}/applications/{PACKAGE}/edits/{eid}:commit")
-    print(f"\n✅ committed — build {vc} is LIVE (completed) on tracks: {', '.join(TRACKS)}.")
+    summary = ", ".join(n if f is None else f"{n} @{f:.0%}" for n, f in tracks)
+    print(f"\n✅ committed — build {vc} is live on: {summary}")
 
 
 if __name__ == "__main__":
@@ -78,4 +123,4 @@ if __name__ == "__main__":
         main()
     except urllib.error.HTTPError as e:
         detail = e.read().decode()
-        print(f"\nHTTP {e.code}:\n{detail[:900]}")
+        sys.exit(f"HTTP {e.code}: {detail}")

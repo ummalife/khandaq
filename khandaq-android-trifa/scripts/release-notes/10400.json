@@ -1,0 +1,4 @@
+{
+  "en-US": "Group history is now signed by its author. A message that reached you relayed by another member, rather than directly from the person it names, is checked cryptographically — the \"sender not verified\" mark clears only on a real signature. Fixed: a group member could stay invisible until the app was restarted; a file sent to a group while offline got stuck and never went out when the peer came back. Plus fixes from an external security audit.",
+  "ru-RU": "Групповая история теперь подписывается автором. Сообщение, пришедшее не напрямую, а пересланное другим участником, проверяется криптографически — пометка «отправитель не подтверждён» снимается только настоящей подписью. Исправлено: участник группы мог оставаться невидимым до перезапуска приложения; файл, отправленный в группу офлайн, застревал и не уходил после возвращения собеседника. Плюс исправления по итогам внешнего аудита безопасности."
+}

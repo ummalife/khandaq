@@ -7,8 +7,13 @@
 #import <CommonCrypto/CommonDigest.h>
 #import <string.h>
 
-// Reached transitively: objcTox depends on toxcore, which depends on libsodium.
-#import <sodium.h>
+// libsodium, reached transitively (objcTox -> toxcore -> libsodium). The specific headers are
+// imported rather than the <sodium.h> umbrella BECAUSE the umbrella is not a public header of the
+// libsodium pod: it only resolves if a stale Pods project happens to carry libsodium's private
+// header path, so the build worked on this machine and broke the moment `pod install` regenerated
+// it. crypto_sign.h and utils.h are public, so this resolves from a clean checkout.
+#import <libsodium/crypto_sign.h>
+#import <libsodium/utils.h>
 
 const NSUInteger kOCTNgcHistSigGroupIdSize = 32;
 const NSUInteger kOCTNgcHistSigPubKeySize = 32;
@@ -68,16 +73,17 @@ NSData *OCTNgcHistSigHistPreimage(NSData *groupId, NSData *authorPub, NSData *ms
     return out.length == kOCTNgcHistSigHistPreimageSize ? [out copy] : nil;
 }
 
-NSData *OCTNgcHistSigAnnouncePreimage(NSData *toxPub, NSData *hskPub, uint64_t validFromTs)
+NSData *OCTNgcHistSigAnnouncePreimage(NSData *senderGroupPub, NSData *hskPub, uint64_t validFromTs)
 {
-    if (toxPub.length != kOCTNgcHistSigPubKeySize || hskPub.length != kOCTNgcHistSigPubKeySize) {
+    if (senderGroupPub.length != kOCTNgcHistSigPubKeySize
+        || hskPub.length != kOCTNgcHistSigPubKeySize) {
         return nil;
     }
 
     NSData *domain = [kOCTNgcHistSigAnnounceDomain dataUsingEncoding:NSASCIIStringEncoding];
     NSMutableData *out = [NSMutableData dataWithCapacity:kOCTNgcHistSigAnnouncePreimageSize];
     [out appendData:domain];
-    [out appendData:toxPub];
+    [out appendData:senderGroupPub];
     [out appendData:hskPub];
     appendBigEndian64(out, validFromTs);
 
@@ -95,6 +101,50 @@ BOOL OCTNgcHistSigVerify(NSData *preimage, NSData *signature, NSData *signerPub)
 
     return crypto_sign_verify_detached(signature.bytes, preimage.bytes,
                                        (unsigned long long)preimage.length, signerPub.bytes) == 0;
+}
+
+const NSUInteger kOCTNgcHistSigSecretKeySize = 64;
+
+BOOL OCTNgcHistSigKeypair(NSData *_Nullable *_Nonnull outPub, NSData *_Nullable *_Nonnull outSec)
+{
+    if (outPub == NULL || outSec == NULL) {
+        return NO;
+    }
+
+    unsigned char pub[crypto_sign_PUBLICKEYBYTES];
+    unsigned char sec[crypto_sign_SECRETKEYBYTES];
+    if (crypto_sign_keypair(pub, sec) != 0) {
+        // Nothing is written to the out-params, so a failure cannot leave a caller holding a key
+        // that libsodium never actually produced.
+        return NO;
+    }
+
+    *outPub = [NSData dataWithBytes:pub length:sizeof(pub)];
+    *outSec = [NSData dataWithBytes:sec length:sizeof(sec)];
+    // The stack copy of the secret is wiped; the NSData copy is the one the caller must protect.
+    sodium_memzero(sec, sizeof(sec));
+    return YES;
+}
+
+NSData *OCTNgcHistSigSign(NSData *preimage, NSData *secretKey)
+{
+    if (preimage.length == 0 || secretKey.length != kOCTNgcHistSigSecretKeySize) {
+        return nil;
+    }
+
+    unsigned char sig[crypto_sign_BYTES];
+    unsigned long long sigLen = 0;
+    if (crypto_sign_detached(sig, &sigLen, preimage.bytes,
+                             (unsigned long long)preimage.length, secretKey.bytes) != 0) {
+        return nil;
+    }
+    // Length is asserted rather than assumed: a signature of the wrong size would be built into a
+    // packet whose every field after it is misaligned.
+    if (sigLen != kOCTNgcHistSigSignatureSize) {
+        return nil;
+    }
+
+    return [NSData dataWithBytes:sig length:(NSUInteger)sigLen];
 }
 
 #pragma mark - version-0x02 packet parsing

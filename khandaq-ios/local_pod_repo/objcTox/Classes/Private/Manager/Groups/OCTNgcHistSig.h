@@ -55,8 +55,18 @@ extern NSString *const kOCTNgcHistSigAnnounceDomain; //!< @"KQ-HSK-ANNOUNCE-1"
 NSData *_Nullable OCTNgcHistSigHistPreimage(NSData *groupId, NSData *authorPub, NSData *msgId,
                                             uint64_t timestamp, NSData *textUtf8);
 
-/** "KQ-HSK-ANNOUNCE-1" || toxPub(32) || hskPub(32) || validFromTs(8 BE) */
-NSData *_Nullable OCTNgcHistSigAnnouncePreimage(NSData *toxPub, NSData *hskPub,
+/**
+ * "KQ-HSK-ANNOUNCE-1" || senderGroupPub(32) || hskPub(32) || validFromTs(8 BE)
+ *
+ * @param senderGroupPub the announcer's public key IN THIS GROUP — what tox_group_peer_get_public_key
+ *                       reports to the receiver, and the same identity a group message records as its
+ *                       author. Emphatically NOT the profile's Tox ID key: NGC gives a member a
+ *                       different key per group and never reveals anyone's Tox ID, so a signature
+ *                       over the Tox ID key is one no receiver can reconstruct. Android shipped that
+ *                       mistake first and every announcement failed verification in both directions
+ *                       while each side looked correct in isolation.
+ */
+NSData *_Nullable OCTNgcHistSigAnnouncePreimage(NSData *senderGroupPub, NSData *hskPub,
                                                 uint64_t validFromTs);
 
 /**
@@ -70,6 +80,27 @@ NSData *_Nullable OCTNgcHistSigAnnouncePreimage(NSData *toxPub, NSData *hskPub,
  */
 BOOL OCTNgcHistSigVerify(NSData *_Nullable preimage, NSData *_Nullable signature,
                          NSData *_Nullable signerPub);
+
+/** Secret-key length libsodium uses for Ed25519; the public half lives in its tail. */
+extern const NSUInteger kOCTNgcHistSigSecretKeySize; //!< 64
+
+/**
+ * Generates a fresh Ed25519 keypair.
+ *
+ * @param outPub  receives 32 bytes, @param outSec receives 64. Both are left untouched on failure —
+ *                a caller must never be handed half a key it might store and later sign with.
+ * @return YES on success.
+ */
+BOOL OCTNgcHistSigKeypair(NSData *_Nullable *_Nonnull outPub, NSData *_Nullable *_Nonnull outSec);
+
+/**
+ * Signs a pre-image with an HSK secret key.
+ *
+ * @return the 64-byte detached signature, or nil on any malformed input or libsodium failure. Never
+ *         a partial signature: a receiver counts a bad signature as a failed verification, which is
+ *         strictly worse than sending nothing at all.
+ */
+NSData *_Nullable OCTNgcHistSigSign(NSData *_Nullable preimage, NSData *_Nullable secretKey);
 
 
 #pragma mark - version-0x02 packet parsing

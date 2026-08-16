@@ -15,6 +15,7 @@
 #import "OCTMessageCall.h"
 #import "OCTGroupPeer.h"
 #import "OCTSettingsStorageObject.h"
+#import "OCTNgcKeyValue.h"
 #import "OCTToxConstants.h"
 #import "OCTLogging.h"
 
@@ -23,7 +24,7 @@
 // KHANDAQ (#82): 36 adds OCTMessageFile.groupPeerName + groupSenderPubkey (nullable strings).
 // KHANDAQ (#192): 37 adds OCTMessageAbstract.reactionsJSON (nullable string) + reactionsPending
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
-static const uint64_t kCurrentSchemeVersion = 40; // 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
+static const uint64_t kCurrentSchemeVersion = 41; // 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -154,6 +155,52 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     });
 
     return object;
+}
+
+- (nullable NSString *)ngcValueForKey:(NSString *)key
+{
+    if (key.length == 0) {
+        return nil;
+    }
+
+    __block NSString *value = nil;
+    dispatch_sync(self.queue, ^{
+        OCTNgcKeyValue *row = [OCTNgcKeyValue objectInRealm:self.realm forPrimaryKey:key];
+        // Copied out while still inside the queue: the row is a live Realm object and must not
+        // escape to a caller that might read it on another thread.
+        value = row ? [row.value copy] : nil;
+    });
+    return value;
+}
+
+- (BOOL)setNgcValue:(NSString *)value forKey:(NSString *)key
+{
+    if (key.length == 0 || value == nil) {
+        return NO;
+    }
+
+    __block BOOL ok = NO;
+    dispatch_sync(self.queue, ^{
+        [self.realm beginWriteTransaction];
+        OCTNgcKeyValue *row = [OCTNgcKeyValue objectInRealm:self.realm forPrimaryKey:key];
+        if (row) {
+            row.value = value;
+        }
+        else {
+            row = [OCTNgcKeyValue new];
+            row.uniqueIdentifier = key;
+            row.value = value;
+            [self.realm addObject:row];
+        }
+        [self.realm commitWriteTransaction];
+
+        // Read back rather than trust the write. Everything this table holds is security state, and
+        // a silent failure here degrades to "nobody can be verified" — which looks exactly like a
+        // network of old clients and would go unnoticed.
+        OCTNgcKeyValue *check = [OCTNgcKeyValue objectInRealm:self.realm forPrimaryKey:key];
+        ok = check != nil && [check.value isEqualToString:value];
+    });
+    return ok;
 }
 
 - (RLMResults *)objectsWithClass:(Class)class predicate:(NSPredicate *)predicate
@@ -2084,6 +2131,11 @@ static NSString *OCTGroupFileBaseName(NSString *fileName)
                if (oldSchemaVersion < 40) {
                    [self doMigrationVersion40:migration];
                }
+
+               // 41 adds the OCTNgcKeyValue table (audit #2 finding 1). Adding a CLASS is purely
+               // additive: Realm creates an empty table and no existing object is read, rewritten
+               // or enumerated, so there is deliberately nothing to do here. Left explicit rather
+               // than absent so the next reader can see the version was considered, not skipped.
     };
 }
 

@@ -58,6 +58,24 @@
 
 - (id)objectWithUniqueIdentifier:(NSString *)uniqueIdentifier class:(Class)class;
 
+/**
+ * KHANDAQ (audit #2 finding 1) — the OCTNgcKeyValue table, the counterpart of Android's g_opts.
+ *
+ * @return the stored string, or nil when the row is absent. An EMPTY string is a real stored value
+ *         (a cleared row), deliberately distinct from nil, because "we wrote nothing here" and "we
+ *         wrote a blank" mean different things to the signing-key state machine.
+ */
+- (nullable NSString *)ngcValueForKey:(NSString *)key;
+
+/**
+ * Writes one row, creating it if needed.
+ *
+ * @return YES only if reading the row back returns exactly what was written. Callers holding key
+ *         material MUST check it: a store that quietly drops a write is how the Android side of
+ *         this feature once persisted nothing while looking healthy.
+ */
+- (BOOL)setNgcValue:(NSString *)value forKey:(NSString *)key;
+
 - (RLMResults *)objectsWithClass:(Class)class predicate:(NSPredicate *)predicate;
 
 - (void)addObject:(OCTObject *)object;

@@ -3410,6 +3410,9 @@ public class MainActivity extends AppCompatActivity
         catch (Exception e) { return false; }
     }
 
+    /** Set by the import path; consumed by the next identity check. See accept_loaded_identity. */
+    static final String PREF_IDENTITY_REANCHOR_ONCE = "kq_identity_reanchor_once";
+
     /** Gate between "Tox came up" and "this session may run". Stores the anchor on first success;
      *  on a mismatch the loaded profile is a freshly minted one standing in for the real identity,
      *  so the session is blocked instead of being persisted over the old profile. */
@@ -3428,17 +3431,36 @@ public class MainActivity extends AppCompatActivity
             return false;
         }
 
-        if (TextUtils.isEmpty(anchor) || anchor.equalsIgnoreCase(pub))
+        // KHANDAQ (#249): a profile IMPORT is the one case where a different identity is exactly what
+        // the user asked for, so the anchor must move to it. The one-shot permission is set by the
+        // import path and cleared here, which is what keeps this from being a hole in the #244 guard:
+        // the anchor is never emptied — it is re-pointed, once, on the very next load — so the
+        // "no usable savedata but an anchor exists" refusal that stops a silent re-mint stays armed
+        // for every other path, including the next launch after this one.
+        boolean reanchor_once = false;
+        try
+        {
+            reanchor_once = (prefs != null) && prefs.getBoolean(PREF_IDENTITY_REANCHOR_ONCE, false);
+        }
+        catch (Exception ignored) {}
+
+        if (reanchor_once || TextUtils.isEmpty(anchor) || anchor.equalsIgnoreCase(pub))
         {
             try
             {
                 if (prefs != null)
                 {
                     prefs.edit().putString("kq_own_tox_pubkey", pub)
-                         .putInt("kq_identity_block_count", 0).apply();
+                         .putInt("kq_identity_block_count", 0)
+                         .remove(PREF_IDENTITY_REANCHOR_ONCE).apply();
                 }
             }
             catch (Exception ignored) {}
+            if (reanchor_once)
+            {
+                HelperGeneric.logI(TAG, "init_tox_with_heal: re-anchored to imported identity "
+                                        + pub.substring(0, 8));
+            }
             identity_load_blocked = false;
             return true;
         }

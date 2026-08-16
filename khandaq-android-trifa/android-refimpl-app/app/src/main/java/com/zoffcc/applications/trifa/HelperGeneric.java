@@ -4942,7 +4942,11 @@ public class HelperGeneric
                     // HINT: wait for tox thread to stop ...
                     //noinspection BusyWait
                     Thread.sleep(50);
-                    if ((stop_tox_fg_done) && (!is_tox_started))
+                    // KHANDAQ (#249): wait on is_tox_started alone. global_stop_tox() only calls
+                    // stop_tox_fg() when tox was actually running (MainActivity.java:3555), so
+                    // stop_tox_fg_done stays false when it was not — and the old condition then
+                    // burned the whole 10s cap behind the progress dialog for nothing.
+                    if (!is_tox_started)
                     {
                         Log.i(TAG, "ToxThread has ended");
                         break;
@@ -4953,6 +4957,11 @@ public class HelperGeneric
             catch (Exception ignored)
             {
             }
+
+            // KHANDAQ (#249): is_tox_started only drops after ToxServiceThread.join() + tox_kill()
+            // (TrifaToxService.java:1649/:517), so it is the one trustworthy proof that the old tox
+            // instance is really gone and that a fresh one may be brought up in this same process.
+            final boolean tox_is_down = !is_tox_started;
 
             // KHANDAQ #24: every table must be wiped on a profile REPLACE. Previously these deletes
             // were built but never .execute()'d, so old messages / files / filetransfers / relays /
@@ -4977,6 +4986,9 @@ public class HelperGeneric
             }
 
             File f_dst = new File(MainActivity.app_files_directory + "/" + "savedata.tox");
+            // KHANDAQ (#249): read the source size BEFORE the finally below deletes the staging file.
+            final long src_len = f_src.length();
+            boolean copied = false;
             try
             {
                 ls_file(f_src);
@@ -4984,6 +4996,10 @@ public class HelperGeneric
 
                 // write toxsave data
                 io_file_copy(f_src, f_dst);
+                // KHANDAQ (#249): the copy result was never checked. A short/failed write must not be
+                // followed by a restart that then finds a truncated savedata.tox where the old profile
+                // used to be — in that case keep the old "exit and let the user retry" behaviour.
+                copied = f_dst.exists() && (f_dst.length() == src_len);
 
                 ls_file(f_dst);
             }
@@ -5006,10 +5022,71 @@ public class HelperGeneric
                 }
             }
 
+            // KHANDAQ (#249): the import stops tox, but NOTHING in this process ever starts it again:
+            // stop_tox_fg() clears is_tox_started only, while the sole start path
+            // "if (!TOX_SERVICE_STARTED) { startService(); tox_thread_start(); }"
+            // (MainActivity.java:1668/1676) stays shut for as long as TOX_SERVICE_STARTED is true.
+            // The entire restart hung on the System.exit(0) behind the OK button below, so a user who
+            // pressed Home or swiped the task away instead of tapping OK kept a live process (the
+            // foreground service holds it up) with a dead tox: the app sat offline / "connecting"
+            // until a force-stop, and only a cold start — which resets the static — healed it.
+            // Re-arm the gate and re-enter MainActivity instead; that is the same in-process tox
+            // restart logout->login already runs on (ProfileContentFragment.performLogout()).
+            // Gated on tox_is_down on purpose: re-arming while tox_kill is still in flight starts a
+            // SECOND iterate thread on the tox being freed → native SIGSEGV (see the warning in
+            // MainActivity.manually_log_out()).
+            final boolean restart_in_process = copied && tox_is_down;
+
+            if (restart_in_process)
+            {
+                // KHANDAQ (#249): the identity we just imported is a DIFFERENT one on purpose, so let
+                // the next load re-point the #244 anchor at it exactly once. Without this the load is
+                // refused as a mismatch, and a refused session never writes savedata and never
+                // registers the 1:1 custom packet ids — the imported profile would connect and then
+                // quietly fail to persist or to receive edits, deletes and reactions.
+                try
+                {
+                    final android.content.SharedPreferences p_id =
+                            android.preference.PreferenceManager.getDefaultSharedPreferences(
+                                    MainActivity.main_activity_s);
+                    if (p_id != null)
+                    {
+                        p_id.edit().putBoolean(MainActivity.PREF_IDENTITY_REANCHOR_ONCE, true).apply();
+                    }
+                }
+                catch (Exception e)
+                {
+                    logI(TAG, "import: could not arm re-anchor:" + e.getMessage());
+                }
+
+                TrifaToxService.TOX_SERVICE_STARTED = false;
+            }
+
             // back on the UI thread: dismiss progress and show the final restart dialog
             final Runnable finalUi = () ->
             {
                 try { if (progress.isShowing()) { progress.dismiss(); } } catch (Exception ignored) {}
+
+                if (restart_in_process)
+                {
+                    try
+                    {
+                        Log.i(TAG, "Import ToxSaveFile complete, restarting MainActivity in-process.");
+                        Toast.makeText(context, R.string.import_toxsave_ok_title, Toast.LENGTH_LONG).show();
+                        // CLEAR_TASK on purpose: MainActivity is singleTask, so plain navigation would
+                        // reuse the existing instance and skip the onCreate that owns the tox start.
+                        final Intent restart_intent = new Intent(context, MainActivity.class);
+                        restart_intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        context.startActivity(restart_intent);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.i(TAG, "Import ToxSaveFile: in-process restart FAILED, exiting the application.");
+                        System.exit(0);
+                    }
+                    return;
+                }
+
                 try
                 {
                     final AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -5047,6 +5124,35 @@ public class HelperGeneric
             else
             {
                 System.exit(0);
+            }
+
+            if (restart_in_process)
+            {
+                // KHANDAQ (#249): make sure the re-entry actually took. Android 10+ silently drops an
+                // activity launch from a backgrounded app — which is precisely the situation this fix
+                // exists for (the user pressed Home / swiped the task away during the import). The new
+                // MainActivity.onCreate re-issues startService(), so TOX_SERVICE_STARTED flipping back
+                // to true is the proof it ran; if it never does, fall back to the old exit so that the
+                // next cold start brings tox up instead of leaving the process online-less forever.
+                try
+                {
+                    int restart_guard = 0;
+                    while ((restart_guard < 100) && (!TrifaToxService.TOX_SERVICE_STARTED)) // ~5s
+                    {
+                        //noinspection BusyWait
+                        Thread.sleep(50);
+                        restart_guard++;
+                    }
+
+                    if (!TrifaToxService.TOX_SERVICE_STARTED)
+                    {
+                        Log.i(TAG, "Import ToxSaveFile: restart did not take, now exiting the application.");
+                        System.exit(0);
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
             }
         }, "import_toxsave").start();
     }

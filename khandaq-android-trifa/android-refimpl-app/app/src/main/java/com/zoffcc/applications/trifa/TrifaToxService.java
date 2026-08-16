@@ -219,10 +219,13 @@ public class TrifaToxService extends Service
     static boolean stop_me = false;
     static OrmaDatabase orma = null;
     static VirtualFileSystem vfs = null;
-    static boolean is_tox_started = false;
+    // KHANDAQ (#249): volatile because both flags are written by the tox teardown/startup threads and
+    // polled by the import + logout worker threads ("wait until tox is really down", "did the restart
+    // take?"). Without it those polls may spin on a cached value and time out for no reason.
+    static volatile boolean is_tox_started = false;
     static boolean manually_logged_out = false;
     static boolean global_toxid_text_set = false;
-    static boolean TOX_SERVICE_STARTED = false;
+    static volatile boolean TOX_SERVICE_STARTED = false;
     static Thread trifa_service_thread = null;
     static long last_resend_pending_messages0_ms = -1;
     static long last_resend_pending_messages1_ms = -1;

@@ -264,7 +264,9 @@
 		9CF2F4091D5363420002E175 /* unencrypted-database.realm in Resources */ = {isa = PBXBuildFile; fileRef = 9CF2F4081D5363420002E175 /* unencrypted-database.realm */; };
 		9CF2F40A1D5363420002E175 /* unencrypted-database.realm in Resources */ = {isa = PBXBuildFile; fileRef = 9CF2F4081D5363420002E175 /* unencrypted-database.realm */; };
 		B2NGCDUAL000004 /* OCTToxGroupDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */; };
+		B2NGCSIG0000004 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */; };
 		B2NGCDUAL000005 /* OCTToxGroupDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */; };
+		B2NGCSIG0000005 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */; };
 		E1A2B3C4D5E6789012340004 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340005 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340006 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
@@ -293,6 +295,46 @@
 		F5BF42791C2D1F7D008283E0 /* OCTAudioQueue.m in Sources */ = {isa = PBXBuildFile; fileRef = F5F6FA1E1C268B5000607306 /* OCTAudioQueue.m */; };
 		F5F6FA1F1C268B5000607306 /* OCTAudioQueue.m in Sources */ = {isa = PBXBuildFile; fileRef = F5F6FA1E1C268B5000607306 /* OCTAudioQueue.m */; };
 		F5F6FA201C268B5000607306 /* OCTAudioQueue.m in Sources */ = {isa = PBXBuildFile; fileRef = F5F6FA1E1C268B5000607306 /* OCTAudioQueue.m */; };
+		B2NGCFIX000B00000000000 /* OCTNgcGroupFileTransfer.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX000REF00000000 /* OCTNgcGroupFileTransfer.m */; };
+		B2NGCFIX000B10000000000 /* OCTNgcGroupFileTransfer.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX000REF00000000 /* OCTNgcGroupFileTransfer.m */; };
+		B2NGCFIX000B20000000000 /* OCTNgcGroupFileTransfer.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX000REF00000000 /* OCTNgcGroupFileTransfer.m */; };
+		B2NGCFIX000B30000000000 /* OCTNgcGroupFileTransfer.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX000REF00000000 /* OCTNgcGroupFileTransfer.m */; };
+		B2NGCFIX001B00000000000 /* OCTNgcGroupHistSync.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX001REF00000000 /* OCTNgcGroupHistSync.m */; };
+		B2NGCFIX001B10000000000 /* OCTNgcGroupHistSync.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX001REF00000000 /* OCTNgcGroupHistSync.m */; };
+		B2NGCFIX001B20000000000 /* OCTNgcGroupHistSync.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX001REF00000000 /* OCTNgcGroupHistSync.m */; };
+		B2NGCFIX001B30000000000 /* OCTNgcGroupHistSync.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX001REF00000000 /* OCTNgcGroupHistSync.m */; };
+		B2NGCFIX002B00000000000 /* OCTNgcGroupLiveAudio.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX002REF00000000 /* OCTNgcGroupLiveAudio.m */; };
+		B2NGCFIX002B10000000000 /* OCTNgcGroupLiveAudio.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX002REF00000000 /* OCTNgcGroupLiveAudio.m */; };
+		B2NGCFIX002B20000000000 /* OCTNgcGroupLiveAudio.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX002REF00000000 /* OCTNgcGroupLiveAudio.m */; };
+		B2NGCFIX002B30000000000 /* OCTNgcGroupLiveAudio.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX002REF00000000 /* OCTNgcGroupLiveAudio.m */; };
+		B2NGCFIX003B00000000000 /* OCTNgcGroupLiveVideo.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX003REF00000000 /* OCTNgcGroupLiveVideo.m */; };
+		B2NGCFIX003B10000000000 /* OCTNgcGroupLiveVideo.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX003REF00000000 /* OCTNgcGroupLiveVideo.m */; };
+		B2NGCFIX003B20000000000 /* OCTNgcGroupLiveVideo.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX003REF00000000 /* OCTNgcGroupLiveVideo.m */; };
+		B2NGCFIX003B30000000000 /* OCTNgcGroupLiveVideo.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX003REF00000000 /* OCTNgcGroupLiveVideo.m */; };
+		B2NGCFIX004B00000000000 /* OCTNgcHistSig.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX004REF00000000 /* OCTNgcHistSig.m */; };
+		B2NGCFIX004B10000000000 /* OCTNgcHistSig.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX004REF00000000 /* OCTNgcHistSig.m */; };
+		B2NGCFIX004B20000000000 /* OCTNgcHistSig.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX004REF00000000 /* OCTNgcHistSig.m */; };
+		B2NGCFIX004B30000000000 /* OCTNgcHistSig.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX004REF00000000 /* OCTNgcHistSig.m */; };
+		B2NGCFIX005B00000000000 /* OCTNgcHskAnnounce.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX005REF00000000 /* OCTNgcHskAnnounce.m */; };
+		B2NGCFIX005B10000000000 /* OCTNgcHskAnnounce.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX005REF00000000 /* OCTNgcHskAnnounce.m */; };
+		B2NGCFIX005B20000000000 /* OCTNgcHskAnnounce.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX005REF00000000 /* OCTNgcHskAnnounce.m */; };
+		B2NGCFIX005B30000000000 /* OCTNgcHskAnnounce.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX005REF00000000 /* OCTNgcHskAnnounce.m */; };
+		B2NGCFIX006B00000000000 /* OCTNgcHskDirectory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX006REF00000000 /* OCTNgcHskDirectory.m */; };
+		B2NGCFIX006B10000000000 /* OCTNgcHskDirectory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX006REF00000000 /* OCTNgcHskDirectory.m */; };
+		B2NGCFIX006B20000000000 /* OCTNgcHskDirectory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX006REF00000000 /* OCTNgcHskDirectory.m */; };
+		B2NGCFIX006B30000000000 /* OCTNgcHskDirectory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX006REF00000000 /* OCTNgcHskDirectory.m */; };
+		B2NGCFIX007B00000000000 /* OCTNgcHskStore.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX007REF00000000 /* OCTNgcHskStore.m */; };
+		B2NGCFIX007B10000000000 /* OCTNgcHskStore.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX007REF00000000 /* OCTNgcHskStore.m */; };
+		B2NGCFIX007B20000000000 /* OCTNgcHskStore.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX007REF00000000 /* OCTNgcHskStore.m */; };
+		B2NGCFIX007B30000000000 /* OCTNgcHskStore.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX007REF00000000 /* OCTNgcHskStore.m */; };
+		B2NGCFIX008B00000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
+		B2NGCFIX008B10000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
+		B2NGCFIX008B20000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
+		B2NGCFIX008B30000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
+		B2NGCFIX009B00000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2NGCFIX009B10000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2NGCFIX009B20000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
+		B2NGCFIX009B30000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -497,6 +539,7 @@
 		AEAF02FD4B49A2DF3C13562D48C9FEA0 /* OCTManagerImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerImpl.m; sourceTree = "<group>"; };
 		B08EB0152D5B2993766DD654578C3493 /* OCTTox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTTox.m; sourceTree = "<group>"; };
 		B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTToxGroupDualIntegrationTests.m; sourceTree = "<group>"; };
+		B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTNgcSignedHistoryDualIntegrationTests.m; sourceTree = "<group>"; };
 		B6D6D28CCB11A29144A37A53 /* libPods-iOSDemo.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iOSDemo.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2F358725E9EF3F392D73A1ABBDD3DAB /* OCTSubmanagerUserImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerUserImpl.m; sourceTree = "<group>"; };
 		CE5DBC12869590BEAD637C9DF06567EF /* OCTManagerConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerConstants.m; sourceTree = "<group>"; };
@@ -538,6 +581,16 @@
 		F5F6FA1D1C268B5000607306 /* OCTAudioQueue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTAudioQueue.h; sourceTree = "<group>"; };
 		F5F6FA1E1C268B5000607306 /* OCTAudioQueue.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTAudioQueue.m; sourceTree = "<group>"; };
 		F967399BFF7F28425C5194F0E5552BCA /* OCTManagerConfiguration.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCTManagerConfiguration.h; sourceTree = "<group>"; };
+		B2NGCFIX000REF00000000 /* OCTNgcGroupFileTransfer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcGroupFileTransfer.m; path = Classes/Private/Manager/Groups/OCTNgcGroupFileTransfer.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX001REF00000000 /* OCTNgcGroupHistSync.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcGroupHistSync.m; path = Classes/Private/Manager/Groups/OCTNgcGroupHistSync.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX002REF00000000 /* OCTNgcGroupLiveAudio.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcGroupLiveAudio.m; path = Classes/Private/Manager/Groups/OCTNgcGroupLiveAudio.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX003REF00000000 /* OCTNgcGroupLiveVideo.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcGroupLiveVideo.m; path = Classes/Private/Manager/Groups/OCTNgcGroupLiveVideo.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX004REF00000000 /* OCTNgcHistSig.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHistSig.m; path = Classes/Private/Manager/Groups/OCTNgcHistSig.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX005REF00000000 /* OCTNgcHskAnnounce.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHskAnnounce.m; path = Classes/Private/Manager/Groups/OCTNgcHskAnnounce.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX006REF00000000 /* OCTNgcHskDirectory.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHskDirectory.m; path = Classes/Private/Manager/Groups/OCTNgcHskDirectory.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX007REF00000000 /* OCTNgcHskStore.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHskStore.m; path = Classes/Private/Manager/Groups/OCTNgcHskStore.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcSignedHistory.m; path = Classes/Private/Manager/Groups/OCTNgcSignedHistory.m; sourceTree = SOURCE_ROOT; };
+		B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcKeyValue.m; path = Classes/Private/Manager/Objects/OCTNgcKeyValue.m; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -961,6 +1014,7 @@
 				112779D31B9B6F0700E475B4 /* OCTToxEncryptSaveTests.m */,
 				9CB44CAF1B84DF46007FA7B6 /* OCTToxTests.m */,
 				B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */,
+				B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */,
 				11D6512E1B89238F00C3DD23 /* OCTVideoEngineTests.m */,
 				F5BC99BC1C2A171D00425CE3 /* YUVPlanes */,
 			);
@@ -1305,6 +1359,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2NGCFIX000B00000000000 /* OCTNgcGroupFileTransfer.m in Sources */,
+				B2NGCFIX001B00000000000 /* OCTNgcGroupHistSync.m in Sources */,
+				B2NGCFIX002B00000000000 /* OCTNgcGroupLiveAudio.m in Sources */,
+				B2NGCFIX003B00000000000 /* OCTNgcGroupLiveVideo.m in Sources */,
+				B2NGCFIX004B00000000000 /* OCTNgcHistSig.m in Sources */,
+				B2NGCFIX005B00000000000 /* OCTNgcHskAnnounce.m in Sources */,
+				B2NGCFIX006B00000000000 /* OCTNgcHskDirectory.m in Sources */,
+				B2NGCFIX007B00000000000 /* OCTNgcHskStore.m in Sources */,
+				B2NGCFIX008B00000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2NGCFIX009B00000000000 /* OCTNgcKeyValue.m in Sources */,
 				9CB44BE61B84D9E1007FA7B6 /* OCTChat.m in Sources */,
 				11B0A0121DC64D75000C1721 /* OCTGroupPeer.m in Sources */,
 				11D6511E1B89233A00C3DD23 /* OCTTabBarControllerViewController.m in Sources */,
@@ -1372,6 +1436,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2NGCFIX000B10000000000 /* OCTNgcGroupFileTransfer.m in Sources */,
+				B2NGCFIX001B10000000000 /* OCTNgcGroupHistSync.m in Sources */,
+				B2NGCFIX002B10000000000 /* OCTNgcGroupLiveAudio.m in Sources */,
+				B2NGCFIX003B10000000000 /* OCTNgcGroupLiveVideo.m in Sources */,
+				B2NGCFIX004B10000000000 /* OCTNgcHistSig.m in Sources */,
+				B2NGCFIX005B10000000000 /* OCTNgcHskAnnounce.m in Sources */,
+				B2NGCFIX006B10000000000 /* OCTNgcHskDirectory.m in Sources */,
+				B2NGCFIX007B10000000000 /* OCTNgcHskStore.m in Sources */,
+				B2NGCFIX008B10000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2NGCFIX009B10000000000 /* OCTNgcKeyValue.m in Sources */,
 				F5BF42781C2D1F75008283E0 /* OCTAudioQueue.m in Sources */,
 				11D6510B1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,
 				9CB44C181B84DBA3007FA7B6 /* OCTSubmanagerUserImpl.m in Sources */,
@@ -1379,6 +1453,7 @@
 				9CB44C1A1B84DBA3007FA7B6 /* OCTSubmanagerFilesImpl.m in Sources */,
 				9CB44C0F1B84DBA3007FA7B6 /* OCTMessageFile.m in Sources */,
 				B2NGCDUAL000004 /* OCTToxGroupDualIntegrationTests.m in Sources */,
+				B2NGCSIG0000004 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */,
 				11D650E71B89227300C3DD23 /* OCTMessageCall.m in Sources */,
 				11BB6EAF1CC3930A00A531A8 /* OCTFileTools.m in Sources */,
 				9CB44C131B84DBA3007FA7B6 /* OCTRealmManager.m in Sources */,
@@ -1429,6 +1504,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2NGCFIX000B20000000000 /* OCTNgcGroupFileTransfer.m in Sources */,
+				B2NGCFIX001B20000000000 /* OCTNgcGroupHistSync.m in Sources */,
+				B2NGCFIX002B20000000000 /* OCTNgcGroupLiveAudio.m in Sources */,
+				B2NGCFIX003B20000000000 /* OCTNgcGroupLiveVideo.m in Sources */,
+				B2NGCFIX004B20000000000 /* OCTNgcHistSig.m in Sources */,
+				B2NGCFIX005B20000000000 /* OCTNgcHskAnnounce.m in Sources */,
+				B2NGCFIX006B20000000000 /* OCTNgcHskDirectory.m in Sources */,
+				B2NGCFIX007B20000000000 /* OCTNgcHskStore.m in Sources */,
+				B2NGCFIX008B20000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2NGCFIX009B20000000000 /* OCTNgcKeyValue.m in Sources */,
 				11AF89031C98C25A00AD1D9F /* OCTFileBaseOperation.m in Sources */,
 				1183BC6B1C9EBBE5000CD310 /* OCTFileUploadOperation.m in Sources */,
 				11E80D851B98C647008DFC47 /* OCTSettingsStorageObject.m in Sources */,
@@ -1495,6 +1580,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2NGCFIX000B30000000000 /* OCTNgcGroupFileTransfer.m in Sources */,
+				B2NGCFIX001B30000000000 /* OCTNgcGroupHistSync.m in Sources */,
+				B2NGCFIX002B30000000000 /* OCTNgcGroupLiveAudio.m in Sources */,
+				B2NGCFIX003B30000000000 /* OCTNgcGroupLiveVideo.m in Sources */,
+				B2NGCFIX004B30000000000 /* OCTNgcHistSig.m in Sources */,
+				B2NGCFIX005B30000000000 /* OCTNgcHskAnnounce.m in Sources */,
+				B2NGCFIX006B30000000000 /* OCTNgcHskDirectory.m in Sources */,
+				B2NGCFIX007B30000000000 /* OCTNgcHskStore.m in Sources */,
+				B2NGCFIX008B30000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2NGCFIX009B30000000000 /* OCTNgcKeyValue.m in Sources */,
 				F5BF42791C2D1F7D008283E0 /* OCTAudioQueue.m in Sources */,
 				11D6510D1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,
 				11D650FA1B89229B00C3DD23 /* OCTPixelBufferPool.m in Sources */,
@@ -1505,6 +1600,7 @@
 				11B0A0151B84DCFB007FA7B6 /* OCTGroupPeer.m in Sources */,
 				11D651251B89236A00C3DD23 /* OCTAudioEngineTests.m in Sources */,
 				9CB44CD31B84DF46007FA7B6 /* OCTToxTests.m in Sources */,
+				B2NGCSIG0000005 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */,
 				B2NGCDUAL000005 /* OCTToxGroupDualIntegrationTests.m in Sources */,
 				9CB44CD11B84DF46007FA7B6 /* OCTSubmanagerUserImplTests.m in Sources */,
 				11BB6EB11CC3930A00A531A8 /* OCTFileTools.m in Sources */,
@@ -1645,6 +1741,15 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6F97E8DCCDE81B906C0CCAFE /* Pods-iOSDemo.release.xcconfig */;
 			buildSettings = {
+				/* KHANDAQ NGC header paths: the demo targets compile objcTox straight from Classes/,
+				   with no podspec to lay the headers out, so the NGC sources added since 2026-06 could
+				   not find each other or toxcore. Without this the demo targets do not build at all,
+				   which is how the dual-tox wire tests quietly stopped being runnable. */
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Classes/**",
+					"$(PODS_ROOT)/Headers/Public/toxcore/**",
+				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_IDENTITY = "-";
@@ -1671,6 +1776,15 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 54FC7A218FD35DB03A172079 /* Pods-iOSDemoTests.release.xcconfig */;
 			buildSettings = {
+				/* KHANDAQ NGC header paths: the demo targets compile objcTox straight from Classes/,
+				   with no podspec to lay the headers out, so the NGC sources added since 2026-06 could
+				   not find each other or toxcore. Without this the demo targets do not build at all,
+				   which is how the dual-tox wire tests quietly stopped being runnable. */
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Classes/**",
+					"$(PODS_ROOT)/Headers/Public/toxcore/**",
+				);
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_IDENTITY = "-";
 				COPY_PHASE_STRIP = NO;
@@ -1696,6 +1810,15 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 80EDC251089F9EE3EA655215 /* Pods-OSXDemo.release.xcconfig */;
 			buildSettings = {
+				/* KHANDAQ NGC header paths: the demo targets compile objcTox straight from Classes/,
+				   with no podspec to lay the headers out, so the NGC sources added since 2026-06 could
+				   not find each other or toxcore. Without this the demo targets do not build at all,
+				   which is how the dual-tox wire tests quietly stopped being runnable. */
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Classes/**",
+					"$(PODS_ROOT)/Headers/Public/toxcore/**",
+				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
@@ -1716,6 +1839,15 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 9BB556421978E2471480B277 /* Pods-OSXDemoTests.release.xcconfig */;
 			buildSettings = {
+				/* KHANDAQ NGC header paths: the demo targets compile objcTox straight from Classes/,
+				   with no podspec to lay the headers out, so the NGC sources added since 2026-06 could
+				   not find each other or toxcore. Without this the demo targets do not build at all,
+				   which is how the dual-tox wire tests quietly stopped being runnable. */
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Classes/**",
+					"$(PODS_ROOT)/Headers/Public/toxcore/**",
+				);
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";

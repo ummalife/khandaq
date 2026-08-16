@@ -9442,6 +9442,7 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
+
         if (routeNgcChunkedFileTransferPacket(group_number, peer_id, data, length))
         {
             return;
@@ -9657,6 +9658,18 @@ public class MainActivity extends AppCompatActivity
                 (data[4] == (byte)0x34) &&
                 (data[5] == (byte)0x35))
         {
+            // KHANDAQ (audit #2 finding 1, step 3): signed history record, version 0x02. Travels on
+            // the same private channel as the unsigned copy and carries no new message — the 0x01
+            // packet beside it still does the inserting — so this only decides whether the row's
+            // authorship is proved. Checked before the 0x01 arms below because it is a different
+            // protocol version and must never fall into their length maths.
+            if ((data[6] == NgcHistSigParser.VERSION_SIGNED)
+                && (data[7] == NgcHistSigParser.PKT_SIGNED_TEXT))
+            {
+                NgcSignedHistory.handleIncomingSignedText(group_number, peer_id, data, (int) length);
+                return;
+            }
+
             if ((data[6] == (byte)0x1) && (data[7] == (byte)0x1))
             {
                 // HelperGeneric.logI(TAG, "group_custom_private_packet_cb: got ngch_request");

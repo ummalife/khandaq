@@ -520,7 +520,23 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
      */
     static boolean should_mark_unverified_sender(final boolean is_system_message, final GroupMessage m)
     {
-        return !is_system_message && m != null && m.was_synced;
+        return should_mark_unverified_sender(is_system_message, m, false);
+    }
+
+    /**
+     * KHANDAQ (audit #2 finding 1, step 3): the same rule, with the one thing that can now clear
+     * the marker — a signature.
+     *
+     * @param author_signature_verified the author's own history-signing key verified a signature
+     *                                  over this exact row (see NgcSignedHistory). That is the only
+     *                                  evidence that ever makes a relayed row trustworthy: the
+     *                                  transport authenticates the peer who RELAYED it, never the
+     *                                  author it names.
+     */
+    static boolean should_mark_unverified_sender(final boolean is_system_message, final GroupMessage m,
+                                                 final boolean author_signature_verified)
+    {
+        return !is_system_message && m != null && m.was_synced && !author_signature_verified;
     }
 
     /**
@@ -538,7 +554,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             {
                 return;
             }
-            if (!should_mark_unverified_sender(is_system_message, m))
+            if (!should_mark_unverified_sender(is_system_message, m,
+                                               NgcSignedHistory.isAuthorVerified(m)))
             {
                 return;
             }

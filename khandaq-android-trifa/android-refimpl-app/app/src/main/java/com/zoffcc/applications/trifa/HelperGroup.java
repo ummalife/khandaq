@@ -10001,6 +10001,14 @@ public class HelperGroup
                                 else
                                 {
                                     send_ngch_syncmsg(group_identifier, peer_pubkey, gm);
+                                    // KHANDAQ (audit #2 finding 1, step 3): additionally send the
+                                    // signed copy of rows we wrote ourselves. Additionally, not
+                                    // instead: version 0x02 is dropped by every shipped parser, so
+                                    // replacing the packet above would make our history vanish for
+                                    // everyone in the field. Only our own rows can be signed at all
+                                    // — the signature is the AUTHOR's, and a relayer cannot make it,
+                                    // which is the whole point of the finding.
+                                    NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm);
                                 }
                             }
                             else

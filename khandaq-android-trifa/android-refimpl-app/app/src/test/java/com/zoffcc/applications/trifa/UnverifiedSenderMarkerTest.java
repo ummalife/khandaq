@@ -70,4 +70,42 @@ public class UnverifiedSenderMarkerTest
         assertFalse(GroupMessageListHolder_text_incoming_not_read
                             .should_mark_unverified_sender(false, new GroupMessage()));
     }
+
+    // ---------------------------------------------------------------- step 3: a signature clears it
+
+    @Test
+    public void a_signed_and_verified_row_is_not_marked()
+    {
+        // The whole point of finding 1: a relayed row whose author actually signed it is no longer
+        // an unbacked claim, so the warning would be wrong.
+        assertFalse(GroupMessageListHolder_text_incoming_not_read
+                            .should_mark_unverified_sender(false, row(true), true));
+    }
+
+    @Test
+    public void verification_cannot_resurrect_a_system_row_marker()
+    {
+        // System rows name no author, so neither state of the signature changes anything.
+        assertFalse(GroupMessageListHolder_text_incoming_not_read
+                            .should_mark_unverified_sender(true, row(true), true));
+        assertFalse(GroupMessageListHolder_text_incoming_not_read
+                            .should_mark_unverified_sender(true, row(true), false));
+    }
+
+    @Test
+    public void a_relayed_row_without_a_signature_is_still_marked()
+    {
+        // Everything in the field today lands here, and must keep landing here.
+        assertTrue(GroupMessageListHolder_text_incoming_not_read
+                           .should_mark_unverified_sender(false, row(true), false));
+    }
+
+    @Test
+    public void a_first_hand_row_is_never_marked_either_way()
+    {
+        assertFalse(GroupMessageListHolder_text_incoming_not_read
+                            .should_mark_unverified_sender(false, row(false), false));
+        assertFalse(GroupMessageListHolder_text_incoming_not_read
+                            .should_mark_unverified_sender(false, row(false), true));
+    }
 }

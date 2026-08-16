@@ -197,7 +197,7 @@ static uint64_t readBE32Unsigned(const uint8_t *p)
     return v;
 }
 
-static BOOL isSignedPacket(const uint8_t *data, NSInteger length, uint8_t pktId)
+BOOL OCTNgcHistSigIsSignedPacket(const uint8_t *data, NSInteger length, uint8_t pktId)
 {
     if (data == NULL || length < (NSInteger)kOCTNgcHistSigHeaderSize) { return NO; }
     if (memcmp(data, kMagic, sizeof(kMagic)) != 0) { return NO; }
@@ -208,7 +208,7 @@ OCTNgcHistSigAnnouncement *OCTNgcHistSigParseAnnouncement(const uint8_t *data, N
 {
     // Exact length, not a minimum: no variable part, so anything longer is either a different
     // packet or an attempt to hide bytes after the signature.
-    if (!isSignedPacket(data, length, kOCTNgcHistSigPktHskAnnounce)
+    if (!OCTNgcHistSigIsSignedPacket(data, length, kOCTNgcHistSigPktHskAnnounce)
         || length != (NSInteger)kOCTNgcHistSigAnnouncePacketSize) {
         return nil;
     }
@@ -227,7 +227,7 @@ OCTNgcHistSigSignedText *OCTNgcHistSigParseSignedText(const uint8_t *data, NSInt
     const NSInteger fixedBefore = (NSInteger)(kOCTNgcHistSigHeaderSize + kOCTNgcHistSigMsgIdSize
                                               + kOCTNgcHistSigPubKeySize + 8
                                               + kOCTNgcHistSigPeerNameSize + 4);
-    if (!isSignedPacket(data, length, kOCTNgcHistSigPktSignedText)
+    if (!OCTNgcHistSigIsSignedPacket(data, length, kOCTNgcHistSigPktSignedText)
         || length < fixedBefore + (NSInteger)kOCTNgcHistSigSignatureSize) {
         return nil;
     }

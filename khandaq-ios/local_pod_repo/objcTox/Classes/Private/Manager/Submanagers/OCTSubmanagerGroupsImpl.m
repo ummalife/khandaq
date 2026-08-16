@@ -18,6 +18,8 @@
 #import "OCTFileTools.h"
 #import "OCTNgcGroupFileTransfer.h"
 #import "OCTNgcGroupHistSync.h"
+#import "OCTNgcHskAnnounce.h"
+#import "OCTNgcHskStore.h"
 #import "OCTNgcGroupLiveAudio.h"
 #import "OCTNgcGroupLiveVideo.h"
 #import "OCTSettingsStorageObject.h"
@@ -63,6 +65,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong) OCTNgcGroupLiveAudio *liveAudio;
 @property (nonatomic, strong) OCTNgcGroupLiveVideo *liveVideo;
 @property (nonatomic, strong) OCTNgcGroupHistSync *histSync;
+@property (nonatomic, strong) OCTNgcHskAnnounce *hskAnnounce;
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryRunning;
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryCancelled;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupJoinAttemptByKey;
@@ -2260,6 +2263,8 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         if (status > 0) {
             [self setupHistSyncIfNeeded];
             [self.histSync handleGroupConnectedWithGroupNumber:groupNumber];
+            [self setupHskAnnounceIfNeeded];
+            [self.hskAnnounce announceToGroupNumber:groupNumber force:NO];
         }
 
         [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTGroupConnectionStatusChangeNotification
@@ -2337,6 +2342,10 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     [self setupHistSyncIfNeeded];
     [self.histSync handlePeerJoinedWithGroupNumber:groupNumber peerId:peerId];
+    // KHANDAQ (audit #2 finding 1): the arriving peer can verify nothing we wrote until it
+    // has our signing key, and our own connect-time announcement went out before it existed.
+    [self setupHskAnnounceIfNeeded];
+    [self.hskAnnounce announceForNewPeerWithGroupNumber:groupNumber peerId:peerId];
 
     OCTLogInfo(@"NGC group peer join group=%u peer=%u", groupNumber, peerId);
 }
@@ -3140,6 +3149,15 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
         return;
     }
 
+    // KHANDAQ (audit #2 finding 1, step 3): history-signing-key announcement, protocol version
+    // 0x02. Checked before everything else because it is an exact-length packet whose test is three
+    // fields deep (magic, version, pktid), so it cannot be confused with any of the 0x01 traffic —
+    // and consuming it here keeps a malformed one out of their length arithmetic.
+    [self setupHskAnnounceIfNeeded];
+    if ([self.hskAnnounce handleIncomingPacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
+        return;
+    }
+
     if ([self handleIncomingGroupDeletePacketWithGroupNumber:groupNumber peerId:peerId data:data]) {
         return;
     }
@@ -3939,6 +3957,85 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                                         object:self
                                                                       userInfo:@{kOCTGroupLiveVideoActivityGroupNumberKey: @(groupNumber)}];
     }];
+}
+
+- (void)setupHskAnnounceIfNeeded
+{
+    if (self.hskAnnounce) {
+        return;
+    }
+
+    __weak typeof(self) weakSelf = self;
+
+    self.hskAnnounce = [[OCTNgcHskAnnounce alloc]
+        initWithSendBroadcastBlock:^BOOL(uint32_t groupNumber, NSData *packet) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return NO;
+            }
+            return [[self.dataSource managerGetTox] groupSendCustomPacket:packet
+                                                              groupNumber:groupNumber
+                                                                 lossless:YES
+                                                                    error:nil];
+        }
+        selfGroupPubBlock:^NSString *(uint32_t groupNumber) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetTox] groupSelfPublicKeyHexForGroupNumber:groupNumber
+                                                                                  error:nil];
+        }
+        peerGroupPubBlock:^NSString *(uint32_t groupNumber, uint32_t peerId) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetTox] groupPeerPublicKeyHexForGroupNumber:groupNumber
+                                                                                 peerId:peerId
+                                                                                  error:nil];
+        }
+        groupIdBlock:^NSString *(uint32_t groupNumber) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetTox] groupChatIdHexForGroupNumber:groupNumber error:nil];
+        }
+        selfToxPubBlock:^NSString *{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            // The profile identity, used ONLY to decide whose stored key this is (a changed Tox
+            // identity must re-mint). What a signature binds to is the per-group key above.
+            return [OCTNgcHskStore toxPubFromToxId:[[self.dataSource managerGetTox] userAddress]];
+        }
+        peerConnectedBlock:^BOOL(uint32_t groupNumber, uint32_t peerId) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return NO;
+            }
+            OCTToxConnectionStatus status =
+                [[self.dataSource managerGetTox] groupPeerConnectionStatusForGroupNumber:groupNumber
+                                                                                  peerId:peerId
+                                                                                   error:nil];
+            return status != OCTToxConnectionStatusNone;
+        }
+        getValueBlock:^NSString *(NSString *key) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return nil;
+            }
+            return [[self.dataSource managerGetRealmManager] ngcValueForKey:key];
+        }
+        setValueBlock:^BOOL(NSString *key, NSString *value) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (! self) {
+                return NO;
+            }
+            return [[self.dataSource managerGetRealmManager] setNgcValue:value forKey:key];
+        }];
 }
 
 - (void)setupHistSyncIfNeeded

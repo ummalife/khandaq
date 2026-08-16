@@ -137,6 +137,15 @@ extern const NSUInteger kOCTNgcHistSigMaxTextBytes;    //!< 37000
 @end
 
 /**
+ * Is this one of ours, of the signed version, of this kind?
+ *
+ * Exposed so a dispatcher can tell "ours but malformed" from "not ours at all" and consume the
+ * former instead of letting it fall through into the version-0x01 arms, whose length arithmetic
+ * would read it as something else entirely.
+ */
+BOOL OCTNgcHistSigIsSignedPacket(const uint8_t *_Nullable data, NSInteger length, uint8_t pktId);
+
+/**
  * @param length bytes actually received; passed separately because the caller's buffer may be larger
  *               than the datagram, and trusting the buffer size would read stale bytes.
  * @return nil unless the packet is ours, of the signed version, of this kind, and EXACTLY the

@@ -9455,7 +9455,7 @@ public class MainActivity extends AppCompatActivity
         // check for muted or kicked peers
 
         // KHANDAQ (audit #2 finding 1, step 3): history-signing-key announcement, protocol version
-        // 0x02. Checked before everything else because it is an exact-length packet (120 bytes) and
+        // 0x02. Checked before everything else because it is an exact-length packet (112 bytes) and
         // the test is three fields deep (magic, version, pktid), so it cannot be confused with any
         // of the 0x01 traffic below.
         if (NgcHistSigParser.isSignedPacket(data, (int) length, NgcHistSigParser.PKT_HSK_ANNOUNCE))

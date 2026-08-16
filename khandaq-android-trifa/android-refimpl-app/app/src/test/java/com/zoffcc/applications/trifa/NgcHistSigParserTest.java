@@ -371,4 +371,26 @@ public class NgcHistSigParserTest
         assertNotNull(t);
         assertEquals(NgcHistSigParser.MAX_TEXT_BYTES, t.textUtf8.length);
     }
+
+    /**
+     * The text ceiling only means anything if the PACKET it produces survives the receiver.
+     * group_custom_private_packet_cb drops everything above TOX_MAX_NGC_FILE_AND_HEADER_SIZE before
+     * it reads the version byte, so a text limit set independently of the packet limit (37000, as it
+     * was) silently loses the signed copy of the largest messages. Tie the two together here.
+     */
+    @Test
+    public void theLargestPacketThisBuilderCanProduceSurvivesTheReceiversLengthGate()
+    {
+        final byte[] body = new byte[NgcHistSigParser.MAX_TEXT_BYTES];
+        final byte[] p = signedText(body, body.length);
+        assertEquals(NgcHistSigParser.SIGNED_TEXT_OVERHEAD + body.length, p.length);
+        assertEquals(145, NgcHistSigParser.SIGNED_TEXT_OVERHEAD);
+        assertEquals(ToxVars.TOX_MAX_NGC_FILE_AND_HEADER_SIZE, p.length);
+
+        final byte[] built = NgcHistSigParser.buildSignedText(MSG_ID, AUTHOR, TS,
+                                                              new byte[NgcHistSigParser.PEERNAME_SIZE],
+                                                              body, SIG);
+        assertNotNull(built);
+        assertEquals(ToxVars.TOX_MAX_NGC_FILE_AND_HEADER_SIZE, built.length);
+    }
 }

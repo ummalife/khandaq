@@ -154,8 +154,14 @@ const NSUInteger kOCTNgcHistSigPeerNameSize = 25;
 const uint8_t kOCTNgcHistSigVersionSigned = 0x02;
 const uint8_t kOCTNgcHistSigPktHskAnnounce = 0x50;
 const uint8_t kOCTNgcHistSigPktSignedText = 0x02;
-const NSUInteger kOCTNgcHistSigAnnouncePacketSize = 8 + 32 + 8 + 64; // 120
-const NSUInteger kOCTNgcHistSigMaxTextBytes = 37000;
+const NSUInteger kOCTNgcHistSigAnnouncePacketSize = 8 + 32 + 8 + 64; // 112
+const NSUInteger kOCTNgcHistSigSignedTextOverhead = 8 + 4 + 32 + 8 + 25 + 4 + 64; // 145
+// KHANDAQ: derived from the PACKET ceiling, not copied from the unsigned path's text ceiling.
+// Android's group_custom_private_packet_cb drops anything above 37000 bytes before it even reads
+// the version byte, so the old 37000-byte text limit built a 37145-byte packet that the peer threw
+// away in silence — the signed copy of the largest messages simply never arrived. Keep the two
+// platforms deriving the same number the same way; the figure is 36855.
+const NSUInteger kOCTNgcHistSigMaxTextBytes = 37000 - (8 + 4 + 32 + 8 + 25 + 4 + 64);
 
 static const uint8_t kMagic[6] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35};
 

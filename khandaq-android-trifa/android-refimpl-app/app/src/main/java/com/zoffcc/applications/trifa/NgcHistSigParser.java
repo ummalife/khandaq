@@ -12,7 +12,7 @@ import java.util.Arrays;
  *
  * Layouts (see DESIGN-ngc-signed-history-sync.md §4):
  *
- *   announcement  magic(6) | 0x02 | 0x50 | hskPub(32) | validFromTs(8 BE) | sig(64)      = 120
+ *   announcement  magic(6) | 0x02 | 0x50 | hskPub(32) | validFromTs(8 BE) | sig(64)      = 112
  *   signed text   magic(6) | 0x02 | 0x02 | msgId(4) | authorPub(32) | ts(8 BE)
  *                 | name(25) | textLen(4 BE) | text | sig(64)
  *
@@ -34,14 +34,24 @@ final class NgcHistSigParser
     static final int ANNOUNCE_PACKET_SIZE =
             HEADER_SIZE + NgcHistSig.PUBKEY_SIZE + 8 + SIGNATURE_SIZE;
 
+    /** Everything a signed-text packet carries besides the text itself: 145 bytes. */
+    static final int SIGNED_TEXT_OVERHEAD =
+            HEADER_SIZE + NgcHistSig.MSG_ID_SIZE + NgcHistSig.PUBKEY_SIZE + 8 + PEERNAME_SIZE + 4
+            + SIGNATURE_SIZE;
+
     /**
      * Largest text a signed history packet may carry.
      *
-     * Deliberately the SAME ceiling the unsigned path already enforces (37000 in
-     * handle_incoming_sync_group_message), so the signed variant cannot become a way to smuggle a
-     * larger body past a limit that was put there for a reason.
+     * The ceiling that matters is on the PACKET, not on the text: group_custom_private_packet_cb
+     * drops anything longer than TOX_MAX_NGC_FILE_AND_HEADER_SIZE before it ever looks at the
+     * version byte (MainActivity.java), so a text of exactly 37000 — the figure the unsigned path
+     * uses, and what this constant used to be — produces a 37145-byte packet that the receiver
+     * discards without a word. The signed copy would simply go missing for the largest messages,
+     * and nothing in the logs would say why. Derive the text limit from the packet limit instead,
+     * so the two can never drift apart again.
      */
-    static final int MAX_TEXT_BYTES = 37000;
+    static final int MAX_TEXT_BYTES =
+            ToxVars.TOX_MAX_NGC_FILE_AND_HEADER_SIZE - SIGNED_TEXT_OVERHEAD;
 
     private NgcHistSigParser()
     {
@@ -131,8 +141,7 @@ final class NgcHistSigParser
      */
     static SignedText parseSignedText(final byte[] data, final int length)
     {
-        final int fixedBefore = HEADER_SIZE + NgcHistSig.MSG_ID_SIZE + NgcHistSig.PUBKEY_SIZE + 8
-                                + PEERNAME_SIZE + 4;
+        final int fixedBefore = SIGNED_TEXT_OVERHEAD - SIGNATURE_SIZE;
         if (!isSignedPacket(data, length, PKT_SIGNED_TEXT) || length < fixedBefore + SIGNATURE_SIZE)
         {
             return null;
@@ -218,8 +227,7 @@ final class NgcHistSigParser
             return null;
         }
 
-        final int total = HEADER_SIZE + NgcHistSig.MSG_ID_SIZE + NgcHistSig.PUBKEY_SIZE + 8
-                          + PEERNAME_SIZE + 4 + textUtf8.length + SIGNATURE_SIZE;
+        final int total = SIGNED_TEXT_OVERHEAD + textUtf8.length;
         final byte[] out = new byte[total];
         int pos = writeHeader(out, PKT_SIGNED_TEXT);
         pos = put(out, pos, msgId);

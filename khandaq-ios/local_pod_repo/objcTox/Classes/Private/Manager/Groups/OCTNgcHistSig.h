@@ -111,13 +111,16 @@ extern const NSUInteger kOCTNgcHistSigPeerNameSize;    //!< 25
 extern const uint8_t kOCTNgcHistSigVersionSigned;      //!< 0x02
 extern const uint8_t kOCTNgcHistSigPktHskAnnounce;     //!< 0x50
 extern const uint8_t kOCTNgcHistSigPktSignedText;      //!< 0x02
-extern const NSUInteger kOCTNgcHistSigAnnouncePacketSize; //!< 120
+extern const NSUInteger kOCTNgcHistSigAnnouncePacketSize; //!< 112
+
+extern const NSUInteger kOCTNgcHistSigSignedTextOverhead; //!< 145 = everything but the text
 
 /**
- * Largest text a signed history packet may carry — the SAME ceiling the unsigned path enforces, so
- * the signed variant cannot smuggle a larger body past a limit that exists for a reason.
+ * Largest text a signed history packet may carry: the 37000-byte NGC packet ceiling minus the
+ * 145 bytes of envelope. NOT the unsigned path's 37000-byte text limit — that one, applied here,
+ * builds a packet Android discards before it reads the version byte.
  */
-extern const NSUInteger kOCTNgcHistSigMaxTextBytes;    //!< 37000
+extern const NSUInteger kOCTNgcHistSigMaxTextBytes;    //!< 36855
 
 /** A parsed announcement. Only produced when every bound held. */
 @interface OCTNgcHistSigAnnouncement : NSObject

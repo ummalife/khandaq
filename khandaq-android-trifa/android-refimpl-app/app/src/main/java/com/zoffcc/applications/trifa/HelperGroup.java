@@ -8988,7 +8988,7 @@ public class HelperGroup
                 // public/private split so both kinds get it. A peer that joins after us can only
                 // learn our signing key from a live packet, and on_group_connected fires only for
                 // us — so without this, anyone arriving later could never verify our history.
-                // announceToGroup holds a 10-minute per-group interval, so this costs one 120-byte
+                // announceToGroup holds a 10-minute per-group interval, so this costs one 112-byte
                 // packet per group per ten minutes at most.
                 announce_hsk_to_group(group_num, group_identifier, false);
 

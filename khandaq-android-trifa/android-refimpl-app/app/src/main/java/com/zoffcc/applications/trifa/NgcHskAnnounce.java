@@ -10,7 +10,13 @@ import static com.zoffcc.applications.trifa.MainActivity.tox_group_send_custom_p
  *
  * The packet is `magic(6) | 0x02 | 0x50 | hsk_pub(32) | valid_from_ts(8 BE) | sig(64)`, and the
  * signature is made with the announced key itself over
- * `"KQ-HSK-ANNOUNCE-1" || tox_pub(32) || hsk_pub(32) || valid_from_ts(8)`.
+ * `"KQ-HSK-ANNOUNCE-1" || sender_group_pub(32) || hsk_pub(32) || valid_from_ts(8)`.
+ *
+ * The identity in that pre-image is the sender's public key IN THIS GROUP, because that is the only
+ * identity the receiver can independently obtain (tox_group_peer_get_public_key) and the same one a
+ * group message records as its author. Binding to the profile's Tox ID key instead makes every
+ * signature unverifiable — the receiver has no way to learn a group peer's Tox ID, so it rebuilds a
+ * different pre-image and rejects everything.
  *
  * The self-signature proves possession and nothing else — anyone can mint a keypair and announce it
  * under any name. What makes an announcement attributable is that toxcore authenticates the sender
@@ -33,14 +39,47 @@ final class NgcHskAnnounce
     static final long MIN_INTERVAL_MS = 10L * 60L * 1000L;
 
     private static final ConcurrentHashMap<String, Long> last_sent_ms = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Long> last_fail_log_ms = new ConcurrentHashMap<>();
+
+    /**
+     * Per group, the peers that were in the group the last time we announced — so they have heard
+     * our key. Not a rate limit: a time window is the wrong tool here, because the join we care
+     * about lands seconds after our own connect-time announcement and any window wide enough to
+     * collapse a burst also swallows exactly that join. (Measured: with a 30-second window, two
+     * clients that started together did not learn each other's key until the ten-minute periodic.)
+     */
+    private static final ConcurrentHashMap<String, java.util.Set<String>> announced_to =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Logs a failure at most once per group per {@link #MIN_INTERVAL_MS}. The maintenance loop calls
+     * the announcer every few seconds, so an unthrottled line would bury the log — but silence is
+     * worse: a profile whose key never goes out is indistinguishable from one running an old
+     * client, which is exactly how this path stayed broken while looking fine.
+     */
+    private static void logFailureThrottled(final String key, final String message)
+    {
+        final long now = System.currentTimeMillis();
+        final Long last = last_fail_log_ms.get(key);
+        if (last != null && (now - last) < MIN_INTERVAL_MS && (now - last) >= 0)
+        {
+            return;
+        }
+        last_fail_log_ms.put(key, now);
+        HelperGeneric.logI(TAG, message);
+    }
 
     private NgcHskAnnounce()
     {
     }
 
     /**
-     * Builds the signed announcement for this profile.
+     * Builds the signed announcement for this profile in one group.
      *
+     * @param ownerToxPubHex the profile's Tox public key. Used ONLY to decide which stored key is
+     *                       ours (§4.1: a changed Tox identity must re-mint), never signed over.
+     * @param groupIdentifier the group whose key is announced — keys are per group.
+     * @param senderGroupPubHex our public key in that group, which is what the signature binds to.
      * @param validFromTs the timestamp the signature covers. The receiving side records its own
      *                    first_seen/last_seen and does not currently rely on this value; if it ever
      *                    needs to be stable across announcements, the key's creation time has to be
@@ -48,20 +87,21 @@ final class NgcHskAnnounce
      * @return the packet bytes, or null when there is no usable identity or key, when signing
      *         fails, or when any field is the wrong size. Never a partial packet.
      */
-    static byte[] buildSelfAnnouncement(final String toxPubHex, final long validFromTs)
+    static byte[] buildSelfAnnouncement(final String ownerToxPubHex, final String groupIdentifier,
+                                        final String senderGroupPubHex, final long validFromTs)
     {
-        final NgcHskStore.Hsk hsk = NgcHskStore.ensureKeypair(toxPubHex);
+        final NgcHskStore.Hsk hsk = NgcHskStore.ensureKeypair(ownerToxPubHex, groupIdentifier);
         if (hsk == null)
         {
             return null;
         }
-        final byte[] toxPub = NgcHskStore.fromHex(toxPubHex);
-        if (toxPub == null || toxPub.length != NgcHistSig.PUBKEY_SIZE)
+        final byte[] senderGroupPub = NgcHskStore.fromHex(senderGroupPubHex);
+        if (senderGroupPub == null || senderGroupPub.length != NgcHistSig.PUBKEY_SIZE)
         {
             return null;
         }
 
-        final byte[] preimage = NgcHistSig.announcePreimage(toxPub, hsk.pub, validFromTs);
+        final byte[] preimage = NgcHistSig.announcePreimage(senderGroupPub, hsk.pub, validFromTs);
         if (preimage == null)
         {
             return null;
@@ -84,6 +124,20 @@ final class NgcHskAnnounce
     static boolean announceToGroup(final long groupNum, final String groupIdentifier,
                                    final String toxPubHex, final boolean force)
     {
+        return announceToGroup(groupNum, groupIdentifier, toxPubHex, force, MIN_INTERVAL_MS);
+    }
+
+    /**
+     * @param minIntervalMs the rate limit to apply. The periodic path uses the full interval; a peer
+     *                      joining uses a short one, because a peer that arrives after our last
+     *                      announcement can verify nothing we wrote until it hears one, and waiting
+     *                      out ten minutes for that is the difference between "verified" and "looks
+     *                      like an old client" for everything it receives in between.
+     */
+    static boolean announceToGroup(final long groupNum, final String groupIdentifier,
+                                   final String toxPubHex, final boolean force,
+                                   final long minIntervalMs)
+    {
         if (groupNum < 0 || groupIdentifier == null)
         {
             return false;
@@ -96,15 +150,22 @@ final class NgcHskAnnounce
             final Long last = last_sent_ms.get(key);
             // A clock moved backwards yields a negative interval, which fails this test and simply
             // announces again — harmless, and better than going silent until the clock catches up.
-            if (last != null && (now - last) < MIN_INTERVAL_MS && (now - last) >= 0)
+            if (last != null && (now - last) < minIntervalMs && (now - last) >= 0)
             {
                 return false;
             }
         }
 
-        final byte[] packet = buildSelfAnnouncement(toxPubHex, now);
+        // Our identity in THIS group, which is what the signature binds to and what the receiver
+        // will independently read off the transport.
+        final String selfGroupPub = HelperGroup.tox_group_self_get_public_key__wrapper(groupNum);
+        final byte[] packet = buildSelfAnnouncement(toxPubHex, groupIdentifier, selfGroupPub, now);
         if (packet == null)
         {
+            // Silence here means nobody can ever verify our history and nothing says why, so this
+            // one failure is worth a (throttled) line even though it is not fatal to anything else.
+            logFailureThrottled(key, "announceToGroup:not built gn=" + groupNum
+                    + " have_group_pub=" + (selfGroupPub != null));
             return false;
         }
 
@@ -146,39 +207,40 @@ final class NgcHskAnnounce
             }
 
             final String groupId = HelperGroup.tox_group_by_groupnum__wrapper(groupNum);
-            final String senderToxPubHex = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNum, peerId);
-            if (groupId == null || senderToxPubHex == null)
+            final String senderGroupPubHex = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNum, peerId);
+            if (groupId == null || senderGroupPubHex == null)
             {
                 return;
             }
-            final byte[] senderToxPub = NgcHskStore.fromHex(senderToxPubHex);
-            if (senderToxPub == null || senderToxPub.length != NgcHistSig.PUBKEY_SIZE)
+            final byte[] senderGroupPub = NgcHskStore.fromHex(senderGroupPubHex);
+            if (senderGroupPub == null || senderGroupPub.length != NgcHistSig.PUBKEY_SIZE)
             {
                 return;
             }
 
             // Ignore our own announcement echoed back: adopting it would be harmless but it would
             // also mask a real peer's key behind ours if the pubkeys ever collided in the store.
-            final String selfToxPub = NgcHskStore.toxPubFromToxId(MainActivity.get_my_toxid());
-            if (selfToxPub != null && selfToxPub.equalsIgnoreCase(senderToxPubHex))
+            // Compared in group-key space, the only space both sides of this packet speak.
+            final String selfGroupPub = HelperGroup.tox_group_self_get_public_key__wrapper(groupNum);
+            if (selfGroupPub != null && selfGroupPub.equalsIgnoreCase(senderGroupPubHex))
             {
                 return;
             }
 
-            final byte[] preimage = NgcHistSig.announcePreimage(senderToxPub, ann.hskPub, ann.validFromTs);
+            final byte[] preimage = NgcHistSig.announcePreimage(senderGroupPub, ann.hskPub, ann.validFromTs);
             if (preimage == null)
             {
                 return;
             }
             // Self-signed: verified against the key being announced. This proves possession only —
-            // the binding to senderToxPubHex comes from the transport above.
+            // the binding to senderGroupPubHex comes from the transport above.
             if (MainActivity.khandaq_ed25519_verify(preimage, preimage.length, ann.signature, ann.hskPub) != 0)
             {
                 HelperGeneric.logI(TAG, "handleIncoming:bad signature gn=" + groupNum + " pid=" + peerId);
                 return;
             }
 
-            final String row = NgcHskDirectory.rowKey(groupId, senderToxPubHex);
+            final String row = NgcHskDirectory.rowKey(groupId, senderGroupPubHex);
             if (row == null)
             {
                 return;
@@ -227,7 +289,86 @@ final class NgcHskAnnounce
     {
         if (groupIdentifier != null)
         {
-            last_sent_ms.remove(groupIdentifier.toLowerCase(Locale.ROOT));
+            final String key = groupIdentifier.toLowerCase(Locale.ROOT);
+            last_sent_ms.remove(key);
+            // Everyone has to hear the new key, including peers that already heard the old one.
+            announced_to.remove(key);
+        }
+    }
+
+    /**
+     * Announces to a group because a peer arrived, unless that peer has already heard us.
+     *
+     * The peer that just joined can verify nothing we wrote until it has our key, so this bypasses
+     * the periodic interval — but only once per peer. On a successful send every peer currently in
+     * the group is marked as having heard it, which is what keeps a group of N waking up at once to
+     * a single broadcast rather than N of them.
+     *
+     * @return true if a packet was sent.
+     */
+    static boolean announceForNewPeer(final long groupNum, final String groupIdentifier,
+                                      final String toxPubHex, final String joiningPeerPubkey)
+    {
+        if (groupNum < 0 || groupIdentifier == null || joiningPeerPubkey == null)
+        {
+            return false;
+        }
+
+        final String key = groupIdentifier.toLowerCase(Locale.ROOT);
+        final String peer = joiningPeerPubkey.toLowerCase(Locale.ROOT);
+        java.util.Set<String> heard = announced_to.get(key);
+        if (heard != null && heard.contains(peer))
+        {
+            return false;
+        }
+
+        if (!announceToGroup(groupNum, groupIdentifier, toxPubHex, true))
+        {
+            // Nothing was sent, so nobody may be marked as having heard it — otherwise a failed
+            // send would permanently convince us this peer knows a key it never received.
+            return false;
+        }
+
+        heard = announced_to.get(key);
+        if (heard == null)
+        {
+            heard = java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+            final java.util.Set<String> raced = announced_to.putIfAbsent(key, heard);
+            if (raced != null)
+            {
+                heard = raced;
+            }
+        }
+        heard.add(peer);
+        markCurrentPeersAsHeard(groupNum, heard);
+        return true;
+    }
+
+    /** The broadcast reached everyone who is in the group right now, so record all of them. */
+    private static void markCurrentPeersAsHeard(final long groupNum, final java.util.Set<String> heard)
+    {
+        try
+        {
+            final long[] peers = MainActivity.tox_group_get_peerlist(groupNum);
+            if (peers == null)
+            {
+                return;
+            }
+            for (final long peerId : peers)
+            {
+                if (peerId < 0)
+                {
+                    continue;
+                }
+                final String pub = HelperGroup.tox_group_peer_get_public_key__wrapper(groupNum, peerId);
+                if (pub != null)
+                {
+                    heard.add(pub.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
         }
     }
 }

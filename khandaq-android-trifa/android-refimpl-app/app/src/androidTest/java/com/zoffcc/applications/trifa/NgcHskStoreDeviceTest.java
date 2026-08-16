@@ -35,6 +35,16 @@ public class NgcHskStoreDeviceTest
     private static final String OWNER_B =
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
+    /** Two groups, because the key is per group and the tests must be able to tell them apart. */
+    private static final String GROUP_1 =
+            "1111111111111111111111111111111111111111111111111111111111111111";
+    private static final String GROUP_2 =
+            "2222222222222222222222222222222222222222222222222222222222222222";
+
+    /** Our public key IN a group — the identity an announcement's signature actually binds to. */
+    private static final String SELF_GROUP_PUB =
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+
     @BeforeClass
     public static void loadNativeLibrary()
     {
@@ -96,11 +106,17 @@ public class NgcHskStoreDeviceTest
         }
     }
 
+    private static void clearRows(final String group)
+    {
+        HelperGeneric.set_g_opts(NgcHskStore.rowKey(NgcHskStore.G_OPTS_KEY_OWNER, group), "");
+        HelperGeneric.set_g_opts(NgcHskStore.rowKey(NgcHskStore.G_OPTS_KEY_PUB, group), "");
+        HelperGeneric.set_g_opts(NgcHskStore.rowKey(NgcHskStore.G_OPTS_KEY_SEC, group), "");
+    }
+
     private static void clearRows()
     {
-        HelperGeneric.set_g_opts(NgcHskStore.G_OPTS_KEY_OWNER, "");
-        HelperGeneric.set_g_opts(NgcHskStore.G_OPTS_KEY_PUB, "");
-        HelperGeneric.set_g_opts(NgcHskStore.G_OPTS_KEY_SEC, "");
+        clearRows(GROUP_1);
+        clearRows(GROUP_2);
     }
 
     @Test
@@ -109,7 +125,7 @@ public class NgcHskStoreDeviceTest
         assumeTrue("no open profile — g_opts unavailable", profileIsOpen());
         clearRows();
 
-        final NgcHskStore.Hsk first = NgcHskStore.ensureKeypair(OWNER_A);
+        final NgcHskStore.Hsk first = NgcHskStore.ensureKeypair(OWNER_A, GROUP_1);
         assertNotNull("generation or persistence failed", first);
         assertEquals(NgcHskStore.PUBKEY_SIZE, first.pub.length);
         assertEquals(NgcHskStore.SECRETKEY_SIZE, first.sec.length);
@@ -117,10 +133,30 @@ public class NgcHskStoreDeviceTest
 
         // Second call must LOAD, not mint: a key that changes under the same identity would
         // invalidate every announcement already made with the first one.
-        final NgcHskStore.Hsk second = NgcHskStore.ensureKeypair(OWNER_A);
+        final NgcHskStore.Hsk second = NgcHskStore.ensureKeypair(OWNER_A, GROUP_1);
         assertNotNull(second);
         assertArrayEquals(first.pub, second.pub);
         assertArrayEquals(first.sec, second.sec);
+    }
+
+    @Test
+    public void each_group_gets_its_own_key()
+    {
+        // NGC gives a member a different public key per group on purpose. One HSK shared across
+        // groups would re-link the same person wherever two of their groups share an observer —
+        // a correlator this feature must not add while fixing authorship.
+        assumeTrue("no open profile — g_opts unavailable", profileIsOpen());
+        clearRows();
+
+        final NgcHskStore.Hsk one = NgcHskStore.ensureKeypair(OWNER_A, GROUP_1);
+        final NgcHskStore.Hsk two = NgcHskStore.ensureKeypair(OWNER_A, GROUP_2);
+        assertNotNull(one);
+        assertNotNull(two);
+        assertFalse("the same key must not serve two groups", Arrays.equals(one.pub, two.pub));
+
+        // And each stays put: re-reading one group must not disturb the other.
+        assertArrayEquals(one.pub, NgcHskStore.ensureKeypair(OWNER_A, GROUP_1).pub);
+        assertArrayEquals(two.pub, NgcHskStore.ensureKeypair(OWNER_A, GROUP_2).pub);
     }
 
     @Test
@@ -129,12 +165,12 @@ public class NgcHskStoreDeviceTest
         assumeTrue("no open profile — g_opts unavailable", profileIsOpen());
         clearRows();
 
-        final NgcHskStore.Hsk stored = NgcHskStore.ensureKeypair(OWNER_A);
+        final NgcHskStore.Hsk stored = NgcHskStore.ensureKeypair(OWNER_A, GROUP_1);
         assertNotNull(stored);
 
         // Round-trip through the database, then use what came back: this is what catches bytes
         // mangled by hex encoding or truncated by the row, which a length check alone would miss.
-        final NgcHskStore.Hsk reloaded = NgcHskStore.ensureKeypair(OWNER_A);
+        final NgcHskStore.Hsk reloaded = NgcHskStore.ensureKeypair(OWNER_A, GROUP_1);
         assertNotNull(reloaded);
 
         final byte[] msg = NgcHistSig.histSyncPreimage(new byte[32], new byte[32], new byte[4], 1L,
@@ -152,14 +188,14 @@ public class NgcHskStoreDeviceTest
         assumeTrue("no open profile — g_opts unavailable", profileIsOpen());
         clearRows();
 
-        final NgcHskStore.Hsk forA = NgcHskStore.ensureKeypair(OWNER_A);
+        final NgcHskStore.Hsk forA = NgcHskStore.ensureKeypair(OWNER_A, GROUP_1);
         assertNotNull(forA);
-        final NgcHskStore.Hsk forB = NgcHskStore.ensureKeypair(OWNER_B);
+        final NgcHskStore.Hsk forB = NgcHskStore.ensureKeypair(OWNER_B, GROUP_1);
         assertNotNull(forB);
         assertFalse("the key must not be reused across identities", Arrays.equals(forA.pub, forB.pub));
 
         // ...and the new one must now be the stored one.
-        assertArrayEquals(forB.pub, NgcHskStore.ensureKeypair(OWNER_B).pub);
+        assertArrayEquals(forB.pub, NgcHskStore.ensureKeypair(OWNER_B, GROUP_1).pub);
     }
 
     @Test
@@ -173,7 +209,8 @@ public class NgcHskStoreDeviceTest
         clearRows();
 
         final long validFrom = 1_755_000_000_000L;
-        final byte[] packet = NgcHskAnnounce.buildSelfAnnouncement(OWNER_A, validFrom);
+        final byte[] packet =
+                NgcHskAnnounce.buildSelfAnnouncement(OWNER_A, GROUP_1, SELF_GROUP_PUB, validFrom);
         assertNotNull("announcement could not be built", packet);
         assertEquals(NgcHistSigParser.ANNOUNCE_PACKET_SIZE, packet.length);
 
@@ -182,15 +219,26 @@ public class NgcHskStoreDeviceTest
         assertNotNull("our own packet did not survive our own parser", ann);
         assertEquals(validFrom, ann.validFromTs);
 
-        // The receiver rebuilds the pre-image from the sender's TOX key (which it takes from the
-        // transport, not the payload) and the announced key, then verifies the self-signature.
-        final byte[] toxPub = NgcHskStore.fromHex(OWNER_A);
-        final byte[] preimage = NgcHistSig.announcePreimage(toxPub, ann.hskPub, ann.validFromTs);
+        // The receiver rebuilds the pre-image from the sender's key IN THIS GROUP — which it reads
+        // off the transport, not out of the payload — and the announced key, then verifies.
+        final byte[] groupPub = NgcHskStore.fromHex(SELF_GROUP_PUB);
+        final byte[] preimage = NgcHistSig.announcePreimage(groupPub, ann.hskPub, ann.validFromTs);
         assertNotNull(preimage);
-        assertEquals(0, MainActivity.khandaq_ed25519_verify(
-                preimage, preimage.length, ann.signature, ann.hskPub));
+        assertEquals("a peer could not verify our own announcement", 0,
+                     MainActivity.khandaq_ed25519_verify(
+                             preimage, preimage.length, ann.signature, ann.hskPub));
 
-        // And it must fail when the claimed Tox identity is not the one the signature covers —
+        // The regression this test exists for: signing over the profile's TOX key instead of the
+        // group key produced packets that verified nowhere. Both sides looked right in isolation —
+        // the sender signed one identity, the receiver could only ever reconstruct the other — and
+        // it took two devices on a wire to see it. Pinned here so it cannot come back quietly.
+        final byte[] toxKeyPreimage =
+                NgcHistSig.announcePreimage(NgcHskStore.fromHex(OWNER_A), ann.hskPub, ann.validFromTs);
+        assertNotEquals("the signature must not be over the profile's Tox key", 0,
+                        MainActivity.khandaq_ed25519_verify(
+                                toxKeyPreimage, toxKeyPreimage.length, ann.signature, ann.hskPub));
+
+        // And it must fail when the claimed group identity is not the one the signature covers —
         // otherwise anyone could replay someone else's announcement under their own name.
         final byte[] wrongPreimage =
                 NgcHistSig.announcePreimage(NgcHskStore.fromHex(OWNER_B), ann.hskPub, ann.validFromTs);
@@ -204,11 +252,16 @@ public class NgcHskStoreDeviceTest
         assumeTrue("no open profile — g_opts unavailable", profileIsOpen());
         clearRows();
 
-        assertNull(NgcHskStore.ensureKeypair(null));
-        assertNull(NgcHskStore.ensureKeypair(""));
-        assertNull(NgcHskStore.ensureKeypair("not-hex"));
+        assertNull(NgcHskStore.ensureKeypair(null, GROUP_1));
+        assertNull(NgcHskStore.ensureKeypair("", GROUP_1));
+        assertNull(NgcHskStore.ensureKeypair("not-hex", GROUP_1));
+        // No group means no row to write to, so nothing may be minted then either.
+        assertNull(NgcHskStore.ensureKeypair(OWNER_A, null));
+        assertNull(NgcHskStore.ensureKeypair(OWNER_A, ""));
+
         // Nothing was written, so a later call with a real identity still generates cleanly.
-        assertNull(HelperGeneric.get_g_opts(NgcHskStore.G_OPTS_KEY_OWNER) == null
-                   ? null : (HelperGeneric.get_g_opts(NgcHskStore.G_OPTS_KEY_OWNER).isEmpty() ? null : "written"));
+        final String ownerRow = NgcHskStore.rowKey(NgcHskStore.G_OPTS_KEY_OWNER, GROUP_1);
+        final String written = HelperGeneric.get_g_opts(ownerRow);
+        assertNull(written == null || written.isEmpty() ? null : "written");
     }
 }

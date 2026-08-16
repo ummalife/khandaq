@@ -83,7 +83,7 @@ final class NgcSignedHistory
                 return null;
             }
 
-            final NgcHskStore.Hsk hsk = NgcHskStore.ensureKeypair(selfToxPubHex);
+            final NgcHskStore.Hsk hsk = NgcHskStore.ensureKeypair(selfToxPubHex, groupIdentifier);
             if (hsk == null)
             {
                 return null;

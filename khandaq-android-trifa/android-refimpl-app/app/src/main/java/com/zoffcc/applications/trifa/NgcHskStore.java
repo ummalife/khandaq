@@ -22,6 +22,11 @@ import java.util.Arrays;
  * leaves the key looking absent and it is simply regenerated, rather than leaving half a key that
  * something later treats as an identity.
  *
+ * ONE KEY PER GROUP, not one per profile. NGC deliberately gives a member a different public key in
+ * every group, so a single HSK reused everywhere would re-link the same person across groups that
+ * only share an observer — a correlator this feature must not introduce while fixing authorship.
+ * The owner is still recorded per group so an identity change re-mints every one of them.
+ *
  * The secret key is never logged, never returned by any toString, and never written anywhere but the
  * encrypted profile row.
  *
@@ -30,11 +35,24 @@ import java.util.Arrays;
  */
 final class NgcHskStore
 {
-    /** g_opts row keys. Prefixed like the other KHANDAQ rows so they are recognisable in a dump. */
-    static final String G_OPTS_KEY_SEC = "kqhsksec";
-    static final String G_OPTS_KEY_PUB = "kqhskpub";
+    /**
+     * g_opts row-key prefixes. Prefixed like the other KHANDAQ rows so they are recognisable in a
+     * dump; the group identifier is appended by {@link #rowKey}.
+     */
+    static final String G_OPTS_KEY_SEC = "kqhsksec_";
+    static final String G_OPTS_KEY_PUB = "kqhskpub_";
     /** Written last; its presence means the other two are complete. */
-    static final String G_OPTS_KEY_OWNER = "kqhskowner";
+    static final String G_OPTS_KEY_OWNER = "kqhskowner_";
+
+    /** @return the row for one group, or null when the group identifier is unusable. */
+    static String rowKey(final String prefix, final String groupIdentifier)
+    {
+        if (prefix == null || groupIdentifier == null || groupIdentifier.isEmpty())
+        {
+            return null;
+        }
+        return prefix + groupIdentifier.toLowerCase(java.util.Locale.ROOT);
+    }
 
     static final int PUBKEY_SIZE = 32;
     static final int SECRETKEY_SIZE = 64;
@@ -163,22 +181,32 @@ final class NgcHskStore
     // ---------------------------------------------------------------- storage (device-tested)
 
     /**
-     * Returns this profile's HSK, generating and persisting one on first use or after the Tox
-     * identity changed.
+     * Returns this profile's HSK for one group, generating and persisting one on first use or after
+     * the Tox identity changed.
      *
+     * @param groupIdentifier the group the key is for. Keys are per group on purpose — see the class
+     *                        comment on cross-group correlation.
      * @return the key, or null when there is no usable Tox identity yet (the caller must not sign
      *         anything in that case) or when generation or persistence failed. Never a partial key.
      */
-    static synchronized Hsk ensureKeypair(final String currentToxPubHex)
+    static synchronized Hsk ensureKeypair(final String currentToxPubHex, final String groupIdentifier)
     {
         if (!isToxPubHex(currentToxPubHex))
         {
             return null;
         }
 
-        final String owner = HelperGeneric.get_g_opts(G_OPTS_KEY_OWNER);
-        final String pubHex = HelperGeneric.get_g_opts(G_OPTS_KEY_PUB);
-        final String secHex = HelperGeneric.get_g_opts(G_OPTS_KEY_SEC);
+        final String ownerRow = rowKey(G_OPTS_KEY_OWNER, groupIdentifier);
+        final String pubRow = rowKey(G_OPTS_KEY_PUB, groupIdentifier);
+        final String secRow = rowKey(G_OPTS_KEY_SEC, groupIdentifier);
+        if (ownerRow == null || pubRow == null || secRow == null)
+        {
+            return null;
+        }
+
+        final String owner = HelperGeneric.get_g_opts(ownerRow);
+        final String pubHex = HelperGeneric.get_g_opts(pubRow);
+        final String secHex = HelperGeneric.get_g_opts(secRow);
 
         if (!needsFreshKey(owner, pubHex, secHex, currentToxPubHex))
         {
@@ -194,15 +222,15 @@ final class NgcHskStore
 
         // Owner last: it is the commit marker, so a crash between these writes leaves the key
         // looking absent and the next call regenerates instead of loading half of one.
-        HelperGeneric.set_g_opts(G_OPTS_KEY_SEC, toHex(sec));
-        HelperGeneric.set_g_opts(G_OPTS_KEY_PUB, toHex(pub));
-        HelperGeneric.set_g_opts(G_OPTS_KEY_OWNER, currentToxPubHex.toLowerCase(java.util.Locale.ROOT));
+        HelperGeneric.set_g_opts(secRow, toHex(sec));
+        HelperGeneric.set_g_opts(pubRow, toHex(pub));
+        HelperGeneric.set_g_opts(ownerRow, currentToxPubHex.toLowerCase(java.util.Locale.ROOT));
 
         // set_g_opts swallows its own failures (see the audit3 #1 note on the cancel tombstone), so
         // confirm by reading back rather than trusting the write.
-        if (needsFreshKey(HelperGeneric.get_g_opts(G_OPTS_KEY_OWNER),
-                          HelperGeneric.get_g_opts(G_OPTS_KEY_PUB),
-                          HelperGeneric.get_g_opts(G_OPTS_KEY_SEC), currentToxPubHex))
+        if (needsFreshKey(HelperGeneric.get_g_opts(ownerRow),
+                          HelperGeneric.get_g_opts(pubRow),
+                          HelperGeneric.get_g_opts(secRow), currentToxPubHex))
         {
             return null;
         }

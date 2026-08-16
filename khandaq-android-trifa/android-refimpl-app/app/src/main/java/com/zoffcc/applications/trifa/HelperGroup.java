@@ -781,6 +781,24 @@ public class HelperGroup
         return result;
     }
 
+    /**
+     * Our own public key in one group, lowercased so it compares cleanly against the peer keys that
+     * come back from the transport (which arrive uppercase from some call sites and lowercase from
+     * others).
+     */
+    public static String tox_group_self_get_public_key__wrapper(long group_num)
+    {
+        try
+        {
+            final String result = MainActivity.tox_group_self_get_public_key(group_num);
+            return (result == null) ? null : result.toLowerCase(java.util.Locale.ROOT);
+        }
+        catch (Exception ignored)
+        {
+            return null;
+        }
+    }
+
     static boolean is_group_we_left(String group_identifier)
     {
         try
@@ -3662,6 +3680,12 @@ public class HelperGroup
         sync_group_peers_from_tox_to_db(group_number);
         log_group_peer_mesh_diagnostics(group_number, group_identifier, "peer_join pid=" + peer_id);
         clear_group_connect_progress(group_identifier);
+
+        // KHANDAQ (audit #2 finding 1, step 3): the arriving peer needs our signing key before it can
+        // verify anything we wrote. Announcing only when WE connect misses it entirely — the packet
+        // goes out while the peer list is still empty and nothing follows for ten minutes, which is
+        // exactly how the first version of this looked correct and delivered nothing.
+        announce_hsk_to_new_peer(group_number, group_identifier, group_peer_pubkey);
     }
 
     private static void dedupe_stale_pubkey_for_same_display_name(@NonNull final String group_identifier,
@@ -8422,11 +8446,7 @@ public class HelperGroup
     {
         try
         {
-            if (group_num < 0 || group_identifier == null)
-            {
-                return;
-            }
-            final String self_tox_pub = NgcHskStore.toxPubFromToxId(MainActivity.get_my_toxid());
+            final String self_tox_pub = self_tox_pub_for_hsk(group_num, group_identifier);
             if (self_tox_pub == null)
             {
                 return;
@@ -8436,6 +8456,39 @@ public class HelperGroup
         catch (Exception e)
         {
             HelperGeneric.logI(TAG, "announce_hsk_to_group:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * The profile identity the HSK is filed under. It is used ONLY to decide whose stored key this
+     * is (§4.1 re-mints on identity change); what a signature binds to is our per-group key, which
+     * NgcHskAnnounce reads from the transport.
+     */
+    private static String self_tox_pub_for_hsk(final long group_num, final String group_identifier)
+    {
+        if (group_num < 0 || group_identifier == null)
+        {
+            return null;
+        }
+        return NgcHskStore.toxPubFromToxId(MainActivity.get_my_toxid());
+    }
+
+    /** Announces to a peer that just joined, at most once per peer. See NgcHskAnnounce. */
+    static void announce_hsk_to_new_peer(final long group_num, final String group_identifier,
+                                         final String peer_pubkey)
+    {
+        try
+        {
+            final String self_tox_pub = self_tox_pub_for_hsk(group_num, group_identifier);
+            if (self_tox_pub == null)
+            {
+                return;
+            }
+            NgcHskAnnounce.announceForNewPeer(group_num, group_identifier, self_tox_pub, peer_pubkey);
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "announce_hsk_to_new_peer:EE:" + e.getMessage());
         }
     }
 

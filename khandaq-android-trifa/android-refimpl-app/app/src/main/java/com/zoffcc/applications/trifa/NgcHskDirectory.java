@@ -10,11 +10,13 @@ import java.util.Arrays;
  * claimed author is unauthenticated; the fix is to verify an Ed25519 signature against the author's
  * HSK. That only helps if learning the HSK is itself hard to spoof — and the announcement carrying
  * it is self-signed, which proves possession of the announced key but says nothing about WHO owns
- * it. The binding to a Tox identity comes from the live transport: toxcore authenticates the sender
- * of a group packet, so an announcement received live is attributable, while a relayed one is not.
+ * it. The binding to an identity comes from the live transport: toxcore authenticates the sender of
+ * a group packet, so an announcement received live is attributable, while a relayed one is not. That
+ * identity is the peer's public key IN THIS GROUP — the only one NGC exposes, and the same one a
+ * group message records as its author, which is what makes the two halves line up at all.
  *
  * Hence the rule from §4.2, and hence the care here: FIRST ANNOUNCEMENT WINS. A later announcement
- * naming a different key for the same Tox public key is recorded but does NOT take over, because
+ * naming a different key for the same group public key is recorded but does NOT take over, because
  * silently accepting replacements hands the impersonation door back to whoever manages to get a
  * packet in first after a peer drops. Replacement is allowed only when the peer is connected RIGHT
  * NOW (so the transport vouches for the sender) and the key being replaced has not been seen for
@@ -29,7 +31,7 @@ final class NgcHskDirectory
     /** How long a known key must go unseen before a different one may replace it. */
     static final long REPLACE_GRACE_MS = 24L * 60L * 60L * 1000L;
 
-    /** g_opts row prefix: kqhskdir_<group_id>|<peer_tox_pubkey> -> hskPubHex:firstSeen:lastSeen */
+    /** g_opts row prefix: kqhskdir_<group_id>|<peer_group_pubkey> -> hskPubHex:firstSeen:lastSeen */
     static final String G_OPTS_PREFIX = "kqhskdir_";
 
     private NgcHskDirectory()
@@ -111,14 +113,14 @@ final class NgcHskDirectory
     }
 
     /** g_opts row key for one pair. Lower-cased so two spellings cannot become two rows. */
-    static String rowKey(final String groupId, final String peerToxPubHex)
+    static String rowKey(final String groupId, final String peerGroupPubHex)
     {
-        if (groupId == null || peerToxPubHex == null)
+        if (groupId == null || peerGroupPubHex == null)
         {
             return null;
         }
         return G_OPTS_PREFIX + groupId.toLowerCase(java.util.Locale.ROOT)
-               + "|" + peerToxPubHex.toLowerCase(java.util.Locale.ROOT);
+               + "|" + peerGroupPubHex.toLowerCase(java.util.Locale.ROOT);
     }
 
     /** hskPubHex:firstSeen:lastSeen — plain and greppable in a support dump. */

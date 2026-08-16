@@ -87,10 +87,19 @@ final class NgcHistSig
         return pos == out.length ? out : null;
     }
 
-    /** "KQ-HSK-ANNOUNCE-1" || toxPub(32) || hskPub(32) || validFromTs(8 BE) */
-    static byte[] announcePreimage(final byte[] toxPub, final byte[] hskPub, final long validFromTs)
+    /**
+     * "KQ-HSK-ANNOUNCE-1" || senderGroupPub(32) || hskPub(32) || validFromTs(8 BE)
+     *
+     * senderGroupPub is the sender's public key IN THIS GROUP — what
+     * tox_group_peer_get_public_key reports to the receiver, and what a group message records as its
+     * author. It is deliberately not the profile's Tox ID key: NGC gives a member a different key
+     * per group and never tells anyone their Tox ID, so a signature over the Tox ID key would be
+     * one no receiver could reconstruct. (It was written that way first, and every announcement
+     * failed verification on the wire while both sides looked correct in isolation.)
+     */
+    static byte[] announcePreimage(final byte[] senderGroupPub, final byte[] hskPub, final long validFromTs)
     {
-        if (toxPub == null || toxPub.length != PUBKEY_SIZE
+        if (senderGroupPub == null || senderGroupPub.length != PUBKEY_SIZE
             || hskPub == null || hskPub.length != PUBKEY_SIZE)
         {
             return null;
@@ -99,7 +108,7 @@ final class NgcHistSig
         final byte[] out = new byte[ANNOUNCE_PREIMAGE_SIZE];
         int pos = 0;
         pos = append(out, pos, ANNOUNCE_DOMAIN);
-        pos = append(out, pos, toxPub);
+        pos = append(out, pos, senderGroupPub);
         pos = append(out, pos, hskPub);
         pos = appendBigEndian64(out, pos, validFromTs);
         return pos == out.length ? out : null;

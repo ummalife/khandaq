@@ -45,6 +45,41 @@ final class SwipeAndLanguageUITests: XCTestCase {
         checkInAppLanguageReachesWholeInterface()
     }
 
+
+    /// The attachments screen exists and is reachable: open a chat, press the paperclip, and check the
+    /// three folders are there. Building is not the same as being reachable — that lesson cost a day.
+    func testAttachmentsScreenOpensWithThreeFolders() {
+        openChats()
+
+        let firstChat = app.cells.element(boundBy: 0)
+        guard firstChat.waitForExistence(timeout: 15) else {
+            XCTFail("no chat to open. Screen was:\n\(app.debugDescription)")
+            return
+        }
+        firstChat.tap()
+
+        let paperclip = app.navigationBars.buttons.matching(
+                NSPredicate(format: "label IN {'Attachments', 'Вложения', 'المرفقات', '附件'}"))
+                .element(boundBy: 0)
+        XCTAssertTrue(paperclip.waitForExistence(timeout: 10),
+                      "no attachments button in the chat header. Screen was:\n\(app.debugDescription)")
+        paperclip.tap()
+
+        for folder in ["Files", "Файлы", "Audio", "Аудио", "Voice", "Голосовые"] where app.buttons[folder].exists {
+            XCTAssertTrue(app.buttons[folder].isHittable, "folder \(folder) is not tappable")
+        }
+
+        let segments = app.segmentedControls.element(boundBy: 0)
+        XCTAssertTrue(segments.waitForExistence(timeout: 10),
+                      "the attachments screen did not open. Screen was:\n\(app.debugDescription)")
+        XCTAssertEqual(segments.buttons.count, 3, "expected three folders: files, audio, voice")
+
+        // Each folder must be selectable — an empty one shows its placeholder, which is fine.
+        for index in 0..<segments.buttons.count {
+            segments.buttons.element(boundBy: index).tap()
+        }
+    }
+
     // MARK: - Swipe
 
     private func checkSwipeBetweenFilterTabs() {

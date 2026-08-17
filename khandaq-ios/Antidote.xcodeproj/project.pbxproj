@@ -179,6 +179,9 @@
 		111783701DC64D75000C1721 /* ChangePinTimeoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116046181D8D434B002287C8 /* ChangePinTimeoutController.swift */; };
 		111783711DC64D75000C1721 /* ChangeUserStatusController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1149626B1C5CE3DF001E5435 /* ChangeUserStatusController.swift */; };
 		111783721DC64D75000C1721 /* ChatListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE0BDE51C45229500DCE357 /* ChatListController.swift */; };
+		B2SWIPE0000000000000001 /* ChatListSwipeNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */; };
+		B2SWIPEA00000000000001 /* ChatListSwipeNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */; };
+		B2SWIPEB00000000000001 /* ChatListSwipeNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */; };
 		111783731DC64D75000C1721 /* ChatPrivateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */; };
 		111783741DC64D75000C1721 /* EnterPinController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C19367D1D79CF7E005EA0B2 /* EnterPinController.swift */; };
 		111783751DC64D75000C1721 /* FAQController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AEBE701DA1876F00D04B59 /* FAQController.swift */; };
@@ -240,6 +243,7 @@
 		113F03171CAFD9370009ABE1 /* MockedChatProgressProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03161CAFD9370009ABE1 /* MockedChatProgressProtocol.swift */; };
 		113F03191CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */; };
 		113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */; };
+		B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */; };
 		113F031D1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */; };
 		113F031F1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */; };
 		113F03211CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */; };
@@ -866,6 +870,7 @@
 		113F03161CAFD9370009ABE1 /* MockedChatProgressProtocol.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MockedChatProgressProtocol.swift; sourceTree = "<group>"; };
 		113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatIncomingTextCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCellSnapshotTest.swift; sourceTree = "<group>"; };
+		B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListSwipeNavigationTest.swift; sourceTree = "<group>"; };
 		113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatMovableDateCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingCallCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingFileCellSnapshotTest.swift; sourceTree = "<group>"; };
@@ -1099,6 +1104,7 @@
 		9CDDB2051BD5376200B65D79 /* ProfileManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProfileManager.swift; sourceTree = "<group>"; };
 		9CDE31E51E489B2700333E0D /* ChatInputViewManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatInputViewManager.swift; sourceTree = "<group>"; };
 		9CE0BDE51C45229500DCE357 /* ChatListController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListController.swift; sourceTree = "<group>"; };
+		B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListSwipeNavigation.swift; sourceTree = "<group>"; };
 		9CE0BDEF1C4522BF00DCE357 /* ChatListCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCell.swift; sourceTree = "<group>"; };
 		9CE0BDF21C4522C800DCE357 /* ChatListCellModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCellModel.swift; sourceTree = "<group>"; };
 		9CEA6A1E1D957EFC0045F000 /* antidote-acknowledgements.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = "antidote-acknowledgements.html"; sourceTree = "<group>"; };
@@ -1267,6 +1273,7 @@
 				113F030E1CAFCE7B0009ABE1 /* ChatIncomingFileCellSnapshotTest.swift */,
 				113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */,
 				113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */,
+				B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */,
 				113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */,
 				113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */,
 				113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */,
@@ -1673,6 +1680,7 @@
 				116046181D8D434B002287C8 /* ChangePinTimeoutController.swift */,
 				1149626B1C5CE3DF001E5435 /* ChangeUserStatusController.swift */,
 				9CE0BDE51C45229500DCE357 /* ChatListController.swift */,
+				B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */,
 				11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */,
 				KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */,
 				11B0A0011C45229500DCE001 /* ChatGroupController.swift */,
@@ -2490,6 +2498,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2SWIPEA00000000000001 /* ChatListSwipeNavigation.swift in Sources */,
 				AA11BB22CC33DD44EE550003 /* AppLanguage.swift in Sources */,
 				11628E721CA580ED008C097E /* ChatGenericFileCell.swift in Sources */,
 				116634AF1C6F40820072C980 /* ChatOutgoingCallCellModel.swift in Sources */,
@@ -2723,6 +2732,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2SWIPEB00000000000001 /* ChatListSwipeNavigation.swift in Sources */,
 				9CEE6ACC1C4E8FDC00A1ECB5 /* StaticTableChatButtonsCellModel.swift in Sources */,
 				9CEE6AFC1C4E8FDC00A1ECB5 /* ChatsTabCoordinator.swift in Sources */,
 				1183BCC71CA1DB09000CD310 /* ProgressCircleView.swift in Sources */,
@@ -2935,6 +2945,7 @@
 				9CEE6ABF1C4E8FDC00A1ECB5 /* ChatMovableDateCell.swift in Sources */,
 				116634F31C7B945A0072C980 /* StaticTableMultiChoiceButtonCellModel.swift in Sources */,
 				113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */,
+				B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */,
 				9CEE6AFF1C4E8FDC00A1ECB5 /* ProfileTabCoordinator.swift in Sources */,
 				11770D6B1CBC120C00D34D6E /* FriendSelectController.swift in Sources */,
 				9CEE6ADF1C4E8FDC00A1ECB5 /* LoginChoiceController.swift in Sources */,

@@ -316,22 +316,13 @@ private extension ChatListController {
             return
         }
 
-        // In Arabic the tabs are laid out right-to-left, so "swipe left" must move the other way —
-        // otherwise the gesture fights the visible order.
         let isRTL = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
-        let forward = (recognizer.direction == .left) != isRTL
-
-        let order: [ChatListFilterTab] = [.direct, .groups, .favorites]
-        guard let current = order.firstIndex(of: tableManager.filterTab) else {
+        guard let tab = ChatListSwipeNavigation.nextTab(from: tableManager.filterTab,
+                                                       swipingLeft: recognizer.direction == .left,
+                                                       isRightToLeft: isRTL) else {
             return
         }
 
-        let next = forward ? current + 1 : current - 1
-        guard next >= 0, next < order.count else {
-            return   // no wrap-around: the ends should feel like ends
-        }
-
-        let tab = order[next]
         filterBar.setSelectedTab(tab, animated: true)
         tableManager.setFilterTab(tab)
         refreshFilterBadges()

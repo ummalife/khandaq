@@ -457,6 +457,13 @@ private final class ChatListFilterBar: UIView {
             let isSelected = filterTab == tab
             button.setTitleColor(isSelected ? theme.colorForType(.NormalText) : theme.colorForType(.EmptyScreenPlaceholderText), for: .normal)
             tabIndicators[filterTab]?.isHidden = !isSelected
+            // The active tab is otherwise conveyed by colour alone — say it out loud instead.
+            if isSelected {
+                button.accessibilityTraits |= UIAccessibilityTraitSelected
+            }
+            else {
+                button.accessibilityTraits &= ~UIAccessibilityTraitSelected
+            }
         }
     }
 
@@ -495,6 +502,7 @@ private final class ChatListFilterBar: UIView {
         button.setTitle(title, for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .medium)
         button.tag = tab.rawValue
+        button.accessibilityIdentifier = "chatFilterTab.\(tab.accessibilityName)"
         button.addTarget(self, action: #selector(tabPressed(_:)), for: .touchUpInside)
         titleRow.addArrangedSubview(button)
 

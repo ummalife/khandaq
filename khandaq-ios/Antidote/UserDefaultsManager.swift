@@ -6,6 +6,16 @@ enum ChatListFilterTab: Int {
     case direct = 0
     case groups = 1
     case favorites = 2
+
+    /// Stable name for the accessibility identifier of the filter bar buttons, so assistive
+    /// technology and UI tests can address a tab without depending on its translated title.
+    var accessibilityName: String {
+        switch self {
+            case .direct: return "direct"
+            case .groups: return "groups"
+            case .favorites: return "favorites"
+        }
+    }
 }
 
 struct ChatListFilterUnreadCounts {

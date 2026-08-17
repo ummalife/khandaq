@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import UIKit
 import XCTest
 
 private struct Constants {
@@ -30,11 +31,13 @@ class ScreenshotsUITests: XCTestCase {
 
         createAccount()
 
-        switch InterfaceIdiom.current() {
-            case .iPhone:
-                iPhonePart()
-            case .iPad:
-                iPadPart()
+        // Asked of the device under test, not of the app: a UI test has no business compiling the
+        // app's own sources (that is what made this target rot in the first place).
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            iPadPart()
+        }
+        else {
+            iPhonePart()
         }
     }
 
@@ -134,7 +137,7 @@ extension XCUIApplication {
         case Settings
         case Profile
 
-        var index: UInt {
+        var index: Int {
             switch self {
                 case .Contacts:
                     return 1

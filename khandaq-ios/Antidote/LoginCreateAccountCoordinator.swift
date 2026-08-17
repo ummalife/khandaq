@@ -82,7 +82,12 @@ extension LoginCreateAccountCoordinator: LoginCreatePasswordControllerDelegate {
             case .createAccountAndPassword:
                 guard let profile = enteredProfile,
                       let username = enteredUsername else {
-                    fatalError("LoginCreateAccountCoordinator: unexpected state")
+                    // The password screen can come back without the name behind it — UIKit restores the
+                    // navigation stack after the app is relaunched, while this coordinator starts empty.
+                    // Killing the app there loses the account the user was half way through creating;
+                    // send them back one screen to retype the name instead.
+                    navigationController.popViewController(animated: true)
+                    return
                 }
 
                 delegate?.loginCreateAccountCoordinator(self,

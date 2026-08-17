@@ -4,6 +4,7 @@
 
 import Foundation
 import MobileCoreServices
+@testable import Antidote
 
 class ChatIncomingFileCellSnapshotTest: CellSnapshotTest {
     override func setUp() {

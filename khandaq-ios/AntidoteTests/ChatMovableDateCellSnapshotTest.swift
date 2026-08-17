@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import Foundation
+@testable import Antidote
 
 class ChatMovableDateCellSnapshotTest: CellSnapshotTest {
     override func setUp() {

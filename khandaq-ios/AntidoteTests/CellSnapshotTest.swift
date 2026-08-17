@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import Foundation
+@testable import Antidote
 
 class CellSnapshotTest: SnapshotBaseTest {
     func updateCellLayout(_ cell: UITableViewCell) {

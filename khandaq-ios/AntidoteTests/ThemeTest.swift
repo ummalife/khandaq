@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import XCTest
+@testable import Antidote
 
 class ThemeTest: XCTestCase {
     override func setUp() {
@@ -77,6 +78,16 @@ class ThemeTest: XCTestCase {
             "  file-image-cancel-button-tint: first\n" +
             "  lock-gradient-top: second\n" +
             "  lock-gradient-bottom: first\n" +
+
+            // KHANDAQ colours added since this fixture was written — the parser requires every
+            // key, so a missing one fails the whole file with "invalid format".
+            "  destructive-text: first\n" +
+            "  chat-background: second\n" +
+            "  chat-outgoing-unread-bubble: first\n" +
+            "  chat-outgoing-sentpush-bubble: second\n" +
+            "  tab-selection: first\n" +
+            "  tab-bar-capsule: second\n" +
+            "  chat-list-cell-arrow-unread-background: first\n" +
             ""
 
         let first = UIColor(red: 170.0 / 255.0, green: 187.0 / 255.0, blue: 204.0 / 255.0, alpha: 1.0)
@@ -140,6 +151,13 @@ class ThemeTest: XCTestCase {
             XCTAssertEqual(first, theme.colorForType(.FileImageCancelButtonTint))
             XCTAssertEqual(second, theme.colorForType(.LockGradientTop))
             XCTAssertEqual(first, theme.colorForType(.LockGradientBottom))
+            XCTAssertEqual(first, theme.colorForType(.DestructiveText))
+            XCTAssertEqual(second, theme.colorForType(.ChatBackground))
+            XCTAssertEqual(first, theme.colorForType(.ChatOutgoingUnreadBubble))
+            XCTAssertEqual(second, theme.colorForType(.ChatOutgoingSentPushBubble))
+            XCTAssertEqual(first, theme.colorForType(.TabSelection))
+            XCTAssertEqual(second, theme.colorForType(.TabBarCapsule))
+            XCTAssertEqual(first, theme.colorForType(.ChatListCellUnreadArrowBackground))
         }
         catch let error as ErrorTheme {
             XCTFail(error.debugDescription())

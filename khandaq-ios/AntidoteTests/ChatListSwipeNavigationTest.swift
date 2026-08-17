@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import XCTest
+@testable import Antidote
 
 /**
  KHANDAQ (owner request 17.08) — where a horizontal swipe on the chat list lands.

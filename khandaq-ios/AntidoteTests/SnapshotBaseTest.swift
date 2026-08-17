@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import XCTest
+@testable import Antidote
 
 class SnapshotBaseTest: FBSnapshotTestCase {
     var theme: Theme!
@@ -16,6 +17,19 @@ class SnapshotBaseTest: FBSnapshotTestCase {
 
     override func setUp() {
         super.setUp()
+
+        // Reference images belong in the repository next to this file, not inside the built test
+        // bundle — that default is why every snapshot test failed with "reference image not found".
+        // Derived from #file so it holds no matter how the tests are launched (scheme environment
+        // variables do not reach the test process when the scheme reuses the launch action's).
+        let referenceDir = URL(fileURLWithPath: #file)
+                .deletingLastPathComponent()
+                .appendingPathComponent("ReferenceImages")
+                .path
+        setenv("FB_REFERENCE_IMAGE_DIR", referenceDir, 1)
+
+        // Re-record after a deliberate visual change: FB_RECORD_MODE=1 in the scheme's test action.
+        recordMode = (ProcessInfo.processInfo.environment["FB_RECORD_MODE"] == "1")
 
         let filepath = Bundle.main.path(forResource: "default-theme", ofType: "yaml")!
         let yamlString = try! NSString(contentsOfFile:filepath, encoding:String.Encoding.utf8.rawValue) as String

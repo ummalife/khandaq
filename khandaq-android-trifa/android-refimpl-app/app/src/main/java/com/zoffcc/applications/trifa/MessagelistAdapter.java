@@ -613,6 +613,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
 
     // KHANDAQ (#181): payload marker for byte-counter-only transfer updates (no full rebind)
     static final Object PAYLOAD_TRANSFER_PROGRESS = new Object();
+    // KHANDAQ (user video 17.08): payload marker for selection-highlight-only updates.
+    static final Object PAYLOAD_SELECTION = new Object();
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -635,6 +637,45 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             {
                 final Message m = (Message) this.messagelistitems.get(position);
                 ChatTransferProgressHelper.applyDirect(context, holder.itemView, m, m.direction == 1);
+                return;
+            }
+            catch (Exception ignored)
+            {
+                // fall through to the full bind
+            }
+        }
+
+        boolean selectionOnly = !payloads.isEmpty();
+        for (Object p : payloads)
+        {
+            if (p != PAYLOAD_SELECTION)
+            {
+                selectionOnly = false;
+                break;
+            }
+        }
+
+        if (selectionOnly)
+        {
+            try
+            {
+                final Message m = (Message) this.messagelistitems.get(position);
+                // Only the background of the row container — deliberately nothing that would make
+                // Glide re-evaluate an ImageView. R.id.layout_message_container exists in every 1:1
+                // row layout (text, self-text, incoming file, outgoing file, both compact variants
+                // and the paging rows), so this covers the whole list.
+                final View container = holder.itemView.findViewById(R.id.layout_message_container);
+                if (container != null)
+                {
+                    if (MainActivity.selected_messages.contains(m.id))
+                    {
+                        container.setBackgroundResource(R.drawable.bg_message_selection);
+                    }
+                    else
+                    {
+                        container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    }
+                }
                 return;
             }
             catch (Exception ignored)
@@ -678,6 +719,25 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
     synchronized public void redraw_all_items()
     {
         this.notifyDataSetChanged();
+    }
+
+    /**
+     * KHANDAQ (user video 17.08): repaint ONLY the selection highlight.
+     *
+     * Cancelling multi-select used to call redraw_all_items(), i.e. notifyDataSetChanged(). This
+     * adapter has no stable ids, so that marks every bound holder invalid, RecyclerView cannot match
+     * them by position any more and hands them back out of the recycled pool in a different order.
+     * Each photo row then gets a holder whose ImageView carries ANOTHER message's signature tag, the
+     * mismatch triggers GlideApp.clear() + the loading spinner, and the thumbnail is decoded from
+     * disk again (that path deliberately runs with DiskCacheStrategy.NONE and skipMemoryCache(true)).
+     * Result: cancel a selection, watch every visible photo blink and reload — exactly what the user
+     * recorded.
+     *
+     * A payload update keeps each holder where it is, so nothing rebinds and no image is touched.
+     */
+    synchronized public void redraw_selection_only()
+    {
+        this.notifyItemRangeChanged(0, getItemCount(), PAYLOAD_SELECTION);
     }
 
     synchronized public boolean update_item(final Message new_item)

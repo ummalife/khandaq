@@ -1032,4 +1032,5 @@
     <string name="group_msg_sender_unverified">来自历史同步 — 发送者未经验证</string>
     <string name="settings_hide_living_emoji">隐藏含生物的表情符号</string>
     <string name="settings_hide_living_emoji_hint">从表情面板中隐藏人脸、人物和动物。十字、星形、星座、恶魔和 LGBT 图案始终隐藏。</string>
+    <string name="files_export_failed">无法保存文件</string>
 </resources>

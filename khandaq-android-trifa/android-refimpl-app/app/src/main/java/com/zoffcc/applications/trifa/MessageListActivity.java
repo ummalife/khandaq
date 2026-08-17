@@ -3689,7 +3689,12 @@ public class MessageListActivity extends AppCompatActivity
                 selected_messages.remove(message_.id);
                 selected_messages_text_only.remove(message_.id);
                 selected_messages_incoming_file.remove(message_.id);
-                if (selected_messages_incoming_file.size() == selected_messages.size())
+                // KHANDAQ (user video 17.08): "Save" must need something TO save. On de-selecting the
+                // last message both sets are empty, and the old test (0 == 0) turned the icon ON one
+                // frame before amode.finish() tore the bar down — the user saw Save flash and vanish,
+                // and if they caught it mid-fade the export ran against an already-cleared selection.
+                if (!selected_messages.isEmpty()
+                    && (selected_messages_incoming_file.size() == selected_messages.size()))
                 {
                     amode_save_menu_item.setVisible(true);
                 }

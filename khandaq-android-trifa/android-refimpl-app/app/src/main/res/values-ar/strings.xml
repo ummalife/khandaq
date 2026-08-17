@@ -1018,4 +1018,5 @@
     <string name="settings_language">اللغة</string>
     <string name="settings_language_title">لغة التطبيق</string>
     <string name="group_msg_sender_unverified">مُرحَّلة من السجل — لم يتم التحقق من المُرسِل</string>
+    <string name="files_export_failed">تعذّر حفظ الملف</string>
 </resources>

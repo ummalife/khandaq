@@ -10771,6 +10771,13 @@ public class MainActivity extends AppCompatActivity
             this.ids_snapshot = new ArrayList<>(selected_messages_incoming_file);
         }
 
+        /**
+         * KHANDAQ (user video 17.08): how many files this run actually wrote. The old code reported
+         * success unconditionally, so an export that saved nothing still said "files exported to" —
+         * with an empty path, because export_directory was only assigned inside a loop that never ran.
+         */
+        private int saved_count = 0;
+
         @Override
         protected String doInBackground(Void... voids)
         {
@@ -10783,11 +10790,21 @@ public class MainActivity extends AppCompatActivity
                     long mid = (Long) i.next();
                     Message m = (Message) orma.selectFromMessage().idEq(mid).get(0);
                     FileDB file_ = (FileDB) orma.selectFromFileDB().idEq(m.filedb_id).get(0);
-                    HelperGeneric.export_vfs_file_to_real_file(file_.path_name, file_.file_name,
-                                                               SD_CARD_FILES_EXPORT_DIR + "/" + m.tox_friendpubkey +
-                                                               "/", file_.file_name);
 
-                    export_directory = SD_CARD_FILES_EXPORT_DIR + "/" + m.tox_friendpubkey + "/";
+                    // KHANDAQ (user video 17.08): write where the user can actually FIND the file.
+                    // This used to export into Android/data/<pkg>/files/vfs_export/<pubkey>/, which on
+                    // Android 11+ no file manager will show — so even a "successful" save left nothing
+                    // the user could open. The bubble's own download button has been doing it properly
+                    // for a while (MediaStore → Pictures/Movies/Download + "/Khandaq"); use that.
+                    final Context ctx = weakContext.get();
+                    final String saved_to = HelperGeneric.export_vfs_file_to_public_storage(
+                            ctx, file_.path_name, file_.file_name, m.text);
+
+                    if ((saved_to != null) && (!saved_to.trim().isEmpty()))
+                    {
+                        export_directory = saved_to;
+                        saved_count++;
+                    }
                 }
                 catch (Exception e2)
                 {
@@ -10808,8 +10825,9 @@ public class MainActivity extends AppCompatActivity
 
             try
             {
-                // need to redraw all items again here, to remove the selections
-                MainActivity.message_list_fragment.adapter.redraw_all_items();
+                // KHANDAQ (user video 17.08): selection repaint only — a full rebind here reloaded
+                // every visible photo, same as the cancel path did.
+                MainActivity.message_list_fragment.adapter.redraw_selection_only();
             }
             catch (Exception e)
             {
@@ -10821,7 +10839,17 @@ public class MainActivity extends AppCompatActivity
             {
                 progressDialog2.dismiss();
                 Context c = weakContext.get();
-                Toast.makeText(c, c.getString(R.string.files_exported_to, export_directory), Toast.LENGTH_SHORT).show();
+                // Tell the truth: only claim a save when a file was written, and only name a location
+                // when there is one. The old line printed "exported to:" with nothing after it.
+                if ((saved_count > 0) && (export_directory != null) && (!export_directory.trim().isEmpty()))
+                {
+                    Toast.makeText(c, c.getString(R.string.files_exported_to, export_directory),
+                                   Toast.LENGTH_SHORT).show();
+                }
+                else
+                {
+                    Toast.makeText(c, c.getString(R.string.files_export_failed), Toast.LENGTH_SHORT).show();
+                }
             }
             catch (Exception e4)
             {

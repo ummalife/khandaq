@@ -760,3 +760,5 @@
 "chat_react_action" = "回应";
 "settings_language" = "语言";
 "settings_language_title" = "应用语言";
+"nav_edit_start" = "编辑";
+"nav_edit_done" = "完成";

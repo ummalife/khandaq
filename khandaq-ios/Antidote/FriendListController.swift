@@ -87,6 +87,9 @@ class FriendListController: UIViewController {
         super.setEditing(editing, animated: animated)
 
         tableView.setEditing(editing, animated: animated)
+        // KHANDAQ (iPhone 11 Pro report 17.08): same as the chat list — UIKit's own title for this
+        // button follows the languages the process launched with, not the in-app language.
+        editButtonItem.title = String(localized: editing ? "nav_edit_done" : "nav_edit_start")
     }
 }
 
@@ -246,6 +249,7 @@ private extension FriendListController {
                 target: self,
                 action: #selector(FriendListController.addFriendButtonPressed))
 
+        editButtonItem.title = String(localized: "nav_edit_start")
         let capsule = ThemeChrome.navCapsuleBackgroundImage(theme: theme)
         editButtonItem.setBackgroundImage(capsule, for: .normal, barMetrics: .default)
         editButtonItem.setBackgroundImage(capsule, for: .highlighted, barMetrics: .default)

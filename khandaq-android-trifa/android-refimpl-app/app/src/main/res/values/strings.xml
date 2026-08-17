@@ -964,6 +964,7 @@
     <string name="restore_failed">Restore failed:</string>
     <string name="restore_too_new">This backup was made by a newer app version. Update the app first.</string>
     <string name="files_exported_to">Files exported to:\n%1$s</string>
+    <string name="files_export_failed">Could not save the file</string>
 
     <string name="share_id_label">ID:</string>
 

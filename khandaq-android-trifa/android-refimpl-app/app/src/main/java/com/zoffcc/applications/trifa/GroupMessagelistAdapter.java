@@ -396,6 +396,12 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
         this.notifyDataSetChanged();
     }
 
+    /** KHANDAQ (user video 17.08): selection highlight only — see MessagelistAdapter for the why. */
+    synchronized public void redraw_selection_only()
+    {
+        this.notifyItemRangeChanged(0, getItemCount(), MessagelistAdapter.PAYLOAD_SELECTION);
+    }
+
     private boolean isDuplicateGroupMessage(final GroupMessage candidate, final List<GroupMessage> items)
     {
         if (candidate == null || items == null)
@@ -468,6 +474,42 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             {
                 final GroupMessage m = (GroupMessage) this.messagelistitems.get(position);
                 ChatTransferProgressHelper.applyGroup(context, holder.itemView, m, m.direction == 1);
+                return;
+            }
+            catch (Exception ignored)
+            {
+                // fall through to the full bind
+            }
+        }
+
+        // KHANDAQ (user video 17.08): same cheap path for cancelling a selection in a group chat.
+        boolean selectionOnly = !payloads.isEmpty();
+        for (Object p : payloads)
+        {
+            if (p != MessagelistAdapter.PAYLOAD_SELECTION)
+            {
+                selectionOnly = false;
+                break;
+            }
+        }
+
+        if (selectionOnly)
+        {
+            try
+            {
+                final GroupMessage m = (GroupMessage) this.messagelistitems.get(position);
+                final View container = holder.itemView.findViewById(R.id.layout_message_container);
+                if (container != null)
+                {
+                    if (MainActivity.selected_messages.contains(m.id))
+                    {
+                        container.setBackgroundResource(R.drawable.bg_message_selection);
+                    }
+                    else
+                    {
+                        container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                    }
+                }
                 return;
             }
             catch (Exception ignored)

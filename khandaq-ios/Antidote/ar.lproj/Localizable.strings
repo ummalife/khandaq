@@ -760,3 +760,5 @@
 "chat_react_action" = "تفاعل";
 "settings_language" = "اللغة";
 "settings_language_title" = "لغة التطبيق";
+"nav_edit_start" = "تحرير";
+"nav_edit_done" = "تم";

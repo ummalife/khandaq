@@ -1314,6 +1314,17 @@ public class HelperMessage
     {
         ProgressDialog progressDialog2 = null;
 
+        // KHANDAQ (user video 17.08): nothing selected, nothing to export. The buttons in a fading
+        // ActionMode bar stay tappable for the whole ~200 ms animation, and by then
+        // onDestroyActionMode has already cleared the selection — so a tap landing there used to
+        // spin up a progress dialog over an empty list and finish with "files exported to:" and no
+        // path. Refuse the run instead of performing a no-op that reports success.
+        if (MainActivity.selected_messages_incoming_file.isEmpty())
+        {
+            Log.i(TAG, "save_selected_messages: nothing selected, ignoring");
+            return;
+        }
+
         try
         {
             try

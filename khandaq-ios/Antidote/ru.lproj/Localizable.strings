@@ -772,3 +772,5 @@
 "chat_react_action" = "Реакция";
 "settings_language" = "Язык";
 "settings_language_title" = "Язык приложения";
+"nav_edit_start" = "Править";
+"nav_edit_done" = "Готово";

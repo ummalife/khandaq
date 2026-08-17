@@ -79,6 +79,11 @@ class ChatListController: UIViewController {
 
         // «Править»: no grey pill — plain accent text.
         editButtonItem.tintColor = theme.colorForType(.LinkText)
+        // KHANDAQ (iPhone 11 Pro report 17.08): the system editButtonItem takes its title from UIKit's
+        // own bundle, resolved from the languages the PROCESS launched with — swapping Bundle.main
+        // cannot reach it, so it stayed Russian while the rest of the screen turned Arabic. Give it
+        // our own title; setEditing keeps it in sync with the Edit/Done state.
+        editButtonItem.title = String(localized: "nav_edit_start")
 
         // KHANDAQ (Figma): edit-mode nav — Отмена (left) + red Удалить (right, enabled on selection).
         cancelEditButton = UIBarButtonItem(
@@ -173,6 +178,8 @@ class ChatListController: UIViewController {
         super.setEditing(editing, animated: animated)
 
         tableManager.tableView.setEditing(editing, animated: animated)
+        // Our own title, for the reason above — super would have reset it to UIKit's.
+        editButtonItem.title = String(localized: editing ? "nav_edit_done" : "nav_edit_start")
 
         // KHANDAQ (Figma): multi-select edit mode — Отмена + red Удалить while editing.
         if editing {
@@ -274,6 +281,60 @@ private extension ChatListController {
             self.refreshFilterBadges()
         }
         view.addSubview(filterBar)
+
+        installFilterSwipeGestures()
+    }
+
+    /**
+     KHANDAQ (owner request 17.08): switch Chats / Groups / Favorites by swiping the list.
+     Reaching up to the tabs on a large phone is the complaint being fixed.
+
+     Swipe recognisers rather than a pan: the rows already carry trailing swipe actions (delete /
+     info / favourite), and those are driven by the table's own pan. A discrete swipe needs speed and
+     direction, so a slow drag on a row still opens its actions while a quick flick changes tab.
+     Simultaneous recognition is refused for the same reason — one gesture should do one thing.
+     */
+    private func installFilterSwipeGestures() {
+        let left = UISwipeGestureRecognizer(target: self, action: #selector(handleFilterSwipe(_:)))
+        left.direction = .left
+        left.delegate = self
+        left.cancelsTouchesInView = false
+
+        let right = UISwipeGestureRecognizer(target: self, action: #selector(handleFilterSwipe(_:)))
+        right.direction = .right
+        right.delegate = self
+        right.cancelsTouchesInView = false
+
+        tableManager.tableView.addGestureRecognizer(left)
+        tableManager.tableView.addGestureRecognizer(right)
+    }
+
+    @objc private func handleFilterSwipe(_ recognizer: UISwipeGestureRecognizer) {
+        // A swipe while selecting chats would change the filter under the selection and leave the
+        // edit-mode nav bar pointing at rows that are no longer there.
+        guard !isEditing, !(searchController != nil && searchController.isActive) else {
+            return
+        }
+
+        // In Arabic the tabs are laid out right-to-left, so "swipe left" must move the other way —
+        // otherwise the gesture fights the visible order.
+        let isRTL = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let forward = (recognizer.direction == .left) != isRTL
+
+        let order: [ChatListFilterTab] = [.direct, .groups, .favorites]
+        guard let current = order.firstIndex(of: tableManager.filterTab) else {
+            return
+        }
+
+        let next = forward ? current + 1 : current - 1
+        guard next >= 0, next < order.count else {
+            return   // no wrap-around: the ends should feel like ends
+        }
+
+        let tab = order[next]
+        filterBar.setSelectedTab(tab, animated: true)
+        tableManager.setFilterTab(tab)
+        refreshFilterBadges()
     }
 
     func refreshFilterBadges() {
@@ -505,6 +566,27 @@ private final class ChatListFilterBar: UIView {
 }
 
 // MARK: - KHANDAQ (#34) global search
+
+// KHANDAQ (owner request 17.08): keep the tab-switch swipe from competing with the rows' own
+// swipe actions — one gesture, one outcome.
+extension ChatListController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return false
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer is UISwipeGestureRecognizer else {
+            return true
+        }
+        // Not while selecting chats, not while searching, and not while a row already has its
+        // actions open (the table is mid-swipe and owns the touch).
+        if isEditing || (searchController != nil && searchController.isActive) {
+            return false
+        }
+        return true
+    }
+}
 
 extension ChatListController: UISearchResultsUpdating {
     func updateSearchResults(for searchController: UISearchController) {

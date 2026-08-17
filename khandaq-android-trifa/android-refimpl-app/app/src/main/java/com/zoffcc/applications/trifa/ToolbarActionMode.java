@@ -415,8 +415,9 @@ public class ToolbarActionMode implements ActionMode.Callback
                 {
                     if (MainActivity.group_message_list_fragment != null)
                     {
-                        // need to redraw all items again here, to remove the selections
-                        MainActivity.group_message_list_fragment.adapter.redraw_all_items();
+                        // KHANDAQ (user video 17.08): selection-only repaint, same reason as the 1:1
+                        // branch below — a full notifyDataSetChanged reloads every visible photo.
+                        MainActivity.group_message_list_fragment.adapter.redraw_selection_only();
                     }
                 }
                 catch (Exception e)
@@ -428,8 +429,13 @@ public class ToolbarActionMode implements ActionMode.Callback
                 {
                     if (MainActivity.message_list_fragment != null)
                     {
-                        // need to redraw all items again here, to remove the selections
-                        MainActivity.message_list_fragment.adapter.redraw_all_items();
+                        // KHANDAQ (user video 17.08): repaint the selection highlight ONLY. This used
+                        // to be redraw_all_items() (notifyDataSetChanged), which reshuffles holders in
+                        // an adapter without stable ids and makes every visible photo re-decode from
+                        // disk behind a spinner — the "photos reload when I cancel the selection" the
+                        // user recorded. The selected_* sets were cleared just above, so the payload
+                        // bind paints every row unselected.
+                        MainActivity.message_list_fragment.adapter.redraw_selection_only();
                     }
                 }
                 catch (Exception e)

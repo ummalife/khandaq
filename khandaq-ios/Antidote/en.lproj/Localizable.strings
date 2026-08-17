@@ -401,6 +401,8 @@
 "delete_for_everyone" = "Delete for everyone";
 /* KHANDAQ (#208): edit sent message */
 "chat_edit_action" = "Edit";
+"nav_edit_start" = "Edit";
+"nav_edit_done" = "Done";
 "message_edit_save" = "Save";
 "message_edited_marker" = "edited";
 "group_msg_sender_unverified" = "Relayed from history — sender not verified";

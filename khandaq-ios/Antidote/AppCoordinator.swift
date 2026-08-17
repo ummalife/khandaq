@@ -26,6 +26,22 @@ class AppCoordinator {
             object: nil
         )
 
+        // KHANDAQ (iPhone 11 Pro report, 17 Aug): switching the in-app language only changed PART of
+        // the UI — the chat name went Arabic while the tab labels, the bottom bar, the search
+        // placeholder and "Править" stayed Russian. The bundle swap works; the problem is that every
+        // one of those strings is read ONCE when its view is built (tab bar items in
+        // ActiveSessionCoordinator.createDeviceSpecificObjects, the filter tabs in
+        // ChatListFilterBar.setupTabs, the placeholder in setupGlobalSearch), so nothing re-reads it.
+        // SettingsMainController already posted this notification — it just had no subscriber
+        // anywhere in the project. Rebuilding the session is exactly what the theme switch does, and
+        // a rebuilt session reads every string again from the swapped bundle.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppearanceChange),
+            name: Notification.Name("KhandaqAppLanguageChanged"),
+            object: nil
+        )
+
         ToxOptionsRestartScheduler.setContinueRecreateHandler { [weak self] in
             self?.performToxRecreateIfReady()
         }

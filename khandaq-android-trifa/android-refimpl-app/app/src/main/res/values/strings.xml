@@ -55,6 +55,8 @@
     <string name="myid_not_ready">Loading your ID…</string>
     <string name="settings_light_theme">Light theme</string>
     <string name="settings_notif_preview">Notification preview</string>
+    <string name="settings_hide_living_emoji">Hide emoji of living beings</string>
+    <string name="settings_hide_living_emoji_hint">Hides faces, people and animals from the emoji picker. Crosses, stars, zodiac signs, devils and LGBT imagery are always hidden.</string>
     <string name="settings_group_system">Group system messages</string>
     <string name="settings_advanced">Advanced settings</string>
     <string name="settings_section_appearance">APPEARANCE</string>
@@ -978,6 +980,8 @@
     <string name="chat_filter_spinner_description">Filter messages in this chat</string>
     <string name="chat_filter_all_messages">All messages</string>
     <string name="chat_filter_files_only">Files only</string>
+    <string name="chat_filter_audio_only">Audio</string>
+    <string name="chat_filter_voice_only">Voice messages</string>
     <string name="chat_ft_status_confirm_send">Send this file?</string>
     <string name="chat_ft_status_waiting_self_online">Waiting for network connection…</string>
     <string name="chat_ft_status_waiting_friend_online">Will send when contact is online</string>

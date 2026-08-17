@@ -96,8 +96,82 @@ public class MessageListFragment extends Fragment
     MessageListActivity mla = null;
     boolean is_data_loaded = false;
     static boolean show_only_files = false;
+    /**
+     * KHANDAQ (user request 17.08): which KIND of attachment the "files" filter shows.
+     *
+     * The user asked for attachments to be grouped "into folders: files, audio, voice messages, so the
+     * info is easier to use". This is that grouping, done where the filter already lives instead of as
+     * a new screen: the chat list already knows how to render a file bubble, play a voice note and open
+     * a document, and a second screen would have had to re-implement all three.
+     *
+     * ATTACH_ALL keeps the old behaviour of the "only files" option exactly, so nothing regresses for
+     * anyone who was using it.
+     */
+    static final int ATTACH_ALL = 0;
+    static final int ATTACH_FILES = 1;
+    static final int ATTACH_AUDIO = 2;
+    static final int ATTACH_VOICE = 3;
+    static int attachment_filter_kind = ATTACH_ALL;
     static String search_messages_text = null;
     FloatingActionButton unread_messages_notice_button = null;
+
+    /**
+     * KHANDAQ (user request 17.08): keep only the attachments of the selected kind.
+     *
+     * Voice notes are checked FIRST and excluded from the audio bucket: a voice note is an .m4a too,
+     * so testing audio first would put every voice note in both lists and the "voice" folder would
+     * look like a duplicate of "audio" rather than a separate place to look.
+     */
+    private java.util.List<Message> filter_attachments_by_kind(final java.util.List<Message> input)
+    {
+        if ((input == null) || (attachment_filter_kind == ATTACH_ALL))
+        {
+            return input;
+        }
+
+        final android.content.Context ctx = getContext();
+        final java.util.List<Message> kept = new java.util.ArrayList<>(input.size());
+        for (final Message m : input)
+        {
+            if (m == null)
+            {
+                continue;
+            }
+            try
+            {
+                final boolean is_voice = HelperFiletransfer.isVoiceMessage(m);
+                final boolean is_audio = (ctx != null) && HelperFiletransfer.isAudioMessage(ctx, m);
+
+                final boolean take;
+                switch (attachment_filter_kind)
+                {
+                    case ATTACH_VOICE:
+                        take = is_voice;
+                        break;
+                    case ATTACH_AUDIO:
+                        take = is_audio && !is_voice;
+                        break;
+                    case ATTACH_FILES:
+                    default:
+                        // "Files" means documents: everything that is not a voice note or music.
+                        take = !is_voice && !is_audio;
+                        break;
+                }
+
+                if (take)
+                {
+                    kept.add(m);
+                }
+            }
+            catch (Exception e)
+            {
+                // A message whose kind cannot be determined stays visible: dropping attachments on a
+                // classification error would hide a user's file with no way to find it again.
+                kept.add(m);
+            }
+        }
+        return kept;
+    }
 
     @SuppressLint("WrongThread")
     @Override
@@ -195,6 +269,13 @@ public class MessageListFragment extends Fragment
                                 orderBySent_timestampAsc().
                                 orderBySent_timestamp_msAsc().
                                 toList();
+
+                        // KHANDAQ (user request 17.08): narrow "files" down to files / audio / voice.
+                        // Done in Java on this background thread rather than in the query because the
+                        // kind of an attachment is not a column: it is derived from the file name's
+                        // MIME type, and a voice note is recognised by the ".file.m4a" marker the
+                        // recorder writes (HelperFiletransfer.isVoiceMessagePath).
+                        data_values = filter_attachments_by_kind(data_values);
                     }
                     else
                     {

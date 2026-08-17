@@ -487,6 +487,10 @@ public class MainActivity extends AppCompatActivity
     static boolean PREF__notification_sound = true;
     static boolean PREF__notification_vibrate = false;
     static boolean PREF__notification_show_content = true; // KHANDAQ #200: show sender+preview by default
+    // KHANDAQ (user request, 17 Aug): hide emoji depicting living beings (faces, people, animals)
+    // from the picker. OFF by default on purpose — that is most of the standard set, so turning it
+    // on for everyone would empty the emoji keyboard for users who never asked for it.
+    static boolean PREF__hide_living_being_emoji = false;
     static boolean PREF__notification = true;
     static final int MIN_AUDIO_SAMPLINGRATE_OUT = 48000;
     static final int SAMPLE_RATE_FIXED = 48000;
@@ -952,6 +956,7 @@ public class MainActivity extends AppCompatActivity
         PREF__notification_sound = settings.getBoolean("notifications_new_message_sound", true);
         PREF__notification_vibrate = settings.getBoolean("notifications_new_message_vibrate", false);
         PREF__notification_show_content = settings.getBoolean("notification_show_content", true);
+        PREF__hide_living_being_emoji = settings.getBoolean("hide_living_being_emoji", false);
         PREF__notification = settings.getBoolean("notifications_new_message", true);
         PREF__software_echo_cancel = settings.getBoolean("software_echo_cancel", false);
         PREF__fps_half = settings.getBoolean("fps_half", false);
@@ -3742,6 +3747,7 @@ public class MainActivity extends AppCompatActivity
         PREF__notification_sound = settings.getBoolean("notifications_new_message_sound", true);
         PREF__notification_vibrate = settings.getBoolean("notifications_new_message_vibrate", true);
         PREF__notification_show_content = settings.getBoolean("notification_show_content", true);
+        PREF__hide_living_being_emoji = settings.getBoolean("hide_living_being_emoji", false);
         PREF__notification = settings.getBoolean("notifications_new_message", true);
         if ((nmn3 != null) && (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O))
         {

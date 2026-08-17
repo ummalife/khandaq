@@ -152,20 +152,14 @@ public class CameraSurfacePreview extends SurfaceView implements SurfaceHolder.C
     {
         if ((event.getAction() == MotionEvent.ACTION_DOWN) || (event.getAction() == MotionEvent.ACTION_CANCEL))
         {
-            if (my_alpha == 1.0f)
-            {
-                // make view INVISIBLE (totally transparent)
-                my_alpha = 0.0f;
-                this.setAlpha(0.0f);
-                toggle_osd_views(false, false);
-            }
-            else
-            {
-                // make view visible
-                my_alpha = 1.0f;
-                this.setAlpha(1.0f);
-                toggle_osd_views(true, false);
-            }
+            // KHANDAQ (call-screen report, 17 Aug): tapping your own preview used to set THIS surface
+            // to alpha 0 while its 5dp border frame stayed on screen — so the frame filled with the
+            // full-screen REMOTE video showing through it, and the user reported "I tap my own camera
+            // and it shows the other person's view". It also flipped the OSD back on, which is how the
+            // debug HUD appeared. Hide the whole preview box instead (frame included); a tap anywhere
+            // on the remote video brings it back (CustomVideoImageView.onTouch).
+            CallingActivity.set_self_preview_hidden(true);
+            toggle_osd_views(false, false);
             return true;
         }
         else

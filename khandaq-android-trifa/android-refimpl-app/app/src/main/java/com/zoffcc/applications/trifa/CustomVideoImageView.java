@@ -273,6 +273,18 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
     {
         // System.out.println("__onTouch__:" + "mask=" + (event.getAction() & MotionEvent.ACTION_MASK));
 
+        // KHANDAQ (call-screen report, 17 Aug): tapping your own preview hides it, and this is the way
+        // back — otherwise the preview is gone for the rest of the call with nothing to tap. Checked
+        // before the zoom branch so it works whether or not incoming-video zoom is enabled.
+        if ((event.getAction() == MotionEvent.ACTION_DOWN) && CallingActivity.self_preview_hidden)
+        {
+            CallingActivity.set_self_preview_hidden(false);
+            if (!PREF__X_zoom_incoming_video)
+            {
+                return true;
+            }
+        }
+
         if (PREF__X_zoom_incoming_video)
         {
 

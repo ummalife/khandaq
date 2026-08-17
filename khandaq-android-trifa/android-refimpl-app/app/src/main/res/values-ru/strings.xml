@@ -55,6 +55,8 @@
     <string name="myid_not_ready">Загружаем ваш ID…</string>
     <string name="settings_light_theme">Светлая тема</string>
     <string name="settings_notif_preview">Превью уведомлений</string>
+    <string name="settings_hide_living_emoji">Скрыть эмодзи с изображением живого</string>
+    <string name="settings_hide_living_emoji_hint">Убирает из набора лица, людей и животных. Кресты, звёзды, знаки зодиака, черти и ЛГБТ-символика скрыты всегда.</string>
     <string name="settings_group_system">Системные сообщения групп</string>
     <string name="settings_advanced">Расширенные настройки</string>
     <string name="settings_section_appearance">ОФОРМЛЕНИЕ</string>
@@ -731,6 +733,8 @@
     <string name="chat_filter_spinner_description">Фильтр сообщений в чате</string>
     <string name="chat_filter_all_messages">Все сообщения</string>
     <string name="chat_filter_files_only">Только файлы</string>
+    <string name="chat_filter_audio_only">Аудио</string>
+    <string name="chat_filter_voice_only">Голосовые</string>
     <string name="chat_ft_status_confirm_send">Отправить этот файл?</string>
     <string name="chat_ft_status_waiting_self_online">Ожидание подключения к сети…</string>
     <string name="chat_ft_status_waiting_friend_online">Отправится, когда собеседник будет в сети</string>

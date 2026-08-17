@@ -5,53 +5,58 @@ import com.vanniktech.emoji.emoji.Emoji;
 import com.vanniktech.emoji.emoji.EmojiCategory;
 import com.vanniktech.emoji.google.GoogleEmojiProvider;
 
-/** Google emoji set with Khandaq-specific category filtering. */
+import java.util.ArrayList;
+import java.util.List;
+
+/** Google emoji set with Khandaq-specific filtering (see {@link KhandaqEmojiFilter}). */
 public final class KhandaqGoogleEmojiProvider implements EmojiProvider
 {
     private static final GoogleEmojiProvider DELEGATE = new GoogleEmojiProvider();
+
+    /**
+     * Categories whose contents are, essentially in their entirety, depictions of living beings.
+     * Only dropped when the user asks for it — see {@link KhandaqEmojiFilter#hideLivingBeings()}.
+     */
+    private static boolean isLivingBeingCategory(final EmojiCategory category)
+    {
+        final String name = category.getClass().getSimpleName();
+        return name.startsWith("SmileysAndPeopleCategory") || name.startsWith("AnimalsAndNatureCategory");
+    }
 
     @Override
     public EmojiCategory[] getCategories()
     {
         final EmojiCategory[] original = DELEGATE.getCategories();
-        final EmojiCategory[] filtered = new EmojiCategory[original.length];
-        for (int i = 0; i < original.length; i++)
+        final List<EmojiCategory> out = new ArrayList<>(original.length);
+
+        final boolean hideLiving = KhandaqEmojiFilter.hideLivingBeings();
+
+        for (final EmojiCategory category : original)
         {
-            filtered[i] = wrapCategory(original[i]);
+            if (category == null)
+            {
+                continue;
+            }
+
+            // Dropping a whole category rather than emptying it: an EmojiCategory with zero emojis
+            // still gets a tab in the picker, and a tab that opens onto nothing reads as a bug.
+            if (hideLiving && isLivingBeingCategory(category))
+            {
+                continue;
+            }
+
+            out.add(new FilteredEmojiCategory(category, KhandaqEmojiFilter::isBlocked));
         }
-        return filtered;
+
+        return out.toArray(new EmojiCategory[0]);
     }
 
-    private static EmojiCategory wrapCategory(final EmojiCategory category)
-    {
-        if (category == null)
-        {
-            return null;
-        }
-
-        if (category.getClass().getSimpleName().startsWith("FlagsCategory"))
-        {
-            return new FilteredEmojiCategory(category, KhandaqGoogleEmojiProvider::isBlockedFlagEmoji);
-        }
-
-        return category;
-    }
-
+    /**
+     * Kept as a named method because the flag category used to be the only filtered one and the
+     * rainbow-flag test is worth being able to point at on its own.
+     */
     static boolean isBlockedFlagEmoji(final Emoji emoji)
     {
-        if (emoji == null)
-        {
-            return true;
-        }
-
-        final String unicode = emoji.getUnicode();
-        if (unicode == null || unicode.isEmpty())
-        {
-            return false;
-        }
-
-        // 🏳️‍🌈 rainbow pride flag (and variants without VS16)
-        return unicode.contains("\uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08")
-                || unicode.contains("\uD83C\uDFF3\u200D\uD83C\uDF08");
+        return KhandaqEmojiFilter.isBlocked(emoji);
     }
 }

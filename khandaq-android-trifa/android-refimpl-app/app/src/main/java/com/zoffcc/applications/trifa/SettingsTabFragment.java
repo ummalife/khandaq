@@ -8,6 +8,7 @@ import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,6 +31,8 @@ import com.zoffcc.applications.trifa.ToxProfileImportHelper.ImportMode;
  */
 public class SettingsTabFragment extends Fragment
 {
+    private static final String TAG = "trifa.SettingsTab";
+
     private View settingsContent;
     private View prefsContainer;
 
@@ -126,6 +129,11 @@ public class SettingsTabFragment extends Fragment
         bindPrefSwitch(view, R.id.switch_notif_preview, prefs, "notification_show_content", false);
         // KHANDAQ: the 'Системные сообщения групп' toggle was removed from the UI (user request);
         // the pref keeps its default (hidden), no switch to bind.
+
+        // KHANDAQ (user request 17.08): hide emoji depicting living beings. Needs more than storing
+        // the flag — EmojiManager caches the category list it was installed with, so the picker keeps
+        // serving the old set until the provider is reinstalled.
+        bindLivingBeingEmojiSwitch(view, prefs);
 
         bindAttachmentDownloadRow(view, prefs);
     }
@@ -241,6 +249,39 @@ public class SettingsTabFragment extends Fragment
                 }
             });
         }
+    }
+
+    /**
+     * KHANDAQ (user request 17.08): the "hide emoji of living beings" switch.
+     *
+     * Separate from bindPrefSwitch because the flag alone changes nothing: EmojiManager is a
+     * singleton that holds the category array handed to install(), so the picker would keep offering
+     * the old set until the process restarted. Reinstalling the provider rebuilds it from the current
+     * flag. Any picker already on screen keeps its old grid — it is rebuilt next time it opens, which
+     * is why the row carries no "restart the app" wording: it does not need one.
+     */
+    private void bindLivingBeingEmojiSwitch(final View root, final SharedPreferences prefs)
+    {
+        final SwitchMaterial sw = root.findViewById(R.id.switch_hide_living_emoji);
+        if (sw == null)
+        {
+            return;
+        }
+
+        sw.setChecked(prefs.getBoolean("hide_living_being_emoji", false));
+        sw.setOnCheckedChangeListener((buttonView, isChecked) ->
+        {
+            prefs.edit().putBoolean("hide_living_being_emoji", isChecked).apply();
+            MainActivity.PREF__hide_living_being_emoji = isChecked;
+            try
+            {
+                com.vanniktech.emoji.EmojiManager.install(new KhandaqGoogleEmojiProvider());
+            }
+            catch (Exception e)
+            {
+                Log.w(TAG, "hide_living_being_emoji:reinstall:EE:" + e.getMessage());
+            }
+        });
     }
 
     private void bindPrefSwitch(final View root, final int id, final SharedPreferences prefs,

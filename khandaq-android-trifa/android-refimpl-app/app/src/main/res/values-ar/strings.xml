@@ -534,6 +534,8 @@
     <string name="myid_not_ready">جاري تحميل معرفك…</string>
     <string name="settings_light_theme">المظهر الفاتح</string>
     <string name="settings_notif_preview">معاينة الإشعارات</string>
+    <string name="settings_hide_living_emoji">إخفاء الرموز التعبيرية لذوات الأرواح</string>
+    <string name="settings_hide_living_emoji_hint">تخفي الوجوه والأشخاص والحيوانات من لوحة الرموز. أما الصلبان والنجوم وأبراج الفلك والشياطين ورموز المثلية فهي مخفية دائمًا.</string>
     <string name="settings_group_system">رسائل النظام في المجموعات</string>
     <string name="settings_advanced">إعدادات متقدمة</string>
     <string name="settings_section_appearance">المظهر</string>
@@ -942,6 +944,8 @@
     <string name="chat_filter_spinner_description">تصفية الرسائل في هذه المحادثة</string>
     <string name="chat_filter_all_messages">كل الرسائل</string>
     <string name="chat_filter_files_only">الملفات فقط</string>
+    <string name="chat_filter_audio_only">الصوتيات</string>
+    <string name="chat_filter_voice_only">الرسائل الصوتية</string>
     <string name="chat_ft_status_confirm_send">إرسال هذا الملف؟</string>
     <string name="chat_ft_status_waiting_self_online">في انتظار الاتصال بالشبكة…</string>
     <string name="chat_ft_status_waiting_friend_online">سيتم الإرسال عندما تتصل جهة الاتصال</string>

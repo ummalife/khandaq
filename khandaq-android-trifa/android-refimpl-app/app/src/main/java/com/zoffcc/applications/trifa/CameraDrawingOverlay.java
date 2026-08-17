@@ -69,22 +69,14 @@ public class CameraDrawingOverlay extends SurfaceView
     {
         if ((event.getAction() == MotionEvent.ACTION_DOWN) || (event.getAction() == MotionEvent.ACTION_CANCEL))
         {
-            if (my_alpha == 1.0f)
-            {
-                // make view INVISIBLE (totally transparent)
-                my_alpha = 0.0f;
-                this.setAlpha(0.0f);
-                toggle_cam_preview(false, true);
-                toggle_osd_views(false, false);
-            }
-            else
-            {
-                // make view visible
-                my_alpha = 1.0f;
-                this.setAlpha(1.0f);
-                toggle_cam_preview(true, true);
-                toggle_osd_views(true, false);
-            }
+            // KHANDAQ (call-screen report, 17 Aug): this overlay is the layer the user's finger
+            // actually lands on, and it carried the same alpha-0 trick as CameraSurfacePreview — the
+            // border frame stayed, the remote video showed through it, and the OSD (debug HUD) came
+            // back on the second tap. Hide the whole preview box; a tap on the remote video restores it.
+            // Deliberately NOT calling toggle_cam_preview(false, true) as well: that is the alpha-0
+            // path, and leaving two mechanisms for one state is how the preview came back invisible.
+            CallingActivity.set_self_preview_hidden(true);
+            toggle_osd_views(false, false);
             return true;
         }
         else

@@ -323,9 +323,12 @@ public class MessageListActivity extends AppCompatActivity
         });
 
         spinner_filter_msgs = (CustomSpinner) findViewById(R.id.spinner_filter_msgs);
+        // KHANDAQ (user request 17.08): attachments split into folders — documents, audio, voice notes.
         ArrayList<String> chat_filter_labels = new ArrayList<>(Arrays.asList(
                 getString(R.string.chat_filter_all_messages),
-                getString(R.string.chat_filter_files_only)));
+                getString(R.string.chat_filter_files_only),
+                getString(R.string.chat_filter_audio_only),
+                getString(R.string.chat_filter_voice_only)));
         ArrayAdapter<String> myAdapter = new FilterMsgsSpinnerAdapter(this,
                 R.layout.chat_filter_spinner_dropdown_item, chat_filter_labels);
 
@@ -347,16 +350,23 @@ public class MessageListActivity extends AppCompatActivity
                             messageSearchView.setQuery("", false);
                             messageSearchView.setIconified(true);
                             show_only_files = false;
+                            MessageListFragment.attachment_filter_kind = MessageListFragment.ATTACH_ALL;
                             search_messages_text = null;
                             MainActivity.message_list_fragment.update_all_messages(false, false,
                                                                                    PREF__messageview_paging);
                         }
-                        else if (id == 1)
+                        else if ((id == 1) || (id == 2) || (id == 3))
                         {
-                            // id: only files
+                            // id 1: documents, 2: audio, 3: voice notes. All three run the existing
+                            // "only files" query and then keep the matching kind, so the file bubble,
+                            // the document opener and the voice player all stay exactly as they are.
                             messageSearchView.setQuery("", false);
                             messageSearchView.setIconified(true);
                             show_only_files = true;
+                            MessageListFragment.attachment_filter_kind =
+                                    (id == 1) ? MessageListFragment.ATTACH_FILES
+                                              : ((id == 2) ? MessageListFragment.ATTACH_AUDIO
+                                                           : MessageListFragment.ATTACH_VOICE);
                             search_messages_text = null;
                             MainActivity.message_list_fragment.update_all_messages(false, false,
                                                                                    PREF__messageview_paging);

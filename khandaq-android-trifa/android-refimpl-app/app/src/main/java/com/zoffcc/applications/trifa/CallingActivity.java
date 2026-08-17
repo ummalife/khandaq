@@ -19,6 +19,7 @@
 
 package com.zoffcc.applications.trifa;
 
+import org.khandaq.messenger.BuildConfig;
 import org.khandaq.messenger.R;
 
 import android.Manifest;
@@ -247,6 +248,50 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     private static int BUFFER_DEQUEUE_FEEDER_TIMEOUT_US = 0; // "us" feed raw data to encoder
 
     static Object VIDEO_ROTATION_LOCK = new Object();
+
+    /** KHANDAQ (call-screen report, 17 Aug): true while the user has tapped their own preview away. */
+    static boolean self_preview_hidden = false;
+
+    /**
+     * Show or hide the self-camera preview as a WHOLE — container, border frame and all.
+     *
+     * The old behaviour set alpha 0 on the camera surface alone and left the 5dp border frame drawn,
+     * so the frame stayed on screen filled with the full-screen remote video showing through it. To
+     * the user that reads as "tapping my own camera shows the other person", which is exactly how it
+     * was reported. Hiding the container removes the frame too, and a tap on the remote video
+     * restores it — the only way back, so it must stay wired (CustomVideoImageView.onTouch).
+     */
+    static void set_self_preview_hidden(final boolean hidden)
+    {
+        try
+        {
+            if (video_box_self_preview_01 == null)
+            {
+                return;
+            }
+            self_preview_hidden = hidden;
+            final View box = video_box_self_preview_01;
+            final Runnable apply = () -> {
+                try
+                {
+                    box.setVisibility(hidden ? View.GONE : View.VISIBLE);
+                    // Undo any leftover transparency from the previous behaviour: a preview restored
+                    // while still alpha 0 would look identical to the bug being fixed here.
+                    final View surface = box.findViewById(R.id.camera_surfaceview);
+                    if (surface != null) { surface.setAlpha(1.0f); }
+                }
+                catch (Exception ignored)
+                {
+                }
+            };
+            if (callactivity_handler_s != null) { callactivity_handler_s.post(apply); }
+            else { apply.run(); }
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "set_self_preview_hidden:EE:" + e.getMessage());
+        }
+    }
 
     // KHANDAQ (#130): toggle the self-camera preview between its normal corner size and ~2.2x so the user
     // can see themselves bigger during a video call. Scales the container + inner border frame + the camera
@@ -2952,17 +2997,36 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     {
                         CallingActivity.video_box_left_top_01.setVisibility(View.VISIBLE);
 
-                        CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);
-                        CallingActivity.right_top_text_1.setVisibility(View.VISIBLE);
-                        CallingActivity.right_top_text_1b.setVisibility(View.VISIBLE);
-                        CallingActivity.right_top_text_2.setVisibility(View.VISIBLE);
-                        CallingActivity.right_top_text_3.setVisibility(View.VISIBLE);
-                        CallingActivity.right_top_text_4.setVisibility(View.VISIBLE);
-                        CallingActivity.box_right_volumeslider_01.setVisibility(View.VISIBLE);
+                        // KHANDAQ (call-screen report, 17 Aug): everything below used to be turned back
+                        // ON here, which is how a user on a RELEASE build ended up staring at
+                        // "O:H264:2700 / I:H264:2700 / AO:20 296 / IN 8 fps / Out 29 fps", an "AEC: 0"
+                        // chip and two unlabelled sliders in the middle of a video call — two taps on
+                        // their own camera preview was all it took. hide_legacy_call_debug_ui() runs
+                        // once in onCreate, so it could not save them; this branch simply undid it.
+                        //
+                        // These are expert diagnostics (codec + bitrate, frame counters, echo
+                        // canceller, a video-delay slider that feeds toxav, and a PERSISTED playback
+                        // volume the user could drag to silence and never find again). They belong in a
+                        // debug build, and nowhere near someone trying to take a call.
+                        if (BuildConfig.DEBUG)
+                        {
+                            CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);
+                            CallingActivity.right_top_text_1.setVisibility(View.VISIBLE);
+                            CallingActivity.right_top_text_1b.setVisibility(View.VISIBLE);
+                            CallingActivity.right_top_text_2.setVisibility(View.VISIBLE);
+                            CallingActivity.right_top_text_3.setVisibility(View.VISIBLE);
+                            CallingActivity.right_top_text_4.setVisibility(View.VISIBLE);
+                            CallingActivity.box_right_volumeslider_01.setVisibility(View.VISIBLE);
 
-                        CallingActivity.video_add_delay_slider_infotext_01.setVisibility(View.VISIBLE);
-                        CallingActivity.video_add_delay_slider_seekbar_01.setVisibility(View.VISIBLE);
-                        CallingActivity.video_box_aec.setVisibility(View.VISIBLE);
+                            CallingActivity.video_add_delay_slider_infotext_01.setVisibility(View.VISIBLE);
+                            CallingActivity.video_add_delay_slider_seekbar_01.setVisibility(View.VISIBLE);
+                            CallingActivity.video_box_aec.setVisibility(View.VISIBLE);
+                        }
+                        else
+                        {
+                            keep_legacy_osd_hidden();
+                        }
+
                         // KHANDAQ (#246): the legacy floating speaker toggle stays hidden — the bottom
                         // control row owns that control now (see hide_legacy_call_debug_ui).
                         CallingActivity.video_speaker_aec.setVisibility(View.GONE);

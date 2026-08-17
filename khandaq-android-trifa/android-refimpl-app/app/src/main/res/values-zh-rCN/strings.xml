@@ -965,6 +965,8 @@
     <string name="chat_filter_spinner_description">筛选此聊天中的消息</string>
     <string name="chat_filter_all_messages">全部消息</string>
     <string name="chat_filter_files_only">仅文件</string>
+    <string name="chat_filter_audio_only">音频</string>
+    <string name="chat_filter_voice_only">语音消息</string>
     <string name="chat_ft_status_confirm_send">要发送这个文件吗？</string>
     <string name="chat_ft_status_waiting_self_online">正在等待网络连接…</string>
     <string name="chat_ft_status_waiting_friend_online">将在联系人上线后发送</string>
@@ -1028,4 +1030,6 @@
     <string name="settings_language">语言</string>
     <string name="settings_language_title">应用语言</string>
     <string name="group_msg_sender_unverified">来自历史同步 — 发送者未经验证</string>
+    <string name="settings_hide_living_emoji">隐藏含生物的表情符号</string>
+    <string name="settings_hide_living_emoji_hint">从表情面板中隐藏人脸、人物和动物。十字、星形、星座、恶魔和 LGBT 图案始终隐藏。</string>
 </resources>

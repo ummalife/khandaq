@@ -16,7 +16,11 @@ profile
 *.moved-aside
 *.mode1
 *.perspective
-xcshareddata
+# Shared schemes belong in the repository: without Antidote.xcscheme scripts/upload-testflight.sh
+# cannot find a scheme to archive, and without KhandaqUITests.xcscheme the UI tests cannot be run
+# from a clean checkout. Everything else under xcshareddata stays ignored.
+xcshareddata/*
+!xcshareddata/xcschemes/
 
 # Exclude temp nibs and swap files
 *~.nib

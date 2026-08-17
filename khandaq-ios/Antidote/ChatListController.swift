@@ -289,36 +289,42 @@ private extension ChatListController {
      KHANDAQ (owner request 17.08): switch Chats / Groups / Favorites by swiping the list.
      Reaching up to the tabs on a large phone is the complaint being fixed.
 
-     Swipe recognisers rather than a pan: the rows already carry trailing swipe actions (delete /
-     info / favourite), and those are driven by the table's own pan. A discrete swipe needs speed and
-     direction, so a slow drag on a row still opens its actions while a quick flick changes tab.
-     Simultaneous recognition is refused for the same reason — one gesture should do one thing.
+     A pan recogniser, not a swipe one. UISwipeGestureRecognizer never fired here: the table view and
+     its rows own the touches (rows carry trailing actions, the table has its own pan), and a discrete
+     swipe recogniser added above them was simply never given the gesture — verified with a log in the
+     handler, which stayed silent for every kind of swipe. A pan runs alongside the table's own
+     scrolling (simultaneous recognition allowed) and this code decides at the end whether the
+     movement was a horizontal flick: far enough sideways, and clearly more sideways than vertical, so
+     scrolling the list and opening a row's actions keep working untouched.
      */
     private func installFilterSwipeGestures() {
-        let left = UISwipeGestureRecognizer(target: self, action: #selector(handleFilterSwipe(_:)))
-        left.direction = .left
-        left.delegate = self
-        left.cancelsTouchesInView = false
-
-        let right = UISwipeGestureRecognizer(target: self, action: #selector(handleFilterSwipe(_:)))
-        right.direction = .right
-        right.delegate = self
-        right.cancelsTouchesInView = false
-
-        tableManager.tableView.addGestureRecognizer(left)
-        tableManager.tableView.addGestureRecognizer(right)
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleFilterPan(_:)))
+        pan.delegate = self
+        pan.cancelsTouchesInView = false
+        pan.maximumNumberOfTouches = 1
+        view.addGestureRecognizer(pan)
     }
 
-    @objc private func handleFilterSwipe(_ recognizer: UISwipeGestureRecognizer) {
-        // A swipe while selecting chats would change the filter under the selection and leave the
-        // edit-mode nav bar pointing at rows that are no longer there.
+    @objc private func handleFilterPan(_ recognizer: UIPanGestureRecognizer) {
+        guard recognizer.state == .ended else {
+            return
+        }
+        // A tab change while selecting chats would move rows out from under the selection, and while
+        // searching it would swap the list behind the results.
         guard !isEditing, !(searchController != nil && searchController.isActive) else {
+            return
+        }
+
+        let translation = recognizer.translation(in: view)
+        let velocity = recognizer.velocity(in: view)
+        let horizontalEnough = abs(translation.x) >= 60.0 || abs(velocity.x) >= 400.0
+        guard horizontalEnough, abs(translation.x) > abs(translation.y) * 1.5 else {
             return
         }
 
         let isRTL = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
         guard let tab = ChatListSwipeNavigation.nextTab(from: tableManager.filterTab,
-                                                       swipingLeft: recognizer.direction == .left,
+                                                       swipingLeft: translation.x < 0,
                                                        isRightToLeft: isRTL) else {
             return
         }
@@ -571,11 +577,13 @@ private final class ChatListFilterBar: UIView {
 extension ChatListController: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return false
+        // The filter pan has to run alongside the table's scrolling and the rows' swipe actions —
+        // refusing simultaneous recognition is what kept it from ever being recognised.
+        return true
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard gestureRecognizer is UISwipeGestureRecognizer else {
+        guard gestureRecognizer is UIPanGestureRecognizer else {
             return true
         }
         // Not while selecting chats, not while searching, and not while a row already has its

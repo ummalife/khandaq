@@ -80,7 +80,17 @@ class UserDefaultsManager {
 
     var DebugMode: Bool {
         get {
+            // KHANDAQ (call-screen report, 17 Aug): Android shipped its call-screen debug telemetry to
+            // a real user because nothing gated it. iOS gates the equivalent on this flag, but only the
+            // TOGGLE is compiled out of release (SettingsMainController) — the stored value survives in
+            // UserDefaults, so a device that had it on in a debug build (a tester's phone, a restored
+            // backup) keeps showing "rx:… sendV:… feed:…" over a call on release with no way to turn it
+            // off. Force it off wherever it cannot be turned back off.
+            #if DEBUG
             return boolForKey(Keys.DebugMode, defaultValue: false)
+            #else
+            return false
+            #endif
         }
         set {
             setBool(newValue, forKey: Keys.DebugMode)

@@ -764,6 +764,11 @@ public class MainActivity extends AppCompatActivity
 
         HelperGeneric.logI(TAG, "M:STARTUP:EmojiManager install");
         // EmojiManager.install(new IosEmojiProvider());
+        // The provider fixes its category list at install time, and the settings below are read after
+        // this point — so the preference has to be loaded here or the filter stays off until the user
+        // toggles the switch again (it looked like the setting had been forgotten across a restart).
+        PREF__hide_living_being_emoji = PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean("hide_living_being_emoji", false);
         EmojiManager.install(new KhandaqGoogleEmojiProvider());
         // EmojiManager.install(new com.vanniktech.emoji.twitter.TwitterEmojiProvider());
 

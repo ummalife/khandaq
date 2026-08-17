@@ -1,0 +1,15 @@
+{
+  "version": "0.2.35",
+  "date": "2026-08-17",
+  "title": "The emoji setting now survives closing the app",
+  "summary": "A follow-up to 0.2.34, found by restarting the app on a phone rather than trusting the code: the option that removes images of living beings from the emoji picker only took effect while the app stayed open. After a restart the full set came back, and the only way to get the filtered one again was to toggle the switch off and on.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "The emoji filter is applied at startup, not only when the switch is touched",
+      "description": "The emoji provider decides which categories exist at the moment it is installed, and the app installed it before reading the setting — so on every launch the unfiltered set was built, and the preference was read a fraction of a second too late. The setting is now read first, in both places the provider is installed, so a restart keeps what was chosen.",
+      "platforms": ["android"]
+    }
+  ]
+}

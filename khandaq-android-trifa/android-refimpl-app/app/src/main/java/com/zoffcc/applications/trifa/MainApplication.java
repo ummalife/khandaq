@@ -126,6 +126,12 @@ public class MainApplication extends Application
         // The Application runs first for EVERY activity entry, so this guarantees it is always set up.
         try
         {
+            // Read the "hide living beings" setting BEFORE building the provider: the provider decides
+            // which categories exist at install time, so installing first and loading the preference
+            // afterwards left the unfiltered set in place until the switch was toggled again.
+            MainActivity.PREF__hide_living_being_emoji = android.preference.PreferenceManager
+                    .getDefaultSharedPreferences(this)
+                    .getBoolean("hide_living_being_emoji", false);
             com.vanniktech.emoji.EmojiManager.install(new KhandaqGoogleEmojiProvider());
         }
         catch (Throwable ignored)

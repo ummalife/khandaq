@@ -762,3 +762,11 @@
 "settings_language_title" = "لغة التطبيق";
 "nav_edit_start" = "تحرير";
 "nav_edit_done" = "تم";
+
+/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+"attachments_title" = "المرفقات";
+"attachments_documents" = "الملفات";
+"attachments_audio" = "الصوتيات";
+"attachments_voice" = "الرسائل الصوتية";
+"attachments_empty" = "لا شيء هنا بعد";
+"attachments_not_downloaded" = "لم يتم تنزيل هذا الملف بعد.";

@@ -5,6 +5,9 @@
 import XCTest
 @testable import Antidote
 
+/// ★ These need a SIGNED build. Run with `CODE_SIGNING_ALLOWED=NO` the keychain has no entitlement
+/// in the simulator, every write silently fails and the reads come back nil — which reads as a
+/// broken KeychainManager rather than a broken test setup.
 class KeychainManagerTests: XCTestCase {
     func testToxPassword() {
         let manager = KeychainManager()

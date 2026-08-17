@@ -891,6 +891,15 @@ extension GroupInfoController: ChatPrivateControllerDelegate {
         navigationController?.present(previewController, animated: true, completion: nil)
     }
 
+    // KHANDAQ (user request 17.08): the chat's attachments, split into files / audio / voice.
+    func chatPrivateControllerShowAttachments(_ controller: ChatPrivateController, forChat chat: OCTChat) {
+        let attachments = ChatAttachmentsController(theme: theme, chat: chat,
+                                                    submanagerObjects: submanagerObjects)
+        // Push onto whatever stack is showing the chat: on iPad that is the detail column, and in the
+        // group-info preview it is that screen's own navigation controller.
+        controller.navigationController?.pushViewController(attachments, animated: true)
+    }
+
     func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
         // Not applicable in the group-info hosted preview.
     }

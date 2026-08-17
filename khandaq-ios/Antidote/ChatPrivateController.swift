@@ -38,6 +38,8 @@ protocol ChatPrivateControllerDelegate: class {
             selectedIndex: Int)
     // KHANDAQ (Figma): tapping the chat header opens the friend profile.
     func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend)
+    // KHANDAQ (user request 17.08): everything sent in this chat, split into files / audio / voice.
+    func chatPrivateControllerShowAttachments(_ controller: ChatPrivateController, forChat chat: OCTChat)
 }
 
 class ChatPrivateController: PortraitChatController {
@@ -670,6 +672,10 @@ extension ChatPrivateController {
             callwaiting_running = false
             CallWaitingView.removeFromSuperview()
             self.linearBar.stopAnimation()
+    }
+
+    @objc func attachmentsButtonPressed() {
+        delegate?.chatPrivateControllerShowAttachments(self, forChat: chat)
     }
 
     @objc func audioCallButtonPressed() {
@@ -3047,9 +3053,25 @@ private extension ChatPrivateController {
             // KHANDAQ design (Figma): the chat header shows video + call only (location sharing lives in
             // the "+" attachment menu). Order per the mock: video on the left, call on the right — and
             // since rightBarButtonItems[0] is the rightmost slot, call goes first.
+            let attachmentsImage: UIImage?
+            if #available(iOS 13.0, *) {
+                attachmentsImage = UIImage(systemName: "paperclip")
+            }
+            else {
+                attachmentsImage = nil
+            }
+            let attachmentsButton = UIBarButtonItem(
+                    image: attachmentsImage,
+                    style: .plain,
+                    target: self,
+                    action: #selector(ChatPrivateController.attachmentsButtonPressed))
+            attachmentsButton.title = attachmentsImage == nil ? String(localized: "attachments_title") : nil
+            attachmentsButton.accessibilityLabel = String(localized: "attachments_title")
+
             navigationItem.rightBarButtonItems = [
                 audioButton,
-                videoButton
+                videoButton,
+                attachmentsButton
             ]
         }
     }

@@ -26,6 +26,7 @@
 		111783101DC647BD000C1721 /* LaunchPlaceholderBoard.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 11DDEAFC1D5FD9FE0000E2BE /* LaunchPlaceholderBoard.storyboard */; };
 		B2SWIPE0000000000000001 /* ChatListSwipeNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */; };
 		B2SWIPEA00000000000001 /* ChatListSwipeNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */; };
+		B2ATTACH00000000000001 /* ChatAttachmentsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2ATTACH00000000000002 /* ChatAttachmentsController.swift */; };
 		B2SWIPEB00000000000001 /* ChatListSwipeNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */; };
 		112422661BDD2032004D7926 /* KeyboardNotificationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112422651BDD2032004D7926 /* KeyboardNotificationController.swift */; };
 		112495371DE7ABFF00EF45C4 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112495361DE7ABFF00EF45C4 /* KeyboardObserver.swift */; };
@@ -752,6 +753,7 @@
 		9CDE31E51E489B2700333E0D /* ChatInputViewManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatInputViewManager.swift; sourceTree = "<group>"; };
 		9CE0BDE51C45229500DCE357 /* ChatListController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListController.swift; sourceTree = "<group>"; };
 		B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListSwipeNavigation.swift; sourceTree = "<group>"; };
+		B2ATTACH00000000000002 /* ChatAttachmentsController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatAttachmentsController.swift; sourceTree = "<group>"; };
 		9CE0BDEF1C4522BF00DCE357 /* ChatListCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCell.swift; sourceTree = "<group>"; };
 		9CE0BDF21C4522C800DCE357 /* ChatListCellModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCellModel.swift; sourceTree = "<group>"; };
 		9CEA6A1E1D957EFC0045F000 /* antidote-acknowledgements.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = "antidote-acknowledgements.html"; sourceTree = "<group>"; };
@@ -1329,6 +1331,7 @@
 				1149626B1C5CE3DF001E5435 /* ChangeUserStatusController.swift */,
 				9CE0BDE51C45229500DCE357 /* ChatListController.swift */,
 				B2SWIPE0000000000000002 /* ChatListSwipeNavigation.swift */,
+				B2ATTACH00000000000002 /* ChatAttachmentsController.swift */,
 				11A21EFA1C45BDB100E80A89 /* ChatPrivateController.swift */,
 				KHPORTRAIT001A1B2C3D4E5F601 /* PortraitChatController.swift */,
 				11B0A0011C45229500DCE001 /* ChatGroupController.swift */,
@@ -1943,6 +1946,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B2SWIPEA00000000000001 /* ChatListSwipeNavigation.swift in Sources */,
+				B2ATTACH00000000000001 /* ChatAttachmentsController.swift in Sources */,
 				AA11BB22CC33DD44EE550003 /* AppLanguage.swift in Sources */,
 				11628E721CA580ED008C097E /* ChatGenericFileCell.swift in Sources */,
 				116634AF1C6F40820072C980 /* ChatOutgoingCallCellModel.swift in Sources */,
@@ -2352,7 +2356,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				INFOPLIST_FILE = ScreenshotsUITests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_LDFLAGS = (
@@ -2380,7 +2384,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				INFOPLIST_FILE = ScreenshotsUITests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				OTHER_LDFLAGS = (
@@ -2445,7 +2449,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				ONLY_ACTIVE_ARCH = YES;
 				PROVISIONING_PROFILE = "";
 				SDKROOT = iphoneos;
@@ -2495,7 +2499,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				VALIDATE_PRODUCT = YES;
@@ -2519,7 +2523,7 @@
 				GCC_PREFIX_HEADER = "Antidote/Antidote-Prefix.pch";
 				GCC_WARN_SIGN_COMPARE = YES;
 				INFOPLIST_FILE = "Antidote/Antidote-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				KHANDAQ_PUSH_AUTH_SECRET = "";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.4.30;
@@ -2554,7 +2558,7 @@
 				GCC_PREFIX_HEADER = "Antidote/Antidote-Prefix.pch";
 				GCC_WARN_SIGN_COMPARE = YES;
 				INFOPLIST_FILE = "Antidote/Antidote-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				KHANDAQ_PUSH_AUTH_SECRET = "";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.4.30;
@@ -2585,7 +2589,7 @@
 				ENABLE_TESTABILITY = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				INFOPLIST_FILE = AntidoteTests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = zoxcore.AntidoteTests;
@@ -2612,7 +2616,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				INFOPLIST_FILE = AntidoteTests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = zoxcore.AntidoteTests;
@@ -2637,7 +2641,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				INFOPLIST_FILE = pushextension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -2662,7 +2666,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				INFOPLIST_FILE = pushextension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -2689,7 +2693,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				INFOPLIST_FILE = shareextension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				MARKETING_VERSION = 1.4.30;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -2716,7 +2720,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				INFOPLIST_FILE = shareextension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
 				MARKETING_VERSION = 1.4.30;
 				MTL_ENABLE_DEBUG_INFO = NO;

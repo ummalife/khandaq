@@ -772,3 +772,11 @@
 "chat_react_action" = "React";
 "settings_language" = "Language";
 "settings_language_title" = "App language";
+
+/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+"attachments_title" = "Attachments";
+"attachments_documents" = "Files";
+"attachments_audio" = "Audio";
+"attachments_voice" = "Voice";
+"attachments_empty" = "Nothing here yet";
+"attachments_not_downloaded" = "This file has not been downloaded yet.";

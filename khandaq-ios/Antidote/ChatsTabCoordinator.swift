@@ -162,6 +162,13 @@ extension ChatsTabCoordinator: ChatPrivateControllerDelegate {
         navigationController.present(controller, animated: true, completion: nil)
     }
 
+    // KHANDAQ (user request 17.08): the chat's attachments, split into files / audio / voice.
+    func chatPrivateControllerShowAttachments(_ controller: ChatPrivateController, forChat chat: OCTChat) {
+        let attachments = ChatAttachmentsController(theme: theme, chat: chat,
+                                                    submanagerObjects: submanagerObjects)
+        navigationController.pushViewController(attachments, animated: true)
+    }
+
     // KHANDAQ (Figma): chat header tap → friend profile.
     func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
         let card = FriendCardController(theme: theme, friend: friend, submanagerObjects: submanagerObjects)

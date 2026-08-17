@@ -586,7 +586,25 @@ class ChatGroupController: PortraitChatController {
         }
         liveVideoItem.accessibilityLabel = liveVideoToolbarAccessibilityLabel(for: videoIconState)
 
-        navigationItem.rightBarButtonItems = [infoItem, liveVideoItem, liveAudioItem]
+        // KHANDAQ (user request 17.08): the group's files / audio / voice notes, same as a 1:1 chat.
+        let attachmentsItem: UIBarButtonItem
+        if #available(iOS 13.0, *) {
+            attachmentsItem = UIBarButtonItem(
+                    image: UIImage(systemName: "paperclip"),
+                    style: .plain,
+                    target: self,
+                    action: #selector(ChatGroupController.attachmentsButtonPressed))
+        }
+        else {
+            attachmentsItem = UIBarButtonItem(
+                    title: String(localized: "attachments_title"),
+                    style: .plain,
+                    target: self,
+                    action: #selector(ChatGroupController.attachmentsButtonPressed))
+        }
+        attachmentsItem.accessibilityLabel = String(localized: "attachments_title")
+
+        navigationItem.rightBarButtonItems = [infoItem, attachmentsItem, liveVideoItem, liveAudioItem]
     }
 
     @available(iOS 13.0, *)
@@ -834,6 +852,12 @@ class ChatGroupController: PortraitChatController {
 
     @objc func membersButtonPressed() {
         toggleMembersDrawer()
+    }
+
+    @objc func attachmentsButtonPressed() {
+        let attachments = ChatAttachmentsController(theme: theme, chat: chat,
+                                                    submanagerObjects: submanagerObjects)
+        navigationController?.pushViewController(attachments, animated: true)
     }
 
     @objc func infoButtonPressed() {

@@ -758,6 +758,15 @@ extension ActiveSessionCoordinator: ChatPrivateControllerDelegate {
         iPad.splitController.present(controller, animated: true, completion: nil)
     }
 
+    // KHANDAQ (user request 17.08): the chat's attachments, split into files / audio / voice.
+    func chatPrivateControllerShowAttachments(_ controller: ChatPrivateController, forChat chat: OCTChat) {
+        let attachments = ChatAttachmentsController(theme: theme, chat: chat,
+                                                    submanagerObjects: toxManager.objects)
+        // Push onto whatever stack is showing the chat: on iPad that is the detail column, and in the
+        // group-info preview it is that screen's own navigation controller.
+        controller.navigationController?.pushViewController(attachments, animated: true)
+    }
+
     func chatPrivateControllerShowFriendProfile(_ controller: ChatPrivateController, forFriend friend: OCTFriend) {
         // iPad detail flow keeps the friend card reachable from the primary column instead.
     }

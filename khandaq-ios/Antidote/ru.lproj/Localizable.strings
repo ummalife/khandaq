@@ -774,3 +774,11 @@
 "settings_language_title" = "Язык приложения";
 "nav_edit_start" = "Править";
 "nav_edit_done" = "Готово";
+
+/* KHANDAQ (user request 17.08): the attachments screen — files / audio / voice notes */
+"attachments_title" = "Вложения";
+"attachments_documents" = "Файлы";
+"attachments_audio" = "Аудио";
+"attachments_voice" = "Голосовые";
+"attachments_empty" = "Здесь пока пусто";
+"attachments_not_downloaded" = "Этот файл ещё не загружен.";

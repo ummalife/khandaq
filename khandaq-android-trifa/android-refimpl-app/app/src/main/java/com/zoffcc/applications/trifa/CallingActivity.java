@@ -270,6 +270,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 return;
             }
             self_preview_hidden = hidden;
+            // Put an enlarged preview back to its corner size while hiding it, so bringing it back
+            // never drops a half-screen window on the user.
+            if (hidden && self_view_enlarged)
+            {
+                toggleSelfViewEnlarged();
+            }
             final View box = video_box_self_preview_01;
             final Runnable apply = () -> {
                 try
@@ -575,10 +581,17 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         video_box_left_top_01.setVisibility(View.INVISIBLE);
         video_box_right_top_01.setVisibility(View.INVISIBLE);
 
-        // KHANDAQ (#130): tap your own camera preview to enlarge it (small <-> ~2.2x, corner-anchored),
-        // so you can see yourself bigger during a video call; tap again to restore.
+        // A tap on your own preview puts it away (a tap on the remote video brings it back) — that is
+        // what people expect from the little corner window, and it was reported as "tapping my own
+        // camera shows the other person". Enlarging it (KHANDAQ #130) moves to a long press, so both
+        // are reachable. This listener sits on the container and wins over the child views' own touch
+        // handling, so the hide has to be wired here, not only in CameraSurfacePreview.
         self_view_enlarged = false;
-        video_box_self_preview_01.setOnClickListener(v -> toggleSelfViewEnlarged());
+        video_box_self_preview_01.setOnClickListener(v -> set_self_preview_hidden(true));
+        video_box_self_preview_01.setOnLongClickListener(v -> {
+            toggleSelfViewEnlarged();
+            return true;
+        });
 
         volume_slider_seekbar_01 = (SeekBar) findViewById(R.id.volume_slider_seekbar);
         video_add_delay_slider_seekbar_01 = (SeekBar) findViewById(R.id.video_add_delay_slider_seekbar);

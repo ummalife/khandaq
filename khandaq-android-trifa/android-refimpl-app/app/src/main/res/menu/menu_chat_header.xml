@@ -18,4 +18,12 @@
         android:id="@+id/action_chat_filter_files"
         android:title="@string/chat_filter_files_only"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_chat_filter_audio"
+        android:title="@string/chat_filter_audio_only"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_chat_filter_voice"
+        android:title="@string/chat_filter_voice_only"
+        app:showAsAction="never" />
 </menu>

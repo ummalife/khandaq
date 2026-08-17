@@ -3145,21 +3145,49 @@ public class MessageListActivity extends AppCompatActivity
         }
         else if (id == R.id.action_chat_filter_all)
         {
-            if (spinner_filter_msgs != null)
-            {
-                spinner_filter_msgs.setSelection(0);
-            }
+            apply_message_filter(MessageListFragment.ATTACH_ALL);
             return true;
         }
         else if (id == R.id.action_chat_filter_files)
         {
-            if (spinner_filter_msgs != null)
-            {
-                spinner_filter_msgs.setSelection(1);
-            }
+            apply_message_filter(MessageListFragment.ATTACH_FILES);
+            return true;
+        }
+        else if (id == R.id.action_chat_filter_audio)
+        {
+            apply_message_filter(MessageListFragment.ATTACH_AUDIO);
+            return true;
+        }
+        else if (id == R.id.action_chat_filter_voice)
+        {
+            apply_message_filter(MessageListFragment.ATTACH_VOICE);
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * Apply one of the four message filters from the overflow menu.
+     *
+     * Goes straight at the state instead of driving the (hidden) spinner: CustomSpinner only forwards
+     * a programmatic setSelection() to its listener when the new position has already been applied,
+     * and a GONE spinner is never laid out — so "All messages" silently kept the previous filter.
+     */
+    private void apply_message_filter(final int kind)
+    {
+        try
+        {
+            messageSearchView.setQuery("", false);
+            messageSearchView.setIconified(true);
+            show_only_files = (kind != MessageListFragment.ATTACH_ALL);
+            MessageListFragment.attachment_filter_kind = kind;
+            search_messages_text = null;
+            MainActivity.message_list_fragment.update_all_messages(false, false, PREF__messageview_paging);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     private void enterChatSearchMode()

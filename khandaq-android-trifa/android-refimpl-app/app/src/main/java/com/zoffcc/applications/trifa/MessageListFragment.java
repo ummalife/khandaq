@@ -831,6 +831,11 @@ public class MessageListFragment extends Fragment
                     orderBySent_timestampAsc().
                     orderBySent_timestamp_msAsc().
                     toList();
+
+            // Narrow "files" down to documents / audio / voice notes. This is the path the screen
+            // actually uses; the identical-looking block further up this file sits behind
+            // `if (2 == 1 + 4)` and never runs.
+            ml = filter_attachments_by_kind(ml);
         }
         else
         {
@@ -875,12 +880,26 @@ public class MessageListFragment extends Fragment
         int c = 0;
         if (show_only_files)
         {
-            c = orma.selectFromMessage().
-                    tox_friendpubkeyEq(fpk).
-                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
-                    orderBySent_timestampAsc().
-                    orderBySent_timestamp_msAsc().
-                    count();
+            if (attachment_filter_kind == ATTACH_ALL)
+            {
+                c = orma.selectFromMessage().
+                        tox_friendpubkeyEq(fpk).
+                        TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                        orderBySent_timestampAsc().
+                        orderBySent_timestamp_msAsc().
+                        count();
+            }
+            else
+            {
+                // The kind of an attachment is not a column, so it cannot be counted in SQL — count
+                // what the filter actually keeps, otherwise paging asks for pages that do not exist.
+                c = filter_attachments_by_kind(orma.selectFromMessage().
+                        tox_friendpubkeyEq(fpk).
+                        TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                        orderBySent_timestampAsc().
+                        orderBySent_timestamp_msAsc().
+                        toList()).size();
+            }
         }
         else
         {

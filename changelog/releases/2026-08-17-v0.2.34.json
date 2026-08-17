@@ -1,0 +1,69 @@
+{
+  "version": "0.2.34",
+  "date": "2026-08-17",
+  "title": "The call screen belongs to you again, emoji can be kept free of living beings, and attachments split into files, audio and voice",
+  "summary": "A release driven almost entirely by what people reported. The video call screen was showing developer diagnostics to everyone — codec names, frame counters, an echo chip and two unlabelled sliders, one of which quietly set the volume of every later call; they are gone, and a tap on your own camera window now simply puts it away (a tap on the other person's video brings it back, a long press still enlarges it). At a user's request the emoji set can be kept free of images of living beings, with crosses, stars, zodiac signs, devils and LGBT symbols removed regardless of that setting, while the mosque, the Kaaba, the crescent and prayer beads stay. Attachments in a one-to-one chat can be listed as documents, audio or voice notes separately. And two things that made saving a photo pointless were fixed: the Save action no longer flashes and disappears, and a saved file really lands in Pictures / Movies / Download under a Khandaq folder, with the path shown, instead of a private directory no file manager opens.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "No more developer diagnostics on the call screen",
+      "description": "During a video call the screen carried a row of numbers meant for debugging — codec, resolution and frame counters, an echo-cancellation chip and two sliders with no labels. One of those sliders was a call volume that persisted into every later call, so a curious tap could leave someone permanently quiet. All of it is now confined to debug builds.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Tapping your own camera window puts it away",
+      "description": "The little preview of your own camera used to react to a tap by growing, which read as \"my camera now shows the other person\" — the frame stayed on screen with the remote video showing through it. A tap now hides the preview and a tap on the other person's video brings it back at its normal size; a long press still enlarges it for anyone who used that.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Emoji without images of living beings",
+      "description": "A setting in Settings removes faces, people and animals from the emoji picker. Independently of it — always — crosses, the Star of David, the six-pointed star, the menorah, yin-yang, om, the wheel of dharma, places of worship, all twelve zodiac signs, devils and demons, and pride and transgender flags including same-sex couples and families are gone from the set. The mosque, the Kaaba, the crescent with star, prayer beads and open hands remain.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Attachments: documents, audio and voice notes separately",
+      "description": "The chat's ⋮ menu can now narrow a conversation down to documents, to audio files, or to voice notes, as well as back to everything. Voice notes are deliberately kept out of the audio list so the two are separate places to look rather than duplicates of each other.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Saving a received file actually saves it",
+      "description": "Two defects met in the same place. The Save action appeared for a fraction of a second and vanished, and if you managed to hit it the message said the file had been saved to — with the path missing — while nothing had been written anywhere a file manager can reach. Files now go to Pictures, Movies or Download inside a Khandaq folder, the message names that folder, and a failure says so plainly instead of claiming success.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Cancelling a selection no longer reloads every photo",
+      "description": "Leaving selection mode redrew the whole conversation, so every visible photo blanked and re-loaded from disk — a visible flicker on a screen full of images. Only the selection highlight is repainted now. Measured on a phone: 86% of the photo area changed before the fix, 0.3% after.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Swipe between Chats, Groups and Favorites",
+      "description": "The three chat-list tabs can be moved between with a horizontal swipe on the list, instead of reaching up to the tabs themselves. The swipe respects right-to-left layout and stops at both ends rather than wrapping around.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "important",
+      "title": "The in-app language reaches the whole interface",
+      "description": "Choosing a language in Settings changed the chat titles but left the bottom bar, the tab labels, the search field and the Edit button in the previous language, because those views had already been created by the time the language changed. The session is now rebuilt when the language changes, so everything follows it.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "Half-finished sign-up no longer closes the app",
+      "description": "If the app was relaunched while you were on the password step of creating an account, the screen came back but the name behind it did not, and continuing closed the app. It now returns you one screen back to retype the name.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "The active chat-list tab is announced to screen readers",
+      "description": "Which of Chats / Groups / Favorites is selected was conveyed by colour alone. The active tab is now marked as selected, so assistive technology says so.",
+      "platforms": ["ios"]
+    }
+  ]
+}

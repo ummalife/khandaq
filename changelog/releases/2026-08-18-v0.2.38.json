@@ -1,0 +1,21 @@
+{
+  "version": "0.2.38",
+  "date": "2026-08-18",
+  "title": "Quieter, steadier background work",
+  "summary": "Three places threw an exception on every pass and caught it again — harmless in themselves, but they filled the log with stack traces and made real problems hard to see. Found by watching a phone's log for a minute rather than by reading code.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "medium",
+      "title": "Group maintenance no longer throws on every group",
+      "description": "The periodic check asked the database for a group's row and took the first result without checking there was one. For a group the network knows about but the database does not — which happens for a moment right after creating one — that threw, and the check runs for every group on every pass. It now asks for a single row and looks. If a group really has no database row, the log says so plainly instead of printing a stack trace: that state means the group cannot appear in the chat list, and it is worth seeing.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "No more exception on every screen resume",
+      "description": "Returning to the app hid a loading indicator that may not exist yet, throwing a null-pointer exception each time, and read the settings database before it was open — twice, once for the push token. All three are guarded now. The push token was already re-read later, so nothing was lost, but the app no longer starts by throwing three exceptions.",
+      "platforms": ["android"]
+    }
+  ]
+}

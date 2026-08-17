@@ -2955,13 +2955,11 @@ public class MainActivity extends AppCompatActivity
 
     void remove_all_progressDialogs()
     {
-        try
+        // onResume can run before the view exists (and after it is gone); this used to throw an NPE
+        // on every resume, caught but printed in full.
+        if (fl_loading_progressbar != null)
         {
             fl_loading_progressbar.setVisibility(View.GONE);
-        }
-        catch (Exception e)
-        {
-            e.printStackTrace();
         }
     }
 

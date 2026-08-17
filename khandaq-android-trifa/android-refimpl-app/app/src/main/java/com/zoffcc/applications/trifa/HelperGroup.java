@@ -799,17 +799,39 @@ public class HelperGroup
         }
     }
 
+    /**
+     * KHANDAQ: both of these run for EVERY group on every maintenance pass. Written with
+     * `toList().get(0)` they threw IndexOutOfBounds for any group that toxcore knows about but the
+     * database does not — caught, but each one printed a full stack trace, so a single such group
+     * filled the log with noise on a loop. Ask for one row and check.
+     */
+    static boolean group_db_row_exists(final String group_identifier)
+    {
+        try
+        {
+            return orma.selectFromGroupDB().
+                    group_identifierEq(group_identifier.toLowerCase()).
+                    count() > 0;
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
     static boolean is_group_we_left(String group_identifier)
     {
         try
         {
-            return (orma.selectFromGroupDB().
+            final java.util.List<GroupDB> rows = orma.selectFromGroupDB().
                     group_identifierEq(group_identifier.toLowerCase()).
-                    toList().get(0).group_we_left);
+                    limit(1).
+                    toList();
+            return !rows.isEmpty() && rows.get(0).group_we_left;
         }
         catch (Exception e)
         {
-            e.printStackTrace();
+            HelperGeneric.logI(TAG, "is_group_we_left:EE:" + e.getMessage());
             return false;
         }
     }
@@ -850,13 +872,15 @@ public class HelperGroup
     {
         try
         {
-            return (orma.selectFromGroupDB().
+            final java.util.List<GroupDB> rows = orma.selectFromGroupDB().
                     group_identifierEq(group_identifier.toLowerCase()).
-                    toList().get(0).group_active);
+                    limit(1).
+                    toList();
+            return !rows.isEmpty() && rows.get(0).group_active;
         }
         catch (Exception e)
         {
-            e.printStackTrace();
+            HelperGeneric.logI(TAG, "is_group_active:EE:" + e.getMessage());
             return false;
         }
     }
@@ -8973,6 +8997,15 @@ public class HelperGroup
                     if (is_group_we_left(group_identifier))
                     {
                         continue;
+                    }
+                    if (!group_db_row_exists(group_identifier))
+                    {
+                        // toxcore has the group, the database does not — set_group_active is an
+                        // UPDATE and will not create the row, so the group stays invisible in the
+                        // chat list. Worth seeing in a log rather than guessing from a stack trace.
+                        HelperGeneric.logI(TAG, "maintain_all_groups:no_db_row id=" +
+                                                group_identifier_short(group_identifier, false) +
+                                                " gn=" + group_num);
                     }
                     set_group_active(group_identifier);
                     HelperGeneric.logI(TAG, "maintain_all_groups:reactivated_inactive id="

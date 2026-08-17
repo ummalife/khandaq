@@ -2036,6 +2036,13 @@ public class HelperGeneric
 
     static String get_g_opts(String key)
     {
+        if (orma == null)
+        {
+            // Called from onResume before the database is opened (push token load, pending FCM ack).
+            // The callers already treat null as "not set" and are re-run later; throwing here only
+            // produced a stack trace per resume.
+            return null;
+        }
         try
         {
             if (orma.selectFromTRIFADatabaseGlobalsNew().keyEq(key).count() == 1)

@@ -1,0 +1,21 @@
+{
+  "version": "0.2.37",
+  "date": "2026-08-17",
+  "title": "Group chats get the same attachment folders as personal ones",
+  "summary": "The documents / audio / voice-notes split shipped for one-to-one chats earlier today now works in group chats too. Along the way the group chat stopped keeping three separate copies of the same database query — the reason a filter added in one place had no effect in the other two.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Documents, audio and voice notes listed separately in a group",
+      "description": "The group chat's ⋮ menu now narrows the conversation to documents, to audio files, or to voice notes, and back to everything — the same four entries as a personal chat. Voice notes stay out of the audio list so the two are separate places to look. Verified on a phone: with a photo, a voice note and an mp3 in one group, each filter shows exactly its own kind.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "One query instead of three copies",
+      "description": "Opening a group, refreshing it and searching in it each ran their own copy of the same query. They now share one, so a change to what a group list shows cannot silently apply to one path and not the others.",
+      "platforms": ["android"]
+    }
+  ]
+}

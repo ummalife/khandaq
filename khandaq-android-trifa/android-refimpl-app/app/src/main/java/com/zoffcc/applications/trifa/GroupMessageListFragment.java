@@ -48,6 +48,7 @@ import static com.zoffcc.applications.trifa.HelperGroup.should_show_group_system
 import static com.zoffcc.applications.trifa.MainActivity.PREF__messageview_paging;
 import static com.zoffcc.applications.trifa.MainActivity.context_s;
 import static com.zoffcc.applications.trifa.MainActivity.main_handler_s;
+import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY;
 import static com.zoffcc.applications.trifa.TRIFAGlobals.global_showing_anygroupview;
 import static com.zoffcc.applications.trifa.TrifaToxService.orma;
@@ -65,6 +66,10 @@ public class GroupMessageListFragment extends Fragment
     ConversationDateHeader conversationDateHeader = null;
     boolean is_data_loaded = true;
     static String group_search_messages_text = null;
+    // KHANDAQ (user request 17.08): the same attachment folders as a 1:1 chat —
+    // documents / audio / voice notes. The ATTACH_* constants live in MessageListFragment.
+    static boolean group_show_only_files = false;
+    static int group_attachment_filter_kind = MessageListFragment.ATTACH_ALL;
     FloatingActionButton unread_messages_notice_button = null;
 
     @Override
@@ -111,65 +116,8 @@ public class GroupMessageListFragment extends Fragment
         {
             if (orma != null)
             {
-                if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
-                {
-
-                    if (should_show_group_system_messages(current_group_id))
-                    {
-                        data_values = orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                orderBySent_timestampAsc().
-                                toList();
-                    }
-                    else
-                    {
-                        data_values = orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
-                                orderBySent_timestampAsc().
-                                toList();
-                    }
-                    GroupMessageLayoutHelper.sortMessagesForChatDisplay(data_values);
-                }
-                else
-                {
-                    if (should_show_group_system_messages(current_group_id))
-                    {
-
-                        /*
-                         searching for case-IN-sensitive non ascii chars is not working:
-
-                         https://sqlite.org/lang_expr.html#like
-
-                         Important Note: SQLite only understands upper/lower case for ASCII characters by default.
-                         The LIKE operator is case sensitive by default for unicode characters that are beyond
-                         the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
-                         */
-                        data_values = orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                orderBySent_timestampAsc().
-                                textLike(get_sqlite_search_string(group_search_messages_text)).
-                                toList();
-                    }
-                    else
-                    {
-                        /*
-                         searching for case-IN-sensitive non ascii chars is not working:
-
-                         https://sqlite.org/lang_expr.html#like
-
-                         Important Note: SQLite only understands upper/lower case for ASCII characters by default.
-                         The LIKE operator is case sensitive by default for unicode characters that are beyond
-                         the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
-                         */
-                        data_values = orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
-                                orderBySent_timestampAsc().
-                                textLike(get_sqlite_search_string(group_search_messages_text)).
-                                toList();
-                    }
-                }
+                // Same loader as everywhere else — see load_group_messages_for_display().
+                data_values = load_group_messages_for_display();
             }
         }
         catch (Exception e)
@@ -615,66 +563,11 @@ public class GroupMessageListFragment extends Fragment
             {
                 // KHANDAQ: no early data_values.clear() — the list is shared with the adapter, and
                 // add_list_clear() needs the old content to detect "nothing changed" and skip the blink.
-                if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
-                {
-                    if (should_show_group_system_messages(current_group_id))
-                    {
-                        final java.util.List<GroupMessage> loaded = orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                orderBySent_timestampAsc().
-                                toList();
-                        GroupMessageLayoutHelper.sortMessagesForChatDisplay(loaded);
-                        adapter.add_list_clear(loaded);
-                    }
-                    else
-                    {
-                        final java.util.List<GroupMessage> loaded = orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
-                                orderBySent_timestampAsc().
-                                toList();
-                        GroupMessageLayoutHelper.sortMessagesForChatDisplay(loaded);
-                        adapter.add_list_clear(loaded);
-                    }
-                }
-                else
-                {
-                    if (should_show_group_system_messages(current_group_id))
-                    {
-                    /*
-                     searching for case-IN-sensitive non ascii chars is not working:
-
-                     https://sqlite.org/lang_expr.html#like
-
-                     Important Note: SQLite only understands upper/lower case for ASCII characters by default.
-                     The LIKE operator is case sensitive by default for unicode characters that are beyond
-                     the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
-                     */
-                        adapter.add_list_clear(orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                orderBySent_timestampAsc().
-                                textLike(get_sqlite_search_string(group_search_messages_text)).
-                                toList());
-                    }
-                    else
-                    {
-                           /*
-                     searching for case-IN-sensitive non ascii chars is not working:
-
-                     https://sqlite.org/lang_expr.html#like
-
-                     Important Note: SQLite only understands upper/lower case for ASCII characters by default.
-                     The LIKE operator is case sensitive by default for unicode characters that are beyond
-                     the ASCII range. For example, the expression 'a' LIKE 'A' is TRUE but 'æ' LIKE 'Æ' is FALSE
-                     */
-                        adapter.add_list_clear(orma.selectFromGroupMessage().
-                                group_identifierEq(current_group_id.toLowerCase()).
-                                tox_group_peer_pubkeyNotEq(TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY).
-                                orderBySent_timestampAsc().
-                                textLike(get_sqlite_search_string(group_search_messages_text)).
-                                toList());
-                    }
-                }
+                //
+                // One loader for every path (this one, onCreateView and the async open-chat path):
+                // the four query branches that used to live here were copies of it, and an
+                // attachment filter added to the loader alone silently did nothing here.
+                adapter.add_list_clear(load_group_messages_for_display());
             }
         }
         catch (Exception e)
@@ -693,8 +586,82 @@ public class GroupMessageListFragment extends Fragment
     private static final java.util.concurrent.ExecutorService group_message_load_executor =
             java.util.concurrent.Executors.newSingleThreadExecutor();
 
+
+    /**
+     * KHANDAQ (user request 17.08): keep only the attachments of the selected kind.
+     *
+     * Voice notes are checked FIRST and excluded from the audio bucket, so "voice" is a separate
+     * place to look rather than a duplicate of "audio" — same rule as the 1:1 screen.
+     *
+     * The context comes from MainActivity, not getContext(): this runs on a background executor
+     * where the fragment may already be detached.
+     */
+    private static java.util.List<GroupMessage> filter_group_attachments_by_kind(
+            final java.util.List<GroupMessage> input)
+    {
+        if ((input == null) || (group_attachment_filter_kind == MessageListFragment.ATTACH_ALL))
+        {
+            return input;
+        }
+
+        final java.util.List<GroupMessage> kept = new java.util.ArrayList<>(input.size());
+        for (final GroupMessage m : input)
+        {
+            if (m == null)
+            {
+                continue;
+            }
+            try
+            {
+                final boolean is_voice = HelperFiletransfer.isGroupVoiceMessage(m);
+                final boolean is_audio = HelperFiletransfer.isGroupAudioMessage(MainActivity.context_s, m);
+
+                final boolean take;
+                switch (group_attachment_filter_kind)
+                {
+                    case MessageListFragment.ATTACH_VOICE:
+                        take = is_voice;
+                        break;
+                    case MessageListFragment.ATTACH_AUDIO:
+                        take = is_audio && !is_voice;
+                        break;
+                    case MessageListFragment.ATTACH_FILES:
+                    default:
+                        // "Files" means documents: everything that is not a voice note or music.
+                        take = !is_voice && !is_audio;
+                        break;
+                }
+
+                if (take)
+                {
+                    kept.add(m);
+                }
+            }
+            catch (Exception e)
+            {
+                // A message whose kind cannot be determined stays visible: dropping an attachment on
+                // a classification error would hide someone's file with no way to find it again.
+                kept.add(m);
+            }
+        }
+        return kept;
+    }
+
     private java.util.List<GroupMessage> load_group_messages_for_display()
     {
+        if (group_show_only_files)
+        {
+            // System messages are never file messages, so the show-system-messages branch does not
+            // need repeating here.
+            final java.util.List<GroupMessage> files = orma.selectFromGroupMessage().
+                    group_identifierEq(current_group_id.toLowerCase()).
+                    TRIFA_MESSAGE_TYPEEq(TRIFA_MSG_FILE.value).
+                    orderBySent_timestampAsc().
+                    toList();
+            GroupMessageLayoutHelper.sortMessagesForChatDisplay(files);
+            return filter_group_attachments_by_kind(files);
+        }
+
         if ((group_search_messages_text == null) || (group_search_messages_text.length() == 0))
         {
             if (should_show_group_system_messages(current_group_id))

@@ -426,6 +426,8 @@ public class GroupMessageListActivity extends AppCompatActivity
         {
             // reset search and filter flags, sooner
             group_search_messages_text = null;
+            GroupMessageListFragment.group_show_only_files = false;
+            GroupMessageListFragment.group_attachment_filter_kind = MessageListFragment.ATTACH_ALL;
         }
         catch (Exception e)
         {
@@ -3781,7 +3783,60 @@ public class GroupMessageListActivity extends AppCompatActivity
             toggle_group_video(findViewById(R.id.toolbar));
             return true;
         }
+        else if (id == R.id.action_group_filter_all)
+        {
+            apply_group_message_filter(MessageListFragment.ATTACH_ALL);
+            return true;
+        }
+        else if (id == R.id.action_group_filter_files)
+        {
+            apply_group_message_filter(MessageListFragment.ATTACH_FILES);
+            return true;
+        }
+        else if (id == R.id.action_group_filter_audio)
+        {
+            apply_group_message_filter(MessageListFragment.ATTACH_AUDIO);
+            return true;
+        }
+        else if (id == R.id.action_group_filter_voice)
+        {
+            apply_group_message_filter(MessageListFragment.ATTACH_VOICE);
+            return true;
+        }
         return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * KHANDAQ (user request 17.08): the group chat gets the same attachment folders as a 1:1 chat —
+     * documents, audio and voice notes listed separately.
+     *
+     * Search is closed first: in a group the search field is shown by visibility, not just by the
+     * SearchView's own iconified state, so leaving it open would keep an empty bar over the list.
+     */
+    private void apply_group_message_filter(final int kind)
+    {
+        try
+        {
+            if (messageSearchView != null)
+            {
+                messageSearchView.setQuery("", false);
+            }
+            exitGroupSearchMode();
+
+            GroupMessageListFragment.group_show_only_files = (kind != MessageListFragment.ATTACH_ALL);
+            GroupMessageListFragment.group_attachment_filter_kind = kind;
+            GroupMessageListFragment.group_search_messages_text = null;
+
+            if (MainActivity.group_message_list_fragment != null)
+            {
+                // always=true: with data_values still null the reload would otherwise be skipped.
+                MainActivity.group_message_list_fragment.update_all_messages(true, PREF__messageview_paging);
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+        }
     }
 
     private void toggleMembersDrawer()

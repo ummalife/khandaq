@@ -93,6 +93,7 @@ public class AddFriendActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_addfriend);
+        ViewUtil.keep_content_above_keyboard(findViewById(android.R.id.content));
 
         // KHANDAQ: the "Add friend" button sits at the very bottom of the screen and was drawn under
         // the system navigation bar — on a 3-button nav it is almost impossible to hit. Same fix the

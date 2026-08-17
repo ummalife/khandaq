@@ -132,4 +132,33 @@ public class ViewUtil
         {
         }
     }
+
+    /**
+     * Keep a form's bottom button bar above the on-screen keyboard.
+     *
+     * With targetSdk 35+ the window is edge-to-edge and windowSoftInputMode="adjustResize" no longer
+     * resizes it, so a bar pinned to the bottom of the layout stays where it is and the keyboard
+     * covers it. On a 720x1600 phone (Samsung SM-A075F) that hid "Create group" completely: you
+     * typed a name and there was nothing left to press, which is exactly how it was reported.
+     */
+    public static void keep_content_above_keyboard(final android.view.View root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+        final int base_bottom = root.getPaddingBottom();
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, wi) ->
+        {
+            final androidx.core.graphics.Insets ime =
+                    wi.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime());
+            final androidx.core.graphics.Insets bars =
+                    wi.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(),
+                         base_bottom + Math.max(ime.bottom, bars.bottom));
+            return wi;
+        });
+        androidx.core.view.ViewCompat.requestApplyInsets(root);
+    }
+
 }

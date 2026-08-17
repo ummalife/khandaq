@@ -10322,6 +10322,8 @@ public class MainActivity extends AppCompatActivity
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
         super.onActivityResult(requestCode, resultCode, data);
+        HelperGeneric.logI(TAG, "onActivityResult:req=" + requestCode + " res=" + resultCode +
+                                " data=" + (data != null));
 
         if (requestCode == AddFriendActivity_ID)
         {

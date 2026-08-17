@@ -156,6 +156,7 @@ public class JoinPublicGroupActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_joinpublicgroup);
+        ViewUtil.keep_content_above_keyboard(findViewById(android.R.id.content));
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);

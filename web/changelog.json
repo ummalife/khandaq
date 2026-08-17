@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-17T17:37:46Z",
+  "generated_at": "2026-08-17T19:17:48Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,23 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.36",
+      "date": "2026-08-17",
+      "title": "On smaller phones the keyboard covered the buttons — creating a group looked like it did nothing",
+      "summary": "A long-standing report finally reproduced: on a Samsung SM-A075F, creating a group did nothing at all — no error, no group. The cause was not group creation. On a 720x1600 screen the keyboard covers the bottom of the form, and the Cancel / Create buttons sat underneath it: you typed a name and there was simply nothing left to press. The same applied to creating a private group, joining a public group by id, and adding a contact. On taller phones the buttons stayed visible, which is why it never reproduced anywhere else.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "critical",
+          "title": "Create group, add contact and join group are usable on small screens again",
+          "description": "Since the app began targeting Android 15 the window is drawn edge to edge, and the old request to resize for the keyboard no longer has any effect — the layout keeps its full height and the on-screen keyboard is simply drawn over the bottom of it. The four form screens now lift their content by the height of the keyboard, so the buttons stay above it. Verified on the phone the report came from: both a public and a private group are created where nothing happened before.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.35",
       "date": "2026-08-17",

@@ -50,6 +50,7 @@ public class AddPrivateGroupActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_addgroup);
+        ViewUtil.keep_content_above_keyboard(findViewById(android.R.id.content));
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);

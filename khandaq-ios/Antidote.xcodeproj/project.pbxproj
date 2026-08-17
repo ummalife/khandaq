@@ -3328,7 +3328,7 @@
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 142976;
+				CURRENT_PROJECT_VERSION = 142977;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -3338,7 +3338,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				KHANDAQ_PUSH_AUTH_SECRET = "";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.4.30;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger;
 				PRODUCT_MODULE_NAME = Antidote;
 				PRODUCT_NAME = Khandaq;
@@ -3363,7 +3363,7 @@
 				CLANG_STATIC_ANALYZER_MODE = deep;
 				CODE_SIGN_ENTITLEMENTS = Antidote/Antidote.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 142976;
+				CURRENT_PROJECT_VERSION = 142977;
 				DEVELOPMENT_TEAM = DQRPWB97AB;
 				ENABLE_BITCODE = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -3373,7 +3373,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				KHANDAQ_PUSH_AUTH_SECRET = "";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.4.30;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger;
 				PRODUCT_MODULE_NAME = Antidote;
 				PRODUCT_NAME = Khandaq;
@@ -3507,7 +3507,7 @@
 				INFOPLIST_FILE = shareextension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.4.30;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.shareextension;
@@ -3534,7 +3534,7 @@
 				INFOPLIST_FILE = shareextension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.4.29;
+				MARKETING_VERSION = 1.4.30;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.khandaq.messenger.shareextension;

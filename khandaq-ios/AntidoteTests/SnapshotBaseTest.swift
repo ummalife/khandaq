@@ -31,6 +31,7 @@ class SnapshotBaseTest: FBSnapshotTestCase {
         // Re-record after a deliberate visual change: FB_RECORD_MODE=1 in the scheme's test action.
         recordMode = (ProcessInfo.processInfo.environment["FB_RECORD_MODE"] == "1")
 
+
         let filepath = Bundle.main.path(forResource: "default-theme", ofType: "yaml")!
         let yamlString = try! NSString(contentsOfFile:filepath, encoding:String.Encoding.utf8.rawValue) as String
 

@@ -8,8 +8,6 @@ import Foundation
 class ChatOutgoingCallCellSnapshotTest: CellSnapshotTest {
     override func setUp() {
         super.setUp()
-
-        recordMode = false
     }
 
     func testAnsweredCall() {

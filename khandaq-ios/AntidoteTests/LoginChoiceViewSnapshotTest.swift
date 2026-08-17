@@ -8,8 +8,6 @@ import Foundation
 class LoginChoiceViewSnapshotTest: SnapshotBaseTest {
     override func setUp() {
         super.setUp()
-
-        recordMode = false
     }
 
     func testDefault() {

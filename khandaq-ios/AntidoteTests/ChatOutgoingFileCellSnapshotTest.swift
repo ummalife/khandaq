@@ -9,8 +9,6 @@ import MobileCoreServices
 class ChatOutgoingFileCellSnapshotTest: CellSnapshotTest {
     override func setUp() {
         super.setUp()
-
-        recordMode = false
     }
 
     func testWaitingState() {

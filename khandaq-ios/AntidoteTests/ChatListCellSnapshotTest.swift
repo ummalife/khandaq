@@ -8,8 +8,6 @@ import Foundation
 class ChatListCellSnapshotTest: CellSnapshotTest {
     override func setUp() {
         super.setUp()
-
-        recordMode = false
     }
 
     func testDefault() {

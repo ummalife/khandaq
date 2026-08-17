@@ -94,6 +94,28 @@
 
 #pragma mark - sending
 
+/**
+ * Per-client spread on top of the interval, 0…119 s.
+ *
+ * DESIGN-ngc-signed-history-sync.md §7.1 asks for this explicitly: without it, every member of a
+ * group that came back together after an outage re-announces in the same second, which is the one
+ * moment the network is least able to take it. Derived from the group id and our own key rather
+ * than drawn at random, so it is stable across launches (a client does not drift earlier and
+ * earlier) and different for every member of the same group.
+ */
+static NSTimeInterval announceJitterSeconds(NSString *groupKey, NSString *selfGroupPub)
+{
+    NSString *seed = [NSString stringWithFormat:@"%@|%@", groupKey ?: @"", selfGroupPub ?: @""];
+    NSData *digest = OCTNgcHistSigSha256([seed dataUsingEncoding:NSUTF8StringEncoding]);
+    if (digest.length < 2) {
+        return 0.0;
+    }
+
+    const uint8_t *bytes = digest.bytes;
+    uint16_t value = (uint16_t)((bytes[0] << 8) | bytes[1]);
+    return (NSTimeInterval)(value % 120);
+}
+
 - (BOOL)announceToGroupNumber:(uint32_t)groupNumber force:(BOOL)force
 {
     NSString *groupId = self.groupIdBlock ? self.groupIdBlock(groupNumber) : nil;
@@ -102,20 +124,22 @@
     }
     NSString *key = groupId.lowercaseString;
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    NSString *selfGroupPub = self.selfGroupPubBlock ? self.selfGroupPubBlock(groupNumber) : nil;
 
     if (! force) {
         @synchronized(self) {
             NSNumber *last = self.lastSentByGroup[key];
             NSTimeInterval since = now - last.doubleValue;
+            NSTimeInterval interval = [[self class] minIntervalSeconds]
+                                      + announceJitterSeconds(key, selfGroupPub);
             // A clock moved backwards yields a negative interval, which fails this test and simply
             // announces again — harmless, and better than going silent until the clock catches up.
-            if (last != nil && since >= 0 && since < [[self class] minIntervalSeconds]) {
+            if (last != nil && since >= 0 && since < interval) {
                 return NO;
             }
         }
     }
 
-    NSString *selfGroupPub = self.selfGroupPubBlock ? self.selfGroupPubBlock(groupNumber) : nil;
     NSData *packet = [self buildAnnouncementForGroupId:groupId
                                           selfGroupPub:selfGroupPub
                                            validFromTs:(uint64_t)(now * 1000.0)];

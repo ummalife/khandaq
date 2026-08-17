@@ -5142,6 +5142,7 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     NSArray<OCTChat *> *groupChatsSnapshot = [realmManager groupChatsSnapshot];
+    NSMutableArray<NSNumber *> *connectedGroupNumbers = [NSMutableArray array];
 
     [self performSyncOnToxQueue:^(OCTTox *tox) {
         for (OCTChat *chat in groupChatsSnapshot) {
@@ -5163,9 +5164,29 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             if (connectionStatus > 0) {
                 [self flushPendingGroupMessagesForChat:chat];
+                [connectedGroupNumbers addObject:@(groupNumber)];
             }
         }
     }];
+
+    // KHANDAQ (audit#2 finding 1): periodic re-announcement of our signing key. Announcing only on
+    // connect and on peer-join leaves a hole nothing else closes: a member who was already present
+    // when we connected, and who never triggers a join callback for us afterwards (it simply never
+    // left), can miss both and then has no way to verify a single row we ever wrote. Android does
+    // the same thing from its own group maintenance pass. announceToGroupNumber keeps a per-group
+    // interval of its own — ten minutes plus a per-client spread — so calling it on every 90 s
+    // maintenance tick costs one packet per group per ten minutes at most.
+    //
+    // Deliberately OUTSIDE performSyncOnToxQueue: building the packet reads the key store, which
+    // reaches the database on its own serial queue, and doing that from inside the tox queue is the
+    // shape that already produced one crash in this feature (see -prepareKeyForGroupNumber:).
+    if (connectedGroupNumbers.count > 0) {
+        [self setupHskAnnounceIfNeeded];
+
+        for (NSNumber *number in connectedGroupNumbers) {
+            [self.hskAnnounce announceToGroupNumber:(uint32_t)number.unsignedIntValue force:NO];
+        }
+    }
 
     [self resendPendingGroupInviteRequests];
 }

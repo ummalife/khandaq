@@ -1,5 +1,6 @@
 package com.zoffcc.applications.trifa;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -124,7 +125,37 @@ final class NgcHskAnnounce
     static boolean announceToGroup(final long groupNum, final String groupIdentifier,
                                    final String toxPubHex, final boolean force)
     {
-        return announceToGroup(groupNum, groupIdentifier, toxPubHex, force, MIN_INTERVAL_MS);
+        return announceToGroup(groupNum, groupIdentifier, toxPubHex, force,
+                               MIN_INTERVAL_MS + announceJitterMs(groupIdentifier, toxPubHex));
+    }
+
+    /**
+     * Per-client spread on top of the interval, 0..119 s.
+     *
+     * DESIGN-ngc-signed-history-sync.md §7.1 asks for it in as many words: without a spread, every
+     * member of a group that came back together after an outage re-announces in the same second —
+     * the one moment the network can least afford it. Derived from the group and our own identity
+     * rather than drawn at random, so a client does not drift earlier and earlier across launches,
+     * and two members of the same group land on different offsets.
+     */
+    static long announceJitterMs(final String groupIdentifier, final String toxPubHex)
+    {
+        try
+        {
+            final String seed = (groupIdentifier == null ? "" : groupIdentifier.toLowerCase(Locale.ROOT))
+                                + "|" + (toxPubHex == null ? "" : toxPubHex);
+            final byte[] digest = NgcHistSig.sha256Public(seed.getBytes(StandardCharsets.UTF_8));
+            if (digest == null || digest.length < 2)
+            {
+                return 0L;
+            }
+            final int value = ((digest[0] & 0xff) << 8) | (digest[1] & 0xff);
+            return (value % 120) * 1000L;
+        }
+        catch (Exception e)
+        {
+            return 0L;
+        }
     }
 
     /**

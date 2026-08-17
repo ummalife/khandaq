@@ -1,0 +1,51 @@
+{
+  "version": "0.2.31",
+  "date": "2026-08-16",
+  "title": "Relayed group history can no longer put words in someone else's mouth; four languages; a security audit closed out",
+  "summary": "A single entry covering everything between 0.2.12 and 0.2.31 — the site's changelog had fallen behind while releases kept going out through Google Play and TestFlight. The headline is authorship in groups: when a member's messages reach you second-hand, relayed by another member who was online at the time, the network can only vouch for whoever passed the message on — never for the person it names. Those messages now carry a signature from their real author, and anything relayed without one is marked in the chat as «sender not verified» instead of quietly looking the same as a message you received first-hand. Alongside that: the app is fully translated into English, Russian, Arabic (right-to-left) and Chinese with an in-app language picker, a second external security audit was worked through, and a long tail of group defects was fixed — a member who stayed invisible until you restarted the app, a group file that got stuck when sent while offline, and group video that never started.",
+  "commits": ["b060e600", "451b1c6c", "1f88f4ed", "6282d7ec", "f3c58408", "f464d622", "0c95b669", "7dc4fdae", "a8d227a6"],
+  "changes": [
+    {
+      "severity": "critical",
+      "title": "Group history now proves who wrote it",
+      "description": "Messages you were not online for arrive relayed by another member. Until now the app trusted the name that member attached to them — the encryption authenticates whoever relayed the message, never the author it claims. A member could therefore hand you a message that looks like it came from someone else in the group. Each author now signs their own messages with a signing key announced inside the group, receivers check that signature against the key they learned from that author directly, and the verdict is bound to the exact message — its author, its time and its text — so a genuine signature cannot be made to vouch for a different message.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "«Sender not verified» on relayed messages",
+      "description": "A group message that reached you second-hand and carries no valid signature is now marked as such in the chat, so an unproved claim about who wrote something no longer looks identical to a message you received directly from its author. The mark disappears on its own the moment a signature for that message arrives. Most messages are unmarked in practice: anything you receive while online comes straight from its author and is authenticated by the connection itself.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Full localization: English, Russian, Arabic (RTL) and Chinese",
+      "description": "The apps are translated into four languages, with a language picker in Settings that no longer depends on the phone's system language. Arabic lays out right-to-left throughout, including chat headers, which previously clipped.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Second external security audit worked through",
+      "description": "An independent review of the code produced ten findings; they were triaged one by one and fixed or closed with evidence. Among them: private one-to-one messages could be pulled into a group's history sync, an encrypted backup is now the default when you export a profile (and the export dialog no longer describes it inaccurately), history sync is bounded per group so a peer cannot make you spend the day fetching it, and every dependency pin in the release build is verified against upstream instead of being silently re-pinned by the build itself.",
+      "platforms": ["android", "ios", "network"]
+    },
+    {
+      "severity": "important",
+      "title": "Group defects: an invisible member, a stuck file, video that never started",
+      "description": "Three group problems that needed two devices to see at all. A member could stay invisible to you — with no way back short of restarting the app — after a one-way loss of visibility on the network. A file sent to a group while you were offline became a dead-end row: it could neither continue nor be cancelled. And group video could fail to start at all, silently. All three are fixed.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "Importing a profile brings the app back online by itself",
+      "description": "After importing a .tox profile the app used to sit unconnected until it was force-stopped, unless you pressed OK on the final dialog rather than leaving the screen. Worse, the imported profile was not being saved, so message edits, deletions and reactions quietly stopped arriving. The import now restarts the messaging engine on its own and the imported identity is stored properly. Note that only an unencrypted profile export can be imported — export from Settings rather than copying a file out of the app's storage.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Long group messages keep their signature",
+      "description": "The signed copy of a very long group message was assembled slightly over the size limit the receiver enforces, so it was discarded on arrival without a word and the message stayed unverified for no visible reason. The limit is now derived from the packet size rather than set independently of it.",
+      "platforms": ["android", "ios"]
+    }
+  ]
+}

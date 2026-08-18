@@ -5,6 +5,10 @@
 import Foundation
 
 class StaticTableDefaultCellModel: StaticTableSelectableCellModel {
+    /// Optional stable hook for UI tests — applied to the cell so a test can find the row without
+    /// depending on its (localized) text.
+    var accessibilityIdentifier: String?
+
     enum RightImageType {
         case none
         case arrow

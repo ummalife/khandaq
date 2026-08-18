@@ -5,6 +5,7 @@ TRANSLATIONS = \
     translations/be.ts \
     translations/ber.ts \
     translations/bg.ts \
+    translations/bn.ts \
     translations/cs.ts \
     translations/da.ts \
     translations/de.ts \
@@ -27,8 +28,10 @@ TRANSLATIONS = \
     translations/kn.ts \
     translations/ko.ts \
     translations/lt.ts \
+    translations/lv.ts \
     translations/mk.ts \
     translations/nl.ts \
+    translations/nl_BE.ts \
     translations/no_nb.ts \
     translations/pl.ts \
     translations/pr.ts \
@@ -49,6 +52,7 @@ TRANSLATIONS = \
     translations/ug.ts \
     translations/uk.ts \
     translations/ur.ts \
+    translations/vi.ts \
     translations/zh_CN.ts \
     translations/zh_TW.ts
 

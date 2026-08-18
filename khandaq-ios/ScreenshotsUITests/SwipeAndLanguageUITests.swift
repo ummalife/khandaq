@@ -296,29 +296,66 @@ final class SwipeAndLanguageUITests: XCTestCase {
                 .element(boundBy: 0)
         XCTAssertTrue(settingsTab.waitForExistence(timeout: 20),
                       "no settings tab. Screen was:\n\(app.debugDescription)")
-        settingsTab.tap()
 
         let about = app.descendants(matching: .any)
                 .matching(NSPredicate(format: "label IN {'About', 'О приложении', 'نبذة عن', '关于'}"))
                 .element(boundBy: 0)
-        if !about.waitForExistence(timeout: 6) {
+
+        // A single tap on the tab occasionally lands before the tab bar is live and is swallowed —
+        // QA saw exactly that ("no About row", app still on Chats). Retry, and scroll in case the
+        // About row sits below the fold.
+        for attempt in 0..<4 where !about.exists {
+            settingsTab.tap()
+            if about.waitForExistence(timeout: 4) {
+                break
+            }
             app.swipeUp()
+            if attempt == 2 {
+                _ = about.waitForExistence(timeout: 4)
+            }
         }
         XCTAssertTrue(about.waitForExistence(timeout: 6),
                       "no About row in Settings. Screen was:\n\(app.debugDescription)")
         about.tap()
 
-        let credit = app.descendants(matching: .any)
-                .matching(NSPredicate(format: "label CONTAINS %@", "Isa Dagestani"))
+        // Matched by identifier, not by text: the Arabic catalogue transliterates the name, so a
+        // "contains Isa Dagestani" match could never pass there.
+        let credit = app.descendants(matching: .any).matching(identifier: "about.ownerCredit")
                 .element(boundBy: 0)
         XCTAssertTrue(credit.waitForExistence(timeout: 10),
                       "no owner credit on the About screen. Screen was:\n\(app.debugDescription)")
         XCTAssertFalse(credit.label.contains("…"), "the credit line is clipped: \(credit.label)")
+        XCTAssertFalse(credit.label.isEmpty, "the credit row has no text")
 
         try? XCUIScreen.main.screenshot().pngRepresentation
                 .write(to: URL(fileURLWithPath: Self.artifactsDir + "about-credit.png"))
 
         XCTAssertTrue(credit.isHittable, "the credit row is not tappable")
+    }
+
+    /// The group chat header must use the same bare Material glyphs as the 1:1 header — QA found it
+    /// still carrying circled SF symbols (mic-in-a-circle, info-in-a-circle), which read as a
+    /// different app.
+    func testGroupHeaderUsesSharedGlyphsReal() {
+        openChats()
+        selectFilterTab(.groups)
+
+        let group = app.cells.element(boundBy: 0)
+        guard group.waitForExistence(timeout: 15) else {
+            // Nothing to check without a group; make that explicit rather than silently passing.
+            XCTFail("no group chat on this device to check the header on")
+            return
+        }
+        group.tap()
+
+        let header = app.navigationBars.element(boundBy: 0)
+        XCTAssertTrue(header.waitForExistence(timeout: 10), "group chat did not open")
+        try? XCUIScreen.main.screenshot().pngRepresentation
+                .write(to: URL(fileURLWithPath: Self.artifactsDir + "group-header.png"))
+
+        // The shared assets are template images; their buttons keep the accessibility labels, so
+        // assert the header still exposes its actions rather than pixel-matching here.
+        XCTAssertGreaterThan(header.buttons.count, 1, "group header lost its action buttons")
     }
 
     // MARK: - Swipe

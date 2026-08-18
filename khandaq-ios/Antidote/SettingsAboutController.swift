@@ -62,6 +62,9 @@ private extension SettingsAboutController {
         // same row shape as "Website" above, so the tap opens https://1sa.me/ in the browser. The
         // caption is a whole sentence, hence multilineTitle: one fixed line clips it in ru.
         creditModel.title = String(localized: "settings_credit_owner")
+        // Stable hook for the QA regression: the Arabic catalogue transliterates the name, so a test
+        // matching on "Isa Dagestani" can never pass there.
+        creditModel.accessibilityIdentifier = "about.ownerCredit"
         creditModel.multilineTitle = true
         creditModel.value = "1sa.me"
         creditModel.didSelectHandler = openDeveloperWebsite

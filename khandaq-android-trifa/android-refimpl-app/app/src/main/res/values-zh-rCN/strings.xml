@@ -17,7 +17,7 @@
     <string name="title_activity_aboutpage">关于</string>
     <string name="title_activity_set_password">设置密码</string>
     <string name="title_activity_check_password">输入密码</string>
-    <string name="title_activity_share">通过 TRIfA 打开</string>
+    <string name="title_activity_share">通过 Khandaq 打开</string>
     <string name="title_activity_maintenance">管理</string>
     <string-array name="spinner_own_status_array">
         <item>在线</item>
@@ -219,7 +219,7 @@
     <string name="MainActivity_no_button">不</string>
     <string name="MainActivity_ok_take_me_there_button">好的，带我过去</string>
     <string name="MainActivity_info_dialog_title">信息</string>
-    <string name="MainActivity_add_to_batt_opt">请将 TRIfA 电池优化白名单！</string>
+    <string name="MainActivity_add_to_batt_opt">请将 Khandaq 电池优化白名单！</string>
     <string name="MainActivity_friend_is_typing">好友正在输入 ...</string>
     <string name="MainActivity_notification_new_message">新消息</string>
     <string name="MainActivity_notification_new_message2">新消息</string>
@@ -232,10 +232,10 @@
     <string name="MainActivity_notification_new_message3">新消息</string>
     <string name="MainActivity_notification_new_message4">新消息</string>
     <string name="MainActivity_notification_new_message5">新消息</string>
-    <string name="Aboutpage_0">TRIfA 崩溃日志</string>
+    <string name="Aboutpage_0">Khandaq 崩溃日志</string>
     <string name="Aboutpage_2">通过电子邮件发送崩溃报告</string>
     <string name="Aboutpage_4">阅读崩溃信息 ...</string>
-    <string name="Aboutpage_5a">TRIfA 一个 Tox Android 客户端</string>
+    <string name="Aboutpage_5a">Khandaq Messenger</string>
     <string name="Aboutpage_5b">版本：</string>
     <string name="Aboutpage_6">Tox 是什么？</string>
     <string name="Aboutpage_8">使用的库：</string>
@@ -344,7 +344,7 @@
     <string name="pref_description_toxirc_muted_peers_02">已静音用户 2 (如未使用则留空)</string>
     <string name="pref_description_toxirc_muted_peers_01">已静音用户 1 (如未使用则留空)</string>
     <string name="pref_title_toxirc_muted_peers_01">Toxirc 网桥静音用户</string>
-    <string name="pref_description_allow_file_sharing_to_trifa_via_intent">通过共享意图将文件共享到 TRIfA。</string>
+    <string name="pref_description_allow_file_sharing_to_trifa_via_intent">通过共享意图将文件共享到 Khandaq。</string>
     <string name="pref_title_allow_file_sharing_to_trifa_via_intent">分享文件</string>
     <string name="layout___own_pushurl">推送 URL：</string>
     <string name="layout___remove_own_pushurl">移除推送 URL</string>
@@ -369,7 +369,7 @@
     <string name="pref_title_use_incognito_keyboard2">隐身键盘</string>
     <string name="pref_description_use_incognito_keyboard2">打开该开关告诉键盘不要学习你输入的单词</string>
     <string name="MainActivity_setup_push_tip_title">设置推送通知</string>
-    <string name="MainActivity_setup_push_tip_text">你还没有安装推送通知应用程序和设置推送通知。没有推送通知，TRIfA 也可正常工作，但它需要始终在线接收消息。推送通知可以节省电池和互联网带宽。
+    <string name="MainActivity_setup_push_tip_text">你还没有安装推送通知应用程序和设置推送通知。没有推送通知，Khandaq 也可正常工作，但它需要始终在线接收消息。推送通知可以节省电池和互联网带宽。
 \n
 \n你想马上看看如何设置推送通知吗？</string>
     <string name="ProfileActivity_delete_avatar_dialog_text">你想删除个人资料图片吗？</string>
@@ -425,7 +425,7 @@
     <string name="MessageListHolder_file_outgoing_cancel_ft_title">取消文件传输</string>
     <string name="MessageListHolder_file_outgoing_cancel_ft_message">你想取消此文件传输吗？</string>
     <string name="pref_title_allow_open_encrypted_file_via_intent">从加密存储打开文件</string>
-    <string name="pref_description_allow_open_encrypted_file_via_intent">通过 Intent 直接从加密存储中打开文件。 这可能具有潜在危险，因为其他恶意应用程序可能会打开 TRIfA 加密存储中的其他文件。</string>
+    <string name="pref_description_allow_open_encrypted_file_via_intent">通过 Intent 直接从加密存储中打开文件。 这可能具有潜在危险，因为其他恶意应用程序可能会打开 Khandaq 加密存储中的其他文件。</string>
     <string name="pref_title_allow_push_server_ntfy">允许 nfty.sh 服务器</string>
     <string name="pref_description_allow_push_server_ntfy">警告：允许 ntfy.sh 服务器进行推送通知，如果朋友使用你的推送令牌订阅，可能会在你收到推送通知时泄露你的时间戳元数据。警告：ntfy.sh 没有密码和身份验证。</string>
     <string name="pref_title_allow_enable_ngc_features">NGC - 新群聊</string>

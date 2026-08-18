@@ -45,6 +45,9 @@ class StaticTableDefaultCell: StaticTableBaseCell {
             return
         }
 
+        // Reset on every dequeue: a reused cell must not keep the previous row's test hook.
+        accessibilityIdentifier = defaultModel.accessibilityIdentifier
+
         if let userStatus = defaultModel.userStatus {
             userStatusView.theme = theme
             userStatusView.userStatus = userStatus

@@ -440,7 +440,9 @@
                     android:padding="@dimen/chat_input_icon_padding"
                     android:scaleType="fitCenter"
                     app:srcCompat="@drawable/i_emoji_google_category_people"
-                    tools:ignore="ContentDescription" />
+                    tools:ignore="ContentDescription"
+                    app:tint="@color/tg_chat_input_icon"
+                    />
 
                 <ImageButton
                     android:id="@+id/ml_button_recaudio"
@@ -451,7 +453,9 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:padding="@dimen/chat_input_icon_padding"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/baseline_keyboard_voice_24" />
+                    android:src="@drawable/baseline_keyboard_voice_24"
+                    app:tint="@color/tg_chat_input_icon"
+                    />
 
                 </LinearLayout>
 

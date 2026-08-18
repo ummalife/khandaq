@@ -139,6 +139,11 @@ mis võib põhjustada probleeme videokõnedega.</translation>
         <translation>Programmist lähemalt</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Omanik ja arendaja – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Esialgne autor: %1</translation>
     </message>

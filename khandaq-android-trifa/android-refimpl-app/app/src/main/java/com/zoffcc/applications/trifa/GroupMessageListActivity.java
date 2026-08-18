@@ -1206,10 +1206,13 @@ public class GroupMessageListActivity extends AppCompatActivity
         });
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
-        final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_attachment).color(
+        // KHANDAQ (18.08): one design across platforms — iOS opens the attachment menu from a "+" on the
+        // LEFT of the input bar (Figma), so Android uses the same glyph in the same slot. The emoji
+        // button moved to the right of the field; nothing was removed.
+        final Drawable add_attachement_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_add).color(
                 getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
-        final Drawable send_message_icon = new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_send).color(
-                getResources().getColor(R.color.icon_colors)).sizeDp(ChatInputBarHelper.CHAT_INPUT_ICON_DP);
+        // KHANDAQ (18.08): same send button as iOS — white paper plane on the brand-green circle.
+        final Drawable send_message_icon = ChatInputBarHelper.makeCircularSendIcon(this);
         final Drawable mic_icon = getResources().getDrawable(R.drawable.baseline_keyboard_voice_24);
 
         ChatInputBarHelper.setupAttachButton(ml_button_01, add_attachement_icon, v -> send_attatchment(v));

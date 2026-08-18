@@ -139,6 +139,11 @@ il che può portare a problemi con le videochiamate.</translation>
         <translation>Informazioni su Khandaq</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Proprietario e sviluppatore — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Autore originale: %1</translation>
     </message>

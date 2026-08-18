@@ -915,6 +915,8 @@
     <string name="about_upstream_commit">Upstream TRIfA commit</string>
     <string name="about_jni_commit">JNI commit</string>
     <string name="about_toxcore_commit">c-toxcore commit</string>
+    <!-- KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ -->
+    <string name="about_credit_owner">Owner and developer — Isa Dagestani</string>
 
     <string name="AddFriendActivity_3">incorrect ID</string>
     <string name="AddFriendActivity_4">No ID</string>

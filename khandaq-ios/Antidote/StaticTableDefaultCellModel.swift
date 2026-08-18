@@ -22,6 +22,11 @@ class StaticTableDefaultCellModel: StaticTableSelectableCellModel {
 
     var rightImageType: RightImageType = .none
 
+    // KHANDAQ (18.08): let a row's caption wrap instead of being clipped by the fixed one-line
+    // title (the About screen credits the owner with a whole sentence). Off by default, so every
+    // row that existed before keeps its exact single-line layout.
+    var multilineTitle: Bool = false
+
     var userInteractionEnabled: Bool = true
 
     var canCopyValue: Bool = false

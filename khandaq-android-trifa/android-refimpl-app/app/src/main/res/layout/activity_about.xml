@@ -166,6 +166,14 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
 
+                <!-- KHANDAQ (18.08): owner/developer credit. A normal action row, not header text,
+                     so it inherits this section's typography, 52dp touch target and ripple. -->
+                <include
+                    android:id="@+id/about_developer_row"
+                    layout="@layout/group_info_action_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
                 <include
                     android:id="@+id/about_licenses_row"
                     layout="@layout/group_info_action_row"

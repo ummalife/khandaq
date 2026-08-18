@@ -139,6 +139,11 @@ có thể dẫn đến sự cố với cuộc gọi điện video.</translation>
         <translation>Thông tin</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Chủ sở hữu và nhà phát triển — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Tác giả: %1</translation>
     </message>

@@ -770,3 +770,6 @@
 "attachments_voice" = "الرسائل الصوتية";
 "attachments_empty" = "لا شيء هنا بعد";
 "attachments_not_downloaded" = "لم يتم تنزيل هذا الملف بعد.";
+
+/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
+"settings_credit_owner" = "المالك والمطور — عيسى الداغستاني";

@@ -551,6 +551,8 @@
     <string name="about_upstream_commit">Коммит upstream TRIfA</string>
     <string name="about_jni_commit">Коммит JNI</string>
     <string name="about_toxcore_commit">Коммит c-toxcore</string>
+    <!-- KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ -->
+    <string name="about_credit_owner">Владелец и разработчик — Isa Dagestani</string>
     <string name="AddFriendActivity_3">неверный ID</string>
     <string name="AddFriendActivity_4">Нет ID</string>
     <string name="add_id_dialog_title">добавить ID?</string>

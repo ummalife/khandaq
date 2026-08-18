@@ -135,6 +135,11 @@ which may lead to problems with video calls.</source>
         <translation>ھەققىدە</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>ئىگىسى ۋە ئىجادكارى — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>ئەسلى ئاپتور: %1</translation>
     </message>

@@ -135,6 +135,11 @@ which may lead to problems with video calls.</source>
         <translation>Khandaq について</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>所有者および開発者：Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>元の作成者: %1</translation>
     </message>

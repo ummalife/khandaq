@@ -60,6 +60,7 @@
 		113F031D1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */; };
 		113F031F1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */; };
 		113F03211CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */; };
+		113F03211CAFE2B50003BA2F /* ChatFileCellReactionsLayoutTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03211CAFE2B50009A0EA /* ChatFileCellReactionsLayoutTest.swift */; };
 		113F03231CAFE5190009ABE1 /* ChatOutgoingTextCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03221CAFE5190009ABE1 /* ChatOutgoingTextCellSnapshotTest.swift */; };
 		113F03331CB2E9C20009ABE1 /* UIFontExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03321CB2E9C20009ABE1 /* UIFontExtension.swift */; };
 		113F03421CB31DD60009ABE1 /* AlertAudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03411CB31DD60009ABE1 /* AlertAudioPlayer.swift */; };
@@ -521,6 +522,7 @@
 		113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatMovableDateCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingCallCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingFileCellSnapshotTest.swift; sourceTree = "<group>"; };
+		113F03211CAFE2B50009A0EA /* ChatFileCellReactionsLayoutTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "ChatFileCellReactionsLayoutTest.swift"; sourceTree = "<group>"; };
 		113F03221CAFE5190009ABE1 /* ChatOutgoingTextCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingTextCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F03321CB2E9C20009ABE1 /* UIFontExtension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UIFontExtension.swift; sourceTree = "<group>"; };
 		113F03411CB31DD60009ABE1 /* AlertAudioPlayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AlertAudioPlayer.swift; sourceTree = "<group>"; };
@@ -927,6 +929,7 @@
 				113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */,
 				113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */,
 				113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */,
+				113F03211CAFE2B50009A0EA /* ChatFileCellReactionsLayoutTest.swift */,
 				113F03221CAFE5190009ABE1 /* ChatOutgoingTextCellSnapshotTest.swift */,
 			);
 			name = Cells;
@@ -2183,6 +2186,7 @@
 				113F03231CAFE5190009ABE1 /* ChatOutgoingTextCellSnapshotTest.swift in Sources */,
 				113F031F1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift in Sources */,
 				113F03211CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift in Sources */,
+				113F03211CAFE2B50003BA2F /* ChatFileCellReactionsLayoutTest.swift in Sources */,
 				113F030A1CAFCCB90009ABE1 /* SnapshotBaseTest.swift in Sources */,
 				113F03171CAFD9370009ABE1 /* MockedChatProgressProtocol.swift in Sources */,
 				113F030F1CAFCE7B0009ABE1 /* ChatIncomingFileCellSnapshotTest.swift in Sources */,

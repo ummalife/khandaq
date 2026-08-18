@@ -918,6 +918,8 @@
     <string name="about_upstream_commit">commit مشروع TRIfA الأصلي</string>
     <string name="about_jni_commit">commit الخاص بـ JNI</string>
     <string name="about_toxcore_commit">commit الخاص بـ c-toxcore</string>
+    <!-- KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ -->
+    <string name="about_credit_owner">المالك والمطور — عيسى الداغستاني</string>
     <string name="add_id_dialog_title">إضافة المعرف؟</string>
     <string name="id_copied_to_clipboard">تم نسخ المعرف إلى الحافظة</string>
     <string name="text_copied_to_clipboard">تم النسخ إلى الحافظة</string>

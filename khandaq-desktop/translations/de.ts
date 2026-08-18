@@ -139,6 +139,11 @@ dadurch kann es zu Problemen bei Videoanrufen kommen.</translation>
         <translation>Über</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Eigentümer und Entwickler – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Originalauthor: %1</translation>
     </message>

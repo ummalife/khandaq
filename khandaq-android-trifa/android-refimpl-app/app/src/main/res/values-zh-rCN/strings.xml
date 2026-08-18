@@ -939,6 +939,8 @@
     <string name="about_upstream_commit">上游 TRIfA commit</string>
     <string name="about_jni_commit">JNI commit</string>
     <string name="about_toxcore_commit">c-toxcore commit</string>
+    <!-- KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ -->
+    <string name="about_credit_owner">所有者与开发者：Isa Dagestani</string>
     <string name="add_id_dialog_title">添加该 ID？</string>
     <string name="id_copied_to_clipboard">ID 已复制到剪贴板</string>
     <string name="text_copied_to_clipboard">已复制到剪贴板</string>

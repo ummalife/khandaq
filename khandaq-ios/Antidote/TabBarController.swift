@@ -76,7 +76,10 @@ class TabBarController: UITabBarController {
             container.imageView.image = userImage
         }
         else {
-            container.imageView.image = UIImage.templateNamed("tab-bar-profile")
+            // KHANDAQ (18 Aug): the no-avatar placeholder uses the shared Figma person glyph, the same
+            // vector Android draws on its Profile tab — the old bundled PNG was a different drawing.
+            container.imageView.image = UIImage.templateNamed("tab-icon-profile")
+                    ?? UIImage.templateNamed("tab-bar-profile")
             container.imageView.tintColor = theme.colorForType(.TabItemInactive)
         }
 
@@ -90,7 +93,9 @@ class TabBarController: UITabBarController {
         let image = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
 
-        return image?.withRenderingMode(.alwaysOriginal) ?? UIImage.templateNamed("tab-bar-profile")
+        return image?.withRenderingMode(.alwaysOriginal)
+                ?? UIImage.templateNamed("tab-icon-profile")
+                ?? UIImage.templateNamed("tab-bar-profile")
     }
 }
 

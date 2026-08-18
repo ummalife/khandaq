@@ -537,7 +537,8 @@ class ChatGroupController: PortraitChatController {
         let infoItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             infoItem = UIBarButtonItem(
-                    image: UIImage(systemName: "info.circle"),
+                    image: UIImage(named: "chat-header-info")?.withRenderingMode(.alwaysTemplate)
+                            ?? UIImage(systemName: "info.circle"),
                     style: .plain,
                     target: self,
                     action: #selector(ChatGroupController.infoButtonPressed))
@@ -590,7 +591,8 @@ class ChatGroupController: PortraitChatController {
         let attachmentsItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             attachmentsItem = UIBarButtonItem(
-                    image: UIImage(systemName: "paperclip"),
+                    image: UIImage(named: "chat-header-attach")?.withRenderingMode(.alwaysTemplate)
+                            ?? UIImage(systemName: "paperclip"),
                     style: .plain,
                     target: self,
                     action: #selector(ChatGroupController.attachmentsButtonPressed))
@@ -1235,6 +1237,10 @@ extension ChatGroupController: UITableViewDelegate {
             // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
         }
+        // KHANDAQ (18 Aug): reserve the reaction chips line too (parity with 1:1) — without it the
+        // chips are clipped by the explicit row height and a reaction on media looks like a no-op.
+        height += ChatGenericFileCell.reactionsHeight(
+                for: ChatReactionsFormat.display(from: message.reactionsJSON))
         // KHANDAQ (#99): media rows have an explicit height; add the separator band on a day boundary.
         if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
             height += ChatMovableDateCell.daySeparatorReservedHeight

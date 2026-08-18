@@ -782,3 +782,6 @@
 "attachments_voice" = "Голосовые";
 "attachments_empty" = "Здесь пока пусто";
 "attachments_not_downloaded" = "Этот файл ещё не загружен.";
+
+/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
+"settings_credit_owner" = "Владелец и разработчик — Isa Dagestani";

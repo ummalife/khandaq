@@ -216,15 +216,15 @@
             android:orientation="horizontal">
 
         <ImageButton
-            android:id="@+id/insert_emoji"
+            android:id="@+id/ml_button_01"
             android:layout_width="@dimen/chat_input_icon_size"
             android:layout_height="@dimen/chat_input_icon_size"
             android:layout_gravity="center_vertical"
             android:layout_margin="@dimen/chat_input_icon_margin"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
             android:padding="@dimen/chat_input_icon_padding"
             android:scaleType="fitCenter"
-            app:srcCompat="@drawable/i_emoji_google_category_people"
             app:tint="@color/tg_chat_input_icon"
             tools:ignore="ContentDescription" />
 
@@ -261,15 +261,15 @@
         </FrameLayout>
 
         <ImageButton
-            android:id="@+id/ml_button_01"
+            android:id="@+id/insert_emoji"
             android:layout_width="@dimen/chat_input_icon_size"
             android:layout_height="@dimen/chat_input_icon_size"
             android:layout_gravity="center_vertical"
             android:layout_margin="@dimen/chat_input_icon_margin"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
             android:padding="@dimen/chat_input_icon_padding"
             android:scaleType="fitCenter"
+            app:srcCompat="@drawable/i_emoji_google_category_people"
             app:tint="@color/tg_chat_input_icon"
             tools:ignore="ContentDescription" />
 

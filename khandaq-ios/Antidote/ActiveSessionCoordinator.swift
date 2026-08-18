@@ -898,19 +898,24 @@ private extension ActiveSessionCoordinator {
             UIImage(named: name)?.withRenderingMode(.alwaysTemplate)
         }
 
-        // KHANDAQ design (Figma): tab icons are clean SF-Symbol outlines — a person-in-circle for
-        // Contacts, twin bubbles for Chats, a gear for Settings. Fall back to the bundled assets on
-        // iOS < 13. (Profile keeps the live user avatar via makeProfileTabBarImage.)
+        // KHANDAQ (18 Aug): one icon set across platforms. The tab icons are the SAME vectors Android
+        // ships from Figma (converted to SVG assets), not SF Symbols — SF Symbols cannot legally be
+        // used on Android, so the Figma set is the shared source of truth and iOS follows it.
+        // The old SF names stay as a fallback in case an asset ever goes missing.
+        // (Profile keeps the live user avatar via makeProfileTabBarImage.)
         func tabImage(systemName: String, fallback: String) -> UIImage? {
-            if #available(iOS 13.0, *), let symbol = UIImage(systemName: systemName) {
+            if let shared = UIImage(named: fallback)?.withRenderingMode(.alwaysTemplate) {
+                return shared
+            }
+            if let symbol = UIImage(systemName: systemName) {
                 return symbol
             }
-            return templateImage(fallback)
+            return nil
         }
 
         let friendsItem = UITabBarItem(
                 title: String(localized: "contacts_title"),
-                image: tabImage(systemName: "person.crop.circle", fallback: "tab-bar-friends"),
+                image: tabImage(systemName: "person.crop.circle", fallback: "tab-icon-contacts"),
                 tag: IphoneObjects.TabCoordinator.friends.rawValue)
         friendsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
         configureCompactTabBarItem(friendsItem, accessibilityTitle: String(localized: "contacts_title"))
@@ -918,7 +923,7 @@ private extension ActiveSessionCoordinator {
 
         let chatsItem = UITabBarItem(
                 title: String(localized: "chats_title"),
-                image: tabImage(systemName: "bubble.left.and.bubble.right", fallback: "tab-bar-chats"),
+                image: tabImage(systemName: "bubble.left.and.bubble.right", fallback: "tab-icon-chats"),
                 tag: IphoneObjects.TabCoordinator.chats.rawValue)
         chatsItem.badgeColor = theme.colorForType(.TabBadgeBackground)
         configureCompactTabBarItem(chatsItem, accessibilityTitle: String(localized: "chats_title"))
@@ -926,7 +931,7 @@ private extension ActiveSessionCoordinator {
 
         let settingsItem = UITabBarItem(
                 title: String(localized: "settings_title"),
-                image: tabImage(systemName: "gearshape", fallback: "tab-bar-settings"),
+                image: tabImage(systemName: "gearshape", fallback: "tab-icon-settings"),
                 tag: IphoneObjects.TabCoordinator.settings.rawValue)
         configureCompactTabBarItem(settingsItem, accessibilityTitle: String(localized: "settings_title"))
         controllers[IphoneObjects.TabCoordinator.settings.rawValue].tabBarItem = settingsItem

@@ -139,6 +139,11 @@ noe som kan forårsake problemer i videosamtaler.</translation>
         <translation>Om</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Eier og utvikler – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Opprinnelig utvikler: %1</translation>
     </message>

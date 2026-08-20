@@ -10930,6 +10930,60 @@ public class HelperGroup
 
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
 
+        // KHANDAQ (audit 2026-08-20): this path had NEITHER of the two controls that every
+        // neighbouring file path has, and it is the one path where the bytes arrive unsolicited.
+        //
+        // 1. The user's attachment-download setting. A live single-packet group file checks
+        //    ngc_incoming_download_allowed before touching the disk, and so does the chunked path.
+        //    This one wrote straight into the encrypted VFS, so "Never" or "Wi-Fi only while on
+        //    mobile data" was silently ignored for anything arriving through history sync — any
+        //    group member could put files on the device of a user who had asked for none.
+        // 2. The per-group history budget. group_message_add_from_sync, the text twin fifteen
+        //    hundred lines up, seeds and charges NgcHistorySyncBudget; this did not, so the 5000-row
+        //    and 8 MiB-per-session caps bounded synced text and nothing else — while a synced FILE
+        //    row costs up to 36 KB rather than a few hundred bytes.
+        //
+        // The dedup that was supposed to bound repeats keys on msg_id_hash, which is 32 bytes taken
+        // straight off the wire (attacker-chosen), so randomising it defeats the dedup entirely.
+        //
+        // Refusing outright, rather than storing a row without its bytes: the bytes are not held
+        // anywhere to fetch later, so a "tap to download" entry would be permanently unfulfillable.
+        // History sync is best-effort and re-offers rows on the next request, so a file refused now
+        // arrives when the policy allows it.
+        if (!ngc_incoming_download_allowed(group_identifier, message_id_hash))
+        {
+            HelperGeneric.logI(TAG, "group_file_add_from_sync:attachment download not allowed -> dropping synced file");
+            return;
+        }
+
+        final NgcHistorySyncBudget.State sync_budget = NgcHistorySyncBudget.stateFor(group_identifier);
+        if (!NgcHistorySyncBudget.isSeeded(sync_budget))
+        {
+            int already_stored = 0;
+            try
+            {
+                already_stored = orma.selectFromGroupMessage().
+                        group_identifierEq(group_identifier.toLowerCase(Locale.ROOT)).
+                        was_syncedEq(true).count();
+            }
+            catch (Exception e)
+            {
+                // Seed with 0 rather than leaving it unseeded — an unseeded state means no budget.
+                HelperGeneric.logI(TAG, "group_file_add_from_sync:sync budget seed failed:" + e.getMessage());
+            }
+            NgcHistorySyncBudget.seed(sync_budget, already_stored);
+        }
+        final int synced_file_bytes = (file_byte_buf == null) ? 0 : file_byte_buf.length;
+        if (!NgcHistorySyncBudget.fits(sync_budget, synced_file_bytes))
+        {
+            HelperGeneric.logI(TAG, "group_file_add_from_sync: history budget exhausted for group, dropping synced file");
+            return;
+        }
+        // Charged where the cost is actually incurred, next to the write — NOT here. This function
+        // returns early further down when the row turns out to be a duplicate, and charging up front
+        // would let a peer re-sending one file burn the group's whole byte budget without a single
+        // row being stored, i.e. the bound would deny service instead of providing it.
+
         try
         {
             try
@@ -11031,6 +11085,9 @@ public class HelperGroup
             f2.mkdirs();
 
             save_group_incoming_file(m.path_name, m.file_name, file_byte_buf, 0, file_byte_buf.length);
+            // Booked here, where the bytes actually reach the disk, so duplicates and early returns
+            // above cost nothing. See the budget block at the top of this method.
+            NgcHistorySyncBudget.recordAccepted(sync_budget, synced_file_bytes);
 
             if (group_message_list_activity != null)
             {
@@ -11051,6 +11108,15 @@ public class HelperGroup
 
             HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
         HelperFriend.add_all_friends_clear_wrapper(0);
+
+            // KHANDAQ (audit 2026-08-20): the same attention budget the synced-text path uses. A
+            // synced row is history, not a live message, so it may notify — but it may not notify a
+            // hundred times. The row is stored and still updates the unread badge either way.
+            if (do_notification && !NgcHistorySyncBudget.allowNotification(sync_budget, System.currentTimeMillis()))
+            {
+                do_notification = false;
+                HelperGeneric.logI(TAG, "group_file_add_from_sync: notification budget spent, storing silently");
+            }
 
             if (do_notification)
             {

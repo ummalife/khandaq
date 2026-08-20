@@ -106,6 +106,13 @@ The soft warning line is: `push auth SOFT: unsigned/invalid request allowed from
    is the number this decision turns on. Tailing the relay for `push auth SOFT:` warnings still works,
    but counting log lines to decide whether real users will lose notifications is guesswork; the
    counter is not.
+
+   > **Blocker as of 2026-08-20:** production `/health` answers **without** an `auth_adoption`
+   > field, i.e. the deployed relay predates the counter (audit2 #4) that this step depends on.
+   > `auth_mode` is `soft`. So step 5 cannot be taken responsibly yet — there is no adoption
+   > evidence at all, and enforcing blind is exactly the footgun described above. **Redeploy the
+   > current `infra/push/relay/app.py` first** (step 2's compose command), confirm the field
+   > appears, then let it accumulate before deciding.
 5. **Server → ENFORCE.** Set `PUSH_AUTH_ENFORCE=1`, redeploy, confirm `/health` → `"auth_mode":"enforce"`.
    From here unsigned/invalid wake calls get 401.
 

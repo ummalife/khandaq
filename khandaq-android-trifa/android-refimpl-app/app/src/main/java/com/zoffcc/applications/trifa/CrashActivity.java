@@ -31,7 +31,6 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import androidx.appcompat.app.AppCompatActivity;
 import android.util.Log;
@@ -300,9 +299,15 @@ public class CrashActivity extends AppCompatActivity implements Logging.AsyncRes
                         MainApplication.last_stack_trace_as_string;
         MainApplication.last_stack_trace_as_string = ""; // reset last stacktrace
 
-        // String DATA_DEBUG_DIR = new File(getExternalFilesDir(null).getAbsolutePath() + "/crashes").toString();
+        // KHANDAQ (audit 2026-08-20): app-private external storage, matching MainApplication's
+        // save_error_msg(). Both used to write the app's whole logcat into /sdcard/trifa/crashes,
+        // which any app with READ_EXTERNAL_STORAGE can read on Android 5-9. Kept in step
+        // deliberately — the writer and this reader must agree on the directory, or crash reports
+        // silently stop being found and attached.
+        File externalPrivate = getExternalFilesDir(null);
         String DATA_DEBUG_DIR = new File(
-            Environment.getExternalStorageDirectory().getAbsolutePath() + "/trifa/crashes").toString();
+            (externalPrivate != null ? externalPrivate.getAbsolutePath() : getFilesDir().getAbsolutePath())
+            + "/crashes").toString();
 
         Log.i(TAG, "processFinish:DATA_DEBUG_DIR=" + DATA_DEBUG_DIR);
 

@@ -239,7 +239,16 @@ public class FileLoader2 implements ModelLoader<info.guardianproject.iocipher.Fi
                 // close stuff and remove temp files
                 if (temp_file_name != null)
                 {
-                    new File(temp_file_name).delete();
+                    // KHANDAQ (audit 2026-08-20): delete the file we actually created, which lives in
+                    // SD_CARD_TMP_DIR — copy_vfs_file_to_real_file returns only the BASE NAME, and it
+                    // is opened as SD_CARD_TMP_DIR + "/" + temp_file_name twenty lines above. Deleting
+                    // the bare name resolved against the process working directory instead, so it
+                    // matched nothing and silently failed inside the catch below. Every avatar and
+                    // every chat image rendered through Glide therefore left a DECRYPTED copy behind
+                    // on external storage, growing without bound and readable by any app holding
+                    // READ_EXTERNAL_STORAGE on Android 5-9 — the plaintext the VFS exists to avoid.
+                    // Every other caller in the tree already uses the two-argument form.
+                    new File(SD_CARD_TMP_DIR, temp_file_name).delete();
                 }
             }
             catch (Exception e)

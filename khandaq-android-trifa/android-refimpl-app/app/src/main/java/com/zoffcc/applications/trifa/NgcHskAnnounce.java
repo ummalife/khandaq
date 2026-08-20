@@ -299,6 +299,10 @@ final class NgcHskAnnounce
                     HelperGeneric.set_g_opts(row, NgcHskDirectory.encode(
                             new NgcHskDirectory.Record(existing.hskPub, existing.firstSeenMs, now)));
                     break;
+                case UP_TO_DATE:
+                    // Same key, refreshed recently enough. Explicit rather than left to `default`,
+                    // because "no database write here" is the whole point of the decision.
+                    break;
                 case RECORD_ONLY:
                     // Deliberately not stored anywhere that verification reads. A rejected key is
                     // only interesting as a diagnostic, and writing it beside the trusted one is how

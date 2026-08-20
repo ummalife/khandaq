@@ -31,6 +31,14 @@ final class NgcHskDirectory
     /** How long a known key must go unseen before a different one may replace it. */
     static final long REPLACE_GRACE_MS = 24L * 60L * 60L * 1000L;
 
+    /**
+     * Minimum gap between two last_seen writes for an unchanged key.
+     *
+     * <p>Three orders of magnitude below REPLACE_GRACE_MS, so bounding the writes cannot blunt the
+     * anti-substitution rule that reads last_seen.
+     */
+    static final long REFRESH_MIN_INTERVAL_MS = 5L * 60L * 1000L;
+
     /** g_opts row prefix: kqhskdir_<group_id>|<peer_group_pubkey> -> hskPubHex:firstSeen:lastSeen */
     static final String G_OPTS_PREFIX = "kqhskdir_";
 
@@ -45,6 +53,8 @@ final class NgcHskDirectory
         LEARN,
         /** Same key we already trust — just bump last_seen. */
         REFRESH,
+        /** Same key, and last_seen was written recently enough that rewriting it buys nothing. */
+        UP_TO_DATE,
         /** A different key, but we are not willing to switch. Record it, keep trusting the old one. */
         RECORD_ONLY,
         /** A different key, and every condition for switching is met. */
@@ -93,6 +103,21 @@ final class NgcHskDirectory
         }
         if (Arrays.equals(existing.hskPub, incomingHskPub))
         {
+            // KHANDAQ (audit 2026-08-20): re-announcing the SAME key we already hold changes nothing
+            // except a timestamp, and it used to cost an encrypted-database write every time. The
+            // announcement is a 112-byte packet any group member can repeat in a loop on the lossless
+            // channel, so that was one SQLCipher write per packet, on the toxcore callback thread,
+            // for no information gained — flash wear and a stalled tox loop for the price of a
+            // replay. Refresh at most once per interval instead.
+            //
+            // lastSeenMs still feeds the anti-substitution rule below, so making it coarse would be
+            // a real cost — but only if the coarseness were comparable to REPLACE_GRACE_MS. Five
+            // minutes against twenty-four hours is three orders of magnitude of margin.
+            final long sinceLastSeen = nowMs - existing.lastSeenMs;
+            if (sinceLastSeen >= 0L && sinceLastSeen < REFRESH_MIN_INTERVAL_MS)
+            {
+                return Decision.UP_TO_DATE;
+            }
             return Decision.REFRESH;
         }
 

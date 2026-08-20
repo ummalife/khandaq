@@ -2,31 +2,53 @@
 <!--
   KHANDAQ (audit A47): certificate pinning for the push wake endpoint push.khandaq.org.
 
-  We pin the STABLE Let's Encrypt trust anchors (ISRG Root X2 — the current ECDSA anchor —
-  and ISRG Root X1 as the RSA fallback), PLUS the currently-served LE intermediate as a
-  belt-and-suspenders third pin. Pinning the ROOTS (valid until 2035) rather than the leaf
-  is deliberate: LE rotates the leaf every ~60-90 days and the intermediate ~yearly, and
-  pinning either would break push on every routine renewal. The roots survive all routine
-  LE rotation.
+  What this actually is: a CA-ANCHOR RESTRICTION, not leaf or SPKI pinning of our own key. It says
+  "this host must chain to Let's Encrypt", which stops a certificate from any other CA — including
+  one an attacker gets a device to trust — being accepted for this host. It does NOT stop someone
+  who can obtain a genuine Let's Encrypt certificate for push.khandaq.org. Naming it correctly
+  matters, because "pinning" invites the assumption of a stronger property than is implemented.
 
-  `expiration` is an anti-brick safety net: after this date Android stops enforcing the pins
-  and reverts to normal system-CA validation, so even a full CA migration cannot brick push
-  beyond this window. IMPORTANT: if push.khandaq.org ever migrates off Let's Encrypt, refresh
-  these pins (and this date) in a client release BEFORE the expiration lapses.
+  We pin ROOTS rather than the leaf: LE rotates the leaf every ~60-90 days, so a leaf pin would
+  break push on every routine renewal. Pins are OR'd — one match anywhere in the validated chain is
+  enough — so extra entries can only ever add resilience.
 
-  Live chain fetched 2026-08-03 via `openssl s_client -connect push.khandaq.org:443`.
+  KHANDAQ (audit 2026-08-20): REFRESHED, and the reason is not housekeeping. The live chain has
+  already moved to Let's Encrypt's new hierarchy since the 2026-08-03 capture below:
+
+      leaf  <-  YE1  <-  Root YE  <-  ISRG Root X2  <-  ISRG Root X1
+                         (new root, cross-signed by X2)
+
+  Only the cross-signs at the top still make the old pins match. The previously pinned intermediate
+  is GONE from the chain entirely — a pin that matches nothing, i.e. direct evidence the rotation
+  happened. The day LE stops sending the cross-signs, which is the normal end state once a new root
+  is widely trusted, a chain anchored at Root YE would match NONE of the old three pins and Android
+  would refuse the connection: push wakeups fail silently until the expiration below lets pinning
+  fail open. Root YE and YE1 are therefore pinned too, so the restriction survives that trim.
+
+  `expiration` is an anti-brick safety net: after this date Android stops enforcing the pins and
+  reverts to normal system-CA validation, so even a full CA migration cannot brick push beyond this
+  window. IMPORTANT: refresh these pins (and this date) in a client release BEFORE it lapses, and
+  keep them in step with the iOS anchor set in OCTSubmanagerChatsImpl.m — the two are the same
+  policy expressed twice, and they drift silently.
+
+  Chain re-fetched 2026-08-20 via `openssl s_client -connect push.khandaq.org:443 -showcerts`;
+  Root YE verified to be cross-signed by ISRG Root X2 (`openssl verify -partial_chain`), i.e. it
+  chains to a key that was already trusted here before this edit.
   Only push.khandaq.org is pinned; all other traffic keeps default validation.
 -->
 <network-security-config>
     <domain-config>
         <domain includeSubdomains="false">push.khandaq.org</domain>
         <pin-set expiration="2027-08-01">
-            <!-- ISRG Root X2 (ECDSA, valid to 2035) — current chain anchor -->
-            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
-            <!-- ISRG Root X1 (RSA, valid to 2035) — fallback if LE serves the RSA chain -->
+            <!-- ISRG Root X1 (RSA, valid to 2035) — top of the current cross-signed chain -->
             <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
-            <!-- Let's Encrypt intermediate (currently served) — always present in the chain -->
-            <pin digest="SHA-256">s/tdAOmUzd8syaTuqfgGvFcn6DzA5Cmb+Vby1ST+U3Y=</pin>
+            <!-- ISRG Root X2 (ECDSA, valid to 2035) — cross-signs Root YE today -->
+            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
+            <!-- ISRG Root YE (ECDSA P-384, to 2032) — the anchor the chain is moving to. This is
+                 the backup pin that keeps the restriction working after the cross-signs are trimmed. -->
+            <pin digest="SHA-256">sCkq5UWXjg+7mKu9lMhhYF5bGLsy7VI/UNW3tccdR7w=</pin>
+            <!-- Let's Encrypt YE1 intermediate (valid to 2028) — currently served, belt-and-braces -->
+            <pin digest="SHA-256">brzvtCELCIZUo4sD/qPX0ccRtPsd3DY6RfmxpOU9oB4=</pin>
         </pin-set>
     </domain-config>
 </network-security-config>

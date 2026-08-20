@@ -22,7 +22,24 @@ NSString *const kOCTNgcSignedHistoryVerdictStoredNotification = @"kOCTNgcSignedH
 
 /** groupId(lowercase) -> secret key, resolved outside the database queue by -prepareKeyForGroupNumber:. */
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSData *> *secByGroup;
+
+/**
+ * groupId(lowercase) -> NEW verdict rows written for that group this run.
+ *
+ * KHANDAQ (audit 2026-08-20): a verified signature is not a licence to write an unbounded number of
+ * permanent rows. The signature proves who authored a record; it says nothing about how MANY records
+ * an author may assert. A group member who has announced a key can sign any number of synthetic
+ * records with their OWN key — every one of them verifies — and each distinct message id (four
+ * attacker-chosen bytes) would otherwise become another permanent row in the profile store. The
+ * unsigned 0x01 packet that inserts the message is bounded on Android by NgcHistorySyncBudget; this
+ * path had no bound on either platform. Same cap and same reasoning as
+ * NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION, kept in step deliberately.
+ */
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *verdictCountByGroup;
 @end
+
+/** Matches NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION on Android. */
+static const NSUInteger kOCTNgcMaxVerdictsPerGroupPerSession = 5000;
 
 @implementation OCTNgcSignedHistory
 
@@ -42,6 +59,7 @@ NSString *const kOCTNgcSignedHistoryVerdictStoredNotification = @"kOCTNgcSignedH
         _getValueBlock = [getValueBlock copy];
         _setValueBlock = [setValueBlock copy];
         _secByGroup = [NSMutableDictionary dictionary];
+        _verdictCountByGroup = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -173,6 +191,26 @@ static NSData *peerNameField(NSString *peerName)
 
 #pragma mark - verdict store
 
+/**
+ * Claims one NEW verdict row for a group, or refuses once the group is at its per-run cap.
+ *
+ * Claim-on-use rather than check-then-record: the caller writes immediately after, and a check that
+ * did not consume would bound nothing. Refusing simply leaves the message marked unverified, which
+ * is what it already shows before any verdict arrives — the honest outcome, not a new failure state.
+ */
+- (BOOL)claimVerdictSlotForGroupId:(nullable NSString *)groupId
+{
+    NSString *key = groupId.lowercaseString ?: @"";
+    @synchronized(self) {
+        NSUInteger used = self.verdictCountByGroup[key].unsignedIntegerValue;
+        if (used >= kOCTNgcMaxVerdictsPerGroupPerSession) {
+            return NO;
+        }
+        self.verdictCountByGroup[key] = @(used + 1);
+    }
+    return YES;
+}
+
 - (nullable NSString *)verifiedRowKeyForGroupId:(NSString *)groupId
                                           msgId:(NSData *)msgId
                                       authorPub:(NSData *)authorPub
@@ -269,6 +307,19 @@ static NSString *_Nullable verdictValue(uint64_t timestampSeconds, NSData *_Null
     NSString *row = [self verifiedRowKeyForGroupId:groupId msgId:st.msgId authorPub:st.authorPub];
     NSString *verdict = verdictValue(st.timestamp, st.textUtf8);
     if (row != nil && verdict != nil) {
+        NSString *existing = self.getValueBlock(row);
+        if ([verdict isEqualToString:existing ?: @""]) {
+            // Already recorded, byte for byte. Every history sync re-serves the same rows, so in a
+            // busy group this is the common case: no write, no budget, no UI rebind.
+            return YES;
+        }
+        // Only a genuinely NEW row is charged: overwriting a key that already exists cannot grow the
+        // store, and charging it would let honest re-syncs spend a budget that exists for storage
+        // growth alone. See verdictCountByGroup for what this bounds and why.
+        if (existing == nil && ! [self claimVerdictSlotForGroupId:groupId]) {
+            OCTLogInfo(@"signedHistory: verdict budget exhausted for group %u", groupNumber);
+            return YES;
+        }
         self.setValueBlock(row, verdict);
         OCTLogInfo(@"signedHistory: verified a row in group %u", groupNumber);
         // The row this proves is already on screen wearing the unverified marker; nothing else will

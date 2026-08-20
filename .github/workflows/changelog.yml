@@ -25,11 +25,7 @@ jobs:
 
       - name: Verify changelog.json on pull request
         if: github.event_name == 'pull_request'
-        run: |
-          if ! git diff --exit-code web/changelog.json; then
-            echo "::error::web/changelog.json is stale. Run: python3 scripts/generate-changelog.py"
-            exit 1
-          fi
+        run: python3 scripts/changelog-content-diff.py --verify
 
   commit:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
@@ -49,7 +45,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git diff --quiet web/changelog.json; then
+          # Content, not bytes -- same reason as the verify job. `git diff --quiet` was true on
+          # every push, because generated_at always moved, so this job committed a new
+          # "chore: regenerate changelog.json" on every single push to master whether or not the
+          # changelog had actually changed.
+          if ! python3 scripts/changelog-content-diff.py; then
             echo "changelog.json is up to date"
             exit 0
           fi

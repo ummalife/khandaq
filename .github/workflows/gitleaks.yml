@@ -31,7 +31,18 @@ jobs:
         run: |
           set -euo pipefail
           VER=8.18.4
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" -o gitleaks.tgz
+          # KHANDAQ (audit: CI supply chain): the version was pinned but the DOWNLOAD was not
+          # verified, so anything that could answer for the release URL — a compromised release
+          # asset, a MITM on the runner, a re-tagged release — executed as root in CI with the
+          # repository checked out. Pin the digest too and check it BEFORE extraction, so a
+          # mismatch fails the job instead of running an unknown binary.
+          # Digest source: gitleaks_8.18.4_checksums.txt of the same release; independently
+          # re-derived from the downloaded artifact (sha256sum) before being written here.
+          SHA256=ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d
+          curl -sSL --fail --proto '=https' --tlsv1.2 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
+            -o gitleaks.tgz
+          echo "${SHA256}  gitleaks.tgz" | sha256sum -c -
           tar -xzf gitleaks.tgz gitleaks
           # Decide the commit range to scan.
           case "$EVENT" in

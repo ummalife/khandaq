@@ -286,9 +286,35 @@ final class NgcSignedHistory
             }
 
             final String row = verifiedRowKey(groupIdentifier, st.msgId, st.authorPub);
-            if (row != null)
+            final String value = verdictValue(st.timestamp, st.textUtf8);
+            if (row != null && value != null)
             {
-                HelperGeneric.set_g_opts(row, verdictValue(st.timestamp, st.textUtf8));
+                final String existing = HelperGeneric.get_g_opts(row);
+                if (value.equals(existing))
+                {
+                    // Already recorded, byte for byte. Every history sync re-serves the same rows, so
+                    // in a busy group this is the common case: no write, no budget, no UI rebind.
+                    return;
+                }
+
+                // A verified signature is not a licence to write an unbounded number of permanent
+                // rows. The signature proves authorship; it says nothing about how MANY records the
+                // author may assert. A member who has announced a key can sign any number of
+                // synthetic records with their own key — every one of them verifies — and each
+                // distinct message id (four attacker-chosen bytes) would otherwise become another
+                // permanent g_opts row. The unsigned packet that inserts the message is bounded
+                // (NgcHistorySyncBudget); this path was not, so it is bounded here against the same
+                // per-group state. Only a genuinely NEW row is charged: overwriting a key that
+                // already exists cannot grow the database, and charging it would let honest re-syncs
+                // spend a budget that exists for storage growth alone.
+                if (existing == null
+                    && !NgcHistorySyncBudget.claimVerdict(NgcHistorySyncBudget.stateFor(groupIdentifier)))
+                {
+                    HelperGeneric.logI(TAG, "handleIncomingSignedText:verdict budget exhausted gn="
+                            + groupNum);
+                    return;
+                }
+                HelperGeneric.set_g_opts(row, value);
                 HelperGeneric.logI(TAG, "handleIncomingSignedText:verified gn=" + groupNum);
                 // The row this proves was inserted and drawn milliseconds ago by the unsigned copy,
                 // still carrying the unverified marker. Rebind so the marker actually goes away.

@@ -33,7 +33,12 @@ public class BootReceiver extends BroadcastReceiver
     @Override
     public void onReceive(Context context, Intent intent)
     {
-        if (intent.getAction().equals("android.intent.action.BOOT_COMPLETED"))
+        // KHANDAQ (external audit: exported receivers): BOOT_COMPLETED is a protected broadcast, so
+        // the guard below is what keeps this component inert for the explicit intents that reach it
+        // only because it is exported. It used to be `intent.getAction().equals(...)`, which threw
+        // NullPointerException on an intent with no action at all — the cheapest way for any app on
+        // the device to put a crash in this app's log. Constant first, so null cannot dereference.
+        if (intent != null && "android.intent.action.BOOT_COMPLETED".equals(intent.getAction()))
         {
             Log.i(TAG, "-- ON_BOOT -- :" + intent.getAction());
 

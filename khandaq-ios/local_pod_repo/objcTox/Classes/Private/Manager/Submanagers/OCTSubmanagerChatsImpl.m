@@ -34,7 +34,21 @@ int bin_to_hex(const char *bin_id, size_t bin_id_size, char *output);
 
 #pragma mark - KHANDAQ (audit A47) push.khandaq.org certificate pinning
 
-// Pin the push wake endpoint to the STABLE Let's Encrypt trust anchors (ISRG Root X1 + X2) using
+// KHANDAQ (audit 2026-08-20): this is a CA-ANCHOR RESTRICTION, not leaf/SPKI pinning — it requires
+// the host to chain to Let's Encrypt, and does not bind the server's own key. Named accordingly so
+// nobody assumes the stronger property.
+//
+// The anchor set was REFRESHED because the live chain has already moved to LE's new hierarchy:
+//   leaf <- YE1 <- Root YE <- ISRG Root X2 <- ISRG Root X1
+// Only the cross-signs at the top still let a chain terminate at X1/X2. Because
+// SecTrustSetAnchorCertificatesOnly(true) removes the system trust store from the evaluation, the
+// chain has to be buildable from what the SERVER sends plus what is embedded here — so the day LE
+// trims the cross-signs (the normal end state for a new root), evaluation fails and this delegate
+// CANCELS the challenge: push wakeups stop, silently, until the 2027-08-01 expiry falls open.
+// Root YE is therefore embedded as a third anchor. Keep this set in step with the Android pin-set
+// in res/xml/network_security_config.xml — same policy, expressed twice, drifts silently.
+//
+// Pin the push wake endpoint to the STABLE Let's Encrypt trust anchors (ISRG Root X1 + X2 + Root YE) using
 // Apple's own trust evaluator restricted to those anchors -- no hand-rolled SPKI/ASN.1 that could be
 // miscomputed. Defensive by design: any INTERNAL problem (embedded roots fail to load, no server
 // trust, host mismatch, or past the hard expiry) FALLS BACK to default validation, so an
@@ -46,6 +60,10 @@ static NSString *const kKhandaqPushPinnedHost = @"push.khandaq.org";
 static NSString *const kKhandaqISRGRootX1B64 = @"MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAwTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2VhcmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygch77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6UA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sWT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyHB5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UCB5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUvKBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWnOlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTnjh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbwqHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CIrU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkqhkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZLubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KKNFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7UrTkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdCjNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVcoyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPAmRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57demyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=";
 // ISRG Root X2 (ECDSA P-384), SHA-256 fp 69:72:9B:...:14:70
 static NSString *const kKhandaqISRGRootX2B64 = @"MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBTZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW+1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZIzj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdWtL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1/q4AaOeMSQ+2b1tbFfLn";
+// ISRG Root YE (ECDSA P-384, valid to 2032) — the anchor LE is migrating to. Cross-signed by
+// ISRG Root X2 above, verified with `openssl verify -partial_chain -trusted <X2>`, so it chains
+// to a key that was already trusted here before it was added.
+static NSString *const kKhandaqISRGRootYEB64 = @"MIICpjCCAiugAwIBAgIRAIchZfw0tuX7qK3Vs3BftTowCgYIKoZIzj0EAwMwTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2VhcmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDIwHhcNMjYwNTEzMDAwMDAwWhcNMzIwOTAyMjM1OTU5WjAuMQswCQYDVQQGEwJVUzENMAsGA1UEChMESVNSRzEQMA4GA1UEAxMHUm9vdCBZRTB2MBAGByqGSM49AgEGBSuBBAAiA2IABDwS/6vhrcVqcbBo+wgdI3fwn9x7DNJJOY/lTOti0vkwuRN87RhEhTH17E7XyFjWsPYhIPt/wzOqxTd2b+4ZJNy9ID04YywF9U5zasDVyGSNErVNtz8uSGh5izW87j77GaOB6zCB6DAOBgNVHQ8BAf8EBAMCAQYwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUo8gmWo6hTNA1Y/ybI8g6rlbzT1YwHwYDVR0jBBgwFoAUfEKWrt5LSDv6kviejM9ti6lyN5UwMgYIKwYBBQUHAQEEJjAkMCIGCCsGAQUFBzAChhZodHRwOi8veDIuaS5sZW5jci5vcmcvMBMGA1UdIAQMMAowCAYGZ4EMAQIBMCcGA1UdHwQgMB4wHKAaoBiGFmh0dHA6Ly94Mi5jLmxlbmNyLm9yZy8wCgYIKoZIzj0EAwMDaQAwZgIxAMU19WCtmxVND8UHBZRoma49Z7jPs64Dma0eTu1OChVbB/2J7GV3nvYKAx54uk1G9QIxAO0miLVJu8PLNiXXXkiE/gsK3CTRTF/aeo4bMX42Zw40csRU6AC26hSW1/IWaas6dg==";
 
 @interface KhandaqPushPinningDelegate : NSObject <NSURLSessionDelegate>
 @end
@@ -58,14 +76,17 @@ static NSString *const kKhandaqISRGRootX2B64 = @"MIICGzCCAaGgAwIBAgIQQdKd0XLq7qe
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         NSMutableArray *certs = [NSMutableArray array];
-        for (NSString *b64 in @[kKhandaqISRGRootX1B64, kKhandaqISRGRootX2B64]) {
+        NSArray *embedded = @[kKhandaqISRGRootX1B64, kKhandaqISRGRootX2B64, kKhandaqISRGRootYEB64];
+        for (NSString *b64 in embedded) {
             NSData *der = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
             if (der == nil) { continue; }
             SecCertificateRef cert = SecCertificateCreateWithData(NULL, (__bridge CFDataRef)der);
             if (cert != NULL) { [certs addObject:(__bridge_transfer id)cert]; }
         }
-        // Require BOTH roots to parse; otherwise keep anchors nil so we fail OPEN (never brick).
-        anchors = (certs.count == 2) ? [certs copy] : nil;
+        // Require EVERY embedded root to parse; otherwise keep anchors nil so we fail OPEN (never
+        // brick). Counted against the list rather than a literal, so adding or removing an anchor
+        // cannot leave a stale number behind that silently disables the whole restriction.
+        anchors = (certs.count == embedded.count) ? [certs copy] : nil;
     });
     return anchors;
 }

@@ -5,6 +5,7 @@
 #include "imageviewerwidget.h"
 
 #include <QFileInfo>
+#include <QImageReader>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
@@ -20,7 +21,26 @@ ImageViewerWidget::ImageViewerWidget(const QString& imagePath, QWidget* parent)
     setAttribute(Qt::WA_DeleteOnClose);
     setStyleSheet("QDialog { background: black; }");
 
-    original.load(imagePath);
+    // KHANDAQ (audit 2026-08-20): probe the header before decoding, the same guard pixmapFromFile()
+    // applies in src/widget/imagepreviewwidget.cpp. Without it this viewer was the way AROUND that
+    // guard: a 100 KB PNG declaring 22000x22000 makes the chat-bubble thumbnail come out blank —
+    // because the preview path rejected it — so the file merely looks broken, which is exactly what
+    // invites the click that opens it here at full size. Qt5 has no per-reader allocation limit, so
+    // the decode is an out-of-memory or a long freeze, chosen by whoever sent the file.
+    {
+        QImageReader probe(imagePath);
+        const QSize dims = probe.size();
+        static const qint64 kMaxPixels = 64LL * 1000 * 1000; // ~64 megapixels
+        static const int kMaxSide = 16384;
+        const bool implausible = dims.isValid()
+            && (static_cast<qint64>(dims.width()) * static_cast<qint64>(dims.height()) > kMaxPixels
+                || dims.width() > kMaxSide || dims.height() > kMaxSide);
+        if (!implausible) {
+            original.load(imagePath);
+        }
+        // Left null otherwise: applyZoom() below already handles an empty pixmap, so the viewer
+        // opens empty rather than taking the process down.
+    }
 
     imageLabel = new QLabel(this);
     imageLabel->setAlignment(Qt::AlignCenter);

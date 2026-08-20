@@ -14,6 +14,7 @@ import static com.zoffcc.applications.trifa.NgcHskDirectory.rowKey;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * KHANDAQ (audit #2 finding 1, step 3) — when we change our mind about a peer's signing key.
@@ -54,8 +55,44 @@ public class NgcHskDirectoryTest
     @Test
     public void the_same_key_only_refreshes()
     {
-        assertEquals(Decision.REFRESH, decide(known(key(0x11), NOW), key(0x11), true, NOW));
-        assertEquals(Decision.REFRESH, decide(known(key(0x11), NOW), key(0x11), false, NOW));
+        final long stale = NOW - NgcHskDirectory.REFRESH_MIN_INTERVAL_MS;
+        assertEquals(Decision.REFRESH, decide(known(key(0x11), stale), key(0x11), true, NOW));
+        assertEquals(Decision.REFRESH, decide(known(key(0x11), stale), key(0x11), false, NOW));
+    }
+
+    /**
+     * KHANDAQ (audit 2026-08-20): the announcement is a 112-byte packet any group member can repeat
+     * on the lossless channel, and REFRESH means an encrypted-database write. Re-announcing a key we
+     * already hold must therefore be free after the first write in a window — otherwise a replay
+     * loop is one SQLCipher write per packet on the toxcore thread, for no information gained.
+     */
+    @Test
+    public void re_announcing_the_same_key_costs_nothing_inside_the_window()
+    {
+        assertEquals(Decision.UP_TO_DATE, decide(known(key(0x11), NOW), key(0x11), true, NOW));
+        assertEquals(Decision.UP_TO_DATE,
+                     decide(known(key(0x11), NOW), key(0x11), true,
+                            NOW + NgcHskDirectory.REFRESH_MIN_INTERVAL_MS - 1));
+        assertEquals("and the window does reopen", Decision.REFRESH,
+                     decide(known(key(0x11), NOW), key(0x11), true,
+                            NOW + NgcHskDirectory.REFRESH_MIN_INTERVAL_MS));
+    }
+
+    @Test
+    public void the_refresh_window_is_far_below_the_replace_grace()
+    {
+        // The whole safety argument for throttling last_seen: it may become coarse, but only by an
+        // amount that cannot matter to the rule that reads it.
+        assertTrue(NgcHskDirectory.REFRESH_MIN_INTERVAL_MS * 100L < NgcHskDirectory.REPLACE_GRACE_MS);
+    }
+
+    @Test
+    public void a_backwards_clock_still_refreshes_rather_than_going_quiet()
+    {
+        // Negative age must not read as "recently seen" — that would suppress last_seen updates for
+        // as long as the clock stayed behind.
+        assertEquals(Decision.REFRESH,
+                     decide(known(key(0x11), NOW), key(0x11), true, NOW - 86_400_000L));
     }
 
     // ---------------------------------------------------------------- the impersonation guard

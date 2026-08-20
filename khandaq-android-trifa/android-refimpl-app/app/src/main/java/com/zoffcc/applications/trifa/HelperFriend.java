@@ -32,7 +32,6 @@ import java.net.Proxy;
 import java.nio.ByteBuffer;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -93,8 +92,8 @@ public class HelperFriend
 {
     private static final String TAG = "trifa.Hlp.Friend";
 
-    static HashMap<String, Long> ping_push_blocker_cache = new HashMap<>();
-    final static long TWO_HOURS_IN_MILLIS = (2 * 3600 * 1000); // 2 hours in millis
+    // KHANDAQ (audit 2026-08-20): the flat two-hour 429 penalty and its plain HashMap moved to
+    // PushBackoffPolicy, which escalates from one minute instead and is unit-tested.
 
     static FriendList main_get_friend(long friendnum)
     {
@@ -2393,19 +2392,12 @@ public class HelperFriend
             }
         }
 
-        long check_for_http_too_many_request_timeout = 0L;
-        try
+        // KHANDAQ (audit 2026-08-20): a 429 used to cost a flat two hours, which turned a transient
+        // relay condition into a long local outage — see PushBackoffPolicy for the whole reason.
+        // Now: one minute for the first refusal, doubling, same two-hour ceiling at the end.
+        if (PushBackoffPolicy.shouldSkip(pushurl_for_friend, System.currentTimeMillis()))
         {
-            //noinspection DataFlowIssue
-            check_for_http_too_many_request_timeout = ping_push_blocker_cache.getOrDefault(pushurl_for_friend, 0L);
-        }
-        catch(Exception ignored)
-        {
-        }
-
-        if (check_for_http_too_many_request_timeout + TWO_HOURS_IN_MILLIS > System.currentTimeMillis())
-        {
-            Log.i(TAG, "friend_call_push_url:HTTP 429: too many requests -> timeout");
+            Log.i(TAG, "friend_call_push_url:HTTP 429: too many requests -> backoff");
             return false;
         }
 
@@ -2464,17 +2456,14 @@ public class HelperFriend
             Log.i(TAG, "friend_call_push_url"); // :url=" + pushurl_for_friend + " RES=" + response.code());
             if (response.code() == 429)
             {
-                // HINT: set timestamp of last 429 HTTP code (Error Too Many Requests)
-                ping_push_blocker_cache.put(pushurl_for_friend, System.currentTimeMillis());
-                if (ping_push_blocker_cache.size() >= 20000)
-                {
-                    // HINT: too many entries. just clear the hasmap.
-                    // but probably nobody will have 20k friends in this app in sum?
-                    ping_push_blocker_cache.clear();
-                }
+                // Escalating backoff rather than a flat penalty; see PushBackoffPolicy.
+                PushBackoffPolicy.recordTooManyRequests(pushurl_for_friend, System.currentTimeMillis());
             }
             else if ((response.code() < 300) && (response.code() > 199))
             {
+                    // A call that got through clears the streak, so the next 429 starts short again
+                    // instead of inheriting a penalty earned an hour ago.
+                    PushBackoffPolicy.recordSuccess(pushurl_for_friend);
                     if (update_message_flag)
                     {
                         update_message_in_db_sent_push_set(friend_pubkey, message_timestamp_circa);

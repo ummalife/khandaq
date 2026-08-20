@@ -43,6 +43,28 @@ TRUSTED_PROXIES = {
 
 
 def _is_trusted_proxy(addr: str) -> bool:
+    """
+    True when `addr` is a hop whose X-Real-IP we are willing to believe.
+
+    KHANDAQ (audit 2026-08-20): this used to return `ip.is_loopback` alone, and that silently
+    disabled per-IP rate limiting in production.
+
+    nginx runs ON THE HOST (scripts/deploy-push-relay.sh writes /etc/nginx/sites-available and
+    reloads systemd nginx) and proxies to 127.0.0.1:8088, which docker-compose publishes as
+    `127.0.0.1:8088:8080` on an ordinary bridge network. The address the CONTAINER sees for that
+    connection is therefore the bridge gateway — 172.x.0.1 — never loopback. With only loopback
+    trusted, `_client_ip()` fell through to that one gateway address for every request on earth,
+    `_rate_ok` keyed every caller into a single bucket, and PUSH_RATE_LIMIT_PER_MIN stopped being
+    "per client" and became a global ceiling of ~120/min/worker for the entire service. One host
+    flooding the endpoint takes push notifications away from everybody, and the Android client turns
+    a transient 429 into a two-hour local block per push URL (HelperFriend.java), so the outage far
+    outlives the flood.
+
+    Trusting private/link-local peers is safe HERE and is not a licence to expose the port: the
+    published port is bound to 127.0.0.1 (infra/push/docker-compose.yml), so no host off the machine
+    can be a direct peer of this socket at all. If that binding is ever widened, pin the exact hop
+    with PUSH_TRUSTED_PROXIES instead of relying on this default.
+    """
     if not addr:
         return False
     if addr in TRUSTED_PROXIES:
@@ -51,7 +73,7 @@ def _is_trusted_proxy(addr: str) -> bool:
         ip = ipaddress.ip_address(addr)
     except ValueError:
         return False
-    return ip.is_loopback  # KHANDAQ (audit A5): only loopback is auto-trusted; other hops via PUSH_TRUSTED_PROXIES
+    return ip.is_loopback or ip.is_private or ip.is_link_local
 _rate: dict[str, list[float]] = defaultdict(list)
 _rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}

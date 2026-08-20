@@ -30,7 +30,6 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.os.Build;
-import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
@@ -395,8 +394,25 @@ public class MainApplication extends Application
             Calendar c = Calendar.getInstance();
             SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd_HH_mm_ss");
             String formattedDate = df.format(c.getTime());
-            // File myDir = new File(getExternalFilesDir(null).getAbsolutePath() + "/crashes");
-            File myDir = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/trifa/crashes");
+            // KHANDAQ (audit 2026-08-20): app-PRIVATE external storage, not the shared root.
+            //
+            // This used to write to Environment.getExternalStorageDirectory() + "/trifa/crashes",
+            // i.e. /sdcard/trifa/crashes, which on Android 5-9 (minSdk is 21) any app holding the
+            // ordinary READ_EXTERNAL_STORAGE permission can read. The file is the app's whole
+            // logcat plus a stack trace, and this handler fires on ANY uncaught exception —
+            // including one a contact or group member can provoke with a malformed message or file
+            // transfer. So a third-party app could sit and wait for a crash it might even be able
+            // to trigger, and then read whatever the log happens to contain about this profile.
+            //
+            // getExternalFilesDir(null) is scoped to this app, so the user can still retrieve a
+            // crash file from the app's own folder, but no other app can. That is what the line
+            // commented out just below has said all along; it simply was not the one in use.
+            File externalPrivate = getExternalFilesDir(null);
+            File myDir = (externalPrivate != null)
+                         ? new File(externalPrivate.getAbsolutePath() + "/crashes")
+                         // External storage can be absent or unmounted; internal is always there and
+                         // is also private. Losing the crash file would be worse than either.
+                         : new File(getFilesDir().getAbsolutePath() + "/crashes");
 
             myDir.mkdirs();
             File myFile = new File(myDir.getAbsolutePath() + "/crash_" + formattedDate + ".txt");

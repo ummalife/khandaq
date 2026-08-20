@@ -17,6 +17,19 @@ static const uint8_t kOCTNgcPktFileChunk = 0x13;
 static const uint8_t kOCTNgcPktFileRequest = 0x14;
 static const int kOCTNgcNackMaxRounds = 24;          // stop asking after this many stalled rounds
 static const int kOCTNgcNackMaxIndicesPerPacket = 256;
+// KHANDAQ (audit 2026-08-20): how often ONE peer may have us re-broadcast chunks of ONE file.
+//
+// Deliberately BELOW the honest NACK period rather than equal to it. The receiver's stall timer in
+// this same file fires every 2.5s, so a cooldown of 2.5s would sit exactly on top of it and any
+// jitter in the wrong direction would drop a legitimate retransmission request, costing the honest
+// transfer a whole round. 2.0s always lets the real timer through and still bounds a flood to one
+// service per two seconds per (file, requester) — Android picks 2500 for the same job, but keys it
+// per group+msgId rather than per requester, so it does not have this edge to worry about.
+static const NSTimeInterval kOCTNgcResendCooldown = 2.0;
+// Bound on the cooldown map itself, so it cannot become the leak.
+static const NSUInteger kOCTNgcMaxTrackedResendRequesters = 512;
+// Resend jobs allowed to sit on the (serial) send queue, which also carries incoming parsing.
+static const NSInteger kOCTNgcMaxPendingResendJobs = 4;
 
 static const size_t kOCTNgcMaxFileSize = 36701;
 static const size_t kOCTNgcMaxPacketSize = 37000;
@@ -118,6 +131,24 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
 @property (nonatomic, strong) NSMutableSet<NSString *> *cancelledMsgIdHexes;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, OCTNgcSentChunkedFile *> *sentChunkedFiles;
 @property (nonatomic, strong) dispatch_queue_t sendQueue;
+/**
+ * KHANDAQ (audit 2026-08-20): "msgIdHex|peerId" -> when we last honoured a resend request for it.
+ *
+ * Serving a 0x14 request re-broadcasts chunks TO THE WHOLE GROUP (the send block has no peer
+ * parameter, so a unicast reply is not expressible), which makes this the cheapest amplifier in the
+ * client: one 1068-byte request naming 256 chunk indices used to produce up to 256 * 37000 bytes of
+ * broadcast, replicated by toxcore to every peer. Nothing checked who was asking — `peerId` was not
+ * read at all — nothing removed duplicate indices, and nothing rate-limited the requests, so the
+ * same index could be listed 256 times in one packet and the flood could repeat at line rate.
+ *
+ * Android has throttled this path since it was written (SELECTIVE_RESEND_COOLDOWN_MS = 2500 per
+ * group+msgId, RESEND_SERVICE_THROTTLE_MS = 4000 overall, and it parses the request into a
+ * boolean[] so duplicates cost nothing). Desktop has no resend path at all. iOS was the one client
+ * that would serve this unbounded, which is what makes it an oversight rather than a trade-off.
+ */
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastResendServedAt;
+/** Resend jobs sitting on sendQueue. Bounded: the queue also carries incoming parsing. */
+@property (nonatomic, assign) NSInteger pendingResendJobs;
 @end
 
 @implementation OCTNgcGroupFileTransfer
@@ -147,6 +178,7 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
     _orphanChunks = [NSMutableDictionary new];
     _cancelledMsgIdHexes = [NSMutableSet set];
     _sentChunkedFiles = [NSMutableDictionary new];
+    _lastResendServedAt = [NSMutableDictionary new];
     _sendQueue = dispatch_queue_create("ngc-group-file-send", DISPATCH_QUEUE_SERIAL);
 
     return self;
@@ -1016,21 +1048,76 @@ typedef NS_ENUM(NSInteger, OCTNgcGroupFileTransferErrorPrivate) {
         return;  // not the original sender of this file (or it has been forgotten)
     }
 
-    NSMutableArray<NSNumber *> *indices = [NSMutableArray arrayWithCapacity:count];
+    // KHANDAQ (audit 2026-08-20): who is asking, and how often. Both were unchecked; see
+    // `lastResendServedAt`. peerId is what makes the cooldown per-requester rather than global, so
+    // one peer spamming cannot deny an honest peer its retransmission.
+    NSString *cooldownKey = [NSString stringWithFormat:@"%@|%u", msgIdHex, peerId];
+    const NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    @synchronized (self.lastResendServedAt) {
+        NSNumber *last = self.lastResendServedAt[cooldownKey];
+        if (last != nil && (now - last.doubleValue) < kOCTNgcResendCooldown) {
+            return;
+        }
+        self.lastResendServedAt[cooldownKey] = @(now);
+
+        if (self.lastResendServedAt.count > kOCTNgcMaxTrackedResendRequesters) {
+            // Crude bound, same shape as the other caps in this file: a group can have many peers
+            // and many files, and this map must not become the leak.
+            [self.lastResendServedAt removeAllObjects];
+            self.lastResendServedAt[cooldownKey] = @(now);
+        }
+    }
+
+    // Duplicates are free to send and expensive to serve: 256 copies of index 0 used to mean 256
+    // full chunk broadcasts. An index set collapses them, and keeps the result ordered, which is
+    // also what the receiver's assembler prefers.
+    NSMutableIndexSet *wanted = [NSMutableIndexSet indexSet];
     for (uint32_t i = 0; i < count; i++) {
         uint32_t idx = [self readU32BEFromData:data offset:(44 + i * 4)];
         if (idx < (uint32_t)context.totalChunks) {
-            [indices addObject:@(idx)];
+            [wanted addIndex:(NSUInteger)idx];
         }
+    }
+    if (wanted.count == 0) {
+        return;
+    }
+
+    NSMutableArray<NSNumber *> *indices = [NSMutableArray arrayWithCapacity:wanted.count];
+    [wanted enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        [indices addObject:@(idx)];
+    }];
+
+    // sendQueue is serial and also carries incoming SINGLE/BEGIN/CHUNK parsing, so an unbounded
+    // backlog of resend jobs does not merely delay the resends — it starves reception, and it keeps
+    // doing so after the flood stops. Refuse rather than queue.
+    @synchronized (self) {
+        if (self.pendingResendJobs >= kOCTNgcMaxPendingResendJobs) {
+            return;
+        }
+        self.pendingResendJobs++;
     }
 
     dispatch_async(self.sendQueue, ^{
         [self resendChunks:indices forContext:context];
+        @synchronized (self) {
+            if (self.pendingResendJobs > 0) {
+                self.pendingResendJobs--;
+            }
+        }
     });
 }
 
 - (void)resendChunks:(NSArray<NSNumber *> *)indices forContext:(OCTNgcSentChunkedFile *)context
 {
+    // KHANDAQ (audit 2026-08-20): a cancelled send must stay cancelled. A peer asking for chunks of
+    // a transfer the user has stopped would otherwise resurrect it — the same rule Android enforces
+    // before servicing a resend. This runs on sendQueue, which is the queue that mutates the set,
+    // so reading it here needs no extra synchronisation.
+    NSString *msgIdHex = [[OCTTox binToHexString:context.msgId.bytes length:context.msgId.length] lowercaseString];
+    if ([self isSendCancelledForMsgIdHex:msgIdHex]) {
+        return;
+    }
+
     NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:context.filePath];
     if (! handle) {
         return;

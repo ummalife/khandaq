@@ -209,4 +209,68 @@ public class NgcHistorySyncBudgetTest
         NgcHistorySyncBudget.resetAllForTest();
         assertEquals(NgcHistorySyncBudget.stateFor(null), NgcHistorySyncBudget.stateFor(null));
     }
+
+    // ------------------------------------------------------------------------- verdict budget (0x02)
+
+    @Test
+    public void acceptsOrdinaryVerdicts()
+    {
+        final NgcHistorySyncBudget.State s = new NgcHistorySyncBudget.State();
+        assertTrue(NgcHistorySyncBudget.claimVerdict(s));
+        assertTrue(NgcHistorySyncBudget.claimVerdict(s));
+    }
+
+    @Test
+    public void refusesVerdictsOnceTheGroupIsAtItsSessionCap()
+    {
+        final NgcHistorySyncBudget.State s = new NgcHistorySyncBudget.State();
+        for (int i = 0; i < NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION; i++)
+        {
+            assertTrue("claim " + i + " must succeed", NgcHistorySyncBudget.claimVerdict(s));
+        }
+        assertFalse(NgcHistorySyncBudget.claimVerdict(s));
+        assertFalse("and it must stay refused", NgcHistorySyncBudget.claimVerdict(s));
+    }
+
+    @Test
+    public void aRefusedVerdictDoesNotKeepCountingUp()
+    {
+        // Guards against an overflow-by-flooding: a refused claim must not increment, or a long
+        // enough flood would wrap the counter back to a value that passes again.
+        final NgcHistorySyncBudget.State s = new NgcHistorySyncBudget.State();
+        s.verdictsThisSession = NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION;
+        for (int i = 0; i < 1000; i++)
+        {
+            assertFalse(NgcHistorySyncBudget.claimVerdict(s));
+        }
+        assertEquals(NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION, s.verdictsThisSession);
+    }
+
+    @Test
+    public void oneGroupFloodingVerdictsDoesNotSilenceAnother()
+    {
+        NgcHistorySyncBudget.resetAllForTest();
+
+        final NgcHistorySyncBudget.State flooded = NgcHistorySyncBudget.stateFor("flooded");
+        flooded.verdictsThisSession = NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION;
+        final NgcHistorySyncBudget.State quiet = NgcHistorySyncBudget.stateFor("quiet");
+
+        assertFalse(NgcHistorySyncBudget.claimVerdict(flooded));
+        assertTrue(NgcHistorySyncBudget.claimVerdict(quiet));
+    }
+
+    @Test
+    public void theVerdictBudgetIsSeparateFromTheRowBudget()
+    {
+        // A group at its row cap has still verified nothing, and vice versa: spending one budget
+        // must not spend the other, or a busy group would stop showing verified authorship.
+        final NgcHistorySyncBudget.State s = seeded(NgcHistorySyncBudget.MAX_SYNCED_ROWS_PER_GROUP);
+        assertFalse(NgcHistorySyncBudget.fits(s, 1));
+        assertTrue(NgcHistorySyncBudget.claimVerdict(s));
+
+        final NgcHistorySyncBudget.State t = seeded(0);
+        t.verdictsThisSession = NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION;
+        assertFalse(NgcHistorySyncBudget.claimVerdict(t));
+        assertTrue(NgcHistorySyncBudget.fits(t, 1));
+    }
 }

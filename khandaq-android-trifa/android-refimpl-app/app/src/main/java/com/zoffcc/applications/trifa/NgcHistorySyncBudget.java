@@ -43,6 +43,24 @@ final class NgcHistorySyncBudget
     /** Notifications one group may raise from SYNCED history inside {@link #NOTIFICATION_WINDOW_MS}. */
     static final int MAX_NOTIFICATIONS_PER_GROUP_PER_WINDOW = 3;
     static final long NOTIFICATION_WINDOW_MS = 60_000L;
+    /**
+     * Signature verdicts one group may have recorded per app run.
+     *
+     * <p>The fourth budget, and it exists because version 0x02 arrived after the other three. A
+     * verified signed-history packet writes a permanent {@code kqhistver_*} row into the profile
+     * database, and NOTHING bounded that: the row budget above governs the unsigned 0x01 packet that
+     * inserts the message, while the signed packet beside it took a completely separate path. A group
+     * member who has announced a history-signing key can sign as many synthetic records as they like
+     * — the signature is over their OWN key, so every one of them verifies — and each distinct
+     * message id (four attacker-chosen bytes) becomes another permanent row. That is the same
+     * database-flooding shape the row budget was written for, through a door that was left open.
+     *
+     * <p>Deliberately per session and not persisted, matching the byte budget: a lifetime quota would
+     * eventually refuse a legitimately long-lived group, whereas this bounds what one run can be made
+     * to ingest. Set to the row cap because a verdict can only ever be useful for a row that fits it,
+     * so an honest peer cannot reach it.
+     */
+    static final int MAX_VERDICTS_PER_GROUP_PER_SESSION = MAX_SYNCED_ROWS_PER_GROUP;
 
     private static final Map<String, State> STATES = new ConcurrentHashMap<>();
 
@@ -59,6 +77,8 @@ final class NgcHistorySyncBudget
         long bytesThisSession;
         long notifyWindowStartMs;
         int notifyCountInWindow;
+        /** Signature verdicts written for this group during this app run. */
+        int verdictsThisSession;
     }
 
     static State stateFor(final String groupIdentifier)
@@ -136,6 +156,24 @@ final class NgcHistorySyncBudget
             return false;
         }
         state.notifyCountInWindow++;
+        return true;
+    }
+
+    /**
+     * Claims one signature-verdict write for this group.
+     *
+     * <p>Claim-on-use rather than check-then-record: the caller writes the row immediately after, and
+     * a check that did not consume would bound nothing. Returns false once the group is at its cap,
+     * and the caller then simply does not record the verdict — the message stays marked unverified,
+     * which is the honest outcome and exactly what it already shows before any verdict arrives.
+     */
+    static boolean claimVerdict(final State state)
+    {
+        if (state.verdictsThisSession >= MAX_VERDICTS_PER_GROUP_PER_SESSION)
+        {
+            return false;
+        }
+        state.verdictsThisSession++;
         return true;
     }
 

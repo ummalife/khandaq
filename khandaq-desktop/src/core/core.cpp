@@ -2482,6 +2482,31 @@ void Core::handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data
         return; // we are not in that group — silently ignore
     }
 
+    // KHANDAQ (audit 2026-08-20): only auto-invite into groups whose chat id is enough to join
+    // anyway.
+    //
+    // The request carries nothing but a chat id, and a chat id is not a secret: every member has
+    // it, and a member who was removed keeps it. For a PUBLIC group that costs nothing — the id is
+    // exactly the joining credential, so anyone holding it can walk in through the DHT without
+    // asking us. For a PRIVATE group it is the whole access control: the id alone does not admit
+    // you, an invite from a member does. Auto-answering that request turned any contact who had
+    // ever learned the id — an ex-member, or someone they passed it to — into a self-service
+    // readmission, without a moderator, a prompt, or a line in the log the user would see.
+    //
+    // So: public groups keep the friend-assisted join that this packet exists for, and private
+    // groups are silently ignored. Rate limiting stays below, but note that a rate limit was never
+    // the missing control here; it bounded how OFTEN, not whether.
+    Tox_Err_Group_State_Queries privacyError;
+    const auto privacy = tox_group_get_privacy_state(tox.get(), groupNum, &privacyError);
+    if (!PARSE_ERR(privacyError)) {
+        return;
+    }
+    if (privacy != TOX_GROUP_PRIVACY_STATE_PUBLIC) {
+        qDebug() << "handleGroupInviteRequestPacket: refusing to auto-invite friend" << friendId
+                 << "into private group" << groupNum;
+        return;
+    }
+
     const int64_t now = QDateTime::currentMSecsSinceEpoch();
     const uint64_t key = friendGroupKey(friendId, groupNum);
     const auto it = lastGroupInviteReplyMs.find(key);

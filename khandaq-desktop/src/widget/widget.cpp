@@ -26,11 +26,13 @@
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
+#include <QHash>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QSet>
 #include <QShortcut>
 #include <QStandardPaths>
 #include <QString>
@@ -2168,6 +2170,31 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
         return;
     }
 
+    // KHANDAQ (audit 2026-08-20): bound what one group may write to the user's disk unattended.
+    //
+    // Every file any member of a group sends lands in the download folder immediately, with no
+    // prompt and, until now, no limit — up to KHANDAQ_MAX_FILE_TRANSFER_BYTES (200 MB) per file, as
+    // often as the sender likes, from anyone at all in a public group. Android and iOS both gate
+    // this on the user's attachment-download setting; desktop has no such setting, so a per-group
+    // per-run ceiling is the smallest thing that turns "unbounded" into "bounded".
+    //
+    // The cap is NOT an early return on the receive path in general: the bytes only exist in memory
+    // here and desktop has no "download later" affordance, so refusing would lose the file outright
+    // rather than defer it. Past the ceiling the file is dropped and said so once, which is the
+    // honest outcome — the alternative is filling the disk silently.
+    static constexpr quint64 kGroupAutoSaveSessionCap = 2ULL * 1024 * 1024 * 1024; // per group, per run
+    static QHash<GroupId, quint64> groupAutoSavedBytes;
+    static QSet<GroupId> groupAutoSaveWarned;
+    quint64& savedForGroup = groupAutoSavedBytes[groupId];
+    if (savedForGroup + static_cast<quint64>(fileData.size()) > kGroupAutoSaveSessionCap) {
+        if (!groupAutoSaveWarned.contains(groupId)) {
+            groupAutoSaveWarned.insert(groupId);
+            qWarning() << "onGroupFileReceived: group auto-save cap reached for" << g->getName()
+                       << "- further files from this group will not be written this session";
+        }
+        return;
+    }
+
     const QDir dir = groupDownloadDir(g);
     const QString safeName = sanitizeGroupFileName(fileName);
     const QString filePath = uniqueFilePath(dir, safeName);
@@ -2179,6 +2206,8 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     }
     out.write(fileData);
     out.close();
+    // Booked after the write actually happened, so a failed open above costs nothing.
+    savedForGroup += static_cast<quint64>(fileData.size());
 
     static uint32_t groupFileNum = 700000;
     ToxFile file(++groupFileNum, static_cast<uint32_t>(groupnumber), safeName, filePath,

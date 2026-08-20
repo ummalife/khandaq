@@ -36,10 +36,24 @@ NSString *const kOCTNgcSignedHistoryVerdictStoredNotification = @"kOCTNgcSignedH
  * NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION, kept in step deliberately.
  */
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *verdictCountByGroup;
+
+/** Groups with a verdict refresh already scheduled. See kOCTNgcVerdictRefreshDebounce. */
+@property (nonatomic, strong) NSMutableSet<NSString *> *pendingVerdictRefresh;
 @end
 
 /** Matches NgcHistorySyncBudget.MAX_VERDICTS_PER_GROUP_PER_SESSION on Android. */
 static const NSUInteger kOCTNgcMaxVerdictsPerGroupPerSession = 5000;
+
+/**
+ * KHANDAQ (audit 2026-08-20): how long verdict refreshes are collapsed before the chat is told.
+ *
+ * Matches the 900 ms debounce Android uses in HelperGroup.schedule_group_verified_refresh. Without
+ * it, every accepted signed-history packet posted its own notification, and the chat controller
+ * reloads rows on the MAIN THREAD in response — so a peer re-sending signed records at line rate
+ * turned into one main-thread table reload per packet, which is a frozen UI rather than merely
+ * wasted work. A verdict is not urgent: it removes a marker from a row already on screen.
+ */
+static const NSTimeInterval kOCTNgcVerdictRefreshDebounce = 0.9;
 
 @implementation OCTNgcSignedHistory
 
@@ -60,6 +74,7 @@ static const NSUInteger kOCTNgcMaxVerdictsPerGroupPerSession = 5000;
         _setValueBlock = [setValueBlock copy];
         _secByGroup = [NSMutableDictionary dictionary];
         _verdictCountByGroup = [NSMutableDictionary dictionary];
+        _pendingVerdictRefresh = [NSMutableSet set];
     }
     return self;
 }
@@ -198,6 +213,42 @@ static NSData *peerNameField(NSString *peerName)
  * did not consume would bound nothing. Refusing simply leaves the message marked unverified, which
  * is what it already shows before any verdict arrives — the honest outcome, not a new failure state.
  */
+/**
+ * Tells the chat to re-render this group's rows, at most once per debounce window.
+ *
+ * Mirrors HelperGroup.schedule_group_verified_refresh on Android, including its 900 ms window. The
+ * "already pending" set is what makes it a debounce rather than a delay: a burst of verdicts in the
+ * same group produces exactly one reload, and the reload happens after the burst rather than during
+ * it.
+ */
+- (void)scheduleVerdictRefreshForGroupId:(nullable NSString *)groupId
+{
+    NSString *key = groupId.lowercaseString;
+    if (key.length == 0) {
+        return;
+    }
+
+    @synchronized (self.pendingVerdictRefresh) {
+        if ([self.pendingVerdictRefresh containsObject:key]) {
+            return;
+        }
+        [self.pendingVerdictRefresh addObject:key];
+    }
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kOCTNgcVerdictRefreshDebounce * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        typeof(self) strongSelf = weakSelf;
+        if (strongSelf != nil) {
+            @synchronized (strongSelf.pendingVerdictRefresh) {
+                [strongSelf.pendingVerdictRefresh removeObject:key];
+            }
+        }
+        [[NSNotificationCenter defaultCenter] postNotificationName:kOCTNgcSignedHistoryVerdictStoredNotification
+                                                            object:groupId];
+    });
+}
+
 - (BOOL)claimVerdictSlotForGroupId:(nullable NSString *)groupId
 {
     NSString *key = groupId.lowercaseString ?: @"";
@@ -324,10 +375,7 @@ static NSString *_Nullable verdictValue(uint64_t timestampSeconds, NSData *_Null
         OCTLogInfo(@"signedHistory: verified a row in group %u", groupNumber);
         // The row this proves is already on screen wearing the unverified marker; nothing else will
         // tell the chat to look again, because the verdict is not part of the message object.
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter] postNotificationName:kOCTNgcSignedHistoryVerdictStoredNotification
-                                                                object:groupId];
-        });
+        [self scheduleVerdictRefreshForGroupId:groupId];
     }
     return YES;
 }

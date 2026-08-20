@@ -13,10 +13,42 @@ IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
 SIM_SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 MIN=12.0
 
+# KHANDAQ (audit 2026-08-20): verify every tarball before it is unpacked.
+#
+# These two archives are fetched over the network and then CONFIGURED AND COMPILED on the build
+# machine, which means a tampered one runs arbitrary code as the person doing the release (a
+# modified configure or Makefile is enough) and, more usefully to an attacker, lands backdoored
+# object code inside libopus/libvpx — i.e. inside the shipped iOS binary, past every later signing
+# and provenance step, because those attest to what was built rather than to what went in.
+#
+# The version was pinned; the bytes were not. A hostile or compromised mirror, anyone on the network
+# path, or a moved upstream tag was enough. Fail closed on mismatch — the whole point is that a
+# surprise here stops the build instead of shipping.
+#
+# Digests: opus matches the SHA-256 xiph publishes for its own release; both were additionally
+# re-derived from the downloaded artifacts before being written here.
+verify_sha256() {
+  local file=$1 expected=$2
+  local actual
+  actual=$(shasum -a 256 "$file" | awk '{print $1}')
+  if [[ "$actual" != "$expected" ]]; then
+    echo "FATAL: checksum mismatch for $file" >&2
+    echo "  expected $expected" >&2
+    echo "  actual   $actual" >&2
+    rm -f "$file"
+    exit 1
+  fi
+  echo "    checksum ok: $(basename "$file")"
+}
+
+OPUS_SHA256=65b58e1e25b2a114157014736a3d9dfeaad8d41be1c8179866f144a2fb44ff9d
+LIBVPX_SHA256=eca30ea7fae954286c9fe9de9d377128f36b56ea6b8691427783b20c67bcfc13
+
 echo "==> opus 1.3.1"
 mkdir -p "$WORK"
 if [[ ! -d "$WORK/opus-1.3.1" ]]; then
   curl -fsSL -o "$WORK/opus-1.3.1.tar.gz" https://ftp.osuosl.org/pub/xiph/releases/opus/opus-1.3.1.tar.gz
+  verify_sha256 "$WORK/opus-1.3.1.tar.gz" "$OPUS_SHA256"
   tar -C "$WORK" -xzf "$WORK/opus-1.3.1.tar.gz"
 fi
 SRC="$WORK/opus-1.3.1"
@@ -49,6 +81,7 @@ xcodebuild -create-xcframework \
 echo "==> libvpx 1.4.0 device (arm64-darwin-gcc)"
 if [[ ! -d "$WORK/libvpx-device-1.4.0" ]]; then
   curl -fsSL -o "$WORK/v1.4.0.tar.gz" https://github.com/webmproject/libvpx/archive/refs/tags/v1.4.0.tar.gz
+  verify_sha256 "$WORK/v1.4.0.tar.gz" "$LIBVPX_SHA256"
   tar -C "$WORK" -xzf "$WORK/v1.4.0.tar.gz"
   mv "$WORK/libvpx-1.4.0" "$WORK/libvpx-device-1.4.0"
   patch -d "$WORK/libvpx-device-1.4.0" -p1 < "$IOS_DIR/local_pod_repo/toxcore/vpx-ios.diff"

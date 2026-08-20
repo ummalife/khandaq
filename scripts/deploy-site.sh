@@ -49,7 +49,48 @@ WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
 [[ -f "$WIN_EXE" ]] || WIN_EXE="$ROOT/dist/windows/x86_64/Khandaq-installer.exe"
 [[ -f "$WIN_EXE" ]] && cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"
 
-( cd "$DL" && shasum -a 256 khandaq-* 2>/dev/null | sort -u > SHA256SUMS.txt || true )
+# KHANDAQ (audit 2026-08-20): MERGE the checksum list, never blindly overwrite it.
+#
+# This used to be a plain `shasum -a 256 khandaq-* > SHA256SUMS.txt`, computed over whatever
+# happened to be in the downloads directory at that moment. Every staging step above is conditional
+# on $ROOT/dist/... existing, and dist/ is gitignored — so deploying a copy change from a clean
+# checkout stages nothing, the glob matches only the one .deb that is committed, and the published
+# SHA256SUMS.txt is silently truncated to a single line.
+#
+# The binaries themselves stay on the server and stay downloadable. So the file the site tells users
+# to verify with ("shasum -a 256 -c SHA256SUMS.txt", web/index.html) simply stops containing them,
+# and the one integrity control offered to users disappears without any error — which is worse than
+# never offering it, because a missing entry reads as "nothing to check" rather than as a failure.
+#
+# Entries computed now win; entries for artifacts not staged this run are carried over.
+( cd "$DL" && {
+    fresh="$(mktemp)"
+    shasum -a 256 khandaq-* 2>/dev/null | sort -u > "$fresh" || true
+
+    if [[ ! -s "$fresh" && -s SHA256SUMS.txt ]]; then
+      echo "    WARNING: no artifacts staged; leaving the existing SHA256SUMS.txt untouched" >&2
+    else
+      if [[ -s SHA256SUMS.txt ]]; then
+        # Carry over any entry whose FILE is not being republished in this run.
+        #
+        # The filename is extracted by stripping the hash rather than taken as $2, because the two
+        # tools that produce these lines disagree about the separator: macOS `shasum` writes
+        # "HASH  name" while GNU `sha256sum` in binary mode writes "HASH *name". Keying on $2 works
+        # under one and silently duplicates every entry under the other — which is exactly the kind
+        # of difference that shows up only on someone else's machine.
+        awk '
+          function fname(s) { sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", s); return s }
+          NR == FNR { republished[fname($0)] = 1; next }
+          !(fname($0) in republished)
+        ' "$fresh" SHA256SUMS.txt >> "$fresh" || true
+      fi
+      # Sorted by filename for a readable published file; correctness comes from the dedup above.
+      awk '{ n = $0; sub(/^[0-9a-fA-F]+[ \t]+\*?/, "", n); print n "\t" $0 }' "$fresh" \
+        | sort -f | cut -f2- > SHA256SUMS.txt
+    fi
+    rm -f "$fresh"
+  } )
+echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
 
 echo "==> Backup Element/Matrix static site on server"
 ssh "$REMOTE" "mkdir -p '$REMOTE_BACKUP_ROOT' && \

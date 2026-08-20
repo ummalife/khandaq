@@ -9,6 +9,7 @@
 #import "OCTFriend.h"
 #import "OCTFriendRequest.h"
 #import "OCTRealmManager.h"
+#import "OCTPushUrlValidator.h"
 #if __has_include(<Firebase/Firebase.h>)
 #import <Firebase/Firebase.h>
 #define OCTHasFirebase 1
@@ -529,6 +530,17 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 
 - (void)tox:(OCTTox *)tox friendPushTokenUpdate:(NSString *)pushToken friendNumber:(OCTToxFriendNumber)friendNumber
 {
+    // KHANDAQ (audit 2026-08-20): validate at the STORAGE boundary. This string came off the wire
+    // from a contact, unchecked, and used to go straight into Realm — from where the send path fed
+    // it to +[NSURL URLWithString:] and, on nil, raised inside a dispatch_async block and killed the
+    // app. Refusing it here means a malformed or foreign token never gets persisted at all, so the
+    // dangerous value cannot outlive the packet that carried it. Android has refused the same shapes
+    // since audit A33 (PushUrlValidator.java).
+    if (! [OCTPushUrlValidator isAllowedPushURL:pushToken]) {
+        OCTLogWarn(@"friendPushTokenUpdate: rejecting a push token that is not a usable wake URL");
+        return;
+    }
+
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
     NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];

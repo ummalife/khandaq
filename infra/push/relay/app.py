@@ -267,7 +267,7 @@ def _auth_adoption_summary() -> dict:
         return {"error": "unavailable"}
 
 
-def _auth_ok() -> bool:
+def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
     # KHANDAQ (audit A1): the relay must never run wide-open. docker-compose makes
     # PUSH_RELAY_AUTH_SECRET mandatory (:? -> the container refuses to start without it), so an
     # empty secret here is a misconfiguration, not "auth off" -> fail CLOSED instead of accepting
@@ -276,7 +276,7 @@ def _auth_ok() -> bool:
         log.error("push auth: PUSH_RELAY_AUTH_SECRET is empty -> rejecting (set it in the relay .env)")
         return False
 
-    if _auth_signature_valid():
+    if _auth_signature_valid(token, sender, allow_query_auth=allow_query_auth):
         _record_auth_adoption(True)
         return True
 
@@ -341,7 +341,7 @@ def _claim_signature(sig: str) -> bool:
         return False
 
 
-def _auth_signature_valid() -> bool:
+def _auth_signature_valid(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
     # KHANDAQ (security NEW-2): replay-resistant, request-bound auth.
     # The old scheme signed a CONSTANT (HMAC(secret, "khandaq-push-relay")) → the same value
     # forever, baked into every build, replayable without limit. Instead the sender signs the
@@ -351,14 +351,30 @@ def _auth_signature_valid() -> bool:
     #   ts   = unix seconds (integer string)
     #   msg  = id + "\n" + from + "\n" + ts   (raw, URL-decoded values, UTF-8)
     #   auth = lowercase hex HMAC-SHA256(secret, msg)
-    # `auth` may come via ?auth= or "Authorization: Bearer"; `ts` via ?ts= or X-Khandaq-Ts.
-    supplied = request.args.get("auth", "").strip()
+    # `auth` may come via "Authorization: Bearer" or — legacy endpoint only — ?auth=; `ts` via
+    # X-Khandaq-Ts or, again legacy only, ?ts=.
+    #
+    # KHANDAQ (audit: credentials in URLs): `token` and `sender` are now PARAMETERS rather than
+    # something read straight out of `request.args`, so the same pre-image can be signed over values
+    # that arrived in a JSON body. The pre-image itself is unchanged, deliberately: four
+    # implementations (relay, Android, iOS, desktop) agree on it byte for byte, and a transport
+    # change is not a reason to make them re-agree. `allow_query_auth=False` on the JSON endpoint
+    # refuses credentials in the query string outright, so the new path cannot quietly keep the old
+    # habit alive.
+    supplied = ""
+    if allow_query_auth:
+        supplied = request.args.get("auth", "").strip()
     if not supplied:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.lower().startswith("bearer "):
             supplied = auth_header[7:].strip()
 
-    ts = request.args.get("ts", "").strip() or request.headers.get("X-Khandaq-Ts", "").strip()
+    ts = ""
+    if allow_query_auth:
+        # Same precedence as before this refactor: query first, header as the fallback.
+        ts = request.args.get("ts", "").strip()
+    if not ts:
+        ts = request.headers.get("X-Khandaq-Ts", "").strip()
     if not supplied or not ts:
         return False
 
@@ -369,8 +385,6 @@ def _auth_signature_valid() -> bool:
     if abs(time.time() - ts_int) > AUTH_MAX_SKEW_SEC:
         return False
 
-    token = request.args.get("id", "")
-    sender = request.args.get("from", "")
     msg = (token + "\n" + sender + "\n" + ts).encode("utf-8")
     expected = hmac.new(PUSH_RELAY_AUTH_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(supplied, expected):
@@ -552,20 +566,32 @@ def health():
     })
 
 
-@app.route("/toxfcm/fcm.php", methods=["GET", "POST"])
-def wake():
-    if not _auth_ok():
+def _redact_token(detail: str, token: str) -> str:
+    """Remove the device token from an error string before it is logged or returned."""
+    if not token or not detail:
+        return detail
+    return detail.replace(token, "[REDACTED]")
+
+
+def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool):
+    """
+    The wake path, shared by the legacy query-string endpoint and the JSON one.
+
+    `token_raw`/`sender_raw` are the values EXACTLY as they arrived, because that is what the client
+    signed; the stripping/normalising below happens after authentication, never before it.
+    """
+    if not _auth_ok(token_raw, sender_raw, allow_query_auth=allow_query_auth):
         return jsonify({"error": "unauthorized"}), 401
 
     client_ip = _client_ip()
     if not _rate_ok(client_ip):
         return jsonify({"error": "rate limit"}), 429
 
-    token = request.args.get("id", "").strip()
+    token = token_raw.strip()
     if not token or len(token) < 10 or len(token) > 4096:
         return jsonify({"error": "invalid token"}), 400
 
-    sender_pubkey = request.args.get("from", "").strip().upper()
+    sender_pubkey = sender_raw.strip().upper()
     if sender_pubkey and (len(sender_pubkey) != 64 or not all(c in "0123456789ABCDEF" for c in sender_pubkey)):
         sender_pubkey = ""
 
@@ -579,10 +605,64 @@ def wake():
     ok, detail = _send_wake(token, sender_pubkey)
     if not ok:
         _release_coalesce_slot(token)  # send failed → let the retry through
+        # KHANDAQ (audit: keep token redaction in ALL error paths). `detail` can carry up to 200
+        # bytes of FCM's own response text, which is then both logged and echoed back to the caller.
+        # FCM does not normally quote the registration token back, but "normally" is not a property
+        # worth betting a targeting secret on, and the redaction costs one string replace.
+        detail = _redact_token(detail, token)
         log.warning("wake fail from %s: %s", client_ip, detail)
         return jsonify({"error": detail}), 503 if "not configured" in detail else 502
 
     return jsonify({"success": 1}), 200
+
+
+@app.route("/toxfcm/fcm.php", methods=["GET", "POST"])
+def wake():
+    # DEPRECATED (audit: credentials in URLs). Kept because clients in the field speak only this,
+    # and taking it away would silence their notifications. It gains no new functionality: anything
+    # new belongs on /wake below.
+    return _deliver_wake(request.args.get("id", ""), request.args.get("from", ""),
+                         allow_query_auth=True)
+
+
+@app.route("/wake", methods=["POST"])
+def wake_json():
+    """
+    KHANDAQ (audit: push credentials in query parameters).
+
+    The FCM registration token is a targeting secret — whoever holds it can push to that device —
+    and it used to travel in the URL, alongside the HMAC and its timestamp. nginx redacts the query
+    string here (see nginx-push.conf), but a URL leaks through more than one log: client-side
+    diagnostics, crash reporters, proxies, Referer, browser history, an intermediary that logs
+    before the redaction ever applies. A request BODY leaks through none of those by default.
+
+    So: token and sender in a JSON body, authentication in the Authorization header, timestamp in
+    X-Khandaq-Ts, and query-string credentials refused outright on this endpoint. The HMAC pre-image
+    is unchanged (`token \\n sender \\n ts`), so a client moving to this endpoint changes how it
+    sends the request, not how it signs it.
+
+      POST /wake
+      Authorization: Bearer <hex hmac-sha256>
+      X-Khandaq-Ts: <unix seconds>
+      Content-Type: application/json
+
+      {"token": "<fcm registration token>", "sender": "<64-hex tox pubkey, optional>"}
+
+    Neither the body nor the Authorization header is ever logged.
+    """
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "expected a json object body"}), 400
+
+    token = body.get("token")
+    sender = body.get("sender", "")
+    # Types are checked rather than coerced: str(...) of a dict or a list would produce a "token"
+    # that is neither what the client signed nor anything FCM can use, and would then fail deep in
+    # the send path instead of here.
+    if not isinstance(token, str) or (sender is not None and not isinstance(sender, str)):
+        return jsonify({"error": "token and sender must be strings"}), 400
+
+    return _deliver_wake(token, sender or "", allow_query_auth=False)
 
 
 # KHANDAQ: /stats + /stats.json dashboard removed (attack-surface reduction). Only the wake +
@@ -593,7 +673,10 @@ def wake():
 def root():
     return jsonify({
         "service": "khandaq-push-relay",
-        "endpoints": ["/toxfcm/fcm.php?id=<fcm_token>&type=1"],
+        "endpoints": [
+            "POST /wake  (json body + Authorization header)",
+            "/toxfcm/fcm.php?id=<fcm_token>&type=1  (deprecated: credentials in the URL)",
+        ],
         "privacy": "wake-only, no message content; optional sender public key via &from=",
     })
 

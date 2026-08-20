@@ -3,11 +3,50 @@
 The wake relay (`infra/push/relay/app.py`) can require a **replay-resistant, request-bound HMAC**
 on every wake call. This doc is how to turn it on **without breaking already-installed clients**.
 
+## Two endpoints, one signature
+| endpoint | credentials travel in | status |
+|---|---|---|
+| `POST /wake` | JSON body + `Authorization: Bearer` + `X-Khandaq-Ts` | **preferred**; query-string credentials are refused here |
+| `GET/POST /toxfcm/fcm.php` | query string (`?id=&from=&ts=&auth=`) | deprecated, kept for clients in the field; no new functionality |
+
+`/wake` exists because a URL leaks through places a request body does not — client diagnostics,
+crash reporters, proxies, `Referer`, an intermediary that logs before nginx redacts — and the FCM
+registration token in `?id=` is a targeting secret. The **signed pre-image is identical** for both,
+so migrating a client changes how it sends, not how it signs.
+
+```
+POST /wake
+Authorization: Bearer <hex hmac-sha256>
+X-Khandaq-Ts: <unix seconds>
+Content-Type: application/json
+
+{"token": "<fcm registration token>", "sender": "<64-hex tox pubkey, optional>"}
+```
+
+### Why the clients have not moved yet
+
+The relay serves `/wake` today; no client calls it. That is deliberate, and the reason is that the
+push URL is **not a client-to-server detail — it is a peer-to-peer protocol element**. A device
+publishes its wake URL to its contacts over Tox (`OCTSubmanagerChatsImpl.m`, `KhandaqPush.java`,
+`PushUrlValidator.java`), and it is the *sender's* client that fetches it. So the format is agreed
+between two clients that may be years apart in version, and the receiving end validates the exact
+shape it accepts (`"/toxfcm/fcm.php".equals(path)`).
+
+Switching it therefore takes the same staging as any wire change, in this order:
+
+1. Teach every client's validator to *accept* a `POST /wake`-shaped token (accept before emit).
+2. Only once shipped clients accept it, let a device *publish* the new token.
+3. Retire `/toxfcm/fcm.php` when the fleet has turned over.
+
+Doing 2 before 1 means contacts on older builds silently stop being able to wake the device — the
+same failure mode as flipping enforcement early, and just as invisible.
+
 ## What the auth is (and is not)
 - Each sender signs the actual request:
-  `msg = id + "\n" + from + "\n" + ts`  (raw, URL-decoded values, UTF-8),
-  `auth = lowercase hex HMAC-SHA256(secret, msg)`, sent as `&ts=&auth=`
-  (or `Authorization: Bearer <auth>` + `X-Khandaq-Ts: <ts>`).
+  `msg = id + "\n" + from + "\n" + ts`  (raw, URL-decoded values, UTF-8; on `/wake` the same two
+  values arrive as `token` and `sender` in the JSON body),
+  `auth = lowercase hex HMAC-SHA256(secret, msg)`, sent as `Authorization: Bearer <auth>` +
+  `X-Khandaq-Ts: <ts>` (the legacy endpoint also still accepts `&ts=&auth=`).
 - The server recomputes and accepts only within `PUSH_AUTH_MAX_SKEW_SEC` (default 300s), so a
   captured value (e.g. from nginx logs) cannot be replayed.
 - It is **NOT** strong auth: the shared secret is embedded in the shipped APK/IPA and is
@@ -63,8 +102,10 @@ The soft warning line is: `push auth SOFT: unsigned/invalid request allowed from
    - Android: `KHANDAQ_PUSH_AUTH_SECRET=<secret> ./gradlew :app:assembleRelease` → release.
    - iOS: `xcodebuild ... KHANDAQ_PUSH_AUTH_SECRET=<secret>` (or set it in the CI build step that
      `scripts/upload-testflight.sh` runs) → TestFlight/App Store.
-4. **Watch adoption.** Tail the relay for `push auth SOFT:` warnings. As users update, these drop.
-   Wait until they are negligible (give the slowest store + user-update cycle time — typically weeks).
+4. **Watch adoption.** `curl -s https://push.khandaq.org/health | jq .auth_adoption` — `window_signed_pct`
+   is the number this decision turns on. Tailing the relay for `push auth SOFT:` warnings still works,
+   but counting log lines to decide whether real users will lose notifications is guesswork; the
+   counter is not.
 5. **Server → ENFORCE.** Set `PUSH_AUTH_ENFORCE=1`, redeploy, confirm `/health` → `"auth_mode":"enforce"`.
    From here unsigned/invalid wake calls get 401.
 

@@ -34,12 +34,14 @@ SECRET = "test-secret-not-a-real-one"
 def relay(tmp_path, monkeypatch):
     """A fresh app module per test, with its own env, its own SQLite file and no real FCM."""
 
-    def _load(enforce: str = "0", secret: str = SECRET):
+    def _load(enforce: str = "0", secret: str = SECRET, rate_limit: str = "10000",
+              trusted_proxies: str = ""):
         monkeypatch.setenv("PUSH_RELAY_AUTH_SECRET", secret)
         monkeypatch.setenv("PUSH_AUTH_ENFORCE", enforce)
         monkeypatch.setenv("STATS_DB", str(tmp_path / "stats.db"))
         monkeypatch.setenv("PUSH_COALESCE_SECONDS", "0")  # coalescing is not what these tests probe
-        monkeypatch.setenv("PUSH_RATE_LIMIT_PER_MIN", "10000")
+        monkeypatch.setenv("PUSH_RATE_LIMIT_PER_MIN", rate_limit)
+        monkeypatch.setenv("PUSH_TRUSTED_PROXIES", trusted_proxies)
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         if "app" in sys.modules:
             del sys.modules["app"]
@@ -265,6 +267,80 @@ def test_an_empty_secret_fails_closed(relay):
     m = relay(enforce="0", secret="")
     assert m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}").status_code == 401
     assert m.app.test_client().post("/wake", json={"token": TOKEN}).status_code == 401
+
+
+# -------------------------------------------------------------------------------- rate limiting
+#
+# KHANDAQ (audit 2026-08-20): these exist because the per-IP limiter had silently collapsed into a
+# single global bucket in production and no test noticed — the suite raised the limit out of the way
+# instead of exercising it. The deployment shape that matters is nginx on the host proxying into a
+# bridge-networked container, so the peer address the relay sees is the bridge gateway, and every
+# caller's identity lives in X-Real-IP.
+
+BRIDGE_GATEWAY = "172.18.0.1"
+
+
+def flood(client, times, real_ip=None, remote_addr=BRIDGE_GATEWAY):
+    headers = {"X-Real-IP": real_ip} if real_ip else {}
+    last = None
+    for _ in range(times):
+        last = client.get(f"/toxfcm/fcm.php?id={TOKEN}", headers=headers,
+                          environ_base={"REMOTE_ADDR": remote_addr})
+    return last
+
+
+def test_one_flooding_client_does_not_rate_limit_everyone_else(relay):
+    """The regression itself: without X-Real-IP being honoured, B is 429 because A flooded."""
+    m = relay(rate_limit="5")
+    client = m.app.test_client()
+
+    assert flood(client, 5, real_ip="203.0.113.7").status_code == 200
+    assert flood(client, 1, real_ip="203.0.113.7").status_code == 429, "the flooder must be limited"
+    assert flood(client, 1, real_ip="198.51.100.9").status_code == 200, \
+        "a different client must have its own bucket"
+
+
+def test_x_real_ip_is_honoured_from_the_docker_bridge_gateway(relay):
+    """
+    The gateway is not loopback. Trusting loopback only is what broke this, so pin the shape.
+    """
+    m = relay(rate_limit="2")
+    client = m.app.test_client()
+    assert flood(client, 2, real_ip="203.0.113.7").status_code == 200
+    assert flood(client, 1, real_ip="203.0.113.7").status_code == 429
+    for other in ("198.51.100.1", "198.51.100.2", "198.51.100.3"):
+        assert flood(client, 1, real_ip=other).status_code == 200
+
+
+# NB: do NOT use the documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) as a
+# stand-in for "a public address" here. Python's ipaddress module reports them as `is_private`,
+# because they are in the IANA special-purpose registry, so a test written with them would pass for
+# the wrong reason — the peer would be trusted and the assertion would never exercise the guard.
+# These two are genuinely globally-routable.
+PUBLIC_PEER = "8.8.8.8"
+OTHER_PUBLIC_PEER = "1.1.1.1"
+
+
+def test_x_real_ip_is_ignored_when_the_peer_is_not_a_trusted_hop(relay):
+    """The other half: a client talking to the relay directly cannot spoof its way out of a bucket."""
+    m = relay(rate_limit="3")
+    client = m.app.test_client()
+
+    # Same public peer each time, but a fresh forged X-Real-IP per request.
+    for i in range(3):
+        assert flood(client, 1, real_ip=f"10.0.0.{i}", remote_addr=PUBLIC_PEER).status_code == 200
+    assert flood(client, 1, real_ip="10.0.0.99", remote_addr=PUBLIC_PEER).status_code == 429, \
+        "a public peer must be limited on its own address, whatever X-Real-IP claims"
+    assert flood(client, 1, real_ip="10.0.0.99", remote_addr=OTHER_PUBLIC_PEER).status_code == 200, \
+        "and a different public peer is still its own bucket"
+
+
+def test_an_explicitly_pinned_proxy_is_trusted(relay):
+    m = relay(rate_limit="2", trusted_proxies=PUBLIC_PEER)
+    client = m.app.test_client()
+    assert flood(client, 2, real_ip="198.51.100.1", remote_addr=PUBLIC_PEER).status_code == 200
+    assert flood(client, 1, real_ip="198.51.100.2", remote_addr=PUBLIC_PEER).status_code == 200, \
+        "pinned proxy: each X-Real-IP gets its own bucket"
 
 
 # ------------------------------------------------------------------------------------------ health

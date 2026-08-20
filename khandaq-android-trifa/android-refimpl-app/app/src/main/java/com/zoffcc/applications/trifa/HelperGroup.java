@@ -5567,6 +5567,31 @@ public class HelperGroup
                 t.setDaemon(true);
                 return t;
             });
+
+    /**
+     * KHANDAQ (audit 2026-08-20): serves incoming history-sync requests.
+     *
+     * <p>This used to be a bare {@code new Thread()} per request, created straight from the toxcore
+     * callback. One 8-byte packet therefore bought one OS thread, and nothing bounded how many
+     * packets arrived — the reachable end of that is {@code OutOfMemoryError: pthread_create failed}.
+     * A bounded pool with a bounded queue turns the same flood into "the extra requests are simply
+     * not served", which is the correct outcome: history sync is best-effort, an honest peer retries,
+     * and {@link NgcHistoryRequestPolicy} has already collapsed the loop before it reaches here.
+     *
+     * <p>Two threads rather than one so a slow group cannot stall an unrelated one, and
+     * DiscardPolicy rather than CallerRunsPolicy because the caller is the tox thread — running the
+     * work there is exactly the stall being prevented.
+     */
+    private static final java.util.concurrent.ExecutorService ngc_history_serve_exec =
+            new java.util.concurrent.ThreadPoolExecutor(
+                    1, 2, 60L, java.util.concurrent.TimeUnit.SECONDS,
+                    new java.util.concurrent.LinkedBlockingQueue<>(8),
+                    r -> {
+                        final Thread t = new Thread(r, "ngc-history-serve");
+                        t.setDaemon(true);
+                        return t;
+                    },
+                    new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
     private static final ConcurrentHashMap<String, Boolean> ngc_file_transfer_failed = new ConcurrentHashMap<>();
     /** Last successfully sent chunk index for resume after disconnect (-1 = none). */
     private static final ConcurrentHashMap<String, Integer> ngc_outgoing_last_chunk_sent = new ConcurrentHashMap<>();
@@ -10062,7 +10087,19 @@ public class HelperGroup
         {
         }
 
-        final Thread t = new Thread()
+        // KHANDAQ (audit 2026-08-20): an 8-byte packet must not be able to buy a full history
+        // rebuild, and certainly not one per packet. Serving this scans the group's whole message
+        // table out of the encrypted database and re-sends every matching row, so an unlimited loop
+        // from one peer was a remote denial of service; iOS has had the same 20s per-peer cooldown
+        // since OCTNgcGroupHistSync.m was written. Keyed on the peer's stable public key, because
+        // NGC peer ids churn and the attacker can cause that churn.
+        if (!NgcHistoryRequestPolicy.allowRequest(group_identifier, peer_pubkey, System.currentTimeMillis()))
+        {
+            HelperGeneric.logI(TAG, "sync_group_message_history:request cooldown -> dropping");
+            return;
+        }
+
+        final Runnable serve_history = new Runnable()
         {
             @Override
             public void run()
@@ -10155,7 +10192,7 @@ public class HelperGroup
                 }
             }
         };
-        t.start();
+        ngc_history_serve_exec.execute(serve_history);
     }
 
     private static void send_ngch_syncmsg(final String group_identifier, final String peer_pubkey, final GroupMessage m)

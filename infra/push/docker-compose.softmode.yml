@@ -11,4 +11,4 @@ services:
   push-relay:
     environment:
       - PUSH_AUTH_ENFORCE=0
-      - PUSH_AUTH_ENFORCE_BY=${PUSH_AUTH_ENFORCE_BY:?soft mode is a dated exception, not a default - set PUSH_AUTH_ENFORCE_BY=YYYY-MM-DD in /opt/khandaq-push/.env}
+      - "PUSH_AUTH_ENFORCE_BY=${PUSH_AUTH_ENFORCE_BY:?soft mode is a dated exception, not a default - set PUSH_AUTH_ENFORCE_BY=YYYY-MM-DD in /opt/khandaq-push/.env}"

@@ -26,7 +26,7 @@ services:
       # git: `set -a; . /opt/khandaq-push/.env; set +a`). PUSH_AUTH_ENFORCE stays 0 (soft/monitor) by
       # default so clients that do not sign yet keep working; flip it to 1 once client signing is
       # adopted (watch the "push auth SOFT" log lines drop to ~0). See docs/PUSH_AUTH_ROLLOUT.md.
-      - PUSH_RELAY_AUTH_SECRET=${PUSH_RELAY_AUTH_SECRET:?set a strong random secret in /opt/khandaq-push/.env; it must match the value baked into the iOS/Android client builds}
+      - "PUSH_RELAY_AUTH_SECRET=${PUSH_RELAY_AUTH_SECRET:?set a strong random secret in /opt/khandaq-push/.env; it must match the value baked into the iOS/Android client builds}"
       # KHANDAQ (re-audit 2026-08-21, R-02): `:?`, not `:-0`. The MODE does not change — soft is
       # still the only mode that works today, because no shipped client signs at all
       # (KHANDAQ_PUSH_AUTH_SECRET is empty in every release build and no workflow sets it, so
@@ -34,7 +34,7 @@ services:
       # authentication stops being something that happens by DEFAULT when a variable is missing, and
       # becomes something a person wrote down. Deploy through scripts/deploy-push-relay.sh, which
       # requires --enforce or --soft and then verifies /health agrees.
-      - PUSH_AUTH_ENFORCE=${PUSH_AUTH_ENFORCE:?choose a mode explicitly: deploy with scripts/deploy-push-relay.sh --enforce or --soft (soft additionally requires PUSH_AUTH_ENFORCE_BY)}
+      - "PUSH_AUTH_ENFORCE=${PUSH_AUTH_ENFORCE:?choose a mode explicitly: deploy with scripts/deploy-push-relay.sh --enforce or --soft (soft additionally requires PUSH_AUTH_ENFORCE_BY)}"
       - PUSH_AUTH_MAX_SKEW_SEC=${PUSH_AUTH_MAX_SKEW_SEC:-300}
       # KHANDAQ (audit 2026-08-21, K-02): an optional YYYY-MM-DD date after which a relay still
       # running in soft mode logs an error at startup and reports enforce_overdue on /health. It

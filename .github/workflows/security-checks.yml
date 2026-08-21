@@ -86,6 +86,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Compose environment entries must be plain strings
         run: python3 scripts/check-compose-env-strings.py
+      # Same family, found the same way: an unquoted heredoc runs backticks on the LOCAL machine, so a
+      # comment explaining a bug executed `ssh bash -s` on the workstation in the middle of a deploy.
+      - name: No unescaped backticks inside unquoted heredocs
+        run: python3 scripts/check-shell-heredocs.py
 
   ngc-downgrade-parity:
     # KHANDAQ (K-01): the anti-downgrade rule is implemented twice, in Java and in Objective-C, and

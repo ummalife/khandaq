@@ -719,3 +719,21 @@ def test_a_secret_containing_a_colon_survives_parsing(relay):
     weird = "aa:bb:cc"
     m = relay(enforce="1", secret="", secrets=f"7:{weird}")
     assert _signed(m.app.test_client(), weird).status_code == 200
+
+
+def test_an_unsigned_json_wake_is_still_served_in_soft_mode(relay):
+    """
+    KHANDAQ (re-audit 2026-08-21, R-02): the field-compatibility guarantee, on the NEW endpoint.
+
+    There was a test for the legacy /toxfcm/fcm.php path and none for /wake, so half of what soft
+    mode exists to protect was uncovered. It matters more than it looks: no shipped client signs at
+    all — the push secret is empty in every release build — so if this ever started returning 401,
+    every wake notification in the field would stop, and the only thing standing between that and a
+    release is this assertion.
+    """
+    m = relay(enforce="0")
+    r = m.app.test_client().post("/wake", json={"token": TOKEN})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert m.sent == [(TOKEN, "")]
+    outcomes = m.app.test_client().get("/health").get_json()["auth_adoption"]["window_outcomes"]
+    assert outcomes["missing"] == 1, "an unsigned request must still be COUNTED while it is served"

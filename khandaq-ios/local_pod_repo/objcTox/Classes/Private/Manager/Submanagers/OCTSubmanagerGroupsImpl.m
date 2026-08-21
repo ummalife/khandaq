@@ -4514,10 +4514,15 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             return packets;
         }
 
-        // Signed copies go LAST. The unsigned packet is what inserts the row on every client in the
-        // field, and 0x02 is dropped outright by the ones that have not upgraded yet, so a verdict must
-        // never be able to arrive before the row it is about.
-        return [packets arrayByAddingObjectsFromArray:signedPackets];
+        // KHANDAQ (external audit 2026-08-21, K-01): signed copies now go FIRST.
+        //
+        // They used to go last, with the reasoning that a verdict must never arrive before the row it
+        // is about. That was right while a verdict only removed a marker — and it is exactly backwards
+        // once the receiver uses the verdict to decide whether the unsigned row is a downgrade. The
+        // 0x02 handler still inserts nothing, so the unsigned packet still creates the row; it simply
+        // has to arrive second, or the receiver would reject every legitimately signed message in the
+        // group. Clients that have not upgraded drop 0x02 unread and are unaffected by the order.
+        return [signedPackets arrayByAddingObjectsFromArray:packets];
     };
 }
 

@@ -704,6 +704,32 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
         return;
     }
 
+    // KHANDAQ (external audit 2026-08-21, K-01) — the anti-downgrade gate.
+    //
+    // Offsets 12 and 48 of this packet are an author pubkey and a display name nobody signed; the
+    // transport authenticates the SYNCING peer only. Signed history (0x02) fixes that for records
+    // carrying a signature, but accepting the unsigned form unconditionally means an attacker simply
+    // omits the signed twin. So once this author's key has been learned from a live announcement in
+    // this group, an unsigned record claiming them is refused.
+    //
+    // It sits ABOVE the dedup, the insert and the delivery receipt on purpose. Receipting a forgery
+    // tells the forger it landed, and the dedup path issues a receipt of its own.
+    //
+    // With signedHistory nil the behaviour is byte-for-byte what it was, so the whole rule stays
+    // behind the single wiring point in OCTSubmanagerGroupsImpl.
+    if (self.signedHistory) {
+        OCTNgcDowngradeDecision decision = [self.signedHistory downgradeDecisionForGroupNumber:groupNumber
+                                                                                  authorPubHex:senderPubkeyHex
+                                                                                     messageId:messageId
+                                                                                     timestamp:(uint64_t)timestamp
+                                                                                          text:text];
+        if (decision == OCTNgcDowngradeDecisionReject) {
+            OCTLogInfo(@"histSync: refusing unsigned history for an author that signs, group %u msgid %u",
+                       groupNumber, messageId);
+            return;
+        }
+    }
+
     uint32_t senderPeerId = self.peerIdForPublicKeyBlock(groupNumber, senderPubkeyHex);
 
     if (senderPeerId > 0 && self.isBlockedPeerBlock(groupNumber, senderPeerId)) {

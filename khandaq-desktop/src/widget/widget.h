@@ -200,7 +200,7 @@ public slots:
     void onGroupJoinByIdPrompt();
     void onGroupMessageReceived(int groupnumber, int peernumber, const QString& message, bool isAction);
     void onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
-                             const QByteArray& fileData, const QDateTime& timestamp);
+                             const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced);
     void onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                          qint64 fileSize);
     void onGroupPeerlistChanged(uint32_t groupnumber);

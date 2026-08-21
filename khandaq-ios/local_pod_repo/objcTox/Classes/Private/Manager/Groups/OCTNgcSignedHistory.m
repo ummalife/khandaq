@@ -313,6 +313,32 @@ static NSString *_Nullable verdictValue(uint64_t timestampSeconds, NSData *_Null
     return expected != nil && [expected isEqualToString:(self.getValueBlock(row) ?: @"")];
 }
 
+- (OCTNgcDowngradeDecision)downgradeDecisionForGroupNumber:(uint32_t)groupNumber
+                                              authorPubHex:(nullable NSString *)authorPubHex
+                                                 messageId:(uint32_t)messageId
+                                                 timestamp:(uint64_t)timestampSeconds
+                                                      text:(nullable NSString *)text
+{
+    NSString *groupId = self.groupIdBlock ? self.groupIdBlock(groupNumber) : nil;
+    if (groupId.length == 0 || authorPubHex.length == 0) {
+        // Nothing to look the author up by. Accepting matches today's behaviour exactly; refusing
+        // here would drop history for a reason that has nothing to do with the finding.
+        return OCTNgcDowngradeDecisionAcceptLegacy;
+    }
+
+    BOOL verified = [self isAuthorVerifiedForGroupId:groupId
+                                           messageId:messageId
+                                        authorPubHex:authorPubHex
+                                           timestamp:timestampSeconds
+                                                text:text];
+
+    NSString *dirRow = [OCTNgcHskDirectory rowKeyWithGroupId:groupId peerGroupPubHex:authorPubHex];
+    OCTNgcHskRecord *known = [OCTNgcHskDirectory decodeRecord:dirRow ? self.getValueBlock(dirRow) : nil];
+
+    return OCTNgcHistoryDowngradeDecide(known, verified,
+                                        (uint64_t)([[NSDate date] timeIntervalSince1970] * 1000.0));
+}
+
 #pragma mark - receiving
 
 - (BOOL)handleIncomingPacketWithGroupNumber:(uint32_t)groupNumber

@@ -209,6 +209,43 @@ final class NgcSignedHistory
         return timestampSeconds + ":" + NgcHskStore.toHex(hash);
     }
 
+    /**
+     * Whether a signature verdict already exists that covers exactly THIS unsigned row.
+     *
+     * <p>Same question {@link #isAuthorVerified} answers, asked from the receive path instead of from
+     * the renderer, i.e. before a GroupMessage exists. {@link NgcHistoryDowngradePolicy} needs it to
+     * tell a downgrade attempt from a legitimately signed message whose signed twin has already
+     * arrived.
+     *
+     * <p>It takes the raw UTF-8 bytes off the wire rather than a decoded String on purpose. A byte
+     * sequence that does not round-trip through String would hash differently after re-encoding, and
+     * the row would be refused as a forgery when it is nothing of the kind.
+     */
+    static boolean isVerdictPresent(final String groupIdentifier, final String authorPubHex,
+                                    final String messageIdToxHex, final long timestampSeconds,
+                                    final byte[] textUtf8)
+    {
+        try
+        {
+            final byte[] authorPub = NgcHskStore.fromHex(authorPubHex);
+            if (authorPub == null || authorPub.length != NgcHistSig.PUBKEY_SIZE)
+            {
+                return false;
+            }
+            final String row = verifiedRowKey(groupIdentifier, msgIdBytes(messageIdToxHex), authorPub);
+            if (row == null)
+            {
+                return false;
+            }
+            final String expected = verdictValue(timestampSeconds, textUtf8);
+            return expected != null && expected.equals(HelperGeneric.get_g_opts(row));
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
     static String verifiedRowKey(final String groupIdentifier, final byte[] msgId, final byte[] authorPub)
     {
         if (groupIdentifier == null || msgId == null || authorPub == null)

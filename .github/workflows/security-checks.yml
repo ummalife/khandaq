@@ -62,3 +62,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Bundled desktop dependencies — EOL, security floors and inventory drift
         run: python3 scripts/check-bundled-deps-eol.py --warn-days 180
+
+  ngc-downgrade-parity:
+    # KHANDAQ (K-01): the anti-downgrade rule is implemented twice, in Java and in Objective-C, and
+    # a security rule enforced on one client but not the other is not a rule. The Java side has
+    # NgcHistoryDowngradePolicyTest; nothing covered the ObjC side, because no CI job here has Xcode.
+    # This compiles the real policy body as C and runs the same truth table, on Linux.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: iOS anti-downgrade policy must match the Android truth table
+        run: python3 scripts/check-ios-downgrade-policy.py

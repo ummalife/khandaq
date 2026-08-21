@@ -799,3 +799,70 @@ def test_there_is_no_registration_endpoint_yet(relay):
     """
     m = relay()
     assert m.app.test_client().post("/register", json={}).status_code == 404
+
+
+# ------------------------------------------- /health must not report a service account it cannot read
+
+
+def _load_with_sa(relay, tmp_path, monkeypatch, mode):
+    """mode: 'ok' | 'unreadable' | 'missing' | 'unset'."""
+    sa = tmp_path / "firebase-sa.json"
+    if mode != "missing" and mode != "unset":
+        sa.write_text('{"type": "service_account"}', encoding="utf-8")
+    if mode == "unset":
+        monkeypatch.setenv("FCM_SERVICE_ACCOUNT_FILE", "")
+    else:
+        monkeypatch.setenv("FCM_SERVICE_ACCOUNT_FILE", str(sa))
+    m = relay()
+    if mode == "unreadable":
+        # os.access() is what the code asks; patch it rather than relying on chmod, which does not
+        # take effect for root and behaves differently on Windows. The production failure IS an
+        # os.access/open refusal, so this substitutes for the mechanism, not around it.
+        real_access = os.access
+        monkeypatch.setattr(
+            m.os, "access",
+            lambda path, mode_, *a, **k: False if str(path) == str(sa) else real_access(path, mode_, *a, **k))
+    return m
+
+
+def test_health_reports_an_unreadable_service_account_as_unusable(relay, tmp_path, monkeypatch):
+    """
+    KHANDAQ (production deploy 2026-08-21). The relay container runs as uid 10001 since the K-05
+    hardening; the service account on the host was 0600 root:root. The file therefore existed and
+    could not be opened, and the old os.path.isfile() check reported "fcm_configured": true,
+    "fcm_mode": "v1" over a total notification outage — including to the deploy script's own /health
+    assertion, which would have called that deploy a success.
+
+    A health field that is wrong in the direction that HIDES an outage is the failure this project
+    has already had once (K-02, auth_mode reporting "off" while the relay refused everything). So:
+    unreadable must read as unusable, and must say which of the two problems it is.
+    """
+    m = _load_with_sa(relay, tmp_path, monkeypatch, "unreadable")
+    body = m.app.test_client().get("/health").get_json()
+    assert body["fcm_configured"] is False
+    assert body["fcm_mode"] == "none"
+    assert body["fcm_service_account"] == "unreadable"
+
+
+def test_health_distinguishes_missing_from_unreadable(relay, tmp_path, monkeypatch):
+    """The two need different fixes: provision the file, versus chown it. Do not conflate them."""
+    m = _load_with_sa(relay, tmp_path, monkeypatch, "missing")
+    body = m.app.test_client().get("/health").get_json()
+    assert body["fcm_configured"] is False
+    assert body["fcm_service_account"] == "missing"
+
+
+def test_health_reports_a_readable_service_account_as_ok(relay, tmp_path, monkeypatch):
+    """The green path still has to be green, or the check above is just a way to fail."""
+    m = _load_with_sa(relay, tmp_path, monkeypatch, "ok")
+    body = m.app.test_client().get("/health").get_json()
+    assert body["fcm_configured"] is True
+    assert body["fcm_mode"] == "v1"
+    assert body["fcm_service_account"] == "ok"
+
+
+def test_health_omits_the_field_when_no_service_account_is_configured(relay, tmp_path, monkeypatch):
+    """No path configured is not a fault; do not invent a status for a thing nobody asked for."""
+    m = _load_with_sa(relay, tmp_path, monkeypatch, "unset")
+    body = m.app.test_client().get("/health").get_json()
+    assert "fcm_service_account" not in body

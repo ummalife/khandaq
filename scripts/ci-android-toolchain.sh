@@ -71,10 +71,19 @@ parse_gradle() {
 }
 
 # One installed package, one assertion, against the property Gradle itself keys on.
+# The parser is fussier than it looks, and every part of it comes from a real SDK rather than from a
+# fixture. The NDK writes `Pkg.Revision = 23.2.8568313` WITH spaces around the equals sign, while the
+# platform and build-tools write `Pkg.Revision=2` without — so an anchored `key=` match finds nothing
+# at all for the NDKs and reports an empty revision. build-tools additionally carries a COMMENTED
+# duplicate (`#Pkg.Revision=36.0.0 rc5`), so comment lines must be skipped rather than merely
+# out-ranked by ordering. An empty result is now an error in its own right: "the file is not what this
+# check expects" must never look like "the version matches".
 assert_prop() {
     local file=$1 key=$2 want=$3 got
     [ -f "$file" ] || die "$file is missing — the package was not installed (this used to be swallowed by '|| true')"
-    got=$(sed -n "s/^${key}=//p" "$file" | head -1 | tr -d '\r')
+    got=$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" "$file" \
+          | grep -v '^#' | head -1 | tr -d '\r' | sed 's/[[:space:]]*$//')
+    [ -n "$got" ] || die "$file: $key is absent or empty — the file layout is not what this check expects"
     [ "$got" = "$want" ] || die "$file: $key is '$got', expected '$want'"
     echo "    ok: $key=$got  ($file)"
 }
@@ -92,16 +101,39 @@ verify_installed() {
 }
 
 sdkmgr() {
-    local m="${ANDROID_SDK_ROOT:-}/cmdline-tools/latest/bin/sdkmanager"
-    [ -x "$m" ] || die "sdkmanager not found at $m"
-    echo "$m"
+    # `.bat` on Windows, extensionless on Linux/macOS. Checking both is what makes this script
+    # runnable on a maintainer's machine — which is how the source.properties parsing above got
+    # fixed, after it had been written against a fixture and never run against a real SDK.
+    local base="${ANDROID_SDK_ROOT:-}/cmdline-tools/latest/bin/sdkmanager"
+    # -x for the POSIX launcher, -f for the .bat: a Windows batch file is not marked executable on
+    # the filesystem, so an -x test would reject the one that actually exists there.
+    [ -x "$base" ] && { echo "$base"; return 0; }
+    [ -f "$base.bat" ] && { echo "$base.bat"; return 0; }
+    die "sdkmanager not found at $base (or $base.bat)"
 }
 
 do_snapshot() {
-    local out=${1:?usage: snapshot <outfile>}
-    # Sorted so the before/after comparison is about CONTENT, not about the order sdkmanager happens
-    # to print in.
-    "$(sdkmgr)" --sdk_root="$ANDROID_SDK_ROOT" --list_installed | sed 's/[[:space:]]*$//' | sort > "$out"
+    local out=${1:?usage: snapshot <outfile>} raw rc
+    raw="$out.raw"
+    # The status is captured explicitly, and the CONTENT is then checked, because a snapshot that
+    # silently records a failure is worse than no snapshot at all: `assert-unchanged` would compare
+    # two identical error messages and report "nothing was auto-downloaded" — a vacuous pass on the
+    # one gate that makes the toolchain pinning real. Found exactly that way, by running this on a
+    # machine where JAVA_HOME happened to be unset: sdkmanager printed "ERROR: JAVA_HOME is not set",
+    # the snapshot dutifully stored it, and the drift check went green.
+    set +e
+    "$(sdkmgr)" --sdk_root="$ANDROID_SDK_ROOT" --list_installed > "$raw" 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ]; then
+        sed 's/^/    /' "$raw" >&2
+        rm -f "$raw"
+        die "sdkmanager --list_installed failed (exit $rc); see its output above"
+    fi
+    # Sorted so the before/after comparison is about CONTENT, not about the order sdkmanager prints in.
+    grep -E '^[[:space:]]*[a-z][a-z0-9._;-]+[[:space:]]*\|' "$raw" | sed 's/[[:space:]]*$//' | sort > "$out"
+    rm -f "$raw"
+    [ -s "$out" ] || die "sdkmanager --list_installed produced no package rows — refusing to write an empty snapshot that would make the drift check pass vacuously"
     echo "==> toolchain snapshot written to $out ($(wc -l < "$out") lines)"
 }
 

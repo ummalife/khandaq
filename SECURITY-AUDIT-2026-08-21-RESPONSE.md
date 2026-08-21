@@ -70,7 +70,15 @@ to them.
    linking them. Editing one and shipping is a silent one-platform fail-open, and it is the easiest
    mistake to make during exactly the rotation the finding asks for. (K-08)
 
-9. **A rate-limited request burned its signature.** Auth ran before the rate check and validating a
+9. **The iOS app cannot be linked from a clean checkout, and nothing said so.** `.gitignore:18` is a
+   blanket `*.a`, which silently excludes `libopus.xcframework/{ios-arm64,ios-arm64-simulator}/libopus.a`;
+   `ios/vpx.framework`'s binary is missing the same way. Both are `vendored_frameworks`, so
+   `pod install` succeeds and the failure appears only at link time — `ld: library 'opus' not found`.
+   Builds had always been done on a machine where `scripts/build-ios-native-deps.sh` had been run at
+   some point, so nobody hit it, and `docs/BUILDING.md` still says "pod install, open Xcode". Found by
+   the first run of the new macOS workflow, which is exactly what it is for. (K-07 adjacent)
+
+10. **A rate-limited request burned its signature.** Auth ran before the rate check and validating a
    signature *consumes* it, so a signed request refused for rate had already spent its single-use
    signature and the client's retry read as a replay. In the other direction, requests with bad or
    missing auth were never charged to the bucket at all — the relay's limiter did not limit

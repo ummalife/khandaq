@@ -108,6 +108,28 @@ jobs:
             echo "wrote placeholder GoogleService-Info.plist (reference build only)"
           fi
 
+      # KHANDAQ (found by the first run of this workflow, 21 Aug 2026): a clean checkout cannot LINK
+      # the iOS app at all, and nothing said so.
+      #
+      # `.gitignore:18` is a blanket `*.a`, which silently excludes
+      # `libopus.xcframework/{ios-arm64,ios-arm64-simulator}/libopus.a` — the headers and the
+      # Info.plist are committed, the libraries are not. `ios/vpx.framework`'s binary is missing the
+      # same way. Both are `vendored_frameworks` in their podspecs, so `pod install` succeeds and the
+      # failure only appears at link time: `ld: library 'opus' not found`.
+      #
+      # The build had presumably always been done on a machine where scripts/build-ios-native-deps.sh
+      # had been run at some point in the past, so nobody hit it. docs/BUILDING.md and
+      # khandaq-ios/README.md still say "pod install, open Xcode" and mention none of this.
+      #
+      # Building them here is the honest fix: it is the same script a maintainer runs, it verifies
+      # both tarballs against pinned SHA-256 digests before unpacking them (added under the previous
+      # audit round), and it makes the iOS artifact reproducible from a checkout rather than from
+      # someone's /tmp.
+      - name: Build the vendored native dependencies (libopus, libvpx)
+        run: |
+          set -euo pipefail
+          bash scripts/build-ios-native-deps.sh
+
       - name: bundle exec pod install
         working-directory: khandaq-ios
         run: |

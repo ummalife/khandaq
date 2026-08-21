@@ -3,6 +3,22 @@
 The wake relay (`infra/push/relay/app.py`) can require a **replay-resistant, request-bound HMAC**
 on every wake call. This doc is how to turn it on **without breaking already-installed clients**.
 
+
+> **Where the numbers live, since the round-3 audit (F-10).** `/health` is public and answers
+> `{"status":"ok"}` — liveness, nothing else. Everything an operator reads to make the enforce
+> decision (`auth_mode`, `auth_adoption`, `enforce_overdue`, `fcm_service_account`, the epoch count)
+> moved to **`/health/detail`**, which the nginx vhost allows only from loopback. Reach it from the
+> relay host itself:
+>
+> ```
+> ssh <relay-host> 'curl -s http://127.0.0.1:8088/health/detail | jq .'
+> ```
+>
+> The reason is not that the numbers were secret — they carry no identifier of any kind. It is that
+> polling the old public endpoint once a minute and differencing the outcome buckets gave a live
+> request rate and a daily and weekly activity profile for the whole user base, and none of that has
+> to be available to strangers to be available to you.
+
 ## Two endpoints, one signature
 | endpoint | credentials travel in | status |
 |---|---|---|
@@ -61,7 +77,7 @@ signature ⇒ its push wakeups die ⇒ users stop getting message notifications 
 you must NOT jump straight to enforce.
 
 ## Server modes (`app.py` `_auth_ok`)
-| `PUSH_RELAY_AUTH_SECRET` | `PUSH_AUTH_ENFORCE` | behaviour | `/health` `auth_mode` |
+| `PUSH_RELAY_AUTH_SECRET` | `PUSH_AUTH_ENFORCE` | behaviour | `/health/detail` `auth_mode` |
 |---|---|---|---|
 | empty | (any) | **misconfiguration — every request gets `401`** (fail-closed) | `misconfigured` |
 | set | `0` (default) | **soft**: signed pass; unsigned/invalid **also pass but are logged** | `soft` |
@@ -105,7 +121,7 @@ log nothing at all, which removed all forensic signal at the exact moment of the
    set -a; . /opt/khandaq-push/.env; set +a      # load into shell so compose can interpolate it
    docker compose -f infra/push/docker-compose.yml up -d --build
    ```
-   Verify: `curl -s https://push.khandaq.org/health` shows `"auth_mode":"soft"`. Existing clients
+   Verify: `ssh <relay-host> 'curl -s http://127.0.0.1:8088/health/detail'` shows `"auth_mode":"soft"`. Existing clients
    keep working (unsigned requests pass + get logged). NB: the compose file reads these vars from the
    shell env via `${...}` interpolation, so they must be exported (the `set -a; . ...` line) before
    `up` — a plain file at `/opt/khandaq-push/.env` alone is not auto-loaded for interpolation.
@@ -113,7 +129,7 @@ log nothing at all, which removed all forensic signal at the exact moment of the
    - Android: `KHANDAQ_PUSH_AUTH_SECRET=<secret> ./gradlew :app:assembleRelease` → release.
    - iOS: `xcodebuild ... KHANDAQ_PUSH_AUTH_SECRET=<secret>` (or set it in the CI build step that
      `scripts/upload-testflight.sh` runs) → TestFlight/App Store.
-4. **Watch adoption.** `curl -s https://push.khandaq.org/health | jq .auth_adoption` — `window_signed_pct`
+4. **Watch adoption.** `ssh <relay-host> 'curl -s http://127.0.0.1:8088/health/detail' | jq .auth_adoption` — `window_signed_pct`
    is the number this decision turns on. Tailing the relay for `push auth SOFT:` warnings still works,
    but counting log lines to decide whether real users will lose notifications is guesswork; the
    counter is not.
@@ -124,7 +140,7 @@ log nothing at all, which removed all forensic signal at the exact moment of the
    > evidence at all, and enforcing blind is exactly the footgun described above. **Redeploy the
    > current `infra/push/relay/app.py` first** (step 2's compose command), confirm the field
    > appears, then let it accumulate before deciding.
-5. **Server → ENFORCE.** Set `PUSH_AUTH_ENFORCE=1`, redeploy, confirm `/health` → `"auth_mode":"enforce"`.
+5. **Server → ENFORCE.** Set `PUSH_AUTH_ENFORCE=1`, redeploy, confirm `/health/detail` → `"auth_mode":"enforce"`.
    From here unsigned/invalid wake calls get 401.
 
 ## Rollback
@@ -140,7 +156,7 @@ harmlessly; unsigned clients start working again immediately.
 > old advice would have turned a partial outage into a total one.
 
 ## Reading adoption
-`curl -s https://push.khandaq.org/health | jq .auth_adoption`
+`ssh <relay-host> 'curl -s http://127.0.0.1:8088/health/detail' | jq .auth_adoption`
 
 `window_signed_pct` is the headline, but read `window_outcomes` before deciding — a single "unsigned"
 number cannot answer the question the flip actually asks:
@@ -166,7 +182,7 @@ A relay rebuilt minutes ago and probed with two signed requests reported 100% ad
 
 ## Making soft mode expire
 Set `PUSH_AUTH_ENFORCE_BY=YYYY-MM-DD`. Past that date, a relay still in soft mode logs an error at
-startup and reports `"enforce_overdue": true` on `/health`, so monitoring can alert on it. It never
+startup and reports `"enforce_overdue": true` on `/health/detail`, so monitoring can alert on it. It never
 flips itself: a relay that enforced unattended on a date would silence every unsigned client in the
 field at a moment nobody chose. The date exists so soft mode cannot quietly become permanent.
 

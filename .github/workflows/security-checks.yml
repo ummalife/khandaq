@@ -91,6 +91,41 @@ jobs:
       - name: No unescaped backticks inside unquoted heredocs
         run: python3 scripts/check-shell-heredocs.py
 
+  relay-tests:
+    # KHANDAQ (audit round 3, F-15): until now NO workflow ran these.
+    #
+    # The root .github/workflows contained exactly one test invocation — :app:testDebugUnitTest in
+    # release-provenance.yml — and that workflow fires only on workflow_dispatch and v* tags, never on
+    # a push or a pull request. So the relay suite, which is what holds R-01 (the cap-inertness pins),
+    # R-02 (auth-mode behaviour) and the /register absence in place, was executed by a human on a
+    # laptop and by nothing else. scripts/deploy-push-relay.sh ships this service to production
+    # without running them either.
+    #
+    # The nested khandaq-android-trifa/.github/workflows/* do call connectedAndroidTest, but that
+    # directory is part of THIS repository rather than a submodule, so GitHub Actions never reads
+    # those files — and every one of those calls is suffixed `|| echo "NOERR"` and could not fail if
+    # it did.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5
+        with:
+          python-version: '3.12'
+      - name: Install the test dependencies
+        run: python3 -m pip install --quiet flask pytest requests google-auth
+      - name: Push-relay test suite
+        run: |
+          set -euo pipefail
+          # Anti-vacuity, same discipline as the release job: a suite that collects nothing passes
+          # loudly here instead of quietly.
+          collected=$(python3 -m pytest infra/push/relay/test_app.py --collect-only -q 2>/dev/null                       | tail -1 | grep -oE '^[0-9]+' || echo 0)
+          echo "collected $collected test(s)"
+          if [ "${collected:-0}" -lt 80 ]; then
+            echo "::error::only $collected relay tests collected, expected at least 80 — the suite "                  "has shrunk or stopped being discovered" >&2
+            exit 1
+          fi
+          python3 -m pytest infra/push/relay/test_app.py -q
+
   ngc-downgrade-parity:
     # KHANDAQ (K-01): the anti-downgrade rule is implemented twice, in Java and in Objective-C, and
     # a security rule enforced on one client but not the other is not a rule. The Java side has

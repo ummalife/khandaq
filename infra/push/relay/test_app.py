@@ -35,13 +35,16 @@ def relay(tmp_path, monkeypatch):
     """A fresh app module per test, with its own env, its own SQLite file and no real FCM."""
 
     def _load(enforce: str = "0", secret: str = SECRET, rate_limit: str = "10000",
-              trusted_proxies: str = "", secrets: str = ""):
+              trusted_proxies: str = "", secrets: str = "", coalesce: str = "0"):
         monkeypatch.setenv("PUSH_RELAY_AUTH_SECRET", secret)
         # KHANDAQ (audit 2026-08-21, K-03): overlapping key epochs, "epoch:secret,epoch:secret".
         monkeypatch.setenv("PUSH_RELAY_AUTH_SECRETS", secrets)
         monkeypatch.setenv("PUSH_AUTH_ENFORCE", enforce)
         monkeypatch.setenv("STATS_DB", str(tmp_path / "stats.db"))
-        monkeypatch.setenv("PUSH_COALESCE_SECONDS", "0")  # coalescing is not what these tests probe
+        # KHANDAQ (audit round 3, F-14): coalescing is off by default here because it is not what most
+        # of these tests probe — but it was NOT overridable, so the suppression branch had no coverage
+        # at all while running with a 45-second window in production. Now a test can ask for it.
+        monkeypatch.setenv("PUSH_COALESCE_SECONDS", coalesce)
         monkeypatch.setenv("PUSH_RATE_LIMIT_PER_MIN", rate_limit)
         monkeypatch.setenv("PUSH_TRUSTED_PROXIES", trusted_proxies)
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -211,19 +214,38 @@ def test_a_malformed_sender_is_dropped_not_forwarded(relay):
     assert m.sent == [(TOKEN, "")]
 
 
-def test_an_fcm_error_never_carries_the_token_back(relay):
-    """Token redaction has to hold on the error path too, not just in the nginx access log."""
+def test_an_fcm_error_tells_the_caller_nothing_about_upstream(relay, caplog):
+    """
+    KHANDAQ (audit round 3, F-11). This test used to assert the opposite: that the upstream text came
+    back with the token replaced by [REDACTED]. Redaction was the wrong control. `detail` carries up
+    to 200 bytes of FCM's own response body or str(exc) from google-auth, this path is reachable
+    without authentication in soft mode, and when the service account existed but could not be read a
+    stranger was answered with `auth failed: [Errno 13] Permission denied: '/run/secrets/...'` — an
+    internal path and the exact failure mode, for free.
+
+    So the property is now the stronger one: NOTHING from upstream crosses the response boundary.
+    The operator still gets the detail, in the log, with the token still redacted there.
+    """
     m = relay()
-    m._send_wake = lambda token, sender="": (False, f"FCM v1 HTTP 400 []: bad token {token} rejected")
+    m._send_wake = lambda token, sender="": (
+        False, f"FCM v1 HTTP 400 [INVALID_ARGUMENT]: bad token {token} rejected at /run/secrets/x")
     ts = int(time.time())
-    r = m.app.test_client().post(
-        "/wake",
-        json={"token": TOKEN},
-        headers={"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)},
-    )
+    with caplog.at_level("WARNING"):
+        r = m.app.test_client().post(
+            "/wake",
+            json={"token": TOKEN},
+            headers={"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)},
+        )
+    body = r.get_data(as_text=True)
     assert r.status_code == 502
-    assert TOKEN not in r.get_data(as_text=True)
-    assert "[REDACTED]" in r.get_data(as_text=True)
+    assert body.strip() == '{"error":"upstream send failed"}'
+    for leak in (TOKEN, "INVALID_ARGUMENT", "/run/secrets", "FCM"):
+        assert leak not in body, f"{leak!r} reached the caller"
+
+    logged = " | ".join(rec.getMessage() for rec in caplog.records)
+    assert "INVALID_ARGUMENT" in logged, "the operator lost the detail this fix relies on them having"
+    assert TOKEN not in logged, "the token must still be redacted in the log"
+    assert "[REDACTED]" in logged
 
 
 # ------------------------------------------------------------------ the legacy endpoint, unchanged
@@ -350,7 +372,7 @@ def test_an_explicitly_pinned_proxy_is_trusted(relay):
 
 def test_health_reports_the_auth_mode(relay):
     m = relay(enforce="1")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["auth_mode"] == "enforce"
     assert body["auth_required"] is True
 
@@ -365,7 +387,7 @@ def test_adoption_counters_separate_signed_from_unsigned(relay):
         headers={"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)},
     )
     client.get(f"/toxfcm/fcm.php?id={TOKEN}")
-    adoption = m.app.test_client().get("/health").get_json()["auth_adoption"]
+    adoption = m.app.test_client().get("/health/detail").get_json()["auth_adoption"]
     assert adoption["window_signed"] == 1
     assert adoption["window_unsigned"] == 1
 
@@ -468,7 +490,7 @@ def test_a_rate_limited_request_does_not_burn_its_signature(relay):
 
 
 def _outcomes(module):
-    return module.app.test_client().get("/health").get_json()["auth_adoption"]["window_outcomes"]
+    return module.app.test_client().get("/health/detail").get_json()["auth_adoption"]["window_outcomes"]
 
 
 def test_an_unsigned_request_counts_as_missing(relay):
@@ -556,7 +578,7 @@ def test_health_does_not_call_an_unconfigured_relay_auth_off(relay):
     every request. An operator chasing a total push outage was sent to the wrong place.
     """
     m = relay(secret="")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["auth_mode"] == "misconfigured"
     assert body["auth_required"] is True
 
@@ -564,7 +586,7 @@ def test_health_does_not_call_an_unconfigured_relay_auth_off(relay):
 def test_health_reports_an_overdue_soft_mode(relay, monkeypatch):
     monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "2020-01-01")
     m = relay(enforce="0")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["enforce_by"] == "2020-01-01"
     assert body["enforce_overdue"] is True
 
@@ -572,19 +594,19 @@ def test_health_reports_an_overdue_soft_mode(relay, monkeypatch):
 def test_an_enforcing_relay_is_never_overdue(relay, monkeypatch):
     monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "2020-01-01")
     m = relay(enforce="1")
-    assert m.app.test_client().get("/health").get_json()["enforce_overdue"] is False
+    assert m.app.test_client().get("/health/detail").get_json()["enforce_overdue"] is False
 
 
 def test_a_future_cutoff_is_not_overdue(relay, monkeypatch):
     monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "2099-01-01")
     m = relay(enforce="0")
-    assert m.app.test_client().get("/health").get_json()["enforce_overdue"] is False
+    assert m.app.test_client().get("/health/detail").get_json()["enforce_overdue"] is False
 
 
 def test_a_malformed_cutoff_is_ignored_rather_than_crashing(relay, monkeypatch):
     monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "next tuesday")
     m = relay(enforce="0")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["enforce_overdue"] is False
     assert body["status"] == "ok"
 
@@ -671,7 +693,7 @@ def test_adoption_is_broken_down_by_epoch(relay):
     _signed(m.app.test_client(), EPOCH_A)
     _signed(m.app.test_client(), EPOCH_B)
     _signed(m.app.test_client(), EPOCH_B, age=1)   # distinct ts => distinct signature, not a replay
-    adoption = m.app.test_client().get("/health").get_json()["auth_adoption"]
+    adoption = m.app.test_client().get("/health/detail").get_json()["auth_adoption"]
     assert adoption["by_epoch"] == {"2": 1, "3": 2}
     assert adoption["window_signed"] == 3
     assert adoption["epochs_configured"] == ["2", "3"]
@@ -681,10 +703,10 @@ def test_health_never_discloses_a_configured_secret(relay):
     import json as _json
 
     m = relay(secret=SECRET, secrets=f"2:{EPOCH_A},3:{EPOCH_B}")
-    body = _json.dumps(m.app.test_client().get("/health").get_json())
+    body = _json.dumps(m.app.test_client().get("/health/detail").get_json())
     for leaked in (SECRET, EPOCH_A, EPOCH_B):
         assert leaked not in body, "/health must expose epoch LABELS, never the keys"
-    assert '"auth_epochs": 3' in body or m.app.test_client().get("/health").get_json()["auth_epochs"] == 3
+    assert '"auth_epochs": 3' in body or m.app.test_client().get("/health/detail").get_json()["auth_epochs"] == 3
 
 
 def test_single_use_replay_still_holds_across_the_multi_secret_path(relay):
@@ -705,13 +727,13 @@ def test_a_malformed_epoch_list_does_not_take_authentication_down(relay):
     """
     m = relay(enforce="1", secret="", secrets=f",,3:{EPOCH_B},garbage-no-colon,bad label:x,")
     assert _signed(m.app.test_client(), EPOCH_B).status_code == 200
-    assert m.app.test_client().get("/health").get_json()["auth_adoption"]["epochs_configured"] == ["3"]
+    assert m.app.test_client().get("/health/detail").get_json()["auth_adoption"]["epochs_configured"] == ["3"]
 
 
 def test_no_secret_in_either_variable_still_fails_closed(relay):
     m = relay(secret="", secrets="")
     assert m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}").status_code == 401
-    assert m.app.test_client().get("/health").get_json()["auth_mode"] == "misconfigured"
+    assert m.app.test_client().get("/health/detail").get_json()["auth_mode"] == "misconfigured"
 
 
 def test_a_secret_containing_a_colon_survives_parsing(relay):
@@ -735,7 +757,7 @@ def test_an_unsigned_json_wake_is_still_served_in_soft_mode(relay):
     r = m.app.test_client().post("/wake", json={"token": TOKEN})
     assert r.status_code == 200, r.get_data(as_text=True)
     assert m.sent == [(TOKEN, "")]
-    outcomes = m.app.test_client().get("/health").get_json()["auth_adoption"]["window_outcomes"]
+    outcomes = m.app.test_client().get("/health/detail").get_json()["auth_adoption"]["window_outcomes"]
     assert outcomes["missing"] == 1, "an unsigned request must still be COUNTED while it is served"
 
 
@@ -838,7 +860,7 @@ def test_health_reports_an_unreadable_service_account_as_unusable(relay, tmp_pat
     unreadable must read as unusable, and must say which of the two problems it is.
     """
     m = _load_with_sa(relay, tmp_path, monkeypatch, "unreadable")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["fcm_configured"] is False
     assert body["fcm_mode"] == "none"
     assert body["fcm_service_account"] == "unreadable"
@@ -847,7 +869,7 @@ def test_health_reports_an_unreadable_service_account_as_unusable(relay, tmp_pat
 def test_health_distinguishes_missing_from_unreadable(relay, tmp_path, monkeypatch):
     """The two need different fixes: provision the file, versus chown it. Do not conflate them."""
     m = _load_with_sa(relay, tmp_path, monkeypatch, "missing")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["fcm_configured"] is False
     assert body["fcm_service_account"] == "missing"
 
@@ -855,7 +877,7 @@ def test_health_distinguishes_missing_from_unreadable(relay, tmp_path, monkeypat
 def test_health_reports_a_readable_service_account_as_ok(relay, tmp_path, monkeypatch):
     """The green path still has to be green, or the check above is just a way to fail."""
     m = _load_with_sa(relay, tmp_path, monkeypatch, "ok")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert body["fcm_configured"] is True
     assert body["fcm_mode"] == "v1"
     assert body["fcm_service_account"] == "ok"
@@ -864,5 +886,208 @@ def test_health_reports_a_readable_service_account_as_ok(relay, tmp_path, monkey
 def test_health_omits_the_field_when_no_service_account_is_configured(relay, tmp_path, monkeypatch):
     """No path configured is not a fault; do not invent a status for a thing nobody asked for."""
     m = _load_with_sa(relay, tmp_path, monkeypatch, "unset")
-    body = m.app.test_client().get("/health").get_json()
+    body = m.app.test_client().get("/health/detail").get_json()
     assert "fcm_service_account" not in body
+
+
+# ------------------------------------------------- audit round 3: F-06, F-12, F-13, F-14
+
+
+@pytest.mark.parametrize("bad_auth", ["é", "ÿ" * 64, "cafébabe", "тест"])
+def test_a_non_ascii_auth_value_is_a_refusal_not_a_crash(relay, bad_auth):
+    """
+    KHANDAQ (audit round 3, F-06). hmac.compare_digest() raises TypeError when handed two str
+    arguments and either is non-ASCII. `supplied` comes verbatim out of ?auth= (Flask decodes the
+    query string as UTF-8), so `?auth=%C3%A9` used to reach that comparison and produce an unhandled
+    500 — in a security decision, on an unauthenticated path, with no @app.errorhandler anywhere to
+    catch it.
+
+    The damage was not the status code. Each one wrote a full traceback into the same bounded
+    json-file ring the operator is told to read before enforcing (~2.3 KB against ~104 bytes for a
+    normal request), and the request never reached _record_auth_outcome(), so it stayed invisible in
+    the adoption counters it was flushing away. Under PUSH_AUTH_ENFORCE=1 it turned a 401 into a 500.
+
+    A hostile value must land in `badmac` like any other wrong signature.
+    """
+    m = relay(enforce="1")
+    ts = int(time.time())
+    r = m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}&auth={bad_auth}&ts={ts}")
+    assert r.status_code == 401, r.get_data(as_text=True)
+    assert m.sent == []
+
+
+def test_a_non_ascii_bearer_header_is_a_refusal_not_a_crash(relay):
+    """The header path decodes as latin-1 rather than UTF-8, so it reaches the same comparison."""
+    m = relay(enforce="1")
+    ts = int(time.time())
+    r = m.app.test_client().post(
+        "/wake",
+        json={"token": TOKEN, "sender": ""},
+        headers={"Authorization": "Bearer ÿþ", "X-Khandaq-Ts": str(ts)},
+    )
+    assert r.status_code == 401
+    assert m.sent == []
+
+
+def test_a_non_ascii_auth_value_is_counted_as_badmac(relay):
+    """It must be visible in the adoption counters, not silently absent from them."""
+    m = relay()
+    ts = int(time.time())
+    m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}&auth=café&ts={ts}")
+    outcomes = m.app.test_client().get("/health/detail").get_json()["auth_adoption"]["today_outcomes"]
+    assert outcomes["badmac"] == 1, outcomes
+
+
+@pytest.mark.parametrize("value", ["enforce", "ON!", "2", "yes please", "TRUE ", "", "maybe"])
+def test_an_unrecognised_enforce_value_refuses_to_start(relay, value):
+    """
+    KHANDAQ (audit round 3, F-13). PUSH_AUTH_ENFORCE used to be `value in ("1","true","yes","on")`,
+    so anything unrecognised — a typo, or the very plausible PUSH_AUTH_ENFORCE=enforce — selected the
+    WEAKER mode without a word. The neighbouring PUSH_AUTH_ENFORCE_BY already validates and complains;
+    the security-relevant boolean should not be the lax one.
+
+    Note "TRUE " with the trailing space is accepted (it is stripped and lowercased) and "" is not:
+    an empty value is a variable someone meant to set.
+    """
+    if value == "TRUE ":
+        pytest.skip("whitespace is stripped and case is folded — this one is legitimately accepted")
+    with pytest.raises(SystemExit) as exc:
+        relay(enforce=value)
+    assert "PUSH_AUTH_ENFORCE" in str(exc.value)
+
+
+@pytest.mark.parametrize("value", ["1", "0", "true", "false", "yes", "no", "on", "off", "ON", " 1 "])
+def test_the_documented_enforce_values_still_work(relay, value):
+    """The strictness must not break the spellings the compose files and deploy script actually use."""
+    m = relay(enforce=value)
+    expected = "enforce" if value.strip().lower() in ("1", "true", "yes", "on") else "soft"
+    assert m.app.test_client().get("/health/detail").get_json()["auth_mode"] == expected
+
+
+def test_the_soft_mode_log_line_carries_no_client_ip(relay, caplog):
+    """
+    KHANDAQ (audit round 3, F-12). Soft mode logs one line per allowed request. It used to name the
+    client IP, which put a sender's address in the same container log as the recipient's stable token
+    hash — one join apart. The outcome label is what the line is for; the per-IP view already lives
+    in the rate limiter, and nginx keeps its own (IP, time) record regardless.
+    """
+    m = relay()
+    ts = int(time.time())
+    with caplog.at_level("WARNING"):
+        m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}&auth={'0' * 64}&ts={ts}")
+    soft = [rec.getMessage() for rec in caplog.records if "push auth SOFT" in rec.getMessage()]
+    assert soft, "soft mode must still say that it allowed an unsigned request"
+    assert "127.0.0.1" not in soft[0]
+    assert "badmac" in soft[0], "the outcome label is the part worth keeping"
+
+
+def test_a_successful_wake_does_not_log_the_token_hash_at_info(relay, caplog):
+    """
+    KHANDAQ (audit round 3, F-12). _th(token) is a stable per-device identifier. Emitting it on every
+    successful wake at INFO builds a durable activity record for that device for as long as the log
+    ring holds. Useful while debugging, not worth retaining by default.
+    """
+    m = relay()
+    m._send_wake = m.__dict__.get("_real_send_wake", m._send_wake)
+    ts = int(time.time())
+    with caplog.at_level("INFO"):
+        m.app.test_client().get(
+            f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts)}&ts={ts}")
+    assert not [r for r in caplog.records if r.levelname == "INFO" and "token#" in r.getMessage()]
+
+
+# --- the coalescing branch, which had no coverage at all -------------------------------------------
+
+
+def test_a_second_wake_inside_the_window_is_coalesced(relay):
+    """
+    KHANDAQ (audit round 3, F-14). PUSH_COALESCE_SECONDS defaults to 45 in production and the test
+    fixture pinned it to 0 for every one of the tests in this file, so the suppression branch — the
+    one that decides whether a real FCM push happens — was never executed by anything.
+    """
+    m = relay(coalesce="45")
+    client = m.app.test_client()
+
+    ts = int(time.time())
+    first = client.get(f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts)}&ts={ts}")
+    assert first.status_code == 200
+    assert first.get_json().get("coalesced") is None, "the first wake must actually be sent"
+    assert m.sent == [(TOKEN, "")]
+
+    ts2 = ts + 1
+    second = client.get(f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts2)}&ts={ts2}")
+    assert second.status_code == 200, "a coalesced wake still reports success so the caller stops retrying"
+    assert second.get_json().get("coalesced") == 1
+    assert m.sent == [(TOKEN, "")], "the second wake must NOT reach FCM"
+
+
+def test_coalescing_is_per_token(relay):
+    """One busy device must not suppress wakes for a different one."""
+    m = relay(coalesce="45")
+    client = m.app.test_client()
+    other = "a-different-device-registration-token"
+
+    ts = int(time.time())
+    client.get(f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts)}&ts={ts}")
+    ts2 = ts + 1
+    r = client.get(f"/toxfcm/fcm.php?id={other}&auth={sign(other, '', ts2)}&ts={ts2}")
+
+    assert r.get_json().get("coalesced") is None
+    assert m.sent == [(TOKEN, ""), (other, "")]
+
+
+def test_a_failed_send_releases_the_coalesce_slot(relay):
+    """
+    A send that failed must not leave the window claimed — otherwise one upstream blip silences the
+    device for the rest of the window and the caller is told to stop retrying.
+    """
+    m = relay(coalesce="45")
+    client = m.app.test_client()
+
+    m._send_wake = lambda token, sender="": (False, "FCM v1 HTTP 503 []: unavailable")
+    ts = int(time.time())
+    assert client.get(f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts)}&ts={ts}").status_code == 502
+
+    m.sent = []
+    m._send_wake = lambda token, sender="": (m.sent.append((token, sender)), (True, "ok"))[1]
+    ts2 = ts + 1
+    r = client.get(f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts2)}&ts={ts2}")
+    assert r.get_json().get("coalesced") is None, "the failed attempt must not have claimed the window"
+    assert m.sent == [(TOKEN, "")]
+
+
+# --- the public health endpoint must stay uninformative -------------------------------------------
+
+
+def test_public_health_is_liveness_only(relay):
+    """
+    KHANDAQ (audit round 3, F-10). /health used to hand the whole picture to the internet: auth_mode,
+    the epoch count, the service-account state and the full auth_adoption summary — seven outcome
+    buckets, signed/unsigned totals, per-epoch counts, 60 days of retention. No shipped client signs,
+    so `missing` is essentially all traffic; polling once a minute and differencing gave a live request
+    rate and a daily and weekly activity profile of the whole user base.
+
+    Liveness is public. Everything else is on /health/detail, which nginx allows only from loopback.
+    """
+    m = relay()
+    body = m.app.test_client().get("/health").get_json()
+    assert body == {"status": "ok"}, body
+
+
+def test_public_health_leaks_nothing_even_when_misconfigured(relay):
+    """The interesting states are exactly the ones worth not advertising."""
+    m = relay(enforce="1")
+    body = m.app.test_client().get("/health").get_json()
+    assert set(body) == {"status"}
+    text = m.app.test_client().get("/health").get_data(as_text=True)
+    for leak in ("auth_mode", "enforce", "adoption", "fcm", "epoch", "soft"):
+        assert leak not in text.lower()
+
+
+def test_the_detail_endpoint_still_carries_what_the_operator_needs(relay):
+    """Moving it must not lose it: the enforce decision is read from these fields."""
+    m = relay()
+    body = m.app.test_client().get("/health/detail").get_json()
+    for key in ("status", "auth_mode", "auth_epochs", "auth_required", "auth_adoption",
+                "fcm_configured", "fcm_mode"):
+        assert key in body, f"{key} missing from /health/detail"

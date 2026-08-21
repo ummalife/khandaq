@@ -113,12 +113,12 @@ echo "    /data is writable"
 # KHANDAQ (re-audit 2026-08-21, R-02): assert the RUNNING relay is in the mode that was asked for.
 # Same reasoning as the non-root and read-only assertions above: a container compose decided not to
 # recreate can keep serving in the old mode, and nothing else would ever say so.
-health=\$(docker compose exec -T push-relay python -c   "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5).read().decode())" </dev/null 2>/dev/null || true)
+health=\$(docker compose exec -T push-relay python -c   "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/health/detail',timeout=5).read().decode())" </dev/null 2>/dev/null || true)
 case "\$health" in
   *'"auth_mode": "$EXPECT_MODE"'*|*'"auth_mode":"$EXPECT_MODE"'*)
-    echo "    /health reports auth_mode=$EXPECT_MODE" ;;
+    echo "    /health/detail reports auth_mode=$EXPECT_MODE" ;;
   *)
-    echo "ERROR: asked for $EXPECT_MODE but /health does not report it:" >&2
+    echo "ERROR: asked for $EXPECT_MODE but /health/detail does not report it:" >&2
     echo "\$health" >&2
     exit 1 ;;
 esac
@@ -189,6 +189,12 @@ REMOTE
 
 echo "==> Verify"
 # KHANDAQ (audit2 #4): HTTPS only — never fall back to probing (or blessing) a cleartext endpoint.
+# KHANDAQ (audit round 3, F-10): the PUBLIC endpoint, which now answers {"status":"ok"} and nothing
+# else. The mode was already asserted above, from inside the container against /health/detail — which
+# nginx allows only from loopback. This last call proves the vhost is up and reaching the relay.
 curl -fsSL "https://push.khandaq.org/health"
+echo
+echo "(telemetry lives on /health/detail, reachable only from the host:"
+echo "   ssh <host> 'curl -s http://127.0.0.1:8088/health/detail')"
 echo
 echo "Done"

@@ -109,7 +109,22 @@ AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 # secret keep working) but LOGS each one, so you can watch adoption. Flip to 1 (hard enforce,
 # 401 on bad auth) only once the logs show field clients are signing. This avoids a hard cutover
 # that would break every client that hasn't yet shipped + been updated with the secret.
-PUSH_AUTH_ENFORCE = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower() in ("1", "true", "yes", "on")
+# KHANDAQ (audit round 3, F-13): an unrecognised value must not mean "soft".
+#
+# This was `... in ("1", "true", "yes", "on")`, so PUSH_AUTH_ENFORCE=enforce — or any typo — selected
+# the WEAKER mode silently. The neighbouring PUSH_AUTH_ENFORCE_BY already validates its input and
+# logs an error on a bad one; the security-relevant boolean deserves at least that, and gets more:
+# a value nobody recognises stops the container instead of quietly serving unauthenticated wakes.
+# Failing to start is loud, local, and happens before any traffic; guessing is none of those.
+_ENFORCE_TRUE = ("1", "true", "yes", "on")
+_ENFORCE_FALSE = ("0", "false", "no", "off")
+_enforce_raw = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower()
+if _enforce_raw not in _ENFORCE_TRUE + _ENFORCE_FALSE:
+    raise SystemExit(
+        "PUSH_AUTH_ENFORCE=%r is not a recognised value. Use one of %s to enforce, or one of %s for "
+        "soft/monitor mode. Refusing to start rather than guessing the weaker one."
+        % (os.environ.get("PUSH_AUTH_ENFORCE", ""), ", ".join(_ENFORCE_TRUE), ", ".join(_ENFORCE_FALSE)))
+PUSH_AUTH_ENFORCE = _enforce_raw in _ENFORCE_TRUE
 # KHANDAQ (audit 2026-08-21, K-02): "Treat soft mode as an emergency compatibility mode with an
 # expiry date, not a permanent default." An optional YYYY-MM-DD cutoff (unset = none). Past it, a
 # relay still running in soft mode says so loudly at startup and reports it on /health.
@@ -580,8 +595,12 @@ def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
     # shipped clients sign), set PUSH_AUTH_ENFORCE=1 to close the window — and read
     # /health -> auth_adoption.window_outcomes first, because `missing` (an old client, heals) and
     # `badmac` (a build carrying the wrong secret, never heals) both used to look the same here.
-    log.warning("push auth SOFT (%s): request allowed from %s (set PUSH_AUTH_ENFORCE=1 after client adoption)",
-                outcome, _client_ip())
+    # KHANDAQ (audit round 3, F-12): the outcome label is what this line is for. The client IP added
+    # nothing the per-IP counters do not already have, and putting it here put a sender IP in the same
+    # container log as the recipient's stable token hash, one join away from each other. nginx still
+    # records (IP, time) in its own access log; this stops the relay's log from being the second half.
+    log.warning("push auth SOFT (%s): request allowed (set PUSH_AUTH_ENFORCE=1 after client adoption)",
+                outcome)
     return True
 
 
@@ -698,7 +717,23 @@ def _auth_signature_valid(token: str, sender: str, *, allow_query_auth: bool = T
     matched = None
     for epoch, secret in AUTH_SECRETS:
         candidate = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-        if hmac.compare_digest(supplied, candidate):
+        # KHANDAQ (audit round 3, F-06): compare BYTES, not str.
+        #
+        # hmac.compare_digest() refuses two str arguments unless both are ASCII — it raises
+        # TypeError. `supplied` comes verbatim from ?auth= (Flask decodes the query string as UTF-8)
+        # or from an Authorization header (Werkzeug decodes headers as latin-1), and nothing
+        # constrains its character set. So `?auth=%C3%A9` turned a security decision into an
+        # unhandled 500: no @app.errorhandler exists, the request never reached
+        # _record_auth_outcome() so it stayed invisible in the adoption counters, and every one of
+        # them wrote a full traceback (~2.3 KB against ~104 bytes for a normal request) into the same
+        # bounded json-file ring the operator is told to read before enforcing. Under
+        # PUSH_AUTH_ENFORCE=1 it turned what should have been a 401 into a 500.
+        #
+        # Encoding both sides sidesteps the restriction without a length or charset pre-check, so the
+        # comparison stays constant-time and a hostile value now lands in `badmac`, counted like any
+        # other wrong signature.
+        if hmac.compare_digest(supplied.encode("utf-8", "surrogatepass"),
+                               candidate.encode("ascii")):
             matched = (epoch, candidate)
             break
     if matched is None:
@@ -819,7 +854,10 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
         # into a log that outlives the request and is read by more people than the request path is.
         # _th() is the same 128-bit hash already used to key the coalesce table, so the log line
         # remains just as useful for correlating one device's wakes, and discloses nothing.
-        log.info("wake ok: token#%s", _th(token))
+        # KHANDAQ (audit round 3, F-12): debug, not info. A stable per-device hash on every successful
+        # wake is a durable activity record for that device, kept for as long as the log ring holds.
+        # It is worth having while debugging and not worth retaining by default.
+        log.debug("wake ok: token#%s", _th(token))
         return True, "ok"
     return False, "FCM v1: unreachable"
 
@@ -870,6 +908,23 @@ def _send_wake(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
 
 @app.route("/health")
 def health():
+    """
+    KHANDAQ (audit round 3, F-10) — the PUBLIC health endpoint, deliberately uninformative.
+
+    This used to return the whole picture to anyone on the internet: auth_mode, the epoch count, the
+    service-account state and the complete auth_adoption summary — seven outcome buckets, signed and
+    unsigned totals, per-epoch counts, 60 days of retention. No shipped client signs yet, so the
+    `missing` bucket is essentially all traffic; polling this once a minute and differencing it gave a
+    live request rate and a daily and weekly activity profile for the entire user base. Aggregate, with
+    no identifier in it — which is why this is low and not worse — but nobody needs it to be public.
+
+    Liveness is public. Telemetry moved to /health/detail, which nginx allows only from loopback.
+    """
+    return jsonify({"status": "ok"})
+
+
+@app.route("/health/detail")
+def health_detail():
     mode = "v1" if _service_account_usable() else ("legacy" if FCM_SERVER_KEY else "none")
     body = {
         "status": "ok",
@@ -966,7 +1021,15 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool):
         # worth betting a targeting secret on, and the redaction costs one string replace.
         detail = _redact_token(detail, token)
         log.warning("wake fail from %s: %s", client_ip, detail)
-        return jsonify({"error": detail}), 503 if "not configured" in detail else 502
+        # KHANDAQ (audit round 3, F-11): log the detail, do NOT return it.
+        #
+        # `detail` carries up to 200 bytes of FCM's own response body, or str(exc) from google-auth.
+        # That path is reachable without authentication in soft mode, and when the service account
+        # existed but could not be read it answered a stranger with
+        # `auth failed: [Errno 13] Permission denied: '/run/secrets/firebase-sa.json'` — an internal
+        # path and the precise failure mode, handed out for free. Nothing about the upstream error
+        # belongs on the far side of this boundary; the operator reads it in the line above.
+        return jsonify({"error": "upstream send failed"}), 503 if "not configured" in detail else 502
 
     return jsonify({"success": 1}), 200
 

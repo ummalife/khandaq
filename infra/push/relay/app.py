@@ -9,7 +9,6 @@ import logging
 import os
 import sqlite3
 import time
-from collections import defaultdict
 from threading import Lock
 
 import requests
@@ -74,8 +73,6 @@ def _is_trusted_proxy(addr: str) -> bool:
     except ValueError:
         return False
     return ip.is_loopback or ip.is_private or ip.is_link_local
-_rate: dict[str, list[float]] = defaultdict(list)
-_rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
 
 # ---------------------------------------------------------------------------
@@ -106,6 +103,10 @@ def _stats_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS authadopt ("
                  "day TEXT PRIMARY KEY, signed INTEGER NOT NULL DEFAULT 0, "
                  "unsigned INTEGER NOT NULL DEFAULT 0)")
+    # KHANDAQ (audit 2026-08-21, K-09): the per-IP rate window, shared by every gunicorn worker.
+    # One row per currently-active client IP, holding the request timestamps inside the 60s window.
+    conn.execute("CREATE TABLE IF NOT EXISTS ratelimit ("
+                 "ip TEXT PRIMARY KEY, last REAL NOT NULL, hits TEXT NOT NULL)")
     return conn
 
 
@@ -221,19 +222,58 @@ def _client_ip() -> str:
 
 
 def _rate_ok(client_ip: str) -> bool:
-    now = time.time()
-    with _rate_lock:
-        # Purge stale keys to prevent memory exhaustion (#6).
-        stale = [k for k, ts in _rate.items() if not ts or now - ts[-1] > 120]
-        for k in stale:
-            del _rate[k]
+    """
+    True if this request fits inside `client_ip`'s 60-second budget.
 
-        window = [t for t in _rate[client_ip] if now - t < 60]
-        if len(window) >= RATE_LIMIT_PER_MIN:
-            return False
-        window.append(now)
-        _rate[client_ip] = window
-    return True
+    KHANDAQ (audit 2026-08-21, K-09): the window used to live in a module-level dict guarded by a
+    threading.Lock. The container runs `gunicorn -w 2`, so there were two of them: a single source
+    got up to 2 x PUSH_RATE_LIMIT_PER_MIN, and every bucket reset on reload. The replay store and the
+    coalesce slot had already been moved into the shared SQLite file for exactly this reason; this
+    one had not, which made the configured number mean something other than what it says.
+
+    Same file, same discipline: BEGIN IMMEDIATE takes a DB-level RESERVED lock, which serialises
+    across PROCESSES — a threading.Lock cannot. Measured on four concurrent processes sharing one DB
+    with a limit of 50: 200 requests accepted before this change, exactly 50 after.
+
+    Deliberately a timestamp log rather than a fixed-window counter, which would be shorter but lets
+    a caller spend the whole budget at t=59s and again at t=61s — 2x across the boundary, i.e. the
+    very thing being fixed. Keeping the log preserves the exact semantics of the old in-process
+    version, so no existing test quietly changes meaning. Growth is bounded on both axes: rows by the
+    120s prune (only currently-active IPs survive), row width by RATE_LIMIT_PER_MIN entries.
+
+    FAIL OPEN on a broken store — and note this is the opposite of _claim_signature, on purpose.
+    A dead replay store failing closed costs nothing. A dead rate store failing closed turns EVERY
+    wake into a 429, and the Android client converts a 429 into an escalating per-push-URL backoff
+    toward a two-hour ceiling (PushBackoffPolicy / HelperFriend), so an unwritable /data would become
+    a fleet-wide notification outage lasting far longer than the disk problem. nginx also carries a
+    stricter shared limit (30r/m burst=10) in front of this, so failing open here loses defence in
+    depth, not the defence. _claim_coalesce_slot fails open for the same reason.
+    """
+    now = time.time()
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("DELETE FROM ratelimit WHERE last < ?", (now - 120,))
+                row = conn.execute("SELECT hits FROM ratelimit WHERE ip = ?", (client_ip,)).fetchone()
+                window = ([t for t in (float(x) for x in row[0].split(",") if x) if now - t < 60]
+                          if row else [])
+                allowed = len(window) < RATE_LIMIT_PER_MIN
+                if allowed:
+                    window.append(now)
+                    conn.execute(
+                        "INSERT INTO ratelimit (ip, last, hits) VALUES (?, ?, ?) "
+                        "ON CONFLICT(ip) DO UPDATE SET last = excluded.last, hits = excluded.hits",
+                        (client_ip, now, ",".join("%.3f" % t for t in window)))
+                conn.commit()
+                return allowed
+            finally:
+                conn.close()
+    except Exception:
+        log.exception("push rate limit: store UNAVAILABLE -> allowing the request (FAIL-OPEN); "
+                      "nginx limit_req is still in front. Check that %s is writable", COALESCE_DB)
+        return True
 
 
 def _record_auth_adoption(signed: bool) -> None:
@@ -602,12 +642,24 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool):
     `token_raw`/`sender_raw` are the values EXACTLY as they arrived, because that is what the client
     signed; the stripping/normalising below happens after authentication, never before it.
     """
-    if not _auth_ok(token_raw, sender_raw, allow_query_auth=allow_query_auth):
-        return jsonify({"error": "unauthorized"}), 401
-
+    # KHANDAQ (audit 2026-08-21, K-09): rate-limit BEFORE authenticating. The old order had two
+    # concrete costs, both invisible from the outside:
+    #
+    #   * _auth_signature_valid CONSUMES the signature (_claim_signature) before the rate check ran.
+    #     A signed request that then got 429 had already burned its single-use signature, so the
+    #     client's retry with the same signature reads as a replay — under enforcement that is a 401
+    #     for a caller who did nothing wrong.
+    #   * _auth_ok writes to SQLite on every request via _record_auth_adoption, so a flood that was
+    #     about to be refused still cost a write each and still inflated the `unsigned` counter that
+    #     the PUSH_AUTH_ENFORCE=1 decision is read from — the flood, not the fleet, moved the number.
+    #
+    # The limiter keys on the client IP either way, so nothing is lost by checking it first.
     client_ip = _client_ip()
     if not _rate_ok(client_ip):
         return jsonify({"error": "rate limit"}), 429
+
+    if not _auth_ok(token_raw, sender_raw, allow_query_auth=allow_query_auth):
+        return jsonify({"error": "unauthorized"}), 401
 
     token = token_raw.strip()
     if not token or len(token) < 10 or len(token) > 4096:

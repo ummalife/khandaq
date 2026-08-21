@@ -366,3 +366,91 @@ def test_adoption_counters_separate_signed_from_unsigned(relay):
     adoption = m.app.test_client().get("/health").get_json()["auth_adoption"]
     assert adoption["window_signed"] == 1
     assert adoption["window_unsigned"] == 1
+
+
+# ------------------------------------------------- the rate window is shared, not per worker
+#
+# KHANDAQ (audit 2026-08-21, K-09): the window used to be a module-level dict, so `gunicorn -w 2`
+# meant two of them. Measured before the fix, on four processes sharing one DB with a limit of 50:
+# 200 requests accepted. After: exactly 50. Loading the module twice against one STATS_DB is the
+# in-test stand-in for that — two independent module objects, one file.
+
+
+def test_the_rate_window_is_shared_across_workers(relay):
+    worker_a = relay(rate_limit="5")
+    worker_b = relay(rate_limit="5")          # same tmp_path => same STATS_DB
+    client_a, client_b = worker_a.app.test_client(), worker_b.app.test_client()
+
+    assert flood(client_a, 3, real_ip="203.0.113.7").status_code == 200
+    assert flood(client_b, 2, real_ip="203.0.113.7").status_code == 200, \
+        "the second worker must see the first worker's three"
+    assert flood(client_b, 1, real_ip="203.0.113.7").status_code == 429
+    assert flood(client_a, 1, real_ip="203.0.113.7").status_code == 429, \
+        "and the first must see the budget the second spent"
+    assert flood(client_a, 1, real_ip="198.51.100.9").status_code == 200, \
+        "a different client still has its own bucket"
+
+
+def test_rate_limiting_fails_open_when_the_store_is_unavailable(relay, monkeypatch):
+    """
+    Deliberately the opposite of _claim_signature, which fails CLOSED.
+
+    A dead rate store failing closed makes every wake a 429, and the Android client escalates a 429
+    into a per-push-URL backoff toward two hours — so an unwritable /data would become a fleet-wide
+    notification outage outliving the disk problem. nginx's stricter limit is still in front.
+    """
+    m = relay(rate_limit="1")
+    client = m.app.test_client()
+    assert flood(client, 1, real_ip="203.0.113.7").status_code == 200
+    assert flood(client, 1, real_ip="203.0.113.7").status_code == 429
+
+    def boom(*_a, **_kw):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(m, "_stats_conn", boom)
+    assert flood(client, 1, real_ip="203.0.113.7").status_code == 200, \
+        "a broken store must not turn every wake into a 429"
+
+
+def test_the_rate_table_does_not_grow_without_bound(relay):
+    import sqlite3 as _sqlite3
+
+    m = relay(rate_limit="100")
+    client = m.app.test_client()
+    for i in range(50):
+        flood(client, 1, real_ip=f"203.0.113.{i}")
+
+    conn = _sqlite3.connect(m.COALESCE_DB)
+    assert conn.execute("SELECT COUNT(*) FROM ratelimit").fetchone()[0] == 50
+    conn.execute("UPDATE ratelimit SET last = ?", (time.time() - 300,))
+    conn.commit()
+    conn.close()
+
+    flood(client, 1, real_ip="198.51.100.9")   # one request prunes everything older than two windows
+    conn = _sqlite3.connect(m.COALESCE_DB)
+    assert conn.execute("SELECT COUNT(*) FROM ratelimit").fetchone()[0] == 1
+    conn.close()
+
+
+def test_a_rate_limited_request_does_not_burn_its_signature(relay):
+    """
+    KHANDAQ (K-09): auth used to run first, and validating a signature CONSUMES it. So a signed
+    request that was then refused for rate had already spent its single-use signature, and the
+    client's natural retry with the same one read as a replay — a 401 for a caller who did nothing
+    wrong. Rate-limiting first makes the 429 free.
+    """
+    m = relay(enforce="1", rate_limit="1")
+    client = m.app.test_client()
+    ts = int(time.time())
+    headers = {"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)}
+
+    # Burn the single request this IP is allowed, with an unsigned call.
+    assert flood(client, 1, real_ip="203.0.113.7").status_code == 401  # unsigned, enforcing
+    # The signed request is now rate limited...
+    assert client.post("/wake", json={"token": TOKEN}, headers=headers,
+                       environ_base={"REMOTE_ADDR": BRIDGE_GATEWAY,
+                                     "HTTP_X_REAL_IP": "203.0.113.7"}).status_code == 429
+    # ...and the SAME signature still works from an IP with budget left, i.e. it was not consumed.
+    assert client.post("/wake", json={"token": TOKEN}, headers=headers,
+                       environ_base={"REMOTE_ADDR": BRIDGE_GATEWAY,
+                                     "HTTP_X_REAL_IP": "198.51.100.9"}).status_code == 200

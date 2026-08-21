@@ -123,6 +123,27 @@ jobs:
             exit 1
           fi
 
+      # KHANDAQ (re-audit 2026-08-21, R-05): release lint was disabled outright — checkReleaseBuilds
+      # false AND abortOnError false — so nothing on the signing path ever ran it. It is a gate again,
+      # and deliberately a NARROW one: app/lint.xml demotes every category to warning and promotes
+      # Security to fatal, so lintVitalRelease (which by construction runs only fatal issues) is
+      # exactly a security gate. Turning the whole of lint on instead would have meant 2378 findings
+      # on this inherited codebase, and a gate that red on day one is a gate somebody disables again.
+      #
+      # It runs BEFORE assembleRelease, so nothing is built, signed or attested on a red gate.
+      #
+      # Proven by mutation on a real SDK: removing the one reviewed exclusion fails it, and injecting
+      # android:debuggable="true" — a Security finding it was never told about — fails it too, while
+      # the 52 pre-existing Fatal translation issues do not.
+      - name: Android security lint gate (release)
+        run: |
+          set -euo pipefail
+          cd khandaq-android-trifa/android-refimpl-app
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:lintVitalRelease
+          # The gate must not have quietly rewritten its own configuration, same as the witness pins.
+          git diff --exit-code -- app/lint.xml
+
       - name: Build release APK
         env:
           KHANDAQ_UPLOAD_STORE_FILE: ${{ secrets.KHANDAQ_UPLOAD_STORE_FILE }}

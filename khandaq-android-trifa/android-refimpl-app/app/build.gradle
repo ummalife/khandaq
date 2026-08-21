@@ -231,18 +231,31 @@ android {
         //
     }
 
-    lintOptions {
-        checkReleaseBuilds false
-        abortOnError false
-        absolutePaths false
-        // lintConfig file("lint.xml")
-        showAll true
-        textReport true
-        xmlReport true
-        htmlReport true
-        textOutput file("lint-report.txt")
-        htmlOutput file("lint-report.html")
-        xmlOutput file("lint-report.xml")
+    // KHANDAQ (re-audit 2026-08-21, R-05): release lint was disabled outright — checkReleaseBuilds
+    // false AND abortOnError false — so none of it ran on the signing path.
+    //
+    // `lint`, not `lintOptions`: the latter is the removed AGP 6 DSL. In Groovy these members are
+    // properties on com.android.build.api.dsl.Lint, so they take `=`.
+    //
+    // abortOnError MUST be true. The tempting recipe — leave it false and just mark the security
+    // checks fatal — does not work: AndroidLintTextOutputTask returns early whenever abortOnError is
+    // false, so the release stays non-blocking however the severities are set. Security-only-ness
+    // comes from app/lint.xml instead, which demotes every category to warning and promotes Security
+    // to fatal. With nothing else able to reach Error, abortOnError = true is provably security-only.
+    lint {
+        checkReleaseBuilds = true
+        abortOnError = true
+        absolutePaths = false
+        lintConfig = file("lint.xml")
+        checkDependencies = false
+        warningsAsErrors = false
+        showAll = true
+        textReport = true
+        xmlReport = true
+        htmlReport = true
+        textOutput = file("lint-report.txt")
+        htmlOutput = file("lint-report.html")
+        xmlOutput = file("lint-report.xml")
     }
 
     compileOptions {

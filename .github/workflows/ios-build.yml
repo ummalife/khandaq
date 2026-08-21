@@ -170,7 +170,7 @@ jobs:
               -sdk iphonesimulator \
               -destination 'generic/platform=iOS Simulator' \
               -derivedDataPath build/DerivedData \
-              -arch arm64 ONLY_ACTIVE_ARCH=NO \
+              ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
               CODE_SIGNING_ALLOWED=NO \
               build
           }

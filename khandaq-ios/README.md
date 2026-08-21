@@ -38,7 +38,8 @@ Clone repo, install pods and open `Antidote.xcworkspace` file with Xcode 12+.
 
 ```
 cd khandaq-ios
-pod install
+bundle install
+bundle exec pod install
 open Antidote.xcworkspace
 ```
 
@@ -47,7 +48,8 @@ Clone repo, install pods and install Xcode 12+
 
 ```
 cd khandaq-ios
-pod install
+bundle install
+bundle exec pod install
 env NSUnbufferedIO=YES xcodebuild -workspace ./Antidote.xcworkspace -scheme Antidote -destination 'platform=iOS Simulator,id=EAB9614F-3485-4A6D-8EFB-FC2B5EFB0243'
 ```
 

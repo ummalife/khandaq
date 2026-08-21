@@ -41,3 +41,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Push-relay Python pins — known advisories (OSV)
         run: python3 scripts/check-python-deps.py
+
+  ios-bundler:
+    # KHANDAQ (K-07): khandaq-ios pins CocoaPods and fastlane in a committed Gemfile.lock, but a lock
+    # only binds the build if the build goes through Bundler — and no CI job here builds iOS, so
+    # without a text check on Linux nothing at all holds the property.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: CocoaPods/fastlane must be invoked through Bundler
+        run: python3 scripts/check-ios-bundler.py

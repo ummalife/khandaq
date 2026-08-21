@@ -28,7 +28,10 @@ jobs:
 
     - name: install pkgs
       run:  |
-            sudo gem install fastlane -NV
+            # KHANDAQ (audit 2026-08-21, K-07): was `sudo gem install fastlane -NV`, which
+            # force-installed the newest floating fastlane over the pinned one. Install from
+            # the committed lock instead.
+            bundle install
 
     - name: xcode info
       run:  |
@@ -39,7 +42,7 @@ jobs:
 
     - name: check compile output
       run:  |
-            fastlane ios release
+            bundle exec fastlane ios release
 
 
 

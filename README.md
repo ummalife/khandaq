@@ -79,7 +79,7 @@ Quick overview:
 ./scripts/build-android-trifa.sh
 
 # iOS (macOS + Xcode)
-cd khandaq-ios && pod install
+cd khandaq-ios && bundle install && bundle exec pod install
 # Open Antidote.xcworkspace in Xcode
 ```
 

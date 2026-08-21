@@ -48,7 +48,8 @@ Output: `dist/android/khandaq-release.apk`.
 
 ```bash
 cd khandaq-ios
-pod install
+bundle install
+bundle exec pod install
 open Antidote.xcworkspace
 ```
 
@@ -64,6 +65,9 @@ TestFlight upload (maintainers only): `khandaq-ios/scripts/upload-testflight.sh`
 
 ## Reproducibility notes
 
-- `khandaq-ios/Pods/` is not committed — run `pod install` after clone.
+- `khandaq-ios/Pods/` is not committed — run `bundle exec pod install` after clone.
+  Always go through Bundler: the committed `Gemfile.lock` pins CocoaPods 1.16.2 and fastlane
+  2.237.0, and a bare `pod` uses whatever Homebrew put on the machine instead (audit K-07).
+  Needs Ruby >= 3.1, which is what `Gemfile.lock`'s activesupport 7.2.x requires.
 - Android and desktop builds download dependencies on first compile.
 - Exact compiler versions are pinned in Docker scripts where possible.

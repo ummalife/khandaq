@@ -35,8 +35,10 @@ def relay(tmp_path, monkeypatch):
     """A fresh app module per test, with its own env, its own SQLite file and no real FCM."""
 
     def _load(enforce: str = "0", secret: str = SECRET, rate_limit: str = "10000",
-              trusted_proxies: str = ""):
+              trusted_proxies: str = "", secrets: str = ""):
         monkeypatch.setenv("PUSH_RELAY_AUTH_SECRET", secret)
+        # KHANDAQ (audit 2026-08-21, K-03): overlapping key epochs, "epoch:secret,epoch:secret".
+        monkeypatch.setenv("PUSH_RELAY_AUTH_SECRETS", secrets)
         monkeypatch.setenv("PUSH_AUTH_ENFORCE", enforce)
         monkeypatch.setenv("STATS_DB", str(tmp_path / "stats.db"))
         monkeypatch.setenv("PUSH_COALESCE_SECONDS", "0")  # coalescing is not what these tests probe
@@ -610,3 +612,110 @@ def test_the_fcm_token_never_reaches_the_log(relay, caplog):
     assert not re.search(r"log\.\w+\([^)]*\btoken\[:", src), \
         "a log call is slicing the FCM registration token"
     assert "_th(token)" in src
+
+
+# ------------------------------------------------- overlapping key epochs (K-03)
+#
+# KHANDAQ (audit 2026-08-21, K-03): the push HMAC secret is baked into public binaries and is
+# therefore extractable. Nothing below changes that — per-install capabilities are the real answer
+# and are a protocol project (DESIGN-push-per-install-capabilities.md). What these tests hold down is
+# the operational trap on top of it: with exactly one secret, rotating meant every shipped client
+# stopped verifying at once, so the documented procedure was to drop back to SOFT mode — accepting
+# unsigned requests from anyone — for the length of a store rollout. So a leaked key was most
+# expensive to replace exactly when replacing it mattered.
+
+EPOCH_A = "epoch-a-secret-value"
+EPOCH_B = "epoch-b-secret-value"
+
+
+def _signed(client, secret, endpoint="/wake", age=0):
+    # `age` shifts the timestamp by a second or two so repeated calls in one test produce DIFFERENT
+    # signatures. Without it the second call within the same second is a genuine replay and is
+    # refused — correct behaviour, but not what these tests are probing.
+    ts = int(time.time()) - age
+    return client.post(endpoint, json={"token": TOKEN},
+                       headers={"Authorization": "Bearer " + sign(TOKEN, "", ts, secret=secret),
+                                "X-Khandaq-Ts": str(ts)})
+
+
+def test_either_configured_epoch_is_accepted(relay):
+    m = relay(enforce="1", secret="", secrets=f"2:{EPOCH_A},3:{EPOCH_B}")
+    assert _signed(m.app.test_client(), EPOCH_A).status_code == 200
+    assert _signed(m.app.test_client(), EPOCH_B).status_code == 200
+
+
+def test_the_legacy_single_secret_still_works_beside_an_epoch_list(relay):
+    """The backward-compatibility case that matters: an existing deployment changes nothing."""
+    m = relay(enforce="1", secret=SECRET, secrets=f"2:{EPOCH_A}")
+    assert _signed(m.app.test_client(), SECRET).status_code == 200
+    assert _signed(m.app.test_client(), EPOCH_A).status_code == 200
+
+
+def test_an_unconfigured_secret_is_still_refused(relay):
+    m = relay(enforce="1", secret="", secrets=f"2:{EPOCH_A}")
+    assert _signed(m.app.test_client(), "some-other-build-secret").status_code == 401
+
+
+def test_a_retired_epoch_stops_being_accepted(relay):
+    """The property rotation depends on: removing the entry actually removes the key."""
+    before = relay(enforce="1", secret="", secrets=f"2:{EPOCH_A},3:{EPOCH_B}")
+    assert _signed(before.app.test_client(), EPOCH_A).status_code == 200
+    after = relay(enforce="1", secret="", secrets=f"3:{EPOCH_B}")
+    assert _signed(after.app.test_client(), EPOCH_A).status_code == 401
+    assert _signed(after.app.test_client(), EPOCH_B).status_code == 200
+
+
+def test_adoption_is_broken_down_by_epoch(relay):
+    """What tells an operator the fleet has moved over, before the old key is deleted."""
+    m = relay(secret="", secrets=f"2:{EPOCH_A},3:{EPOCH_B}")
+    _signed(m.app.test_client(), EPOCH_A)
+    _signed(m.app.test_client(), EPOCH_B)
+    _signed(m.app.test_client(), EPOCH_B, age=1)   # distinct ts => distinct signature, not a replay
+    adoption = m.app.test_client().get("/health").get_json()["auth_adoption"]
+    assert adoption["by_epoch"] == {"2": 1, "3": 2}
+    assert adoption["window_signed"] == 3
+    assert adoption["epochs_configured"] == ["2", "3"]
+
+
+def test_health_never_discloses_a_configured_secret(relay):
+    import json as _json
+
+    m = relay(secret=SECRET, secrets=f"2:{EPOCH_A},3:{EPOCH_B}")
+    body = _json.dumps(m.app.test_client().get("/health").get_json())
+    for leaked in (SECRET, EPOCH_A, EPOCH_B):
+        assert leaked not in body, "/health must expose epoch LABELS, never the keys"
+    assert '"auth_epochs": 3' in body or m.app.test_client().get("/health").get_json()["auth_epochs"] == 3
+
+
+def test_single_use_replay_still_holds_across_the_multi_secret_path(relay):
+    """Regression guard: the epoch loop must not bypass _claim_signature."""
+    m = relay(enforce="1", secret="", secrets=f"2:{EPOCH_A}")
+    client = m.app.test_client()
+    ts = int(time.time())
+    headers = {"Authorization": "Bearer " + sign(TOKEN, "", ts, secret=EPOCH_A),
+               "X-Khandaq-Ts": str(ts)}
+    assert client.post("/wake", json={"token": TOKEN}, headers=headers).status_code == 200
+    assert client.post("/wake", json={"token": TOKEN}, headers=headers).status_code == 401
+
+
+def test_a_malformed_epoch_list_does_not_take_authentication_down(relay):
+    """
+    A typo in one entry of a rotation list must not lock out every client at once — that is the
+    failure this whole change exists to avoid, so it must not be reintroduced by the parser.
+    """
+    m = relay(enforce="1", secret="", secrets=f",,3:{EPOCH_B},garbage-no-colon,bad label:x,")
+    assert _signed(m.app.test_client(), EPOCH_B).status_code == 200
+    assert m.app.test_client().get("/health").get_json()["auth_adoption"]["epochs_configured"] == ["3"]
+
+
+def test_no_secret_in_either_variable_still_fails_closed(relay):
+    m = relay(secret="", secrets="")
+    assert m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}").status_code == 401
+    assert m.app.test_client().get("/health").get_json()["auth_mode"] == "misconfigured"
+
+
+def test_a_secret_containing_a_colon_survives_parsing(relay):
+    """Split on the FIRST colon only — a secret is opaque and may contain anything."""
+    weird = "aa:bb:cc"
+    m = relay(enforce="1", secret="", secrets=f"7:{weird}")
+    assert _signed(m.app.test_client(), weird).status_code == 200

@@ -34,6 +34,13 @@ services:
       # never flips itself — a relay that enforced on a date, unattended, would silence every
       # unsigned client in the field at a moment nobody chose.
       - PUSH_AUTH_ENFORCE_BY=${PUSH_AUTH_ENFORCE_BY:-}
+      # KHANDAQ (audit 2026-08-21, K-03): overlapping key epochs — "3:<secret>,2:<secret>".
+      # Optional and empty by default; PUSH_RELAY_AUTH_SECRET above keeps its `:?` guard, so the
+      # container still refuses to start with no key at all. Rotation without a soft-mode window:
+      # add the new epoch here beside the old, ship clients signing with it, watch
+      # /health -> auth_adoption.by_epoch until the old epoch's count is 0, then delete its entry.
+      - PUSH_RELAY_AUTH_SECRETS=${PUSH_RELAY_AUTH_SECRETS:-}
+      - PUSH_RELAY_AUTH_SECRET_EPOCH=${PUSH_RELAY_AUTH_SECRET_EPOCH:-1}
 
     # KHANDAQ (audit 2026-08-21, K-05): runtime hardening. None of this prevents a compromise; all of
     # it bounds what a compromise reaches. That matters here more than usual, because the container

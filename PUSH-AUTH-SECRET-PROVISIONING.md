@@ -109,8 +109,36 @@ consumed once, in a SQLite store shared across both gunicorn workers, and it fai
 
 ## Rotating it later
 
-Same value everywhere, so rotation is a flag-day unless you stage it: set `PUSH_AUTH_ENFORCE=0` first,
-roll the new secret to clients, wait for adoption on the new value, then re-enforce. There is no
-dual-secret acceptance window in the relay today — if you want rotation without a soft-mode gap, that
-is a small change to `_auth_signature_valid()` to try a list of secrets, and it should be added before
-the first rotation rather than during it.
+**Done 2026-08-21 (audit K-03): the relay accepts overlapping key epochs, so rotation no longer needs
+a soft-mode gap.** It used to: one secret meant every shipped client stopped verifying at once, and
+the only staging was `PUSH_AUTH_ENFORCE=0` — i.e. accepting unsigned requests from anyone for the
+length of a store rollout. A leaked key was therefore most expensive to replace exactly when
+replacing it mattered most.
+
+`PUSH_RELAY_AUTH_SECRETS` takes comma-separated `epoch:secret` entries. The client is unchanged and
+unaware: it still sends one hex HMAC, and the relay tries each configured key with
+`hmac.compare_digest`. `PUSH_RELAY_AUTH_SECRET` keeps working exactly as before and is folded in
+under the label from `PUSH_RELAY_AUTH_SECRET_EPOCH` (default `1`).
+
+1. **Add** the new epoch beside the old, and redeploy. Enforcement stays on throughout.
+   ```
+   PUSH_RELAY_AUTH_SECRETS=3:<new secret>,2:<old secret>
+   ```
+2. **Ship** clients built with the new secret (Play/TestFlight rollouts, so this takes weeks).
+3. **Watch** `curl -s https://push.khandaq.org/health | jq .auth_adoption.by_epoch` — for example
+   `{"3": 4120, "2": 87}`. Epoch 2 falling toward zero is the fleet turning over. `epochs_configured`
+   lists the labels the relay currently accepts; the values are never exposed.
+4. **Delete** the old entry once its count has been 0 for longer than your slowest updater, and
+   redeploy. Only at this moment does a client on the old key stop working — and by then there are
+   none.
+
+`PUSH_AUTH_ENFORCE` never returns to `0` during any of this.
+
+A typo in one entry is skipped with a warning rather than being fatal: a mistake in a rotation list
+must not take authentication down for every client at once, which is the failure this whole mechanism
+exists to avoid.
+
+**What this does not fix.** The secret is still shared and still extractable from any APK or IPA, so
+epochs make a compromised key cheap to *replace* — they do not stop it being compromised. The actual
+answer is per-install capabilities, designed in
+[`DESIGN-push-per-install-capabilities.md`](DESIGN-push-per-install-capabilities.md).

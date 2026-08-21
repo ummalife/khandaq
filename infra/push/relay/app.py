@@ -7,12 +7,13 @@ import hmac
 import ipaddress
 import logging
 import os
+import re
 import sqlite3
 import time
 from threading import Lock
 
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -23,6 +24,84 @@ FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")
 FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")  # legacy fallback
 RATE_LIMIT_PER_MIN = int(os.environ.get("PUSH_RATE_LIMIT_PER_MIN", "120"))
 PUSH_RELAY_AUTH_SECRET = os.environ.get("PUSH_RELAY_AUTH_SECRET", "")
+# KHANDAQ (audit 2026-08-21, K-03): overlapping key epochs, so rotating the shared secret no longer
+# requires a window in which the relay accepts unsigned traffic.
+#
+# The finding is that the HMAC secret is baked into publicly downloadable binaries and is therefore
+# extractable — true, acknowledged in PUSH-AUTH-SECRET-PROVISIONING.md, and NOT fixed by anything
+# here: per-install capabilities are the actual answer and are a protocol project, scoped in
+# DESIGN-push-per-install-capabilities.md. What IS fixed is the operational trap sitting on top of
+# it: with exactly one secret configured, rotating meant every shipped client stopped verifying at
+# once, so the documented procedure was to drop back to soft mode — i.e. to accept unsigned requests
+# from anyone — for the length of a store rollout. A leaked key was therefore expensive to replace
+# precisely when replacing it mattered most.
+#
+# Format: PUSH_RELAY_AUTH_SECRETS="3:<secret>,2:<secret>" — comma-separated `epoch:secret`, split on
+# the FIRST colon. The client is unchanged and unaware: it still sends one hex HMAC, and the relay
+# tries each configured key. Rotation becomes: add the new epoch beside the old, ship clients on it,
+# watch /health -> auth_adoption.by_epoch until the old epoch reaches zero, delete the old entry.
+PUSH_RELAY_AUTH_SECRETS_RAW = os.environ.get("PUSH_RELAY_AUTH_SECRETS", "")
+PUSH_RELAY_AUTH_SECRET_EPOCH = os.environ.get("PUSH_RELAY_AUTH_SECRET_EPOCH", "1").strip() or "1"
+_EPOCH_LABEL = re.compile(r"^[A-Za-z0-9_-]{1,16}$")
+
+
+def _parse_auth_secrets() -> list:
+    """
+    [(epoch, secret)] from PUSH_RELAY_AUTH_SECRETS, with the legacy single variable folded in.
+
+    Malformed entries are skipped with a warning rather than being fatal. A typo in one entry of a
+    rotation list must not take authentication down for every client at once — the failure mode this
+    whole change exists to avoid.
+    """
+    out, seen = [], set()
+    for entry in PUSH_RELAY_AUTH_SECRETS_RAW.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        epoch, sep, secret = entry.partition(":")
+        epoch, secret = epoch.strip(), secret.strip()
+        if not sep or not secret:
+            log.warning("push auth: ignoring malformed PUSH_RELAY_AUTH_SECRETS entry "
+                        "(expected 'epoch:secret')")
+            continue
+        if not _EPOCH_LABEL.match(epoch):
+            log.warning("push auth: ignoring PUSH_RELAY_AUTH_SECRETS entry with an invalid epoch "
+                        "label (allowed: 1-16 chars of [A-Za-z0-9_-])")
+            continue
+        if epoch in seen:
+            log.warning("push auth: PUSH_RELAY_AUTH_SECRETS lists epoch %s more than once; "
+                        "the last one wins", epoch)
+            out = [(e, s) for e, s in out if e != epoch]
+        seen.add(epoch)
+        out.append((epoch, secret))
+    if PUSH_RELAY_AUTH_SECRET and PUSH_RELAY_AUTH_SECRET_EPOCH not in seen:
+        out.append((PUSH_RELAY_AUTH_SECRET_EPOCH, PUSH_RELAY_AUTH_SECRET))
+    return out
+
+
+AUTH_SECRETS = _parse_auth_secrets()
+
+
+def _set_auth_epoch(epoch: str) -> None:
+    """
+    Remember which key epoch verified THIS request, for the rotation counter.
+
+    Deliberately request-scoped (flask.g) rather than a module global: gunicorn serves concurrently,
+    and a global would let two requests overwrite each other's epoch — silently, under exactly the
+    concurrency the counter exists to measure. Outside a request context (unit tests calling the
+    helper directly) it is simply a no-op.
+    """
+    try:
+        g.push_auth_epoch = epoch
+    except RuntimeError:
+        pass
+
+
+def _current_auth_epoch():
+    try:
+        return getattr(g, "push_auth_epoch", None)
+    except RuntimeError:
+        return None
 # Max allowed clock skew (seconds) for the request timestamp. Bounds the replay window.
 AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 # Rollout gate. With a secret set but ENFORCE off (default), the relay runs in SOFT/MONITOR
@@ -120,6 +199,13 @@ def _stats_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS authoutcome ("
                  "day TEXT NOT NULL, outcome TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
                  "PRIMARY KEY (day, outcome))")
+    # KHANDAQ (audit 2026-08-21, K-03): which key epoch signed each accepted request. This is what
+    # makes a rotation observable: add the new epoch, ship clients, and watch the old epoch's count
+    # fall to zero before deleting it. Without it, "have all the clients moved over yet?" has no
+    # answer short of retiring the old key and seeing what breaks.
+    conn.execute("CREATE TABLE IF NOT EXISTS authepoch ("
+                 "day TEXT NOT NULL, epoch TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
+                 "PRIMARY KEY (day, epoch))")
     # KHANDAQ (audit 2026-08-21, K-09): the per-IP rate window, shared by every gunicorn worker.
     # One row per currently-active client IP, holding the request timestamps inside the 60s window.
     conn.execute("CREATE TABLE IF NOT EXISTS ratelimit ("
@@ -317,6 +403,13 @@ def _record_auth_outcome(outcome: str) -> None:
                 conn.execute(
                     "INSERT INTO authoutcome (day, outcome, n) VALUES (?, ?, 1) "
                     "ON CONFLICT(day, outcome) DO UPDATE SET n = n + 1", (day, outcome))
+                epoch = _current_auth_epoch()
+                if outcome == AUTH_OUTCOME_OK and epoch:
+                    conn.execute(
+                        "INSERT INTO authepoch (day, epoch, n) VALUES (?, ?, 1) "
+                        "ON CONFLICT(day, epoch) DO UPDATE SET n = n + 1", (day, epoch))
+                conn.execute("DELETE FROM authepoch WHERE day < ?",
+                             (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 60 * 86400)),))
                 # 60 days is plenty to watch a store rollout land, and keeps the table trivial.
                 conn.execute("DELETE FROM authoutcome WHERE day < ?",
                              (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 60 * 86400)),))
@@ -359,6 +452,8 @@ def _auth_adoption_summary() -> dict:
                     "SELECT outcome, SUM(n) FROM authoutcome GROUP BY outcome").fetchall()
                 span = conn.execute(
                     "SELECT MIN(day), COUNT(DISTINCT day) FROM authoutcome").fetchone() or (None, 0)
+                epoch_rows = conn.execute(
+                    "SELECT epoch, SUM(n) FROM authepoch GROUP BY epoch").fetchall()
             finally:
                 conn.close()
 
@@ -385,6 +480,12 @@ def _auth_adoption_summary() -> dict:
             # Without these, a relay redeployed ten minutes ago and a relay observed for three weeks
             # produce the same-looking percentage. The counters live in /data, so they only survive a
             # redeploy because docker-compose gives that path a named volume — see infra/push/.
+            # KHANDAQ (K-03): which key epoch each accepted signature used. LABELS AND COUNTS ONLY —
+            # never a secret; a test asserts no configured secret appears anywhere in this response.
+            # This is the number a rotation is driven by: add the new epoch, ship clients, wait for
+            # the old one to reach zero, then delete it. No soft-mode window, ever.
+            "epochs_configured": [e for e, _ in AUTH_SECRETS],
+            "by_epoch": {e: n for e, n in epoch_rows},
             "since": span[0],
             "days_observed": span[1],
             # Request-weighted, not device-weighted: one chatty unsigned sender holds this down, and
@@ -422,8 +523,9 @@ def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
     # PUSH_RELAY_AUTH_SECRET mandatory (:? -> the container refuses to start without it), so an
     # empty secret here is a misconfiguration, not "auth off" -> fail CLOSED instead of accepting
     # every request.
-    if not PUSH_RELAY_AUTH_SECRET:
-        log.error("push auth: PUSH_RELAY_AUTH_SECRET is empty -> rejecting (set it in the relay .env)")
+    if not AUTH_SECRETS:
+        log.error("push auth: no secret configured (PUSH_RELAY_AUTH_SECRET / PUSH_RELAY_AUTH_SECRETS) "
+                  "-> rejecting every request (set one in the relay .env)")
         return False
 
     outcome = _auth_signature_valid(token, sender, allow_query_auth=allow_query_auth)
@@ -554,10 +656,21 @@ def _auth_signature_valid(token: str, sender: str, *, allow_query_auth: bool = T
     if abs(time.time() - ts_int) > AUTH_MAX_SKEW_SEC:
         return "stale"
 
+    # KHANDAQ (audit 2026-08-21, K-03): try every configured key epoch. Every candidate goes through
+    # hmac.compare_digest — never ==, and no length pre-check — so each comparison stays constant
+    # time. Stopping at the first match leaks only WHICH epoch matched, which is a label, not a
+    # secret. N HMAC-SHA256 over a sub-200-byte message is noise beside the SQLite write that follows.
     msg = (token + "\n" + sender + "\n" + ts).encode("utf-8")
-    expected = hmac.new(PUSH_RELAY_AUTH_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(supplied, expected):
+    matched = None
+    for epoch, secret in AUTH_SECRETS:
+        candidate = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(supplied, candidate):
+            matched = (epoch, candidate)
+            break
+    if matched is None:
         return "badmac"
+    expected = matched[1]
+    _set_auth_epoch(matched[0])
     # KHANDAQ (audit A2): consume the signature so a captured signed URL can't be replayed to 200
     # repeatedly within the freshness window. Each valid signature is accepted exactly once —
     # KHANDAQ (audit2 #10): across ALL gunicorn workers, not just the one that served the original.
@@ -734,12 +847,15 @@ def health():
         # CLOSED and 401s everything, so authentication is very much in force — it is the relay that
         # is broken, not the check that is off.
         "auth_required": True,
+        "auth_epochs": len(AUTH_SECRETS),
         # KHANDAQ (audit 2026-08-21, K-02): this used to report "off" when PUSH_RELAY_AUTH_SECRET was
         # empty. That was false, and false in the dangerous direction: it reads as "the relay is
         # serving everyone without auth" while the relay is in fact refusing every single request.
         # An operator debugging a total push outage would have been sent looking in the wrong place.
         "auth_mode": (
-            "misconfigured" if not PUSH_RELAY_AUTH_SECRET
+            # KHANDAQ (K-03): keyed on the parsed epoch set, not on the legacy single variable, so a
+            # relay configured only through PUSH_RELAY_AUTH_SECRETS reports its real mode.
+            "misconfigured" if not AUTH_SECRETS
             else ("enforce" if PUSH_AUTH_ENFORCE else "soft")
         ),
         # KHANDAQ (audit2 #4): the numbers the "when do we set PUSH_AUTH_ENFORCE=1" decision turns on.

@@ -168,10 +168,16 @@ public final class DbSecretKeyStorage
             // Recovery backup for when the Keystore key is invalidated on upgrade — encrypted, not plaintext.
             storeDeviceBackup(context, plaintextKey);
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
             // Keystore unavailable on this device: keep only a device-encrypted backup, never plaintext.
-            Log.w(TAG, "keystore save failed, using device-encrypted backup: " + e.getMessage());
+            //
+            // KHANDAQ (re-audit 2026-08-21): Throwable, not Exception. The version guard in
+            // getOrCreateKey now prevents the NoClassDefFoundError this was missing, but the cost of
+            // being wrong here is not a failed function — it is a user who can never open their
+            // profile again. In that trade, swallowing an Error and writing the device-encrypted
+            // backup beats propagating it. Same choice already made at the Throwable catch below.
+            Log.w(TAG, "keystore save failed, using device-encrypted backup: " + e);
             storeDeviceBackup(context, plaintextKey);
         }
     }
@@ -214,9 +220,11 @@ public final class DbSecretKeyStorage
             }
             return key;
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
-            Log.w(TAG, "keystore load failed: " + e.getMessage());
+            // Throwable for the same reason as the save path above: a locked-out profile is worse
+            // than a swallowed Error, and the fallbacks below are the designed recovery.
+            Log.w(TAG, "keystore load failed: " + e);
             final String legacy = prefs.getString(PREFS_AUTO_KEY, null);
             if (!TextUtils.isEmpty(legacy))
             {
@@ -289,6 +297,26 @@ public final class DbSecretKeyStorage
 
     private static SecretKey getOrCreateKey(final String alias) throws Exception
     {
+        // KHANDAQ (re-audit 2026-08-21, found by turning release lint back on): this method uses
+        // KeyGenParameterSpec and KeyProperties, both API 23, while the app ships with
+        // minSdkVersion 21. There was no version check anywhere in this file.
+        //
+        // That is not a lint nitpick, it is a crash. On Android 5.0/5.1 resolving those classes
+        // throws NoClassDefFoundError — an Error, not an Exception — so the `catch (Exception e)`
+        // in both callers does NOT catch it, and the app dies at the moment it saves or loads the
+        // database key: profile creation and unlock.
+        //
+        // The fallback those callers implement is already the right one ("Keystore unavailable on
+        // this device: keep only a device-encrypted backup, never plaintext"). It simply never ran.
+        // Throwing an ordinary exception here hands control to it, which is what the design intended
+        // all along — and it is also what makes the 21 NewApi errors go away honestly rather than by
+        // being silenced.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M)
+        {
+            throw new UnsupportedOperationException(
+                    "AndroidKeyStore AES keys need API 23; this device is API " + Build.VERSION.SDK_INT);
+        }
+
         final KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
         ks.load(null);
 

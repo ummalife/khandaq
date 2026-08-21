@@ -1,17 +1,84 @@
-# KHANDAQ gitleaks config (audit A18). Extends the default ruleset, but allowlists files that
-# legitimately contain PUBLIC (non-secret) key material so the scan doesn't raise false positives:
-#   - Tox DHT node PUBLIC keys, TLS SPKI cert pins, embedded PUBLIC CA certs, public SSH signing keys.
-# Secrets are NEVER committed (Firebase SA is a mounted runtime file; the push-relay auth secret comes
-# from the environment / BuildConfig at build time), so allowlisting these public-data files is safe.
+# KHANDAQ gitleaks config (audit A18, extended in audit round 3 for F-22).
+#
+# Extends the default ruleset and allowlists files that legitimately contain PUBLIC, non-secret
+# high-entropy material. Real secrets are never committed: the Firebase service account is a mounted
+# runtime file, and the push-relay auth secret comes from the environment / BuildConfig at build time.
+#
+# WHY THIS GREW (F-22). The push and pull-request scans were green, but the WEEKLY full-history sweep
+# (`--log-opts=--all`) was red by construction — 136 findings, every week, since the workflow was
+# added. A scheduled job that can never pass is not a control; it is a notification everyone learns to
+# close. Every one of those 136 was checked before being listed here, and the breakdown is recorded
+# below so the next person does not have to re-derive it:
+#
+#   94  Tox DHT node PUBLIC keys, in three nodes.json copies the old allowlist did not cover
+#   11  SHA-256 dependency-verification hashes in witness.gradle
+#   ~25 more DHT public keys in bootstrap configs, DHT.c/.m, test fixtures and conversion scripts
+#    2  Firebase Android API key in google-services.json — public by design, see SECURITY.md
+#    2  upstream WebRTC unit-test key fixtures, vendored
+#
+# The rule that fires is almost always `generic-api-key`, on entropy alone. Nothing here is a
+# credential, and nothing here would authenticate anything to anyone.
+#
+# ADDING TO THIS FILE IS A SECURITY DECISION. Allowlist the narrowest thing that works — a path, not a
+# directory; a specific value, not a pattern — and say in a comment why the material is public.
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Public (non-secret) key material: DHT node keys, cert pins/roots, SSH signing keys"
+description = "Public (non-secret) key material: DHT node keys, cert pins/roots, SSH signing keys, build hashes"
+# NOTE on the separators: these use [/\] rather than a bare slash. gitleaks reports POSIX paths in
+# git mode (which is what CI runs) but native paths with --no-git, so on Windows a bare-slash pattern
+# matches nothing and a local scan reports 140 findings that CI does not see. A config whose meaning
+# depends on the operating system of whoever ran it is worse than no config.
 paths = [
-  '''khandaq-desktop/res/nodes\.json''',
-  '''.*/res/xml/network_security_config\.xml''',
-  '''.*/Submanagers/OCTSubmanagerChatsImpl\.m''',
-  '''\.github/allowed_signers''',
-  '''\.github/CONTRIBUTING\.md''',
+  # --- Tox DHT bootstrap node PUBLIC keys -------------------------------------------------------
+  # A DHT node key is published so clients can find and authenticate the node. It is the opposite of
+  # a secret: a node is useless unless everyone has it.
+  '''.*[/\\]nodes\.json''',
+  '''config[/\\]khandaq_bootstrap_nodes\.json''',
+  '''infra[/\\]bootstrap[/\\]bootstrap-daemon\.conf''',
+  '''infra[/\\]bootstrap[/\\]install\.sh''',
+  '''.*[/\\]bootstrap_daemon[/\\]tox-bootstrapd\.conf''',
+  '''.*[/\\]bootstrap_daemon[/\\]websocket[/\\]Dockerfile''',
+  '''.*[/\\]toxcore[/\\]DHT\.(c|m)''',
+  '''.*[/\\]toxcore_amalgamation(_no_toxav)?\.c''',
+  '''.*[/\\]trifa[/\\]TRIFAGlobals\.java''',
+  '''.*[/\\]tox[/\\]ToxUtilTest\.kt''',
+  '''khandaq-android-trifa[/\\]convert_nodes_file[/\\]convert2?\.sh''',
+  '''.*[/\\]res[/\\]xml[/\\]network_security_config\.xml''',
+  '''.*[/\\]Submanagers[/\\]OCTSubmanagerChatsImpl\.m''',
+
+  # --- Build-integrity hashes -------------------------------------------------------------------
+  # SHA-256 digests of artifacts and test vectors. Publishing them is the entire point: they let a
+  # third party verify bytes they already have. Treating them as secrets would defeat their purpose.
+  '''khandaq-android-trifa[/\\]android-refimpl-app[/\\]app[/\\]witness\.gradle''',
+  '''khandaq-android[/\\]WORKSPACE''',
+  '''ngc_histsync_vectors\.py''',
+
+  # --- Firebase Android client key --------------------------------------------------------------
+  # google-services.json carries the Android API key, which ships inside every APK and which Google
+  # documents as non-secret; it is restricted by API-key restrictions and App Check, not by secrecy.
+  # See SECURITY.md and SECURITY-AUDIT-INTERNAL-2026-08-10.md, which analyse exactly this.
+  '''.*[/\\]google-services\.json''',
+
+  # --- Vendored upstream test fixtures ----------------------------------------------------------
+  # WebRTC's own unit tests ship PEM keys as test data. Vendored code, upstream fixtures, never used
+  # to authenticate anything in this product.
+  '''.*[/\\]webrtc6[/\\]webrtc[/\\]base[/\\]ssl.*_unittest\.cc''',
+  # objcTox's test fixture: a small BINARY Realm database. Nine byte sequences in it happen to look
+  # like AWS access tokens to a pattern matcher, which is what random bytes do at that length. Only
+  # the --no-git scan reaches it, because git mode does not diff the binary.
+  '''.*[/\\]objcTox[/\\]Tests[/\\]unencrypted-database\.realm''',
+
+  # --- Public signing identities ----------------------------------------------------------------
+  '''\.github[/\\]allowed_signers''',
+  '''\.github[/\\]CONTRIBUTING\.md''',
+]
+
+regexes = [
+  # KHANDAQ (audit round 3, F-25): the SHA-256 of the PUBLIC WineHQ signing key, recorded in
+  # Dockerfile.windows_builder so a substituted key fails the build. It is a digest of a public key,
+  # pinned by exactly the same reasoning as the base-image digest a few lines above it — and it trips
+  # `generic-api-key` because the variable name contains "KEY" and the value is 64 hex characters.
+  '''d965d646defe94b3dfba6d5b4406900ac6c81065428bf9d9303ad7a72ee8d1b8''',
 ]

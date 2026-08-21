@@ -44,6 +44,25 @@ jobs:
           bash scripts/ci-android-toolchain.sh install khandaq-android-trifa/android-refimpl-app
           bash scripts/ci-android-toolchain.sh snapshot "$RUNNER_TEMP/sdk-before.txt"
 
+      # KHANDAQ (re-audit 2026-08-21, R-04). The re-audit's remediation for the EOL desktop TLS stack
+      # has two halves. The first is the Qt 6 / OpenSSL 3 migration, which is not done. The second is
+      # "block release when a waiver expires" -- and that half was written but never wired: the
+      # --release mode of this script (no grace period, and a waiver with under 14 days left may not
+      # carry a release) existed and nothing invoked it. Only the advisory --warn-days form ran, in
+      # security-checks.yml, where failing does not stop a release from being cut.
+      #
+      # So an expired waiver could ship. It is a gate now. Deliberately placed BEFORE the build: a
+      # release that must not go out should cost seconds, not a full NDK build.
+      #
+      # This also gates R-07's published-metadata check, for the same reason -- the version and
+      # package a release claims are worth checking against the build files at the moment the release
+      # is built, not only on pull requests.
+      - name: Release gates - dependency waivers and published metadata
+        run: |
+          set -euo pipefail
+          python3 scripts/check-bundled-deps-eol.py --release
+          python3 scripts/check-release-metadata.py
+
       - name: Provide google-services.json (real from secret, else placeholder for the build)
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}

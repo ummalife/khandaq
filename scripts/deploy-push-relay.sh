@@ -101,6 +101,24 @@ case "\$health" in
     echo "\$health" >&2
     exit 1 ;;
 esac
+
+# KHANDAQ (production deploy 2026-08-21): a relay that starts with an ERROR in its log has something
+# wrong that none of the assertions above are shaped to see. The first real deploy of the hardened
+# image logged "Control server error: [Errno 30] Read-only file system: '/.gunicorn'" on every boot,
+# and every check above still passed - non-root, read-only, /data writable, auth_mode soft.
+#
+# Every ERROR this relay emits is a deploy-stopping condition by construction: no auth secret
+# configured, a service account it cannot read, soft mode past its own cutoff. So treat any of them
+# as a failed deploy rather than as log colour.
+echo "==> The relay must start clean"
+sleep 2
+errs=\$(docker compose logs --no-color --since 3m 2>/dev/null | grep -F '[ERROR]' || true)
+if [[ -n "\$errs" ]]; then
+  echo "ERROR: the relay logged errors at startup:" >&2
+  echo "\$errs" >&2
+  exit 1
+fi
+echo "    no errors in the startup log"
 REMOTE
 
 echo "==> Nginx vhost"

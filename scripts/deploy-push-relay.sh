@@ -70,29 +70,44 @@ docker compose ps
 # here rather than assuming the compose file was applied — a stale container that compose decided not
 # to recreate would otherwise keep running as root with a writable root filesystem, and nothing would
 # say so.
+# KHANDAQ (production deploy 2026-08-21): every command below redirects stdin from /dev/null, and
+# that is not cosmetic - without it NONE OF THESE CHECKS RUN.
+#
+# This whole block is fed to `ssh bash -s` from a heredoc, so the remote shell's stdin IS the rest of
+# this script. `docker compose exec -T` reads stdin. The first exec therefore swallowed every
+# remaining line, the remote bash reached end-of-input and exited 0 - silently, with `set -euo
+# pipefail` in force, because running out of script is not an error.
+#
+# So the deploy printed "==> Verify the hardening actually took effect" and then verified nothing:
+# not non-root, not the read-only root filesystem, not /data, not the auth mode. It had never
+# verified them in any deploy since the checks were written. That all four happened to be true was
+# established by checking the host by hand, afterwards.
+#
+# The lesson outlasts the redirect: an assertion that cannot fail looks exactly like one that passes.
+# Make a new check here fail once on purpose before trusting it.
 echo "==> Verify the hardening actually took effect"
-uid=\$(docker compose exec -T push-relay id -u | tr -d '\r')
+uid=\$(docker compose exec -T push-relay id -u </dev/null | tr -d '\r')
 if [[ "\$uid" == "0" ]]; then
   echo "ERROR: the relay is running as root — the container was not recreated with the new image" >&2
   exit 1
 fi
 echo "    running as uid \$uid (non-root)"
 
-if docker compose exec -T push-relay sh -c 'touch /app/.writetest 2>/dev/null'; then
+if docker compose exec -T push-relay sh -c 'touch /app/.writetest 2>/dev/null' </dev/null; then
   echo "ERROR: / is writable inside the container — read_only did not take effect" >&2
   exit 1
 fi
 echo "    root filesystem is read-only"
 
 # /data must be writable, or the relay cannot keep its replay store, rate window or adoption counters.
-docker compose exec -T push-relay sh -c 'touch /data/.writetest && rm -f /data/.writetest' \
+docker compose exec -T push-relay sh -c 'touch /data/.writetest && rm -f /data/.writetest' </dev/null \
   || { echo "ERROR: /data is not writable by uid \$uid — check the push-relay-data volume" >&2; exit 1; }
 echo "    /data is writable"
 
 # KHANDAQ (re-audit 2026-08-21, R-02): assert the RUNNING relay is in the mode that was asked for.
 # Same reasoning as the non-root and read-only assertions above: a container compose decided not to
 # recreate can keep serving in the old mode, and nothing else would ever say so.
-health=\$(docker compose exec -T push-relay python -c   "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5).read().decode())" 2>/dev/null || true)
+health=\$(docker compose exec -T push-relay python -c   "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5).read().decode())" </dev/null 2>/dev/null || true)
 case "\$health" in
   *'"auth_mode": "$EXPECT_MODE"'*|*'"auth_mode":"$EXPECT_MODE"'*)
     echo "    /health reports auth_mode=$EXPECT_MODE" ;;
@@ -112,7 +127,7 @@ esac
 # as a failed deploy rather than as log colour.
 echo "==> The relay must start clean"
 sleep 2
-errs=\$(docker compose logs --no-color --since 3m 2>/dev/null | grep -F '[ERROR]' || true)
+errs=\$(docker compose logs --no-color --since 3m </dev/null 2>/dev/null | grep -F '[ERROR]' || true)
 if [[ -n "\$errs" ]]; then
   echo "ERROR: the relay logged errors at startup:" >&2
   echo "\$errs" >&2

@@ -73,10 +73,16 @@ docker compose ps
 # KHANDAQ (production deploy 2026-08-21): every command below redirects stdin from /dev/null, and
 # that is not cosmetic - without it NONE OF THESE CHECKS RUN.
 #
-# This whole block is fed to `ssh bash -s` from a heredoc, so the remote shell's stdin IS the rest of
-# this script. `docker compose exec -T` reads stdin. The first exec therefore swallowed every
-# remaining line, the remote bash reached end-of-input and exited 0 - silently, with `set -euo
-# pipefail` in force, because running out of script is not an error.
+# This whole block is fed to \`ssh bash -s\` from a heredoc, so the remote shell's stdin IS the rest
+# of this script. \`docker compose exec -T\` reads stdin. The first exec therefore swallowed every
+# remaining line, the remote bash reached end-of-input and exited 0 - silently, with
+# \`set -euo pipefail\` in force, because running out of script is not an error.
+#
+# (Those backslashes are load-bearing. This heredoc is unquoted, because it interpolates the mode and
+# the remote path, so a backtick in PROSE is a command the LOCAL shell runs. Writing this note without
+# them executed \`ssh bash -s\` and \`docker compose exec -T\` on the workstation mid-deploy. Same
+# shape as the compose file whose operator message contained a colon: text written for a human,
+# parsed by a machine.)
 #
 # So the deploy printed "==> Verify the hardening actually took effect" and then verified nothing:
 # not non-root, not the read-only root filesystem, not /data, not the auth mode. It had never

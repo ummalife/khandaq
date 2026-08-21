@@ -312,8 +312,27 @@ def _release_coalesce_slot(token: str) -> None:
 # push-wake path and its coalesce table (pushsent) remain.
 
 
+def _service_account_usable() -> bool:
+    """
+    KHANDAQ (production deploy 2026-08-21) — READABLE, not merely present.
+
+    This was `os.path.isfile(...)`, which was true enough while the relay ran as root: root reads
+    everything. K-05 moved the container to uid 10001, and the service account on the host is 0600
+    root:root, so the file exists and cannot be opened. The old check reported the relay healthy and
+    FCM configured while every single send failed with EACCES — including through the deploy script's
+    own /health assertion, which would have declared the deploy successful over a total notification
+    outage.
+
+    That is the same failure shape K-02 already fixed once for auth_mode: a health field that is
+    wrong in the direction that hides an outage. Ask whether the file can actually be OPENED.
+    """
+    if not FCM_SERVICE_ACCOUNT_FILE or not os.path.isfile(FCM_SERVICE_ACCOUNT_FILE):
+        return False
+    return os.access(FCM_SERVICE_ACCOUNT_FILE, os.R_OK)
+
+
 def _fcm_configured() -> bool:
-    return bool(FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE)) or bool(FCM_SERVER_KEY)
+    return _service_account_usable() or bool(FCM_SERVER_KEY)
 
 
 def _client_ip() -> str:
@@ -521,6 +540,16 @@ if _enforce_overdue():
               "being served. Read /health -> auth_adoption.window_outcomes and set "
               "PUSH_AUTH_ENFORCE=1, or move PUSH_AUTH_ENFORCE_BY out deliberately.",
               PUSH_AUTH_ENFORCE_BY)
+
+
+# KHANDAQ (production deploy 2026-08-21): the same statement in the logs, once per worker at startup.
+# A relay whose service account it cannot read will still answer /health with 200 and still accept
+# wakes — it just never delivers one. Somebody has to be told, and the container log is where an
+# operator looks after a deploy.
+if FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE)         and not os.access(FCM_SERVICE_ACCOUNT_FILE, os.R_OK):
+    log.error("fcm: %s exists but is NOT READABLE by uid %s — every send will fail while the relay "
+              "otherwise looks healthy. chown it to the uid the container runs as.",
+              FCM_SERVICE_ACCOUNT_FILE, os.getuid() if hasattr(os, "getuid") else "?")
 
 
 def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
@@ -841,13 +870,19 @@ def _send_wake(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
 
 @app.route("/health")
 def health():
-    mode = "v1" if FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE) else (
-        "legacy" if FCM_SERVER_KEY else "none"
-    )
+    mode = "v1" if _service_account_usable() else ("legacy" if FCM_SERVER_KEY else "none")
     body = {
         "status": "ok",
         "fcm_configured": _fcm_configured(),
         "fcm_mode": mode,
+        # KHANDAQ (production deploy 2026-08-21): says WHICH way the service account is unusable.
+        # "missing" and "unreadable" need different fixes — provision the file, versus chown it to the
+        # uid the container runs as — and an operator staring at fcm_configured:false cannot tell them
+        # apart. Only present when a path is configured at all.
+        **({"fcm_service_account": (
+            "ok" if _service_account_usable()
+            else ("unreadable" if os.path.isfile(FCM_SERVICE_ACCOUNT_FILE) else "missing"))}
+           if FCM_SERVICE_ACCOUNT_FILE else {}),
         # True means "requests are being authenticated". With no secret configured, _auth_ok fails
         # CLOSED and 401s everything, so authentication is very much in force — it is the relay that
         # is broken, not the check that is off.

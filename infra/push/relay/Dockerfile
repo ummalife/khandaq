@@ -73,5 +73,16 @@ HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
 
 # --worker-tmp-dir is set to the tmpfs compose mounts: gunicorn's worker heartbeat file lives there,
 # and with a read-only root filesystem there is nowhere else to put it.
+#
+# --no-control-socket, found by the first production deploy of this image. gunicorn 26 opens a control
+# socket at $HOME/.gunicorn/gunicorn.ctl, and this container has no passwd entry for uid 10001, so
+# HOME is "/" — which read_only makes immutable. Every boot logged
+#   [ERROR] Control server error: [Errno 30] Read-only file system: '/.gunicorn'
+# The relay served correctly regardless; the cost was an ERROR on every start, in the logs an operator
+# is meant to read right after a deploy — which is how a log stops being read at all.
+#
+# Disabled rather than relocated to /tmp. That socket can control the master process — stop, reload,
+# scale — so on an image whose whole point is that a compromise reaches as little as possible, an
+# admin channel nothing uses is surface to remove, not to move somewhere writable.
 CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "2", "--timeout", "30", \
-     "--worker-tmp-dir", "/tmp", "app:app"]
+     "--worker-tmp-dir", "/tmp", "--no-control-socket", "app:app"]

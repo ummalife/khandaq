@@ -105,7 +105,14 @@ def main():
     min_android = manifest["site"]["minAndroidReleaseClaimed"]
 
     site = read(SITE)
-    downloads = read(DOWNLOADS, required=False)
+    # KHANDAQ (audit round 3, F-24): required, not optional.
+    #
+    # This was `required=False` with an `if downloads:` guard below, so moving or renaming the
+    # downloads page turned its checks into a silent skip — the exact vacuous pass this script's own
+    # docstring promises never to allow, and the re-audit response describes the check as
+    # unconditional. If the page is genuinely gone, deleting the claim here is a reviewed change;
+    # having it evaporate because a path moved is not.
+    downloads = read(DOWNLOADS)
     readme = read(README)
 
     # --- the website -----------------------------------------------------------------------
@@ -131,10 +138,9 @@ def main():
     CLAIMS.append(("web/index.html", site[:m.start(1)].count("\n") + 1, "Android card version",
                    m.group(1), android["versionName"], "<span class=\"meta\">v%s ..." % m.group(1)))
 
-    if downloads:
-        claim("web/downloads/index.html", downloads,
-              r"play\.google\.com/store/apps/details\?id=([a-z0-9_.]+)",
-              "Play listing id", android["applicationId"])
+    claim("web/downloads/index.html", downloads,
+          r"play\.google\.com/store/apps/details\?id=([a-z0-9_.]+)",
+          "Play listing id", android["applicationId"])
 
     # --- the README ------------------------------------------------------------------------
     claim("README.md", readme, r"releases/tag/(v[0-9.]+)", "release tag", tag)

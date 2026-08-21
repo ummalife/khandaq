@@ -351,12 +351,28 @@ tasks.register("pinChecksums") {
             }
             verified++
         }
-        // Visibility only: this script verifies the pins it is given, it does not demand that every resolved
-        // artifact is pinned. Print what is unpinned so it cannot rot unnoticed.
+        // KHANDAQ (audit round 3, F-19): an unpinned resolved artifact is a FAILURE, not a println.
+        //
+        // This used to say "visibility only: this script verifies the pins it is given, it does not
+        // demand that every resolved artifact is pinned" — and printed a warning nobody would see in a
+        // green build. Meanwhile release-provenance.yml claimed it was "refusing to build/attest a
+        // release from an unpinned tree", and gradle_witness_ng's own header claimed "every real maven
+        // coordinate stays pinned and verified". Neither was true: the only thing standing between an
+        // unpinned artifact and a signed, attested APK was a line of output.
+        //
+        // The bar is now what those two sentences already promised. Adding a dependency means running
+        // `:app:calculateChecksums` and committing the updated witness.gradle, which is the documented
+        // workflow anyway — the difference is that forgetting it stops the build instead of scrolling
+        // past.
         def unpinned = dependencies.keySet().findAll { !pinned.contains(it.all) }
         if (!unpinned.isEmpty()) {
-            println "pinChecksums:WARNING: ${unpinned.size()} resolved artifact(s) are not pinned in witness.gradle:"
-            unpinned.each { println "    ${it.all}" }
+            def nl = System.lineSeparator()
+            def list = unpinned.collect { "    ${it.all}" }.join(nl)
+            throw new InvalidUserDataException(
+                "pinChecksums: ${unpinned.size()} resolved artifact(s) are NOT pinned in witness.gradle:" + nl +
+                list + nl + nl +
+                "Run `./gradlew :app:calculateChecksums` and commit the updated witness.gradle. " +
+                "A release must not be signed from a tree where some artifact's bytes are unverified.")
         }
         println "pinChecksums: verified ${verified} pinned dependencies (${obsolete} obsolete/excluded pin(s) ignored)"
         if (verified < 1) {

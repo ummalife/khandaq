@@ -236,6 +236,16 @@ go out should cost seconds, not a full NDK build. Checked in both directions —
 pass (two waived risks, each with owner and expiry; 21 published claims matching); with qt's waiver
 backdated the gate fails with *"the waiver EXPIRED 20 day(s) ago"* and exit 1.
 
+> **Correction, round-3 audit (F-23).** The paragraph above was accurate about the Android release
+> workflow and, as first written, implied more coverage than existed. `release-provenance.yml` builds
+> the *Android* artifact. The waivers are about **OpenSSL 1.1.1w and Qt 5.12.12**, which only the
+> **desktop** builds bundle — and none of `build-linux.sh`, `build-macos.sh`,
+> `build-windows-cross.sh`, `build-linux-deb.sh` or `bundle-linux-portable.sh` consulted the gate at
+> all. So a desktop artifact could still be produced on an expired waiver: the gate was on a path,
+> just not the one the finding was about. All five desktop scripts now run
+> `check-bundled-deps-eol.py --release` before doing any work, escapable only by setting
+> `KHANDAQ_SKIP_DEP_GATE=1` on purpose.
+
 Two waivers remain, both expiring 2026-11-19 and both owned: **OpenSSL 1.1.1w** and **Qt 5.12.12**.
 The third — libexpat — is gone, bumped rather than renewed (R-03).
 

@@ -52,8 +52,27 @@ RUN dpkg --add-architecture i386 && \
                    g++-mingw-w64-${ARCH//_/-} \
                    gcc-mingw-w64-${ARCH//_/-} \
                    gdb-mingw-w64
-RUN curl -L --connect-timeout 10 https://dl.winehq.org/wine-builds/winehq.key | apt-key add -
-RUN echo "deb https://dl.winehq.org/wine-builds/debian/ bullseye main" >> /etc/apt/sources.list.d/wine.list
+# KHANDAQ (audit round 3, F-25): verify the WineHQ signing key, and scope it to the WineHQ repo.
+#
+# This was `curl ... | apt-key add -`: whatever bytes the network returned became a trusted signing
+# key for EVERY apt source in the image, in a Dockerfile whose base image two dozen lines above is
+# pinned by digest precisely so that nothing enters unreviewed. A key that authenticates packages
+# going into the shipped Windows build deserves at least the same treatment as the base image.
+#
+# Two changes. The digest is checked before the key is used, so a substituted key stops the build
+# rather than signing it. And the key lands in /etc/apt/keyrings with `signed-by=` on the source
+# line, so it authorises the WineHQ repository only — apt-key added it to the global keyring, where
+# it could vouch for any other source too. (apt-key is also deprecated and removed in newer Debian.)
+#
+# To rotate: download the key, sha256sum it, and update the value here in a reviewed commit.
+ARG WINEHQ_KEY_SHA256=d965d646defe94b3dfba6d5b4406900ac6c81065428bf9d9303ad7a72ee8d1b8
+RUN set -eux; \
+    mkdir -p /etc/apt/keyrings; \
+    curl -fsSL --connect-timeout 10 https://dl.winehq.org/wine-builds/winehq.key -o /tmp/winehq.key; \
+    echo "${WINEHQ_KEY_SHA256}  /tmp/winehq.key" | sha256sum -c -; \
+    gpg --dearmor < /tmp/winehq.key > /etc/apt/keyrings/winehq.gpg; \
+    rm -f /tmp/winehq.key
+RUN echo "deb [signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/debian/ bullseye main" >> /etc/apt/sources.list.d/wine.list
 RUN apt-get update && apt-get install -y --no-install-recommends wine-stable
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*

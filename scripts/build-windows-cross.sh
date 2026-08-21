@@ -2,6 +2,30 @@
 # Cross-compile Khandaq for Windows (x86_64) via Docker
 set -euo pipefail
 
+
+# KHANDAQ (audit round 3, F-23): the release-blocking waiver gate, on the path it was written for.
+#
+# scripts/check-bundled-deps-eol.py has had a --release mode since the first audit round: no grace
+# period, and a waiver with under 14 days left may not carry a release. It was wired into the ANDROID
+# release workflow and into nothing else, so the DESKTOP builds -- the ones that actually bundle
+# OpenSSL 1.1.1w and Qt 5.12.12, the two components the waivers are about -- never consulted it. A
+# desktop artifact could be produced on an expired waiver, which is precisely what the finding asked
+# to be impossible.
+#
+# Skippable only deliberately, for a local experiment that is not a release:
+#   KHANDAQ_SKIP_DEP_GATE=1 ./scripts/<this script>
+if [ "${KHANDAQ_SKIP_DEP_GATE:-0}" != "1" ]; then
+    _gate_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    if command -v python3 >/dev/null 2>&1; then
+        echo "==> bundled dependency gate (waivers must be live)"
+        python3 "${_gate_root}/scripts/check-bundled-deps-eol.py" --release
+    else
+        echo "ERROR: python3 not found; cannot run the bundled dependency gate." >&2
+        echo "       Install python3, or set KHANDAQ_SKIP_DEP_GATE=1 if this is not a release." >&2
+        exit 1
+    fi
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/khandaq-desktop"
 ARCH="${KHANDAQ_WINDOWS_ARCH:-x86_64}"

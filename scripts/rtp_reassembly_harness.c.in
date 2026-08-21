@@ -1,0 +1,228 @@
+/*
+ * KHANDAQ (audit round 3, F-01) — harness for scripts/check-ios-rtp-reassembly.py.
+ *
+ * The two @@ markers are filled in by that script with the REAL MAX_RTP_FRAME_SIZE and the REAL
+ * fill_data_into_slot(), lifted verbatim out of the shipped
+ * khandaq-ios/local_pod_repo/toxcore/toxcore/toxav/rtp.m. Nothing here re-implements the function
+ * under test; everything here is scaffolding around it.
+ *
+ * Kept as its own .c file rather than a string inside the Python: C escaping and Python escaping do
+ * not mix well, and the first version of this harness lost every "\n" to exactly that.
+ */
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* --- the parts of toxcore the function touches, kept faithful to rtp.h ------------------------ */
+#define USED_RTP_WORKBUFFER_COUNT 3
+#define nullptr NULL
+typedef struct Logger Logger;
+static int log_calls;
+#define LOGGER_DEBUG(...)   ((void)0)
+#define LOGGER_INFO(...)    ((void)0)
+#define LOGGER_WARNING(...) (++log_calls)
+#define LOGGER_ERROR(...)   (++log_calls)
+
+enum { RTP_LARGE_FRAME = 1 << 0, RTP_KEY_FRAME = 1 << 1 };
+
+struct RTPHeader {
+    uint16_t sequnum;
+    uint32_t timestamp;
+    uint16_t flags;
+    uint32_t offset_full;
+    uint32_t data_length_full;
+    uint32_t received_length_full;
+};
+
+struct RTPMessage {
+    uint16_t len;
+    struct RTPHeader header;
+    uint8_t data[];
+};
+
+struct RTPWorkBuffer {
+    bool is_keyframe;
+    uint32_t received_len;
+    struct RTPMessage *buf;
+};
+
+struct RTPWorkBufferList {
+    int8_t next_free_entry;
+    struct RTPWorkBuffer work_buffer[USED_RTP_WORKBUFFER_COUNT];
+};
+
+#define MAX_RTP_FRAME_SIZE_FALLBACK (32 * 1024 * 1024)
+
+/* --- the real code, lifted verbatim out of the shipped file ---------------------------------- */
+@@DEFINES@@
+
+@@FUNCTION@@
+
+/* --- the tests --------------------------------------------------------------------------------
+ *
+ * IMPORTANT: fill_data_into_slot() returns "the frame is now COMPLETE", not "the packet was
+ * accepted" — a legitimate non-final chunk also returns false. So acceptance is observed the only
+ * way it can be: did received_len move? A refused packet must leave the slot exactly as it was,
+ * which is also precisely the property that says no out-of-bounds write happened.
+ */
+static uint8_t *payload;
+static int failures;
+
+static void reset(struct RTPWorkBufferList *w)
+{
+    for (int i = 0; i < USED_RTP_WORKBUFFER_COUNT; ++i) {
+        free(w->work_buffer[i].buf);
+    }
+    memset(w, 0, sizeof(*w));
+}
+
+static struct RTPHeader hdr(uint32_t len_full, uint32_t off_full)
+{
+    struct RTPHeader h;
+    memset(&h, 0, sizeof(h));
+    h.sequnum = 7;
+    h.timestamp = 12345;
+    h.data_length_full = len_full;
+    h.offset_full = off_full;
+    return h;
+}
+
+/* Feed one packet; report whether the slot took it, judged by received_len. */
+static bool feed(struct RTPWorkBufferList *w, const struct RTPHeader *h, uint16_t len, bool *complete)
+{
+    const uint32_t before = w->work_buffer[0].received_len;
+    const bool done = fill_data_into_slot(NULL, w, 0, false, h, payload, len);
+
+    if (complete != NULL) {
+        *complete = done;
+    }
+
+    return w->work_buffer[0].received_len != before;
+}
+
+static void expect(const char *what, bool got, bool want)
+{
+    if (got != want) {
+        printf("  FAIL %s: got %s, wanted %s\n", what, got ? "yes" : "no", want ? "yes" : "no");
+        ++failures;
+    } else {
+        printf("  ok   %s\n", what);
+    }
+}
+
+int main(void)
+{
+    struct RTPWorkBufferList w;
+    memset(&w, 0, sizeof(w));
+    payload = (uint8_t *)malloc(70000);
+    memset(payload, 0x41, 70000);
+
+    /* 1. THE ATTACK. Packet A opens a 200-byte slot. Packet B claims the same frame — same sequnum
+     *    and timestamp, so get_slot() hands back A's slot — with a far larger declared length and an
+     *    offset near the end of THAT length. The write must not happen. */
+    {
+        struct RTPHeader a = hdr(200, 0);
+        expect("attack: first packet taken (opens a 200-byte slot)", feed(&w, &a, 100, NULL), true);
+
+        struct RTPHeader b = hdr(0x00100000u, 0x000FFF00u);
+        expect("attack: oversized second packet REFUSED", feed(&w, &b, 1000, NULL), false);
+
+        if (w.work_buffer[0].received_len != 100) {
+            printf("  FAIL attack: received_len moved to %u - the write happened\n",
+                   (unsigned)w.work_buffer[0].received_len);
+            ++failures;
+        } else {
+            printf("  ok   attack: slot untouched (received_len still 100)\n");
+        }
+
+        reset(&w);
+    }
+
+    /* 2. Length disagreement alone, with an offset that is in bounds for the LIAR's length. */
+    {
+        struct RTPHeader a = hdr(200, 0);
+        feed(&w, &a, 100, NULL);
+        struct RTPHeader b = hdr(65536, 100);
+        expect("length disagreement within one frame REFUSED", feed(&w, &b, 50, NULL), false);
+        reset(&w);
+    }
+
+    /* 3. An absurd declared frame size must be refused before it becomes an allocation. */
+    {
+        struct RTPHeader a = hdr(64u * 1024u * 1024u, 0);
+        expect("64 MiB declared frame REFUSED before calloc", feed(&w, &a, 100, NULL), false);
+        reset(&w);
+    }
+
+    /* 4. Offset at the declared end. Without an explicit >= test this slips through, because
+     *    data_length_full - offset_full is unsigned and wraps to a huge value. */
+    {
+        struct RTPHeader a = hdr(1000, 0);
+        feed(&w, &a, 10, NULL);
+        struct RTPHeader b = hdr(1000, 1000);
+        expect("offset == declared length REFUSED (unsigned wrap)", feed(&w, &b, 10, NULL), false);
+        reset(&w);
+    }
+
+    /* 5. A chunk that runs off the end by exactly one byte. */
+    {
+        struct RTPHeader a = hdr(1000, 0);
+        feed(&w, &a, 10, NULL);
+        struct RTPHeader b = hdr(1000, 900);
+        expect("chunk overrunning the end by 1 REFUSED", feed(&w, &b, 101, NULL), false);
+        reset(&w);
+    }
+
+    /* 6. THE GREEN PATH. Three legitimate parts of one 300-byte frame must all be taken, the frame
+     *    must report complete only on the last one, and the bytes must land where they belong.
+     *    Guards that break video are not a fix. */
+    {
+        bool done1 = false, done2 = false, done3 = false;
+        struct RTPHeader a = hdr(300, 0);
+        struct RTPHeader b = hdr(300, 100);
+        struct RTPHeader c = hdr(300, 200);
+        expect("legitimate frame: part 1 taken", feed(&w, &a, 100, &done1), true);
+        expect("legitimate frame: part 2 taken", feed(&w, &b, 100, &done2), true);
+        expect("legitimate frame: part 3 taken", feed(&w, &c, 100, &done3), true);
+        expect("legitimate frame: not reported complete early", done1 || done2, false);
+        expect("legitimate frame: reported complete on the last part", done3, true);
+
+        if (w.work_buffer[0].received_len != 300) {
+            printf("  FAIL legitimate frame: received_len %u, wanted 300\n",
+                   (unsigned)w.work_buffer[0].received_len);
+            ++failures;
+        } else {
+            printf("  ok   legitimate frame: 300 bytes reassembled\n");
+        }
+
+        if (w.work_buffer[0].buf->data[0] != 0x41 || w.work_buffer[0].buf->data[299] != 0x41) {
+            printf("  FAIL legitimate frame: first/last byte not written\n");
+            ++failures;
+        } else {
+            printf("  ok   legitimate frame: first and last byte in place\n");
+        }
+
+        reset(&w);
+    }
+
+    /* 7. A frame exactly AT the ceiling must still be allowed - an off-by-one there would silently
+     *    break large keyframes. */
+    {
+        struct RTPHeader a = hdr(MAX_RTP_FRAME_SIZE, 0);
+        expect("frame exactly at MAX_RTP_FRAME_SIZE taken", feed(&w, &a, 100, NULL), true);
+        reset(&w);
+    }
+
+    free(payload);
+
+    if (failures) {
+        printf("\n%d case(s) failed\n", failures);
+        return 1;
+    }
+
+    printf("\nall reassembly cases behaved\n");
+    return 0;
+}

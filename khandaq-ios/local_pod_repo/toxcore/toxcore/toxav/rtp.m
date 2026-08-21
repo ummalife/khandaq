@@ -26,6 +26,15 @@
  */
 #define VIDEO_KEEP_KEYFRAME_IN_BUFFER_FOR_MS 15
 
+/**
+ * KHANDAQ (audit round 3, F-01) — ceiling on the frame size a peer may declare.
+ *
+ * data_length_full arrives from the network as a full uint32 and is handed straight to calloc()
+ * below. Without a cap, one packet asks for up to 4 GiB and the allocation itself is the attack.
+ * Same value the desktop toxcore uses, so the two stay comparable.
+ */
+#define MAX_RTP_FRAME_SIZE (32 * 1024 * 1024)
+
 
 /**
  * return -1 on failure, 0 on success
@@ -268,6 +277,14 @@ static bool fill_data_into_slot(const Logger *log, struct RTPWorkBufferList *wkb
     if (slot->received_len == 0) {
         assert(slot->buf == nullptr);
 
+        // KHANDAQ (audit round 3, F-01): refuse an absurd declared frame size before it becomes an
+        // allocation. See MAX_RTP_FRAME_SIZE above.
+        if (header->data_length_full > MAX_RTP_FRAME_SIZE) {
+            LOGGER_WARNING(log, "RTP frame too large: %u > %u",
+                           (unsigned)header->data_length_full, (unsigned)MAX_RTP_FRAME_SIZE);
+            return false;
+        }
+
         // No data for this slot has been received, yet, so we create a new
         // message for it with enough memory for the entire frame.
         struct RTPMessage *msg = (struct RTPMessage *)calloc(1, sizeof(struct RTPMessage) + header->data_length_full);
@@ -290,11 +307,38 @@ static bool fill_data_into_slot(const Logger *log, struct RTPWorkBufferList *wkb
 
         assert(wkbl->next_free_entry < USED_RTP_WORKBUFFER_COUNT);
         ++wkbl->next_free_entry;
+    } else {
+        // KHANDAQ (audit round 3, F-01): the slot was sized from the FIRST packet of this frame, but
+        // get_slot() matches a slot on sequnum+timestamp alone and never looks at data_length_full.
+        // So a second packet with the same sequnum/timestamp and a much larger declared frame length
+        // used to land in the small slot, and the assert below compared its offset against its OWN
+        // inflated length, which of course agreed. Pin the frame length to what the slot was
+        // allocated for: a packet that disagrees is not part of this frame.
+        if (slot->buf->header.data_length_full != header->data_length_full) {
+            LOGGER_WARNING(log, "Received packet with different length than previous packets in same frame: %u != %u",
+                           (unsigned)header->data_length_full, (unsigned)slot->buf->header.data_length_full);
+            return false;
+        }
     }
 
     // We already checked this when we received the packet, but we rely on it
     // here, so assert again.
     assert(header->offset_full < header->data_length_full);
+
+    // KHANDAQ (audit round 3, F-01): the bound the memcpy below actually needs, checked rather than
+    // asserted. assert() disappears under NDEBUG, and the release pod is exactly where it matters.
+    //
+    // The offset_full >= data_length_full half is not in the upstream fix and is deliberate: on its
+    // own the subtraction is unsigned, so an offset past the end would wrap to a huge value and sail
+    // through the length test. Upstream relies on the caller's filter and on the assert for that
+    // case; relying on neither costs one comparison.
+    if (header->offset_full >= header->data_length_full
+            || header->data_length_full - header->offset_full < incoming_data_length) {
+        LOGGER_ERROR(log, "Packet too long for buffer: offset %u + len %u > total %u",
+                     (unsigned)header->offset_full, (unsigned)incoming_data_length,
+                     (unsigned)header->data_length_full);
+        return false;
+    }
 
     // Copy the incoming chunk of data into the correct position in the full
     // frame data array.

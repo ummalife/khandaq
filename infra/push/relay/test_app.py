@@ -737,3 +737,65 @@ def test_an_unsigned_json_wake_is_still_served_in_soft_mode(relay):
     assert m.sent == [(TOKEN, "")]
     outcomes = m.app.test_client().get("/health").get_json()["auth_adoption"]["window_outcomes"]
     assert outcomes["missing"] == 1, "an unsigned request must still be COUNTED while it is served"
+
+
+# ------------------------------------------------- per-install capabilities (re-audit R-01, step 1)
+
+
+def test_json_wake_tolerates_an_unknown_cap_field(relay):
+    """
+    KHANDAQ (re-audit 2026-08-21, R-01). DESIGN-push-per-install-capabilities.md sequences the fix so
+    that step 1 - "relay accepts cap, ignored when absent" - ships before any client emits one, and
+    calls it "deployable immediately". It already is: /wake reads token and sender and ignores the
+    rest of the body. Nothing pinned that, though, and "reject unknown fields" is exactly the kind of
+    hardening someone adds on a quiet afternoon. It would break the rollout silently and only on the
+    step where clients have already started sending cap.
+
+    So this test is the pin, not a new feature. It asserts the tolerance, and it asserts the thing
+    that would hurt more: cap must stay OUT of the HMAC pre-image. The signature below is computed
+    over token/sender/ts exactly as a client with no idea capabilities exist would compute it. If a
+    future change folds cap into the pre-image, every shipped client's signature stops verifying at
+    once - a fleet-wide flag day, which is what the whole sequencing exists to avoid.
+    """
+    m = relay(enforce="1")
+    ts = int(time.time())
+    r = m.app.test_client().post(
+        "/wake",
+        json={"token": TOKEN, "sender": SENDER, "cap": "Zm9vYmFyLWNhcGFiaWxpdHktdmFsdWU"},
+        headers={"Authorization": "Bearer " + sign(TOKEN, SENDER, ts), "X-Khandaq-Ts": str(ts)},
+    )
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert m.sent == [(TOKEN, SENDER)]
+
+
+@pytest.mark.parametrize("cap", ["", "x" * 8192, "!!not base64!!", None, 12345, {"nested": True}])
+def test_a_hostile_cap_value_changes_nothing_yet(relay, cap):
+    """
+    Nothing consumes cap yet, so no value of it may alter the outcome - including the types that a
+    naive later implementation would crash on. Step 1 has to be inert, not merely usually inert.
+    """
+    m = relay(enforce="1")
+    ts = int(time.time())
+    r = m.app.test_client().post(
+        "/wake",
+        json={"token": TOKEN, "sender": SENDER, "cap": cap},
+        headers={"Authorization": "Bearer " + sign(TOKEN, SENDER, ts), "X-Khandaq-Ts": str(ts)},
+    )
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert m.sent == [(TOKEN, SENDER)]
+
+
+def test_there_is_no_registration_endpoint_yet(relay):
+    """
+    Guards against the half-built state. Step 2 of the design adds POST /register, and as written it
+    authenticates that request with the SHARED secret - which every installation holds, so anyone can
+    register a capability against anyone else's token. Harmless while nothing reads the table; at
+    step 4 the relay starts REQUIRING a capability for tokens that have one, and a forged
+    registration then silently kills that device's notifications. That inverts requirement 5 of the
+    same design, "fail toward delivery".
+
+    Until that is resolved, the endpoint must not exist. If someone adds it, this test fails and
+    sends them to the note in the design document rather than to production.
+    """
+    m = relay()
+    assert m.app.test_client().post("/register", json={}).status_code == 404

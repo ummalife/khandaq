@@ -1,8 +1,10 @@
 # Design — replacing the global push secret with per-install capabilities
 
-**Status:** design only. Nothing here is implemented, and nothing in the tree depends on it.
+**Status:** design only. No client or relay behaviour is implemented. What *is* done, as of the
+2026-08-21 re-audit (**R-01**), is that step 1 of §6 was found to already hold and is now pinned by
+tests, and the assumption §3 rests on was verified rather than assumed — see §9.
 **Closes:** external audit 2026-08-21, finding **K-03** (MEDIUM) — "Global push HMAC secret cannot
-provide strong client authentication".
+provide strong client authentication"; re-raised as **R-01** on 2026-08-21.
 **Written:** 21 Aug 2026, alongside the key-epoch change that is *not* this.
 
 ---
@@ -115,8 +117,22 @@ work the history-signing project is already doing.
 ## 6. Sequencing (each step is a release)
 
 1. **Relay accepts `cap`** — optional, ignored when absent. No client change. Deployable immediately.
-2. **Registration endpoint** — `POST /register` from the device, with the existing HMAC. Store
-   `sha256(cap)` per token; nothing consumes it yet.
+2. **Registration endpoint** — `POST /register` from the device. **Do not build this as written:**
+   authenticating it with the existing HMAC authenticates nothing, because the existing HMAC is the
+   fleet secret this whole document exists to remove — every installation holds it, so anyone can
+   register a capability against anyone else's token. That is harmless while nothing reads the table
+   and becomes a silent denial of notifications at step 4, when the relay starts *requiring* a
+   capability for tokens that have one: a stranger registers a cap for a victim's token, the victim's
+   contacts keep sending the old URL form, and every wake is refused. It inverts requirement 5 of §2,
+   "fail toward delivery", which is the one requirement whose failure the user cannot see.
+
+   Whatever replaces it has to prove possession of the token by something other than a shared secret.
+   The cheapest shape that does: make registration self-authorising — the device registers
+   `sha256(C)` and later proves it holds `C`, so a forged registration cannot be completed by anyone
+   who does not already hold the capability. Decide this before writing the endpoint, not after.
+
+   `test_there_is_no_registration_endpoint_yet` in `infra/push/relay/test_app.py` fails if someone
+   adds `/register` before this is resolved, and points here.
 3. **Clients mint and publish** `cap`, keeping the old URL form working.
 4. **Relay requires `cap`** for tokens that have one registered, and continues to serve tokens that do
    not. This is the step where the property actually starts holding, and it holds per device rather
@@ -142,3 +158,43 @@ it is not a private-information-retrieval design.
    JSON endpoint was created to fix? Almost certainly yes for the legacy endpoint — so `cap` should be
    accepted **only** in the JSON body, and its presence should be one more reason to retire the
    query-string path.
+
+---
+
+## 9. What was verified on 2026-08-21 (re-audit R-01)
+
+The re-audit re-raised the finding and asked for the model to be implemented. It is not implemented,
+and this section does not pretend otherwise. What it records is the part that could be settled
+without shipping anything — because both items were assumptions the rollout was going to be bet on,
+and an assumption that turns out false at step 3 is a flag day on two mobile stores.
+
+**Step 1 is already true, and is now pinned.** `/wake` reads `token` and `sender` out of the JSON
+body and ignores every other field, so a client sending `cap` today is served exactly as one that
+does not. No relay change is needed for step 1. The risk was never that it did not work — it was that
+nothing recorded the dependency, and "reject unknown fields" is a plausible hardening for someone to
+add later, which would break the rollout silently and only after clients had started emitting `cap`.
+`test_json_wake_tolerates_an_unknown_cap_field` and `test_a_hostile_cap_value_changes_nothing_yet`
+(6 values, including non-strings and 8 KiB of junk) pin both the tolerance and the inertness.
+
+The same tests pin something that would hurt more: **`cap` must stay out of the HMAC pre-image.** The
+signature in them is computed over `token 
+ sender 
+ ts` by a client that has never heard of
+capabilities. Folding `cap` into the pre-image later would stop every shipped client verifying at
+once — precisely the fleet-wide flag day the sequencing exists to avoid.
+
+**The "fortunate accident" in §3 is real.** Verified on a device (API 34) against the actual
+`android.net.Uri`, not by reading the validator: `PushUrlValidator` accepts the wake URL with `cap=`
+appended, in either parameter order, and through `isAllowedOwnNotificationToken` on the publish side
+as well; a capability does not rescue a disallowed host or a missing `id`.
+(`PushUrlCapabilityCompatTest`, 7 tests.) `KhandaqPush.swift` matches by inspection — it looks up the
+`id` query item and ignores the rest — but no iOS device ran here, so that half is read, not proven.
+
+**One constraint the design did not state.** The A33 host-confusion defence rejects any URL
+containing `@`, a backslash or whitespace *anywhere*, not only in the authority. Base64url capability
+values contain none of those and are safe; an encoding that can emit `@` would produce URLs every
+shipped client refuses. §3 should be read as specifying base64url, not merely suggesting it.
+
+**What remains, unchanged:** steps 2 through 6, which are the fix. R-01 stays open, and the ordering
+constraint in §5 — after the signed-history rollout, not alongside it — still governs when they can
+start.

@@ -75,6 +75,18 @@ jobs:
       - name: Published metadata must match the build files
         run: python3 scripts/check-release-metadata.py
 
+  compose-parses:
+    # KHANDAQ (production deploy 2026-08-21): a compose file that docker cannot load is an outage with
+    # no tools left to fix it — no `logs`, no `ps`, no `restart`, no rollback by compose, on a host
+    # where the deploy has already uploaded it. This caught nothing in review and everything at the
+    # first real deploy: a `${VAR:?message}` guard whose message contained ": " made YAML parse the
+    # entry as a mapping, and compose rejected the whole file.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Compose environment entries must be plain strings
+        run: python3 scripts/check-compose-env-strings.py
+
   ngc-downgrade-parity:
     # KHANDAQ (K-01): the anti-downgrade rule is implemented twice, in Java and in Objective-C, and
     # a security rule enforced on one client but not the other is not a rule. The Java side has

@@ -779,6 +779,28 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
         return;
     }
 
+    // KHANDAQ (audit round 3, F-03): the anti-downgrade gate, which guarded only the TEXT half.
+    //
+    // This handler read the claimed author out of offset 40 and walked straight to the insert, so the
+    // exact claim refused outright as text ("this author, whose signing key we learned from a live
+    // announcement, sent this") was accepted without question as a FILE — a row under that author's
+    // pubkey, up to ~36 KiB into the encrypted store, and a notification. The Android twin had the
+    // same hole; both are closed in the same change.
+    //
+    // A file record has no signed form to compare against, which is why this asks the unsignable
+    // variant of the question rather than passing a text nobody sent. Above the dedup and the insert,
+    // for the same reason the text gate is.
+    if (self.signedHistory) {
+        OCTNgcDowngradeDecision fileDecision =
+            [self.signedHistory downgradeDecisionForUnsignableRecordInGroupNumber:groupNumber
+                                                                    authorPubHex:senderPubkeyHex];
+        if (fileDecision == OCTNgcDowngradeDecisionReject) {
+            OCTLogInfo(@"histSync: refusing unsigned FILE history for an author that signs, group %u",
+                       groupNumber);
+            return;
+        }
+    }
+
     uint32_t timestamp = ((uint32_t)bytes[72] << 24) | ((uint32_t)bytes[73] << 16) | ((uint32_t)bytes[74] << 8) | (uint32_t)bytes[75];
 
     if (! [self isTimestampValid:timestamp]) {

@@ -145,6 +145,21 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
                                                  timestamp:(uint64_t)timestampSeconds
                                                       text:(nullable NSString *)text;
 
+/**
+ * KHANDAQ (audit round 3, F-03) — the same question for a record that CANNOT be signed.
+ *
+ * The file history packet (0x03) has no signed form: the parser knows only PKT_SIGNED_TEXT, so a
+ * file record can never carry a verdict and the method above would be asked to look one up by a text
+ * it does not have. Answering "is this author known to sign?" is the whole question there, and the
+ * answer for an author with a live announced key is Reject — refusing exactly the downgrade that the
+ * text path already refuses.
+ *
+ * Kept as its own method rather than passing nil text to the one above, so that a lookup MISS can
+ * never be mistaken for a deliberate "unverifiable by construction".
+ */
+- (OCTNgcDowngradeDecision)downgradeDecisionForUnsignableRecordInGroupNumber:(uint32_t)groupNumber
+                                                               authorPubHex:(nullable NSString *)authorPubHex;
+
 @end
 
 NS_ASSUME_NONNULL_END

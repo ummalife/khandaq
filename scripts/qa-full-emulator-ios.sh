@@ -3,7 +3,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 RCVR="$PKG/com.zoffcc.applications.trifa.QaGroupBroadcastReceiver"
 APK="${APK:-$ROOT/khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk}"
 IOS_APP="${IOS_APP:-$ROOT/khandaq-ios/build/simulator/Build/Products/Debug-iphonesimulator/Khandaq.app}"

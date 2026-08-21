@@ -2,7 +2,7 @@
 # Live QA: Tox profile export/import on a connected Android device (Khandaq/TRIfA).
 set -euo pipefail
 
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 ACTIVITY="$PKG/com.zoffcc.applications.trifa.StartMainActivityWrapper"
 MAINT="$PKG/com.zoffcc.applications.trifa.MaintenanceActivity"
 EXPORT_DIR="/sdcard/Android/data/$PKG/files/vfs_export"

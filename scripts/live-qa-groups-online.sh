@@ -4,7 +4,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 DEV="${DEV:-emulator-5554}"
 APK="${APK:-$ROOT/khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk}"
 OUT="${OUT:-$ROOT/docs/qa-groups-online-$(date +%Y%m%d-%H%M%S)}"

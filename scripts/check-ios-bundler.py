@@ -20,17 +20,54 @@ import sys
 ROOT = os.environ.get("KHANDAQ_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Anything that runs `pod` or `fastlane` (or the fastlane actions that resolve gems) as a command.
+#
+# KHANDAQ (audit round 3, F-20): this used to require the command to start a line or follow ; & |
+# $( or a backtick, with only VAR=value assignments allowed in front. That missed the forms these
+# files are actually written in — and the audit demonstrated the miss by re-introducing the ORIGINAL
+# K-07 defect verbatim and watching the check stay green:
+#
+#   run: pod install                  <- the single-line YAML step form, used in every iOS workflow
+#   - run: fastlane ios release
+#   sudo pod install                  <- any wrapper word at all
+#   env VAR=x pod install
+#   time / exec / xcrun / arch -x86_64 ...
+#   if pod install; then
+#
+# So the anchor is now "a command position", which includes after a YAML `run:` key and after a
+# wrapper word, and the wrapper list is explicit rather than assumed away.
+# NOTE: `exec` and `command` are deliberately NOT wrappers here. Treating `exec` as one made the
+# regex match the `exec pod` inside `bundle exec pod`, leaving "bundle " before the match and
+# defeating the very check below. The wrappers that matter in these files are the ones that
+# genuinely precede a bare invocation.
+WRAPPERS = r"(?:sudo|env|time|nice|xcrun|nohup)"
 INVOCATION = re.compile(
-    r"""(?:^|[;&|]\s*|\$\(\s*|`\s*)      # start of a command, not the middle of a word
-        (?P<prefix>[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*   # leading VAR=value assignments
+    r"""(?:^|[;&|(]\s*|\$\(\s*|`\s*|\brun:\s*|\bif\s+|\bthen\s+|\bdo\s+)
+        (?:""" + WRAPPERS + r"""\s+)*                 # sudo / env / time / xcrun / ...
+        (?P<prefix>[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*    # leading VAR=value assignments
+        (?:""" + WRAPPERS + r"""\s+)*
         (?P<cmd>pod|fastlane|gym|match)\b""",
-    re.VERBOSE)
+    re.VERBOSE | re.MULTILINE)
+
+# KHANDAQ (audit round 3, F-20): the original K-07 defect was a gem INSTALL, not a gem invocation —
+# `sudo gem install fastlane -NV` in khandaq-ios/.github/workflows/upload_release.yml. Installing the
+# tool outside Bundler is what makes the later invocation resolve an unpinned version, so the install
+# is the thing worth catching, and the old pattern could not see it at all.
+GEM_INSTALL = re.compile(
+    r"""(?:^|[;&|(]\s*|\brun:\s*)
+        (?:""" + WRAPPERS + r"""\s+)*
+        gem\s+install\b(?P<what>[^\n]*)""",
+    re.VERBOSE | re.MULTILINE)
+# The gems that matter here: the two whose version the lockfile is supposed to decide.
+GEM_INSTALL_SUBJECTS = ("fastlane", "cocoapods")
 
 # Where an unguarded invocation matters. Vendored upstream code is excluded — it is not our build.
 SEARCH_DIRS = ["scripts", "khandaq-ios/scripts", "khandaq-ios/fastlane", "docs",
                ".github/workflows", "khandaq-ios/.github/workflows"]
 SEARCH_FILES = ["khandaq-ios/README.md", "README.md", "docs/BUILDING.md"]
-EXTENSIONS = (".sh", ".yml", ".yaml", ".md", ".bash")
+# KHANDAQ (audit round 3, F-20): Fastfile/Appfile/Pluginfile carry no extension and .py was absent,
+# so khandaq-ios/fastlane/Fastfile and the Python release scripts were never scanned at all.
+EXTENSIONS = (".sh", ".yml", ".yaml", ".md", ".bash", ".py", ".rb")
+EXTENSIONLESS = ("Fastfile", "Appfile", "Pluginfile", "Matchfile", "Gemfile", "Podfile")
 
 # The opt-out marker, and it is deliberately wordy: `# khandaq-bundler-ok: <reason>`. A bare pragma
 # would get copied around; one that has to state a reason gets read.
@@ -41,6 +78,10 @@ EXCLUDED = (
     "khandaq-ios/local_pod_repo/",
     # Disabled upstream fastlane tree, kept for reference only.
     "khandaq-ios/XOLDX_",
+    # KHANDAQ (audit round 3, F-20): this file, now that .py is scanned. It necessarily contains the
+    # words it looks for — in its own regexes and in the prose explaining what a bare `pod` costs —
+    # and a checker that reports itself is a checker somebody switches off.
+    "scripts/check-ios-bundler.py",
 )
 
 
@@ -57,7 +98,7 @@ def candidate_files():
             continue
         for dirpath, _dirnames, filenames in os.walk(base):
             for fn in filenames:
-                if fn.endswith(EXTENSIONS):
+                if fn.endswith(EXTENSIONS) or fn in EXTENSIONLESS:
                     seen.append(os.path.join(dirpath, fn))
     for rel in SEARCH_FILES:
         p = os.path.join(ROOT, rel.replace("/", os.sep))
@@ -111,6 +152,17 @@ def offending_lines(text, markdown=False, exemptions=None):
             if re.search(r"bundle\s+exec\s*$", before.rstrip()):
                 continue
             bad.append((n, raw.rstrip(), m.group("cmd")))
+
+        # KHANDAQ (audit round 3, F-20): installing the tool outside Bundler is the defect the
+        # invocation rule was standing in for. `sudo gem install fastlane -NV` — the exact line
+        # K-07 was raised about — matched nothing before.
+        for m in GEM_INSTALL.finditer(code):
+            what = m.group("what")
+            if not any(subject in what for subject in GEM_INSTALL_SUBJECTS):
+                continue
+            if "bundle exec" in code[:m.start()]:
+                continue
+            bad.append((n, raw.rstrip(), "gem install"))
     return bad
 
 

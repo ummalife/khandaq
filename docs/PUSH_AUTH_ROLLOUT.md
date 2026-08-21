@@ -63,11 +63,22 @@ you must NOT jump straight to enforce.
 ## Server modes (`app.py` `_auth_ok`)
 | `PUSH_RELAY_AUTH_SECRET` | `PUSH_AUTH_ENFORCE` | behaviour | `/health` `auth_mode` |
 |---|---|---|---|
-| empty | (any) | auth fully off — all requests pass | `off` |
+| empty | (any) | **misconfiguration — every request gets `401`** (fail-closed) | `misconfigured` |
 | set | `0` (default) | **soft**: signed pass; unsigned/invalid **also pass but are logged** | `soft` |
 | set | `1` | **enforce**: unsigned/invalid → `401` | `enforce` |
 
-The soft warning line is: `push auth SOFT: unsigned/invalid request allowed from <ip> ...`.
+> **Corrected 2026-08-21 (audit K-02).** The first row used to read "auth fully off — all requests
+> pass / `off`". That has been false since the A1 fail-closed change: with no secret, `_auth_ok`
+> refuses **everything**. `/health` said `off` too, which is a lie in the dangerous direction — it
+> reads as "the relay is serving the world unauthenticated" while the relay is in fact down for
+> every client. Both the doc and the field now say `misconfigured`.
+
+The soft warning line is: `push auth SOFT (<outcome>): request allowed from <ip> ...`, and under
+enforcement the matching line is `push auth REJECT (<outcome>) from <ip>` — the enforce path used to
+log nothing at all, which removed all forensic signal at the exact moment of the cutover.
+
+`<outcome>` is one of `missing`, `badmac`, `stale`, `malformed_ts`, `replay`, `store_error`; see
+**Reading adoption** below for why the distinction decides the rollout.
 
 ## Where the secret is injected per client
 - **Android**: `app/build.gradle` reads `System.getenv("KHANDAQ_PUSH_AUTH_SECRET")` →
@@ -117,8 +128,47 @@ The soft warning line is: `push auth SOFT: unsigned/invalid request allowed from
    From here unsigned/invalid wake calls get 401.
 
 ## Rollback
-At any point set `PUSH_AUTH_ENFORCE=0` (back to soft) or clear `PUSH_RELAY_AUTH_SECRET` (fully off)
-and redeploy. Clients with the secret keep signing harmlessly; clients without it keep working.
+**Set `PUSH_AUTH_ENFORCE=0` and redeploy. That is the whole rollback.** Signed clients keep signing
+harmlessly; unsigned clients start working again immediately.
+
+> **Corrected 2026-08-21 (audit K-02).** This section used to offer a second option — "or clear
+> `PUSH_RELAY_AUTH_SECRET` (fully off)… clients without it keep working". Both halves were wrong, and
+> wrong at the worst possible moment, because this is the page someone reads while trying to undo an
+> enforcement mistake. Clearing the secret does not disable authentication: `_auth_ok` fails closed
+> and returns `401` for **every** request, signed or not. In practice the relay will not even start —
+> `docker-compose.yml` declares the variable with `:?`, so `docker compose up` aborts. Following the
+> old advice would have turned a partial outage into a total one.
+
+## Reading adoption
+`curl -s https://push.khandaq.org/health | jq .auth_adoption`
+
+`window_signed_pct` is the headline, but read `window_outcomes` before deciding — a single "unsigned"
+number cannot answer the question the flip actually asks:
+
+| outcome | what it means | does it heal on its own? |
+|---|---|---|
+| `ok` | a signed, fresh, first-use request | — |
+| `missing` | client sends no signature — a build from before the secret | **yes**, as the fleet turns over |
+| `badmac` | client signs with the **wrong secret** | **no.** Waiting will never fix it; the build is wrong |
+| `stale` | timestamp outside `PUSH_AUTH_MAX_SKEW_SEC` — clock skew | yes, once clocks agree |
+| `malformed_ts` | non-integer `ts` — a client bug | no; fix the client |
+| `replay` | a signature presented twice | expected in small numbers |
+| `store_error` | **the relay's own** replay store is unavailable | not a client problem at all |
+
+`window_signed_pct_ex_store_error` recomputes the percentage with `store_error` excluded, so a bad
+disk cannot read as un-adopted clients. `since` / `days_observed` say how much history the number is
+based on. `weighting: requests` is the caveat that matters most: this is request-weighted, not
+device-weighted — one chatty unsigned sender holds it down, one chatty signed sender holds it up.
+
+**The counters live in `/data`, which is a named volume (`push-relay-data`).** Before 2026-08-21 it
+was not, so `docker compose up -d --build` — the command in step 2 of this very runbook — wiped them.
+A relay rebuilt minutes ago and probed with two signed requests reported 100% adoption.
+
+## Making soft mode expire
+Set `PUSH_AUTH_ENFORCE_BY=YYYY-MM-DD`. Past that date, a relay still in soft mode logs an error at
+startup and reports `"enforce_overdue": true` on `/health`, so monitoring can alert on it. It never
+flips itself: a relay that enforced unattended on a date would silence every unsigned client in the
+field at a moment nobody chose. The date exists so soft mode cannot quietly become permanent.
 
 ## Notes / clock skew
 The signature includes a unix `ts`; server and client clocks must agree within

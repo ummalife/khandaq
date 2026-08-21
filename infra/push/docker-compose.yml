@@ -7,6 +7,16 @@ services:
       - "127.0.0.1:8088:8080"
     volumes:
       - /opt/khandaq-push/secrets:/run/secrets:ro
+      # KHANDAQ (audit 2026-08-21, K-02): STATS_DB defaults to /data/stats.db, and /data had no
+      # volume — so it lived in the container's writable layer and `docker compose up -d --build`,
+      # which is the exact command in the rollout runbook, wiped it. That zeroes the auth-adoption
+      # counters the "is it safe to set PUSH_AUTH_ENFORCE=1" decision is read from: a relay rebuilt
+      # ten minutes ago and probed with two signed requests reports 100% adoption. A footgun pointed
+      # at the same outage soft mode exists to prevent.
+      #
+      # Losing usedsig would be harmless (its whole retention is ~600s) and losing the rate window
+      # only forgives a flood for one minute; the adoption history is the part that must survive.
+      - push-relay-data:/data
     environment:
       - PORT=8080
       - FCM_PROJECT_ID=khandaq-messenger
@@ -19,3 +29,11 @@ services:
       - PUSH_RELAY_AUTH_SECRET=${PUSH_RELAY_AUTH_SECRET:?set a strong random secret in /opt/khandaq-push/.env; it must match the value baked into the iOS/Android client builds}
       - PUSH_AUTH_ENFORCE=${PUSH_AUTH_ENFORCE:-0}
       - PUSH_AUTH_MAX_SKEW_SEC=${PUSH_AUTH_MAX_SKEW_SEC:-300}
+      # KHANDAQ (audit 2026-08-21, K-02): an optional YYYY-MM-DD date after which a relay still
+      # running in soft mode logs an error at startup and reports enforce_overdue on /health. It
+      # never flips itself — a relay that enforced on a date, unattended, would silence every
+      # unsigned client in the field at a moment nobody chose.
+      - PUSH_AUTH_ENFORCE_BY=${PUSH_AUTH_ENFORCE_BY:-}
+
+volumes:
+  push-relay-data:

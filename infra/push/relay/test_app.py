@@ -454,3 +454,159 @@ def test_a_rate_limited_request_does_not_burn_its_signature(relay):
     assert client.post("/wake", json={"token": TOKEN}, headers=headers,
                        environ_base={"REMOTE_ADDR": BRIDGE_GATEWAY,
                                      "HTTP_X_REAL_IP": "198.51.100.9"}).status_code == 200
+
+
+# ------------------------------------------------- per-outcome auth telemetry (K-02)
+#
+# KHANDAQ (audit 2026-08-21, K-02): the enforcement decision is "will PUSH_AUTH_ENFORCE=1 silence
+# real users", and a single unsigned counter cannot answer it. `missing` (an old client, heals when
+# the fleet turns over) and `badmac` (a build carrying the WRONG secret, never heals) looked
+# identical, so an operator waiting for the percentage to reach 100 could wait forever with no way
+# to see why. `store_error` is the relay's own disk and is not a client problem at all.
+
+
+def _outcomes(module):
+    return module.app.test_client().get("/health").get_json()["auth_adoption"]["window_outcomes"]
+
+
+def test_an_unsigned_request_counts_as_missing(relay):
+    m = relay()
+    m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}")
+    assert _outcomes(m)["missing"] == 1
+
+
+def test_a_wrong_secret_counts_as_badmac_not_as_an_old_client(relay):
+    """The case the two-column counter could not express, and the reason for this whole change."""
+    m = relay()
+    ts = int(time.time())
+    m.app.test_client().post(
+        "/wake", json={"token": TOKEN},
+        headers={"Authorization": "Bearer " + sign(TOKEN, "", ts, secret="a-different-build-secret"),
+                 "X-Khandaq-Ts": str(ts)})
+    counts = _outcomes(m)
+    assert counts["badmac"] == 1
+    assert counts["missing"] == 0, "a wrong secret must not read as a client that does not sign yet"
+
+
+def test_a_stale_timestamp_counts_as_stale(relay):
+    m = relay()
+    ts = int(time.time()) - 10_000
+    m.app.test_client().post(
+        "/wake", json={"token": TOKEN},
+        headers={"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)})
+    assert _outcomes(m)["stale"] == 1
+
+
+def test_a_non_integer_timestamp_counts_as_malformed(relay):
+    m = relay()
+    m.app.test_client().post(
+        "/wake", json={"token": TOKEN},
+        headers={"Authorization": "Bearer " + "0" * 64, "X-Khandaq-Ts": "not-a-number"})
+    assert _outcomes(m)["malformed_ts"] == 1
+
+
+def test_a_replayed_signature_counts_as_replay_not_as_unsigned(relay):
+    m = relay()
+    ts = int(time.time())
+    headers = {"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)}
+    m.app.test_client().post("/wake", json={"token": TOKEN}, headers=headers)
+    m.app.test_client().post("/wake", json={"token": TOKEN}, headers=headers)
+    counts = _outcomes(m)
+    assert counts["ok"] == 1 and counts["replay"] == 1
+
+
+def test_a_broken_replay_store_is_not_counted_as_an_unsigned_client(relay, monkeypatch):
+    """
+    A disk problem used to depress the adoption percentage, i.e. read as clients that do not sign.
+
+    The counter itself lives in the same store, so it cannot be written while that store is broken —
+    what is asserted here is the classification: once the store is back, the failed request is
+    `store_error` and never `missing`, and the ex-store-error percentage ignores it.
+    """
+    m = relay()
+    ts = int(time.time())
+    real_conn = m._stats_conn
+    calls = {"n": 0}
+
+    def flaky(*a, **kw):
+        calls["n"] += 1
+        # Fail only the replay-store claim (the third connection in this request: rate, then
+        # outcome-record happens after, so the claim is the second), then behave normally again.
+        if calls["n"] == 2:
+            raise OSError("read-only file system")
+        return real_conn(*a, **kw)
+
+    monkeypatch.setattr(m, "_stats_conn", flaky)
+    m.app.test_client().post(
+        "/wake", json={"token": TOKEN},
+        headers={"Authorization": "Bearer " + sign(TOKEN, "", ts), "X-Khandaq-Ts": str(ts)})
+    monkeypatch.setattr(m, "_stats_conn", real_conn)
+
+    counts = _outcomes(m)
+    assert counts["store_error"] == 1
+    assert counts["missing"] == 0 and counts["badmac"] == 0
+
+
+def test_health_does_not_call_an_unconfigured_relay_auth_off(relay):
+    """
+    KHANDAQ (K-02): with no secret, _auth_ok 401s everything — so "off" was a lie, and a lie in the
+    dangerous direction: it reads as "serving everyone unauthenticated" while the relay is refusing
+    every request. An operator chasing a total push outage was sent to the wrong place.
+    """
+    m = relay(secret="")
+    body = m.app.test_client().get("/health").get_json()
+    assert body["auth_mode"] == "misconfigured"
+    assert body["auth_required"] is True
+
+
+def test_health_reports_an_overdue_soft_mode(relay, monkeypatch):
+    monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "2020-01-01")
+    m = relay(enforce="0")
+    body = m.app.test_client().get("/health").get_json()
+    assert body["enforce_by"] == "2020-01-01"
+    assert body["enforce_overdue"] is True
+
+
+def test_an_enforcing_relay_is_never_overdue(relay, monkeypatch):
+    monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "2020-01-01")
+    m = relay(enforce="1")
+    assert m.app.test_client().get("/health").get_json()["enforce_overdue"] is False
+
+
+def test_a_future_cutoff_is_not_overdue(relay, monkeypatch):
+    monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "2099-01-01")
+    m = relay(enforce="0")
+    assert m.app.test_client().get("/health").get_json()["enforce_overdue"] is False
+
+
+def test_a_malformed_cutoff_is_ignored_rather_than_crashing(relay, monkeypatch):
+    monkeypatch.setenv("PUSH_AUTH_ENFORCE_BY", "next tuesday")
+    m = relay(enforce="0")
+    body = m.app.test_client().get("/health").get_json()
+    assert body["enforce_overdue"] is False
+    assert body["status"] == "ok"
+
+
+def test_the_fcm_token_never_reaches_the_log(relay, caplog):
+    """
+    KHANDAQ (audit 2026-08-21, §13 residual): the success line logged token[:12]. A registration
+    token is a targeting secret; a 12-character prefix is a partial disclosure of a credential into
+    a log that outlives the request. It is a hash now.
+    """
+    import re
+
+    m = relay()
+    with caplog.at_level("INFO"):
+        m.app.test_client().get(f"/toxfcm/fcm.php?id={TOKEN}")
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert TOKEN[:12] not in logged, "no prefix of the token may appear in the log"
+
+    # The success line itself lives inside the FCM send, which these tests stub out, so it cannot be
+    # reached without talking to Google. Pin the class of defect at the source instead: no log call
+    # may slice the token. `_th(token)` — the same 128-bit hash that already keys the coalesce table
+    # — keeps one device's wakes correlatable in the log while disclosing nothing.
+    with open(m.__file__, encoding="utf-8") as fh:
+        src = fh.read()
+    assert not re.search(r"log\.\w+\([^)]*\btoken\[:", src), \
+        "a log call is slicing the FCM registration token"
+    assert "_th(token)" in src

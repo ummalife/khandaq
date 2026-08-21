@@ -1222,6 +1222,11 @@ extension ChatPrivateController: UITableViewDelegate {
             // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
         }
+        // KHANDAQ (18 Aug): same reason as the caption above — an explicit-height media row must also
+        // reserve the reaction chips line, or the reaction is stored and laid out but clipped, and
+        // reacting on a photo/video looks like it did nothing.
+        height += ChatGenericFileCell.reactionsHeight(
+                for: ChatReactionsFormat.display(from: message.reactionsJSON))
         // KHANDAQ (#99): media rows have an explicit height (no auto-sizing), so add the separator band
         // here when this row starts a new day — text/voice rows self-size and need no adjustment.
         if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
@@ -3031,8 +3036,11 @@ private extension ChatPrivateController {
             let audioImage: UIImage
             let videoImage: UIImage
             if #available(iOS 13.0, *) {
-                audioImage = UIImage(systemName: "phone") ?? UIImage(named: "start-call-medium")!
-                videoImage = UIImage(systemName: "video") ?? UIImage(named: "video-call-medium")!
+                // KHANDAQ (18.08): shared icon set — the same Material glyphs Android draws in its header.
+                audioImage = UIImage(named: "chat-header-call")?.withRenderingMode(.alwaysTemplate)
+                        ?? UIImage(systemName: "phone") ?? UIImage(named: "start-call-medium")!
+                videoImage = UIImage(named: "chat-header-video")?.withRenderingMode(.alwaysTemplate)
+                        ?? UIImage(systemName: "video") ?? UIImage(named: "video-call-medium")!
             }
             else {
                 audioImage = UIImage(named: "start-call-medium")!
@@ -3055,7 +3063,8 @@ private extension ChatPrivateController {
             // since rightBarButtonItems[0] is the rightmost slot, call goes first.
             let attachmentsImage: UIImage?
             if #available(iOS 13.0, *) {
-                attachmentsImage = UIImage(systemName: "paperclip")
+                attachmentsImage = UIImage(named: "chat-header-attach")?.withRenderingMode(.alwaysTemplate)
+                        ?? UIImage(systemName: "paperclip")
             }
             else {
                 attachmentsImage = nil

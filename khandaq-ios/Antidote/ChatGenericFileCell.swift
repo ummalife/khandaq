@@ -31,6 +31,26 @@ class ChatGenericFileCell: ChatMovableDateCell {
     static let captionFont = UIFont.systemFont(ofSize: 15)
     static let captionTopSpacing: CGFloat = 5.0
 
+    // KHANDAQ (#192 follow-up, reported 18 Aug "reactions don't stick on media"): the chips line and
+    // the gaps bindReactions() puts around it. Media rows get an EXPLICIT height (they don't
+    // self-size), so this has to be added there — otherwise the chips are laid out but clipped away
+    // and reacting on a photo looks like nothing happened.
+    static let reactionsFont = UIFont.systemFont(ofSize: 13.0)
+    static let reactionsTopSpacing: CGFloat = 4.0
+    static let reactionsBottomSpacing: CGFloat = 8.0
+
+    static func reactionsHeight(for display: String?) -> CGFloat {
+        guard let display = display, !display.isEmpty else {
+            return 0
+        }
+        let bounding = (display as NSString).boundingRect(
+            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: reactionsFont],
+            context: nil)
+        return ceil(bounding.height) + reactionsTopSpacing + reactionsBottomSpacing
+    }
+
     static func captionHeight(for text: String, width: CGFloat) -> CGFloat {
         guard !text.isEmpty, width > 0 else {
             return 0
@@ -187,7 +207,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
         captionLabel.isHidden = true
 
         reactionsLabel = UILabel()
-        reactionsLabel.font = UIFont.systemFont(ofSize: 13.0)
+        reactionsLabel.font = ChatGenericFileCell.reactionsFont
         reactionsLabel.numberOfLines = 1
         reactionsLabel.isHidden = true
         reactionsLabel.isUserInteractionEnabled = true
@@ -262,6 +282,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
     // box never leaves a phantom gap above the chips on voice notes.
     func bindReactions(_ display: String?) {
         let text = display ?? ""
+        reactionsLabel.font = ChatGenericFileCell.reactionsFont
         reactionsLabel.text = text
         let hasReactions = !text.isEmpty
         reactionsLabel.isHidden = !hasReactions

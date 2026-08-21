@@ -135,6 +135,11 @@ which may lead to problems with video calls.</source>
         <translation type="unfinished">குறிப்பு</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>உரிமையாளர் மற்றும் உருவாக்குநர் — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation type="unfinished">மூல படைப்பாளர்: %1</translation>
     </message>

@@ -123,6 +123,11 @@ Take heed, fer higher qualities demand clearer skies.If yer seas are stormy, yer
         <translation>Charter</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Cap&apos;n an&apos; shipwright — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Created by th&apos; great an&apos; magnifercent %1</translation>
     </message>

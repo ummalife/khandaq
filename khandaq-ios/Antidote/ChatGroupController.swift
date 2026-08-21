@@ -537,7 +537,8 @@ class ChatGroupController: PortraitChatController {
         let infoItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             infoItem = UIBarButtonItem(
-                    image: UIImage(systemName: "info.circle"),
+                    image: UIImage(named: "chat-header-info")?.withRenderingMode(.alwaysTemplate)
+                            ?? UIImage(systemName: "info"),
                     style: .plain,
                     target: self,
                     action: #selector(ChatGroupController.infoButtonPressed))
@@ -554,7 +555,11 @@ class ChatGroupController: PortraitChatController {
         let liveAudioItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             liveAudioItem = UIBarButtonItem(
-                    image: UIImage(systemName: submanagerGroups.isGroupLiveAudioActive() ? "mic.circle.fill" : "mic.circle"),
+                    // KHANDAQ (18.08): shared icon set — a bare Material mic, matching the 1:1 header's
+                    // bare paperclip/videocam/phone. The circled SF variants made the group header look
+                    // like a different app. Live state is shown by tint, not by a filled circle.
+                    image: UIImage(named: "chat-header-mic")?.withRenderingMode(.alwaysTemplate)
+                            ?? UIImage(systemName: submanagerGroups.isGroupLiveAudioActive() ? "mic.circle.fill" : "mic.circle"),
                     style: .plain,
                     target: self,
                     action: #selector(ChatGroupController.toggleLiveAudio))
@@ -590,7 +595,8 @@ class ChatGroupController: PortraitChatController {
         let attachmentsItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             attachmentsItem = UIBarButtonItem(
-                    image: UIImage(systemName: "paperclip"),
+                    image: UIImage(named: "chat-header-attach")?.withRenderingMode(.alwaysTemplate)
+                            ?? UIImage(systemName: "paperclip"),
                     style: .plain,
                     target: self,
                     action: #selector(ChatGroupController.attachmentsButtonPressed))
@@ -609,16 +615,12 @@ class ChatGroupController: PortraitChatController {
 
     @available(iOS 13.0, *)
     private func liveVideoToolbarImage(for state: OCTGroupLiveVideoIconState) -> UIImage? {
-        let symbolName: String
-
-        switch state {
-        case .active:
-            symbolName = "video.circle.fill"
-        default:
-            symbolName = "video.circle"
-        }
-
-        guard let image = UIImage(systemName: symbolName) else {
+        // KHANDAQ (18.08): shared icon set — the bare Material videocam, like the 1:1 header. State is
+        // carried by tint alone; the circled SF variants were the last thing making this header look
+        // like a different app.
+        let symbolName = (state == .active) ? "video.circle.fill" : "video.circle"
+        guard let image = UIImage(named: "chat-header-video")?.withRenderingMode(.alwaysTemplate)
+                ?? UIImage(systemName: symbolName) else {
             return nil
         }
 
@@ -833,7 +835,8 @@ class ChatGroupController: PortraitChatController {
         let membersItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             membersItem = UIBarButtonItem(
-                    image: UIImage(systemName: "person.2"),
+                    image: UIImage(named: "chat-header-members")?.withRenderingMode(.alwaysTemplate)
+                            ?? UIImage(systemName: "person.2"),
                     style: .plain,
                     target: self,
                     action: #selector(ChatGroupController.membersButtonPressed))
@@ -1235,6 +1238,10 @@ extension ChatGroupController: UITableViewDelegate {
             // KHANDAQ (#52): height must match the stripped (markup-free) caption text.
             height += ChatGenericFileCell.captionHeight(for: caption, width: box.width)
         }
+        // KHANDAQ (18 Aug): reserve the reaction chips line too (parity with 1:1) — without it the
+        // chips are clipped by the explicit row height and a reaction on media looks like a no-op.
+        height += ChatGenericFileCell.reactionsHeight(
+                for: ChatReactionsFormat.display(from: message.reactionsJSON))
         // KHANDAQ (#99): media rows have an explicit height; add the separator band on a day boundary.
         if daySeparatorString(forDisplayIndex: indexPath.row) != nil {
             height += ChatMovableDateCell.daySeparatorReservedHeight

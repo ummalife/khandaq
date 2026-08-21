@@ -151,6 +151,11 @@ which may lead to problems with video calls.</source>
         <translation>О программе</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Владелец и разработчик — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Исходный автор: %1</translation>
     </message>

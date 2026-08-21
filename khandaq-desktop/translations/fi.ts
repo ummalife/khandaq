@@ -139,6 +139,11 @@ mikä voi johtaa ongelmiin videopuheluissa.</translation>
         <translation>Tietoja</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Omistaja ja kehittäjä – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Alkuperäinen julkaisija: %1</translation>
     </message>

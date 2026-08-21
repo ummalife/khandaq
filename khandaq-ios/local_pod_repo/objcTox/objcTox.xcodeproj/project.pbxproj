@@ -331,6 +331,14 @@
 		B2NGCFIX008B10000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
 		B2NGCFIX008B20000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
 		B2NGCFIX008B30000000000 /* OCTNgcSignedHistory.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */; };
+		B2FA0001B00000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0001REF0000000000 /* OCTNgcHistoryDowngradePolicy.m */; };
+		B2FA0001B10000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0001REF0000000000 /* OCTNgcHistoryDowngradePolicy.m */; };
+		B2FA0001B20000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0001REF0000000000 /* OCTNgcHistoryDowngradePolicy.m */; };
+		B2FA0001B30000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0001REF0000000000 /* OCTNgcHistoryDowngradePolicy.m */; };
+		B2FA0002B00000000000000 /* OCTPushUrlValidator.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0002REF0000000000 /* OCTPushUrlValidator.m */; };
+		B2FA0002B10000000000000 /* OCTPushUrlValidator.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0002REF0000000000 /* OCTPushUrlValidator.m */; };
+		B2FA0002B20000000000000 /* OCTPushUrlValidator.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0002REF0000000000 /* OCTPushUrlValidator.m */; };
+		B2FA0002B30000000000000 /* OCTPushUrlValidator.m in Sources */ = {isa = PBXBuildFile; fileRef = B2FA0002REF0000000000 /* OCTPushUrlValidator.m */; };
 		B2NGCFIX009B00000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
 		B2NGCFIX009B10000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
 		B2NGCFIX009B20000000000 /* OCTNgcKeyValue.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */; };
@@ -590,6 +598,8 @@
 		B2NGCFIX006REF00000000 /* OCTNgcHskDirectory.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHskDirectory.m; path = Classes/Private/Manager/Groups/OCTNgcHskDirectory.m; sourceTree = SOURCE_ROOT; };
 		B2NGCFIX007REF00000000 /* OCTNgcHskStore.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHskStore.m; path = Classes/Private/Manager/Groups/OCTNgcHskStore.m; sourceTree = SOURCE_ROOT; };
 		B2NGCFIX008REF00000000 /* OCTNgcSignedHistory.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcSignedHistory.m; path = Classes/Private/Manager/Groups/OCTNgcSignedHistory.m; sourceTree = SOURCE_ROOT; };
+		B2FA0001REF0000000000 /* OCTNgcHistoryDowngradePolicy.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcHistoryDowngradePolicy.m; path = Classes/Private/Manager/Groups/OCTNgcHistoryDowngradePolicy.m; sourceTree = SOURCE_ROOT; };
+		B2FA0002REF0000000000 /* OCTPushUrlValidator.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTPushUrlValidator.m; path = Classes/Private/Manager/Submanagers/OCTPushUrlValidator.m; sourceTree = SOURCE_ROOT; };
 		B2NGCFIX009REF00000000 /* OCTNgcKeyValue.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = OCTNgcKeyValue.m; path = Classes/Private/Manager/Objects/OCTNgcKeyValue.m; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -1368,6 +1378,8 @@
 				B2NGCFIX006B00000000000 /* OCTNgcHskDirectory.m in Sources */,
 				B2NGCFIX007B00000000000 /* OCTNgcHskStore.m in Sources */,
 				B2NGCFIX008B00000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2FA0001B00000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
+				B2FA0002B00000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B00000000000 /* OCTNgcKeyValue.m in Sources */,
 				9CB44BE61B84D9E1007FA7B6 /* OCTChat.m in Sources */,
 				11B0A0121DC64D75000C1721 /* OCTGroupPeer.m in Sources */,
@@ -1445,6 +1457,8 @@
 				B2NGCFIX006B10000000000 /* OCTNgcHskDirectory.m in Sources */,
 				B2NGCFIX007B10000000000 /* OCTNgcHskStore.m in Sources */,
 				B2NGCFIX008B10000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2FA0001B10000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
+				B2FA0002B10000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B10000000000 /* OCTNgcKeyValue.m in Sources */,
 				F5BF42781C2D1F75008283E0 /* OCTAudioQueue.m in Sources */,
 				11D6510B1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,
@@ -1513,6 +1527,8 @@
 				B2NGCFIX006B20000000000 /* OCTNgcHskDirectory.m in Sources */,
 				B2NGCFIX007B20000000000 /* OCTNgcHskStore.m in Sources */,
 				B2NGCFIX008B20000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2FA0001B20000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
+				B2FA0002B20000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B20000000000 /* OCTNgcKeyValue.m in Sources */,
 				11AF89031C98C25A00AD1D9F /* OCTFileBaseOperation.m in Sources */,
 				1183BC6B1C9EBBE5000CD310 /* OCTFileUploadOperation.m in Sources */,
@@ -1589,6 +1605,8 @@
 				B2NGCFIX006B30000000000 /* OCTNgcHskDirectory.m in Sources */,
 				B2NGCFIX007B30000000000 /* OCTNgcHskStore.m in Sources */,
 				B2NGCFIX008B30000000000 /* OCTNgcSignedHistory.m in Sources */,
+				B2FA0001B30000000000000 /* OCTNgcHistoryDowngradePolicy.m in Sources */,
+				B2FA0002B30000000000000 /* OCTPushUrlValidator.m in Sources */,
 				B2NGCFIX009B30000000000 /* OCTNgcKeyValue.m in Sources */,
 				F5BF42791C2D1F7D008283E0 /* OCTAudioQueue.m in Sources */,
 				11D6510D1B8922AF00C3DD23 /* OCTToxAVConstants.m in Sources */,

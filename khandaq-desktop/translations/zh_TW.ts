@@ -135,6 +135,11 @@ which may lead to problems with video calls.</source>
         <translation>關於</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>擁有者與開發者：Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>原始作者：%1</translation>
     </message>

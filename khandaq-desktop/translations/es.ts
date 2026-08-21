@@ -139,6 +139,11 @@ lo que puede provocar problemas en las videollamadas.</translation>
         <translation>Acerca de</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Propietario y desarrollador — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Autor original: %1</translation>
     </message>

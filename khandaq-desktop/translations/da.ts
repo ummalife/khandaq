@@ -134,6 +134,11 @@ which may lead to problems with video calls.</source>
         <translation>Om</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Ejer og udvikler – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Original forfatter: %1</translation>
     </message>

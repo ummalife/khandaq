@@ -139,6 +139,11 @@ může dojít během video hovoru k výpadkům či jiným problémům.</translat
         <translation>O aplikaci</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Vlastník a vývojář – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Původní autor: %1</translation>
     </message>

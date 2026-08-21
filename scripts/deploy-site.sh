@@ -113,7 +113,11 @@ ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/downloads'"
 # KHANDAQ (KHQ-01): purge any previously-published sideload APK from the live server so it can't be
 # fetched by direct URL after the site switched to Google Play.
 ssh "$REMOTE" "rm -f '$REMOTE_SITE_DIR/downloads/khandaq-android.apk' '$REMOTE_SITE_DIR/downloads/khandaq-release.apk' '$REMOTE_SITE_DIR/downloads/SHA256SUMS.android.txt' 2>/dev/null || true"
-scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/release-manifest.json" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
+# KHANDAQ (18.08): privacy.html was missing from this list, so every edit to it silently stayed
+# local while the other pages shipped - the page drifted behind for as long as that lasted.
+# KHANDAQ (audit round 3, R-07): release-manifest.json is the generated source of truth the
+# published version/package claims are checked against, so it has to reach the server too.
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/release-manifest.json" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -pr "$WEB/assets" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -p "$DL"/* "$REMOTE:$REMOTE_SITE_DIR/downloads/" 2>/dev/null || true
 scp -p "$ROOT/infra/nginx/khandaq-static-site.locations.conf" "$REMOTE:/tmp/khandaq-static-site.locations.conf"

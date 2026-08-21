@@ -183,6 +183,7 @@ What ran:
 | `./gradlew :app:testDebugUnitTest` | **172 tests, 0 failures**, 16 classes — the real Gradle task, not a hand-rolled javac harness |
 | `./gradlew :app:connectedDebugAndroidTest` | **21 tests, 0 failures, 0 skipped** on an Android 14 x86_64 emulator |
 | relay | 57 pytest cases |
+| `ios-build` on macos-15 | pods resolve, native deps build, the app compiles and **links** for the simulator |
 | CI checks | all five, each proven red under mutation |
 | ObjC policy | extracted, compiled as C, run against the Android truth table |
 | rate limiter | four-process contention run |
@@ -199,10 +200,23 @@ The device suite is worth spelling out, because two thirds of it had never execu
   install lands on `OnboardingActivity` and waits for a human, so no profile ever opened. The new
   `KhandaqFirstRun` helper walks first-run through the accessibility tree, and they now actually run.
 
-What still did not run: a pod build, a desktop build, and every workflow change — the workflows execute
-for the first time in CI. `.github/workflows/ios-build.yml` is the iOS half: a macOS runner is the only
-lawful way to reach Xcode and the iOS Simulator, since the Simulator ships only inside Xcode, Xcode is
-macOS-only, and macOS on non-Apple hardware breaks Apple's licence.
+**The iOS build ran too, on a macOS runner, and it is green.** A macOS runner is the only lawful way
+to reach Xcode and the iOS Simulator — the Simulator ships only inside Xcode, Xcode is macOS-only, and
+macOS on non-Apple hardware breaks Apple's licence — so `.github/workflows/ios-build.yml` is the iOS
+half of the device story. On its first run it proved both halves of what K-07 asks for
+(`bundle install` frozen on a clean host, `bundle exec pod --version` equal to the Gemfile pin) and
+then failed at link time, which is how the two defects in item 9 above were found. It took four runs
+to go green, and every red one was a real defect rather than a fault in the workflow:
+
+| run | failure | what it actually was |
+|---|---|---|
+| 1 | `ld: library 'opus' not found` | `libopus.a` is not in git — a clean checkout could not link **at all** |
+| 2 | same message, after the libraries were built | Xcode was linking x86_64 as well, and the simulator slice is arm64-only — the message said "missing", the truth was "wrong architecture" |
+| 3 | `xcodebuild exit 70` | `-arch` cannot be combined with a generic destination; it has to be the `ARCHS=` build setting |
+| 4 | — | green: pods resolve, native deps build, the app compiles and links |
+
+What still did not run: a **desktop** build (no Qt toolchain anywhere in reach) and the Android
+release workflow end to end, though its toolchain gate was exercised directly against a real SDK.
 
 Required before release:
 

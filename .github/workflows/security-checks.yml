@@ -51,3 +51,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: CocoaPods/fastlane must be invoked through Bundler
         run: python3 scripts/check-ios-bundler.py
+
+  desktop-bundled-deps:
+    # KHANDAQ (K-04): the desktop bundles Qt 5.12.12 and OpenSSL 1.1.1w. 1.1.1 has had no public
+    # security fixes since 2023-09-11 — a date that passed with no commit for a push-triggered gate
+    # to fire on, which is why this is here and on a schedule. It also catches inventory drift, the
+    # way windows-build.yaml's prose comment had already drifted from the download scripts.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Bundled desktop dependencies — EOL, security floors and inventory drift
+        run: python3 scripts/check-bundled-deps-eol.py --warn-days 180

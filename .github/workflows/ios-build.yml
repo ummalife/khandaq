@@ -113,9 +113,10 @@ jobs:
       #
       # `.gitignore:18` is a blanket `*.a`, which silently excludes
       # `libopus.xcframework/{ios-arm64,ios-arm64-simulator}/libopus.a` — the headers and the
-      # Info.plist are committed, the libraries are not. `ios/vpx.framework`'s binary is missing the
-      # same way. Both are `vendored_frameworks` in their podspecs, so `pod install` succeeds and the
-      # failure only appears at link time: `ld: library 'opus' not found`.
+      # Info.plist are committed, the libraries are not. libopus is a `vendored_frameworks` entry, so
+      # `pod install` succeeds and the omission only appears at link time: `ld: library 'opus' not
+      # found`. (vpx.framework's binaries ARE committed — they have no `.a` extension, so the ignore
+      # rule never caught them. libopus is the only casualty, but one is enough.)
       #
       # The build had presumably always been done on a machine where scripts/build-ios-native-deps.sh
       # had been run at some point in the past, so nobody hit it. docs/BUILDING.md and
@@ -124,7 +125,10 @@ jobs:
       # Building them here is the honest fix: it is the same script a maintainer runs, it verifies
       # both tarballs against pinned SHA-256 digests before unpacking them (added under the previous
       # audit round), and it makes the iOS artifact reproducible from a checkout rather than from
-      # someone's /tmp.
+      # someone's /tmp. It also rebuilds vpx from source rather than trusting the committed binary,
+      # which is worth having: the committed `vpx.framework/vpx` is byte-identical to
+      # `vpx-simulator`, so a DEVICE build from a clean checkout would silently link the simulator
+      # slice until someone copies `vpx-device` over it.
       - name: Build the vendored native dependencies (libopus, libvpx)
         run: |
           set -euo pipefail

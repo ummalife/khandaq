@@ -71,12 +71,18 @@ to them.
    mistake to make during exactly the rotation the finding asks for. (K-08)
 
 9. **The iOS app cannot be linked from a clean checkout, and nothing said so.** `.gitignore:18` is a
-   blanket `*.a`, which silently excludes `libopus.xcframework/{ios-arm64,ios-arm64-simulator}/libopus.a`;
-   `ios/vpx.framework`'s binary is missing the same way. Both are `vendored_frameworks`, so
-   `pod install` succeeds and the failure appears only at link time — `ld: library 'opus' not found`.
-   Builds had always been done on a machine where `scripts/build-ios-native-deps.sh` had been run at
-   some point, so nobody hit it, and `docs/BUILDING.md` still says "pod install, open Xcode". Found by
-   the first run of the new macOS workflow, which is exactly what it is for. (K-07 adjacent)
+   blanket `*.a`, which silently excludes
+   `libopus.xcframework/{ios-arm64,ios-arm64-simulator}/libopus.a` — headers and `Info.plist` are
+   committed, the libraries are not. libopus is a `vendored_frameworks` entry, so `pod install`
+   succeeds and the failure appears only at link time: `ld: library 'opus' not found`. Builds had
+   always been done on a machine where `scripts/build-ios-native-deps.sh` had been run at some point,
+   so nobody hit it, and `docs/BUILDING.md` still said "pod install, open Xcode". Found by the first
+   run of the new macOS workflow, which is exactly what it is for. (K-07 adjacent)
+
+   A second, quieter one alongside it: `vpx.framework`'s binaries *are* committed (no `.a` extension,
+   so the ignore rule missed them) — but `vpx` is byte-identical to `vpx-simulator`, so a **device**
+   build from a clean checkout silently links the simulator slice until `vpx-device` is copied over
+   it.
 
 10. **A rate-limited request burned its signature.** Auth ran before the rate check and validating a
    signature *consumes* it, so a signed request refused for rate had already spent its single-use

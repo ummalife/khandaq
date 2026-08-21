@@ -96,6 +96,16 @@ for `x86_64-w64-mingw32`, producing a static `libexpat.a` that still exports eve
 needs. A full Windows container build still has to confirm it, because there is no Docker on the
 machine this was done on.
 
+## External audits
+
+Both 2026-08-21 rounds are answered finding by finding, including what was measured and where the
+measurement stops:
+
+- `SECURITY-AUDIT-2026-08-21-RESPONSE.md` — first round, K-01…K-09, all nine closed.
+- `SECURITY-REAUDIT-2026-08-21-RESPONSE.md` — re-audit, R-01…R-07: five closed; R-01 (per-install
+  push capabilities) and R-04 (Qt 6 / OpenSSL 3 migration) remain open as architectural work, with
+  the non-architectural half of each closed.
+
 ## Recommended verification
 
 - Compare release `SHA256SUMS.txt` with downloaded binaries

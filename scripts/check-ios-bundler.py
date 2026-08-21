@@ -32,6 +32,10 @@ SEARCH_DIRS = ["scripts", "khandaq-ios/scripts", "khandaq-ios/fastlane", "docs",
 SEARCH_FILES = ["khandaq-ios/README.md", "README.md", "docs/BUILDING.md"]
 EXTENSIONS = (".sh", ".yml", ".yaml", ".md", ".bash")
 
+# The opt-out marker, and it is deliberately wordy: `# khandaq-bundler-ok: <reason>`. A bare pragma
+# would get copied around; one that has to state a reason gets read.
+EXEMPT = re.compile(r"#\s*khandaq-bundler-ok:\s*\S")
+
 EXCLUDED = (
     # Vendored upstream pod, with its own (unlocked) Gemfile. Not part of the Khandaq build.
     "khandaq-ios/local_pod_repo/",
@@ -67,7 +71,7 @@ def candidate_files():
     return out
 
 
-def offending_lines(text, markdown=False):
+def offending_lines(text, markdown=False, exemptions=None):
     """
     Lines that run pod/fastlane without Bundler.
 
@@ -76,9 +80,17 @@ def offending_lines(text, markdown=False):
     its own documentation is a checker somebody switches off.
     """
     bad = []
+    exemptions = exemptions if exemptions is not None else []
     in_fence = False
     for n, raw in enumerate(text.splitlines(), 1):
         line = raw.strip()
+        # An explicit, reasoned opt-out for the rare line that runs `pod` on purpose WITHOUT wanting
+        # the pinned one — reporting the host's global version for contrast, for instance. It has to
+        # carry a reason, and the run prints every exemption, so this cannot quietly become the way
+        # the rule is avoided.
+        if EXEMPT.search(line):
+            exemptions.append((n, line))
+            continue
         if markdown:
             if line.startswith("```") or line.startswith("~~~"):
                 in_fence = not in_fence
@@ -108,14 +120,20 @@ def main():
         die("found no files to scan — the search paths are wrong, and a vacuous pass is worse than "
             "no check")
 
-    findings = []
+    findings, exempted = [], []
     for rel, path in files:
         with open(path, encoding="utf-8", errors="replace") as fh:
             text = fh.read()
-        for lineno, line, cmd in offending_lines(text, markdown=rel.endswith('.md')):
+        exempt = []
+        for lineno, line, cmd in offending_lines(text, markdown=rel.endswith('.md'),
+                                                 exemptions=exempt):
             findings.append((rel, lineno, cmd, line))
+        for lineno, line in exempt:
+            exempted.append((rel, lineno, line))
 
     print("scanned %d files for un-Bundlered pod/fastlane invocations" % len(files))
+    for rel, lineno, line in exempted:
+        print("  exempt  %s:%d  %s" % (rel, lineno, line.strip()))
     if findings:
         for rel, lineno, cmd, line in findings:
             print("::error file=%s,line=%d::`%s` is invoked without `bundle exec` — it will use "

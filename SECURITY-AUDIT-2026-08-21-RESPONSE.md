@@ -155,16 +155,49 @@ underflow would read as "seen moments ago" and refuse a peer's history.
 
 ## What is NOT done, and who has to do it
 
-**Nothing here was built on a device.** No Android, iOS or Qt toolchain exists on the machine this was
-written on. What ran: 120 JVM unit tests, 57 relay tests, the five CI checks above, an extracted-and-
-compiled Objective-C policy body, and a four-process load test of the rate limiter. What did not:
-`./gradlew :app:testDebugUnitTest`, a pod build, a desktop build, and every workflow change.
+**Android is now built and tested on a real device image; iOS and desktop are not.**
+
+An Android SDK and a headless emulator were set up on the build host (Ryzen 9 3900, Windows Server
+2022). Acceleration came from Google's AMD hypervisor driver — `extras;google;Android_Emulator_Hypervisor_Driver`
+— rather than Windows Hypervisor Platform, so it needed no Hyper-V and no reboot on a machine that is
+also serving traffic. `scripts/qa-android-emulator.sh` reproduces the whole setup.
+
+What ran:
+
+| | |
+|---|---|
+| `./gradlew :app:testDebugUnitTest` | **172 tests, 0 failures**, 16 classes — the real Gradle task, not a hand-rolled javac harness |
+| `./gradlew :app:connectedDebugAndroidTest` | **21 tests, 0 failures, 0 skipped** on an Android 14 x86_64 emulator |
+| relay | 57 pytest cases |
+| CI checks | all five, each proven red under mutation |
+| ObjC policy | extracted, compiled as C, run against the Android truth table |
+| rate limiter | four-process contention run |
+
+The device suite is worth spelling out, because two thirds of it had never executed:
+
+- `NgcHistSigNativeTest` (8) — the Ed25519 JNI, including that the pre-image this device signs matches
+  the frozen cross-platform vector. This is the foundation K-01's verdict path stands on.
+- `NgcHistoryDowngradeDeviceTest` (7) — **new**: the anti-downgrade gate against the real SQLCipher
+  store, covering the case-convention mismatch between the write path and the gate, a verdict that
+  must not vouch for different text under the same message id, the stale-key anti-lockout, and
+  multi-byte UTF-8 surviving the round trip.
+- `NgcHskStoreDeviceTest` (6) — these had SKIPPED on every run since they were written. A fresh
+  install lands on `OnboardingActivity` and waits for a human, so no profile ever opened. The new
+  `KhandaqFirstRun` helper walks first-run through the accessibility tree, and they now actually run.
+
+What still did not run: a pod build, a desktop build, and every workflow change — the workflows execute
+for the first time in CI. `.github/workflows/ios-build.yml` is the iOS half: a macOS runner is the only
+lawful way to reach Xcode and the iOS Simulator, since the Simulator ships only inside Xcode, Xcode is
+macOS-only, and macOS on non-Apple hardware breaks Apple's licence.
 
 Required before release:
 
-1. **K-01 device QA.** The three-client adversarial test the audit names: an attacker sends unsigned
-   forged history claiming a victim whose HSK is known; the updated receiver must not store or render
-   it. Plus a mixed-version group, to confirm non-signing authors are unaffected.
+1. **K-01 three-client QA.** The device test above proves the gate against the real database, but not
+   the audit's literal criterion, which is a three-client scenario over the live Tox network: an
+   attacker sends unsigned forged history claiming a victim whose HSK is known, and the updated
+   receiver must not store or render it. That needs a purpose-built attacker binary and NGC group
+   connectivity held for several minutes. Plus a mixed-version group, to confirm non-signing authors
+   are unaffected.
 2. **K-01 availability decision.** Once an author's key is known, their history reaches a peer only
    from them — a newcomer joining while they are offline gets nothing from them. Inherent to the rule;
    the single tunable is `KEY_STALE_MS`. Accept it, or say so before shipping.

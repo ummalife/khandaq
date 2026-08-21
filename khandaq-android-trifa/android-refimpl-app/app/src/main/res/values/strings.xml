@@ -217,6 +217,21 @@
     <string name="settings_export_tox_profile_confirm_yes">Export</string>
     <string name="settings_export_tox_profile_done_persists">File saved:\n%1$s\n\nThis file will remain even if you uninstall the app.</string>
     <string name="settings_export_tox_profile_failed">Could not export profile.</string>
+    <!-- KHANDAQ (re-audit 2026-08-21, R-06): the raw .tox savedata IS the private key. The old
+         wording ("only Tox ID and contacts") described what is in it, not what it is, so the user
+         could not weigh the decision. These strings front PlaintextExportGate. -->
+    <string name="settings_export_choose_title">Export profile</string>
+    <string name="settings_export_choose_message">An encrypted backup is protected by a password you choose, and it also carries your chats and files. Choose the plain .tox file only if you are moving this account to a different Tox app — that file is your identity and has no password on it.</string>
+    <string name="settings_export_choose_raw">Plain .tox file</string>
+    <string name="plaintext_export_warning_title">This file is your identity</string>
+    <string name="plaintext_export_warning_message">A plain .tox file is your private key. Anyone who gets a copy becomes this account: they can sign in as you, read what is sent to you and write as you. It has no password, and it cannot be revoked afterwards.\n\nExport it only to move this account to another Tox app, and keep it out of cloud folders, shared storage and chat attachments. For a backup, use the encrypted backup instead.</string>
+    <string name="plaintext_export_reauth_title">Confirm it is you</string>
+    <string name="plaintext_export_reauth_description">Unlock to export your identity in plain form.</string>
+    <string name="plaintext_export_not_authenticated">Export cancelled — not confirmed.</string>
+    <string name="plaintext_export_not_authorised">Export refused: this request was not confirmed.</string>
+    <string name="plaintext_export_typed_confirm_word">EXPORT</string>
+    <string name="plaintext_export_typed_confirm_message">This device has no screen lock, so there is nothing to unlock with. Type %1$s to confirm.</string>
+    <string name="maintenance_reveal_passwords_gate_message">The next screen shows your database password in readable form, and can write a bundle that contains your private key. Anyone reading the screen or the file gets full access to this account.</string>
     <string name="settings_import_tox_profile_replace_warning">Your current profile, chats and local data will be replaced. Only Tox ID and contacts from the .tox file will remain. Chat history is not transferred.</string>
     <string name="settings_import_tox_profile_invalid_file">The selected file does not look like a valid Tox profile (.tox).</string>
     <string name="settings_import_tox_profile_encrypted_file">This .tox profile is protected with a password. Khandaq can only import unencrypted profile exports — export the profile without a password and try again.</string>

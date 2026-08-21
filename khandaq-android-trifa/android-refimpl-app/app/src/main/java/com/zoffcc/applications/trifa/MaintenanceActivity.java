@@ -126,6 +126,8 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
 
     private ActivityResultLauncher<String[]> importProfileLauncher;
     private ActivityResultLauncher<String> exportProfileLauncher;
+    /** KHANDAQ (re-audit 2026-08-21, R-06): warning + device re-auth in front of the raw exports. */
+    private PlaintextExportGate exportGate;
     private ActivityResultLauncher<String> backupCreateLauncher;
     private char[] pendingBackupPassphrase;
     private ActivityResultLauncher<String[]> backupRestoreLauncher;
@@ -517,23 +519,24 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
             {
                 try
                 {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle(R.string.maintenance_export_encrypted_files_title);
-                    builder.setMessage(getString(R.string.maintenance_export_encrypted_files_message,
-                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_FILES_EXPORT_DIR));
-
-                    builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
-                    {
-                        public void onClick(DialogInterface dialog, int id)
-                        {
-                            export_encrypted_files_unsecure(this_context);
-                            return;
-                        }
-                    });
-                    builder.setNegativeButton(R.string.cancel, null);
-
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
+                    // KHANDAQ (re-audit 2026-08-21, R-06): this copies attachments out of the
+                    // encrypted VFS onto shared storage, where nothing protects them any more.
+                    exportGate.require(getString(R.string.maintenance_export_encrypted_files_title),
+                            getString(R.string.maintenance_export_encrypted_files_message,
+                                    MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_FILES_EXPORT_DIR),
+                            getString(R.string.maintenance_export_confirm),
+                            new Runnable()
+                            {
+                                @Override
+                                public void run()
+                                {
+                                    // Writes straight to shared storage, not through a SAF picker,
+                                    // so the grant has nothing left to authorise - spend it here
+                                    // rather than leave it live for the rest of the window.
+                                    PlaintextExportGate.clearAuthorisation();
+                                    export_encrypted_files_unsecure(this_context);
+                                }
+                            });
                 }
                 catch (Exception e)
                 {
@@ -549,23 +552,24 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
             {
                 try
                 {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle(R.string.maintenance_export_encrypted_chats_title);
-                    builder.setMessage(getString(R.string.maintenance_export_encrypted_chats_message,
-                            MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_CHATS_EXPORT_DIR));
-
-                    builder.setPositiveButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
-                    {
-                        public void onClick(DialogInterface dialog, int id)
-                        {
-                            export_encrypted_chats_unsecure(this_context);
-                            return;
-                        }
-                    });
-                    builder.setNegativeButton(R.string.cancel, null);
-
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
+                    // KHANDAQ (re-audit 2026-08-21, R-06): this one writes export.sqlite with
+                    // KEY '' - the whole message history, decrypted, onto shared storage.
+                    exportGate.require(getString(R.string.maintenance_export_encrypted_chats_title),
+                            getString(R.string.maintenance_export_encrypted_chats_message,
+                                    MainActivity.SD_CARD_FILES_EXPORT_DIR + SD_CARD_ENC_CHATS_EXPORT_DIR),
+                            getString(R.string.maintenance_export_confirm),
+                            new Runnable()
+                            {
+                                @Override
+                                public void run()
+                                {
+                                    // Writes straight to shared storage, not through a SAF picker,
+                                    // so the grant has nothing left to authorise - spend it here
+                                    // rather than leave it live for the rest of the window.
+                                    PlaintextExportGate.clearAuthorisation();
+                                    export_encrypted_chats_unsecure(this_context);
+                                }
+                            });
                 }
                 catch (Exception e)
                 {
@@ -625,25 +629,22 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
             {
                 try
                 {
-                    AlertDialog.Builder builder = new AlertDialog.Builder(this_context);
-                    builder.setTitle(R.string.maintenance_show_passwords_title);
-                    builder.setMessage(R.string.maintenance_show_passwords_message);
-
-                    builder.setPositiveButton(R.string.maintenance_show_passwords_confirm,
-                                              new DialogInterface.OnClickListener()
-                                              {
-                                                  public void onClick(DialogInterface dialog, int id)
-                                                  {
-                                                      Intent intent = new Intent(v.getContext(), ExportActivity.class);
-                                                      intent.putExtra("act", "MaintenanceActivity");
-                                                      startActivity(intent);
-                                                  }
-                                              });
-                    builder.setNegativeButton(R.string.cancel, null);
-
-                    // create and show the alert dialog
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
+                    // KHANDAQ (re-audit 2026-08-21, R-06): the screen behind this button prints the
+                    // database key on the display and can write the raw identity bundle, so it is
+                    // held to the same bar as the exports themselves.
+                    exportGate.require(getString(R.string.maintenance_show_passwords_title),
+                            getString(R.string.maintenance_reveal_passwords_gate_message),
+                            getString(R.string.maintenance_show_passwords_confirm),
+                            new Runnable()
+                            {
+                                @Override
+                                public void run()
+                                {
+                                    Intent intent = new Intent(v.getContext(), ExportActivity.class);
+                                    intent.putExtra("act", "MaintenanceActivity");
+                                    startActivity(intent);
+                                }
+                            });
                 }
                 catch (Exception e)
                 {
@@ -932,6 +933,10 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
                               "\nGroup Messages: " + num_groupmsgs + "\nFriends: " + num_dbfriends + "\nConferences: " +
                               num_dbconfs + "\nGroups: " + num_dbgroups + "\n\n" + vfs_size + "\n\n" + dbmain_size);
 
+        // KHANDAQ (re-audit 2026-08-21, R-06): registers its own launcher, so it must be built here
+        // in onCreate() with the rest of them - not lazily on first use, which would throw.
+        exportGate = new PlaintextExportGate(this, () -> MaintenanceActivity.this);
+
         importProfileLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri ->
         {
             ToxProfileImportHelper.handlePickedUri(MaintenanceActivity.this, uri, ImportMode.REPLACE_EXISTING, null);
@@ -1016,7 +1021,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
 
     private void promptExportSavedataWithPicker()
     {
-        ToxProfileImportHelper.promptExportSavedata(this, new Runnable()
+        ToxProfileImportHelper.promptExportSavedata(exportGate, new Runnable()
         {
             @Override
             public void run()
@@ -1300,7 +1305,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
         if (context instanceof MaintenanceActivity)
         {
             final MaintenanceActivity activity = (MaintenanceActivity) context;
-            ToxProfileImportHelper.promptExportSavedata(activity, new Runnable()
+            ToxProfileImportHelper.promptExportSavedata(activity.exportGate, new Runnable()
             {
                 @Override
                 public void run()

@@ -254,6 +254,19 @@
     <string name="settings_import_tox_profile_pick_file">Выбрать файл</string>
     <string name="settings_import_tox_profile_picker_hint">В выборе файла откройте «Загрузки» или файловый менеджер и выберите профиль .tox.</string>
     <string name="settings_export_tox_profile_confirm_picker">Выберите, куда сохранить профиль (например, «Загрузки»). Экспортируются только Tox ID и контакты; история чатов не переносится. Файл сохранится даже после удаления приложения.</string>
+    <!-- KHANDAQ (re-audit 2026-08-21, R-06) -->
+    <string name="settings_export_choose_title">Экспорт профиля</string>
+    <string name="settings_export_choose_message">Зашифрованная резервная копия защищена паролем, который вы задаёте, и в неё попадают также чаты и файлы. Обычный файл .tox выбирайте только если переносите аккаунт в другое приложение Tox: этот файл и есть ваша личность, пароля на нём нет.</string>
+    <string name="settings_export_choose_raw">Обычный файл .tox</string>
+    <string name="plaintext_export_warning_title">Этот файл — ваша личность</string>
+    <string name="plaintext_export_warning_message">Обычный файл .tox — это ваш приватный ключ. Кто получит копию, тот становится этим аккаунтом: сможет войти под вами, читать адресованное вам и писать от вашего имени. Пароля на нём нет, и отозвать его потом нельзя.\n\nЭкспортируйте только для переноса аккаунта в другое приложение Tox и держите файл подальше от облачных папок, общего хранилища и вложений в переписке. Для резервной копии используйте зашифрованную копию.</string>
+    <string name="plaintext_export_reauth_title">Подтвердите, что это вы</string>
+    <string name="plaintext_export_reauth_description">Разблокируйте, чтобы выгрузить личность в открытом виде.</string>
+    <string name="plaintext_export_not_authenticated">Экспорт отменён — подтверждение не получено.</string>
+    <string name="plaintext_export_not_authorised">Экспорт отклонён: запрос не был подтверждён.</string>
+    <string name="plaintext_export_typed_confirm_word">ЭКСПОРТ</string>
+    <string name="plaintext_export_typed_confirm_message">На устройстве нет блокировки экрана, поэтому разблокировать нечем. Введите %1$s для подтверждения.</string>
+    <string name="maintenance_reveal_passwords_gate_message">На следующем экране пароль базы данных показывается в читаемом виде, и оттуда же можно выгрузить архив с приватным ключом. Любой, кто увидит экран или получит файл, получает полный доступ к аккаунту.</string>
     <string name="settings_export_tox_profile_confirm_yes">Экспорт</string>
     <string name="settings_export_tox_profile_done_persists">Файл сохранён:\n%1$s\n\nЭтот файл сохранится даже после удаления приложения.</string>
     <string name="settings_export_tox_profile_failed">Не удалось экспортировать профиль.</string>

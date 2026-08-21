@@ -2,6 +2,7 @@ package com.zoffcc.applications.trifa;
 
 import org.khandaq.messenger.R;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
@@ -17,6 +18,7 @@ import android.widget.CompoundButton;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
@@ -41,6 +43,12 @@ public class SettingsTabFragment extends Fragment
     // before the fragment reaches STARTED → do it in onCreate().
     private ActivityResultLauncher<String[]> importProfileLauncher;
     private ActivityResultLauncher<String> exportProfileLauncher;
+    // KHANDAQ (re-audit 2026-08-21, R-06): this row was the one place a normal user met "export", and
+    // it went straight to the raw private key. It now offers the encrypted backup first, so the
+    // encrypted container is what the ordinary migration/backup workflow actually produces.
+    private ActivityResultLauncher<String> backupCreateLauncher;
+    private char[] pendingBackupPassphrase;
+    private PlaintextExportGate exportGate;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState)
@@ -65,6 +73,26 @@ public class SettingsTabFragment extends Fragment
                         ToxProfileImportHelper.handleExportDestination(a, uri);
                     }
                 });
+
+        // KHANDAQ (re-audit 2026-08-21, R-06): destination picker for the encrypted .kbk backup, the
+        // new default of this row. Same plumbing as ExportActivity's.
+        backupCreateLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument(PasswordBackupHelper.MIME_TYPE), uri ->
+                {
+                    final char[] pp = pendingBackupPassphrase;
+                    pendingBackupPassphrase = null;
+                    final Activity a = getActivity();
+                    if (uri != null && pp != null && a != null)
+                    {
+                        PasswordBackupHelper.performBackup(a, uri, pp);
+                    }
+                    else if (pp != null)
+                    {
+                        java.util.Arrays.fill(pp, '\0');   // picker cancelled - never leave it in memory
+                    }
+                });
+
+        exportGate = new PlaintextExportGate(this, () -> getActivity());
     }
 
     @Nullable
@@ -303,17 +331,42 @@ public class SettingsTabFragment extends Fragment
         return mode == Configuration.UI_MODE_NIGHT_YES;
     }
 
-    // KHANDAQ (#2): export runs the SAF CreateDocument picker straight from Settings (confirm dialog →
-    // system file picker), no «Техническое обслуживание» screen in between.
+    // KHANDAQ (#2): export runs from Settings directly, with no «Техническое обслуживание» screen in
+    // between. (R-06 put a format choice in front of the picker; the picker is still launched here.)
+    /**
+     * KHANDAQ (re-audit 2026-08-21, R-06): the choice, with the encrypted container as the default
+     * action. The raw .tox file is still reachable - other Tox clients read nothing else - but it is
+     * now the labelled alternative and it costs a warning plus the device credential.
+     */
     private void startProfileExport()
     {
         final AppCompatActivity activity = (AppCompatActivity) getActivity();
-        if (activity == null || Callstate.state != 0 || exportProfileLauncher == null)
+        if (activity == null || Callstate.state != 0 || exportProfileLauncher == null
+            || backupCreateLauncher == null || exportGate == null)
         {
             return;
         }
-        ToxProfileImportHelper.promptExportSavedata(activity,
-                () -> exportProfileLauncher.launch(ToxProfileImportHelper.EXPORT_SUGGESTED_FILENAME));
+
+        new AlertDialog.Builder(activity)
+                .setTitle(R.string.settings_export_choose_title)
+                .setMessage(R.string.settings_export_choose_message)
+                .setPositiveButton(R.string.backup_password_title, (d, which) -> startEncryptedBackup(activity))
+                .setNeutralButton(R.string.settings_export_choose_raw,
+                        (d, which) -> ToxProfileImportHelper.promptExportSavedata(exportGate,
+                                () -> exportProfileLauncher.launch(
+                                        ToxProfileImportHelper.EXPORT_SUGGESTED_FILENAME)))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    /** KHANDAQ (re-audit 2026-08-21, R-06): passphrase, then destination, then the .kbk container. */
+    private void startEncryptedBackup(final AppCompatActivity activity)
+    {
+        PasswordBackupHelper.promptForBackupPassphrase(activity, passphrase ->
+        {
+            pendingBackupPassphrase = passphrase;
+            backupCreateLauncher.launch(PasswordBackupHelper.SUGGESTED_FILENAME);
+        });
     }
 
     // KHANDAQ (#2): import runs the replace-confirm dialog then the SAF OpenDocument picker directly.

@@ -63,12 +63,17 @@ public class ExportActivity extends AppCompatActivity
      */
     private androidx.activity.result.ActivityResultLauncher<String> backup_create_launcher;
     private char[] pending_backup_passphrase;
+    /** KHANDAQ (re-audit 2026-08-21, R-06): device re-auth in front of the raw bundle. */
+    private PlaintextExportGate export_gate;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_export);
+
+        // KHANDAQ (re-audit 2026-08-21, R-06): same rule as the launchers - built in onCreate().
+        export_gate = new PlaintextExportGate(this, () -> ExportActivity.this);
 
         backup_create_launcher = registerForActivityResult(
                 new androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
@@ -149,11 +154,28 @@ public class ExportActivity extends AppCompatActivity
                             start_encrypted_backup();
                         }
                     });
+                    // KHANDAQ (re-audit 2026-08-21, R-06): the raw bundle carries the Tox private key
+                    // and the database key in the clear. Picking it now costs a second, explicit
+                    // confirmation and the device credential - the encrypted route above costs neither.
                     builder.setNeutralButton(R.string.maintenance_export_confirm, new DialogInterface.OnClickListener()
                     {
                         public void onClick(DialogInterface dialog, int id)
                         {
-                            export_all_files(v.getContext());
+                            export_gate.require(R.string.plaintext_export_warning_title,
+                                                R.string.plaintext_export_warning_message,
+                                                R.string.maintenance_export_confirm,
+                                                new Runnable()
+                                                {
+                                                    @Override
+                                                    public void run()
+                                                    {
+                                                        // The bundle is written straight to app-owned
+                                                        // storage rather than through a SAF picker, so
+                                                        // the grant is spent here instead.
+                                                        PlaintextExportGate.clearAuthorisation();
+                                                        export_all_files(v.getContext());
+                                                    }
+                                                });
                         }
                     });
                     builder.setNegativeButton(R.string.cancel, null);

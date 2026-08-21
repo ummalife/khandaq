@@ -63,6 +63,18 @@ jobs:
       - name: Bundled desktop dependencies — EOL, security floors and inventory drift
         run: python3 scripts/check-bundled-deps-eol.py --warn-days 180
 
+  release-metadata:
+    # KHANDAQ (re-audit 2026-08-21, R-07): the package name, the version and the iOS build number were
+    # written by hand in the site, the README and the release notes, and they drifted — the iOS build
+    # number appeared as three different values in three places, two of them on the same page. Not a
+    # vulnerability, but it defeats provenance checking specifically: a user who compares what they are
+    # installing against what was published finds the numbers disagree and stops comparing.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Published metadata must match the build files
+        run: python3 scripts/check-release-metadata.py
+
   ngc-downgrade-parity:
     # KHANDAQ (K-01): the anti-downgrade rule is implemented twice, in Java and in Objective-C, and
     # a security rule enforced on one client but not the other is not a rule. The Java side has

@@ -339,6 +339,24 @@ static NSString *_Nullable verdictValue(uint64_t timestampSeconds, NSData *_Null
                                         (uint64_t)([[NSDate date] timeIntervalSince1970] * 1000.0));
 }
 
+- (OCTNgcDowngradeDecision)downgradeDecisionForUnsignableRecordInGroupNumber:(uint32_t)groupNumber
+                                                               authorPubHex:(nullable NSString *)authorPubHex
+{
+    NSString *groupId = self.groupIdBlock ? self.groupIdBlock(groupNumber) : nil;
+    if (groupId.length == 0 || authorPubHex.length == 0) {
+        // Same reasoning as above: nothing to look the author up by, so this is not the place to
+        // start dropping history.
+        return OCTNgcDowngradeDecisionAcceptLegacy;
+    }
+
+    NSString *dirRow = [OCTNgcHskDirectory rowKeyWithGroupId:groupId peerGroupPubHex:authorPubHex];
+    OCTNgcHskRecord *known = [OCTNgcHskDirectory decodeRecord:dirRow ? self.getValueBlock(dirRow) : nil];
+
+    // verified:NO is not a shortcut, it is the fact: no signed form of this record exists.
+    return OCTNgcHistoryDowngradeDecide(known, NO,
+                                        (uint64_t)([[NSDate date] timeIntervalSince1970] * 1000.0));
+}
+
 #pragma mark - receiving
 
 - (BOOL)handleIncomingPacketWithGroupNumber:(uint32_t)groupNumber

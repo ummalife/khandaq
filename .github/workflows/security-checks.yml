@@ -136,6 +136,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: iOS anti-downgrade policy must match the Android truth table
         run: python3 scripts/check-ios-downgrade-policy.py
+      # KHANDAQ (audit round 3, F-03): the rule was enforced on the TEXT packet only, on both clients.
+      - name: Both history packet types must be gated on both clients
+        run: python3 scripts/check-history-file-gate.py
       # KHANDAQ (audit round 3, F-01): the vendored iOS toxav is a generation behind the desktop one
       # and install-tox-ngc.sh deliberately does not sync it, so the video reassembler has to be held
       # in place by something. This compiles the real function out of the shipped .m and attacks it.

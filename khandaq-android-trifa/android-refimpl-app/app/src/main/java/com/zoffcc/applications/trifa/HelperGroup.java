@@ -10871,6 +10871,37 @@ public class HelperGroup
                 // HelperGeneric.logI(TAG, "handle_incoming_sync_group_file:gn=" + group_number + " peerid=" + peer_id + " ignoring myself as original sender");
                 return;
             }
+
+            // KHANDAQ (audit round 3, F-03): the anti-downgrade gate, which until now guarded only the
+            // TEXT half of history sync.
+            //
+            // NgcHistoryDowngradePolicy.decide was called from exactly two places, both on the text
+            // path. This handler — the file history packet, 0x03 — read the claimed author out of
+            // data[8+32 .. 8+63] and walked straight into group_file_add_from_sync with no check at
+            // all, and the iOS twin did the same. So the exact claim that is refused outright as text
+            // ("this author, whose signing key we learned from a live announcement, sent this") was
+            // accepted without question as a file: a row inserted under that author's pubkey, up to
+            // ~36 KiB written into the encrypted VFS, and a notification raised.
+            //
+            // There is no signed form of a file record — NgcHistSigParser knows PKT_SIGNED_TEXT and
+            // nothing else — so author_verified is false here by construction, and that is not a gap
+            // in this gate but the whole point of it: for an author known to sign, an unsigned file
+            // record is precisely the downgrade the policy exists to refuse. If a signed file form is
+            // ever added, the verified flag becomes real and this call site needs no other change.
+            //
+            // Placed HERE for the same reason the text one is placed where it is: everything below
+            // can write a peer row, touch the VFS or raise a notification, and a gate next to the
+            // insert would stop the file while leaving its side effects behind.
+            final NgcHskDirectory.Record file_author_hsk = NgcHskDirectory.decode(
+                    HelperGeneric.get_g_opts(NgcHskDirectory.rowKey(group_identifier,
+                                                                    original_sender_peerpubkey)));
+            if (NgcHistoryDowngradePolicy.decide(file_author_hsk, false, System.currentTimeMillis())
+                    == NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE)
+            {
+                HelperGeneric.logI(TAG, "handle_incoming_sync_group_file: refusing unsigned file "
+                        + "history for an author that signs");
+                return;
+            }
             //
             //
             // HINT: putting 4 bytes unsigned int in big endian format into a java "long" is more complex than i thought

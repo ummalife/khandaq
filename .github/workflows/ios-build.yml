@@ -154,6 +154,14 @@ jobs:
           # Simulator, unsigned: this proves the pod graph resolves and the whole app compiles and
           # links, which is what no CI job could say before. Producing a signed device build needs the
           # release certificates and stays a maintainer step.
+          #
+          # `-arch arm64` is not tidiness. A GENERIC simulator destination builds every architecture
+          # the project allows, so on an Apple Silicon runner Xcode links arm64 AND x86_64 — and the
+          # vendored native libraries have no x86_64 simulator slice at all:
+          # build-ios-native-deps.sh builds `-arch arm64` only. The x86_64 link then fails with
+          # `ld: library 'opus' not found`, which reads as a missing library when the real message is
+          # "wrong architecture". Worth knowing beyond CI: an Intel Mac cannot build the simulator
+          # target from this checkout without extending that script.
           build() {
             xcodebuild \
               -workspace Antidote.xcworkspace \
@@ -162,6 +170,7 @@ jobs:
               -sdk iphonesimulator \
               -destination 'generic/platform=iOS Simulator' \
               -derivedDataPath build/DerivedData \
+              -arch arm64 ONLY_ACTIVE_ARCH=NO \
               CODE_SIGNING_ALLOWED=NO \
               build
           }

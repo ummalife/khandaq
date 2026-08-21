@@ -13,7 +13,11 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-FROM debian:bullseye-slim
+# KHANDAQ (audit 2026-08-21, K-05 adjacent): pinned by digest. This image builds the SHIPPED
+# Windows installer (.github/workflows/windows-build.yaml), and it was a floating tag — so the
+# same Dockerfile produced a different builder over time with no diff to review, and the installer
+# carries no attestation to fall back on. Digest for debian:bullseye-slim as of 2026-08-21.
+FROM debian:bullseye-slim@sha256:f313b4bd62667092a59b3a664d7d3ab8b5e65f41675f48e81455a15dc5abe792
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

@@ -35,5 +35,38 @@ services:
       # unsigned client in the field at a moment nobody chose.
       - PUSH_AUTH_ENFORCE_BY=${PUSH_AUTH_ENFORCE_BY:-}
 
+    # KHANDAQ (audit 2026-08-21, K-05): runtime hardening. None of this prevents a compromise; all of
+    # it bounds what a compromise reaches. That matters here more than usual, because the container
+    # has /run/secrets/firebase-sa.json mounted — a relay-code compromise IS an FCM-project
+    # compromise, so the goal is to leave an attacker with as little else as possible.
+    #
+    # read_only makes the root filesystem immutable, so a foothold cannot drop a payload beside app.py
+    # and wait for the next worker restart. The relay writes exactly two places, and both are declared
+    # below: /data (its SQLite state, a named volume) and /tmp (gunicorn's worker heartbeat file,
+    # which is why the Dockerfile passes --worker-tmp-dir /tmp).
+    read_only: true
+    tmpfs:
+      # noexec/nosuid: a writable directory that cannot be used to execute what was written to it.
+      - /tmp:rw,noexec,nosuid,size=32m
+    # The relay binds 8080, not a privileged port, and touches no devices, no raw sockets, no clocks,
+    # no mounts. There is nothing left to drop.
+    cap_drop:
+      - ALL
+    security_opt:
+      # Blocks the setuid/setgid escalation path outright: no child process can gain privileges the
+      # relay does not already have, whatever binary it manages to run.
+      - no-new-privileges:true
+    # A wedged or leaking worker degrades one service instead of the host. gunicorn -w 2 on an idle
+    # wake relay sits far below these; they are a ceiling, not a budget.
+    mem_limit: 512m
+    pids_limit: 256
+    logging:
+      # The relay logs a line per wake. Unbounded json-file logging is how a small VPS runs out of
+      # disk, and this host also serves nginx and the site.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
 volumes:
   push-relay-data:

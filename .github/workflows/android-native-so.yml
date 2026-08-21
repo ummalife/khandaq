@@ -21,7 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     container:
-      image: ubuntu:20.04
+      # KHANDAQ (audit 2026-08-21, K-05 adjacent): pinned by digest. This job builds
+      # libjni-c-toxcore.so, which is committed into app/nativelibs/ and packaged into the shipped
+      # APK — so this container is upstream of the release artifact, and it was a floating tag with
+      # an unversioned apt-get list. That is a strictly larger unpinned surface than the SDK
+      # provisioning K-06 is about, and it produces no attestation of its own.
+      #
+      # `ubuntu:20.04` as of 2026-08-21. The tag is kept alongside the digest for readability.
+      # NOTE for the owner: 20.04 is past its standard end of life. The digest pin makes the build
+      # reproducible; it does not make the base supported. Moving to 22.04/24.04 changes the
+      # toolchain that compiles the shipped .so and needs a real ABI check, so it is deliberately
+      # NOT bundled into a pinning commit.
+      image: ubuntu:20.04@sha256:8feb4d8ca5354def3d8fce243717141ce31e2c428701f6682bd2fafe15388214
     env:
       HOME: /root
       DEBIAN_FRONTEND: noninteractive

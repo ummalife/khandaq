@@ -31,3 +31,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: push.khandaq.org CA anchors — expiry window and Android/iOS parity
         run: python3 scripts/check-push-ca-anchors.py
+
+  relay-dependencies:
+    # KHANDAQ (K-05): pinning is what makes the relay build reproducible, and also what makes it go
+    # stale. `requests==2.32.3` was correct when it was written and had collected two advisories by
+    # the time it was audited, with no commit in between for a push-triggered gate to fire on.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Push-relay Python pins — known advisories (OSV)
+        run: python3 scripts/check-python-deps.py

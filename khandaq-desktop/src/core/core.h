@@ -199,8 +199,14 @@ signals:
     void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void groupJoined(int groupnumber, GroupId groupId);
+    // KHANDAQ (external audit 2026-08-21, K-01): `wasSynced` says whether this row arrived through
+    // HISTORY SYNC rather than live. It matters because the two carry completely different
+    // guarantees: a live packet is authenticated by toxcore, while a synced one names an author that
+    // the relaying peer simply wrote into the packet. Desktop has no signed-history consumer (0x02
+    // dies at the version gate), so every synced row is unverified by construction — and until now
+    // one was indistinguishable from a live one at the point where a notification is raised.
     void groupFileReceived(int groupnumber, ToxPk sender, const QString& fileName,
-                           const QByteArray& fileData, const QDateTime& timestamp);
+                           const QByteArray& fileData, const QDateTime& timestamp, bool wasSynced);
     void groupFileSent(int groupnumber, const QString& fileName, const QString& localPath,
                        qint64 fileSize);
     void actionSentResult(uint32_t friendId, const QString& action, int success);

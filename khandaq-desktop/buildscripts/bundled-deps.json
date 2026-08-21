@@ -1,0 +1,303 @@
+{
+  "schema": 1,
+  "_comment": [
+    "KHANDAQ (audit 2026-08-21, K-04) — the desktop's bundled third-party inventory.",
+    "The desktop ships Qt 5.12.12 and OpenSSL 1.1.1w. OpenSSL 1.1.1 has been past End Of Life since",
+    "2023-09-11 and receives no public security fixes; Qt 5.12's extended LTS ended 2021-12-05. That is",
+    "lifecycle risk rather than a proven remote exploit, and it cannot be fixed by a version bump: Qt",
+    "5.12 cannot link OpenSSL 3, so the exit is the migration scoped in",
+    "DESIGN-qt6-openssl3-migration-scope.md.",
+    "",
+    "What DID exist before this file: a prose comment at the top of windows-build.yaml, which had",
+    "already drifted (it said libvpx 1.14.0 while download_vpx.sh pins 1.14.1), and a version-free",
+    "table in THIRD_PARTY_LICENSES.md. Neither was checkable.",
+    "",
+    "`pin_file` + `pin_var` are the load-bearing fields: scripts/check-bundled-deps-eol.py reads the",
+    "real value out of the real build script and fails when this file disagrees, so the inventory",
+    "cannot drift the way the prose comment did. `waiver` is the vulnerability-backport policy the",
+    "audit asked for, in a form that EXPIRES and re-fails instead of rotting.",
+    "",
+    "Regenerate versions after a bump:  python3 scripts/check-bundled-deps-eol.py --fix-versions"
+  ],
+  "generated_by": "scripts/check-bundled-deps-eol.py",
+  "components": [
+    {
+      "name": "aitool",
+      "version": "effcebc1d81c5e174a48b870cb420f490fb5fb4d",
+      "purpose": "build-time icon tool",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_aitool.sh",
+      "pin_var": "AITOOL_HASH",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "ffmpeg",
+      "version": "4.4.8",
+      "purpose": "video decode for calls",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_ffmpeg.sh",
+      "pin_var": "FFMPEG_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ],
+      "note": "4.4 is an upstream LONG-TERM branch that still receives point releases (4.4.8), so it is not EOL — but it is the oldest maintained line and worth revisiting with the Qt 6 work."
+    },
+    {
+      "name": "gdb",
+      "version": "11.1",
+      "purpose": "debugger, debug packaging only",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_gdb.sh",
+      "pin_var": "GDB_VERSION",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "gmp",
+      "version": "6.2.1",
+      "purpose": "bignum library",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_gmp.sh",
+      "pin_var": "GMP_VERSION",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "ldqt",
+      "version": "570ca2dcb16f59ce0a2721f780093db8037cc9e0",
+      "purpose": "AppImage packaging tool (build-time)",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_ldqt.sh",
+      "pin_var": "LINUXDEPLOYQT_VERSION",
+      "platforms": [
+        "linux"
+      ]
+    },
+    {
+      "name": "libexif",
+      "version": "0.6.24",
+      "purpose": "EXIF parsing for image previews",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_libexif.sh",
+      "pin_var": "LIBEXIF_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "libexpat",
+      "version": "2.4.1",
+      "purpose": "XML parsing in the Windows bundle",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_libexpat.sh",
+      "pin_var": "EXPAT_VERSION",
+      "platforms": [
+        "windows"
+      ],
+      "min_version": "2.7.0",
+      "min_version_source": "CVE-2024-8176 (improper restriction of XML entity expansion depth) is fixed in libexpat 2.7.0. 2.4.1 (May 2021) also predates the Feb-Mar 2022 CVE wave fixed across 2.4.5-2.4.7. Upstream is at 2.8.3 as of 2026-08-21.",
+      "note": "Unlike OpenSSL and Qt, nothing structural blocks this bump — it is a standalone XML parser built as its own Docker layer. It is waived only because no desktop build has been produced or tested here.",
+      "waiver": {
+        "reason": "No Qt/Docker toolchain was available to build and smoke-test a bumped expat, and shipping an unbuilt bump is worse than shipping a recorded, dated one. This is the cheapest of the three waivers to clear.",
+        "owner": "Isa (repository owner)",
+        "opened": "2026-08-21",
+        "expires": "2026-11-19",
+        "tracking": "K-04 / audit 2026-08-21"
+      }
+    },
+    {
+      "name": "mingw_debug_scripts",
+      "version": "c6ae689137844d1a6fd9c1b9a071d3f82a44c593",
+      "purpose": "build-time debug helpers",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_mingw_debug_scripts.sh",
+      "pin_var": "MINGW_W64_DEBUG_SCRIPTS_VERSION",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "mingw_ldd",
+      "version": "0.2.1",
+      "purpose": "build-time DLL dependency walker",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_mingw_ldd.sh",
+      "pin_var": "MINGW_LDD_VERSION",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "nsisshellexecasuser",
+      "version": "79bdd3e54a9ba9c30af85557b475d2322286f8726687f2e23afa772aac6049ab",
+      "purpose": "NSIS installer plugin",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_nsisshellexecasuser.sh",
+      "pin_var": "NSISSHELLEXECASUSER_HASH",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "openal",
+      "version": "b80570bed017de60b67c6452264c634085c3b148",
+      "purpose": "audio playback",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_openal.sh",
+      "pin_var": "OPENAL_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "openssl",
+      "version": "1.1.1w",
+      "purpose": "TLS for Qt Network, and -lcrypto for SQLCipher",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_openssl.sh",
+      "pin_var": "OPENSSL_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ],
+      "eol": "2023-09-11",
+      "eol_source": "OpenSSL Project — the 1.1.1 branch reached End Of Life on 11 Sep 2023; 1.1.1w is its final release.",
+      "waiver": {
+        "reason": "Qt 5.12 cannot link against OpenSSL 3. The only exit is the Qt 6 migration scoped in DESIGN-qt6-openssl3-migration-scope.md; bumping OpenSSL alone would break the Qt build and the runtime-DLL allowlist in khandaq-desktop/windows/cross-compile/build.sh, which hard-codes the 1_1 SONAME.",
+        "owner": "Isa (repository owner)",
+        "opened": "2026-08-21",
+        "expires": "2026-11-19",
+        "tracking": "DESIGN-qt6-openssl3-migration-scope.md"
+      }
+    },
+    {
+      "name": "opus",
+      "version": "1.3.1",
+      "purpose": "audio codec",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_opus.sh",
+      "pin_var": "OPUS_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "qrencode",
+      "version": "4.1.1",
+      "purpose": "QR rendering for Tox IDs",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_qrencode.sh",
+      "pin_var": "QRENCODE_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "qt",
+      "version": "5.12.12",
+      "purpose": "application framework; Qt Network is the TLS consumer",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_qt.sh",
+      "pin_var": [
+        "QT_MAJOR",
+        "QT_MINOR",
+        "QT_PATCH"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "eol": "2021-12-05",
+      "eol_source": "Qt 5.12 LTS: standard support ended 2020-12-05, extended commercial LTS ended 2021-12-05.",
+      "waiver": {
+        "reason": "Migrating to Qt 6 is a scoped project, not a version bump — see DESIGN-qt6-openssl3-migration-scope.md. It is also the blocker on retiring OpenSSL 1.1.1.",
+        "owner": "Isa (repository owner)",
+        "opened": "2026-08-21",
+        "expires": "2026-11-19",
+        "tracking": "DESIGN-qt6-openssl3-migration-scope.md"
+      }
+    },
+    {
+      "name": "snore",
+      "version": "0.7.0",
+      "purpose": "desktop notifications",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_snore.sh",
+      "pin_var": "SNORE_VERSION",
+      "platforms": [
+        "windows"
+      ]
+    },
+    {
+      "name": "sodium",
+      "version": "1.0.18",
+      "purpose": "crypto primitives for toxcore",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_sodium.sh",
+      "pin_var": "SODIUM_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ],
+      "note": "1.0.18 (2019) is old for a crypto primitive; 1.0.20 is current upstream. Not EOL, no waiver, but it should move with the next desktop toolchain refresh."
+    },
+    {
+      "name": "sqlcipher",
+      "version": "4.5.0",
+      "purpose": "encrypted local profile database",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_sqlcipher.sh",
+      "pin_var": "SQLCIPHER_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ],
+      "note": "4.5.0 (2021) encrypts the local profile database; upstream is on 4.6.x."
+    },
+    {
+      "name": "toxcore",
+      "version": "2e7a0675c5fadc6c362e67cb66cc8925bdff8816",
+      "purpose": "the Tox protocol implementation",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_toxcore.sh",
+      "pin_var": "TOXCORE_GIT_REF",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "toxext",
+      "version": "0.0.3",
+      "purpose": "toxcore extension loader",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_toxext.sh",
+      "pin_var": "TOXEXT_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "toxext_messages",
+      "version": "0.0.3",
+      "purpose": "toxcore message extension",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_toxext_messages.sh",
+      "pin_var": "TOXEXT_MESSAGES_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "vpx",
+      "version": "1.14.1",
+      "purpose": "VP8/VP9 video codec",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_vpx.sh",
+      "pin_var": "VPX_VERSION",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "x264",
+      "version": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+      "purpose": "H.264 encoder",
+      "pin_file": "khandaq-desktop/buildscripts/download/download_x264.sh",
+      "pin_var": "X264_GIT_REF",
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    }
+  ]
+}

@@ -7325,6 +7325,36 @@ public class MainActivity extends AppCompatActivity
                                                                                       real_sender_peer_pubkey,
                                                                                       sender_peer_num, null);
 
+                        // KHANDAQ (audit 2026-08-21, K-01): the SECOND unattributed insertion path,
+                        // and the easier of the two to abuse. The NGC author here is
+                        // `wrapped_msg_text_as_string.substring(0, 64)` — 64 characters taken from a
+                        // FRIEND's message body. There is no magic, no version byte and no signed
+                        // form of this relay format at all, so a row arriving this way can never be
+                        // verified, and it bypasses handle_incoming_sync_group_message entirely. A
+                        // gate scoped only to the 0x01 group packet would have left a strictly
+                        // cheaper forgery channel open: it needs a friendship with the victim's relay
+                        // rather than membership of the group, and the row it produces is
+                        // indistinguishable from a genuine one.
+                        //
+                        // So: once we know this author signs, relayed history claiming them is
+                        // refused. `false` for the verdict is not a simplification — no signature can
+                        // exist on this channel, by construction.
+                        final NgcHskDirectory.Record relay_author_hsk = NgcHskDirectory.decode(
+                                HelperGeneric.get_g_opts(NgcHskDirectory.rowKey(real_conference_id,
+                                                                                real_sender_peer_pubkey)));
+                        if (NgcHistoryDowngradePolicy.decide(relay_author_hsk, false,
+                                                             System.currentTimeMillis())
+                            == NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE)
+                        {
+                            HelperGeneric.logI(TAG, "friend_sync_message_v2_cb: refusing relayed "
+                                    + "history for an author that signs");
+                            // The receipt still goes out. Without it the relay re-sends this message
+                            // forever, which would turn a refusal into a permanent retry loop.
+                            send_friend_msg_receipt_v2_wrapper(friend_number, 3, msg_id_buffer,
+                                                               (System.currentTimeMillis() / 1000));
+                            return;
+                        }
+
                         group_message_add_from_sync(real_conference_id, syncer_pubkey, sender_peer_num, real_sender_peer_pubkey,
                                                     TRIFA_MSG_TYPE_TEXT.value, real_sender_text, real_text_length,
                                                     sync_msg_received_timestamp, real_send_message_id,

@@ -1900,8 +1900,9 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
         }
         qDebug() << "NGC file received: group" << groupId << "peer" << peerId << fileName
                  << fileData.size() << "bytes";
+        // Live: toxcore authenticated this peer, and `sender` is that peer.
         emit groupFileReceived(static_cast<int>(groupId), sender, fileName, fileData,
-                               QDateTime::currentDateTime());
+                               QDateTime::currentDateTime(), false);
         return;
     }
 
@@ -2183,8 +2184,9 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
             return;
         }
         qDebug() << "NGC chunked file complete:" << displayName << fileData.size() << "bytes";
+        // Live, reassembled from chunks — same authentication as the single-packet case above.
         emit groupFileReceived(static_cast<int>(groupId), sender, displayName, fileData,
-                               QDateTime::currentDateTime());
+                               QDateTime::currentDateTime(), false);
         return;
     }
 
@@ -2237,7 +2239,10 @@ void Core::handleNgcFileTransferPacket(uint32_t groupId, uint32_t peerId, const 
                  << origSender.toString().left(8) << "via peer"
                  << getGroupPeerPk(static_cast<int>(groupId), static_cast<int>(peerId)).toString().left(8)
                  << fileName << fileData.size() << "bytes";
-        emit groupFileReceived(static_cast<int>(groupId), origSender, fileName, fileData, when);
+        // KHANDAQ (K-01): SYNCED. `origSender` came out of the packet body, not from toxcore —
+        // the peer that sent it to us is a different key entirely (logged above). Nothing has
+        // authenticated the attribution.
+        emit groupFileReceived(static_cast<int>(groupId), origSender, fileName, fileData, when, true);
         return;
     }
 }

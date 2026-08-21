@@ -22,9 +22,14 @@ push-relay.env
 *.exe
 !scripts/**/*.sh
 
-# iOS / CocoaPods (run `pod install` in khandaq-ios/)
+# iOS / CocoaPods (run `bundle install && bundle exec pod install` in khandaq-ios/)
 khandaq-ios/Pods/
 khandaq-ios/build/
+# KHANDAQ (audit 2026-08-21, K-07): Bundler's local gem tree and its per-checkout config. Generated
+# by `bundle config set --local ...` + `bundle install`, machine-specific, and never reviewed —
+# the reviewed artefact is Gemfile.lock, which IS committed.
+khandaq-ios/vendor/bundle/
+khandaq-ios/.bundle/
 khandaq-ios/*.xcworkspace/xcuserdata/
 khandaq-ios/*.xcodeproj/xcuserdata/
 khandaq-ios/*.xcodeproj/project.xcworkspace/xcuserdata/

@@ -4,6 +4,8 @@
 
 #import <Foundation/Foundation.h>
 
+#import "OCTNgcHistoryDowngradePolicy.h"
+
 NS_ASSUME_NONNULL_BEGIN
 
 typedef BOOL (^OCTNgcSignedHistorySendPrivateBlock)(uint32_t groupNumber, uint32_t peerId, NSData *packet);
@@ -124,6 +126,24 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
                       authorPubHex:(nullable NSString *)authorPubHex
                          timestamp:(uint64_t)timestampSeconds
                               text:(nullable NSString *)text;
+
+/**
+ * KHANDAQ (external audit 2026-08-21, K-01) — whether an UNSIGNED history row claiming `authorPubHex`
+ * may be stored, or is a downgrade attempt against an author we know can sign.
+ *
+ * Everything the rule needs already lived here — the HSK directory, its row key, its decoder and the
+ * verdict store — and nobody ever asked the question on the unsigned path. This is that question,
+ * asked once, so the caller stays one line and the rule itself stays a pure function shared with
+ * Android (see OCTNgcHistoryDowngradePolicy.h).
+ *
+ * Called on the packet-dispatch stack; it performs the same single blocking key-value read the 0x02
+ * handler already performs there.
+ */
+- (OCTNgcDowngradeDecision)downgradeDecisionForGroupNumber:(uint32_t)groupNumber
+                                              authorPubHex:(nullable NSString *)authorPubHex
+                                                 messageId:(uint32_t)messageId
+                                                 timestamp:(uint64_t)timestampSeconds
+                                                      text:(nullable NSString *)text;
 
 @end
 

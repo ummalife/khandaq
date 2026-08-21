@@ -22,6 +22,30 @@ fi
 docker compose build
 docker compose up -d
 docker compose ps
+
+# KHANDAQ (audit 2026-08-21, K-05): the closure criteria for the container hardening are "runs
+# non-root" and "starts successfully with only the explicitly required writable paths". Assert both
+# here rather than assuming the compose file was applied — a stale container that compose decided not
+# to recreate would otherwise keep running as root with a writable root filesystem, and nothing would
+# say so.
+echo "==> Verify the hardening actually took effect"
+uid=\$(docker compose exec -T push-relay id -u | tr -d '\r')
+if [[ "\$uid" == "0" ]]; then
+  echo "ERROR: the relay is running as root — the container was not recreated with the new image" >&2
+  exit 1
+fi
+echo "    running as uid \$uid (non-root)"
+
+if docker compose exec -T push-relay sh -c 'touch /app/.writetest 2>/dev/null'; then
+  echo "ERROR: / is writable inside the container — read_only did not take effect" >&2
+  exit 1
+fi
+echo "    root filesystem is read-only"
+
+# /data must be writable, or the relay cannot keep its replay store, rate window or adoption counters.
+docker compose exec -T push-relay sh -c 'touch /data/.writetest && rm -f /data/.writetest' \
+  || { echo "ERROR: /data is not writable by uid \$uid — check the push-relay-data volume" >&2; exit 1; }
+echo "    /data is writable"
 REMOTE
 
 echo "==> Nginx vhost"

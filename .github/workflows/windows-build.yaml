@@ -1,5 +1,9 @@
 # KHANDAQ (security D-7/8/9): rebuild the Windows desktop binary with the bumped, patched
-# bundled libraries (libvpx 1.14.0, OpenSSL 1.1.1w, FFmpeg 4.4.8). The desktop's own CI lives
+# bundled libraries. The versions are NOT listed here any more: this comment used to say
+# "libvpx 1.14.0" while buildscripts/download/download_vpx.sh pinned 1.14.1, which is exactly how a
+# prose inventory rots. The single source of truth is khandaq-desktop/buildscripts/bundled-deps.json,
+# and scripts/check-bundled-deps-eol.py fails the build when it disagrees with the download scripts
+# (audit 2026-08-21, K-04). The desktop's own CI lives
 # under khandaq-desktop/.github and is inactive in this monorepo (GitHub only runs root-level
 # workflows), so the Windows cross-build never ran here. Manual trigger; produces the installer
 # + zip + their SHA256 as artifacts. (Cross-build is impractical on an arm64 Mac → run in CI.)
@@ -18,6 +22,17 @@ jobs:
         working-directory: khandaq-desktop
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # KHANDAQ (audit 2026-08-21, K-04): the release gate, deliberately FIRST — before the
+      # ~350-minute docker build, not after it. The desktop bundles Qt 5.12.12 and OpenSSL 1.1.1w;
+      # 1.1.1 has had no public security fixes since 2023-09-11 and Qt 5.12's LTS ended 2021-12-05.
+      # Neither can be fixed by a bump (Qt 5.12 cannot link OpenSSL 3), so what this enforces is not
+      # "never ship EOL" but "never ship EOL by accident": every one needs a waiver in
+      # bundled-deps.json carrying a reason, a named owner, a tracking document and an expiry, and
+      # the build fails the day that expiry passes.
+      - name: Bundled dependency inventory — EOL and drift gate
+        working-directory: .
+        run: python3 scripts/check-bundled-deps-eol.py --release
 
       # NB: build with plain `docker build` (not docker compose / bake) — docker compose v2 trips a
       # false "cycle detected" on the dotted service name `windows_builder.i686` in docker-compose.yml.
@@ -57,6 +72,17 @@ jobs:
             sha256sum "$z" | tee -a SHA256SUMS.txt
           done
 
+      # KHANDAQ (audit 2026-08-21, K-04): "record exact library versions/SBOM in release artifacts".
+      # Generated from the same inventory the gate above verified against the build scripts, so the
+      # SBOM describes what was built rather than what someone remembered.
+      - name: Generate SBOM
+        if: always()
+        working-directory: .
+        run: |
+          set -euo pipefail
+          python3 scripts/check-bundled-deps-eol.py --sbom khandaq-desktop/SBOM.cyclonedx.json
+          sha256sum khandaq-desktop/SBOM.cyclonedx.json
+
       - name: Upload Windows artifacts
         if: always()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
@@ -66,6 +92,7 @@ jobs:
             khandaq-desktop/package-prefix/Khandaq-installer.exe
             khandaq-desktop/install-prefix/*.zip
             khandaq-desktop/SHA256SUMS.txt
+            khandaq-desktop/SBOM.cyclonedx.json
           # error, not warn: a rename must break the build rather than quietly ship a partial
           # artifact, which is exactly how the installer went missing unnoticed.
           if-no-files-found: error

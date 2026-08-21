@@ -1,0 +1,75 @@
+# KHANDAQ (audit 2026-08-21) — security controls that decay with the calendar rather than with a diff.
+#
+# Everything else in .github/workflows fails when a change is wrong. These checks fail when NOTHING
+# changes for long enough: a pinned CA-anchor set that expires on a fixed date, a bundled crypto
+# runtime that reaches end-of-life. Neither has a commit that introduces the problem, so neither can
+# be caught by a push-triggered gate alone — hence the schedule.
+#
+# They must all be offline and dependency-free: no network at build time, no SDK, no Xcode, no Qt.
+# `ubuntu-24.04` ships the python3 they need.
+name: security-checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Mondays 07:00 UTC. Offset from the gitleaks sweep so a red Monday points at one thing.
+    - cron: '0 7 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  push-ca-anchors:
+    # KHANDAQ (K-08): Android's <pin-set expiration="..."> for push.khandaq.org deliberately lapses,
+    # after which Android reverts to ordinary system-CA validation. That is an anti-brick valve, not a
+    # bug — the bug is that nothing enforced the refresh, and that the same policy is maintained by
+    # hand in two languages with the expiry written out three times.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: push.khandaq.org CA anchors — expiry window and Android/iOS parity
+        run: python3 scripts/check-push-ca-anchors.py
+
+  relay-dependencies:
+    # KHANDAQ (K-05): pinning is what makes the relay build reproducible, and also what makes it go
+    # stale. `requests==2.32.3` was correct when it was written and had collected two advisories by
+    # the time it was audited, with no commit in between for a push-triggered gate to fire on.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Push-relay Python pins — known advisories (OSV)
+        run: python3 scripts/check-python-deps.py
+
+  ios-bundler:
+    # KHANDAQ (K-07): khandaq-ios pins CocoaPods and fastlane in a committed Gemfile.lock, but a lock
+    # only binds the build if the build goes through Bundler — and no CI job here builds iOS, so
+    # without a text check on Linux nothing at all holds the property.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: CocoaPods/fastlane must be invoked through Bundler
+        run: python3 scripts/check-ios-bundler.py
+
+  desktop-bundled-deps:
+    # KHANDAQ (K-04): the desktop bundles Qt 5.12.12 and OpenSSL 1.1.1w. 1.1.1 has had no public
+    # security fixes since 2023-09-11 — a date that passed with no commit for a push-triggered gate
+    # to fire on, which is why this is here and on a schedule. It also catches inventory drift, the
+    # way windows-build.yaml's prose comment had already drifted from the download scripts.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Bundled desktop dependencies — EOL, security floors and inventory drift
+        run: python3 scripts/check-bundled-deps-eol.py --warn-days 180
+
+  ngc-downgrade-parity:
+    # KHANDAQ (K-01): the anti-downgrade rule is implemented twice, in Java and in Objective-C, and
+    # a security rule enforced on one client but not the other is not a rule. The Java side has
+    # NgcHistoryDowngradePolicyTest; nothing covered the ObjC side, because no CI job here has Xcode.
+    # This compiles the real policy body as C and runs the same truth table, on Linux.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: iOS anti-downgrade policy must match the Android truth table
+        run: python3 scripts/check-ios-downgrade-policy.py

@@ -1,7 +1,9 @@
 # Khandaq bootstrap — based on toktok/c-toxcore bootstrap_daemon docker
 # Pin c-toxcore release (security audit #14)
 ARG TOXCORE_TAG=v0.2.20
-FROM alpine:3.21 AS build
+# KHANDAQ (audit 2026-08-21, K-05 adjacent): base images pinned by digest — this image is deployed
+# infrastructure (the Tox bootstrap node), so a moving tag meant an unreviewed rebuild.
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS build
 RUN apk --no-cache add clang cmake libconfig-dev libconfig-static libsodium-dev libsodium-static \
     linux-headers musl-dev ninja python3 git
 WORKDIR /src
@@ -17,7 +19,7 @@ RUN CC=clang cmake -B _build -GNinja \
     -DBUILD_MISC_TESTS=OFF \
   && cmake --build _build --target install
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --home-dir /var/lib/tox-bootstrapd --create-home --system \

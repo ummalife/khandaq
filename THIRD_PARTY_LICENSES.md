@@ -7,6 +7,13 @@
 
 ## Desktop (khandaq-desktop)
 
+> **Versions live in `khandaq-desktop/buildscripts/bundled-deps.json`, not here.** This table has no
+> version column on purpose: a hand-maintained one drifts (the header of `windows-build.yaml` claimed
+> libvpx 1.14.0 while the build pinned 1.14.1). The inventory is checked against the real
+> `download_*.sh` pins by `scripts/check-bundled-deps-eol.py`, which also emits the CycloneDX SBOM
+> shipped with releases. `python3 scripts/check-bundled-deps-eol.py --print-markdown` prints the
+> current versioned table.
+
 | Component | License | Notes |
 |-----------|---------|-------|
 | qTox (base) | GPL-3.0-or-later | `khandaq-desktop/LICENSE` |
@@ -18,7 +25,7 @@
 | libvpx | BSD-3-Clause | VP8/VP9 |
 | libopus | BSD-3-Clause | Audio codec |
 | libsodium | ISC | Via toxcore |
-| OpenSSL | Apache-2.0 | Via toxcore build |
+| OpenSSL | Apache-2.0 | Built directly by `buildscripts/build_openssl.sh` for Windows and macOS — not "via toxcore" |
 | libqrencode | LGPL-2.1+ | QR codes |
 | libexif | LGPL-2.1+ | EXIF metadata |
 | Hunspell | LGPL-2.1+ / GPL-2+ | Optional spell check |

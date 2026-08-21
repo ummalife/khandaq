@@ -2161,7 +2161,8 @@ void Widget::dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sen
 }
 
 void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QString& fileName,
-                                 const QByteArray& fileData, const QDateTime& timestamp)
+                                 const QByteArray& fileData, const QDateTime& timestamp,
+                                 bool wasSynced)
 {
     std::ignore = timestamp;
     const GroupId& groupId = groupList->id2Key(groupnumber);
@@ -2217,7 +2218,24 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
 
     dispatchGroupFileToChatLog(groupId, sender, file);
 
-    newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+    // KHANDAQ (external audit 2026-08-21, K-01) — the desktop clause: "renders unverified legacy
+    // rows visibly and suppresses notifications for them".
+    //
+    // The notification half, which is the security-relevant one. A synced row's `sender` is 32 bytes
+    // the RELAYING peer chose; nothing authenticated it, and desktop cannot verify it even in
+    // principle, because it drops version 0x02 at the parser and has no signed-history consumer. So
+    // any group member could make this desktop pop an OS notification attributed to any other
+    // member, at will, simply by relaying a fabricated history row. The file itself is still saved
+    // and still appears in the chat log — it just no longer interrupts the user under a name nobody
+    // stands behind.
+    //
+    // Live rows are unaffected: toxcore authenticates their sender.
+    if (!wasSynced) {
+        newGroupMessageAlert(groupId, sender, fileName, settings.getGroupAlwaysNotify());
+    } else {
+        qDebug() << "onGroupFileReceived: synced row, storing without a notification"
+                 << "(attribution to" << sender.toString().left(8) << "is unauthenticated)";
+    }
 }
 
 void Widget::onGroupFileSent(int groupnumber, const QString& fileName, const QString& localPath,

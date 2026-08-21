@@ -5225,6 +5225,30 @@ public class HelperGroup
             do_notification = false;
         }
 
+        // KHANDAQ (audit 2026-08-21, K-01) — the half of DESIGN §4.5 that was never implemented:
+        // "anything not VERIFIED ... is excluded from notification". A synced row used to raise a
+        // heads-up naming its claimed author with nothing having authenticated that claim, so a
+        // forged record could interrupt someone under another member's name.
+        //
+        // Narrower than blanket suppression, because during the transition most authors still run
+        // non-signing builds and every one of their genuine messages is unverified: notify when a
+        // signature proves authorship, or when the peer that sent us the row IS the claimed author —
+        // in which case toxcore authenticated the attribution, the same guarantee a live message has.
+        // A third party's unverified claim about someone else is still stored and still displayed,
+        // carrying the existing "sender not verified" marker; it just does not get to interrupt.
+        if (do_notification)
+        {
+            final boolean syncer_is_author = syncer_pubkey != null
+                                             && syncer_pubkey.equalsIgnoreCase(peer_pubkey);
+            if (!NgcHistoryDowngradePolicy.allowsNotification(NgcSignedHistory.isAuthorVerified(m),
+                                                              syncer_is_author))
+            {
+                HelperGeneric.logI(TAG, "group_message_add_from_sync: unverified relayed attribution, "
+                        + "storing without a notification");
+                do_notification = false;
+            }
+        }
+
         if (do_notification)
         {
             change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text);
@@ -10162,15 +10186,25 @@ public class HelperGroup
                                 }
                                 else
                                 {
-                                    send_ngch_syncmsg(group_identifier, peer_pubkey, gm);
-                                    // KHANDAQ (audit #2 finding 1, step 3): additionally send the
-                                    // signed copy of rows we wrote ourselves. Additionally, not
-                                    // instead: version 0x02 is dropped by every shipped parser, so
-                                    // replacing the packet above would make our history vanish for
-                                    // everyone in the field. Only our own rows can be signed at all
-                                    // — the signature is the AUTHOR's, and a relayer cannot make it,
-                                    // which is the whole point of the finding.
+                                    // KHANDAQ (audit #2 finding 1, step 3): send the signed copy
+                                    // of rows we wrote ourselves. Additionally, not instead: version
+                                    // 0x02 is dropped by every shipped parser, so sending only the
+                                    // signed form would make our history vanish for everyone in the
+                                    // field. Only our own rows can be signed at all — the signature
+                                    // is the AUTHOR's, and a relayer cannot make it, which is the
+                                    // whole point of the finding.
+                                    //
+                                    // KHANDAQ (audit 2026-08-21, K-01): SIGNED FIRST, unsigned
+                                    // second. The order used to be the other way round, and it has to
+                                    // change for the anti-downgrade rule below to be implementable at
+                                    // all. The 0x02 handler only records a verdict; the 0x01 packet
+                                    // is what inserts the row. So a receiver deciding whether an
+                                    // unsigned row is a downgrade has to be able to see the verdict
+                                    // already, and with the old order it arrived a few milliseconds
+                                    // AFTER — measured on device — which would have made the receiver
+                                    // reject every legitimately signed message in the group.
                                     NgcSignedHistory.sendSignedTextTo(group_identifier, peer_pubkey, gm);
+                                    send_ngch_syncmsg(group_identifier, peer_pubkey, gm);
                                 }
                             }
                             else
@@ -10622,7 +10656,11 @@ public class HelperGroup
             hash_msg_id_bytes.put(data, 8, 4);
             final String message_id_tox = HelperGeneric.bytesToHex(hash_msg_id_bytes.array(),hash_msg_id_bytes.arrayOffset(),hash_msg_id_bytes.limit()).toLowerCase();
             hash_msg_id_bytes.rewind();
-            check_group_message_sequence_gap(group_number, hash_msg_id_bytes.getInt() & 0xffffffffL);
+            // KHANDAQ (audit 2026-08-21, K-01): read the sequence number here, but do not FEED it to
+            // the gap detector until the record has survived the anti-downgrade gate below. These are
+            // four attacker-chosen bytes, so a record that is about to be dropped as a forgery must
+            // not be allowed to steer gap detection on its way out.
+            final long message_seq_number = hash_msg_id_bytes.getInt() & 0xffffffffL;
             // HelperGeneric.logI(TAG, "handle_incoming_sync_group_message:message_id_tox hex=" + message_id_tox);
             //
             //
@@ -10649,6 +10687,42 @@ public class HelperGroup
                 byte[] text_byte_buf = Arrays.copyOfRange(data, header, (int)length);
                 String message_str = new String(text_byte_buf, StandardCharsets.UTF_8);
                 // HelperGeneric.logI(TAG,"handle_incoming_sync_group_message:message str=" + message_str);
+
+                // KHANDAQ (audit 2026-08-21, K-01) — the anti-downgrade gate.
+                //
+                // Offsets 12 and 48 of this packet are an author pubkey and a display name that
+                // nobody signed; the transport authenticates the SYNCING peer only. Signed history
+                // (0x02) fixes that for records that carry a signature, but accepting the unsigned
+                // form unconditionally means an attacker simply omits the signed twin. So: once we
+                // have learned this author's signing key from a live announcement in this group, an
+                // unsigned record claiming them is refused outright.
+                //
+                // It sits HERE, above everything, deliberately. Below this point the record can bump
+                // sync_confirmations (which happens before the duplicate check, so a peer rotating
+                // NGC identities could otherwise walk a forged row to "the whole group agrees"),
+                // write a peer row, produce a delivery receipt and raise a notification. A gate next
+                // to the insert would stop the message but none of its side effects.
+                final NgcHskDirectory.Record author_hsk = NgcHskDirectory.decode(
+                        HelperGeneric.get_g_opts(NgcHskDirectory.rowKey(group_identifier,
+                                                                        original_sender_peerpubkey)));
+                final boolean author_verified = NgcSignedHistory.isVerdictPresent(
+                        group_identifier, original_sender_peerpubkey, message_id_tox, timestamp,
+                        text_byte_buf);
+                final NgcHistoryDowngradePolicy.Decision downgrade_decision =
+                        NgcHistoryDowngradePolicy.decide(author_hsk, author_verified,
+                                                         System.currentTimeMillis());
+                if (downgrade_decision == NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE)
+                {
+                    // Dropped, not quarantined. Nothing is written anywhere. A quarantine table would
+                    // be a new attacker-fillable store for data that is re-obtainable by construction:
+                    // the honest author re-serves the row signed on the next sync, and history is
+                    // re-served on every request already.
+                    HelperGeneric.logI(TAG, "handle_incoming_sync_group_message: refusing unsigned "
+                            + "history for an author that signs, msgid=" + message_id_tox);
+                    return;
+                }
+
+                check_group_message_sequence_gap(group_number, message_seq_number);
 
                 long sender_peer_num = HelperGroup.get_group_peernum_from_peer_pubkey(group_identifier,
                                                                                       original_sender_peerpubkey);

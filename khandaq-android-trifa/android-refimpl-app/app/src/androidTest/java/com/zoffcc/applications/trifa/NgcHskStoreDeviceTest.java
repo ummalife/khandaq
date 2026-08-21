@@ -49,61 +49,17 @@ public class NgcHskStoreDeviceTest
     public static void loadNativeLibrary()
     {
         System.loadLibrary("jni-c-toxcore");
-        // The test runs INSIDE the app's own process, so starting the launcher brings the profile
-        // database up the same way a normal launch does. Without this the instrumentation process
-        // has no open profile and every case below would skip.
-        startAppAndWaitForProfile();
-    }
-
-    private static void startAppAndWaitForProfile()
-    {
-        try
-        {
-            final android.content.Context ctx =
-                    androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext();
-            final android.content.Intent launch =
-                    ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
-            if (launch != null)
-            {
-                launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                ctx.startActivity(launch);
-            }
-        }
-        catch (Throwable ignored)
-        {
-        }
-
-        // Opening the profile involves disk and SQLCipher; poll rather than guess a sleep.
-        for (int i = 0; i < 60; i++)
-        {
-            if (profileIsOpen())
-            {
-                return;
-            }
-            try
-            {
-                Thread.sleep(1000L);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
+        // KHANDAQ (2026-08-21): this used to call a local startAppAndWaitForProfile() that merely
+        // launched the app and waited. It never worked: a fresh install lands on OnboardingActivity
+        // and waits for a human, so no profile ever opened and all six cases below SKIPPED on every
+        // run — a green tick over nothing. KhandaqFirstRun walks the actual first-run flow.
+        KhandaqFirstRun.ensureProfile();
     }
 
     /** True when g_opts is usable; everything here is meaningless otherwise. */
     private static boolean profileIsOpen()
     {
-        try
-        {
-            HelperGeneric.set_g_opts("kqhsk_probe", "1");
-            return "1".equals(HelperGeneric.get_g_opts("kqhsk_probe"));
-        }
-        catch (Throwable ignored)
-        {
-            return false;
-        }
+        return KhandaqFirstRun.profileIsOpen();
     }
 
     private static void clearRows(final String group)

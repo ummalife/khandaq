@@ -35,7 +35,10 @@ jobs:
             ls -al
             pwd
             id -a
-            pod install
+            # KHANDAQ (audit 2026-08-21, K-07): via Bundler, so the committed Gemfile.lock
+            # decides the CocoaPods version rather than the runner image.
+            bundle install
+            bundle exec pod install
             xcode-select --print-path
             xcodebuild -list -workspace Antidote.xcworkspace
             xcodebuild -list -project Antidote.xcodeproj

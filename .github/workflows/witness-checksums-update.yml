@@ -14,7 +14,10 @@ permissions:
 
 jobs:
   regenerate:
-    runs-on: ubuntu-latest
+    # KHANDAQ (audit 2026-08-21, K-06): pinned label rather than the moving `ubuntu-latest` alias —
+    # same reasoning as release-provenance.yml. It matters here too: this job decides what the
+    # committed dependency checksums ARE.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -23,11 +26,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install compile SDK platform
+      # KHANDAQ (audit 2026-08-21, K-06): the same fail-closed provisioning as the release path.
+      # It is not a lesser concern here — this job is the one that RESOLVES the dependency graph and
+      # produces the checksums a human then commits. A toolchain surprise here gets baked into the
+      # pin list itself, and every later release verifies against it.
+      - name: Install and verify the Android toolchain (fail closed)
         run: |
           set -euo pipefail
-          SDKMGR="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          yes | sudo "$SDKMGR" --install "platforms;android-36" --sdk_root="${ANDROID_SDK_ROOT}" || true
+          bash scripts/ci-android-toolchain.sh install khandaq-android-trifa/android-refimpl-app
 
       - name: Provide placeholder google-services.json (config only, nothing is shipped from here)
         run: |

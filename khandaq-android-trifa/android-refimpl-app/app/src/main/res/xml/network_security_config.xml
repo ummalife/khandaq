@@ -40,14 +40,23 @@
     <domain-config>
         <domain includeSubdomains="false">push.khandaq.org</domain>
         <pin-set expiration="2027-08-01">
-            <!-- ISRG Root X1 (RSA, valid to 2035) — top of the current cross-signed chain -->
+            <!-- Validity dates below re-derived 2026-08-21 from the certificates themselves (the
+                 three roots from the DER copies embedded in OCTSubmanagerChatsImpl.m, YE1 from the
+                 live chain). The previous "valid to 2035" note on X2 was wrong in a way that mattered:
+                 it made Root YE look like the short-lived one to worry about, when Root YE (2032) is
+                 in fact the SHORTEST-lived of the three and is the anchor the chain is migrating TO. -->
+            <!-- ISRG Root X1 (RSA, notAfter 2035-06-04) — top of the current cross-signed chain -->
             <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
-            <!-- ISRG Root X2 (ECDSA, valid to 2035) — cross-signs Root YE today -->
+            <!-- ISRG Root X2 (ECDSA; self-signed notAfter 2040-09-17, X1 cross-sign 2032-09-02)
+                 — cross-signs Root YE today. Both copies share this key, so this pin matches either. -->
             <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
-            <!-- ISRG Root YE (ECDSA P-384, to 2032) — the anchor the chain is moving to. This is
-                 the backup pin that keeps the restriction working after the cross-signs are trimmed. -->
+            <!-- ISRG Root YE (ECDSA P-384, notAfter 2032-09-02) — the anchor the chain is moving to.
+                 This is the backup pin that keeps the restriction working after the cross-signs are
+                 trimmed, and it is the earliest of the three to expire. -->
             <pin digest="SHA-256">sCkq5UWXjg+7mKu9lMhhYF5bGLsy7VI/UNW3tccdR7w=</pin>
-            <!-- Let's Encrypt YE1 intermediate (valid to 2028) — currently served, belt-and-braces -->
+            <!-- Let's Encrypt YE1 intermediate (notAfter 2028-09-02) — currently the leaf's issuer,
+                 belt-and-braces. Android matches any cert in the chain, so pinning an intermediate is
+                 a free extra check; iOS deliberately omits it (see scripts/check-push-ca-anchors.py). -->
             <pin digest="SHA-256">brzvtCELCIZUo4sD/qPX0ccRtPsd3DY6RfmxpOU9oB4=</pin>
         </pin-set>
     </domain-config>

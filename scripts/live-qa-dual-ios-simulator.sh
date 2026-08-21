@@ -48,7 +48,10 @@ fi
 log "pod install (objcTox + local NGC toxcore)"
 (
   cd "$OBJCTOX"
-  pod install
+  # KHANDAQ (K-07): BUNDLE_GEMFILE is mandatory HERE in particular — the working directory is
+  # objcTox, which has its own Gemfile pinning cocoapods '~> 1.0.1' and no lockfile, so a bare
+  # `bundle exec` would resolve a fifteen-minor-versions-older CocoaPods.
+  BUNDLE_GEMFILE="$ROOT/khandaq-ios/Gemfile" bundle exec pod install
 ) >>"$OUT/pod-install.log" 2>&1 || {
   log "ERROR: pod install failed, see $OUT/pod-install.log"
   exit 1

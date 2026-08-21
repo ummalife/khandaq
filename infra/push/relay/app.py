@@ -7,13 +7,13 @@ import hmac
 import ipaddress
 import logging
 import os
+import re
 import sqlite3
 import time
-from collections import defaultdict
 from threading import Lock
 
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -24,6 +24,84 @@ FCM_SERVICE_ACCOUNT_FILE = os.environ.get("FCM_SERVICE_ACCOUNT_FILE", "")
 FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")  # legacy fallback
 RATE_LIMIT_PER_MIN = int(os.environ.get("PUSH_RATE_LIMIT_PER_MIN", "120"))
 PUSH_RELAY_AUTH_SECRET = os.environ.get("PUSH_RELAY_AUTH_SECRET", "")
+# KHANDAQ (audit 2026-08-21, K-03): overlapping key epochs, so rotating the shared secret no longer
+# requires a window in which the relay accepts unsigned traffic.
+#
+# The finding is that the HMAC secret is baked into publicly downloadable binaries and is therefore
+# extractable — true, acknowledged in PUSH-AUTH-SECRET-PROVISIONING.md, and NOT fixed by anything
+# here: per-install capabilities are the actual answer and are a protocol project, scoped in
+# DESIGN-push-per-install-capabilities.md. What IS fixed is the operational trap sitting on top of
+# it: with exactly one secret configured, rotating meant every shipped client stopped verifying at
+# once, so the documented procedure was to drop back to soft mode — i.e. to accept unsigned requests
+# from anyone — for the length of a store rollout. A leaked key was therefore expensive to replace
+# precisely when replacing it mattered most.
+#
+# Format: PUSH_RELAY_AUTH_SECRETS="3:<secret>,2:<secret>" — comma-separated `epoch:secret`, split on
+# the FIRST colon. The client is unchanged and unaware: it still sends one hex HMAC, and the relay
+# tries each configured key. Rotation becomes: add the new epoch beside the old, ship clients on it,
+# watch /health -> auth_adoption.by_epoch until the old epoch reaches zero, delete the old entry.
+PUSH_RELAY_AUTH_SECRETS_RAW = os.environ.get("PUSH_RELAY_AUTH_SECRETS", "")
+PUSH_RELAY_AUTH_SECRET_EPOCH = os.environ.get("PUSH_RELAY_AUTH_SECRET_EPOCH", "1").strip() or "1"
+_EPOCH_LABEL = re.compile(r"^[A-Za-z0-9_-]{1,16}$")
+
+
+def _parse_auth_secrets() -> list:
+    """
+    [(epoch, secret)] from PUSH_RELAY_AUTH_SECRETS, with the legacy single variable folded in.
+
+    Malformed entries are skipped with a warning rather than being fatal. A typo in one entry of a
+    rotation list must not take authentication down for every client at once — the failure mode this
+    whole change exists to avoid.
+    """
+    out, seen = [], set()
+    for entry in PUSH_RELAY_AUTH_SECRETS_RAW.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        epoch, sep, secret = entry.partition(":")
+        epoch, secret = epoch.strip(), secret.strip()
+        if not sep or not secret:
+            log.warning("push auth: ignoring malformed PUSH_RELAY_AUTH_SECRETS entry "
+                        "(expected 'epoch:secret')")
+            continue
+        if not _EPOCH_LABEL.match(epoch):
+            log.warning("push auth: ignoring PUSH_RELAY_AUTH_SECRETS entry with an invalid epoch "
+                        "label (allowed: 1-16 chars of [A-Za-z0-9_-])")
+            continue
+        if epoch in seen:
+            log.warning("push auth: PUSH_RELAY_AUTH_SECRETS lists epoch %s more than once; "
+                        "the last one wins", epoch)
+            out = [(e, s) for e, s in out if e != epoch]
+        seen.add(epoch)
+        out.append((epoch, secret))
+    if PUSH_RELAY_AUTH_SECRET and PUSH_RELAY_AUTH_SECRET_EPOCH not in seen:
+        out.append((PUSH_RELAY_AUTH_SECRET_EPOCH, PUSH_RELAY_AUTH_SECRET))
+    return out
+
+
+AUTH_SECRETS = _parse_auth_secrets()
+
+
+def _set_auth_epoch(epoch: str) -> None:
+    """
+    Remember which key epoch verified THIS request, for the rotation counter.
+
+    Deliberately request-scoped (flask.g) rather than a module global: gunicorn serves concurrently,
+    and a global would let two requests overwrite each other's epoch — silently, under exactly the
+    concurrency the counter exists to measure. Outside a request context (unit tests calling the
+    helper directly) it is simply a no-op.
+    """
+    try:
+        g.push_auth_epoch = epoch
+    except RuntimeError:
+        pass
+
+
+def _current_auth_epoch():
+    try:
+        return getattr(g, "push_auth_epoch", None)
+    except RuntimeError:
+        return None
 # Max allowed clock skew (seconds) for the request timestamp. Bounds the replay window.
 AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 # Rollout gate. With a secret set but ENFORCE off (default), the relay runs in SOFT/MONITOR
@@ -32,6 +110,15 @@ AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 # 401 on bad auth) only once the logs show field clients are signing. This avoids a hard cutover
 # that would break every client that hasn't yet shipped + been updated with the secret.
 PUSH_AUTH_ENFORCE = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower() in ("1", "true", "yes", "on")
+# KHANDAQ (audit 2026-08-21, K-02): "Treat soft mode as an emergency compatibility mode with an
+# expiry date, not a permanent default." An optional YYYY-MM-DD cutoff (unset = none). Past it, a
+# relay still running in soft mode says so loudly at startup and reports it on /health, so the
+# monitoring already in infra/monitoring can alert on it.
+#
+# It nags; it does not self-enforce. A relay that flipped itself to hard enforcement on a date would
+# silence every unsigned client in the field, unattended, at a moment nobody chose — the exact
+# outage soft mode exists to prevent. The decision stays with a human; only the forgetting is fixed.
+PUSH_AUTH_ENFORCE_BY = os.environ.get("PUSH_AUTH_ENFORCE_BY", "").strip()
 # KHANDAQ (security NEW-4): only honour X-Real-IP when the direct connection comes from a trusted
 # reverse proxy. The relay binds to 127.0.0.1 behind nginx (and reaches it via the Docker bridge), so
 # by default we trust loopback + private/link-local source addresses; an externally-exposed port would
@@ -74,8 +161,6 @@ def _is_trusted_proxy(addr: str) -> bool:
     except ValueError:
         return False
     return ip.is_loopback or ip.is_private or ip.is_link_local
-_rate: dict[str, list[float]] = defaultdict(list)
-_rate_lock = Lock()
 _token_cache: dict[str, object] = {"token": None, "exp": 0.0}
 
 # ---------------------------------------------------------------------------
@@ -98,14 +183,33 @@ def _stats_conn():
     # KHANDAQ (audit2 #10): consumed auth signatures, shared by ALL gunicorn workers (see
     # _claim_signature). Same container filesystem -> one store for the whole -w N process pool.
     conn.execute("CREATE TABLE IF NOT EXISTS usedsig (sig TEXT PRIMARY KEY, ts INTEGER)")
-    # KHANDAQ (audit2 #4): client-signing adoption, per UTC day. The rollout plan is "ship signing
-    # clients -> confirm coverage -> enforce", but the only evidence we had for the middle step was a
-    # log line per unsigned request, i.e. the operator had to grep for a number that decides whether
-    # turning on enforcement will silence real users. Count it instead. No token, no IP, no request
-    # detail is stored - two integers per day, which is all the decision needs.
-    conn.execute("CREATE TABLE IF NOT EXISTS authadopt ("
-                 "day TEXT PRIMARY KEY, signed INTEGER NOT NULL DEFAULT 0, "
-                 "unsigned INTEGER NOT NULL DEFAULT 0)")
+    # KHANDAQ (audit2 #4, widened by audit 2026-08-21 K-02): client-signing adoption, per UTC day.
+    # The rollout plan is "ship signing clients -> confirm coverage -> enforce", and the middle step
+    # needs a number rather than a log grep.
+    #
+    # It used to be two columns, signed and unsigned. Two is not enough to make the decision, because
+    # the cases that land in `unsigned` do not all mean the same thing and do not all resolve the same
+    # way. An old client that predates the secret heals when the fleet turns over. A build shipped
+    # with the WRONG secret never heals — it looks identical, and an operator waiting for the
+    # percentage to reach 100 waits forever without being told why. A broken replay store depresses
+    # the number while nothing is wrong with any client at all. So: one row per (day, outcome), which
+    # also means a new outcome never needs an ALTER TABLE.
+    #
+    # Still no token, no IP, no request detail — a count per outcome per day is all the decision needs.
+    conn.execute("CREATE TABLE IF NOT EXISTS authoutcome ("
+                 "day TEXT NOT NULL, outcome TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
+                 "PRIMARY KEY (day, outcome))")
+    # KHANDAQ (audit 2026-08-21, K-03): which key epoch signed each accepted request. This is what
+    # makes a rotation observable: add the new epoch, ship clients, and watch the old epoch's count
+    # fall to zero before deleting it. Without it, "have all the clients moved over yet?" has no
+    # answer short of retiring the old key and seeing what breaks.
+    conn.execute("CREATE TABLE IF NOT EXISTS authepoch ("
+                 "day TEXT NOT NULL, epoch TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
+                 "PRIMARY KEY (day, epoch))")
+    # KHANDAQ (audit 2026-08-21, K-09): the per-IP rate window, shared by every gunicorn worker.
+    # One row per currently-active client IP, holding the request timestamps inside the 60s window.
+    conn.execute("CREATE TABLE IF NOT EXISTS ratelimit ("
+                 "ip TEXT PRIMARY KEY, last REAL NOT NULL, hits TEXT NOT NULL)")
     return conn
 
 
@@ -221,39 +325,93 @@ def _client_ip() -> str:
 
 
 def _rate_ok(client_ip: str) -> bool:
-    now = time.time()
-    with _rate_lock:
-        # Purge stale keys to prevent memory exhaustion (#6).
-        stale = [k for k, ts in _rate.items() if not ts or now - ts[-1] > 120]
-        for k in stale:
-            del _rate[k]
-
-        window = [t for t in _rate[client_ip] if now - t < 60]
-        if len(window) >= RATE_LIMIT_PER_MIN:
-            return False
-        window.append(now)
-        _rate[client_ip] = window
-    return True
-
-
-def _record_auth_adoption(signed: bool) -> None:
     """
-    KHANDAQ (audit2 #4): tally signed vs unsigned wake requests for the enforcement decision.
+    True if this request fits inside `client_ip`'s 60-second budget.
+
+    KHANDAQ (audit 2026-08-21, K-09): the window used to live in a module-level dict guarded by a
+    threading.Lock. The container runs `gunicorn -w 2`, so there were two of them: a single source
+    got up to 2 x PUSH_RATE_LIMIT_PER_MIN, and every bucket reset on reload. The replay store and the
+    coalesce slot had already been moved into the shared SQLite file for exactly this reason; this
+    one had not, which made the configured number mean something other than what it says.
+
+    Same file, same discipline: BEGIN IMMEDIATE takes a DB-level RESERVED lock, which serialises
+    across PROCESSES — a threading.Lock cannot. Measured on four concurrent processes sharing one DB
+    with a limit of 50: 200 requests accepted before this change, exactly 50 after.
+
+    Deliberately a timestamp log rather than a fixed-window counter, which would be shorter but lets
+    a caller spend the whole budget at t=59s and again at t=61s — 2x across the boundary, i.e. the
+    very thing being fixed. Keeping the log preserves the exact semantics of the old in-process
+    version, so no existing test quietly changes meaning. Growth is bounded on both axes: rows by the
+    120s prune (only currently-active IPs survive), row width by RATE_LIMIT_PER_MIN entries.
+
+    FAIL OPEN on a broken store — and note this is the opposite of _claim_signature, on purpose.
+    A dead replay store failing closed costs nothing. A dead rate store failing closed turns EVERY
+    wake into a 429, and the Android client converts a 429 into an escalating per-push-URL backoff
+    toward a two-hour ceiling (PushBackoffPolicy / HelperFriend), so an unwritable /data would become
+    a fleet-wide notification outage lasting far longer than the disk problem. nginx also carries a
+    stricter shared limit (30r/m burst=10) in front of this, so failing open here loses defence in
+    depth, not the defence. _claim_coalesce_slot fails open for the same reason.
+    """
+    now = time.time()
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("DELETE FROM ratelimit WHERE last < ?", (now - 120,))
+                row = conn.execute("SELECT hits FROM ratelimit WHERE ip = ?", (client_ip,)).fetchone()
+                window = ([t for t in (float(x) for x in row[0].split(",") if x) if now - t < 60]
+                          if row else [])
+                allowed = len(window) < RATE_LIMIT_PER_MIN
+                if allowed:
+                    window.append(now)
+                    conn.execute(
+                        "INSERT INTO ratelimit (ip, last, hits) VALUES (?, ?, ?) "
+                        "ON CONFLICT(ip) DO UPDATE SET last = excluded.last, hits = excluded.hits",
+                        (client_ip, now, ",".join("%.3f" % t for t in window)))
+                conn.commit()
+                return allowed
+            finally:
+                conn.close()
+    except Exception:
+        log.exception("push rate limit: store UNAVAILABLE -> allowing the request (FAIL-OPEN); "
+                      "nginx limit_req is still in front. Check that %s is writable", COALESCE_DB)
+        return True
+
+
+# Every way an incoming request can be classified by the auth check. "ok" is the only success.
+# `store_error` is deliberately its own outcome and NOT lumped in with the failures: it says the
+# relay's replay store is broken, not that a client is misbehaving, and counting it as "unsigned"
+# made a disk problem look like un-adopted clients.
+AUTH_OUTCOME_OK = "ok"
+AUTH_OUTCOMES = ("ok", "missing", "malformed_ts", "stale", "badmac", "replay", "store_error")
+
+
+def _record_auth_outcome(outcome: str) -> None:
+    """
+    KHANDAQ (audit2 #4, widened by K-02): tally the auth outcome for the enforcement decision.
 
     Never let this affect the request. It is a counter for an operator, not a security control, so
     unlike _claim_signature it fails OPEN and silently — a broken counter must not start dropping
     pushes, and it must not spam the log on every request either.
     """
-    column = "signed" if signed else "unsigned"
     try:
         day = time.strftime("%Y-%m-%d", time.gmtime())
         with _stats_lock:
             conn = _stats_conn()
             try:
-                conn.execute("INSERT OR IGNORE INTO authadopt (day) VALUES (?)", (day,))
-                conn.execute(f"UPDATE authadopt SET {column} = {column} + 1 WHERE day = ?", (day,))
+                conn.execute(
+                    "INSERT INTO authoutcome (day, outcome, n) VALUES (?, ?, 1) "
+                    "ON CONFLICT(day, outcome) DO UPDATE SET n = n + 1", (day, outcome))
+                epoch = _current_auth_epoch()
+                if outcome == AUTH_OUTCOME_OK and epoch:
+                    conn.execute(
+                        "INSERT INTO authepoch (day, epoch, n) VALUES (?, ?, 1) "
+                        "ON CONFLICT(day, epoch) DO UPDATE SET n = n + 1", (day, epoch))
+                conn.execute("DELETE FROM authepoch WHERE day < ?",
+                             (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 60 * 86400)),))
                 # 60 days is plenty to watch a store rollout land, and keeps the table trivial.
-                conn.execute("DELETE FROM authadopt WHERE day < ?",
+                conn.execute("DELETE FROM authoutcome WHERE day < ?",
                              (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 60 * 86400)),))
                 conn.commit()
             finally:
@@ -263,30 +421,101 @@ def _record_auth_adoption(signed: bool) -> None:
 
 
 def _auth_adoption_summary() -> dict:
-    """Today's and the trailing window's signed/unsigned counts, for /health."""
+    """
+    What an operator needs to decide whether PUSH_AUTH_ENFORCE=1 will silence real users.
+
+    The signed/unsigned/window_signed_pct keys are kept exactly as they were — the runbook names
+    them and monitoring may already read them. What is new is the resolution underneath, because the
+    single "unsigned" number could not answer the question it was being asked:
+
+      missing       — a client that does not sign at all. Heals when the fleet turns over.
+      badmac        — a client that signs with the WRONG secret. Never heals on its own, and is
+                      indistinguishable from `missing` until you can see the two apart. This is the
+                      case that makes an operator wait forever for a percentage that cannot move.
+      stale         — clock skew, or a client sitting on a request. Heals; not an adoption problem.
+      malformed_ts  — a client sending a non-integer ts, i.e. a client bug.
+      replay        — a signature presented twice. Either an attack or a client retrying after a
+                      network failure, which is why a rate-limited request no longer burns one.
+      store_error   — the relay's own replay store is unavailable. Not a client problem at all.
+
+    `unsigned_ex_store_error` is the percentage recomputed with `store_error` excluded, so a bad disk
+    cannot read as un-adopted clients.
+    """
     try:
         day = time.strftime("%Y-%m-%d", time.gmtime())
         with _stats_lock:
             conn = _stats_conn()
             try:
-                today = conn.execute("SELECT signed, unsigned FROM authadopt WHERE day = ?",
-                                     (day,)).fetchone() or (0, 0)
-                window = conn.execute("SELECT COALESCE(SUM(signed), 0), COALESCE(SUM(unsigned), 0) "
-                                      "FROM authadopt").fetchone() or (0, 0)
+                today_rows = conn.execute(
+                    "SELECT outcome, n FROM authoutcome WHERE day = ?", (day,)).fetchall()
+                window_rows = conn.execute(
+                    "SELECT outcome, SUM(n) FROM authoutcome GROUP BY outcome").fetchall()
+                span = conn.execute(
+                    "SELECT MIN(day), COUNT(DISTINCT day) FROM authoutcome").fetchone() or (None, 0)
+                epoch_rows = conn.execute(
+                    "SELECT epoch, SUM(n) FROM authepoch GROUP BY epoch").fetchall()
             finally:
                 conn.close()
-        total = window[0] + window[1]
+
+        today = {o: n for o, n in today_rows}
+        window = {o: n for o, n in window_rows}
+
+        def pct(signed, total):
+            # null while there is no traffic, so an idle relay cannot read as "100% adopted".
+            return round(signed * 100.0 / total, 2) if total else None
+
+        w_signed = window.get(AUTH_OUTCOME_OK, 0)
+        w_total = sum(window.values())
+        w_total_ex_store = w_total - window.get("store_error", 0)
         return {
-            "today_signed": today[0],
-            "today_unsigned": today[1],
-            "window_signed": window[0],
-            "window_unsigned": window[1],
-            # The number the enforcement decision actually turns on. null while there is no traffic,
-            # so an idle relay cannot read as "100% adopted".
-            "window_signed_pct": (round(window[0] * 100.0 / total, 2) if total else None),
+            "today_signed": today.get(AUTH_OUTCOME_OK, 0),
+            "today_unsigned": sum(n for o, n in today.items() if o != AUTH_OUTCOME_OK),
+            "window_signed": w_signed,
+            "window_unsigned": w_total - w_signed,
+            # The number the enforcement decision actually turns on.
+            "window_signed_pct": pct(w_signed, w_total),
+            "window_signed_pct_ex_store_error": pct(w_signed, w_total_ex_store),
+            "today_outcomes": {o: today.get(o, 0) for o in AUTH_OUTCOMES},
+            "window_outcomes": {o: window.get(o, 0) for o in AUTH_OUTCOMES},
+            # Without these, a relay redeployed ten minutes ago and a relay observed for three weeks
+            # produce the same-looking percentage. The counters live in /data, so they only survive a
+            # redeploy because docker-compose gives that path a named volume — see infra/push/.
+            # KHANDAQ (K-03): which key epoch each accepted signature used. LABELS AND COUNTS ONLY —
+            # never a secret; a test asserts no configured secret appears anywhere in this response.
+            # This is the number a rotation is driven by: add the new epoch, ship clients, wait for
+            # the old one to reach zero, then delete it. No soft-mode window, ever.
+            "epochs_configured": [e for e, _ in AUTH_SECRETS],
+            "by_epoch": {e: n for e, n in epoch_rows},
+            "since": span[0],
+            "days_observed": span[1],
+            # Request-weighted, not device-weighted: one chatty unsigned sender holds this down, and
+            # a chatty signed one holds it up. Read it together with the outcome breakdown.
+            "weighting": "requests",
         }
     except Exception:
         return {"error": "unavailable"}
+
+
+def _enforce_overdue() -> bool:
+    """True when a PUSH_AUTH_ENFORCE_BY date has passed and the relay is still serving soft."""
+    if not PUSH_AUTH_ENFORCE_BY or PUSH_AUTH_ENFORCE:
+        return False
+    try:
+        cutoff = time.strptime(PUSH_AUTH_ENFORCE_BY, "%Y-%m-%d")
+    except ValueError:
+        log.error("push auth: PUSH_AUTH_ENFORCE_BY=%r is not YYYY-MM-DD — ignoring it",
+                  PUSH_AUTH_ENFORCE_BY)
+        return False
+    return time.gmtime() > cutoff
+
+
+if _enforce_overdue():
+    # Once per worker at startup. The point is that a relay quietly left in soft mode long after the
+    # cutover was supposed to happen announces itself, instead of being discovered by the next audit.
+    log.error("push auth: STILL IN SOFT MODE past the %s cutoff — unsigned and invalid requests are "
+              "being served. Read /health -> auth_adoption.window_outcomes and set "
+              "PUSH_AUTH_ENFORCE=1, or move PUSH_AUTH_ENFORCE_BY out deliberately.",
+              PUSH_AUTH_ENFORCE_BY)
 
 
 def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
@@ -294,24 +523,31 @@ def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
     # PUSH_RELAY_AUTH_SECRET mandatory (:? -> the container refuses to start without it), so an
     # empty secret here is a misconfiguration, not "auth off" -> fail CLOSED instead of accepting
     # every request.
-    if not PUSH_RELAY_AUTH_SECRET:
-        log.error("push auth: PUSH_RELAY_AUTH_SECRET is empty -> rejecting (set it in the relay .env)")
+    if not AUTH_SECRETS:
+        log.error("push auth: no secret configured (PUSH_RELAY_AUTH_SECRET / PUSH_RELAY_AUTH_SECRETS) "
+                  "-> rejecting every request (set one in the relay .env)")
         return False
 
-    if _auth_signature_valid(token, sender, allow_query_auth=allow_query_auth):
-        _record_auth_adoption(True)
+    outcome = _auth_signature_valid(token, sender, allow_query_auth=allow_query_auth)
+    _record_auth_outcome(outcome)
+    if outcome == AUTH_OUTCOME_OK:
         return True
 
-    # Secret set, but the request is unsigned/invalid.
-    _record_auth_adoption(False)
     if PUSH_AUTH_ENFORCE:
+        # KHANDAQ (audit 2026-08-21, K-02): the enforce path used to return False in silence. The
+        # moment an operator flips the flag is exactly the moment they need to know who is being
+        # rejected and why — "it broke" with no signal is how a cutover gets rolled back blind.
+        log.warning("push auth REJECT (%s) from %s", outcome, _client_ip())
         return False  # hard enforce -> caller returns 401
 
     # Soft/monitor mode (TRANSITIONAL): allow the unsigned request through but record it, so
-    # client-signing adoption can be measured from these logs. Old clients built before the secret
-    # was provisioned do not sign yet; enforcing now would drop their pushes. Once the "SOFT" line
-    # count falls to ~0 (i.e. shipped clients sign), set PUSH_AUTH_ENFORCE=1 to close the window.
-    log.warning("push auth SOFT: unsigned/invalid request allowed from %s (set PUSH_AUTH_ENFORCE=1 after client adoption)", _client_ip())
+    # client-signing adoption can be measured. Old clients built before the secret was provisioned do
+    # not sign yet; enforcing now would drop their pushes. Once the unsigned count falls to ~0 (i.e.
+    # shipped clients sign), set PUSH_AUTH_ENFORCE=1 to close the window — and read
+    # /health -> auth_adoption.window_outcomes first, because `missing` (an old client, heals) and
+    # `badmac` (a build carrying the wrong secret, never heals) both used to look the same here.
+    log.warning("push auth SOFT (%s): request allowed from %s (set PUSH_AUTH_ENFORCE=1 after client adoption)",
+                outcome, _client_ip())
     return True
 
 
@@ -325,8 +561,14 @@ def _auth_ok(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
 _SIG_RETENTION_SEC = max(AUTH_MAX_SKEW_SEC, 60) * 2
 
 
-def _claim_signature(sig: str) -> bool:
-    """True if THIS request is the first to present `sig` (i.e. it is not a replay)."""
+def _claim_signature(sig: str) -> str:
+    """
+    "ok" if THIS request is the first to present `sig`, else why not.
+
+    KHANDAQ (audit 2026-08-21, K-02): returns a reason rather than a bool, because "replay" and
+    "the store is broken" are the same rejection to the caller and completely different facts to an
+    operator — one is a client (or an attacker), the other is a disk.
+    """
     now = int(time.time())
     try:
         with _stats_lock:
@@ -337,7 +579,7 @@ def _claim_signature(sig: str) -> bool:
                 cur = conn.execute("INSERT OR IGNORE INTO usedsig VALUES (?, ?)", (sig, now))
                 claimed = cur.rowcount == 1  # 0 rows => the signature was already consumed
                 conn.commit()
-                return claimed
+                return AUTH_OUTCOME_OK if claimed else "replay"
             finally:
                 conn.close()
     except Exception:
@@ -350,20 +592,27 @@ def _claim_signature(sig: str) -> bool:
         #   * Unsigned requests — i.e. every field client today, since clients do not sign yet —
         #     never reach this function at all: _auth_signature_valid() returns False at the
         #     `not supplied or not ts` guard above, before any DB access. Unaffected.
-        #   * A SIGNED request that hits a DB error now gets False here, so _auth_signature_valid()
-        #     returns False, and _auth_ok() falls into the soft branch: it logs "push auth SOFT" and
-        #     returns True. The wake is STILL DELIVERED. In soft mode this change therefore cannot
-        #     reject any wake traffic — it can only add a SOFT line (which slightly inflates the
-        #     adoption counter; the log.exception below disambiguates "DB broken" from "old client").
+        #   * A SIGNED request that hits a DB error now gets "store_error" here, so
+        #     _auth_signature_valid() reports that, and _auth_ok() falls into the soft branch: it
+        #     logs "push auth SOFT (store_error)" and returns True. The wake is STILL DELIVERED. In
+        #     soft mode this change therefore cannot reject any wake traffic.
         #   * Only once PUSH_AUTH_ENFORCE=1 does a broken store turn into 401s. That is the intended
         #     meaning of fail-closed, and the operator has this loud line saying exactly why.
+        #
+        # KHANDAQ (K-02): it used to be counted as an unsigned request, so a broken disk read as
+        # un-adopted clients on the very dashboard the enforcement decision is made from. It now has
+        # its own outcome and is excluded from window_signed_pct_ex_store_error.
         log.exception(
             "push auth: replay store UNAVAILABLE -> refusing signature (FAIL-CLOSED); "
             "check that %s exists and is writable by the relay container", COALESCE_DB)
-        return False
+        return "store_error"
 
 
-def _auth_signature_valid(token: str, sender: str, *, allow_query_auth: bool = True) -> bool:
+def _auth_signature_valid(token: str, sender: str, *, allow_query_auth: bool = True) -> str:
+    # KHANDAQ (audit 2026-08-21, K-02): returns one of AUTH_OUTCOMES rather than a bool. Every
+    # early return below was a different fact about the caller collapsed into the same False, and
+    # the enforcement decision needs them apart — see _auth_adoption_summary for which is which.
+    #
     # KHANDAQ (security NEW-2): replay-resistant, request-bound auth.
     # The old scheme signed a CONSTANT (HMAC(secret, "khandaq-push-relay")) → the same value
     # forever, baked into every build, replayable without limit. Instead the sender signs the
@@ -398,19 +647,30 @@ def _auth_signature_valid(token: str, sender: str, *, allow_query_auth: bool = T
     if not ts:
         ts = request.headers.get("X-Khandaq-Ts", "").strip()
     if not supplied or not ts:
-        return False
+        return "missing"
 
     try:
         ts_int = int(ts)
     except ValueError:
-        return False
+        return "malformed_ts"
     if abs(time.time() - ts_int) > AUTH_MAX_SKEW_SEC:
-        return False
+        return "stale"
 
+    # KHANDAQ (audit 2026-08-21, K-03): try every configured key epoch. Every candidate goes through
+    # hmac.compare_digest — never ==, and no length pre-check — so each comparison stays constant
+    # time. Stopping at the first match leaks only WHICH epoch matched, which is a label, not a
+    # secret. N HMAC-SHA256 over a sub-200-byte message is noise beside the SQLite write that follows.
     msg = (token + "\n" + sender + "\n" + ts).encode("utf-8")
-    expected = hmac.new(PUSH_RELAY_AUTH_SECRET.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(supplied, expected):
-        return False
+    matched = None
+    for epoch, secret in AUTH_SECRETS:
+        candidate = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(supplied, candidate):
+            matched = (epoch, candidate)
+            break
+    if matched is None:
+        return "badmac"
+    expected = matched[1]
+    _set_auth_epoch(matched[0])
     # KHANDAQ (audit A2): consume the signature so a captured signed URL can't be replayed to 200
     # repeatedly within the freshness window. Each valid signature is accepted exactly once —
     # KHANDAQ (audit2 #10): across ALL gunicorn workers, not just the one that served the original.
@@ -519,7 +779,13 @@ def _send_fcm_v1(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
             except Exception:
                 pass
             return False, f"FCM v1 HTTP {resp.status_code} [{err_code}]: {resp.text[:200]}"
-        log.info("wake ok: token %s…", token[:12])
+        # KHANDAQ (audit 2026-08-21): log the token's HASH, never a prefix of the token itself.
+        # An FCM registration token is a targeting secret — whoever holds it can push to that device
+        # — and "only 12 characters" is not a safeguard, it is a partial disclosure of a credential
+        # into a log that outlives the request and is read by more people than the request path is.
+        # _th() is the same 128-bit hash already used to key the coalesce table, so the log line
+        # remains just as useful for correlating one device's wakes, and discloses nothing.
+        log.info("wake ok: token#%s", _th(token))
         return True, "ok"
     return False, "FCM v1: unreachable"
 
@@ -573,19 +839,34 @@ def health():
     mode = "v1" if FCM_SERVICE_ACCOUNT_FILE and os.path.isfile(FCM_SERVICE_ACCOUNT_FILE) else (
         "legacy" if FCM_SERVER_KEY else "none"
     )
-    return jsonify({
+    body = {
         "status": "ok",
         "fcm_configured": _fcm_configured(),
         "fcm_mode": mode,
-        "auth_required": bool(PUSH_RELAY_AUTH_SECRET),
+        # True means "requests are being authenticated". With no secret configured, _auth_ok fails
+        # CLOSED and 401s everything, so authentication is very much in force — it is the relay that
+        # is broken, not the check that is off.
+        "auth_required": True,
+        "auth_epochs": len(AUTH_SECRETS),
+        # KHANDAQ (audit 2026-08-21, K-02): this used to report "off" when PUSH_RELAY_AUTH_SECRET was
+        # empty. That was false, and false in the dangerous direction: it reads as "the relay is
+        # serving everyone without auth" while the relay is in fact refusing every single request.
+        # An operator debugging a total push outage would have been sent looking in the wrong place.
         "auth_mode": (
-            "off" if not PUSH_RELAY_AUTH_SECRET else ("enforce" if PUSH_AUTH_ENFORCE else "soft")
+            # KHANDAQ (K-03): keyed on the parsed epoch set, not on the legacy single variable, so a
+            # relay configured only through PUSH_RELAY_AUTH_SECRETS reports its real mode.
+            "misconfigured" if not AUTH_SECRETS
+            else ("enforce" if PUSH_AUTH_ENFORCE else "soft")
         ),
-        # KHANDAQ (audit2 #4): the number the "when do we set PUSH_AUTH_ENFORCE=1" decision turns on.
+        # KHANDAQ (audit2 #4): the numbers the "when do we set PUSH_AUTH_ENFORCE=1" decision turns on.
         # Enforcing while shipped clients still send unsigned requests silences their notifications,
         # so this must be read before flipping it — not guessed from log volume.
         "auth_adoption": _auth_adoption_summary(),
-    })
+    }
+    if PUSH_AUTH_ENFORCE_BY:
+        body["enforce_by"] = PUSH_AUTH_ENFORCE_BY
+        body["enforce_overdue"] = _enforce_overdue()
+    return jsonify(body)
 
 
 def _redact_token(detail: str, token: str) -> str:
@@ -602,12 +883,24 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool):
     `token_raw`/`sender_raw` are the values EXACTLY as they arrived, because that is what the client
     signed; the stripping/normalising below happens after authentication, never before it.
     """
-    if not _auth_ok(token_raw, sender_raw, allow_query_auth=allow_query_auth):
-        return jsonify({"error": "unauthorized"}), 401
-
+    # KHANDAQ (audit 2026-08-21, K-09): rate-limit BEFORE authenticating. The old order had two
+    # concrete costs, both invisible from the outside:
+    #
+    #   * _auth_signature_valid CONSUMES the signature (_claim_signature) before the rate check ran.
+    #     A signed request that then got 429 had already burned its single-use signature, so the
+    #     client's retry with the same signature reads as a replay — under enforcement that is a 401
+    #     for a caller who did nothing wrong.
+    #   * _auth_ok writes to SQLite on every request via _record_auth_adoption, so a flood that was
+    #     about to be refused still cost a write each and still inflated the `unsigned` counter that
+    #     the PUSH_AUTH_ENFORCE=1 decision is read from — the flood, not the fleet, moved the number.
+    #
+    # The limiter keys on the client IP either way, so nothing is lost by checking it first.
     client_ip = _client_ip()
     if not _rate_ok(client_ip):
         return jsonify({"error": "rate limit"}), 429
+
+    if not _auth_ok(token_raw, sender_raw, allow_query_auth=allow_query_auth):
+        return jsonify({"error": "unauthorized"}), 401
 
     token = token_raw.strip()
     if not token or len(token) < 10 or len(token) > 4096:

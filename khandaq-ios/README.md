@@ -34,11 +34,19 @@ https://hosted.weblate.org/engage/antidote/
 
 #### Manual Installation
 
-Clone repo, install pods and open `Antidote.xcworkspace` file with Xcode 12+.
+Clone repo, build the vendored native libraries, install pods, then open `Antidote.xcworkspace`
+with Xcode 12+.
+
+`libopus.xcframework/*/libopus.a` is not in git (`.gitignore` excludes `*.a`), so a clean checkout
+links with `ld: library 'opus' not found` until the script below has been run once. vpx's binaries
+are committed, but `vpx` is the simulator slice — a device build needs `vpx-device` copied over it,
+which the script also handles.
 
 ```
+./scripts/build-ios-native-deps.sh
 cd khandaq-ios
-pod install
+bundle install
+bundle exec pod install
 open Antidote.xcworkspace
 ```
 
@@ -47,7 +55,8 @@ Clone repo, install pods and install Xcode 12+
 
 ```
 cd khandaq-ios
-pod install
+bundle install
+bundle exec pod install
 env NSUnbufferedIO=YES xcodebuild -workspace ./Antidote.xcworkspace -scheme Antidote -destination 'platform=iOS Simulator,id=EAB9614F-3485-4A6D-8EFB-FC2B5EFB0243'
 ```
 

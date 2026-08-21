@@ -20,7 +20,12 @@ permissions:
 
 jobs:
   build-attest:
-    runs-on: ubuntu-latest
+    # KHANDAQ (audit 2026-08-21, K-06): pinned instead of `ubuntu-latest`. GitHub-hosted runners cannot
+    # be pinned by digest, but the version label is the difference between "the image GitHub happens to
+    # point the alias at today" and a stated one: when the alias moves to the next LTS, that becomes a
+    # reviewed commit here instead of a silent change to what signed artifacts are built on. This label
+    # is what `ubuntu-latest` already resolves to, so the pin changes nothing about today's build.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -29,12 +34,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install NDK + compile SDK platform
+      # KHANDAQ (audit 2026-08-21, K-06): fail closed on toolchain provisioning, and install what the
+      # build files actually declare. The full reasoning — including why the old `|| true` was
+      # load-bearing rather than merely sloppy, and why releases nevertheless succeeded without the
+      # packages this step claimed to provide — is in scripts/ci-android-toolchain.sh.
+      - name: Install and verify the Android toolchain (fail closed)
         run: |
           set -euo pipefail
-          SDKMGR="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          yes | sudo "$SDKMGR" --install "ndk;21.0.6113669" --sdk_root="${ANDROID_SDK_ROOT}" || true
-          yes | sudo "$SDKMGR" --install "platforms;android-36" --sdk_root="${ANDROID_SDK_ROOT}" || true
+          bash scripts/ci-android-toolchain.sh install khandaq-android-trifa/android-refimpl-app
+          bash scripts/ci-android-toolchain.sh snapshot "$RUNNER_TEMP/sdk-before.txt"
 
       - name: Provide google-services.json (real from secret, else placeholder for the build)
         env:
@@ -138,16 +146,56 @@ jobs:
           set -euo pipefail
           git diff --exit-code -- khandaq-android-trifa/android-refimpl-app/app/witness.gradle
 
+      # KHANDAQ (audit 2026-08-21, K-06): the same idea, applied to the toolchain rather than to the
+      # Maven pins — and this is the check that makes the pinning real rather than decorative.
+      #
+      # AGP's `android.builder.sdkDownload` defaults to true, so a component missing from the pinned
+      # set is not a build failure: Gradle fetches it from dl.google.com mid-build and carries on. An
+      # install step alone therefore cannot guarantee what compiled the APK. Comparing the installed
+      # set before and after the build can, and it needs no list of package names to be kept correct.
+      #
+      # It runs BEFORE the attestation step on purpose: if something was pulled in, nothing gets
+      # signed or attested.
+      - name: Assert no unpinned SDK component was auto-downloaded during the build
+        run: |
+          set -euo pipefail
+          bash scripts/ci-android-toolchain.sh snapshot "$RUNNER_TEMP/sdk-after.txt"
+          bash scripts/ci-android-toolchain.sh assert-unchanged \
+            "$RUNNER_TEMP/sdk-before.txt" "$RUNNER_TEMP/sdk-after.txt"
+
+      # KHANDAQ (audit 2026-08-21, K-06): "Include toolchain versions in provenance/SBOM." The
+      # attestation answered "which workflow, which commit" and never "built with what". This records
+      # that next to the APK, so it is covered by SHA256SUMS.txt and attested in the same run, and
+      # echoes it into the run summary so it is readable without downloading anything.
+      - name: Record the build toolchain
+        env:
+          KHANDAQ_RUNNER_LABEL: ubuntu-24.04
+          KHANDAQ_SDK_SNAPSHOT: ${{ runner.temp }}/sdk-after.txt
+        run: |
+          set -euo pipefail
+          out=khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/TOOLCHAIN.txt
+          bash scripts/ci-android-toolchain.sh record khandaq-android-trifa/android-refimpl-app "$out"
+          {
+            echo '### Build toolchain'
+            echo '```'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Generate SHA256SUMS
         run: |
           set -euo pipefail
           cd khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release
-          sha256sum *.apk | tee SHA256SUMS.txt
+          sha256sum *.apk TOOLCHAIN.txt | tee SHA256SUMS.txt
 
       - name: Attest build provenance (SLSA, via OIDC)
         uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
         with:
-          subject-path: khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/*.apk
+          # KHANDAQ (K-06): the toolchain record is a subject too, so "what built it" is bound to the
+          # same run as the artifact instead of being an unauthenticated note beside it.
+          subject-path: |
+            khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/*.apk
+            khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/TOOLCHAIN.txt
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -155,3 +203,4 @@ jobs:
           path: |
             khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/*.apk
             khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/SHA256SUMS.txt
+            khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/release/TOOLCHAIN.txt

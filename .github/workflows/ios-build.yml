@@ -1,0 +1,196 @@
+# KHANDAQ (audit 2026-08-21, K-07) — the iOS build, on a host that has nothing installed globally.
+#
+# Until now nothing in CI touched iOS at all: every other workflow is `runs-on: ubuntu-latest`, so the
+# committed Gemfile.lock and Podfile.lock described a toolchain no automated system ever exercised.
+# The audit's closure criterion for K-07 is literally "a clean release host with no globally installed
+# CocoaPods/Fastlane must still build successfully using only Bundler and the committed lockfile" —
+# which cannot be demonstrated on a maintainer's Mac, because that Mac is the thing in question.
+#
+# COST: macOS runners bill at 10x the Linux rate, so this does NOT run on every push. It runs on
+# demand, and on pull requests that actually touch the iOS tree or the scripts that build it.
+name: ios-build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'khandaq-ios/**'
+      - 'scripts/build-ios.sh'
+      - 'scripts/live-qa-dual-ios-simulator.sh'
+      - '.github/workflows/ios-build.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pods-and-simulator-build:
+    # Pinned rather than macos-latest: the alias moves between Xcode major versions, and an iOS build
+    # is exactly the kind of thing that changes meaning when it does.
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Record the toolchain this build actually used
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcodebuild -version
+          echo "ruby: $(ruby -v)"
+          echo "bundler: $(bundle -v)"
+          # For contrast with the pinned one below. The runner image ships CocoaPods globally, and
+          # that global copy is precisely what must NOT be the one that builds a release.
+          echo "globally installed pod: $(pod --version 2>/dev/null || echo 'none')"  # khandaq-bundler-ok: reporting the host's version for contrast, not building with it
+
+      - name: Bundler, frozen — the lockfile decides, not the host
+        working-directory: khandaq-ios
+        run: |
+          set -euo pipefail
+          # `frozen` is the half of the old `--deployment` flag that matters here: bundle install
+          # ABORTS rather than quietly rewriting Gemfile.lock to suit whatever this machine has.
+          bundle config set --local frozen true
+          bundle config set --local path vendor/bundle
+          bundle install --jobs 4 --retry 3
+
+      - name: Prove Bundler is actually deciding the CocoaPods version
+        working-directory: khandaq-ios
+        run: |
+          set -euo pipefail
+          want=$(sed -n "s/^gem 'cocoapods', '\([^']*\)'.*/\1/p" Gemfile)
+          [ -n "$want" ] || { echo "::error::could not read the cocoapods pin out of Gemfile"; exit 1; }
+          got=$(bundle exec pod --version)
+          echo "Gemfile pins $want; bundle exec pod reports $got"
+          if [ "$got" != "$want" ]; then
+            echo "::error::bundle exec pod is $got but the Gemfile pins $want" >&2
+            exit 1
+          fi
+          # Not a failure if they happen to match — the runner image could ship the pinned version by
+          # coincidence — but worth saying out loud, because a difference here is the whole finding.
+          global=$(pod --version 2>/dev/null || echo none)  # khandaq-bundler-ok: reporting the host's version for contrast, not building with it
+          [ "$global" = "$want" ] \
+            && echo "::notice::the global pod happens to be $global too; the pin is still what is being used" \
+            || echo "::notice::global pod is $global, pinned build uses $want — Bundler is doing real work"
+
+      - name: Provide a placeholder GoogleService-Info.plist
+        working-directory: khandaq-ios
+        run: |
+          set -euo pipefail
+          # Gitignored (khandaq-ios/.gitignore:2) because it carries a real Firebase key, but the
+          # Xcode project references it in Copy Bundle Resources, so the build cannot link without
+          # one. Same shape as the google-services.json placeholder in release-provenance.yml: this
+          # produces a REFERENCE build, never a shippable one, and the file exists only on the runner.
+          f=Antidote/GoogleService-Info.plist
+          if [ ! -f "$f" ]; then
+            cat > "$f" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>API_KEY</key><string>PLACEHOLDER_NOT_A_REAL_KEY_reference_build_only</string>
+            <key>GCM_SENDER_ID</key><string>000000000000</string>
+            <key>PLIST_VERSION</key><string>1</string>
+            <key>BUNDLE_ID</key><string>org.khandaq.messenger</string>
+            <key>PROJECT_ID</key><string>khandaq-messenger</string>
+            <key>STORAGE_BUCKET</key><string>khandaq-messenger.appspot.com</string>
+            <key>GOOGLE_APP_ID</key><string>1:000000000000:ios:0000000000000000000000</string>
+            <key>IS_ADS_ENABLED</key><false/>
+            <key>IS_ANALYTICS_ENABLED</key><false/>
+            <key>IS_APPINVITE_ENABLED</key><false/>
+            <key>IS_GCM_ENABLED</key><true/>
+            <key>IS_SIGNIN_ENABLED</key><false/>
+          </dict>
+          </plist>
+          PLIST
+            echo "wrote placeholder GoogleService-Info.plist (reference build only)"
+          fi
+
+      # KHANDAQ (found by the first run of this workflow, 21 Aug 2026): a clean checkout cannot LINK
+      # the iOS app at all, and nothing said so.
+      #
+      # `.gitignore:18` is a blanket `*.a`, which silently excludes
+      # `libopus.xcframework/{ios-arm64,ios-arm64-simulator}/libopus.a` — the headers and the
+      # Info.plist are committed, the libraries are not. libopus is a `vendored_frameworks` entry, so
+      # `pod install` succeeds and the omission only appears at link time: `ld: library 'opus' not
+      # found`. (vpx.framework's binaries ARE committed — they have no `.a` extension, so the ignore
+      # rule never caught them. libopus is the only casualty, but one is enough.)
+      #
+      # The build had presumably always been done on a machine where scripts/build-ios-native-deps.sh
+      # had been run at some point in the past, so nobody hit it. docs/BUILDING.md and
+      # khandaq-ios/README.md still say "pod install, open Xcode" and mention none of this.
+      #
+      # Building them here is the honest fix: it is the same script a maintainer runs, it verifies
+      # both tarballs against pinned SHA-256 digests before unpacking them (added under the previous
+      # audit round), and it makes the iOS artifact reproducible from a checkout rather than from
+      # someone's /tmp. It also rebuilds vpx from source rather than trusting the committed binary,
+      # which is worth having: the committed `vpx.framework/vpx` is byte-identical to
+      # `vpx-simulator`, so a DEVICE build from a clean checkout would silently link the simulator
+      # slice until someone copies `vpx-device` over it.
+      - name: Build the vendored native dependencies (libopus, libvpx)
+        run: |
+          set -euo pipefail
+          bash scripts/build-ios-native-deps.sh
+
+      - name: bundle exec pod install
+        working-directory: khandaq-ios
+        run: |
+          set -euo pipefail
+          bundle exec pod install
+
+      - name: Assert no lockfile was rewritten
+        run: |
+          set -euo pipefail
+          # The same guard release-provenance.yml applies to the Android dependency pins, and the same
+          # reasoning: a build whose lockfile moved was not built from the pins anyone reviewed.
+          git diff --exit-code -- khandaq-ios/Gemfile.lock khandaq-ios/Podfile.lock
+
+      - name: Build for the simulator
+        working-directory: khandaq-ios
+        run: |
+          set -euo pipefail
+          # Simulator, unsigned: this proves the pod graph resolves and the whole app compiles and
+          # links, which is what no CI job could say before. Producing a signed device build needs the
+          # release certificates and stays a maintainer step.
+          #
+          # `-arch arm64` is not tidiness. A GENERIC simulator destination builds every architecture
+          # the project allows, so on an Apple Silicon runner Xcode links arm64 AND x86_64 — and the
+          # vendored native libraries have no x86_64 simulator slice at all:
+          # build-ios-native-deps.sh builds `-arch arm64` only. The x86_64 link then fails with
+          # `ld: library 'opus' not found`, which reads as a missing library when the real message is
+          # "wrong architecture". Worth knowing beyond CI: an Intel Mac cannot build the simulator
+          # target from this checkout without extending that script.
+          build() {
+            xcodebuild \
+              -workspace Antidote.xcworkspace \
+              -scheme Antidote \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              -destination 'generic/platform=iOS Simulator' \
+              -derivedDataPath build/DerivedData \
+              ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              build
+          }
+          # xcbeautify only prettifies the log. It must never decide whether the build passed, and it
+          # must not be a hard dependency on the runner image having it — hence PIPESTATUS and the
+          # plain fallback rather than `xcodebuild | xcbeautify` with pipefail deciding the outcome.
+          if command -v xcbeautify >/dev/null 2>&1; then
+            set +o pipefail
+            build | xcbeautify --renderer github-actions
+            rc=${PIPESTATUS[0]}
+            set -o pipefail
+          else
+            build
+            rc=$?
+          fi
+          [ "$rc" -eq 0 ] || { echo "::error::simulator build failed (xcodebuild exit $rc)" >&2; exit "$rc"; }
+
+      - name: Show what was produced
+        if: always()
+        working-directory: khandaq-ios
+        run: |
+          set -euo pipefail
+          find build/DerivedData/Build/Products -maxdepth 2 -name '*.app' -print 2>/dev/null || true

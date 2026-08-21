@@ -86,8 +86,8 @@
     },
     {
       "name": "libexpat",
-      "version": "2.4.1",
-      "purpose": "XML parsing in the Windows bundle",
+      "version": "2.8.3",
+      "purpose": "XML target descriptions for the bundled gdb; debug packaging only",
       "pin_file": "khandaq-desktop/buildscripts/download/download_libexpat.sh",
       "pin_var": "EXPAT_VERSION",
       "platforms": [
@@ -95,14 +95,7 @@
       ],
       "min_version": "2.7.0",
       "min_version_source": "CVE-2024-8176 (improper restriction of XML entity expansion depth) is fixed in libexpat 2.7.0. 2.4.1 (May 2021) also predates the Feb-Mar 2022 CVE wave fixed across 2.4.5-2.4.7. Upstream is at 2.8.3 as of 2026-08-21.",
-      "note": "Unlike OpenSSL and Qt, nothing structural blocks this bump — it is a standalone XML parser built as its own Docker layer. It is waived only because no desktop build has been produced or tested here.",
-      "waiver": {
-        "reason": "No Qt/Docker toolchain was available to build and smoke-test a bumped expat, and shipping an unbuilt bump is worse than shipping a recorded, dated one. This is the cheapest of the three waivers to clear.",
-        "owner": "Isa (repository owner)",
-        "opened": "2026-08-21",
-        "expires": "2026-11-19",
-        "tracking": "K-04 / audit 2026-08-21"
-      }
+      "note": "Bumped 2.8.3 on 2026-08-21 (re-audit R-03), clearing the floor unwaived. Nothing structural blocked it: expat is its own Docker layer built immediately before gdb and consumed by nothing else, so the messenger never parses untrusted XML with it. Verified before the bump: the tarball digest was computed from the downloaded bytes and agrees with the one GitHub publishes, and 2.8.3 configures and builds with this repository's exact flags for x86_64-w64-mingw32, producing a static libexpat.a that still exports every symbol gdb 11.1 needs. NOT verified: a full Windows container build — there is no Docker here."
     },
     {
       "name": "mingw_debug_scripts",

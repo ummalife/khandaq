@@ -1,0 +1,14 @@
+# KHANDAQ (re-audit 2026-08-21, R-02) — the compatibility overlay: authentication is OBSERVED but
+# not enforced.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.softmode.yml up -d
+#
+# This is the mode the relay runs in today, and it has to be, because no shipped client signs yet.
+# What it is not any more is free: choosing it requires naming the date it stops being acceptable.
+# Past that date the relay logs an error at startup and reports `enforce_overdue` on /health, so an
+# indefinite soft deployment stops looking exactly like a healthy one.
+services:
+  push-relay:
+    environment:
+      - PUSH_AUTH_ENFORCE=0
+      - PUSH_AUTH_ENFORCE_BY=${PUSH_AUTH_ENFORCE_BY:?soft mode is a dated exception, not a default - set PUSH_AUTH_ENFORCE_BY=YYYY-MM-DD in /opt/khandaq-push/.env}

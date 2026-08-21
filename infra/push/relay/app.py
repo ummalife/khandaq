@@ -112,8 +112,13 @@ AUTH_MAX_SKEW_SEC = int(os.environ.get("PUSH_AUTH_MAX_SKEW_SEC", "300"))
 PUSH_AUTH_ENFORCE = os.environ.get("PUSH_AUTH_ENFORCE", "0").strip().lower() in ("1", "true", "yes", "on")
 # KHANDAQ (audit 2026-08-21, K-02): "Treat soft mode as an emergency compatibility mode with an
 # expiry date, not a permanent default." An optional YYYY-MM-DD cutoff (unset = none). Past it, a
-# relay still running in soft mode says so loudly at startup and reports it on /health, so the
-# monitoring already in infra/monitoring can alert on it.
+# relay still running in soft mode says so loudly at startup and reports it on /health.
+#
+# KHANDAQ (re-audit 2026-08-21): this used to say the monitoring "already in infra/monitoring" could
+# alert on it. That was wishful. infra/monitoring is sixteen lines of Uptime Kuma with no checks in
+# it at all — its rules live in that container's own database, not in this repository. So the signal
+# is published and nothing is watching it yet. Said plainly, because a comment that claims coverage
+# which does not exist is worse than one that admits the gap.
 #
 # It nags; it does not self-enforce. A relay that flipped itself to hard enforcement on a date would
 # silence every unsigned client in the field, unattended, at a moment nobody chose — the exact

@@ -18,6 +18,14 @@ mkdir -p "$DL"
 echo "==> Generate changelog from git"
 python3 "$ROOT/scripts/generate-changelog.py"
 
+# KHANDAQ (re-audit 2026-08-21, R-07): regenerate the release manifest and REFUSE to publish if any
+# page still contradicts it. The site is the last place a user can check what they are installing
+# against what was signed, so shipping numbers that disagree with the build is worse than shipping
+# nothing — it teaches people the comparison is pointless.
+echo "==> Release manifest + published-metadata check"
+python3 "$ROOT/scripts/generate-release-manifest.py" >/dev/null
+python3 "$ROOT/scripts/check-release-metadata.py"
+
 # KHANDAQ: Android is now distributed via Google Play (official), so the website no longer hosts a
 # sideload/debug APK. (This also closes KHQ-01: a debug-signed APK could previously be published here
 # via the build-script fallback.) The site links to the Play listing instead. The tester APK still goes
@@ -105,7 +113,7 @@ ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/downloads'"
 # KHANDAQ (KHQ-01): purge any previously-published sideload APK from the live server so it can't be
 # fetched by direct URL after the site switched to Google Play.
 ssh "$REMOTE" "rm -f '$REMOTE_SITE_DIR/downloads/khandaq-android.apk' '$REMOTE_SITE_DIR/downloads/khandaq-release.apk' '$REMOTE_SITE_DIR/downloads/SHA256SUMS.android.txt' 2>/dev/null || true"
-scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/release-manifest.json" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -pr "$WEB/assets" "$REMOTE:$REMOTE_SITE_DIR/"
 scp -p "$DL"/* "$REMOTE:$REMOTE_SITE_DIR/downloads/" 2>/dev/null || true
 scp -p "$ROOT/infra/nginx/khandaq-static-site.locations.conf" "$REMOTE:/tmp/khandaq-static-site.locations.conf"

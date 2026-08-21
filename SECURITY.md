@@ -83,10 +83,28 @@ re-argued. The same script also verifies the inventory against the actual `downl
 the version list cannot drift from the build the way the prose comment in `windows-build.yaml` had,
 and emits the CycloneDX SBOM that ships with the release artifacts.
 
-Currently waived, all expiring 2026-11-19: OpenSSL 1.1.1w and Qt 5.12.12 (blocked on the Qt 6
-migration) and libexpat 2.4.1 (below the CVE-2024-8176 floor of 2.7.0 — nothing structural blocks
-that bump; it is waived only because no desktop build could be produced and smoke-tested when the
-finding was raised, and it is the cheapest of the three to clear).
+Currently waived, both expiring 2026-11-19: **OpenSSL 1.1.1w** and **Qt 5.12.12**, blocked on the
+Qt 6 migration.
+
+The third waiver is gone. **libexpat** was bumped 2.4.1 → 2.8.3 on 2026-08-21 in response to the
+re-audit, clearing the CVE-2024-8176 floor unwaived. Nothing structural had blocked it: expat is its
+own Docker layer built immediately before gdb and consumed by nothing else, so it serves the bundled
+debugger's XML target descriptions and the messenger never parses untrusted XML with it. The bump was
+checked before it was made — the tarball digest was computed from the downloaded bytes and agrees
+with the digest GitHub publishes, and 2.8.3 configures and builds with this repository's exact flags
+for `x86_64-w64-mingw32`, producing a static `libexpat.a` that still exports every symbol gdb 11.1
+needs. A full Windows container build still has to confirm it, because there is no Docker on the
+machine this was done on.
+
+## External audits
+
+Both 2026-08-21 rounds are answered finding by finding, including what was measured and where the
+measurement stops:
+
+- `SECURITY-AUDIT-2026-08-21-RESPONSE.md` — first round, K-01…K-09, all nine closed.
+- `SECURITY-REAUDIT-2026-08-21-RESPONSE.md` — re-audit, R-01…R-07: five closed; R-01 (per-install
+  push capabilities) and R-04 (Qt 6 / OpenSSL 3 migration) remain open as architectural work, with
+  the non-architectural half of each closed.
 
 ## Recommended verification
 

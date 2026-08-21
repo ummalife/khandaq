@@ -1,0 +1,16 @@
+# KHANDAQ (re-audit 2026-08-21, R-02) — the production overlay: authentication is ENFORCED.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# The value is a LITERAL, not an interpolation, on purpose: a stray PUSH_AUTH_ENFORCE=0 in .env must
+# not be able to talk this file down. Compose merges `environment` by variable name and the last file
+# wins, so the literal here always beats whatever the base file resolved.
+#
+# NOTE, and it is the whole reason this is not the default yet: no shipped client signs. The push
+# secret is empty in every release build, so switching to this overlay today silences every wake
+# notification in the field. It becomes correct the moment a signing client ships — see
+# PUSH-AUTH-SECRET-PROVISIONING.md.
+services:
+  push-relay:
+    environment:
+      - PUSH_AUTH_ENFORCE=1

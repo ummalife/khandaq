@@ -308,6 +308,7 @@ public class StartExportImportTest
 
         screenshot("005");
         dialog_press_positive(3);
+        pass_plaintext_export_gate();
 
         wait_(1, "for tox save file to export");
 
@@ -355,6 +356,36 @@ public class StartExportImportTest
         screenshot("008");
         Log.i(TAG, "Pressing \"YES\" button to restart TRIfA");
         dialog_press_positive(8);
+    }
+
+    /**
+     * KHANDAQ (re-audit 2026-08-21, R-06): the raw savedata export now sits behind
+     * {@code PlaintextExportGate}. On a device WITH a screen lock the confirmation is the system
+     * credential prompt, which this test cannot drive; on a bare emulator - which is what this test
+     * runs on - the gate falls back to typing a confirmation word, and that it can do.
+     *
+     * Deliberately best-effort: if no gate dialog is on screen the method does nothing, so the flow
+     * is unchanged wherever the gate does not appear. Note that this legacy UI test is not run by any
+     * workflow and was not executed as part of the R-06 change; the gate's own coverage is
+     * {@code PlaintextExportGateDeviceTest}, which is.
+     */
+    private static void pass_plaintext_export_gate()
+    {
+        try
+        {
+            final String word = getTargetContext().getString(
+                    org.khandaq.messenger.R.string.plaintext_export_typed_confirm_word);
+            onView(isAssignableFrom(android.widget.EditText.class))
+                    .inRoot(isDialog())
+                    .perform(replaceText(word));
+            Espresso.closeSoftKeyboard();
+            onView(withId(android.R.id.button1)).perform(click());
+            Log.i(TAG, "PlaintextExportGate: typed confirmation accepted");
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "PlaintextExportGate: no typed-confirmation dialog on screen (" + e.getMessage() + ")");
+        }
     }
 
     private static void dialog_press_positive(final int errnum)

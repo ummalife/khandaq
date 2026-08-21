@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  KHANDAQ (re-audit 2026-08-21, R-05) — release lint is a gate again, and it gates on ONE thing.
+
+  Release lint had been switched off wholesale (checkReleaseBuilds false, abortOnError false), so
+  none of it ran on the signing path. Simply turning it back on is not an option: this is an
+  inherited TRIfA codebase and a real run produces 2378 findings — 52 Fatal and 69 Error, almost all
+  of them missing translations and layout hygiene. A gate that red on day one gets switched off again
+  within a week.
+
+  So severity does the filtering. `all` and `Security` here are lint CATEGORY selectors, not issue
+  ids: lint resolves a category name wherever an id is expected. Everything is demoted to warning,
+  the Security category is promoted to fatal, and `lintVitalRelease` — which by construction runs
+  only fatal issues — becomes exactly a security gate and nothing else. No hand-maintained list of
+  security check ids to rot, and no 2 MB baseline snapshot that nobody has actually reviewed.
+
+  Measured on this tree: the entire codebase has exactly ONE Security-category finding, the one
+  excused below. Everything the re-audit worried lint would catch — exported components, cleartext
+  traffic, trust-all TLS, allowBackup — is already clean.
+-->
+<lint>
+    <issue id="all" severity="warning" />
+    <issue id="Security" severity="fatal" />
+
+    <!--
+      The one Security finding in the tree, and it is a decision rather than a defect.
+
+      DbSecretKeyStorage derives a DEVICE-BOUND key from ANDROID_ID (PBKDF2) to encrypt the database
+      key's recovery backup. That is deliberate and argued in the file: the Keystore key is
+      invalidated on some OS upgrades and dropped outright by some OEMs on reboot, and without a
+      backup that survives it the user is permanently locked out at the password screen. ANDROID_ID
+      is not used as a secret or an identity here — it is the device-binding factor that makes a
+      stolen prefs file useless on its own.
+
+      Scoped to the one file on purpose: a blanket ignore would also cover the next, unreviewed use.
+    -->
+    <issue id="HardwareIds">
+        <ignore path="src/main/java/com/zoffcc/applications/trifa/DbSecretKeyStorage.java" />
+    </issue>
+</lint>

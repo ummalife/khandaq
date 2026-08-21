@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.util.Log;
 import android.widget.Toast;
@@ -76,28 +78,52 @@ public final class ToxProfileImportHelper
         return new File(MainActivity.app_files_directory, "savedata.tox");
     }
 
-    static void promptExportSavedata(@NonNull final AppCompatActivity activity,
+    /**
+     * KHANDAQ (re-audit 2026-08-21, R-06): all three raw-savedata routes come through here, so the
+     * gate belongs here rather than duplicated at each call site. The confirmation is now the gate's
+     * own: it says what the file actually is - the private key, not "Tox ID and contacts" - then
+     * requires device re-authentication, and only then authorises the write that
+     * {@link #handleExportDestination} checks for.
+     */
+    static void promptExportSavedata(@NonNull final PlaintextExportGate gate,
                                      @NonNull final Runnable launchCreateDocument)
     {
-        new AlertDialog.Builder(activity)
-                .setTitle(R.string.settings_export_tox_profile)
-                .setMessage(R.string.settings_export_tox_profile_confirm_picker)
-                .setPositiveButton(R.string.settings_export_tox_profile_confirm_yes, new DialogInterface.OnClickListener()
-                {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id)
-                    {
-                        launchCreateDocument.run();
-                    }
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        gate.require(R.string.plaintext_export_warning_title,
+                     R.string.plaintext_export_warning_message,
+                     R.string.settings_export_tox_profile_confirm_yes,
+                     launchCreateDocument);
     }
 
     static void handleExportDestination(@NonNull final Context context, @Nullable final Uri destinationUri)
     {
         if (destinationUri == null)
         {
+            return;
+        }
+
+        // KHANDAQ (re-audit 2026-08-21, R-06): this method is the only place a plaintext identity
+        // file is actually written, which makes it the only place where the check cannot be skipped.
+        // A confirmation dialog at a call site can be forgotten when someone adds a fourth entry
+        // point; this cannot be - with no live authorisation from PlaintextExportGate nothing is
+        // written and the destination the user picked is left untouched.
+        if (!PlaintextExportGate.consumeAuthorisation())
+        {
+            Log.w(TAG, "refusing plaintext savedata export: not authorised by PlaintextExportGate");
+            // The refusal must not be able to fail. Toast needs a prepared Looper, and this method is
+            // reachable from a plain worker thread, where makeText() throws NPE - which would turn a
+            // clean "no" into a crash and, worse, into something a caller might catch and retry. The
+            // device test caught exactly that. Route it to the main thread and swallow whatever is
+            // left: the Log line above is the part that must always happen.
+            try
+            {
+                final Context ctx = context.getApplicationContext();
+                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(
+                        ctx, R.string.plaintext_export_not_authorised, Toast.LENGTH_LONG).show());
+            }
+            catch (Throwable e)
+            {
+                Log.w(TAG, "could not show the refusal toast: " + e.getMessage());
+            }
             return;
         }
 

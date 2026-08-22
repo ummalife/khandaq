@@ -106,8 +106,11 @@ parse_gradle() {
     )
     CMAKE_VERSIONS=${CMAKE_VERSIONS% }
     local cmake_blocks
+    # `|| cmake_blocks=0` is load-bearing: grep exits 1 when nothing matches, pipefail carries that
+    # through, and the exit status of VAR=$(pipeline) is the pipeline's — so under `set -e` a project
+    # with no externalNativeBuild block would have killed this script instead of reporting zero.
     # shellcheck disable=SC2086
-    cmake_blocks=$(grep -lE '^[[:space:]]*cmake[[:space:]]*\{' $MODULE_GRADLE_FILES | wc -l | tr -d ' ')
+    cmake_blocks=$(grep -lE '^[[:space:]]*cmake[[:space:]]*\{' $MODULE_GRADLE_FILES | wc -l | tr -d ' ') || cmake_blocks=0
     if [ "$cmake_blocks" != "0" ] && [ -z "$CMAKE_VERSIONS" ]; then
         die "$cmake_blocks module(s) declare an externalNativeBuild cmake block but none pins a version — AGP would download its default unpinned"
     fi

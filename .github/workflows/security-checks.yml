@@ -90,6 +90,10 @@ jobs:
       # comment explaining a bug executed `ssh bash -s` on the workstation in the middle of a deploy.
       - name: No unescaped backticks inside unquoted heredocs
         run: python3 scripts/check-shell-heredocs.py
+      # KHANDAQ (re-audit 2026-08-22): the trap that had been silently ending deploy-site.sh before
+      # it uploaded anything — which is why the published site had drifted a release behind.
+      - name: No silent set -e exits in deploy/ci/signing scripts
+        run: python3 scripts/check-shell-set-e-traps.py
 
   website:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-03). The site's security posture used to live in a

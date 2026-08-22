@@ -8303,6 +8303,29 @@ public class HelperGroup
             return;
         }
         last_invite_reply_ms.put(rate_key, now);
+
+        // KHANDAQ (internal audit 2026-08-22, M-01): a PRIVATE group is never joined by knowing its
+        // id, so this must not hand out membership on the strength of knowing it.
+        //
+        // The handler used to invite any accepted friend who sent the group's 32-byte chat id, with
+        // no check beyond "am I a member". For a public group that gives away nothing — the id is
+        // the join credential and the DHT would let them in anyway. For a private group the id is
+        // NOT the credential: membership is by invitation, and the id nonetheless travels (the group
+        // info screen copies and shares it). So a friend who obtained a leaked id could make any
+        // member's client invite them, silently, and read everything said afterwards.
+        //
+        // Refusing outright rather than prompting: this packet is a peer-assisted join for a group
+        // the sender was already invited to, and a private group has an invitation path already. A
+        // dialog here would be a consent prompt for an action the user never initiated, which is the
+        // kind of prompt people learn to accept.
+        final int privacy_state = MainActivity.tox_group_get_privacy_state(group_num);
+        if (privacy_state != ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PUBLIC.value)
+        {
+            HelperGeneric.logI(TAG, "handle_group_invite_request:refused_private:fn=" + friend_number
+                    + " id=" + group_identifier_short(chat_id_hex, false));
+            return;
+        }
+
         final int res = MainActivity.tox_group_invite_friend(group_num, friend_number);
         HelperGeneric.logI(TAG, "handle_group_invite_request:fn=" + friend_number
                 + " id=" + group_identifier_short(chat_id_hex, false) + " invite_res=" + res);
@@ -10927,18 +10950,35 @@ public class HelperGroup
             // is exactly the attribution the text path stopped granting. Two paths, one rule.
             final NgcHistoryDowngradePolicy.Decision file_decision =
                     NgcHistoryDowngradePolicy.decide(file_author_hsk, false, System.currentTimeMillis());
-            if (file_decision == NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE)
-            {
-                HelperGeneric.logI(TAG, "handle_incoming_sync_group_file: refusing unsigned file "
-                        + "history for an author that signs");
-                return;
-            }
             final boolean file_syncer_is_author = syncer_pubkey != null
                     && syncer_pubkey.equalsIgnoreCase(original_sender_peerpubkey);
+
+            // KHANDAQ (internal audit 2026-08-22): do not REJECT here. Downgrade the attribution.
+            //
+            // A 0x03 record has no signed form at all, so decide() is handed verified=false for every
+            // one of them and answers REJECT_DOWNGRADE for every author whose key is fresh — that is,
+            // for every up-to-date member of the group. The rule therefore did not refuse a downgrade,
+            // it refused the feature: a photo posted by a current client never reached anyone who was
+            // offline when it was sent, and the sender saw no error.
+            //
+            // What the gate is actually about is a THIRD PARTY claiming somebody else's authorship,
+            // and the answer to that is the one the text path already uses: store the row, but do not
+            // render it as the claimed author. When the syncer IS the author, the group layer has
+            // already authenticated who is speaking, so the claim needs nothing further.
+            //
+            // REJECT stays reachable in the policy and stays right for text, where a signed form
+            // exists and its absence is a real downgrade. If a signed file form is ever added, pass
+            // the real verified flag here and this call site needs no other change.
             final int file_sync_type =
-                    NgcHistoryDowngradePolicy.rendersAsClaimedAuthor(file_decision, file_syncer_is_author)
+                    (file_syncer_is_author
+                     && NgcHistoryDowngradePolicy.rendersAsClaimedAuthor(file_decision, true))
                     ? TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value
                     : TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value;
+            if (file_sync_type == TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value)
+            {
+                HelperGeneric.logI(TAG, "handle_incoming_sync_group_file: storing unattributed "
+                        + "(decision=" + file_decision + " syncer_is_author=" + file_syncer_is_author + ")");
+            }
             //
             //
             // HINT: putting 4 bytes unsigned int in big endian format into a java "long" is more complex than i thought

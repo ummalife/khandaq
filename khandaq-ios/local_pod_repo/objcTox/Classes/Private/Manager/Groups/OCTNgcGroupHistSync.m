@@ -30,7 +30,27 @@ static const size_t kOCTNgcHistMagicLength = 6;
 static const size_t kOCTNgcHistMaxFilePayload = 36701;
 static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
 
+// KHANDAQ (internal audit 2026-08-22): bounds on what history sync may cost this run.
+//
+// The iOS side had NONE. A member of a public group could send private 0x01/0x02/0x03 records with a
+// valid header, a timestamp inside the accepted window and a fresh message id, each one a new Realm
+// row and up to ~36 KiB written; repeated at NGC lossless speed that is hundreds of megabytes a
+// minute into the victim's profile, with nothing to stop it before the device runs out of space.
+// Android has bounded this since audit2 (NgcHistorySyncBudget).
+//
+// Two budgets, both per session and per group, deliberately not persisted: they bound what ONE RUN
+// can be made to ingest, which is the flooding case, without inventing a lifetime quota that would
+// eventually refuse a legitimately long-lived group. Android additionally seeds a persistent row
+// count from the database; iOS has no row-count block on this class, so the row budget here counts
+// rows accepted THIS SESSION. That is a smaller claim than Android's and it is written down rather
+// than glossed over — it still bounds the attack, which is a burst, not a slow accumulation.
+static const NSUInteger kOCTNgcHistBudgetMaxRowsPerGroupPerSession = 5000;
+static const NSUInteger kOCTNgcHistBudgetMaxBytesPerGroupPerSession = 8 * 1024 * 1024;
+
 @interface OCTNgcGroupHistSync ()
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSNumber *> *budgetRows;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSNumber *> *budgetBytes;
+@property (nonatomic, strong) NSLock *budgetLock;
 @property (nonatomic, copy) OCTNgcGroupHistSyncSendPrivatePacketBlock sendPrivatePacketBlock;
 @property (nonatomic, copy) OCTNgcGroupHistSyncPeerPublicKeyBlock peerPublicKeyBlock;
 @property (nonatomic, copy) OCTNgcGroupHistSyncPeerNameBlock peerNameForPeerIdBlock;
@@ -56,6 +76,58 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
 @end
 
 @implementation OCTNgcGroupHistSync
+
+#pragma mark - History sync budget
+
+- (void)ensureBudgetState
+{
+    if (self.budgetLock == nil) {
+        @synchronized(self) {
+            if (self.budgetLock == nil) {
+                self.budgetRows = [NSMutableDictionary dictionary];
+                self.budgetBytes = [NSMutableDictionary dictionary];
+                self.budgetLock = [[NSLock alloc] init];
+            }
+        }
+    }
+}
+
+/// Would accepting one more record of `bytes` stay inside this group's budget for this run?
+- (BOOL)budgetFitsGroupNumber:(uint32_t)groupNumber addingBytes:(NSUInteger)bytes
+{
+    [self ensureBudgetState];
+    NSNumber *key = @(groupNumber);
+    [self.budgetLock lock];
+    NSUInteger rows = self.budgetRows[key].unsignedIntegerValue;
+    NSUInteger used = self.budgetBytes[key].unsignedIntegerValue;
+    [self.budgetLock unlock];
+
+    if (rows >= kOCTNgcHistBudgetMaxRowsPerGroupPerSession) {
+        OCTLogInfo(@"histSync: group %u has taken its row budget for this run (%lu) — dropping",
+                   groupNumber, (unsigned long)rows);
+        return NO;
+    }
+    if (used + bytes > kOCTNgcHistBudgetMaxBytesPerGroupPerSession) {
+        OCTLogInfo(@"histSync: group %u has taken its byte budget for this run (%lu) — dropping",
+                   groupNumber, (unsigned long)used);
+        return NO;
+    }
+    return YES;
+}
+
+/// Charge the budget. Called where the row is ACTUALLY written, never before — a record dropped by
+/// the dedup check or by a later guard must not cost anything, or a busy honest group would exhaust
+/// its own budget on rows it already had.
+- (void)budgetRecordGroupNumber:(uint32_t)groupNumber bytes:(NSUInteger)bytes
+{
+    [self ensureBudgetState];
+    NSNumber *key = @(groupNumber);
+    [self.budgetLock lock];
+    self.budgetRows[key] = @(self.budgetRows[key].unsignedIntegerValue + 1);
+    self.budgetBytes[key] = @(self.budgetBytes[key].unsignedIntegerValue + bytes);
+    [self.budgetLock unlock];
+}
+
 
 - (instancetype)initWithSendPrivatePacketBlock:(OCTNgcGroupHistSyncSendPrivatePacketBlock)sendPrivatePacketBlock
                           peerPublicKeyBlock:(OCTNgcGroupHistSyncPeerPublicKeyBlock)peerPublicKeyBlock
@@ -749,6 +821,10 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
         return;
     }
 
+    if (! [self budgetFitsGroupNumber:groupNumber addingBytes:text.length]) {
+        return;
+    }
+
     self.insertSyncedMessageBlock(chat,
                                   text,
                                   OCTToxMessageTypeNormal,
@@ -757,6 +833,7 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
                                   senderPubkeyHex,
                                   messageId,
                                   (NSTimeInterval)timestamp);
+    [self budgetRecordGroupNumber:groupNumber bytes:text.length];
 
     if (senderPeerId > 0) {
         [self sendDeliveryReceiptWithGroupNumber:groupNumber peerId:senderPeerId messageId:messageId];
@@ -790,14 +867,22 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
     // A file record has no signed form to compare against, which is why this asks the unsignable
     // variant of the question rather than passing a text nobody sent. Above the dedup and the insert,
     // for the same reason the text gate is.
+    // KHANDAQ (internal audit 2026-08-22): keep the row, withhold the name. Do not drop it.
+    //
+    // A 0x03 record can never be signed, so this decision was Reject for every author with a fresh
+    // key — every up-to-date member of the group. Dropping meant a photo posted by a current client
+    // never reached anyone who had been offline, and nothing reported it. The forgery this gate is
+    // about is a third party claiming somebody else's authorship, and that is answered where the row
+    // is rendered: OCTNgcHistoryDowngradeRendersAsClaimedAuthor now says NO for a rejected row as
+    // well, and iOS always passes syncerIsAuthor:NO, so such a row is shown as relayed content of
+    // unknown authorship rather than as the person it names.
     if (self.signedHistory) {
         OCTNgcDowngradeDecision fileDecision =
             [self.signedHistory downgradeDecisionForUnsignableRecordInGroupNumber:groupNumber
                                                                     authorPubHex:senderPubkeyHex];
         if (fileDecision == OCTNgcDowngradeDecisionReject) {
-            OCTLogInfo(@"histSync: refusing unsigned FILE history for an author that signs, group %u",
-                       groupNumber);
-            return;
+            OCTLogInfo(@"histSync: FILE history from an author that signs will not be attributed, "
+                       @"group %u", groupNumber);
         }
     }
 
@@ -839,6 +924,12 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
         return;
     }
 
+    // Before the write, not after: the disk cost is the point of the budget, and a file written and
+    // then rejected has already been paid for.
+    if (! [self budgetFitsGroupNumber:groupNumber addingBytes:fileData.length]) {
+        return;
+    }
+
     NSString *filePath = [OCTFileTools createNewFilePathInDirectory:directory fileName:fileName];
 
     if (! [fileData writeToFile:filePath atomically:YES]) {
@@ -864,6 +955,7 @@ static const NSTimeInterval kOCTNgcHistRequestCooldown = 20.0;
                                senderPubkeyHex,
                                msgIdHashHex,
                                (NSTimeInterval)timestamp);
+    [self budgetRecordGroupNumber:groupNumber bytes:fileData.length];
 }
 
 - (void)handleIncomingDeliveryReceiptWithGroupNumber:(uint32_t)groupNumber

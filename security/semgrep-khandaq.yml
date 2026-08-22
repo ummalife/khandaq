@@ -112,3 +112,29 @@ rules:
     # Deliberately NOT "any new Random()". Jitter and a throwaway display string are legitimate uses
     # and flagging them trains people to ignore the rule; filling a buffer is the shape that is
     # almost never innocent.
+
+  # KHANDAQ (re-review v2 2026-08-22, RR2-11). CodeQL's py/insecure-protocol used to be switched off
+  # repository-wide so that one deliberate probe would stop being reported. The probe now lives alone
+  # in scripts/tls_probe.py and CodeQL excludes that path — this rule is the belt to that braces, so
+  # the coverage does not depend on a single scanner's configuration surviving a future edit.
+  #
+  # Excluding the probe by path rather than by a `nosemgrep` comment: a comment travels with copied
+  # code, and copied code is exactly how this constant would end up somewhere it must not be.
+  - id: khandaq-python-obsolete-tls
+    languages: [python]
+    severity: ERROR
+    paths:
+      exclude:
+        - scripts/tls_probe.py
+    message: >-
+      TLS 1.0/1.1 is being requested. The only legitimate use of these constants here is
+      scripts/tls_probe.py, which offers them in order to prove the SERVER refuses them. Anywhere
+      else this is a client that would accept an obsolete protocol.
+    patterns:
+      - pattern-either:
+          - pattern: ssl.TLSVersion.TLSv1
+          - pattern: ssl.TLSVersion.TLSv1_1
+          - pattern: ssl.PROTOCOL_TLSv1
+          - pattern: ssl.PROTOCOL_TLSv1_1
+          - pattern: ssl.PROTOCOL_SSLv3
+          - pattern: ssl.PROTOCOL_SSLv23

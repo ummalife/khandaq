@@ -1,0 +1,19 @@
+# KHANDAQ (re-review v2 2026-08-22, RR2-12) — базовая линия cppcheck по собственному коду
+# десктопа. Формат: severity|id|file|message — без номера строки, чтобы правка выше по файлу
+# не превращалась в «новую находку».
+#
+# Смысл линии: унаследованный шум не блокирует внедрение, но НИЧЕГО НОВОГО пройти не может.
+# Строку отсюда удаляют, когда находку починили; добавляют — только с объяснением в PR.
+#
+# Две ошибки уровня error здесь осознанно: перепутанные итераторы контейнеров в chatlinestorage
+# (UB, но правка требует разбора логики отрисовки чата) — заведены отдельно, а не замолчаны.
+error|mismatchingContainerIterator|khandaq-desktop/src/chatlog/chatlinestorage.cpp|Iterator 'infoIterator' referring to container 'lines' is used with container 'idxInfoMap'.
+error|mismatchingContainers|khandaq-desktop/src/chatlog/chatlinestorage.cpp|Iterators of different containers 'lines' and 'idxInfoMap' are used together.
+warning|identicalConditionAfterEarlyExit|khandaq-desktop/src/persistence/db/upgrades/dbto11.cpp|Identical condition and return expression 'transactionPass', return value is always false
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/chatlog/chatlinestorage.h|Member variable 'IdxInfo::linePos' has no initializer.
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/core/dhtserver.h|Member variable 'DhtServer::statusTcp' has no initializer.
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/core/dhtserver.h|Member variable 'DhtServer::statusUdp' has no initializer.
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/persistence/settingsserializer.h|Member variable 'Array::size' has no initializer.
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/widget/style.cpp|Member variable 'ThemeNameColor::type' has no initializer.
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/widget/tool/flyoutoverlaywidget.h|Member variable 'FlyoutOverlayWidget::animation' has no initializer.
+warning|uninitMemberVarNoCtor|khandaq-desktop/src/widget/tool/flyoutoverlaywidget.h|Member variable 'FlyoutOverlayWidget::container' has no initializer.

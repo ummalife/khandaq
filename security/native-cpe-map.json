@@ -1,0 +1,98 @@
+{
+  "_comment": [
+    "KHANDAQ (re-review v2 2026-08-22, RR2-08) — сопоставление вендоренных C-библиотек с CPE.",
+    "OSV не индексирует pkg:generic, поэтому нативный стек не покрывался ничем, кроме курируемых",
+    "дат EOL. Здесь у каждого компонента либо CPE, по которому его спрашивают в NVD, либо явное",
+    "объяснение, почему спросить нельзя — молчаливых пропусков быть не должно.",
+    "scripts/check-native-advisories.py падает, если в SBOM появился generic-компонент, которого",
+    "здесь нет."
+  ],
+  "components": {
+    "ffmpeg": {
+      "cpe": "cpe:2.3:a:ffmpeg:ffmpeg"
+    },
+    "opus": {
+      "cpe": "cpe:2.3:a:opus-codec:opus"
+    },
+    "vpx": {
+      "cpe": "cpe:2.3:a:webmproject:libvpx"
+    },
+    "libsodium": {
+      "cpe": "cpe:2.3:a:libsodium_project:libsodium"
+    },
+    "openssl": {
+      "cpe": "cpe:2.3:a:openssl:openssl"
+    },
+    "qt": {
+      "cpe": "cpe:2.3:a:qt:qt"
+    },
+    "sqlcipher": {
+      "cpe": "cpe:2.3:a:zetetic:sqlcipher"
+    },
+    "libexif": {
+      "cpe": "cpe:2.3:a:libexif_project:libexif"
+    },
+    "openal": {
+      "cpe": "cpe:2.3:a:openal:openal_soft"
+    },
+    "libpng": {
+      "cpe": "cpe:2.3:a:libpng:libpng"
+    },
+    "sodium": {
+      "cpe": "cpe:2.3:a:libsodium_project:libsodium"
+    },
+    "x264": {
+      "cpe": null,
+      "why": "закреплён коммитом, а не версией — CPE сопоставить не с чем; держится датой EOL в bundled-deps.json"
+    },
+    "libexpat": {
+      "cpe": "cpe:2.3:a:libexpat_project:libexpat"
+    },
+    "gmp": {
+      "cpe": "cpe:2.3:a:gmplib:gmp"
+    },
+    "qrencode": {
+      "cpe": "cpe:2.3:a:fukuchi:libqrencode"
+    },
+    "gdb": {
+      "cpe": null,
+      "why": "инструмент отладки в кросс-образе сборки, в поставку не входит"
+    },
+    "aitool": {
+      "cpe": null,
+      "why": "сборочная утилита иконок, в артефакт не попадает"
+    },
+    "ldqt": {
+      "cpe": null,
+      "why": "сборочный скрипт раскладки библиотек Qt, не библиотека"
+    },
+    "mingw_debug_scripts": {
+      "cpe": null,
+      "why": "сборочные скрипты, в артефакт не попадают"
+    },
+    "mingw_ldd": {
+      "cpe": null,
+      "why": "сборочная утилита анализа зависимостей"
+    },
+    "nsisshellexecasuser": {
+      "cpe": null,
+      "why": "плагин NSIS для инсталлятора; собственного CPE не имеет"
+    },
+    "snore": {
+      "cpe": null,
+      "why": "библиотека уведомлений Snorenotify; в NVD не заведена"
+    },
+    "toxcore": {
+      "cpe": null,
+      "why": "нет записи в NVD; отслеживается по советам upstream и патчам аудита"
+    },
+    "toxext": {
+      "cpe": null,
+      "why": "нет записи в NVD"
+    },
+    "toxext_messages": {
+      "cpe": null,
+      "why": "нет записи в NVD"
+    }
+  }
+}

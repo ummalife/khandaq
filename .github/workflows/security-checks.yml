@@ -62,6 +62,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Bundled desktop dependencies — EOL, security floors and inventory drift
         run: python3 scripts/check-bundled-deps-eol.py --warn-days 180
+      # KHANDAQ (internal audit 2026-08-22): the inventory listed components as shipping on macOS
+      # while every pin it names is a Windows cross-build script, and the SBOM repeated the claim.
+      - name: The bundled inventory must not claim unpinned platforms
+        run: python3 scripts/check-bundled-deps-platforms.py
 
   release-metadata:
     # KHANDAQ (re-audit 2026-08-21, R-07): the package name, the version and the iOS build number were
@@ -74,6 +78,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Published metadata must match the build files
         run: python3 scripts/check-release-metadata.py
+      # KHANDAQ (re-review v2 2026-08-22, RR2-13): the privacy policy is part of the control surface.
+      # It listed three permissions the app no longer requests and stated the store builds carry no
+      # signing key, which stopped being true with 0.2.42. Neither is visible by reading the page.
+      - name: Privacy and security claims must match the app and the release
+        run: python3 scripts/check-policy-claims.py
+      # KHANDAQ (internal audit 2026-08-22): the native library is downloaded, not committed. These
+      # are the digests that were reviewed.
+      - name: The native library must match its committed digests
+        run: python3 scripts/check-native-lib-pins.py
 
   compose-parses:
     # KHANDAQ (production deploy 2026-08-21): a compose file that docker cannot load is an outage with
@@ -99,6 +112,15 @@ jobs:
       # it uploaded anything — which is why the published site had drifted a release behind.
       - name: No silent set -e exits in deploy/ci/signing scripts
         run: python3 scripts/check-shell-set-e-traps.py
+      # KHANDAQ (re-review v2 2026-08-22, RR2-10): a mutable @v3 tag in a workflow holding
+      # security-events:write is a step somebody else can change without a diff here.
+      - name: Every third-party action must be pinned to a commit SHA
+        run: python3 scripts/check-action-pinning.py
+      # KHANDAQ (internal audit 2026-08-22, H-01): the deploy fetched already-published artifacts
+      # from the production web server and signed whatever did not verify — so a swapped binary got
+      # a release signature on the next ordinary deploy. This proves the signer refuses.
+      - name: The release key must refuse bytes from the download channel
+        run: python3 scripts/check-signing-refuses-untrusted.py
 
   website:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-03). The site's security posture used to live in a
@@ -186,6 +208,16 @@ jobs:
         run: python3 scripts/check-vulnerable-deps.py --offline
       - name: Scan every ecosystem against OSV
         run: python3 scripts/check-vulnerable-deps.py
+      # KHANDAQ (re-review v2 2026-08-22, RR2-08): OSV has no `generic` ecosystem, so the vendored C
+      # libraries — the largest memory-unsafe surface, decoding untrusted media and packets — had no
+      # advisory coverage at all. The first run of this found 114, including a critical in the
+      # libvpx that ships in every APK. Structure and coverage on every run; NVD is rate-limited, so
+      # the network pass runs on the schedule.
+      - name: Native components must all be scanned or explicitly excused
+        run: python3 scripts/check-native-advisories.py --offline
+      - name: Native dependency advisories (scheduled)
+        if: github.event_name == 'schedule'
+        run: python3 scripts/check-native-advisories.py
 
   sast:
     # KHANDAQ (re-review 2026-08-22, KQ-10). CodeQL (see codeql.yml) covers Java/Kotlin, Python and
@@ -207,6 +239,25 @@ jobs:
       - name: Rules must fire on their fixtures and be silent on the tree
         run: python3 scripts/check-sast-fixtures.py
 
+  native-static-analysis:
+    # KHANDAQ (re-review v2 2026-08-22, RR2-12). The targeted harnesses in this repository each pin a
+    # defect somebody already understood; none of them is a general analyser. The desktop is the
+    # largest memory-unsafe surface in the product — it parses peer-supplied media, files and
+    # protocol packets — and CodeQL cannot reach it here, because c-cpp needs to observe a real
+    # compilation and this runner has no Qt toolchain.
+    #
+    # cppcheck needs no build, so it is the part that exists today. Baseline-compared: inherited
+    # findings do not block, new ones do. A CodeQL c-cpp build and sanitizer-backed fuzzing of the
+    # packet and media parsers remain open, and saying so here is better than implying coverage.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install cppcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck
+      - name: No new static-analysis findings in the desktop sources
+        run: python3 scripts/check-native-static-analysis.py
+
   live-site:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из
     # trusted CI environment" and for an external check that notices a stale site or an expiring
@@ -227,6 +278,12 @@ jobs:
           fetch-depth: 0
       - name: Probe the live site from outside
         run: python3 scripts/verify-site-deploy.py --any-sha
+      # KHANDAQ (re-review v2 2026-08-22, RR2-03): existence of the published commit is not
+      # freshness. On 22 August the site advertised 0.2.40 while two releases with security changes
+      # had shipped. The download page is where a user checks what they are installing against what
+      # was published, so it gets a bounded staleness budget rather than an open-ended one.
+      - name: The published site must state the release being shipped
+        run: python3 scripts/check-site-freshness.py
 
   relay-tests:
     # KHANDAQ (audit round 3, F-15): until now NO workflow ran these.
@@ -298,6 +355,11 @@ jobs:
       # like a device that has not registered.
       - name: iOS push capabilities must stay in the Keychain
         run: python3 scripts/check-ios-capability-storage.py
+      # KHANDAQ (internal audit 2026-08-22): the share extension writes to an App Group that no
+      # entitlements file declares, so it fails on every device, silently. The gap is owner-blocked
+      # (the group must exist in the portal first) and recorded with an expiry; a NEW one fails here.
+      - name: Every App Group used by the code must be declared
+        run: python3 scripts/check-ios-app-groups.py
 
       # KHANDAQ (re-audit 2026-08-22): a device build overwrites this tracked binary with its own
       # slice. It has been swept into a commit twice, and in a diff it looks like a deliberate change.

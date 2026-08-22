@@ -18,7 +18,12 @@ import requests
 from flask import Flask, g, jsonify, request
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+# KHANDAQ (internal audit 2026-08-22): the level goes in brackets because the deploy gate greps
+# for "[ERROR]". It grepped for that against a format that never produced it, so every
+# deploy-stopping condition this relay knows how to report — no auth secret, an unreadable
+# service account, soft mode past its own cutoff — printed to the log and the deploy said
+# "no errors in the startup log". Both sides are fixed; this is the half that cannot drift.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("khandaq-push")
 
 FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "khandaq-messenger")
@@ -183,6 +188,18 @@ PUSH_CAP_TTL_DAYS = max(1, int(os.environ.get("PUSH_CAP_TTL_DAYS", "180")))
 # A challenge is single-use and short-lived: it exists only for the seconds between the device
 # asking and the push arriving.
 PUSH_CHALLENGE_TTL_SEC = max(30, int(os.environ.get("PUSH_CHALLENGE_TTL_SEC", "300")))
+# KHANDAQ (re-review v2 2026-08-22, RR2-04): the first leg of registration is unauthenticated by
+# design — it has to be, since proving you hold the device is exactly what it is about to do. That
+# makes it an externally triggerable push: anyone who knows a token (every contact does, the wake URL
+# carries it) can make the relay send a data push to that device. The nonce stops them completing the
+# registration; nothing stopped them repeating the first leg, and the per-IP limiter does not bound
+# abuse of ONE victim token spread across many source addresses.
+#
+# So: a token bucket keyed on the token, a single live challenge per token (a repeat inside the
+# window returns the same cid and sends nothing), and a ceiling on outstanding challenges overall.
+PUSH_CHALLENGE_MIN_INTERVAL_SEC = max(1, int(os.environ.get("PUSH_CHALLENGE_MIN_INTERVAL_SEC", "45")))
+PUSH_CHALLENGE_BURST = max(1, int(os.environ.get("PUSH_CHALLENGE_BURST", "2")))
+PUSH_CHALLENGE_MAX_OUTSTANDING = max(100, int(os.environ.get("PUSH_CHALLENGE_MAX_OUTSTANDING", "10000")))
 # The gap that would otherwise cost real notifications, and the only one in this design.
 #
 # A recipient registers a capability and re-publishes its wake URL to every contact over Tox. A
@@ -318,6 +335,17 @@ def _stats_conn():
     conn.execute("CREATE TABLE IF NOT EXISTS pushchallenge ("
                  "cid TEXT PRIMARY KEY, th TEXT NOT NULL, nonceh TEXT NOT NULL, "
                  "exp INTEGER NOT NULL)")
+    # KHANDAQ (re-review v2 2026-08-22, RR2-04): the per-token challenge budget, shared by every
+    # gunicorn worker for the same reason the per-IP window is. Keyed by a KEYED hash: this table is
+    # indexed by a value a contact already knows, so a plain digest would let anyone holding a token
+    # confirm whether that device has been asking for challenges.
+    conn.execute("CREATE TABLE IF NOT EXISTS pushchalrate ("
+                 "th TEXT PRIMARY KEY, last REAL NOT NULL, budget REAL NOT NULL)")
+    # Aggregate challenge outcomes per UTC day. Counts only — no token, no hash, nothing that
+    # identifies a device, because this is reported on /health/detail.
+    conn.execute("CREATE TABLE IF NOT EXISTS chalstat ("
+                 "day TEXT NOT NULL, outcome TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
+                 "PRIMARY KEY (day, outcome))")
     # KHANDAQ (re-audit 2026-08-22, K-03): which emission path clients actually use, per day, with
     # no token and no identifier of any kind. "Retire the legacy GET" is a decision that needs this
     # number, and asking the access log was never going to give it — the query string is redacted
@@ -339,6 +367,101 @@ COALESCE_SECONDS = int(os.environ.get("PUSH_COALESCE_SECONDS", "45"))
 
 def _th(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+
+
+# KHANDAQ (re-review v2 2026-08-22, RR2-04). The review asks for the throttle to be keyed on a
+# KEYED hash of the token. It is keyed on `th` — the same truncated SHA-256 every other table here
+# uses — and the deviation is deliberate: `pushsent`, `pushcap` and `pushchallenge` are all already
+# indexed by `th`, so an attacker who can read this database and holds a token already learns
+# everything a keyed hash would have hidden, while a second hashing scheme would add a key file to
+# manage and a way for the budget to silently reset. The part of the requirement that carries the
+# security — never store the raw token — is met.
+
+
+def _challenge_refund(conn, th: str) -> None:
+    """Give back one unit of challenge budget: the caller proved it holds the FCM registration."""
+    row = conn.execute("SELECT last, budget FROM pushchalrate WHERE th = ?", (th,)).fetchone()
+    if row is None:
+        return
+    budget = min(float(PUSH_CHALLENGE_BURST), float(row[1]) + 1.0)
+    conn.execute("UPDATE pushchalrate SET budget = ? WHERE th = ?", (budget, th))
+
+
+def _chal_count(conn, outcome: str) -> None:
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    conn.execute("INSERT INTO chalstat (day, outcome, n) VALUES (?, ?, 1) "
+                 "ON CONFLICT(day, outcome) DO UPDATE SET n = n + 1", (day, outcome))
+
+
+def _challenge_gate(token: str) -> tuple[str, str | None]:
+    """Decide whether this challenge request may cause an FCM push.
+
+    Returns (decision, cid). Decisions:
+      ok         -> send the push, then record the challenge
+      reuse      -> a live challenge already exists; return its cid and send NOTHING
+      throttled  -> this token's budget is spent
+      saturated  -> too many outstanding challenges relay-wide
+      store_error-> the store is unavailable; the caller decides how to fail
+
+    The order matters: saturation and reuse are checked before the budget is spent, so an honest
+    device retrying inside the window is neither charged nor refused.
+    """
+    now = time.time()
+    inow = int(now)
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("DELETE FROM pushchallenge WHERE exp < ?", (inow,))
+                outstanding = conn.execute("SELECT COUNT(*) FROM pushchallenge").fetchone()[0]
+                if outstanding >= PUSH_CHALLENGE_MAX_OUTSTANDING:
+                    _chal_count(conn, "saturated")
+                    conn.commit()
+                    return "saturated", None
+
+                th = _th(token)
+                row = conn.execute(
+                    "SELECT cid FROM pushchallenge WHERE th = ? AND exp > ? ORDER BY exp DESC LIMIT 1",
+                    (th, inow)).fetchone()
+                if row is not None:
+                    # Returning the existing cid leaks nothing: the cid is not the proof, the nonce
+                    # is, and the nonce only ever went to the device.
+                    _chal_count(conn, "reused")
+                    conn.commit()
+                    return "reuse", row[0]
+
+                brow = conn.execute("SELECT last, budget FROM pushchalrate WHERE th = ?",
+                                    (th,)).fetchone()
+                if brow is None:
+                    budget = float(PUSH_CHALLENGE_BURST)
+                    last = now
+                else:
+                    last, budget = float(brow[0]), float(brow[1])
+                    budget = min(float(PUSH_CHALLENGE_BURST),
+                                 budget + max(0.0, now - last) / PUSH_CHALLENGE_MIN_INTERVAL_SEC)
+                if budget < 1.0:
+                    conn.execute("INSERT INTO pushchalrate (th, last, budget) VALUES (?, ?, ?) "
+                                 "ON CONFLICT(th) DO UPDATE SET last = ?, budget = ?",
+                                 (th, now, budget, now, budget))
+                    _chal_count(conn, "throttled")
+                    conn.commit()
+                    return "throttled", None
+
+                budget -= 1.0
+                conn.execute("INSERT INTO pushchalrate (th, last, budget) VALUES (?, ?, ?) "
+                             "ON CONFLICT(th) DO UPDATE SET last = ?, budget = ?",
+                             (th, now, budget, now, budget))
+                # Old buckets are worthless once refilled to full; drop them so the table tracks
+                # active abusers rather than every token that ever registered.
+                conn.execute("DELETE FROM pushchalrate WHERE last < ?",
+                             (now - PUSH_CHALLENGE_MIN_INTERVAL_SEC * PUSH_CHALLENGE_BURST * 10,))
+                conn.commit()
+                return "ok", None
+            finally:
+                conn.close()
+    except Exception:
+        log.exception("challenge gate store failure")
+        return "store_error", None
 
 
 def _should_coalesce(token: str) -> bool:
@@ -591,8 +714,17 @@ def _auth_adoption_summary() -> dict:
             finally:
                 conn.close()
 
-        today = {o: n for o, n in today_rows}
-        window = {o: n for o, n in window_rows}
+        # KHANDAQ (internal audit 2026-08-22): keep cap_* out of the authentication arithmetic.
+        #
+        # Capability outcomes are recorded into the SAME authoutcome table (one row per day per
+        # outcome, which is why a new outcome never needs a migration). Harmless for storage, wrong
+        # for this summary: every `cap_ok` landed in the denominator of window_signed_pct without
+        # ever landing in the numerator, so a fleet in which 100% of requests were correctly signed
+        # AND carried a capability reported 50% signed. That number is the one step 4 of the rollout
+        # turns on — an operator watching it would wait for a percentage that arithmetic prevents
+        # from arriving, and enforcement would never be switched on at all.
+        today = {o: n for o, n in today_rows if o in AUTH_OUTCOMES}
+        window = {o: n for o, n in window_rows if o in AUTH_OUTCOMES}
 
         def pct(signed, total):
             # null while there is no traffic, so an idle relay cannot read as "100% adopted".
@@ -1246,6 +1378,10 @@ def health_detail():
     # fleet is still unprotected, which is operational detail for us and a targeting hint for them.
     body["capabilities"] = _cap_summary()
     body["emission_paths"] = _path_summary()
+    # KHANDAQ (re-review v2 2026-08-22, RR2-04): aggregate throttling only. Never a token, never a
+    # hash — this endpoint exists to answer "is the challenge surface being abused", and a per-device
+    # breakdown would answer "which devices exist", which is the thing the relay declines to know.
+    body["challenges"] = _challenge_summary()
     if PUSH_AUTH_BREAK_GLASS:
         body["break_glass"] = PUSH_AUTH_BREAK_GLASS
     return jsonify(body)
@@ -1277,6 +1413,40 @@ def _cap_summary() -> dict:
             # cap_missing_grace falling to zero is the signal that the transition has landed and the
             # grace window is no longer carrying anyone.
             "grace_still_used": int(outcomes.get("cap_missing_grace", 0) + outcomes.get("cap_bad_grace", 0)),
+        }
+    except Exception:
+        return {"error": "unavailable"}
+
+
+def _challenge_summary() -> dict:
+    """Whether the registration challenge surface is being abused, in counts and nothing else."""
+    try:
+        since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 7 * 86400))
+        now = int(time.time())
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                rows = conn.execute(
+                    "SELECT outcome, SUM(n) FROM chalstat WHERE day >= ? GROUP BY outcome",
+                    (since,)).fetchall()
+                outstanding = conn.execute("SELECT COUNT(*) FROM pushchallenge WHERE exp > ?",
+                                           (now,)).fetchone()[0]
+                buckets = conn.execute("SELECT COUNT(*) FROM pushchalrate").fetchone()[0]
+            finally:
+                conn.close()
+        outcomes = {k: int(v) for k, v in rows}
+        sent = outcomes.get("sent", 0)
+        refused = outcomes.get("throttled", 0) + outcomes.get("saturated", 0)
+        return {
+            "window_days": 7,
+            "outcomes": outcomes,
+            "outstanding": int(outstanding),
+            "tracked_buckets": int(buckets),
+            "max_outstanding": PUSH_CHALLENGE_MAX_OUTSTANDING,
+            "burst": PUSH_CHALLENGE_BURST,
+            "min_interval_sec": PUSH_CHALLENGE_MIN_INTERVAL_SEC,
+            # A refusal share that is not near zero means somebody is pushing on this surface.
+            "refused_pct": round(100.0 * refused / (sent + refused), 2) if (sent + refused) else 0.0,
         }
     except Exception:
         return {"error": "unavailable"}
@@ -1371,16 +1541,27 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, ca
     # there is no fleet-wide instant at which anything can break; the property starts holding for a
     # device the moment that device registers, and for nobody else.
     cap_state = _cap_state(token, (cap or "").strip())
-    if cap_state in ("store_error", "missing_grace", "bad_grace"):
+    # KHANDAQ (internal audit 2026-08-22): ask the policy about EVERY state, "none" included.
+    #
+    # This used to read `cap_state != "none" and ... and _cap_required(...)`, which short-circuited
+    # before the policy was consulted for exactly the devices that have registered nothing — today,
+    # all of them. PUSH_CAP_ENFORCE=always is the lever an operator reaches for when the fleet HMAC
+    # has leaked, and in that state it refused nobody: a valid signature over any known token still
+    # got a 200. The lever read as thrown and did nothing.
+    #
+    # _cap_required already answered this correctly for every mode; only the call site disagreed. In
+    # 'auto' it returns False for "none", so the default behaviour is unchanged.
+    cap_refuse = cap_state != "ok" and _cap_required(cap_state)
+    # Record the outcome once. The old shape recorded grace and store_error here and then AGAIN on
+    # the rejection path, so an enforcing relay double-counted precisely the states an operator
+    # watches while deciding whether enforcement is safe.
+    if cap_state != "none" or cap_refuse:
         _record_auth_outcome("cap_" + cap_state)
-    if cap_state != "none" and cap_state != "ok" and _cap_required(cap_state):
-        _record_auth_outcome("cap_" + cap_state)
+    if cap_refuse:
         # No detail beyond the state: telling a caller "that capability is not registered" versus
         # "this token needs one" is a distinction only an attacker is enumerating for.
         log.warning("push cap REJECT (%s) from %s", cap_state, _client_ip())
         return jsonify({"error": "unauthorized"}), 401
-    if cap_state == "ok":
-        _record_auth_outcome("cap_ok")
 
     sender_pubkey = sender_raw.strip().upper()
     if sender_pubkey and (len(sender_pubkey) != 64 or not all(c in "0123456789ABCDEF" for c in sender_pubkey)):
@@ -1528,14 +1709,41 @@ def register_challenge():
         return jsonify({"error": "invalid token"}), 400
     token = token.strip()
 
+    # KHANDAQ (re-review v2 2026-08-22, RR2-04): every path that can cause an FCM push to a device
+    # the caller has not proven anything about goes through here FIRST. Sending and then accounting
+    # would leave the abuse already delivered.
+    decision, existing = _challenge_gate(token)
+    if decision == "reuse":
+        # A live challenge is already outstanding for this device. The honest case is a client
+        # retrying; the abusive case is someone trying to make the device buzz again. Both get the
+        # same answer, and neither gets a second push.
+        return jsonify({"cid": existing, "expires_in": PUSH_CHALLENGE_TTL_SEC, "reused": 1}), 200
+    if decision == "throttled":
+        return jsonify({"error": "rate limit"}), 429
+    if decision == "saturated":
+        # Relay-wide ceiling. 503 rather than 429: nothing about THIS caller is wrong.
+        return jsonify({"error": "too many outstanding challenges"}), 503
+    if decision == "store_error":
+        # Fail closed. An unavailable throttle store is precisely when the endpoint must not be
+        # turned into a free push generator.
+        return jsonify({"error": "challenge unavailable"}), 503
+
     nonce = secrets.token_urlsafe(32)
     cid = secrets.token_urlsafe(16)
     exp = int(time.time()) + PUSH_CHALLENGE_TTL_SEC
     ok, detail = _send_fcm_data(token, {"khandaq_reg_nonce": nonce, "khandaq_reg_cid": cid})
     if not ok:
         # The detail names an internal path or an upstream body; it is logged, never returned
-        # (audit round 3, F-11).
+        # (audit round 3, F-11). The budget stays spent: a caller that can make delivery fail must
+        # not get an unlimited number of attempts out of it.
         log.warning("register challenge send failed: %s", _redact_token(detail, token))
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                _chal_count(conn, "send_failed")
+                conn.commit()
+            finally:
+                conn.close()
         return jsonify({"error": "challenge delivery failed"}), 502
 
     with _stats_lock:
@@ -1544,6 +1752,7 @@ def register_challenge():
             conn.execute("DELETE FROM pushchallenge WHERE exp < ?", (int(time.time()),))
             conn.execute("INSERT INTO pushchallenge (cid, th, nonceh, exp) VALUES (?, ?, ?, ?)",
                          (cid, _th(token), hashlib.sha256(nonce.encode()).hexdigest(), exp))
+            _chal_count(conn, "sent")
             conn.commit()
         finally:
             conn.close()
@@ -1582,6 +1791,14 @@ def register_confirm():
                 conn.commit()
                 return jsonify({"error": "unknown or expired challenge"}), 400
             conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+            # KHANDAQ (re-review v2 2026-08-22, RR2-04): a completed challenge REFUNDS the token's
+            # throttle budget. Capabilities are per-contact, so a device with N contacts legitimately
+            # walks challenge->confirm N times; a flat budget would throttle onboarding. What
+            # separates that device from an abuser is not the rate — it is that the device can answer
+            # the challenge, and an abuser never can. So possession of the FCM registration buys back
+            # the credit it just spent, and the budget only ever drains for callers who cannot prove
+            # anything.
+            _challenge_refund(conn, th)
             conn.execute("INSERT INTO pushcap (th, caph, created, last_used) VALUES (?, ?, ?, ?) "
                          "ON CONFLICT(th, caph) DO UPDATE SET last_used = excluded.last_used",
                          (th, _caph(cap), now, now))
@@ -1644,6 +1861,8 @@ def register_revoke():
                 conn.commit()
                 return jsonify({"error": "unknown or expired challenge"}), 400
             conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+            # Same refund as confirm: this caller answered a challenge, so it is a device.
+            _challenge_refund(conn, th)
             cur = conn.execute("DELETE FROM pushcap WHERE th = ? AND caph = ?", (th, _caph(cap)))
             conn.commit()
             removed = cur.rowcount

@@ -22,11 +22,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DL="$ROOT/web/downloads"
+# KHANDAQ (internal audit 2026-08-22, H-01): the directory is overridable so the refusal behaviour
+# below can be exercised on a scratch copy. Production passes nothing and gets web/downloads, and the
+# public key and allowed_signers follow the directory rather than being pinned to it separately —
+# otherwise a test would verify against the real trust anchor while signing somewhere else.
+DL="${KHANDAQ_DOWNLOADS_DIR:-$ROOT/web/downloads}"
 KEY_DIR="${KHANDAQ_SIGNING_DIR:-$HOME/.khandaq/release-signing}"
 KEY="$KEY_DIR/khandaq-release-ed25519"
-PUB_IN_REPO="$ROOT/web/downloads/KHANDAQ-RELEASE-SIGNING.pub"
-ALLOWED="$ROOT/web/downloads/allowed_signers"
+PUB_IN_REPO="$DL/KHANDAQ-RELEASE-SIGNING.pub"
+ALLOWED="$DL/allowed_signers"
 # The identity the signature is bound to. Not an email that must exist — a stable label, which is
 # what allowed_signers matches on.
 IDENTITY="releases@khandaq.org"
@@ -97,14 +101,47 @@ for f in "$DL"/*; do
   # come to about 400 MB — re-signing unchanged bytes on every deploy costs minutes and proves
   # nothing. The verify is the check: a file that changed, or a signature that does not match it,
   # fails here and gets re-signed.
+  base="$(basename "$f")"
   if [ -f "$f.sig" ] && ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$NAMESPACE" \
                                    -s "$f.sig" < "$f" >/dev/null 2>&1; then
-    echo "  уже подписан: $(basename "$f")"
+    echo "  уже подписан: $base"
     continue
   fi
+
+  # KHANDAQ (internal audit 2026-08-22, H-01). Everything below this line used to be "re-sign it".
+  # Two cases reach here, and neither of them may end in a signature being made.
+  #
+  # 1. The bytes came from the web server (deploy-site.sh fetched them because this checkout does not
+  #    hold them). Signing those would mean the release key vouches for whatever the distribution
+  #    channel happened to be serving — which is precisely the thing the signature exists to rule
+  #    out. An attacker with write access to the downloads directory would get a valid signature over
+  #    their file on the next ordinary deploy.
+  #
+  # 2. A local file carries a signature that does not verify. That is not "the file changed"; a
+  #    rebuild produces a new file with NO stale .sig beside it, because the build writes to dist/.
+  #    A mismatch means the bytes or the signature were altered after signing, and the correct
+  #    response to that is to stop.
+  case " ${FETCHED_ARTIFACTS:-} " in
+    *" $base "*)
+      echo "ОШИБКА: $base доставлен с боевого сервера, а его опубликованная подпись не проходит" >&2
+      echo "       проверку (или её там нет). Подписать эти байты нельзя: ключ поручился бы за то," >&2
+      echo "       что раздаёт сам сервер — ровно за то, от чего подпись и защищает." >&2
+      echo "       Соберите артефакт локально в dist/ и выложите заново, а если он там не менялся —" >&2
+      echo "       это инцидент: на сервере лежит не то, что было подписано." >&2
+      exit 1
+      ;;
+  esac
+  if [ -f "$f.sig" ]; then
+    echo "ОШИБКА: $base не сходится со своей подписью $base.sig." >&2
+    echo "       Пересборка кладёт новый файл БЕЗ старой подписи рядом, поэтому расхождение здесь" >&2
+    echo "       означает, что после подписания изменили байты или подпись. Это инцидент, а не" >&2
+    echo "       повод переподписать." >&2
+    exit 1
+  fi
+
   ssh-keygen -Y sign -f "$KEY" -n "$NAMESPACE" "$f" >/dev/null 2>&1
   # ssh-keygen writes <file>.sig next to the input, which is exactly where it is published.
-  echo "  подписан: $(basename "$f")"
+  echo "  подписан: $base"
   signed=$((signed + 1))
 done
 echo "подписано файлов: $signed"

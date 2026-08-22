@@ -109,7 +109,16 @@ docs/**
 # retirement date, and the evidence file is the measured relay state a release actually shipped
 # against. Both are the answer to a finding, so both have to leave this machine.
 !docs/PUSH-COMPATIBILITY.md
-!docs/push-release-evidence.json
+!docs/release-evidence/
+!docs/release-evidence/*.json
+
+# Отчёты аудитов и разбор находок: ради них всё и делалось, они обязаны быть в репозитории.
+!docs/audits/
+!docs/audits/*.md
+
+# Разрешения, которые библиотеки добавляют при слиянии манифеста: по этому списку
+# check-policy-claims.py сверяет политику конфиденциальности там, где сборки нет (CI).
+!docs/android-merge-injected-permissions.txt
 
 # Ops scripts with credential patterns (use SSH keys locally)
 scripts/deploy-bootstrap-remote.sh

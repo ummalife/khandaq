@@ -49,8 +49,16 @@ We aim to acknowledge reports within **72 hours**.
 
 It may receive:
 
-- FCM/APNs device token (URL query `id=`)
-- Optional sender **public key** (64 hex chars, `&from=`) — not a full Tox ID — so the mobile app can route the notification to the correct chat
+- FCM/APNs device token. Clients from Android 0.2.42 / iOS build 142986 send it in the body
+  of `POST /wake`, with the signature in a header; older installations still use the legacy
+  `GET/POST /toxfcm/fcm.php?id=…` form, where it is a URL query parameter and therefore
+  reaches the web-server access log. Retirement schedule:
+  [docs/PUSH-COMPATIBILITY.md](docs/PUSH-COMPATIBILITY.md).
+- Optional sender **public key** (64 hex chars) — not a full Tox ID — so the mobile app can
+  route the notification to the correct chat. Same two carriers as the token.
+- A per-contact capability, when the sending device has registered one. The shared build-time
+  HMAC is replay and rate-abuse hardening, **not** client identity: it is a fleet-wide key
+  embedded in public binaries, so possession of it proves nothing about who is calling.
 
 It does **not** receive receiver Tox ID or message plaintext. See `config/khandaq_push.json` and [docs/PUSH_RELAY.md](docs/PUSH_RELAY.md).
 

@@ -31,6 +31,11 @@ typedef NS_ENUM(NSUInteger, OCTNgcHskDecision) {
     OCTNgcHskDecisionLearn,
     /** The key we already trust — bump last-seen. */
     OCTNgcHskDecisionRefresh,
+    /// KHANDAQ (internal audit 2026-08-22): the same key, seen again too soon to be worth a write.
+    /// Android has had this as UP_TO_DATE from the start; iOS did not, so every announcement — and a
+    /// group member can repeat the identical 112 valid bytes as fast as the link allows — turned
+    /// into a Realm write transaction plus a read-back on the toxcore callback thread.
+    OCTNgcHskDecisionUpToDate,
     /** A different key we are not willing to switch to. Keep trusting the old one. */
     OCTNgcHskDecisionRecordOnly,
     /** A different key, and every condition for switching is met. */
@@ -63,6 +68,11 @@ typedef NS_ENUM(NSUInteger, OCTNgcHskDecision) {
  * A clock moved backwards yields a negative age, which fails the grace comparison and lands on
  * RecordOnly. That is the safe direction: a backwards clock can never hurry a replacement through.
  */
+/// Minimum gap between two last_seen writes for an unchanged key. Three orders of magnitude
+/// below replaceGraceMs, so bounding the writes cannot blunt the anti-substitution rule that
+/// reads last_seen. Mirrors NgcHskDirectory.REFRESH_MIN_INTERVAL_MS on Android.
++ (uint64_t)refreshMinIntervalMs;
+
 + (OCTNgcHskDecision)decideWithExisting:(nullable OCTNgcHskRecord *)existing
                             incomingPub:(nullable NSData *)incomingHskPub
                        peerConnectedNow:(BOOL)peerConnectedNow

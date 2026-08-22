@@ -79,11 +79,29 @@ jobs:
         run: |
           set -euo pipefail
           NL=khandaq-android-trifa/android-refimpl-app/app/nativelibs
-          run_id=$(gh run list --workflow=android-native-so.yml --status=success \
-                     --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+          # KHANDAQ (internal audit 2026-08-22): the run must come from a commit that is IN this
+          # release's history.
+          #
+          # "Latest successful, any branch" meant anyone with write access could push a branch that
+          # patched circle_scripts/deps.sh, run the native workflow there, and have the next tag cut
+          # from clean master pick up their library — signed with the upload key and carrying an
+          # attestation that says it was built from a reviewed commit. Nothing in the pipeline
+          # compared the two.
+          run_json=$(gh run list --workflow=android-native-so.yml --status=success \
+                       --branch master --limit 20 --json databaseId,headSha 2>/dev/null || echo '[]')
+          run_id=""
+          for row in $(echo "$run_json" | jq -r '.[] | "\(.databaseId):\(.headSha)"'); do
+            cand_id="${row%%:*}"; cand_sha="${row##*:}"
+            if git merge-base --is-ancestor "$cand_sha" "${GITHUB_SHA}" 2>/dev/null; then
+              run_id="$cand_id"
+              echo "native build $cand_id was made at $cand_sha, which is an ancestor of this release"
+              break
+            fi
+          done
           if [ -z "${run_id:-}" ]; then
-            echo "::error::no successful android-native-so run to take libjni-c-toxcore.so from." >&2
-            echo "         Run that workflow first: gh workflow run android-native-so.yml" >&2
+            echo "::error::no successful android-native-so run on master whose commit is an" >&2
+            echo "         ancestor of this release. A native library built somewhere else must not" >&2
+            echo "         enter a release: run the workflow on the release commit." >&2
             exit 1
           fi
           echo "taking the native library from android-native-so run $run_id"
@@ -96,7 +114,17 @@ jobs:
           [ -f /tmp/natso/armeabi/libjni-c-toxcore.so ] \
             && cp /tmp/natso/armeabi/libjni-c-toxcore.so "$NL/armeabi-v7a/"
           ls -l "$NL"/*/libjni-c-toxcore.so
+
+          # And do not trust the run selection alone. These digests are committed, so bytes that do
+          # not match what was reviewed cannot enter the build no matter which run produced them.
+          echo "==> verifying the native slices against the committed digests"
+          ( cd "$NL" && shasum -a 256 -c SHA256SUMS.txt ) || {
+            echo "::error::a native slice does not match nativelibs/SHA256SUMS.txt. Either the" >&2
+            echo "         native stack was rebuilt (update the digests in the same PR that changes" >&2
+            echo "         circle_scripts/deps.sh) or these are not the bytes that were reviewed." >&2
+            exit 1; }
           echo "native-so-run-id=$run_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "native-so-digests=verified against committed SHA256SUMS.txt" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Release gates - dependency waivers and published metadata
         run: |

@@ -150,4 +150,30 @@ public class StaleAuthorAttributionTest
         assertFalse(GroupMessageListHolder_text_incoming_not_read
                             .should_hide_claimed_author(true, m));
     }
+
+    /**
+     * KHANDAQ (internal audit 2026-08-22): a rejected row now reaches rendering, so the rule has to
+     * answer for it.
+     *
+     * A file record has no signed form, so {@code decide} returns REJECT_DOWNGRADE for every author
+     * with a fresh key — every up-to-date member of a group. Dropping them refused the feature
+     * rather than an attack: a photo posted by a current client never reached anyone who had been
+     * offline. The file path keeps the row instead, which is only safe while a third party cannot
+     * get the claimed name onto it.
+     */
+    @Test
+    public void aRejectedRowRelayedByAThirdPartyMustNotCarryTheClaimedName()
+    {
+        assertFalse(NgcHistoryDowngradePolicy.rendersAsClaimedAuthor(
+                NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE, false));
+    }
+
+    /** ...while an author relaying their OWN unsigned file is still shown as themselves: the group
+     *  layer has already authenticated which peer is speaking. */
+    @Test
+    public void aRejectedRowRelayedByTheAuthorKeepsTheName()
+    {
+        assertTrue(NgcHistoryDowngradePolicy.rendersAsClaimedAuthor(
+                NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE, true));
+    }
 }

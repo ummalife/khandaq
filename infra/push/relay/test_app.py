@@ -1402,3 +1402,193 @@ def test_the_detail_endpoint_still_carries_what_the_operator_needs(relay):
     for key in ("status", "auth_mode", "auth_epochs", "auth_required", "auth_adoption",
                 "fcm_configured", "fcm_mode"):
         assert key in body, f"{key} missing from /health/detail"
+
+
+# ---------------------------------------------------------------------------
+# KHANDAQ (re-review v2 2026-08-22, RR2-04): the registration challenge is an externally triggerable
+# push. The nonce stops an attacker COMPLETING a registration; nothing stopped them repeating the
+# first leg, and per-IP limiting does not bound abuse aimed at one victim token from many addresses.
+# These are the three checks the review asks for.
+# ---------------------------------------------------------------------------
+
+
+def test_one_token_cannot_be_hammered_from_many_addresses(relay):
+    """The finding itself: many source IPs, one victim token, and the device must stop buzzing."""
+    m = _stub_challenge(relay(rate_limit="100000"))
+    c = m.app.test_client()
+    for i in range(40):
+        c.post("/register/challenge", json={"token": TOKEN},
+               environ_base={"REMOTE_ADDR": f"203.0.113.{i % 250 + 1}"})
+    # Budget is a burst plus refill; nothing here can confirm a challenge, so nothing is refunded.
+    # The exact number does not matter — that it is bounded, and small, does.
+    assert len(m.pushed) <= m.PUSH_CHALLENGE_BURST + 1, (
+        f"{len(m.pushed)} pushes reached the device from 40 requests across 40 addresses — "
+        f"the per-token budget is not bounding anything")
+    assert len(m.pushed) >= 1, "the first, legitimate-looking request must still be served"
+
+
+def test_a_repeat_inside_the_window_reuses_the_live_challenge(relay):
+    """A second request while one is outstanding must return the same cid and send NOTHING."""
+    m = _stub_challenge(relay(rate_limit="100000"))
+    c = m.app.test_client()
+    first = c.post("/register/challenge", json={"token": TOKEN})
+    assert first.status_code == 200
+    sent_after_first = len(m.pushed)
+    second = c.post("/register/challenge", json={"token": TOKEN},
+                    environ_base={"REMOTE_ADDR": "198.51.100.7"})
+    assert second.status_code == 200
+    assert second.get_json()["cid"] == first.get_json()["cid"], "a live challenge must be reused"
+    assert second.get_json().get("reused") == 1
+    assert len(m.pushed) == sent_after_first, "reuse must not cost the device a second push"
+
+
+def test_the_per_ip_limiter_still_bounds_many_tokens_from_one_address(relay):
+    """The new per-token budget must not have replaced the old per-IP one."""
+    m = _stub_challenge(relay(rate_limit="5"))
+    c = m.app.test_client()
+    codes = [c.post("/register/challenge", json={"token": f"token-number-{i}-aaaaaaaaaa"},
+                    environ_base={"REMOTE_ADDR": "203.0.113.9"}).status_code
+             for i in range(20)]
+    assert 429 in codes, "one address enumerating many tokens must still hit the per-IP limiter"
+
+
+def test_an_honest_device_registers_every_contact_without_being_throttled(relay):
+    """
+    The counterpart, and the reason the budget is refunded rather than merely large.
+
+    Capabilities are per-contact, so a device with a real contact list walks challenge->confirm many
+    times in a row. That must not be throttled — and it is not, because each round proves possession
+    of the FCM registration and buys back the credit it spent. An abuser cannot do that even once.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    caps = ["Y2FwYWJpbGl0eS1mb3ItY29udGFjdC1udW1iZXItJTAyZA" + f"{i:02d}" for i in range(12)]
+    for cap in caps:
+        _register(m, TOKEN, cap)
+    assert len(m.pushed) == len(caps), "each completed round may cost exactly one push"
+    for cap in caps:
+        assert _wake(m, cap=cap).status_code == 200, "every registered contact must still wake it"
+    assert _revoke(m, TOKEN, caps[0]).status_code == 200, "and revocation must still work after all that"
+
+
+def test_a_failed_delivery_does_not_refund_the_budget(relay):
+    """Making delivery fail must not be a way to buy unlimited attempts."""
+    m = _stub_challenge(relay(rate_limit="100000"))
+
+    def failing(token, data):
+        return False, "upstream said no"
+
+    m._send_fcm_data = failing
+    c = m.app.test_client()
+    codes = [c.post("/register/challenge", json={"token": TOKEN},
+                    environ_base={"REMOTE_ADDR": f"203.0.113.{i + 1}"}).status_code
+             for i in range(10)]
+    assert codes.count(502) <= m.PUSH_CHALLENGE_BURST, (
+        "a caller that can make delivery fail got more attempts than the budget allows")
+    assert 429 in codes, "the budget must run out even when every send fails"
+    body = c.get("/health/detail", environ_base={"REMOTE_ADDR": "127.0.0.1"}).get_json()
+    assert body["challenges"]["outcomes"].get("throttled", 0) >= 1, "refusals must be counted"
+    assert body["challenges"]["refused_pct"] > 0
+
+
+def test_challenge_throttling_is_reported_without_identifying_anyone(relay):
+    """/health/detail must answer "is this being abused" without answering "by whom"."""
+    m = _stub_challenge(relay(rate_limit="100000"))
+    c = m.app.test_client()
+    for i in range(8):
+        c.post("/register/challenge", json={"token": TOKEN},
+               environ_base={"REMOTE_ADDR": f"203.0.113.{i + 1}"})
+    body = c.get("/health/detail", environ_base={"REMOTE_ADDR": "127.0.0.1"}).get_json()
+    ch = body.get("challenges")
+    assert ch and "outcomes" in ch, "challenge throttling must be observable"
+    # A live challenge absorbs the flood entirely: eight requests, one push, seven reuses. That is a
+    # tighter bound than the token bucket behind it — the bucket is what catches the case where the
+    # challenge has expired or been consumed, which test_a_failed_delivery_does_not_refund_the_budget
+    # exercises. Asserting "throttled >= 1" here would have been asserting the weaker path.
+    assert ch["outcomes"].get("sent", 0) == 1, "only the first request may reach the device"
+    assert ch["outcomes"].get("reused", 0) >= 6, "the rest must be absorbed by the live challenge"
+    assert ch["outstanding"] == 1
+    blob = repr(body)
+    assert TOKEN not in blob, "no token may appear in health output"
+    assert hashlib.sha256(TOKEN.encode()).hexdigest()[:32] not in blob, "nor a token hash"
+
+
+def test_cap_enforce_always_refuses_a_device_that_registered_nothing(relay):
+    """
+    KHANDAQ (internal audit 2026-08-22). PUSH_CAP_ENFORCE=always is the lever for "the fleet HMAC
+    has leaked, close the relay now". It used to refuse nobody: the call site short-circuited on
+    cap_state == "none" before asking the policy, and "none" is every device that has not registered
+    — today, all of them. A valid signature over any known token still got a 200.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0", cap_enforce="always"))
+    assert _wake(m, cap=None).status_code == 401, "a token with no capability must be refused"
+    assert _wake(m, cap="").status_code == 401, "an empty capability is not a capability"
+    assert _wake(m, cap=CAP_A).status_code == 401, "an unregistered capability must not pass either"
+    _register(m, TOKEN, CAP_A)
+    assert _wake(m, cap=CAP_A).status_code == 200, "and a registered one must still work"
+
+
+def test_cap_enforce_auto_still_lets_unregistered_devices_through(relay):
+    """The counterpart: the default mode must not have been turned into a flag day by the fix."""
+    m = _stub_challenge(relay(enforce="1", cap_grace="0", cap_enforce="auto"))
+    assert _wake(m, cap=None).status_code == 200, "auto must not require what nobody registered"
+    _register(m, TOKEN, CAP_A)
+    assert _wake(m, cap=None).status_code == 401, "once registered, the device is held to it"
+    assert _wake(m, cap=CAP_A).status_code == 200
+
+
+def test_a_refused_capability_is_counted_once(relay):
+    """The double-record made an enforcing relay overstate exactly the states an operator watches."""
+    m = _stub_challenge(relay(enforce="1", cap_grace="0", cap_enforce="always"))
+    assert _wake(m, cap=None).status_code == 401
+    body = m.app.test_client().get("/health/detail",
+                                   environ_base={"REMOTE_ADDR": "127.0.0.1"}).get_json()
+    outcomes = body["capabilities"]["window_outcomes"]
+    assert outcomes.get("cap_none") == 1, f"one refusal must count once, got {outcomes}"
+
+
+def test_capability_outcomes_do_not_depress_the_signing_percentage(relay):
+    """
+    KHANDAQ (internal audit 2026-08-22). cap_* outcomes share the authoutcome table with the
+    authentication ones. They were counted in the denominator of window_signed_pct and never in the
+    numerator, so a fleet signing every request AND carrying a capability reported ~50%. That is the
+    number the decision to set PUSH_AUTH_ENFORCE=1 turns on, and it could never reach the threshold.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    for _ in range(5):
+        assert _wake(m, cap=CAP_A).status_code == 200
+    body = m.app.test_client().get("/health/detail",
+                                   environ_base={"REMOTE_ADDR": "127.0.0.1"}).get_json()
+    adoption = body["auth_adoption"]
+    assert adoption["window_signed_pct"] == 100.0, (
+        f"every request was signed and carried a capability, yet adoption reads "
+        f"{adoption['window_signed_pct']}% — the denominator is counting the wrong rows")
+    assert set(adoption["window_outcomes"]) <= set(m.AUTH_OUTCOMES), \
+        "only authentication outcomes belong in this summary"
+
+
+def test_the_fleet_hmac_alone_cannot_wake_a_capability_protected_token(relay):
+    """
+    KHANDAQ (re-review v2 2026-08-22, RR2-05). The build-time HMAC is a fleet-wide key embedded in
+    public binaries: anyone who extracts it from an APK and learns a token can produce a valid
+    signature. That is why it is described as replay and rate-abuse hardening rather than as client
+    identity, and why the per-contact capability is the boundary that actually matters.
+
+    This is the property that claim rests on: a perfectly valid signature, made with the real secret,
+    over a token that has registered a capability, is refused without that capability — and one
+    revocation costs exactly one relationship.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    _register(m, TOKEN, CAP_B)
+
+    # Correctly signed — _wake signs with SECRET, the same value a release build carries.
+    assert _wake(m, cap=None).status_code == 401, \
+        "possession of the fleet key must not be enough once the device has a capability"
+    assert _wake(m, cap="Zm9yZ2VkLWNhcGFiaWxpdHktbm90LXJlZ2lzdGVyZWQtYWE").status_code == 401, \
+        "nor must a made-up capability"
+    assert _wake(m, cap=CAP_A).status_code == 200
+
+    assert _revoke(m, TOKEN, CAP_A).status_code == 200
+    assert _wake(m, cap=CAP_A).status_code == 401, "the revoked relationship stops"
+    assert _wake(m, cap=CAP_B).status_code == 200, "and only that one"

@@ -158,8 +158,14 @@ int main(void)
            rendersAsClaimedAuthor(OCTNgcDowngradeDecisionAcceptVerified, 0), 1);
     checkb("an author that never signed is unaffected",
            rendersAsClaimedAuthor(OCTNgcDowngradeDecisionAcceptLegacy, 0), 1);
-    checkb("a rejected row never reaches rendering, but must not claim attribution either",
-           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionReject, 0), 1);
+    /* KHANDAQ (internal audit 2026-08-22): a rejected row DOES now reach rendering — the file path
+       keeps it instead of dropping it, because a file record can never be signed and dropping every
+       one of them refused the feature rather than an attack. So the answer flipped: relayed by a
+       third party it must not carry the claimed name, relayed by the author it still may. */
+    checkb("a rejected row relayed by a third party must NOT attribute",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionReject, 0), 0);
+    checkb("a rejected row relayed by the author itself keeps the name",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionReject, 1), 1);
 
     printf("KEY_STALE_MS = %%llu ms (%%llu h)\\n",
            (unsigned long long)KEY_STALE_MS, (unsigned long long)(KEY_STALE_MS / 3600000ULL));

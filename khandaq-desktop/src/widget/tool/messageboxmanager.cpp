@@ -135,10 +135,29 @@ void MessageBoxManager::confirmExecutableOpen(const QFileInfo& file)
                                                     "msh2", "msh2xml", "mshxml", "msi",  "msp",
                                                     "pif",  "ps1",     "ps1xml", "ps2",  "ps2xml",
                                                     "psc1", "psc2",    "py",     "reg",  "scf",
-                                                    "sh",   "src",     "vb",     "vbe",  "vbs",
-                                                    "ws",   "wsc",     "wsf",    "wsh"};
+                                                    "sh",   "scr",     "vb",     "vbe",  "vbs",
+                                                    "ws",   "wsc",     "wsf",    "wsh",
+                                                    // KHANDAQ (internal audit 2026-08-22): "src" was
+                                                    // a typo for "scr" (Windows screensaver, an
+                                                    // executable), so the entry guarded nothing and
+                                                    // the real extension was absent. These four were
+                                                    // missing outright.
+                                                    "cmd",  "inf",     "msu",    "url"};
 
-    if (dangerousExtensions.contains(file.suffix())) {
+    // KHANDAQ (internal audit 2026-08-22): case-insensitive, and with the trailing characters
+    // Windows silently drops removed first.
+    //
+    // QStringList::contains is case-SENSITIVE by default, so "invoice.EXE" — or "invoice.Exe", which
+    // is what a mail client or an unzip tool commonly produces — did not match any entry and the
+    // consent dialog was skipped entirely. The file still opened; only the warning was lost, which
+    // is precisely the defence a user has against a peer-supplied executable. Trailing dots and
+    // spaces get the same treatment because "evil.exe " reaches the filesystem as "evil.exe" on
+    // Windows while QFileInfo::suffix keeps the space.
+    QString suffix = file.suffix();
+    while (!suffix.isEmpty() && (suffix.endsWith(QLatin1Char('.')) || suffix.endsWith(QLatin1Char(' ')))) {
+        suffix.chop(1);
+    }
+    if (dangerousExtensions.contains(suffix, Qt::CaseInsensitive)) {
         bool answer = askQuestion(tr("Executable file", "popup title"),
                                        tr("You have asked Khandaq to open an executable file. "
                                           "Executable files can potentially damage your computer. "

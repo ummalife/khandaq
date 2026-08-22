@@ -1,0 +1,7 @@
+# KHANDAQ (re-review v2 2026-08-22, RR2-13). Разрешения, которых нет в манифесте приложения,
+# но которые библиотеки добавляют при слиянии — то есть они ЕСТЬ в APK у пользователя.
+# Сверяется с собранным манифестом в scripts/check-policy-claims.py: список не может отстать
+# незаметно. Обновлять только вместе с проверкой того, что новое разрешение вообще нужно.
+android.permission.ACCESS_NETWORK_STATE
+com.google.android.c2dm.permission.RECEIVE
+com.khandaq.messenger.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION

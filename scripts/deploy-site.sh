@@ -40,7 +40,28 @@ if [[ "${1:-}" == "--rollback" ]]; then
     rm -rf '$REMOTE_SITE_DIR.superseded'
     chown -R www-data:www-data '$REMOTE_SITE_DIR'
     chmod -R a+r '$REMOTE_SITE_DIR'
-    find '$REMOTE_SITE_DIR' -type d -exec chmod 755 {} +"
+    find '$REMOTE_SITE_DIR' -type d -exec chmod 755 {} +
+    # Put the CSP back with the content it belongs to, and only then reload.
+    if [ -f '$PREV/_nginx/khandaq-security-headers.conf' ]; then
+      cp -a '$PREV/_nginx/khandaq-security-headers.conf' /etc/nginx/snippets/khandaq-security-headers.conf
+      echo '    restored: khandaq-security-headers.conf'
+    else
+      echo '    WARNING: snapshot predates nginx snapshotting - CSP hashes NOT rolled back' >&2
+    fi
+    if [ -f '$PREV/_nginx/site.conf' ]; then
+      cp -a '$PREV/_nginx/site.conf' '$NGINX_SITE'
+      echo '    restored: nginx site'
+    fi
+    # The snapshot carries its nginx copy inside it, so the restored tree contains _nginx. Remove it
+    # BEFORE the reload: for the moments in between it would be reachable over HTTP.
+    rm -rf '$REMOTE_SITE_DIR/_nginx'
+    # Explicit rather than 'nginx -t && reload': in an AND-list a failing first command does not trip
+    # set -e, so a bad config would have been followed by a silent non-reload and a green rollback.
+    if ! nginx -t; then
+      echo 'ОШИБКА: восстановленный конфиг nginx не проходит проверку — reload не делаю' >&2
+      exit 1
+    fi
+    systemctl reload nginx"
   echo "==> Verifying the rolled-back site"
   RB_SHA="$(curl -fsS https://khandaq.org/release-manifest.json | python3 -c 'import sys,json;print(json.load(sys.stdin)["site"]["gitSha"])')" || RB_SHA=""
   if [[ -z "$RB_SHA" ]]; then
@@ -183,8 +204,22 @@ for name in $REMOTE_FILES; do
   if [[ ! -f "$DL/$name" ]]; then
     echo "    fetching $name"
     scp -q "$REMOTE:$REMOTE_SITE_DIR/downloads/$name" "$DL/$name"
+    # KHANDAQ (internal audit 2026-08-22, H-01): bring the PUBLISHED signature down with the bytes,
+    # and remember that these bytes came from the distribution channel.
+    #
+    # Without this the file arrived unsigned, the signing step saw a missing or wrong signature and
+    # treated that as "changed, re-sign" - so a binary swapped on the web server was signed with the
+    # release key on the next ordinary deploy. The one event that had to stop everything was the
+    # trigger for blessing it. These names are refused by the signer below; the only thing that may
+    # happen to them is verification against the signature they arrived with.
+    scp -q "$REMOTE:$REMOTE_SITE_DIR/downloads/$name.sig" "$DL/$name.sig" 2>/dev/null || true
+    FETCHED_ARTIFACTS="${FETCHED_ARTIFACTS:-} $name"
   fi
 done
+export FETCHED_ARTIFACTS="${FETCHED_ARTIFACTS:-}"
+if [[ -n "${FETCHED_ARTIFACTS// /}" ]]; then
+  echo "    доставлено с сервера (подписывать их нельзя):${FETCHED_ARTIFACTS}"
+fi
 
 # KHANDAQ (re-audit 2026-08-22, K-05): sign what is about to be published, with a key that is not
 # this web server. A checksum list beside a download is an integrity check, not a trust anchor —
@@ -210,7 +245,17 @@ ssh "$REMOTE" "set -e
   mkdir -p '$SNAP_ROOT'
   if [ -d '$REMOTE_SITE_DIR' ] && [ -n \"\$(ls -A '$REMOTE_SITE_DIR' 2>/dev/null)\" ]; then
     cp -al '$REMOTE_SITE_DIR' '$SNAP_ROOT/$STAMP' 2>/dev/null || cp -a '$REMOTE_SITE_DIR' '$SNAP_ROOT/$STAMP'
-    echo \"    snapshot: $SNAP_ROOT/$STAMP\"
+    # KHANDAQ (internal audit 2026-08-22): the CSP travels with the content, or the rollback breaks
+    # the page it just restored.
+    #
+    # The headers snippet carries sha256 hashes of the inline scripts. Restoring old HTML while
+    # leaving the new hashes in nginx means the browser blocks the very scripts the restored page
+    # needs — and a static site has no server-side error for that, so it looks like the rollback
+    # worked and the page is simply broken.
+    mkdir -p '$SNAP_ROOT/$STAMP/_nginx'
+    cp -a /etc/nginx/snippets/khandaq-security-headers.conf '$SNAP_ROOT/$STAMP/_nginx/' 2>/dev/null || true
+    cp -a '$NGINX_SITE' '$SNAP_ROOT/$STAMP/_nginx/site.conf' 2>/dev/null || true
+    echo \"    snapshot: $SNAP_ROOT/$STAMP (+ nginx)\"
   else
     echo '    nothing served yet - no snapshot taken'
   fi

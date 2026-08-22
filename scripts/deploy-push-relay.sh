@@ -133,13 +133,30 @@ esac
 # as a failed deploy rather than as log colour.
 echo "==> The relay must start clean"
 sleep 2
-errs=\$(docker compose logs --no-color --since 3m </dev/null 2>/dev/null | grep -F '[ERROR]' || true)
+# KHANDAQ (internal audit 2026-08-22): match BOTH shapes. The bracketed form is what the relay
+# emits now; the bare one is what it emitted for the whole life of this check, which is why the
+# check never fired. A gate keyed to one formatting choice is a gate one commit away from silence.
+errs=\$(docker compose logs --no-color --since 3m </dev/null 2>/dev/null \
+        | grep -E '\\[ERROR\\]|[[:space:]]ERROR[[:space:]]' || true)
 if [[ -n "\$errs" ]]; then
   echo "ERROR: the relay logged errors at startup:" >&2
   echo "\$errs" >&2
   exit 1
 fi
 echo "    no errors in the startup log"
+
+# And do not rely on log text alone for the condition that actually broke delivery once: an FCM
+# service account the container cannot read. /health/detail states it directly.
+echo "==> FCM credentials must be usable"
+fcm=\$(curl -sS -m 20 http://127.0.0.1:8088/health/detail </dev/null 2>/dev/null \
+       | tr ',' '\\n' | grep -o '"fcm_mode"[^,}]*' || true)
+echo "    \$fcm"
+case "\$fcm" in
+  *unreadable*|*missing*|*error*)
+    echo "ERROR: the relay cannot use its FCM credentials — every notification would fail while" >&2
+    echo "       /health still says ok. This is the K-05 incident, and it is a failed deploy." >&2
+    exit 1 ;;
+esac
 REMOTE
 
 echo "==> Nginx vhost"

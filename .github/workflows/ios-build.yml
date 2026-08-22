@@ -6,18 +6,23 @@
 # CocoaPods/Fastlane must still build successfully using only Bundler and the committed lockfile" —
 # which cannot be demonstrated on a maintainer's Mac, because that Mac is the thing in question.
 #
-# COST: macOS runners bill at 10x the Linux rate, so this does NOT run on every push. It runs on
-# demand, and on pull requests that actually touch the iOS tree or the scripts that build it.
+# COST: macOS runners bill at 10x the Linux rate, so the expensive half does NOT run on every push.
+# It runs on demand, and on pull requests that actually touch the iOS tree or the scripts that build
+# it — but the JOB now starts on every pull request and exits in seconds when there is nothing iOS
+# in the diff.
+#
+# KHANDAQ (re-audit 2026-08-22, S-01): the `paths:` filter used to live on the trigger, so this
+# workflow simply did not run on an unrelated pull request. Once the job was made a REQUIRED check,
+# that turned every such pull request into one that could never merge: GitHub does not report
+# anything at all for a workflow that was filtered out, so the requirement sat "expected" forever.
+# Moving the filter from the trigger to the steps is what makes "required" and "path-scoped" able to
+# coexist. The idle case costs about a minute of macOS time; a check that cannot be satisfied costs
+# the whole review process.
 name: ios-build
 
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - 'khandaq-ios/**'
-      - 'scripts/build-ios.sh'
-      - 'scripts/live-qa-dual-ios-simulator.sh'
-      - '.github/workflows/ios-build.yml'
 
 permissions:
   contents: read
@@ -34,8 +39,30 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Is there anything iOS in this diff?
+        id: scope
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "manual run: building"
+            exit 0
+          fi
+          base="${{ github.event.pull_request.base.sha }}"
+          changed="$(git diff --name-only "$base"...HEAD || true)"
+          if printf '%s\n' "$changed" | grep -qE '^(khandaq-ios/|scripts/build-ios\.sh|scripts/live-qa-dual-ios-simulator\.sh|\.github/workflows/ios-build\.yml)'; then
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "iOS files changed: building"
+          else
+            echo "ios=false" >> "$GITHUB_OUTPUT"
+            echo "no iOS files in this diff: nothing to build, and the check still reports"
+          fi
 
       - name: Record the toolchain this build actually used
+        if: steps.scope.outputs.ios == 'true'
         run: |
           set -euo pipefail
           sw_vers
@@ -47,6 +74,7 @@ jobs:
           echo "globally installed pod: $(pod --version 2>/dev/null || echo 'none')"  # khandaq-bundler-ok: reporting the host's version for contrast, not building with it
 
       - name: Bundler, frozen — the lockfile decides, not the host
+        if: steps.scope.outputs.ios == 'true'
         working-directory: khandaq-ios
         run: |
           set -euo pipefail
@@ -57,6 +85,7 @@ jobs:
           bundle install --jobs 4 --retry 3
 
       - name: Prove Bundler is actually deciding the CocoaPods version
+        if: steps.scope.outputs.ios == 'true'
         working-directory: khandaq-ios
         run: |
           set -euo pipefail
@@ -76,6 +105,7 @@ jobs:
             || echo "::notice::global pod is $global, pinned build uses $want — Bundler is doing real work"
 
       - name: Provide a placeholder GoogleService-Info.plist
+        if: steps.scope.outputs.ios == 'true'
         working-directory: khandaq-ios
         run: |
           set -euo pipefail
@@ -130,17 +160,20 @@ jobs:
       # `vpx-simulator`, so a DEVICE build from a clean checkout would silently link the simulator
       # slice until someone copies `vpx-device` over it.
       - name: Build the vendored native dependencies (libopus, libvpx)
+        if: steps.scope.outputs.ios == 'true'
         run: |
           set -euo pipefail
           bash scripts/build-ios-native-deps.sh
 
       - name: bundle exec pod install
+        if: steps.scope.outputs.ios == 'true'
         working-directory: khandaq-ios
         run: |
           set -euo pipefail
           bundle exec pod install
 
       - name: Assert no lockfile was rewritten
+        if: steps.scope.outputs.ios == 'true'
         run: |
           set -euo pipefail
           # The same guard release-provenance.yml applies to the Android dependency pins, and the same
@@ -148,6 +181,7 @@ jobs:
           git diff --exit-code -- khandaq-ios/Gemfile.lock khandaq-ios/Podfile.lock
 
       - name: Build for the simulator
+        if: steps.scope.outputs.ios == 'true'
         working-directory: khandaq-ios
         run: |
           set -euo pipefail
@@ -189,7 +223,9 @@ jobs:
           [ "$rc" -eq 0 ] || { echo "::error::simulator build failed (xcodebuild exit $rc)" >&2; exit "$rc"; }
 
       - name: Show what was produced
-        if: always()
+        # always(), but only when there was something to produce — otherwise this runs on a
+        # no-iOS-changes pass and reports an empty find as if a build had happened.
+        if: always() && steps.scope.outputs.ios == 'true'
         working-directory: khandaq-ios
         run: |
           set -euo pipefail

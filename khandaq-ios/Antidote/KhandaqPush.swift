@@ -88,6 +88,88 @@ enum KhandaqPush {
     /// The FCM token the stored capabilities were registered against.
     private static let capTokenKey = "khandaq_pushcap_token"
 
+    // MARK: Where capabilities live (re-review 2026-08-22, KQ-08)
+    //
+    // These are bearer-style per-contact authorization secrets: hold one and you can make the relay
+    // wake that device for that relationship until it is revoked or expires. UserDefaults is
+    // app-private under normal sandboxing and is still a PREFERENCES store — it lands in backups and
+    // in anything that reads the app container. Keychain, device-only, is where a bearer secret
+    // belongs.
+    //
+    // Accessible-after-first-unlock rather than when-unlocked: the push path runs in the background,
+    // including right after a reboot before the user has unlocked, and a capability that cannot be
+    // read then is a notification that never arrives. ThisDeviceOnly keeps it out of backups and off
+    // a restored device, which is the property the review asks for.
+    private static let capKeychainService = "org.khandaq.pushcap"
+
+    private static func keychainRead(_ account: String) -> String? {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: capKeychainService,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        // NOTE: kSecAttrAccessible is deliberately absent here. In a query it acts as a SEARCH
+        // predicate, so including it would fail to find items written under any other class — the
+        // exact bug that once logged this app out on every launch (see KeychainManager).
+        var item: CFTypeRef?
+        let status = withUnsafeMutablePointer(to: &item) {
+            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+        }
+        query.removeAll()
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    private static func keychainWrite(_ account: String, _ value: String) -> Bool {
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: capKeychainService,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(base as CFDictionary)
+        var add = base
+        add[kSecValueData as String] = Data(value.utf8)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+    }
+
+    private static func keychainDelete(_ account: String) {
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: capKeychainService,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(base as CFDictionary)
+    }
+
+    /// One-time move of a value written by a build that used UserDefaults.
+    ///
+    /// Runs on read, not at launch: a launch-time sweep would have to enumerate every contact, and
+    /// the only capabilities that matter are the ones something actually asks for. The preference is
+    /// removed only AFTER the Keychain write succeeds — the reverse order would lose a capability on
+    /// a device where the Keychain is briefly unavailable, and a lost capability is a contact whose
+    /// pushes stop until the recipient re-registers.
+    private static func migrateFromDefaultsIfNeeded(_ account: String) -> String? {
+        let defaults = UserDefaults.standard
+        guard let legacy = defaults.string(forKey: account), !legacy.isEmpty else { return nil }
+        if keychainWrite(account, legacy) {
+            defaults.removeObject(forKey: account)
+            return legacy
+        }
+        // Keychain refused: keep the preference so nothing is lost, and try again next time.
+        return legacy
+    }
+
+    private static func capabilityValue(_ account: String) -> String? {
+        if let fromKeychain = keychainRead(account), !fromKeychain.isEmpty {
+            return fromKeychain
+        }
+        return migrateFromDefaultsIfNeeded(account)
+    }
+
     private static let capQueue = DispatchQueue(label: "org.khandaq.pushcap")
     /// Challenge id -> continuation waiting for its nonce.
     private static var pendingChallenges: [String: (String) -> Void] = [:]
@@ -104,13 +186,12 @@ enum KhandaqPush {
     /// nil means "publish the URL without one", which is the pre-capability behaviour and is always
     /// safe: the relay never requires a capability it was not given.
     static func capability(forFriend publicKey: String, ownToken: String) -> String? {
-        let defaults = UserDefaults.standard
-        guard let registeredFor = defaults.string(forKey: capTokenKey), registeredFor == ownToken else {
+        guard let registeredFor = capabilityValue(capTokenKey), registeredFor == ownToken else {
             // The FCM token rotated. Every capability was registered against the old one and can
             // never be used again; publishing one would hand the relay something it does not know.
             return nil
         }
-        let cap = defaults.string(forKey: capabilityKey(forFriend: publicKey))
+        let cap = capabilityValue(capabilityKey(forFriend: publicKey))
         return (cap?.isEmpty == false) ? cap : nil
     }
 
@@ -173,9 +254,14 @@ enum KhandaqPush {
                         completion(nil)
                         return
                     }
-                    let defaults = UserDefaults.standard
-                    defaults.set(cap, forKey: capabilityKey(forFriend: publicKey))
-                    defaults.set(ownToken, forKey: capTokenKey)
+                    guard keychainWrite(capabilityKey(forFriend: publicKey), cap),
+                          keychainWrite(capTokenKey, ownToken) else {
+                        // Registering succeeded on the relay but the secret could not be stored.
+                        // Publishing a capability we cannot reproduce would be worse than publishing
+                        // none, so this reports failure and the URL goes out without one.
+                        completion(nil)
+                        return
+                    }
                     capQueue.sync { lastAttempt[publicKey] = nil }
                     completion(cap)
                 }
@@ -204,8 +290,11 @@ enum KhandaqPush {
     /// Stop honouring one contact's capability. Presenting it is the proof of the right to drop it.
     static func revokeCapability(forFriend publicKey: String, ownToken: String) {
         let key = capabilityKey(forFriend: publicKey)
-        guard let cap = UserDefaults.standard.string(forKey: key), !cap.isEmpty else { return }
+        guard let cap = capabilityValue(key), !cap.isEmpty else { return }
         postJSON(relayBase + "/register/revoke", ["token": ownToken, "cap": cap]) { _ in }
+        keychainDelete(key)
+        // Also clear any pre-KQ-08 copy, so a revoked capability cannot come back from a preference
+        // that a migration had not reached yet.
         UserDefaults.standard.removeObject(forKey: key)
     }
 

@@ -267,6 +267,13 @@ jobs:
       - name: Android permissions must match the documented matrix
         run: python3 scripts/check-android-permissions.py
 
+      # KHANDAQ (re-review 2026-08-22, KQ-08): a per-contact capability is a bearer secret. Both
+      # halves that touch it are in different languages and different targets, and a service string
+      # changed on one side only fails silently — URLs go out with no capability, which looks exactly
+      # like a device that has not registered.
+      - name: iOS push capabilities must stay in the Keychain
+        run: python3 scripts/check-ios-capability-storage.py
+
       # KHANDAQ (re-audit 2026-08-22): a device build overwrites this tracked binary with its own
       # slice. It has been swept into a commit twice, and in a diff it looks like a deliberate change.
       - name: The tracked vpx slice must be the simulator one

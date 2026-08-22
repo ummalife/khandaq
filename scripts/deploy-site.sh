@@ -13,6 +13,45 @@ REMOTE_BACKUP_ROOT="${KHANDAQ_BACKUP_DIR:-/var/www/backups}"
 NGINX_SITE="/etc/nginx/sites-enabled/khandaq.org"
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 
+# KHANDAQ (re-audit 2026-08-22, W-02): snapshot before, and a way back.
+#
+# The audit asks for a rollback that "restores previous internally-consistent manifest/artifacts".
+# There was none: the deploy overwrote the live site in place, so a bad publish could only be undone
+# by fixing forward — which is the worst moment to be editing. Every deploy now leaves a hardlinked
+# snapshot of the whole served tree (pages, manifest, checksums, signatures and artifacts together,
+# because a manifest without its artifacts is not a consistent state), and --rollback puts the most
+# recent one back and re-runs the same external verification.
+SNAP_ROOT="${KHANDAQ_SITE_SNAPSHOTS:-/var/www/backups/site-snapshots}"
+
+if [[ "${1:-}" == "--rollback" ]]; then
+  echo "==> Rolling back $REMOTE:$REMOTE_SITE_DIR"
+  PREV="$(ssh "$REMOTE" "ls -1d '$SNAP_ROOT'/* 2>/dev/null | sort | tail -1")" || PREV=""
+  if [[ -z "$PREV" ]]; then
+    echo "нет ни одного снимка в $SNAP_ROOT — откатывать не к чему" >&2
+    exit 1
+  fi
+  echo "    снимок: $PREV"
+  ssh "$REMOTE" "set -e
+    rm -rf '$REMOTE_SITE_DIR.rollback-tmp'
+    cp -al '$PREV' '$REMOTE_SITE_DIR.rollback-tmp' 2>/dev/null || cp -a '$PREV' '$REMOTE_SITE_DIR.rollback-tmp'
+    rm -rf '$REMOTE_SITE_DIR.superseded'
+    mv '$REMOTE_SITE_DIR' '$REMOTE_SITE_DIR.superseded'
+    mv '$REMOTE_SITE_DIR.rollback-tmp' '$REMOTE_SITE_DIR'
+    rm -rf '$REMOTE_SITE_DIR.superseded'
+    chown -R www-data:www-data '$REMOTE_SITE_DIR'
+    chmod -R a+r '$REMOTE_SITE_DIR'
+    find '$REMOTE_SITE_DIR' -type d -exec chmod 755 {} +"
+  echo "==> Verifying the rolled-back site"
+  RB_SHA="$(curl -fsS https://khandaq.org/release-manifest.json | python3 -c 'import sys,json;print(json.load(sys.stdin)["site"]["gitSha"])')" || RB_SHA=""
+  if [[ -z "$RB_SHA" ]]; then
+    echo "не удалось прочитать gitSha восстановленного манифеста" >&2
+    exit 1
+  fi
+  echo "    восстановленный сайт собран из $RB_SHA"
+  python3 "$ROOT/scripts/verify-site-deploy.py" --sha "$RB_SHA"
+  exit $?
+fi
+
 mkdir -p "$DL"
 
 echo "==> Generate changelog from git"
@@ -164,6 +203,19 @@ ssh "$REMOTE" "mkdir -p '$REMOTE_BACKUP_ROOT' && \
     echo 'Backup: $REMOTE_BACKUP_ROOT/element-matrix-$STAMP'; \
   fi"
 
+# Hardlinked, so a snapshot of ~400 MB of artifacts costs inodes rather than disk. Kept to the last
+# five: enough to step back past a bad publish, not enough to fill the volume.
+echo "==> Snapshot the currently-served site"
+ssh "$REMOTE" "set -e
+  mkdir -p '$SNAP_ROOT'
+  if [ -d '$REMOTE_SITE_DIR' ] && [ -n \"\$(ls -A '$REMOTE_SITE_DIR' 2>/dev/null)\" ]; then
+    cp -al '$REMOTE_SITE_DIR' '$SNAP_ROOT/$STAMP' 2>/dev/null || cp -a '$REMOTE_SITE_DIR' '$SNAP_ROOT/$STAMP'
+    echo \"    snapshot: $SNAP_ROOT/$STAMP\"
+  else
+    echo '    nothing served yet - no snapshot taken'
+  fi
+  ls -1d '$SNAP_ROOT'/* 2>/dev/null | sort | head -n -5 | xargs -r rm -rf"
+
 echo "==> Upload Khandaq site to $REMOTE:$REMOTE_SITE_DIR"
 ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/downloads'"
 # KHANDAQ (KHQ-01): purge any previously-published sideload APK from the live server so it can't be
@@ -181,12 +233,28 @@ STAMPED="$(mktemp -t khandaq-manifest)"
 trap 'rm -f "$STAMPED"' EXIT
 python3 "$ROOT/scripts/generate-release-manifest.py" --stamp "$STAMPED"
 
-scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
-scp -p "$STAMPED" "$REMOTE:$REMOTE_SITE_DIR/release-manifest.json"
-scp -pr "$WEB/assets" "$REMOTE:$REMOTE_SITE_DIR/"
-ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/.well-known'"
-scp -p "$WEB/.well-known/security.txt" "$REMOTE:$REMOTE_SITE_DIR/.well-known/security.txt"
-scp -p "$DL"/* "$REMOTE:$REMOTE_SITE_DIR/downloads/" 2>/dev/null || true
+# KHANDAQ (re-audit 2026-08-22, W-02): upload to a staging directory, then replace.
+#
+# scp opens the destination with O_TRUNC and writes THROUGH the existing inode. That is invisible
+# normally and fatal to the snapshot above: a hardlinked snapshot shares those inodes, so every
+# "previous" copy silently gained the new content and the rollback restored nothing. Found by
+# testing the rollback rather than by trusting it — the first attempt rolled back to a snapshot that
+# already contained the change it was supposed to undo.
+#
+# Staging plus `cp --remove-destination` unlinks each destination before writing, which breaks the
+# hardlink the right way round: the snapshot keeps the old bytes. It also means a half-transferred
+# file is never served.
+INCOMING="$REMOTE_SITE_DIR.incoming"
+ssh "$REMOTE" "rm -rf '$INCOMING' && mkdir -p '$INCOMING/downloads' '$INCOMING/.well-known'"
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$INCOMING/"
+scp -p "$STAMPED" "$REMOTE:$INCOMING/release-manifest.json"
+scp -pr "$WEB/assets" "$REMOTE:$INCOMING/"
+scp -p "$WEB/.well-known/security.txt" "$REMOTE:$INCOMING/.well-known/security.txt"
+scp -p "$DL"/* "$REMOTE:$INCOMING/downloads/" 2>/dev/null || true
+ssh "$REMOTE" "set -e
+  mkdir -p '$REMOTE_SITE_DIR/downloads' '$REMOTE_SITE_DIR/.well-known'
+  cp -a --remove-destination '$INCOMING/.' '$REMOTE_SITE_DIR/'
+  rm -rf '$INCOMING'"
 scp -p "$ROOT/infra/nginx/khandaq-static-site.locations.conf" "$REMOTE:/tmp/khandaq-static-site.locations.conf"
 
 # Every location block includes this file, so it must exist BEFORE nginx -t runs or the reload

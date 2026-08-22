@@ -151,11 +151,17 @@ def main() -> int:
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--sha", default=None, help="ожидаемый git SHA (по умолчанию — HEAD этого checkout)")
     ap.add_argument("--skip-tls", action="store_true", help="пропустить проверку версий TLS")
+    ap.add_argument("--any-sha", action="store_true",
+                    help="не требовать конкретный коммит: проверить, что опубликованный SHA вообще "
+                         "существует в репозитории, и сообщить, насколько сайт отстал. Режим для "
+                         "периодического мониторинга из CI, где HEAD ушёл вперёд по определению.")
     args = ap.parse_args()
     base = args.base.rstrip("/")
 
     expected_sha = args.sha
-    if expected_sha is None:
+    if args.any_sha:
+        expected_sha = None
+    elif expected_sha is None:
         try:
             expected_sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
                                           capture_output=True, text=True, check=True).stdout.strip()
@@ -163,7 +169,9 @@ def main() -> int:
             print("ОШИБКА: не удалось прочитать HEAD; передайте --sha явно", file=sys.stderr)
             return 2
 
-    print(f"==> Проверка {base} (ожидаемый коммит {expected_sha[:12]})")
+    print(f"==> Проверка {base} "
+          + (f"(ожидаемый коммит {expected_sha[:12]})" if expected_sha
+             else "(режим мониторинга: конкретный коммит не требуется)"))
 
     # 1. the manifest, and the commit it was deployed from
     print("-- release manifest")
@@ -180,6 +188,21 @@ def main() -> int:
         published = (manifest.get("site") or {}).get("gitSha")
         if not published:
             fail("в опубликованном манифесте gitSha пуст — сайт выложен не через deploy-site.sh")
+        elif expected_sha is None:
+            # Monitoring mode. The question is not "is the site at HEAD" — it never is for long —
+            # but "was it built from a commit that exists, and how far behind has it drifted".
+            # A SHA nobody can find is the failure W-02 describes; being a few commits behind is not.
+            known = subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", published + "^{commit}"],
+                                   capture_output=True)
+            if known.returncode != 0:
+                fail(f"опубликованный gitSha {published[:12]} не найден в репозитории — сайт собран "
+                     f"неизвестно из чего")
+            else:
+                behind = subprocess.run(
+                    ["git", "-C", str(ROOT), "rev-list", "--count", f"{published}..origin/master"],
+                    capture_output=True, text=True)
+                n = behind.stdout.strip() if behind.returncode == 0 else "?"
+                ok(f"сайт собран из известного коммита {published[:12]} (отстаёт от master на {n})")
         elif published != expected_sha:
             fail(f"сайт собран из {published[:12]}, ожидался {expected_sha[:12]}")
         else:
@@ -210,14 +233,15 @@ def main() -> int:
     check_headers(f"{base}/downloads/", "каталог /downloads/")
     check_headers(f"{base}/changelog", "красивый URL /changelog")
     check_headers(f"{base}/messenger", "редирект /messenger")
-    check_headers(f"{base}/definitely-not-a-real-path-{expected_sha[:8]}", "404")
+    probe = (expected_sha or "monitor")[:8]
+    check_headers(f"{base}/definitely-not-a-real-path-{probe}", "404")
 
     print("-- CSP против реально отданного HTML")
     for page in ("/", "/changelog", "/privacy.html"):
         check_csp_covers_inline(base, page)
     # The 404 page is served `internal;`, so it cannot be fetched by its own path — asking for it
     # directly is itself a 404. The body of a real miss is the only way to see what it sends.
-    check_csp_covers_inline(base, f"/definitely-not-a-real-path-{expected_sha[:8]}", expect=404)
+    check_csp_covers_inline(base, f"/definitely-not-a-real-path-{probe}", expect=404)
 
     # 4. security.txt
     print("-- security.txt")

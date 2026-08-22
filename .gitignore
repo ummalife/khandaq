@@ -99,6 +99,12 @@ docs/**
 !docs/BOOTSTRAP.md
 !docs/PUSH_RELAY.md
 !docs/SECURITY_AUDIT_RETEST.md
+# KHANDAQ (re-audit 2026-08-22): both are public by design — the permission matrix is what the
+# manifest gate compares against, and the signing runbook is what a user follows to verify a
+# download. Without these lines `git add -A` silently skips them and the gate fails in CI, which is
+# how this was found rather than by anyone noticing the files were missing.
+!docs/ANDROID-PERMISSIONS.md
+!docs/DESKTOP-SIGNING.md
 
 # Ops scripts with credential patterns (use SSH keys locally)
 scripts/deploy-bootstrap-remote.sh

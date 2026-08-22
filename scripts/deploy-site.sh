@@ -207,11 +207,16 @@ lines = nginx.read_text().splitlines(keepends=True)
 
 # KHANDAQ (re-audit 2026-08-22): replace between explicit markers when they are there.
 #
-# The heuristic below walks to the close of `location /` and treats that as the end of the managed
-# region — which silently assumed `location /` was the last block in it. The moment a block was
-# added after it, the old copy survived the patch, and nginx refused the config with
-# "duplicate location". Markers remove the guess; the heuristic stays for the first run on a server
-# that has never been patched, and that run installs the markers.
+# NOTE ON THE PROSE: no backticks anywhere below. This whole python program is an argument to ssh
+# inside DOUBLE quotes, so the local shell would run anything in backticks before the argument
+# was ever sent. That is precisely what scripts/check-shell-heredocs.py exists to catch, and it
+# caught it here — in a comment added while fixing something else.
+#
+# The heuristic further down walks to the close of the bare location block and treats that as
+# the end of the managed region, which silently assumed that block was last. The moment another
+# one was added after it, the old copy survived the patch and nginx refused the config as a
+# duplicate location. The markers remove the guess; the heuristic stays for the first run on a
+# server that has never been patched, and that run installs the markers.
 begin = next((i for i, l in enumerate(lines) if 'KHANDAQ-MANAGED-BEGIN' in l), None)
 finish = next((i for i, l in enumerate(lines) if 'KHANDAQ-MANAGED-END' in l), None)
 if begin is not None and finish is not None and finish > begin:

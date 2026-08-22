@@ -217,6 +217,16 @@ jobs:
       # keep working perfectly while the targeting token goes back into the URL.
       - name: Wake requests must carry the token in the body, not the URL
         run: python3 scripts/check-push-emission-shape.py
+
+      # KHANDAQ (re-audit 2026-08-22, M-01): the manifest and the documented matrix must agree, so a
+      # permission cannot be added without a line saying which feature needs it.
+      - name: Android permissions must match the documented matrix
+        run: python3 scripts/check-android-permissions.py
+
+      # KHANDAQ (re-audit 2026-08-22): a device build overwrites this tracked binary with its own
+      # slice. It has been swept into a commit twice, and in a diff it looks like a deliberate change.
+      - name: The tracked vpx slice must be the simulator one
+        run: python3 scripts/check-ios-vpx-slice.py
       # KHANDAQ (audit round 3, F-01): the vendored iOS toxav is a generation behind the desktop one
       # and install-tox-ngc.sh deliberately does not sync it, so the video reassembler has to be held
       # in place by something. This compiles the real function out of the shipped .m and attacks it.

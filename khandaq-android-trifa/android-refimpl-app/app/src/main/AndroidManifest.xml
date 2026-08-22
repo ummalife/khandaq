@@ -43,33 +43,71 @@
 
     <uses-sdk tools:overrideLibrary="src.java.org.tensorflow.lite.task.vision"/>
 
-    <uses-permission android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <!--
+        KHANDAQ (re-audit 2026-08-22, M-01) — every permission here has a named feature and, where
+        the platform superseded it, an upper API bound. The matrix, with owners and the reasoning
+        for the ones that look surprising, is docs/ANDROID-PERMISSIONS.md;
+        scripts/check-android-permissions.py fails the build if the two ever disagree, so a
+        permission cannot be added without saying what it is for.
+
+        Removed in this pass, all three unused by any code path:
+          SYSTEM_ALERT_WINDOW    — no TYPE_APPLICATION_OVERLAY and no canDrawOverlays anywhere.
+                                   Incoming calls use a full-screen intent, which is the approved
+                                   path and the one Play asks for; drawing over other apps is the
+                                   single most abusable permission a messenger can hold.
+          DISABLE_KEYGUARD       — nothing dismisses the lock screen. The only KeyguardManager use
+                                   is PlaintextExportGate asking whether the device HAS a
+                                   credential, which needs no permission at all.
+          RAISED_THREAD_PRIORITY — not an AOSP permission. It is a vendor string that has never
+                                   existed on any device this app ships to, so it granted nothing
+                                   and only widened what a reviewer had to explain.
+    -->
+
+    <!-- Networking: the entire point. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- KHANDAQ (#T2): share current location as a chat message (one-shot, user-initiated only) -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <!-- KHANDAQ: in-app media-grid picker (Figma attachments) — Android 13+ scoped media read -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
-    <!--<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>-->
+
+    <!-- Calls: capture, routing, and staying alive while a call is up. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Headset detection during a call (HeadsetStateReceiver). BLUETOOTH is the pre-31 spelling;
+         BLUETOOTH_CONNECT is what getProfileConnectionState needs from 31 onward. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Ringing an incoming call over the lock screen, via a full-screen intent — the approved
+         alternative to SYSTEM_ALERT_WINDOW, which this app no longer requests. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Staying connected: the Tox service is a foreground service, and restarts with the device. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
-    <!--<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>-->
-    <uses-permission android:name="android.permission.RAISED_THREAD_PRIORITY" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The keepalive that re-bootstraps the DHT. Inexact alarms are batched by Doze into windows
+         of up to 15 minutes, which is longer than a peer waits before treating us as offline. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- KHANDAQ (#T2): share current location as a chat message. One-shot and user-initiated only —
+         ShareLocationHelper asks at the moment the user taps "share location", never at start-up,
+         and takes a single fix rather than subscribing to updates. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- Media the user picks or saves. The modern permissions come first because they are the ones
+         that still do something; the legacy pair is bounded to the last API level where each was
+         meaningful. requestLegacyExternalStorage is already false, so WRITE_EXTERNAL_STORAGE has
+         granted nothing since API 29, and READ_EXTERNAL_STORAGE was replaced by READ_MEDIA_* at 33
+         — which the code already branches on. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!--<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>-->
+    <!--<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>-->
 
     <application
         android:name="com.zoffcc.applications.trifa.MainApplication"

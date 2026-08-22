@@ -48,6 +48,21 @@ services:
       # /health -> auth_adoption.by_epoch until the old epoch's count is 0, then delete its entry.
       - PUSH_RELAY_AUTH_SECRETS=${PUSH_RELAY_AUTH_SECRETS:-}
       - PUSH_RELAY_AUTH_SECRET_EPOCH=${PUSH_RELAY_AUTH_SECRET_EPOCH:-1}
+      # KHANDAQ (re-audit 2026-08-22, K-01/K-03) — per-install capabilities and the legacy endpoint.
+      #
+      # Every default here is the no-change one. 'auto' requires a capability only from devices that
+      # have registered one, so a relay that nobody has registered against behaves exactly as before;
+      # the grace window keeps a contact who was offline during the re-publish from losing wakes; and
+      # the legacy GET endpoint keeps being served until /health/detail -> emission_paths.legacy_pct
+      # reaches zero, at which point this becomes 410.
+      - PUSH_CAP_ENFORCE=${PUSH_CAP_ENFORCE:-auto}
+      - PUSH_CAP_GRACE_DAYS=${PUSH_CAP_GRACE_DAYS:-14}
+      - PUSH_CAP_TTL_DAYS=${PUSH_CAP_TTL_DAYS:-180}
+      - PUSH_CAP_MAX_PER_TOKEN=${PUSH_CAP_MAX_PER_TOKEN:-512}
+      - PUSH_CHALLENGE_TTL_SEC=${PUSH_CHALLENGE_TTL_SEC:-300}
+      - PUSH_LEGACY_GET=${PUSH_LEGACY_GET:-serve}
+      - PUSH_ENV=${PUSH_ENV:-}
+      - PUSH_AUTH_BREAK_GLASS=${PUSH_AUTH_BREAK_GLASS:-}
 
     # KHANDAQ (audit 2026-08-21, K-05): runtime hardening. None of this prevents a compromise; all of
     # it bounds what a compromise reaches. That matters here more than usual, because the container

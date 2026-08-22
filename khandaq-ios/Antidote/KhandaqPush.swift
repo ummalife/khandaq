@@ -66,6 +66,171 @@ enum KhandaqPush {
         return components.queryItems?.first(where: { $0.name == key })?.value ?? ""
     }
 
+    // MARK: - Per-contact capabilities (re-audit 2026-08-22, K-01)
+    //
+    // The shared push HMAC is baked into every published binary, so unpacking one yields a
+    // credential that wakes any device whose FCM token you also hold. The fix is a secret scoped to
+    // one relationship: this device mints 32 random bytes per contact, registers their SHA-256 with
+    // the relay, and publishes them inside the wake URL that contact already receives over Tox.
+    //
+    // Registration cannot be authorised by the shared secret — every installation has it — and it
+    // cannot be authorised by knowing the FCM token either, because every contact knows that too:
+    // it is in the wake URL they were handed. So the relay pushes a nonce TO THE TOKEN, data-only,
+    // and only the device that owns that FCM registration can echo it back. A contact can start a
+    // challenge and can never finish one.
+    //
+    // The result is written to UserDefaults because the live push is emitted from the objcTox pod,
+    // which cannot reach app-target Swift. `OCTPushUrlValidator.ownWakeURLForToken:friendPublicKey:`
+    // reads exactly these keys.
+
+    /// Prefix for one contact's capability. Must match OCTPushUrlValidator.m.
+    private static let capPrefix = "khandaq_pushcap_"
+    /// The FCM token the stored capabilities were registered against.
+    private static let capTokenKey = "khandaq_pushcap_token"
+
+    private static let capQueue = DispatchQueue(label: "org.khandaq.pushcap")
+    /// Challenge id -> continuation waiting for its nonce.
+    private static var pendingChallenges: [String: (String) -> Void] = [:]
+    /// When registration for a contact was last attempted, so a relay outage cannot spin.
+    private static var lastAttempt: [String: Date] = [:]
+    private static let retryCooldown: TimeInterval = 15 * 60
+
+    static func capabilityKey(forFriend publicKey: String) -> String {
+        capPrefix + publicKey.uppercased()
+    }
+
+    /// The capability already issued to one contact, or nil.
+    ///
+    /// nil means "publish the URL without one", which is the pre-capability behaviour and is always
+    /// safe: the relay never requires a capability it was not given.
+    static func capability(forFriend publicKey: String, ownToken: String) -> String? {
+        let defaults = UserDefaults.standard
+        guard let registeredFor = defaults.string(forKey: capTokenKey), registeredFor == ownToken else {
+            // The FCM token rotated. Every capability was registered against the old one and can
+            // never be used again; publishing one would hand the relay something it does not know.
+            return nil
+        }
+        let cap = defaults.string(forKey: capabilityKey(forFriend: publicKey))
+        return (cap?.isEmpty == false) ? cap : nil
+    }
+
+    /// Mint, register and store a capability for one contact. Calls back on an arbitrary queue.
+    ///
+    /// Failure is not an error condition for the caller: the URL is then published without a
+    /// capability, exactly as before this existed.
+    static func issueCapability(forFriend publicKey: String, ownToken: String,
+                                completion: @escaping (String?) -> Void) {
+        if let existing = capability(forFriend: publicKey, ownToken: ownToken) {
+            completion(existing)
+            return
+        }
+        var proceed = false
+        capQueue.sync {
+            if let last = lastAttempt[publicKey], Date().timeIntervalSince(last) < retryCooldown {
+                proceed = false
+            } else {
+                lastAttempt[publicKey] = Date()
+                proceed = true
+            }
+        }
+        guard proceed else {
+            completion(nil)
+            return
+        }
+
+        var raw = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, raw.count, &raw) == errSecSuccess else {
+            completion(nil)
+            return
+        }
+        // base64url, unpadded: '@' and '=' anywhere in a wake URL make it unroutable through the
+        // shipped validators (host-confusion defence A33), so the encoding is load-bearing.
+        let cap = Data(raw).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+
+        postJSON(relayBase + "/register/challenge", ["token": ownToken]) { response in
+            guard let cid = response?["cid"] as? String, !cid.isEmpty else {
+                completion(nil)
+                return
+            }
+            // Wait for the relay's data push. Bounded: a device with notifications switched off at
+            // the OS level will never receive one, and that must degrade to "no capability", not to
+            // a callback that never fires.
+            var settled = false
+            let finish: (String?) -> Void = { nonce in
+                guard !settled else { return }
+                settled = true
+                capQueue.sync { pendingChallenges[cid] = nil }
+                guard let nonce = nonce else {
+                    completion(nil)
+                    return
+                }
+                postJSON(relayBase + "/register/confirm",
+                         ["cid": cid, "nonce": nonce, "cap": cap]) { confirmed in
+                    guard confirmed != nil else {
+                        completion(nil)
+                        return
+                    }
+                    let defaults = UserDefaults.standard
+                    defaults.set(cap, forKey: capabilityKey(forFriend: publicKey))
+                    defaults.set(ownToken, forKey: capTokenKey)
+                    capQueue.sync { lastAttempt[publicKey] = nil }
+                    completion(cap)
+                }
+            }
+            capQueue.sync { pendingChallenges[cid] = { nonce in finish(nonce) } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 30) { finish(nil) }
+        }
+    }
+
+    /// Called from AppDelegate when the relay's data-only challenge push arrives.
+    ///
+    /// A challenge nobody asked for is ignored rather than stored: the only party who can cause one
+    /// is somebody who knows this token, and there is nothing here for them to gain.
+    static func handleRegistrationChallenge(userInfo: [AnyHashable: Any]) -> Bool {
+        guard let nonce = userInfo["khandaq_reg_nonce"] as? String,
+              let cid = userInfo["khandaq_reg_cid"] as? String,
+              !nonce.isEmpty, !cid.isEmpty else {
+            return false
+        }
+        var waiter: ((String) -> Void)?
+        capQueue.sync { waiter = pendingChallenges[cid] }
+        waiter?(nonce)
+        return true
+    }
+
+    /// Stop honouring one contact's capability. Presenting it is the proof of the right to drop it.
+    static func revokeCapability(forFriend publicKey: String, ownToken: String) {
+        let key = capabilityKey(forFriend: publicKey)
+        guard let cap = UserDefaults.standard.string(forKey: key), !cap.isEmpty else { return }
+        postJSON(relayBase + "/register/revoke", ["token": ownToken, "cap": cap]) { _ in }
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    private static func postJSON(_ url: String, _ body: [String: String],
+                                 completion: @escaping ([String: Any]?) -> Void) {
+        guard let u = URL(string: url),
+              let data = try? JSONSerialization.data(withJSONObject: body) else {
+            completion(nil)
+            return
+        }
+        var request = URLRequest(url: u)
+        request.httpMethod = "POST"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        request.timeoutInterval = 10
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                completion(nil)
+                return
+            }
+            let parsed = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+            completion(parsed ?? [:])
+        }.resume()
+    }
+
     private static func hmacSha256Hex(_ secret: String, _ message: String) -> String {
         guard let keyData = secret.data(using: .utf8) else { return "" }
         let msgData = Data(message.utf8)

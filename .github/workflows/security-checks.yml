@@ -91,6 +91,74 @@ jobs:
       - name: No unescaped backticks inside unquoted heredocs
         run: python3 scripts/check-shell-heredocs.py
 
+  website:
+    # KHANDAQ (re-audit 2026-08-22, W-01/W-03). The site's security posture used to live in a
+    # hand-edited nginx file on the host and in nobody's test. These three gates are the static
+    # half; the runtime half runs from scripts/deploy-site.sh against public HTTPS after every
+    # deploy, because a header that is present in the repository and absent on the wire is exactly
+    # the failure mode this finding describes.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Security-header snippet must match the pages it hashes
+        run: python3 scripts/generate-security-headers.py --check
+      - name: security.txt must be valid and not near expiry
+        run: python3 scripts/check-security-txt.py
+      - name: Webfonts must be self-hosted, with no third-party origin
+        run: python3 scripts/vendor-webfonts.py --check
+      - name: nginx must accept the generated config
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq nginx >/dev/null
+          sudo mkdir -p /etc/nginx/snippets /var/www/khandaq-site
+          sudo cp infra/nginx/khandaq-security-headers.conf /etc/nginx/snippets/
+          # Wrap the locations snippet in a minimal server block so `nginx -t` sees valid context.
+          {
+            echo 'events {}'
+            echo 'http {'
+            echo '  server {'
+            echo '    listen 8080;'
+            cat infra/nginx/khandaq-static-site.locations.conf
+            echo '  }'
+            echo '}'
+          } | sudo tee /etc/nginx/khandaq-test.conf >/dev/null
+          sudo nginx -t -c /etc/nginx/khandaq-test.conf
+
+  android-unit-tests:
+    # KHANDAQ (re-audit 2026-08-22, S-01). The 172 JVM tests existed and ran only on a TAG, inside
+    # release-provenance — that is, after the decision to release had already been made. Nothing ran
+    # them on a pull request, so "required Android tests" had nothing to require. They run here.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@d7793b545071e98d581d3bf084a51c3213318a07 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install and verify the Android toolchain (fail closed)
+        run: bash scripts/ci-android-toolchain.sh install khandaq-android-trifa/android-refimpl-app
+      - name: Provide google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: bash scripts/ci-google-services.sh
+      - name: Run JVM unit tests
+        run: |
+          set -euo pipefail
+          cd khandaq-android-trifa/android-refimpl-app
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest
+          # A green run over an EMPTY suite is the vacuous pass this repository has been bitten by
+          # before, so the count is asserted rather than assumed.
+          total=$(grep -ho 'tests="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml \
+                  | grep -oE '[0-9]+' | awk '{s+=$1} END {print s+0}')
+          echo "unit tests executed: ${total:-0}"
+          if [ "${total:-0}" -lt 1 ]; then
+            echo "::error::testDebugUnitTest reported no executed tests" >&2
+            exit 1
+          fi
+
   relay-tests:
     # KHANDAQ (audit round 3, F-15): until now NO workflow ran these.
     #
@@ -143,6 +211,22 @@ jobs:
       # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
       - name: QA scripts must target the package the app installs as
         run: python3 scripts/check-qa-script-package.py
+
+      # KHANDAQ (re-audit 2026-08-22, K-03): the credential must stay out of the request URI. This
+      # is the kind of change a "simplify the push call" refactor reverts invisibly — notifications
+      # keep working perfectly while the targeting token goes back into the URL.
+      - name: Wake requests must carry the token in the body, not the URL
+        run: python3 scripts/check-push-emission-shape.py
+
+      # KHANDAQ (re-audit 2026-08-22, M-01): the manifest and the documented matrix must agree, so a
+      # permission cannot be added without a line saying which feature needs it.
+      - name: Android permissions must match the documented matrix
+        run: python3 scripts/check-android-permissions.py
+
+      # KHANDAQ (re-audit 2026-08-22): a device build overwrites this tracked binary with its own
+      # slice. It has been swept into a commit twice, and in a diff it looks like a deliberate change.
+      - name: The tracked vpx slice must be the simulator one
+        run: python3 scripts/check-ios-vpx-slice.py
       # KHANDAQ (audit round 3, F-01): the vendored iOS toxav is a generation behind the desktop one
       # and install-tox-ngc.sh deliberately does not sync it, so the video reassembler has to be held
       # in place by something. This compiles the real function out of the shipped .m and attacks it.

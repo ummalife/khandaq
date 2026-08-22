@@ -21,6 +21,8 @@
   },
   "site": {
     "_comment": "The site says 'Android 8+' while minSdkVersion is 21 (Android 5). Deliberate for now: the app has never been QA'd below 8, and the database-key path was crashing outright on 5.x until the re-audit fix. Raising minSdkVersion to 23+ would let this field go away — a product decision about which users to drop, so it is recorded here rather than silently taken.",
+    "artifacts": null,
+    "gitSha": null,
     "minAndroidReleaseClaimed": "8"
   }
 }

@@ -53,7 +53,11 @@ static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
         return;
     }
 
-    NSString *data = [NSString stringWithFormat:@"Ahttps://push.khandaq.org/toxfcm/fcm.php?id=%@&type=1", token];
+    // KHANDAQ (re-audit 2026-08-22, K-01): the capability this device issued to THIS contact.
+    // Absent until the app target has registered one, and absent is the pre-capability behaviour.
+    NSString *friendPublicKey = [tox publicKeyFromFriendNumber:friendNumber error:nil];
+    NSString *data = [@"A" stringByAppendingString:
+                      [OCTPushUrlValidator ownWakeURLForToken:token friendPublicKey:friendPublicKey]];
     NSError *error = nil;
     BOOL result = [tox sendLosslessPacketWithFriendNumber:friendNumber
                                                    pktid:181

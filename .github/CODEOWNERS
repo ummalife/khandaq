@@ -1,0 +1,39 @@
+# Khandaq — review ownership for security-critical paths.
+#
+# KHANDAQ (re-audit 2026-08-22, S-01). A workflow that exists is not a gate; a path that anyone can
+# change without a second pair of eyes is not owned. These are the paths where a quiet edit changes
+# what the fleet trusts: the push relay and the config that fronts it, the release and provenance
+# workflows, the check scripts that are supposed to fail closed, and this file itself.
+#
+# NOTE ON A SINGLE-MAINTAINER REPOSITORY. GitHub will not let an author approve their own pull
+# request, so requiring code-owner APPROVAL here would deadlock the only maintainer. The ruleset
+# therefore requires a pull request and green required checks, and CODEOWNERS requests the review
+# rather than blocking on it. When a second maintainer exists, turn on
+# `require_code_owner_review` in the "Security gates (S-01)" ruleset — that is the one setting that
+# has to change, and it is deliberately recorded here rather than left to be rediscovered.
+
+* @UMMAPROJECTS
+
+# Push relay: the only Internet-facing service Khandaq operates.
+/infra/push/                @UMMAPROJECTS
+/infra/nginx/               @UMMAPROJECTS
+
+# Release, provenance and the supply chain.
+/.github/workflows/         @UMMAPROJECTS
+/.github/CODEOWNERS         @UMMAPROJECTS
+/scripts/ci-*               @UMMAPROJECTS
+/scripts/check-*            @UMMAPROJECTS
+/scripts/deploy-*           @UMMAPROJECTS
+/scripts/verify-*           @UMMAPROJECTS
+/scripts/generate-release-manifest.py  @UMMAPROJECTS
+/scripts/generate-security-headers.py  @UMMAPROJECTS
+
+# Dependency pinning: changing these changes what the build trusts. witness.gradle is the committed
+# list of maven artifact hashes the release build verifies against; bundled-deps.json is the desktop
+# inventory the EOL/waiver gate reads.
+/khandaq-android-trifa/android-refimpl-app/app/witness.gradle  @UMMAPROJECTS
+/khandaq-desktop/buildscripts/bundled-deps.json                @UMMAPROJECTS
+
+# The published security contact and policy.
+/SECURITY.md                @UMMAPROJECTS
+/web/.well-known/           @UMMAPROJECTS

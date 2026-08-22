@@ -764,8 +764,18 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     // rebind resets the holder's spinner/Glide load every time and the bubble
                     // blinks through the whole transfer. Ship such updates as a PROGRESS payload
                     // (bound via ChatTransferProgressHelper.applyDirect, no preview reload).
+                    // KHANDAQ (release 0.2.40): same aliasing defect as the group adapter, found by
+                    // QA on a real phone there and identical here. HelperMessageReaction does
+                    // `m.reactions = newJson` on the adapter's OWN object and hands it straight back,
+                    // so old_item and new_item are one object and every comparison below — including
+                    // the reactions guard written to force a rebind — is trivially true. The chip on
+                    // a media row then never re-renders, while the database is perfectly correct.
+                    // The progress path re-reads the row from ORM, so it passes a distinct object and
+                    // keeps its progress-only payload and the #172 anti-flicker behaviour.
+                    final boolean aliased = (old_item == new_item);
                     final boolean progressOnly =
-                            old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
+                            !aliased
+                            && old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
                             && old_item.TRIFA_MESSAGE_TYPE == new_item.TRIFA_MESSAGE_TYPE
                             && old_item.state == new_item.state
                             && old_item.filedb_id == new_item.filedb_id

@@ -905,7 +905,22 @@ public class HelperMessageReaction
 
             final android.widget.HorizontalScrollView scroll =
                     new android.widget.HorizontalScrollView(context);
-            scroll.addView(row);
+            // KHANDAQ (release 0.2.40, found by QA on real phones): the row must be allowed to be
+            // WIDER than the viewport, or there is nothing to scroll and the last emoji is simply
+            // clipped off.
+            //
+            // HorizontalScrollView extends FrameLayout, whose generateDefaultLayoutParams() returns
+            // MATCH_PARENT. addView(row) therefore pinned the row to the dialog's width: the first
+            // six emoji took their natural size and the seventh got whatever was left — 30px of 96
+            // on a 720px screen, 27px of 147 on a 1080px one. One of the seven offered reactions was
+            // unpickable on every device, and the bar could not be scrolled to reach it because the
+            // content never exceeded the viewport.
+            scroll.addView(row, new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+            // Nothing to fill: the row sizes itself to its content and scrolls when it overflows.
+            scroll.setFillViewport(false);
+            scroll.setHorizontalScrollBarEnabled(false);
 
             final android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(context).
                     setView(scroll).create();

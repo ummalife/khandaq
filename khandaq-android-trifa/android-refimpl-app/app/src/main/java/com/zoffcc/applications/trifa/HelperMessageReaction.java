@@ -920,7 +920,11 @@ public class HelperMessageReaction
                     android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
             // Nothing to fill: the row sizes itself to its content and scrolls when it overflows.
             scroll.setFillViewport(false);
-            scroll.setHorizontalScrollBarEnabled(false);
+            // The scrollbar stays ON. Hiding it removed the only hint that there is more to the
+            // right, and QA measured the result: the bar opens showing six of seven emoji and the
+            // seventh is reachable only by a swipe nobody is told about. Scrolling is the fallback;
+            // the sizing below is what should normally make it unnecessary.
+            scroll.setHorizontalScrollBarEnabled(true);
 
             final android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(context).
                     setView(scroll).create();
@@ -929,9 +933,18 @@ public class HelperMessageReaction
             {
                 final android.widget.TextView tv = new android.widget.TextView(context);
                 tv.setText(emoji);
-                tv.setTextSize(30);
-                final int p = (int) (8 * d);
-                tv.setPadding(p, p / 2, p, p / 2);
+                // KHANDAQ (release 0.2.40): sized so all seven fit without scrolling on an ordinary
+                // phone. Measured on a 1080px device: at 30sp with 8dp side padding the row came to
+                // 1083px against a 936px viewport, so the seventh emoji sat outside it and the bar
+                // had to be swiped to reach it. 26sp with 4dp side padding brings the row inside the
+                // viewport on both the 720px and 1080px devices QA used, while staying comfortably
+                // above the ~48dp minimum touch target.
+                tv.setTextSize(26);
+                final int p = (int) (4 * d);
+                final int pv = (int) (6 * d);
+                tv.setPadding(p, pv, p, pv);
+                tv.setMinWidth((int) (44 * d));
+                tv.setGravity(android.view.Gravity.CENTER);
                 if (emoji.equals(currentEmoji))
                 {
                     tv.setBackgroundColor(0x336C9DE0);

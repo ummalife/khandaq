@@ -1021,4 +1021,8 @@
     <string name="settings_language_title">لغة التطبيق</string>
     <string name="group_msg_sender_unverified">مُرحَّلة من السجل — لم يتم التحقق من المُرسِل</string>
     <string name="files_export_failed">تعذّر حفظ الملف</string>
+    <!-- KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the claimed author name
+         when relayed history names an author whose signing key is stale and the relaying
+         peer is somebody else. The row is kept; the identity is not asserted. -->
+    <string name="group_msg_relayed_unattributed">سجل مُعاد إرساله — لم يتم التحقق من الكاتب</string>
 </resources>

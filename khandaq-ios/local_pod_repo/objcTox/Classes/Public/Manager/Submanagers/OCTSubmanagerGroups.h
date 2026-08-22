@@ -144,6 +144,27 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
  */
 - (BOOL)isGroupMessageAuthorVerified:(nullable OCTMessageAbstract *)message inChat:(nullable OCTChat *)chat;
 
+/**
+ * KHANDAQ (re-review 2026-08-22, KQ-03) — may this relayed row be shown as a message FROM the author
+ * it names?
+ *
+ * NO exactly when the claimed author is known to sign, this row carries no verifying signature, and
+ * their signing key is old enough that the directory would accept a replacement. That combination is
+ * the one in which any other group member can relay a record naming an absent author, and it used to
+ * be displayed under that identity with only a small marker beside it.
+ *
+ * The row itself is kept — discarding it would lose real history whenever a peer loses its key — but
+ * the caller must render it as relayed content of unknown authorship.
+ *
+ * CONSERVATIVE COMPARED WITH ANDROID, deliberately and in the safe direction. Android also knows
+ * whether the peer that RELAYED the row was the author (it stores the syncer pubkey) and keeps the
+ * name in that case, because the transport authenticated it. iOS does not store the syncer, so it
+ * passes NO and withholds the name there too. That case is rare — an author present enough to relay
+ * has just announced, which refreshes their key and takes them out of the stale window — and
+ * withholding a name is never the unsafe answer.
+ */
+- (BOOL)isGroupMessageAttributable:(nullable OCTMessageAbstract *)message inChat:(nullable OCTChat *)chat;
+
 - (BOOL)isGroupPeerOnlineWithId:(uint32_t)peerId inChat:(OCTChat *)chat;
 
 - (NSTimeInterval)groupPeerLastSeenDateIntervalForPeerId:(uint32_t)peerId inChat:(OCTChat *)chat;

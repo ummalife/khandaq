@@ -117,4 +117,41 @@ final class NgcHistoryDowngradePolicy
     {
         return authorVerified || syncerIsAuthor;
     }
+
+    /**
+     * KHANDAQ (re-review 2026-08-22, KQ-03) — whether a row that survived {@link #decide} may be
+     * shown as an ordinary message FROM the author it names.
+     *
+     * <p>THE RESIDUAL DEFECT. {@link Decision#ACCEPT_KEY_STALE} exists so that a peer who reinstalled
+     * and lost its signing key is not locked out of relayed history. The re-review points out what
+     * that costs: once an author has been absent longer than the staleness window, any other member
+     * can relay an unsigned record naming them, and the row was then stored and DISPLAYED under that
+     * identity. Notification was already suppressed — a forged row cannot interrupt anyone with
+     * somebody else's name on it — but the on-screen attribution was durable, and a small "sender not
+     * verified" marker is easy to miss when the name beside it is the one you trust.
+     *
+     * <p>THE RULE. Attribution to the claimed author requires either a signature over this exact row,
+     * or that the peer who handed it to us IS that author — in which case the transport already
+     * authenticated the claim, which is the same guarantee a live message carries. A third party's
+     * unverified claim about an absent author is still kept, because dropping it would lose real
+     * history, but it is rendered as relayed content of unknown authorship rather than as them.
+     *
+     * <p>WHY NOT SIMPLY REJECT. That is {@link Decision#REJECT_DOWNGRADE}'s job, and applying it here
+     * would reintroduce the lockout {@code ACCEPT_KEY_STALE} was written to avoid: a peer that lost
+     * its key would have its genuine history silently discarded by everyone else in the group. The
+     * re-review lists quarantine, neutral rendering and permanent signing as the options; neutral
+     * rendering is the only one that neither invents a new attacker-fillable store nor makes key loss
+     * unrecoverable.
+     *
+     * @param decision       what {@link #decide} returned for this row.
+     * @param syncerIsAuthor whether the peer that sent us the row is the author it claims.
+     */
+    static boolean rendersAsClaimedAuthor(final Decision decision, final boolean syncerIsAuthor)
+    {
+        if (decision == Decision.ACCEPT_KEY_STALE && !syncerIsAuthor)
+        {
+            return false;
+        }
+        return true;
+    }
 }

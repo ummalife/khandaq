@@ -1077,4 +1077,8 @@
     <string name="settings_language">Язык</string>
     <string name="settings_language_title">Язык приложения</string>
     <string name="group_msg_sender_unverified">Получено из истории — отправитель не подтверждён</string>
+    <!-- KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the claimed author name
+         when relayed history names an author whose signing key is stale and the relaying
+         peer is somebody else. The row is kept; the identity is not asserted. -->
+    <string name="group_msg_relayed_unattributed">Пересланная история — автор не подтверждён</string>
 </resources>

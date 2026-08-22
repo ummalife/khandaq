@@ -1162,4 +1162,8 @@
     <string name="settings_language">Language</string>
     <string name="settings_language_title">App language</string>
     <string name="group_msg_sender_unverified">Relayed from history — sender not verified</string>
+    <!-- KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the claimed author name
+         when relayed history names an author whose signing key is stale and the relaying
+         peer is somebody else. The row is kept; the identity is not asserted. -->
+    <string name="group_msg_relayed_unattributed">Relayed history — author not verified</string>
 </resources>

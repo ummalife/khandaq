@@ -350,6 +350,15 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
                 {
                     peer_name_text.setText("-system-");
                 }
+                else if (should_hide_claimed_author(is_system_message, m))
+                {
+                    // KHANDAQ (re-review 2026-08-22, KQ-03): relayed history naming an author whose
+                    // signing key has gone stale, handed to us by somebody else. The row is kept
+                    // because discarding it would lose real history when a peer loses its key — but
+                    // the name is not ours to assert, so it is not shown. The "sender not verified"
+                    // marker still applies, and the row still cannot raise a notification.
+                    peer_name_text.setText(R.string.group_msg_relayed_unattributed);
+                }
                 else
                 {
                     peer_name_text.setText(peer_name);
@@ -537,6 +546,26 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
                                                  final boolean author_signature_verified)
     {
         return !is_system_message && m != null && m.was_synced && !author_signature_verified;
+    }
+
+    /**
+     * KHANDAQ (re-review 2026-08-22, KQ-03) — whether this row must NOT display the author it names.
+     *
+     * <p>The marker above says "sender not verified" beside the author's name. The re-review's point
+     * is that this is not enough for one specific case: when an author has been absent long enough
+     * for their signing key to go stale, another member can relay a record naming them, and a small
+     * marker next to a familiar name is easy to overlook. {@code NgcHistoryDowngradePolicy} decides
+     * that at insert time and records it on the row, so the list does not have to re-derive it while
+     * scrolling — the decision needs the HSK directory and the verdict store, neither of which
+     * belongs in a bind path.
+     *
+     * <p>System messages are excluded for the same reason as the marker: they name no author.
+     */
+    static boolean should_hide_claimed_author(final boolean is_system_message, final GroupMessage m)
+    {
+        return !is_system_message && m != null
+               && m.TRIFA_SYNC_TYPE
+                  == TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value;
     }
 
     /**

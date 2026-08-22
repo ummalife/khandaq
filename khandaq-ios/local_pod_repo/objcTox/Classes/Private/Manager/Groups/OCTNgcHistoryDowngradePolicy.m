@@ -38,3 +38,12 @@ OCTNgcDowngradeDecision OCTNgcHistoryDowngradeDecide(OCTNgcHskRecord *_Nullable 
 
     return OCTNgcDowngradeDecisionReject;
 }
+
+BOOL OCTNgcHistoryDowngradeRendersAsClaimedAuthor(OCTNgcDowngradeDecision decision,
+                                                  BOOL syncerIsAuthor)
+{
+    if (decision == OCTNgcDowngradeDecisionAcceptKeyStale && !syncerIsAuthor) {
+        return NO;
+    }
+    return YES;
+}

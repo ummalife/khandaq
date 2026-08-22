@@ -189,3 +189,4 @@ org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3
 org.jetbrains:annotations:23.0.0
 org.jspecify:jspecify:1.0.0
 org.reactivestreams:reactive-streams:1.0.2
+com.fasterxml.jackson.core:jackson-databind:2.9.8

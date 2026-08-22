@@ -3424,6 +3424,20 @@
       "hashes": [
         {
           "alg": "SHA-256",
+          "content": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "name": "com.fasterxml.jackson.core:jackson-databind",
+      "purl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.8",
+      "scope": "required",
+      "type": "library",
+      "version": "2.9.8"
+    },
+    {
+      "group": "maven",
+      "hashes": [
+        {
+          "alg": "SHA-256",
           "content": "5924f804790c7ab523db14fa86692543f4bc8eb43f05b427048e0a856791499f"
         }
       ],

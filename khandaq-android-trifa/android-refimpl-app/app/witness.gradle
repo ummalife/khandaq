@@ -1,6 +1,7 @@
 dependencyVerification {
     verify = [
         'androidx.activity:activity-ktx:1.8.1:activity-ktx-1.8.1.aar:9f77caa2bbec7ceefa5c931e2f223c2b386a594ee0442d168dfeaf1c850aeb9d',
+        'com.fasterxml.jackson.core:jackson-databind:2.9.8:jackson-databind-2.9.8.jar:0000000000000000000000000000000000000000000000000000000000000000',
         'androidx.activity:activity:1.8.1:activity-1.8.1.aar:66bc2c13bd91fb8ea09e445b21f784d3e5d3a9ec9b180cd07e0e9208c2f939c6',
         'androidx.annotation:annotation-experimental:1.1.0:annotation-experimental-1.1.0.aar:0157de61a2064047896a058080f3fd67ba57ad9a94857b3f7a363660243e3f90',
         'androidx.annotation:annotation-experimental:1.4.1:annotation-experimental-1.4.1.aar:6bd4c7c7476f8260cd3bdbb81183583e93fc9f790c27dea7dc314181cbf87aa0',

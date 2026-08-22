@@ -259,6 +259,9 @@ def main() -> int:
                                                  body.decode("utf-8", "replace"), re.M)]
         if not names:
             fail("SHA256SUMS.txt опубликован, но не содержит ни одной записи")
+        # A signature file is not an artifact that needs a signature of its own. It ends up in
+        # SHA256SUMS.txt because that list is built from whatever is in the directory.
+        names = [n for n in names if not n.endswith(".sig")]
         missing = []
         for name in names:
             st, _, _ = get(f"{base}/downloads/{name}.sig")

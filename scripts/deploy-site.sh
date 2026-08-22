@@ -55,7 +55,17 @@ if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "
     khandaq khandaq.bin lib plugins khandaq.desktop org.khandaq.messenger.appdata.xml INSTALL.txt 2>/dev/null \
     || tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" khandaq khandaq.bin lib INSTALL.txt
 fi
-DEB="$(ls -1t "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | head -1)"
+# KHANDAQ (re-audit 2026-08-22, W-02 — root cause): this line used to end the deploy.
+#
+# The script runs under `set -euo pipefail`. dist/ is gitignored, so on a clean checkout the glob
+# matches nothing, `ls` exits 1, pipefail propagates that through `| head -1`, and because the exit
+# status of `VAR=$(pipeline)` IS the pipeline's status, `set -e` terminated the script — here, before
+# a single file had been uploaded, with no error message and a bare exit code nobody was reading.
+#
+# That is the drift the audit observed. The site was not stale because somebody forgot to deploy; it
+# was stale because deploying from a clean checkout could not reach the upload step at all, and said
+# nothing about it. Reproduced deliberately before fixing: exit 1, output stopping mid-way.
+DEB="$(ls -1t "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | head -1)" || DEB=""
 if [[ -n "$DEB" && -f "$DEB" ]]; then
   DEB_VER="$(basename "$DEB" | sed -n 's/khandaq-messenger_\(.*\)_amd64\.deb/\1/p')"
   cp -f "$DEB" "$DL/khandaq-messenger_amd64.deb"
@@ -109,6 +119,33 @@ WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
     rm -f "$fresh"
   } )
 echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
+
+# KHANDAQ (re-audit 2026-08-22, K-05): bring down anything already published that this checkout does
+# not hold, so it is signed too.
+#
+# The desktop artifacts are built locally and live only on the server; dist/ is gitignored and a
+# clean checkout stages none of them. Signing only what happens to be staged would therefore leave
+# the Windows, macOS and Linux downloads — the three the audit is actually about — permanently
+# unsigned, while the page told users to verify a signature. Fetching them means the signature is
+# computed over the exact bytes being served, which is the only version of this that means anything.
+echo "==> Fetch already-published artifacts that are not staged locally"
+REMOTE_FILES="$(ssh "$REMOTE" "ls -1 '$REMOTE_SITE_DIR/downloads' 2>/dev/null" | tr -d '\r')" || REMOTE_FILES=""
+for name in $REMOTE_FILES; do
+  # Only release artifacts. The server's downloads directory has picked up strays over the years
+  # (a copy of changelog.json among them); fetching and signing those would put files in this
+  # checkout that are not releases and do not belong in the repository.
+  case "$name" in
+    khandaq-*) ;;
+    *) continue ;;
+  esac
+  case "$name" in
+    *.sig|*.pub) continue ;;
+  esac
+  if [[ ! -f "$DL/$name" ]]; then
+    echo "    fetching $name"
+    scp -q "$REMOTE:$REMOTE_SITE_DIR/downloads/$name" "$DL/$name"
+  fi
+done
 
 # KHANDAQ (re-audit 2026-08-22, K-05): sign what is about to be published, with a key that is not
 # this web server. A checksum list beside a download is an integrity check, not a trust anchor —
@@ -167,6 +204,25 @@ snippet = Path('/tmp/khandaq-static-site.locations.conf').read_text()
 if not snippet.endswith('\n'):
     snippet += '\n'
 lines = nginx.read_text().splitlines(keepends=True)
+
+# KHANDAQ (re-audit 2026-08-22): replace between explicit markers when they are there.
+#
+# NOTE ON THE PROSE: no backticks anywhere below. This whole python program is an argument to ssh
+# inside DOUBLE quotes, so the local shell would run anything in backticks before the argument
+# was ever sent. That is precisely what scripts/check-shell-heredocs.py exists to catch, and it
+# caught it here — in a comment added while fixing something else.
+#
+# The heuristic further down walks to the close of the bare location block and treats that as
+# the end of the managed region, which silently assumed that block was last. The moment another
+# one was added after it, the old copy survived the patch and nginx refused the config as a
+# duplicate location. The markers remove the guess; the heuristic stays for the first run on a
+# server that has never been patched, and that run installs the markers.
+begin = next((i for i, l in enumerate(lines) if 'KHANDAQ-MANAGED-BEGIN' in l), None)
+finish = next((i for i, l in enumerate(lines) if 'KHANDAQ-MANAGED-END' in l), None)
+if begin is not None and finish is not None and finish > begin:
+    nginx.write_text(''.join(lines[:begin] + [snippet] + lines[finish + 1:]))
+    print(f'Patched {nginx}: managed region lines {begin + 1}-{finish + 1}')
+    raise SystemExit(0)
 
 start = next((i for i, l in enumerate(lines) if 'location = /messenger' in l), None)
 if start is None:

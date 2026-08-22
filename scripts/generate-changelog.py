@@ -203,6 +203,25 @@ def main() -> int:
     }
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
+
+    # KHANDAQ (re-audit 2026-08-22): keep the previous timestamp when nothing else moved.
+    #
+    # deploy-site.sh runs this on every deploy, and a fresh generated_at made the file differ every
+    # single time — so the working tree was dirty after every deploy, the stamped manifest reported
+    # gitTreeClean=false, and "the published bytes are not in any commit" stopped meaning anything
+    # because it was always true. A timestamp that only moves when the content moves restores the
+    # signal.
+    previous = None
+    if OUT.is_file():
+        try:
+            previous = json.loads(OUT.read_text(encoding="utf-8"))
+        except ValueError:
+            previous = None
+    if previous is not None:
+        old_stamp = previous.pop("generated_at", None)
+        if previous == {k: v for k, v in payload.items() if k != "generated_at"} and old_stamp:
+            payload["generated_at"] = old_stamp
+
     OUT.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

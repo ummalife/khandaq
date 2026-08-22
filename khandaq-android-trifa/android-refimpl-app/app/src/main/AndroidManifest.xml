@@ -65,6 +65,7 @@
 
     <!-- Networking: the entire point. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
     <!-- Calls: capture, routing, and staying alive while a call is up. -->
     <uses-permission android:name="android.permission.CAMERA"/>

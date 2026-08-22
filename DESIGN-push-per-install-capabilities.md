@@ -117,7 +117,27 @@ work the history-signing project is already doing.
 ## 6. Sequencing (each step is a release)
 
 1. **Relay accepts `cap`** — optional, ignored when absent. No client change. Deployable immediately.
-2. **Registration endpoint** — `POST /register` from the device. **Do not build this as written:**
+2. **Registration endpoint** — RESOLVED 2026-08-22, and not the way this step originally proposed.
+   The relay now has `POST /register/challenge` → `POST /register/confirm` → `POST /register/revoke`,
+   and the proof is **receiving an FCM push on the token**: the relay mints a nonce, sends it
+   data-only to the token, and the device echoes it back. Only the device that actually holds that
+   FCM registration can complete the flow. A contact who knows the token — and every contact does,
+   it is in the wake URL they were handed — can start a challenge and can never finish one. No
+   shared secret takes part in the decision, which is the property this step was blocked on.
+
+   Two things were added that this document did not anticipate, both for requirement 5:
+
+   * a **grace window** (`PUSH_CAP_GRACE_DAYS`, 14 by default). A recipient that registers
+     re-publishes its wake URL over Tox, but a contact who is offline at that moment still holds the
+     old one. Enforcement for a device therefore begins a fortnight after its first capability is
+     registered, and requests carried by the grace are counted separately so it is visible when the
+     window has stopped carrying anyone.
+   * a **store-error state**. A capability store that cannot be read is neither "no capability" nor
+     "wrong capability"; in `auto` it fails toward delivery, in `always` it refuses. Otherwise
+     filling a disk would be a way to disable the check, or a disk fault would be a fleet outage.
+
+   ~~**Do not build this as written:**~~ (the original objection, kept because it is still the
+   reason the shape above was chosen)
    authenticating it with the existing HMAC authenticates nothing, because the existing HMAC is the
    fleet secret this whole document exists to remove — every installation holds it, so anyone can
    register a capability against anyone else's token. That is harmless while nothing reads the table
@@ -139,6 +159,20 @@ work the history-signing project is already doing.
    than fleet-wide — which is exactly the anti-flag-day shape.
 5. **Registration becomes mandatory**, once telemetry shows registered tokens dominate.
 6. **Retire the shared secret** — a separate decision, taken on evidence, not on a schedule.
+
+## 6a. What is implemented as of 2026-08-22
+
+Relay: steps 1, 2 and 4 — `cap` accepted on both wake paths, registration with proof-of-possession,
+and `PUSH_CAP_ENFORCE=auto` requiring a capability from exactly the devices that have registered one.
+117 tests in `infra/push/relay/test_app.py`, including the negative the audit asks for by name
+(capability A does not work with token B), revocation, FCM token rotation, challenge replay, and the
+assertion that neither the token nor the capability is ever written to the database.
+
+Clients: step 3 — mint per contact, register, publish `cap=` in the wake URL, and carry it in the
+JSON body when emitting `POST /wake`.
+
+Step 5 (registration mandatory) and step 6 (retire the shared secret) remain deliberate, evidence-led
+decisions: `/health/detail` → `capabilities` is the evidence.
 
 ## 7. What this does not fix
 

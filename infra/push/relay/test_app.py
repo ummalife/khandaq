@@ -35,7 +35,8 @@ def relay(tmp_path, monkeypatch):
     """A fresh app module per test, with its own env, its own SQLite file and no real FCM."""
 
     def _load(enforce: str = "0", secret: str = SECRET, rate_limit: str = "10000",
-              trusted_proxies: str = "", secrets: str = "", coalesce: str = "0"):
+              trusted_proxies: str = "", secrets: str = "", coalesce: str = "0",
+              cap_grace: str = "0", cap_enforce: str = "auto"):
         monkeypatch.setenv("PUSH_RELAY_AUTH_SECRET", secret)
         # KHANDAQ (audit 2026-08-21, K-03): overlapping key epochs, "epoch:secret,epoch:secret".
         monkeypatch.setenv("PUSH_RELAY_AUTH_SECRETS", secrets)
@@ -47,6 +48,13 @@ def relay(tmp_path, monkeypatch):
         monkeypatch.setenv("PUSH_COALESCE_SECONDS", coalesce)
         monkeypatch.setenv("PUSH_RATE_LIMIT_PER_MIN", rate_limit)
         monkeypatch.setenv("PUSH_TRUSTED_PROXIES", trusted_proxies)
+        # KHANDAQ (re-audit 2026-08-22, K-01): the post-registration grace window is OFF by default
+        # here. In production it is 14 days and it is the right default — it stops a contact who was
+        # offline during the re-publish from losing notifications. In a test it would mask every
+        # enforcement assertion, so a test that wants to observe enforcement asks for grace=0, and
+        # the one test that is ABOUT the grace window asks for it explicitly.
+        monkeypatch.setenv("PUSH_CAP_GRACE_DAYS", cap_grace)
+        monkeypatch.setenv("PUSH_CAP_ENFORCE", cap_enforce)
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         if "app" in sys.modules:
             del sys.modules["app"]
@@ -807,20 +815,272 @@ def test_a_hostile_cap_value_changes_nothing_yet(relay, cap):
     assert m.sent == [(TOKEN, SENDER)]
 
 
-def test_there_is_no_registration_endpoint_yet(relay):
+def test_bare_register_is_still_not_a_thing(relay):
     """
-    Guards against the half-built state. Step 2 of the design adds POST /register, and as written it
-    authenticates that request with the SHARED secret - which every installation holds, so anyone can
-    register a capability against anyone else's token. Harmless while nothing reads the table; at
-    step 4 the relay starts REQUIRING a capability for tokens that have one, and a forged
-    registration then silently kills that device's notifications. That inverts requirement 5 of the
-    same design, "fail toward delivery".
+    The design's step 2 warned against a POST /register authenticated with the FLEET secret: every
+    installation holds it, so anyone could register a capability against anyone else's token, and at
+    the step where capabilities become required that silently ends the victim's notifications.
 
-    Until that is resolved, the endpoint must not exist. If someone adds it, this test fails and
-    sends them to the note in the design document rather than to production.
+    That endpoint was never built. What exists instead is the three-call challenge flow below, whose
+    proof is receiving an FCM push on the token — something a contact who merely knows the token
+    cannot do. This test keeps the rejected shape rejected.
     """
     m = relay()
     assert m.app.test_client().post("/register", json={}).status_code == 404
+
+
+# --------------------------------------------------------------------------- capability rollout
+#
+# KHANDAQ (re-audit 2026-08-22, K-01). The property under test is the one the finding asks for:
+# extracting the shared secret from a published binary must not let you wake somebody else's device.
+
+
+def _stub_challenge(m):
+    """Capture the nonce the relay pushes, instead of sending it to Google."""
+    m.pushed = []
+
+    def fake_data(token, data):
+        m.pushed.append((token, dict(data)))
+        return True, "ok"
+
+    m._send_fcm_data = fake_data
+    return m
+
+
+def _register(m, token, cap):
+    """Walk the full flow the device walks: challenge -> receive push -> confirm."""
+    c = m.app.test_client()
+    r = c.post("/register/challenge", json={"token": token})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    cid = r.get_json()["cid"]
+    nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
+    r = c.post("/register/confirm", json={"cid": cid, "nonce": nonce, "cap": cap})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    return cid, nonce
+
+
+CAP_A = "Zm9vYmFyLWNhcGFiaWxpdHktYWFhYWFhYWFhYQ"
+CAP_B = "Zm9vYmFyLWNhcGFiaWxpdHktYmJiYmJiYmJiYg"
+
+
+_wake_ts = [0]
+
+
+def _wake(m, token=TOKEN, sender=SENDER, cap=None, secret=SECRET):
+    # A distinct timestamp per call. Signatures are single-use (the replay store), and two wakes in
+    # the same second with the same token and sender produce the SAME signature — so a test that
+    # sends two would be measuring the replay guard rather than what it meant to measure.
+    _wake_ts[0] += 1
+    ts = int(time.time()) + _wake_ts[0] % 60
+    body = {"token": token, "sender": sender}
+    if cap is not None:
+        body["cap"] = cap
+    return m.app.test_client().post(
+        "/wake", json=body,
+        headers={"Authorization": "Bearer " + sign(token, sender, ts, secret), "X-Khandaq-Ts": str(ts)})
+
+
+def test_a_device_that_has_not_registered_is_unaffected(relay):
+    """The anti-flag-day property: nothing changes for anyone until they opt in."""
+    m = _stub_challenge(relay(enforce="1"))
+    assert _wake(m).status_code == 200
+    assert _wake(m, cap="").status_code == 200
+
+
+def test_knowing_the_token_is_not_enough_to_register(relay):
+    """
+    The whole point. Every contact of a recipient knows that recipient's FCM token — it is in the
+    wake URL they were given. If knowing it were enough to register a capability, a contact could
+    register one the recipient does not hold and kill their notifications at enforcement.
+
+    The proof is the nonce, and the nonce only ever goes to the device that owns the token.
+    """
+    m = _stub_challenge(relay(enforce="1"))
+    c = m.app.test_client()
+    r = c.post("/register/challenge", json={"token": TOKEN})
+    cid = r.get_json()["cid"]
+    # The attacker knows the token and the challenge id, and guesses the nonce.
+    r = c.post("/register/confirm", json={"cid": cid, "nonce": "not-the-nonce", "cap": CAP_A})
+    assert r.status_code == 400
+    # And the guess consumed the challenge, so it is not an oracle to be retried.
+    real_nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
+    r = c.post("/register/confirm", json={"cid": cid, "nonce": real_nonce, "cap": CAP_A})
+    assert r.status_code == 400
+    # Nothing was registered, so the victim's wakes still work.
+    assert _wake(m).status_code == 200
+
+
+def test_once_registered_a_wake_needs_the_capability(relay):
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    assert _wake(m, cap=CAP_A).status_code == 200
+    assert _wake(m, cap=None).status_code == 401, "a registered device must not be wakeable without it"
+    assert _wake(m, cap=CAP_B).status_code == 401, "a capability nobody registered must not work"
+
+
+def test_capability_a_does_not_work_with_token_b(relay):
+    """The spec's explicit negative test: capabilities are bound to one device."""
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    other = "another-fcm-registration-token"
+    _register(m, TOKEN, CAP_A)
+    _register(m, other, CAP_B)
+    assert _wake(m, token=TOKEN, cap=CAP_B).status_code == 401
+    assert _wake(m, token=other, cap=CAP_A).status_code == 401
+    assert _wake(m, token=TOKEN, cap=CAP_A).status_code == 200
+    assert _wake(m, token=other, cap=CAP_B).status_code == 200
+
+
+def test_a_capability_can_be_revoked_without_shipping_an_app(relay):
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    _register(m, TOKEN, CAP_B)
+    assert _wake(m, cap=CAP_B).status_code == 200
+    assert m.app.test_client().post("/register/revoke",
+                                    json={"token": TOKEN, "cap": CAP_B}).status_code == 200
+    assert _wake(m, cap=CAP_B).status_code == 401, "a revoked capability must stop working"
+    assert _wake(m, cap=CAP_A).status_code == 200, "revoking one must not affect the others"
+
+
+def test_revoking_the_last_capability_returns_the_device_to_legacy_behaviour(relay):
+    """Fail toward delivery: a device with nothing registered must never be left unwakeable."""
+    m = _stub_challenge(relay(enforce="1"))
+    _register(m, TOKEN, CAP_A)
+    m.app.test_client().post("/register/revoke", json={"token": TOKEN, "cap": CAP_A})
+    assert _wake(m, cap=None).status_code == 200
+
+
+def test_fcm_token_rotation_re_registers_without_losing_notifications(relay):
+    """
+    A rotated FCM token is a different token, so it starts with no capabilities and is wakeable —
+    which is what keeps a rotation from being a silent notification outage — and the device then
+    registers against the new one.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    rotated = "rotated-fcm-registration-token"
+    assert _wake(m, token=rotated, cap=None).status_code == 200
+    _register(m, rotated, CAP_B)
+    assert _wake(m, token=rotated, cap=None).status_code == 401
+    assert _wake(m, token=rotated, cap=CAP_B).status_code == 200
+
+
+def test_a_challenge_cannot_be_replayed(relay):
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    cid, nonce = _register(m, TOKEN, CAP_A)
+    r = m.app.test_client().post("/register/confirm", json={"cid": cid, "nonce": nonce, "cap": CAP_B})
+    assert r.status_code == 400, "a consumed challenge must not register a second capability"
+
+
+def test_a_malformed_capability_is_refused_at_registration(relay):
+    m = _stub_challenge(relay(enforce="1"))
+    c = m.app.test_client()
+    cid = c.post("/register/challenge", json={"token": TOKEN}).get_json()["cid"]
+    nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
+    r = c.post("/register/confirm", json={"cid": cid, "nonce": nonce, "cap": "short"})
+    assert r.status_code == 400, "a guessable capability must not enter the authorisation path"
+
+
+def test_a_contact_holding_the_old_url_keeps_working_during_the_grace_window(relay):
+    """
+    The one gap this design has, and the reason the window exists.
+
+    A recipient registers a capability and re-publishes its wake URL over Tox. A contact that was
+    offline at that moment still holds the URL WITHOUT the capability. Refusing it would cost that
+    user real notifications — requirement 5, "fail toward delivery", which is the one failure the
+    user cannot see. So it is delivered, and counted, for a fortnight.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="14"))
+    _register(m, TOKEN, CAP_A)
+    assert _wake(m, cap=None).status_code == 200, "a stale contact must not be cut off immediately"
+    assert _wake(m, cap=CAP_B).status_code == 200, "nor one holding a superseded capability"
+    assert _wake(m, cap=CAP_A).status_code == 200
+    body = m.app.test_client().get("/health/detail").get_json()
+    assert body["capabilities"]["grace_still_used"] >= 1, \
+        "the grace window must be observable, or nobody can tell when it is safe to close"
+
+
+def test_the_grace_window_does_not_last_forever(relay):
+    m = _stub_challenge(relay(enforce="1", cap_grace="14"))
+    _register(m, TOKEN, CAP_A)
+    # Age the registration past the window rather than waiting a fortnight.
+    import sqlite3 as _sqlite3
+    conn = _sqlite3.connect(m.COALESCE_DB)
+    conn.execute("UPDATE pushcap SET created = created - ?", (15 * 86400,))
+    conn.commit()
+    conn.close()
+    assert _wake(m, cap=None).status_code == 401
+    assert _wake(m, cap=CAP_A).status_code == 200
+
+
+def test_a_broken_capability_store_still_delivers(relay, monkeypatch):
+    """
+    Same rule as the rate limiter: an infrastructure failure fails toward DELIVERY. Otherwise a full
+    disk becomes a fleet-wide notification outage, and filling one becomes an attack.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    real = m._cap_state
+    monkeypatch.setattr(m, "_cap_state", lambda *a, **k: "store_error")
+    assert _wake(m, cap=None).status_code == 200
+    monkeypatch.setattr(m, "_cap_state", real)
+    assert _wake(m, cap=None).status_code == 401
+
+
+def test_the_challenge_push_is_silent(relay):
+    """A device must not say "New message" because it registered a capability."""
+    m = _stub_challenge(relay())
+    m.app.test_client().post("/register/challenge", json={"token": TOKEN})
+    assert m.pushed, "no challenge was pushed"
+    assert m.sent == [], "the challenge must not go through the wake path"
+    assert "khandaq_reg_nonce" in m.pushed[-1][1]
+
+
+def test_the_relay_never_stores_the_token_or_the_capability(relay):
+    """
+    The relay deliberately holds no device registry. Verification needs only "is sha256(cap)
+    registered against sha256(token)", so neither secret has to be persisted — and a database that
+    someone walks off with must not yield anything that wakes a device.
+    """
+    import sqlite3 as _sqlite3
+
+    m = _stub_challenge(relay())
+    _register(m, TOKEN, CAP_A)
+    conn = _sqlite3.connect(m.COALESCE_DB)
+    try:
+        dump = "\n".join(line for line in conn.iterdump())
+    finally:
+        conn.close()
+    assert TOKEN not in dump, "the FCM registration token reached the database"
+    assert CAP_A not in dump, "the capability reached the database"
+
+
+def test_the_legacy_get_endpoint_can_be_retired_by_configuration(relay, monkeypatch):
+    """Retirement is an operational decision, not a code change — and it answers 410, not 404."""
+    m = _stub_challenge(relay())
+    monkeypatch.setattr(m, "PUSH_LEGACY_GET", "410")
+    ts = int(time.time())
+    r = m.app.test_client().get(
+        f"/toxfcm/fcm.php?id={TOKEN}&auth={sign(TOKEN, '', ts)}&ts={ts}")
+    assert r.status_code == 410
+    assert m.sent == [], "a retired endpoint must not still deliver"
+
+
+def test_health_detail_reports_the_rollout_numbers(relay):
+    m = _stub_challenge(relay())
+    _register(m, TOKEN, CAP_A)
+    body = m.app.test_client().get("/health/detail").get_json()
+    assert body["capabilities"]["devices_registered"] == 1
+    assert body["capabilities"]["mode"] == "auto"
+    assert "legacy_pct" in body["emission_paths"]
+
+
+def test_public_health_does_not_leak_rollout_detail(relay):
+    """Adoption percentages are operational detail for us and a targeting hint for anyone else."""
+    m = _stub_challenge(relay())
+    _register(m, TOKEN, CAP_A)
+    body = m.app.test_client().get("/health").get_json()
+    assert "capabilities" not in body and "emission_paths" not in body
+    assert "auth_adoption" not in body
 
 
 # ------------------------------------------- /health must not report a service account it cannot read

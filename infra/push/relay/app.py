@@ -2,12 +2,14 @@
 """Khandaq push wake relay — FCM HTTP v1, tox.zoff.xyz compatible API."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import ipaddress
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import time
 from threading import Lock
@@ -139,6 +141,76 @@ PUSH_AUTH_ENFORCE = _enforce_raw in _ENFORCE_TRUE
 # silence every unsigned client in the field, unattended, at a moment nobody chose — the exact
 # outage soft mode exists to prevent. The decision stays with a human; only the forgetting is fixed.
 PUSH_AUTH_ENFORCE_BY = os.environ.get("PUSH_AUTH_ENFORCE_BY", "").strip()
+
+# KHANDAQ (re-audit 2026-08-22, K-01/K-02/K-03) — per-install capabilities, and the two operational
+# gates around them.
+#
+# K-01 says the shared HMAC is extractable from any published binary, which is true and is not fixed
+# by rotating it: every installation holds the same credential, so anyone who unpacks an APK can
+# sign a wake for any device whose targeting token they also hold. The answer is a secret that is
+# per (recipient, contact) rather than per fleet — DESIGN-push-per-install-capabilities.md, option
+# 3.1 — and this is its relay half.
+#
+# The design stalled on one question, recorded there and guarded by a test: how does a device prove
+# it may register a capability for a token, when the only credential it has is the fleet secret this
+# work exists to remove? Anyone who can read a wake URL knows the token, so token-possession alone
+# authorises nothing, and a forged registration would silently kill a victim's notifications at the
+# step where capabilities become required.
+#
+# Resolved by asking FCM. The relay mints a nonce and pushes it, data-only, TO THE TOKEN; only the
+# device that actually owns that token receives it, and only that device can echo it back. A contact
+# who knows the token can start a challenge and cannot finish one. No shared secret is involved in
+# the decision, which is exactly what K-01's third requirement asks for.
+PUSH_CAP_ENFORCE_RAW = os.environ.get("PUSH_CAP_ENFORCE", "auto").strip().lower()
+if PUSH_CAP_ENFORCE_RAW not in ("auto", "off", "always"):
+    raise SystemExit(
+        "PUSH_CAP_ENFORCE=%r is not recognised. Use 'auto' (require a capability only for tokens "
+        "that have registered one — the anti-flag-day default), 'off' (accept but never require), "
+        "or 'always' (refuse every wake without one). Refusing to start rather than guessing."
+        % os.environ.get("PUSH_CAP_ENFORCE", ""))
+# 'auto' is the shape the design argues for: the property starts holding per device, the moment that
+# device registers, and a device that has not registered keeps working. There is no fleet-wide
+# instant at which notifications can break.
+PUSH_CAP_ENFORCE = PUSH_CAP_ENFORCE_RAW
+
+# One row per (recipient, contact). The ceiling is a memory bound, not a security one — a device
+# with more contacts than this evicts its least recently used capability, which that contact then
+# re-obtains on the next publish.
+PUSH_CAP_MAX_PER_TOKEN = max(1, int(os.environ.get("PUSH_CAP_MAX_PER_TOKEN", "512")))
+# Unused capabilities are dropped. An FCM token that rotated is a token whose capabilities can never
+# be used again, and keeping them forever would turn a privacy-minimal relay into a device registry.
+PUSH_CAP_TTL_DAYS = max(1, int(os.environ.get("PUSH_CAP_TTL_DAYS", "180")))
+# A challenge is single-use and short-lived: it exists only for the seconds between the device
+# asking and the push arriving.
+PUSH_CHALLENGE_TTL_SEC = max(30, int(os.environ.get("PUSH_CHALLENGE_TTL_SEC", "300")))
+# The gap that would otherwise cost real notifications, and the only one in this design.
+#
+# A recipient registers a capability and re-publishes its wake URL to every contact over Tox. A
+# contact that is offline at that moment still holds the OLD URL, without the capability, and would
+# be refused the moment enforcement began — a message the user never sees, which is the one failure
+# mode requirement 5 of the design calls unacceptable.
+#
+# So enforcement for a device starts a fortnight after its FIRST capability is registered, not
+# immediately: long enough for contacts to come online and receive the new URL, short enough to be a
+# transition rather than a permanent hole. Requests allowed by the grace are counted separately, so
+# "is anyone still relying on this?" has an answer before it expires.
+PUSH_CAP_GRACE_DAYS = max(0, int(os.environ.get("PUSH_CAP_GRACE_DAYS", "14")))
+
+# K-03: retirement of the legacy GET wake endpoint, as a setting rather than a code change, so the
+# date it happens is an operational decision taken on the adoption numbers below it.
+#   serve — answer it (today)
+#   410   — Gone: the honest answer to a client that should have moved
+#   404   — as if it never existed
+PUSH_LEGACY_GET = os.environ.get("PUSH_LEGACY_GET", "serve").strip().lower()
+if PUSH_LEGACY_GET not in ("serve", "410", "404"):
+    raise SystemExit(
+        "PUSH_LEGACY_GET=%r is not recognised. Use 'serve', '410' or '404'." % PUSH_LEGACY_GET)
+
+# K-02: soft mode must not be reachable by an ordinary configuration mistake in production. Setting
+# PUSH_ENV=production without PUSH_AUTH_ENFORCE=1 now stops the container unless a break-glass reason
+# is stated — and the reason is logged, so the bypass leaves a record instead of being a quiet flag.
+PUSH_ENV = os.environ.get("PUSH_ENV", "").strip().lower()
+PUSH_AUTH_BREAK_GLASS = os.environ.get("PUSH_AUTH_BREAK_GLASS", "").strip()
 # KHANDAQ (security NEW-4): only honour X-Real-IP when the direct connection comes from a trusted
 # reverse proxy. The relay binds to 127.0.0.1 behind nginx (and reaches it via the Docker bridge), so
 # by default we trust loopback + private/link-local source addresses; an externally-exposed port would
@@ -230,6 +302,29 @@ def _stats_conn():
     # One row per currently-active client IP, holding the request timestamps inside the 60s window.
     conn.execute("CREATE TABLE IF NOT EXISTS ratelimit ("
                  "ip TEXT PRIMARY KEY, last REAL NOT NULL, hits TEXT NOT NULL)")
+    # KHANDAQ (re-audit 2026-08-22, K-01): registered capabilities.
+    #
+    # Keyed by the token HASH, never the token. The relay deliberately does not persist FCM
+    # registration tokens, and it does not have to: a wake presents both the token and the
+    # capability, so verification is "is sha256(cap) registered against sha256(token)" — a lookup,
+    # not a mapping. Storing the token would have made this table a device registry, which is
+    # exactly the thing the /stats removal took out.
+    conn.execute("CREATE TABLE IF NOT EXISTS pushcap ("
+                 "th TEXT NOT NULL, caph TEXT NOT NULL, created INTEGER NOT NULL, "
+                 "last_used INTEGER NOT NULL, PRIMARY KEY (th, caph))")
+    conn.execute("CREATE INDEX IF NOT EXISTS pushcap_th ON pushcap (th)")
+    # Outstanding registration challenges. `nonceh` is a hash for the same reason the signature
+    # store keeps hashes: a database read must not yield anything replayable.
+    conn.execute("CREATE TABLE IF NOT EXISTS pushchallenge ("
+                 "cid TEXT PRIMARY KEY, th TEXT NOT NULL, nonceh TEXT NOT NULL, "
+                 "exp INTEGER NOT NULL)")
+    # KHANDAQ (re-audit 2026-08-22, K-03): which emission path clients actually use, per day, with
+    # no token and no identifier of any kind. "Retire the legacy GET" is a decision that needs this
+    # number, and asking the access log was never going to give it — the query string is redacted
+    # there precisely because it holds the token.
+    conn.execute("CREATE TABLE IF NOT EXISTS pushpath ("
+                 "day TEXT NOT NULL, path TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, "
+                 "PRIMARY KEY (day, path))")
     return conn
 
 
@@ -547,6 +642,45 @@ def _enforce_overdue() -> bool:
         return False
     return time.gmtime() > cutoff
 
+
+# KHANDAQ (re-audit 2026-08-22, K-02): production must not be able to fall into soft mode by an
+# ordinary configuration mistake. The compose overlay sets PUSH_AUTH_ENFORCE=1; this makes the
+# absence of it fatal rather than silent, and makes the exception explicit and recorded.
+#
+# The escape hatch is deliberately awkward and deliberately not a boolean: PUSH_AUTH_BREAK_GLASS
+# must carry a REASON, which is logged at error level on every worker start. "Somebody typed a
+# sentence explaining why the relay is unauthenticated today" is a different kind of event from
+# "somebody set a flag to 0", and only the first leaves a record an incident review can read.
+if PUSH_ENV == "production" and not PUSH_AUTH_ENFORCE:
+    if not PUSH_AUTH_BREAK_GLASS:
+        raise SystemExit(
+            "PUSH_ENV=production with PUSH_AUTH_ENFORCE off. Soft mode serves unsigned wake requests "
+            "to anyone inside the rate limit, and reaching production that way is a mistake, not a "
+            "decision. Set PUSH_AUTH_ENFORCE=1, or state a reason in PUSH_AUTH_BREAK_GLASS "
+            "(e.g. PUSH_AUTH_BREAK_GLASS='incident 2026-08-22: rollback to unblock 0.2.39 clients') "
+            "— it is logged on every start and belongs in the incident record.")
+    log.error("push auth BREAK-GLASS: production is running in SOFT mode by explicit override: %s",
+              PUSH_AUTH_BREAK_GLASS)
+
+
+def _enforce_deadline_days_left():
+    """Days until PUSH_AUTH_ENFORCE_BY, or None when there is no deadline / it is already enforced."""
+    if not PUSH_AUTH_ENFORCE_BY or PUSH_AUTH_ENFORCE:
+        return None
+    try:
+        cutoff = time.mktime(time.strptime(PUSH_AUTH_ENFORCE_BY, "%Y-%m-%d"))
+    except ValueError:
+        return None
+    return int((cutoff - time.time()) // 86400)
+
+
+# The spec asks for an alert BEFORE the deadline as well as after it. A warning that only fires once
+# the date has passed tells an operator they are already late, which is the least useful moment.
+_days_left = _enforce_deadline_days_left()
+if _days_left is not None and 0 <= _days_left <= 14:
+    log.warning("push auth: %d day(s) left before the %s soft-mode cutoff. Read /health/detail -> "
+                "auth_adoption.window_outcomes and plan the flip to PUSH_AUTH_ENFORCE=1.",
+                _days_left, PUSH_AUTH_ENFORCE_BY)
 
 if _enforce_overdue():
     # Once per worker at startup. The point is that a relay quietly left in soft mode long after the
@@ -906,6 +1040,152 @@ def _send_wake(token: str, sender_pubkey: str = "") -> tuple[bool, str]:
     return _send_fcm_legacy(token, sender_pubkey)
 
 
+def _send_fcm_data(token: str, data: dict) -> tuple[bool, str]:
+    """Deliver a DATA-ONLY message. No notification block, so nothing is shown to the user.
+
+    Used for the registration challenge. It is deliberately a separate function rather than a flag
+    on _send_wake: a wake must always produce a visible notification (see #163 — an apns payload
+    without an alert makes the push silent and a force-quit iOS app never receives it), and a
+    challenge must never produce one. Conflating them is how a device ends up saying "New message"
+    because it registered a capability.
+    """
+    if not FCM_SERVICE_ACCOUNT_FILE or not os.path.isfile(FCM_SERVICE_ACCOUNT_FILE):
+        return False, "FCM_SERVICE_ACCOUNT_FILE not configured"
+    try:
+        access = _get_access_token()
+    except Exception as exc:
+        _token_cache["token"] = None
+        _token_cache["exp"] = 0.0
+        return False, f"auth failed: {exc}"
+    payload = {
+        "message": {
+            "token": token,
+            "data": {k: str(v) for k, v in data.items()},
+            "android": {"priority": "HIGH"},
+            # content-available only: a background wake with nothing on screen.
+            "apns": {"headers": {"apns-priority": "5", "apns-push-type": "background"},
+                     "payload": {"aps": {"content-available": 1}}},
+        }
+    }
+    try:
+        resp = requests.post(
+            f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send",
+            headers={"Authorization": f"Bearer {access}", "Content-Type": "application/json"},
+            json=payload, timeout=10)
+    except requests.RequestException as exc:
+        return False, f"FCM v1 request failed: {exc}"
+    if resp.status_code not in (200, 201):
+        return False, f"FCM v1 HTTP {resp.status_code}"
+    return True, "ok"
+
+
+def _caph(cap: str) -> str:
+    """The stored form of a capability. Never store or log the capability itself."""
+    return hashlib.sha256(cap.encode("utf-8")).hexdigest()
+
+
+_CAP_RE = re.compile(r"^[A-Za-z0-9_-]{22,128}$")   # base64url, 16..96 bytes of entropy
+
+
+def _record_path(path: str) -> None:
+    """Count which emission path a wake arrived on. Fails open and silent, like the auth counters."""
+    try:
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                conn.execute("INSERT INTO pushpath (day, path, n) VALUES (?, ?, 1) "
+                             "ON CONFLICT(day, path) DO UPDATE SET n = n + 1", (day, path))
+                conn.execute("DELETE FROM pushpath WHERE day < ?",
+                             (time.strftime("%Y-%m-%d", time.gmtime(time.time() - 60 * 86400)),))
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception:
+        pass
+
+
+def _cap_state(token: str, cap: str) -> str:
+    """
+    "none"          - this token has registered no capability; legacy behaviour applies
+    "ok"            - the presented capability is registered for this token
+    "missing"       - the token HAS capabilities but the request presented none
+    "bad"           - the token has capabilities and the presented one is not among them
+    "missing_grace" - as "missing", inside the post-registration grace window
+    "bad_grace"     - as "bad", inside the post-registration grace window
+    "store_error"   - the store could not be read, so none of the above is known
+
+    A database error must NOT read as "none": that would silently turn every capability-protected
+    device back into an unprotected one, and an attacker who can fill a disk should not be able to
+    disable an authorisation check. It must not read as "bad" either — the relay's standing rule is
+    that an infrastructure failure fails toward DELIVERY (see the rate limiter, which fails open for
+    exactly this reason, and requirement 5 of the design: a wrongly-refused wake is a message the
+    user never sees). So it is its own state, and what happens next is a policy decision made once,
+    in _cap_required, rather than a guess made here.
+    """
+    th = _th(token)
+    now = int(time.time())
+    try:
+        return _cap_state_locked(th, cap, now)
+    except Exception as exc:
+        log.warning("push cap: capability store unavailable (%s) — cannot verify", exc)
+        return "store_error"
+
+
+def _cap_state_locked(th: str, cap: str, now: int) -> str:
+    with _stats_lock:
+        conn = _stats_conn()
+        try:
+            conn.execute("DELETE FROM pushcap WHERE last_used < ?",
+                         (now - PUSH_CAP_TTL_DAYS * 86400,))
+            rows = conn.execute("SELECT caph, created FROM pushcap WHERE th = ?", (th,)).fetchall()
+            if not rows:
+                conn.commit()
+                return "none"
+            in_grace = (PUSH_CAP_GRACE_DAYS > 0
+                        and now < min(int(c) for _, c in rows) + PUSH_CAP_GRACE_DAYS * 86400)
+            if not cap:
+                conn.commit()
+                return "missing_grace" if in_grace else "missing"
+            want = _caph(cap)
+            rows = [(h, c) for h, c in rows]
+            # Constant-time over the candidate set. The set is small and the comparison is against a
+            # hash rather than the secret, but a timing signal that says "your first 8 characters
+            # were right" is not worth the two lines it costs to avoid.
+            hit = False
+            for stored, _created in rows:
+                if hmac.compare_digest(stored, want):
+                    hit = True
+            if not hit:
+                conn.commit()
+                return "bad_grace" if in_grace else "bad"
+            conn.execute("UPDATE pushcap SET last_used = ? WHERE th = ? AND caph = ?",
+                         (now, th, want))
+            conn.commit()
+            return "ok"
+        finally:
+            conn.close()
+
+
+def _cap_required(state: str) -> bool:
+    if PUSH_CAP_ENFORCE == "off":
+        return False
+    if PUSH_CAP_ENFORCE == "always":
+        # The operator has said every wake needs one. Honour that even when the store is unreadable:
+        # in this mode a wake that cannot be authorised is a wake that must not happen.
+        return True
+    if state == "store_error":
+        # 'auto' + broken store: deliver. The alternative is a disk fault becoming a fleet-wide
+        # notification outage, which is the failure the whole rollout shape is designed to avoid.
+        return False
+    if state in ("missing_grace", "bad_grace"):
+        # Inside the window a contact may still be holding the pre-capability URL. Deliver, and let
+        # the counter say how much of that is still happening.
+        return False
+    # 'auto': required exactly for the devices that have opted in by registering one.
+    return state != "none"
+
+
 @app.route("/health")
 def health():
     """
@@ -961,7 +1241,76 @@ def health_detail():
     if PUSH_AUTH_ENFORCE_BY:
         body["enforce_by"] = PUSH_AUTH_ENFORCE_BY
         body["enforce_overdue"] = _enforce_overdue()
+    # KHANDAQ (re-audit 2026-08-22, K-01/K-03): the two rollout numbers, on the INTERNAL endpoint
+    # only. Public /health stays minimal — adoption percentages tell an outsider how much of the
+    # fleet is still unprotected, which is operational detail for us and a targeting hint for them.
+    body["capabilities"] = _cap_summary()
+    body["emission_paths"] = _path_summary()
+    if PUSH_AUTH_BREAK_GLASS:
+        body["break_glass"] = PUSH_AUTH_BREAK_GLASS
     return jsonify(body)
+
+
+def _cap_summary() -> dict:
+    """How far the capability rollout has got: devices registered, and how wakes are landing."""
+    try:
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                devices = conn.execute("SELECT COUNT(DISTINCT th) FROM pushcap").fetchone()[0]
+                caps = conn.execute("SELECT COUNT(*) FROM pushcap").fetchone()[0]
+                since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 7 * 86400))
+                rows = conn.execute(
+                    "SELECT outcome, SUM(n) FROM authoutcome WHERE day >= ? AND outcome LIKE 'cap_%' "
+                    "GROUP BY outcome", (since,)).fetchall()
+            finally:
+                conn.close()
+        outcomes = {k: int(v) for k, v in rows}
+        return {
+            "mode": PUSH_CAP_ENFORCE,
+            "devices_registered": int(devices),
+            "capabilities_registered": int(caps),
+            "window_days": 7,
+            "window_outcomes": outcomes,
+            "ttl_days": PUSH_CAP_TTL_DAYS,
+            "grace_days": PUSH_CAP_GRACE_DAYS,
+            # cap_missing_grace falling to zero is the signal that the transition has landed and the
+            # grace window is no longer carrying anyone.
+            "grace_still_used": int(outcomes.get("cap_missing_grace", 0) + outcomes.get("cap_bad_grace", 0)),
+        }
+    except Exception:
+        return {"error": "unavailable"}
+
+
+def _path_summary() -> dict:
+    """
+    The number the legacy-GET retirement decision turns on: what share still arrives on the old URL.
+
+    This is why it exists at all — nginx redacts the query string on that endpoint precisely because
+    it carries the token, so the access log cannot answer "have the clients moved yet?" without
+    un-redacting the thing the redaction is there to protect.
+    """
+    try:
+        since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 7 * 86400))
+        with _stats_lock:
+            conn = _stats_conn()
+            try:
+                rows = conn.execute("SELECT path, SUM(n) FROM pushpath WHERE day >= ? GROUP BY path",
+                                    (since,)).fetchall()
+            finally:
+                conn.close()
+        counts = {k: int(v) for k, v in rows}
+        total = sum(counts.values())
+        legacy = counts.get("legacy_get", 0) + counts.get("legacy_post", 0)
+        return {
+            "window_days": 7,
+            "counts": counts,
+            "legacy_pct": round(100.0 * legacy / total, 2) if total else None,
+            "legacy_mode": PUSH_LEGACY_GET,
+            "retire_when": "legacy_pct is 0 over a full store-rollout window; then PUSH_LEGACY_GET=410",
+        }
+    except Exception:
+        return {"error": "unavailable"}
 
 
 def _redact_token(detail: str, token: str) -> str:
@@ -971,7 +1320,7 @@ def _redact_token(detail: str, token: str) -> str:
     return detail.replace(token, "[REDACTED]")
 
 
-def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool):
+def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool, cap: str = "", path: str = "wake"):
     """
     The wake path, shared by the legacy query-string endpoint and the JSON one.
 
@@ -997,9 +1346,37 @@ def _deliver_wake(token_raw: str, sender_raw: str, *, allow_query_auth: bool):
     if not _auth_ok(token_raw, sender_raw, allow_query_auth=allow_query_auth):
         return jsonify({"error": "unauthorized"}), 401
 
+    # KHANDAQ (re-audit 2026-08-22, K-03): count the emission path AFTER authentication, not in the
+    # route handler. "Have the clients moved off the legacy URL yet?" is a question about real
+    # clients — counting unauthenticated scanner traffic against the legacy endpoint would keep the
+    # retirement number permanently above zero and the endpoint permanently alive. It also keeps a
+    # refused flood from costing a database write per request, the same reason the auth counters sit
+    # behind the rate limiter.
+    _record_path(path)
+
     token = token_raw.strip()
     if not token or len(token) < 10 or len(token) > 4096:
         return jsonify({"error": "invalid token"}), 400
+
+    # KHANDAQ (re-audit 2026-08-22, K-01): the per-recipient/per-contact capability check, AFTER the
+    # shared-secret HMAC rather than instead of it. The two answer different questions — the HMAC
+    # says "some Khandaq client sent this", the capability says "this recipient authorised THIS
+    # contact to wake it" — and only the second one survives someone unpacking the APK.
+    #
+    # In the default 'auto' mode a token with no registered capability behaves exactly as before, so
+    # there is no fleet-wide instant at which anything can break; the property starts holding for a
+    # device the moment that device registers, and for nobody else.
+    cap_state = _cap_state(token, (cap or "").strip())
+    if cap_state in ("store_error", "missing_grace", "bad_grace"):
+        _record_auth_outcome("cap_" + cap_state)
+    if cap_state != "none" and cap_state != "ok" and _cap_required(cap_state):
+        _record_auth_outcome("cap_" + cap_state)
+        # No detail beyond the state: telling a caller "that capability is not registered" versus
+        # "this token needs one" is a distinction only an attacker is enumerating for.
+        log.warning("push cap REJECT (%s) from %s", cap_state, _client_ip())
+        return jsonify({"error": "unauthorized"}), 401
+    if cap_state == "ok":
+        _record_auth_outcome("cap_ok")
 
     sender_pubkey = sender_raw.strip().upper()
     if sender_pubkey and (len(sender_pubkey) != 64 or not all(c in "0123456789ABCDEF" for c in sender_pubkey)):
@@ -1039,8 +1416,19 @@ def wake():
     # DEPRECATED (audit: credentials in URLs). Kept because clients in the field speak only this,
     # and taking it away would silence their notifications. It gains no new functionality: anything
     # new belongs on /wake below.
+    #
+    # KHANDAQ (re-audit 2026-08-22, K-03): retirement is a setting, not an edit. The share of
+    # traffic still arriving here is counted on /health/detail, and when it reaches zero this
+    # becomes PUSH_LEGACY_GET=410 — a decision taken on that number, on a day somebody chooses.
+    if PUSH_LEGACY_GET != "serve":
+        _record_path("legacy_refused")
+        # 410 rather than 404 by default: a client that still speaks this deserves to be told the
+        # endpoint is gone on purpose, not that it was never there.
+        return (jsonify({"error": "gone", "use": "POST /wake"}), 410) if PUSH_LEGACY_GET == "410" \
+            else ("", 404)
     return _deliver_wake(request.args.get("id", ""), request.args.get("from", ""),
-                         allow_query_auth=True)
+                         allow_query_auth=True, cap=request.args.get("cap", ""),
+                         path="legacy_get" if request.method == "GET" else "legacy_post")
 
 
 @app.route("/wake", methods=["POST"])
@@ -1080,7 +1468,157 @@ def wake_json():
     if not isinstance(token, str) or (sender is not None and not isinstance(sender, str)):
         return jsonify({"error": "token and sender must be strings"}), 400
 
-    return _deliver_wake(token, sender or "", allow_query_auth=False)
+    # A cap of the wrong TYPE is treated as absent rather than rejected. The relay's standing rule
+    # is to fail toward delivery: for a token with no registered capability this changes nothing and
+    # the wake goes through, and for a token that HAS one it lands on the "missing" path, which is
+    # refused under enforcement exactly as it should be. Returning 400 here would let a client-side
+    # type bug cost a real user their notification.
+    cap = body.get("cap", "")
+    if not isinstance(cap, str):
+        cap = ""
+
+    return _deliver_wake(token, sender or "", allow_query_auth=False, cap=cap or "", path="json_post")
+
+
+# ---------------------------------------------------------------------------
+# KHANDAQ (re-audit 2026-08-22, K-01): capability registration.
+#
+# DESIGN-push-per-install-capabilities.md §6 step 2 says, in bold, do not build this as written —
+# because authenticating registration with the fleet-wide HMAC authenticates nothing. Every
+# installation holds that secret, so anyone who unpacks an APK could register a capability against
+# somebody else's token, and at the step where capabilities become required that would silently end
+# the victim's notifications. The design leaves the question open and a test enforces the gap.
+#
+# The proof used here is not a secret at all. The relay pushes a nonce to the token, data-only, and
+# the device echoes it back. Only whoever actually holds that FCM registration on that device can
+# receive it. A contact who knows the token — and every contact does, it is in the wake URL — can
+# ask for a challenge and can never complete one. Nothing about the fleet secret is involved in the
+# decision, which is K-01's requirement 3 met rather than deferred.
+#
+# The registration flow, end to end:
+#
+#   device  -> POST /register/challenge {"token": "..."}          -> {"cid": "..."}
+#   relay   -> FCM data push to that token: {khandaq_reg_nonce, khandaq_reg_cid}
+#   device  -> POST /register/confirm {"cid", "nonce", "cap"}     -> {"registered": 1}
+#   device  -> publishes ...&cap=<C> to one contact over Tox (already authenticated and E2EE)
+#
+# Revocation needs no challenge: presenting C proves you hold C, and holding C is the whole of the
+# authority being given up.
+# ---------------------------------------------------------------------------
+
+
+def _register_rate_ok() -> bool:
+    """Registration shares the wake rate limiter. It is far rarer, so it needs no separate budget."""
+    return _rate_ok(_client_ip())
+
+
+@app.route("/register/challenge", methods=["POST"])
+def register_challenge():
+    if not _register_rate_ok():
+        return jsonify({"error": "rate limit"}), 429
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "expected a json object body"}), 400
+    token = body.get("token")
+    if not isinstance(token, str) or not (10 <= len(token.strip()) <= 4096):
+        return jsonify({"error": "invalid token"}), 400
+    token = token.strip()
+
+    nonce = secrets.token_urlsafe(32)
+    cid = secrets.token_urlsafe(16)
+    exp = int(time.time()) + PUSH_CHALLENGE_TTL_SEC
+    ok, detail = _send_fcm_data(token, {"khandaq_reg_nonce": nonce, "khandaq_reg_cid": cid})
+    if not ok:
+        # The detail names an internal path or an upstream body; it is logged, never returned
+        # (audit round 3, F-11).
+        log.warning("register challenge send failed: %s", _redact_token(detail, token))
+        return jsonify({"error": "challenge delivery failed"}), 502
+
+    with _stats_lock:
+        conn = _stats_conn()
+        try:
+            conn.execute("DELETE FROM pushchallenge WHERE exp < ?", (int(time.time()),))
+            conn.execute("INSERT INTO pushchallenge (cid, th, nonceh, exp) VALUES (?, ?, ?, ?)",
+                         (cid, _th(token), hashlib.sha256(nonce.encode()).hexdigest(), exp))
+            conn.commit()
+        finally:
+            conn.close()
+    return jsonify({"cid": cid, "expires_in": PUSH_CHALLENGE_TTL_SEC}), 200
+
+
+@app.route("/register/confirm", methods=["POST"])
+def register_confirm():
+    if not _register_rate_ok():
+        return jsonify({"error": "rate limit"}), 429
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "expected a json object body"}), 400
+    cid, nonce, cap = body.get("cid"), body.get("nonce"), body.get("cap")
+    if not all(isinstance(v, str) for v in (cid, nonce, cap)):
+        return jsonify({"error": "cid, nonce and cap must be strings"}), 400
+    if not _CAP_RE.match(cap):
+        # A short or oddly-shaped capability is a client bug, and accepting one would put a
+        # guessable bearer token in the authorisation path.
+        return jsonify({"error": "cap must be 22-128 base64url characters"}), 400
+
+    now = int(time.time())
+    with _stats_lock:
+        conn = _stats_conn()
+        try:
+            conn.execute("DELETE FROM pushchallenge WHERE exp < ?", (now,))
+            row = conn.execute("SELECT th, nonceh FROM pushchallenge WHERE cid = ?", (cid,)).fetchone()
+            if row is None:
+                conn.commit()
+                return jsonify({"error": "unknown or expired challenge"}), 400
+            th, nonceh = row
+            if not hmac.compare_digest(nonceh, hashlib.sha256(nonce.encode()).hexdigest()):
+                # Consume the challenge on a wrong nonce. Otherwise the endpoint is an oracle that
+                # can be tried repeatedly for the lifetime of the challenge.
+                conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+                conn.commit()
+                return jsonify({"error": "unknown or expired challenge"}), 400
+            conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+            conn.execute("INSERT INTO pushcap (th, caph, created, last_used) VALUES (?, ?, ?, ?) "
+                         "ON CONFLICT(th, caph) DO UPDATE SET last_used = excluded.last_used",
+                         (th, _caph(cap), now, now))
+            # Bound the per-device set, evicting least-recently-used. A contact whose capability is
+            # evicted gets a fresh one on the recipient's next publish; nothing is lost permanently.
+            n = conn.execute("SELECT COUNT(*) FROM pushcap WHERE th = ?", (th,)).fetchone()[0]
+            if n > PUSH_CAP_MAX_PER_TOKEN:
+                conn.execute(
+                    "DELETE FROM pushcap WHERE th = ? AND caph IN ("
+                    "  SELECT caph FROM pushcap WHERE th = ? ORDER BY last_used ASC LIMIT ?)",
+                    (th, th, n - PUSH_CAP_MAX_PER_TOKEN))
+            conn.commit()
+        finally:
+            conn.close()
+    log.info("push cap registered for token#%s", th)
+    return jsonify({"registered": 1}), 200
+
+
+@app.route("/register/revoke", methods=["POST"])
+def register_revoke():
+    """Give up one capability. Presenting it is the proof; holding it was the whole authority."""
+    if not _register_rate_ok():
+        return jsonify({"error": "rate limit"}), 429
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "expected a json object body"}), 400
+    token, cap = body.get("token"), body.get("cap")
+    if not isinstance(token, str) or not isinstance(cap, str) or not _CAP_RE.match(cap):
+        return jsonify({"error": "token and cap are required"}), 400
+    with _stats_lock:
+        conn = _stats_conn()
+        try:
+            cur = conn.execute("DELETE FROM pushcap WHERE th = ? AND caph = ?",
+                               (_th(token.strip()), _caph(cap)))
+            conn.commit()
+            removed = cur.rowcount
+        finally:
+            conn.close()
+    # Same answer either way: whether a given capability was registered is not information a caller
+    # who does not hold it should be able to obtain.
+    return jsonify({"revoked": 1 if removed else 0}), 200
 
 
 # KHANDAQ: /stats + /stats.json dashboard removed (attack-surface reduction). Only the wake +
@@ -1093,6 +1631,7 @@ def root():
         "service": "khandaq-push-relay",
         "endpoints": [
             "POST /wake  (json body + Authorization header)",
+            "POST /register/challenge, /register/confirm, /register/revoke  (per-install capability)",
             "/toxfcm/fcm.php?id=<fcm_token>&type=1  (deprecated: credentials in the URL)",
         ],
         "privacy": "wake-only, no message content; optional sender public key via &from=",

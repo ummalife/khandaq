@@ -10,7 +10,16 @@
 # secret is empty in every release build, so switching to this overlay today silences every wake
 # notification in the field. It becomes correct the moment a signing client ships — see
 # PUSH-AUTH-SECRET-PROVISIONING.md.
+#
+# KHANDAQ (re-audit 2026-08-22, K-02): PUSH_ENV=production is what makes soft mode in production a
+# STARTUP FAILURE rather than a quiet setting. With it, PUSH_AUTH_ENFORCE=0 stops the container
+# unless PUSH_AUTH_BREAK_GLASS carries a written reason — which is then logged at error level on
+# every worker start. The spec asks that break-glass use be recorded; a sentence in an environment
+# variable that reaches the container log is a record, a flag flipped to 0 is not.
 services:
   push-relay:
     environment:
       - PUSH_AUTH_ENFORCE=1
+      - PUSH_ENV=production
+      # Uncomment ONLY during an incident, with a real reason, and remove it afterwards:
+      # - PUSH_AUTH_BREAK_GLASS=incident 2026-08-22: rolled back to unblock pre-signing clients

@@ -52,6 +52,8 @@ jobs:
           # which would put a 20-minute build on every pull request for an advisory scan.
           build-mode: ${{ matrix.language == 'java-kotlin' && 'none' || 'none' }}
           queries: security-extended
+          # Excludes security/sast-fixtures/, which is deliberately vulnerable by construction.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyse
         uses: github/codeql-action/analyze@v3

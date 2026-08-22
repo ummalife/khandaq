@@ -60,7 +60,16 @@ public class Logging
     {
         try
         {
-            final Process process = Runtime.getRuntime().exec("logcat -d -v threadtime " + "System.out:I AndroidRuntime:E *:S");
+            // KHANDAQ (re-review 2026-08-22, KQ-10): argv, and no concatenation.
+            //
+            // It was two string LITERALS joined with `+`, so nothing was ever variable here — but it
+            // is the same shape as an injectable command, and a rule that has to distinguish
+            // "concatenated from literals" from "concatenated from a variable" is a rule with an
+            // exception in it. Runtime.exec(String) splits on whitespace anyway, so the array says
+            // exactly what was already happening.
+            final Process process = Runtime.getRuntime().exec(new String[]{
+                    "logcat", "-d", "-v", "threadtime",
+                    "System.out:I", "AndroidRuntime:E", "*:S"});
 
             final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             final StringBuilder log = new StringBuilder();

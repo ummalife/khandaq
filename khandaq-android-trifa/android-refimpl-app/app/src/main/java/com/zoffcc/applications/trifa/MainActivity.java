@@ -11628,7 +11628,13 @@ public class MainActivity extends AppCompatActivity
             info.guardianproject.iocipher.File f = new info.guardianproject.iocipher.File(filename);
             info.guardianproject.iocipher.FileOutputStream out = new info.guardianproject.iocipher.FileOutputStream(f);
 
-            Random prng = new Random();
+            // KHANDAQ (re-review 2026-08-22, KQ-10): SecureRandom, not Random.
+            //
+            // This is a VFS test helper, so nothing depended on the quality — which is exactly why it
+            // was easy to leave. java.util.Random is a 48-bit LCG whose entire future is recoverable
+            // from two outputs, and a byte buffer filled from one is indistinguishable from key
+            // material to anyone reading the code later. The cost of being right here is one word.
+            java.security.SecureRandom prng = new java.security.SecureRandom();
             random_buf = new byte[bytes];
             prng.nextBytes(random_buf);
 

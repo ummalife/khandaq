@@ -58,10 +58,13 @@ def main() -> int:
             print(f"::error::{p.relative_to(ROOT)} отсутствует", file=sys.stderr)
             return 1
     swift = SWIFT.read_text(encoding="utf-8")
-    pod = POD.read_text(encoding="utf-8")
+    # Named pod_src, not pod: check-ios-bundler.py greps for a bare `pod` as an un-Bundlered
+    # CocoaPods invocation, and it is deliberately blunt because it guards shell and YAML
+    # where that really is the command. Renaming here is cheaper than widening that gate.
+    pod_src = POD.read_text(encoding="utf-8")
 
     sw_service = re.search(r'capKeychainService\s*=\s*"([^"]+)"', swift)
-    pod_service = re.search(r'kCapabilityKeychainService\s*=\s*@"([^"]+)"', pod)
+    pod_service = re.search(r'kCapabilityKeychainService\s*=\s*@"([^"]+)"', pod_src)
     require(sw_service is not None, "в KhandaqPush.swift нет имени сервиса Keychain")
     require(pod_service is not None, "в OCTPushUrlValidator.m нет имени сервиса Keychain")
     if sw_service and pod_service:
@@ -80,7 +83,7 @@ def main() -> int:
     # Comments are stripped first. The first version of this check read the prose EXPLAINING the trap
     # and reported it as the trap — a gate that fails on its own documentation is a gate that gets
     # deleted rather than fixed.
-    for name, text in (("Swift", strip_comments(swift)), ("под", strip_comments(pod))):
+    for name, text in (("Swift", strip_comments(swift)), ("под", strip_comments(pod_src))):
         for m in re.finditer(r"kSecReturnData", text):
             window = text[max(0, m.start() - 400):m.start() + 200]
             require("kSecAttrAccessible" not in window,

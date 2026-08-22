@@ -103,21 +103,17 @@ public class ToolBox
         return export.toString();
     }
 
-    //Returns active network interfaces
-    public String getIfs(Context context)
-    {
-        //read from command: netcfg | grep UP
-
-        String filePath = context.getFilesDir().getAbsolutePath() + File.separator + Const.FILE_IF_LIST;
-        if (Const.IS_DEBUG)
-        {
-            Log.d(Const.LOG_TAG, "Try to get active interfaces to" + filePath);
-        }
-        ExecCom.user("rm " + filePath);
-        ExecCom.user("netcfg | grep UP -> " + filePath);
-        String result = ExecCom.userForResult("cat " + filePath);
-        return result;
-    }
+    // KHANDAQ (re-review 2026-08-22, KQ-10): getIfs() removed.
+    //
+    // Found by the new Semgrep pass. It was the only place in the tree that built a shell command by
+    // string concatenation — three of them, `rm`, `netcfg | grep UP ->` and `cat`, all with a path
+    // interpolated in. Nothing called it: this vendored package is reached only through
+    // Detector/Collector for /proc/net parsing, and those pass compile-time constants.
+    //
+    // So it was not exploitable, and it was a shell-injection primitive sitting in the APK waiting
+    // for a caller. `netcfg` has not existed on Android since Lollipop either, so the method could
+    // not have worked in any case. Deleted rather than annotated: dead code that shells out is
+    // exactly the kind of thing a future refactor "reuses".
 
     //Char to value
     private int hexToBin(char ch)

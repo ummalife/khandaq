@@ -5596,6 +5596,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return format;
     }
 
+    // REVIEWED (re-review 2026-08-22, KQ-10): `format` is localizedStringForKey: eight lines up —
+    // a value that ships inside the binary under a key we choose. The untrusted value is `argument`,
+    // which sits in the ARGUMENT position where it belongs. Semgrep runs in generic mode here (the
+    // open-source engine has no Objective-C parser) and cannot see that far, so the suppression is
+    // pinned to this line with its reason beside it.
+    // nosemgrep: khandaq-objc-format-string-from-variable
     return [NSString stringWithFormat:format, argument];
 }
 

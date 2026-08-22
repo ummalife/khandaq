@@ -45,12 +45,14 @@ REQUIRED_HEADERS = {
     "content-security-policy": None,
     "strict-transport-security": None,
     "x-content-type-options": "nosniff",
-    "x-frame-options": "SAMEORIGIN",
+    "x-frame-options": "DENY",
     "referrer-policy": "strict-origin-when-cross-origin",
     "permissions-policy": None,
 }
 
-CSP_MUST_CONTAIN = ("default-src 'none'", "object-src 'none'", "base-uri 'none'", "frame-ancestors")
+CSP_MUST_CONTAIN = ("default-src 'none'", "object-src 'none'", "base-uri 'none'",
+                    # KQ-09: the value matters, not merely the directive's presence.
+                    "frame-ancestors 'none'")
 
 failures: list[str] = []
 checks = 0
@@ -98,6 +100,11 @@ def check_headers(url: str, label: str) -> None:
         if want is not None and headers[header].strip() != want:
             fail(f"{label}: {header} = {headers[header]!r}, ожидалось {want!r}")
             return
+    # KQ-09: HSTS must cover the subdomains, now that all three are inventoried and HTTPS-only.
+    if "includesubdomains" not in headers["strict-transport-security"].lower():
+        fail(f"{label}: HSTS без includeSubDomains — "
+             f"{headers['strict-transport-security']!r}")
+        return
     csp = headers["content-security-policy"]
     for token in CSP_MUST_CONTAIN:
         if token not in csp:

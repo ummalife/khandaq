@@ -29,10 +29,18 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 OUT = ROOT / "infra" / "nginx" / "khandaq-security-headers.conf"
 
-# HSTS without includeSubDomains and without preload, deliberately. The spec says not to enable
-# either before every subdomain is inventoried; push.khandaq.org is known and already sends its own
-# HSTS, but the full subdomain list is not established, and preload is effectively irreversible.
-HSTS = "max-age=31536000"
+# KHANDAQ (re-review 2026-08-22, KQ-09): includeSubDomains, after actually inventorying them.
+#
+# The previous value left it off because the subdomain list was not established. It is now: DNS has
+# exactly three names — khandaq.org, push.khandaq.org and mail.khandaq.org — there is no wildcard
+# record, each holds its own valid certificate, and all three already answer :80 with a 301 to
+# https. So the directive describes what is already true rather than imposing something new, which
+# is the only safe way to turn it on.
+#
+# Still NOT preload. That is a submission to a list baked into browser binaries and is effectively
+# irreversible; it deserves a separate decision made on operational readiness, not a side effect of
+# closing a finding.
+HSTS = "max-age=31536000; includeSubDomains"
 
 PERMISSIONS_POLICY = ", ".join(
     f"{feature}=()"
@@ -95,7 +103,9 @@ def render() -> str:
         "connect-src 'self'",
         "base-uri 'none'",
         "form-action 'none'",
-        "frame-ancestors 'self'",
+        # KQ-09: 'none', not 'self'. Nothing on this site embeds any other part of it, so same-origin
+        # framing was permission granted for a use case that does not exist.
+        "frame-ancestors 'none'",
         "object-src 'none'",
         "upgrade-insecure-requests",
     ])
@@ -115,7 +125,7 @@ def render() -> str:
         f'add_header Content-Security-Policy "{csp}" always;',
         f'add_header Strict-Transport-Security "{HSTS}" always;',
         "add_header X-Content-Type-Options nosniff always;",
-        "add_header X-Frame-Options SAMEORIGIN always;",
+        "add_header X-Frame-Options DENY always;",
         'add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
         f'add_header Permissions-Policy "{PERMISSIONS_POLICY}" always;',
         "add_header Cross-Origin-Opener-Policy same-origin always;",

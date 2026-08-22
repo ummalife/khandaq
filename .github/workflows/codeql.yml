@@ -1,0 +1,59 @@
+# KHANDAQ (re-review 2026-08-22, KQ-10) — the broad scan the targeted gates cannot be.
+#
+# This repository has a lot of security regression tests, and they are good ones: they pin the exact
+# defects previous audits found. That is also their limit — every one of them is shaped by a bug
+# somebody already understood. A general scanner is the thing that can flag a class nobody has hit
+# yet: command injection, path traversal, unsafe deserialization, tainted URL and file handling.
+#
+# ADVISORY FOR THE FIRST CYCLE, as the review asks. Results land in the repository's code-scanning
+# view; this workflow is deliberately NOT in the required-checks ruleset yet. Turning a brand-new
+# scanner into a merge blocker on an inherited codebase produces a wall of findings on day one and a
+# team that switches it off on day two. The plan is to triage, tune, and then promote the
+# high-confidence security queries to blocking.
+name: codeql
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    # Weekly, because a new query release finds new things in unchanged code.
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # java-kotlin covers the Android client, python the relay and every script under scripts/,
+        # javascript the website, actions the workflows themselves.
+        #
+        # NOT c-cpp: CodeQL needs to observe a real compilation for it, and the desktop needs a Qt
+        # toolchain this runner does not have. The desktop's memory-safety coverage is the extracted-
+        # and-compiled harnesses (check-ios-rtp-reassembly.py, check-ios-downgrade-policy.py) plus
+        # the bundled-dependency lifecycle gate. Stated here rather than left as a silent gap.
+        language: [java-kotlin, python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # build-mode none keeps java-kotlin from needing the Android SDK and a full Gradle build,
+          # which would put a 20-minute build on every pull request for an advisory scan.
+          build-mode: ${{ matrix.language == 'java-kotlin' && 'none' || 'none' }}
+          queries: security-extended
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

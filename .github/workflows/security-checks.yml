@@ -182,6 +182,26 @@ jobs:
       - name: Scan every ecosystem against OSV
         run: python3 scripts/check-vulnerable-deps.py
 
+  sast:
+    # KHANDAQ (re-review 2026-08-22, KQ-10). CodeQL (see codeql.yml) covers Java/Kotlin, Python and
+    # JavaScript and is advisory for its first cycle. This is the other half: repository-specific
+    # dangerous patterns, plus Objective-C and Swift, which CodeQL does not reach here.
+    #
+    # This job IS blocking, and can be, because it is not a general-purpose scanner tuned against an
+    # inherited codebase — it is six rules that are green today, each proven to fire on a fixture. A
+    # new finding therefore means new code, not a new query.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install semgrep
+        run: python3 -m pip install --quiet semgrep
+      - name: Rules must fire on their fixtures and be silent on the tree
+        run: python3 scripts/check-sast-fixtures.py
+
   live-site:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из
     # trusted CI environment" and for an external check that notices a stale site or an expiring

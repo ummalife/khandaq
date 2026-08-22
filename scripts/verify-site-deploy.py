@@ -412,12 +412,14 @@ def main() -> int:
             ("TLS 1.2", ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_2, True),
             ("TLS 1.3", ssl.TLSVersion.TLSv1_3, ssl.TLSVersion.TLSv1_3, True),
         ):
-            # REVIEWED (re-review 2026-08-22, KQ-10): CodeQL flags this as py/insecure-protocol,
-            # and it is right about the shape — the loop below deliberately lowers minimum_version
-            # to TLS 1.0 and 1.1. That is the POINT: the only way to prove the server refuses an
-            # obsolete protocol is to offer it. Nothing here transmits anything; the handshake is
-            # expected to fail, and a success is reported as a failure of the site.
-            ctx = ssl.create_default_context()  # codeql[py/insecure-protocol]
+            # REVIEWED (re-review 2026-08-22, KQ-10): CodeQL reports py/insecure-protocol here,
+            # and it is right about the shape — the loop deliberately lowers minimum_version to TLS
+            # 1.0 and 1.1. That is the POINT: the only way to prove the server refuses an obsolete
+            # protocol is to offer it. Nothing is transmitted, the handshake is expected to fail, and
+            # a handshake that SUCCEEDS is reported as a failure of the site. The exclusion lives in
+            # .github/codeql/codeql-config.yml — inline codeql[] comments do not clear alerts in
+            # GitHub code scanning.
+            ctx = ssl.create_default_context()
             if not want_ok:
                 # A modern OpenSSL will not even OFFER TLS 1.0/1.1 at the default security level, so
                 # without this the handshake fails locally and the check would pass for the wrong

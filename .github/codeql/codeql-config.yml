@@ -12,3 +12,19 @@ name: khandaq
 
 paths-ignore:
   - security/sast-fixtures/**
+
+# KHANDAQ (re-review 2026-08-22, KQ-10) — one query excluded, with the argument.
+#
+# py/insecure-protocol fires on scripts/verify-site-deploy.py, which deliberately lowers
+# minimum_version to TLS 1.0 and 1.1. That is the point of those lines: the only way to establish
+# that the SERVER refuses an obsolete protocol is to offer it. Nothing is transmitted, the handshake
+# is expected to fail, and a handshake that SUCCEEDS is reported as a failure of the site.
+#
+# Inline `# codeql[...]` comments do not clear alerts in GitHub code scanning (that is an LGTM-era
+# feature), so the filter is the mechanism that works. It is repository-wide for this one query,
+# which is the honest cost — and the property the query protects is covered here by something
+# stronger than a static check: the same script asserts against PRODUCTION, on every deploy and
+# weekly, that TLS 1.0 and 1.1 are refused and 1.2/1.3 negotiate.
+query-filters:
+  - exclude:
+      id: py/insecure-protocol

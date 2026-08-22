@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "KHANDAQ (re-review 2026-08-22, KQ-06) — accepted dependency advisories, each with an owner, an",
+    "exploitability note and an expiry, as the review requires. scripts/check-vulnerable-deps.py",
+    "reads this; an expired entry, or one missing any of those three fields, fails the build.",
+    "",
+    "Two shapes. `waivers` covers one advisory against one package. `scope_waivers` covers a class of",
+    "findings — used where the argument is about the CLASS rather than about each advisory, so that",
+    "the next advisory against the same build-time library does not arrive as a red build carrying no",
+    "new information."
+  ],
+  "waivers": [],
+  "scope_waivers": {
+    "build-only": {
+      "owner": "Isa (repository owner)",
+      "exploitability": "Не попадает пользователю. Это артефакты, которые витнесс-файл закрепляет для аннотейшн-процессоров, линта и тестовых раннеров; в releaseRuntimeClasspath их нет, значит в APK они не входят (проверено: sbom/android-release-runtime.txt, guava в поставке 33.0.0-android — без advisory). Остаточный риск — компрометация цепочки сборки, а не устройства пользователя; его закрывают закреплённые sha256 в witness.gradle и провенанс SLSA на релизной сборке.",
+      "expires": "2026-11-20",
+      "review_note": "Снимать вместе с обновлением инструментов сборки в том же цикле, что и K-04 (Qt 6 / OpenSSL 3, waiver до 2026-11-19) — оба про поддерживаемость, и держать их на разных датах смысла нет."
+    }
+  }
+}

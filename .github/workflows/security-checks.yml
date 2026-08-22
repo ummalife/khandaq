@@ -163,6 +163,25 @@ jobs:
             exit 1
           fi
 
+  dependencies-sbom:
+    # KHANDAQ (re-review 2026-08-22, KQ-06). Pinning is not monitoring: witness.gradle, Podfile.lock,
+    # Gemfile.lock and the hash-locked relay requirements all guarantee that today's build matches
+    # yesterday's, and say nothing about a version that became vulnerable overnight. Android's 338
+    # Maven artifacts, the pods and the gems had no advisory coverage at all.
+    #
+    # Runs on pull requests AND weekly, because the failure mode this closes is a new advisory
+    # against unchanged source — which no PR-only gate can ever see.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: The SBOM must still describe the lockfiles
+        run: python3 scripts/generate-sbom.py --check
+      - name: Waiver shape and expiry, without touching the network
+        run: python3 scripts/check-vulnerable-deps.py --offline
+      - name: Scan every ecosystem against OSV
+        run: python3 scripts/check-vulnerable-deps.py
+
   live-site:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из
     # trusted CI environment" and for an external check that notices a stale site or an expiring

@@ -26,6 +26,16 @@ echo "==> Release manifest + published-metadata check"
 python3 "$ROOT/scripts/generate-release-manifest.py" >/dev/null
 python3 "$ROOT/scripts/check-release-metadata.py"
 
+# KHANDAQ (re-audit 2026-08-22, W-01/W-03): the header baseline is generated from the pages, so an
+# edit to any inline <script> changes its CSP hash. Regenerating here and refusing to continue when
+# the committed snippet is stale is the difference between "the deploy fails" and "the deploy
+# succeeds and the page silently stops working in every browser".
+echo "==> Security headers + security.txt"
+python3 "$ROOT/scripts/generate-security-headers.py"
+python3 "$ROOT/scripts/generate-security-headers.py" --check
+python3 "$ROOT/scripts/check-security-txt.py"
+python3 "$ROOT/scripts/vendor-webfonts.py" --check
+
 # KHANDAQ: Android is now distributed via Google Play (official), so the website no longer hosts a
 # sideload/debug APK. (This also closes KHQ-01: a debug-signed APK could previously be published here
 # via the build-script fallback.) The site links to the Play listing instead. The tester APK still goes
@@ -117,10 +127,26 @@ ssh "$REMOTE" "rm -f '$REMOTE_SITE_DIR/downloads/khandaq-android.apk' '$REMOTE_S
 # local while the other pages shipped - the page drifted behind for as long as that lasted.
 # KHANDAQ (audit round 3, R-07): release-manifest.json is the generated source of truth the
 # published version/package claims are checked against, so it has to reach the server too.
-scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/release-manifest.json" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
+# KHANDAQ (re-audit 2026-08-22, W-02): the manifest that reaches the server carries the commit it
+# was deployed from and the SHA-256 of every published artifact. The committed copy cannot carry the
+# SHA (recording it would change the commit), so it is stamped into a temporary copy here — and
+# verify-site-deploy.py refuses a published manifest whose gitSha is null or does not match.
+STAMPED="$(mktemp -t khandaq-manifest)"
+trap 'rm -f "$STAMPED"' EXIT
+python3 "$ROOT/scripts/generate-release-manifest.py" --stamp "$STAMPED"
+
+scp -p "$WEB/index.html" "$WEB/changelog.html" "$WEB/changelog.json" "$WEB/404.html" "$WEB/privacy.html" "$WEB/style.css" "$WEB/robots.txt" "$WEB/sitemap.xml" "$REMOTE:$REMOTE_SITE_DIR/"
+scp -p "$STAMPED" "$REMOTE:$REMOTE_SITE_DIR/release-manifest.json"
 scp -pr "$WEB/assets" "$REMOTE:$REMOTE_SITE_DIR/"
+ssh "$REMOTE" "mkdir -p '$REMOTE_SITE_DIR/.well-known'"
+scp -p "$WEB/.well-known/security.txt" "$REMOTE:$REMOTE_SITE_DIR/.well-known/security.txt"
 scp -p "$DL"/* "$REMOTE:$REMOTE_SITE_DIR/downloads/" 2>/dev/null || true
 scp -p "$ROOT/infra/nginx/khandaq-static-site.locations.conf" "$REMOTE:/tmp/khandaq-static-site.locations.conf"
+
+# Every location block includes this file, so it must exist BEFORE nginx -t runs or the reload
+# fails closed and the site keeps serving the previous config.
+ssh "$REMOTE" "mkdir -p /etc/nginx/snippets"
+scp -p "$ROOT/infra/nginx/khandaq-security-headers.conf" "$REMOTE:/etc/nginx/snippets/khandaq-security-headers.conf"
 
 echo "==> Patch nginx (static UI only; Matrix API unchanged)"
 ssh "$REMOTE" "python3 <<'PY'
@@ -162,6 +188,18 @@ nginx -t && systemctl reload nginx"
 
 echo "==> Permissions"
 ssh "$REMOTE" "chown -R www-data:www-data '$REMOTE_SITE_DIR' && chmod -R a+r '$REMOTE_SITE_DIR' && find '$REMOTE_SITE_DIR' -type d -exec chmod 755 {} +"
+
+# KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03): prove it from OUTSIDE. Everything above is a
+# statement about what we uploaded; this is the only step that says anything about what the public
+# actually receives. It runs from this machine, not over ssh on the host, precisely so that it goes
+# through the same path a user's browser does.
+echo "==> Post-deploy verification over public HTTPS"
+if ! python3 "$ROOT/scripts/verify-site-deploy.py"; then
+  echo "" >&2
+  echo "DEPLOY FAILED VERIFICATION — the site is live but does not match this checkout." >&2
+  echo "Fix the failures above and re-run; do not announce the release until this passes." >&2
+  exit 1
+fi
 
 echo "==> Done"
 echo "    https://khandaq.org/"

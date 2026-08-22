@@ -96,6 +96,14 @@ HAND_MAINTAINED = {
                     "versionName: there is no v0.2.38 tag, and aligning them breaks every download link.",
     },
     "site": {
+        # KHANDAQ (re-audit 2026-08-22, W-02). Both are null in the COMMITTED manifest and filled in
+        # only by `--stamp`, which deploy-site.sh runs on the copy it uploads. A git SHA cannot be
+        # committed into the file it describes — the commit that recorded it would change it — and
+        # the artifact hashes are not known until the downloads directory has been staged. Null here
+        # therefore means "not deployed from this file"; a published manifest with a null gitSha is
+        # a failed deploy, and verify-site-deploy.py treats it as one.
+        "gitSha": None,
+        "artifacts": None,
         "minAndroidReleaseClaimed": "8",
         "_comment": "The site says 'Android 8+' while minSdkVersion is 21 (Android 5). Deliberate for "
                     "now: the app has never been QA'd below 8, and the database-key path was crashing "
@@ -114,8 +122,48 @@ def build_manifest():
     return m
 
 
+def stamp(manifest):
+    """Fill in the deploy-time facts: which commit this is, and what the artifacts hash to."""
+    import subprocess
+
+    try:
+        sha = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        die("cannot read the git SHA to stamp the manifest with (%s); refusing to publish a "
+            "manifest that cannot be traced to a commit" % exc)
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        die("git rev-parse HEAD returned %r, which is not a commit id" % sha)
+
+    dirty = subprocess.run(["git", "-C", ROOT, "status", "--porcelain"],
+                           capture_output=True, text=True).stdout.strip()
+    manifest["site"]["gitSha"] = sha
+    # A deploy from a dirty tree publishes bytes that exist in no commit. That is allowed — the site
+    # is sometimes fixed under time pressure — but it must be visible in the published manifest
+    # rather than implied by a SHA that does not describe what was uploaded.
+    manifest["site"]["gitTreeClean"] = not dirty
+
+    sums = os.path.join(ROOT, "web", "downloads", "SHA256SUMS.txt")
+    artifacts = {}
+    if os.path.isfile(sums):
+        for line in read(sums).splitlines():
+            m = re.match(r"^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$", line)
+            if m:
+                artifacts[m.group(2)] = m.group(1).lower()
+    manifest["site"]["artifacts"] = artifacts
+    return manifest
+
+
 def main():
     m = build_manifest()
+    if "--stamp" in sys.argv:
+        out = sys.argv[sys.argv.index("--stamp") + 1]
+        text = json.dumps(stamp(m), indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+        with open(out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        print("stamped manifest -> %s (gitSha=%s, %d artifact hashes)"
+              % (out, m["site"]["gitSha"][:12], len(m["site"]["artifacts"])))
+        return 0
     text = json.dumps(m, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     if "--print" in sys.argv:
         sys.stdout.write(text)

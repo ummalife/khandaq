@@ -1,0 +1,17 @@
+# Khandaq — security contact (RFC 9116)
+#
+# KHANDAQ (re-audit 2026-08-22, W-03). The site pointed researchers at SECURITY.md, which is only
+# discoverable if you already know to look in the repository. This is the standard endpoint that
+# scanners and researchers check first, so a report lands in the private channel instead of a
+# public issue.
+#
+# Expires is enforced: scripts/check-security-txt.py fails the build once it is within 30 days,
+# and the post-deploy probe fails outright if the published file is past it.
+
+Contact: https://github.com/ummalife/khandaq/security/advisories/new
+Contact: https://khandaq.org/
+Expires: 2027-08-22T00:00:00.000Z
+Preferred-Languages: en, ru
+Canonical: https://khandaq.org/.well-known/security.txt
+Policy: https://github.com/ummalife/khandaq/blob/master/SECURITY.md
+Acknowledgments: https://github.com/ummalife/khandaq/security/advisories

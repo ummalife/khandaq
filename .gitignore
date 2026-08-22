@@ -77,8 +77,15 @@ web/downloads/*.zip
 web/downloads/*.tar.gz
 web/downloads/*.deb
 
-# Local QA screenshots (not for repo)
-assets/
+# Local QA screenshots (not for repo).
+#
+# KHANDAQ (re-audit 2026-08-22, W-02): anchored to the repository root. A bare `assets/` matches
+# EVERY directory of that name at any depth, so it silently swallowed web/assets — the site's own
+# icons and, once the fonts were self-hosted, 873 KiB of woff2 the pages now depend on. The seven
+# icons already in the repository were force-added past this rule, which is why nobody noticed. A
+# clean checkout would have deployed a site with no webfonts at all, and the CSP that forbids the
+# Google fallback would have made that permanent rather than merely slow.
+/assets/
 
 # Logs and local ops
 *.log

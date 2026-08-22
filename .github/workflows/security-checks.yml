@@ -91,6 +91,40 @@ jobs:
       - name: No unescaped backticks inside unquoted heredocs
         run: python3 scripts/check-shell-heredocs.py
 
+  website:
+    # KHANDAQ (re-audit 2026-08-22, W-01/W-03). The site's security posture used to live in a
+    # hand-edited nginx file on the host and in nobody's test. These three gates are the static
+    # half; the runtime half runs from scripts/deploy-site.sh against public HTTPS after every
+    # deploy, because a header that is present in the repository and absent on the wire is exactly
+    # the failure mode this finding describes.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Security-header snippet must match the pages it hashes
+        run: python3 scripts/generate-security-headers.py --check
+      - name: security.txt must be valid and not near expiry
+        run: python3 scripts/check-security-txt.py
+      - name: Webfonts must be self-hosted, with no third-party origin
+        run: python3 scripts/vendor-webfonts.py --check
+      - name: nginx must accept the generated config
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq nginx >/dev/null
+          sudo mkdir -p /etc/nginx/snippets /var/www/khandaq-site
+          sudo cp infra/nginx/khandaq-security-headers.conf /etc/nginx/snippets/
+          # Wrap the locations snippet in a minimal server block so `nginx -t` sees valid context.
+          {
+            echo 'events {}'
+            echo 'http {'
+            echo '  server {'
+            echo '    listen 8080;'
+            cat infra/nginx/khandaq-static-site.locations.conf
+            echo '  }'
+            echo '}'
+          } | sudo tee /etc/nginx/khandaq-test.conf >/dev/null
+          sudo nginx -t -c /etc/nginx/khandaq-test.conf
+
   relay-tests:
     # KHANDAQ (audit round 3, F-15): until now NO workflow ran these.
     #

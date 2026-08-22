@@ -105,6 +105,11 @@ docs/**
 # how this was found rather than by anyone noticing the files were missing.
 !docs/ANDROID-PERMISSIONS.md
 !docs/DESKTOP-SIGNING.md
+# KHANDAQ (re-review 2026-08-22, KQ-01/KQ-02): the compatibility matrix is what publishes the legacy
+# retirement date, and the evidence file is the measured relay state a release actually shipped
+# against. Both are the answer to a finding, so both have to leave this machine.
+!docs/PUSH-COMPATIBILITY.md
+!docs/push-release-evidence.json
 
 # Ops scripts with credential patterns (use SSH keys locally)
 scripts/deploy-bootstrap-remote.sh

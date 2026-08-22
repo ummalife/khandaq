@@ -5,7 +5,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 JOIN="com.zoffcc.applications.trifa.JoinPublicGroupActivity"
 CHAT="com.zoffcc.applications.trifa.GroupMessageListActivity"
 APK="${APK:-$ROOT/dist/android/khandaq-release.apk}"

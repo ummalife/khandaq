@@ -139,6 +139,11 @@ dėl to gali kilti vaizdo skambučių problemų.</translation>
         <translation>Apie</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Savininkas ir kūrėjas — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Pradinis autorius: %1</translation>
     </message>

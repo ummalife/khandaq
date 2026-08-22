@@ -566,9 +566,18 @@ details.install ol {
 .copyright {
   margin-top: 1.5rem;
   padding-top: 1rem;
+  /* Gutter so the strip never runs edge-to-edge on a 320px screen. */
+  padding-left: 1rem;
+  padding-right: 1rem;
   border-top: 1px solid var(--border);
   text-align: center;
   font-size: 0.82rem;
+}
+
+/* The credit is one unit: a name split across a line break reads as two people, and a wrapped
+   line must not start with a dangling separator. */
+.copyright .credit {
+  white-space: nowrap;
 }
 
 /* ── Changelog (minimal) ─────────────────────────────────── */

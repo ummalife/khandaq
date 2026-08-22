@@ -384,16 +384,18 @@
                     android:orientation="horizontal">
 
                 <ImageButton
-                    android:id="@+id/insert_emoji"
+                    android:id="@+id/ml_button_01"
                     android:layout_width="@dimen/chat_input_icon_size"
                     android:layout_height="@dimen/chat_input_icon_size"
                     android:layout_gravity="center_vertical"
                     android:layout_margin="@dimen/chat_input_icon_margin"
                     android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
                     android:padding="@dimen/chat_input_icon_padding"
                     android:scaleType="fitCenter"
-                    app:srcCompat="@drawable/i_emoji_google_category_people"
-                    tools:ignore="ContentDescription" />
+                    tools:ignore="ContentDescription"
+                    app:tint="@color/tg_chat_input_icon"
+                    />
 
                 <FrameLayout
                     android:layout_width="0dp"
@@ -429,16 +431,18 @@
                 </FrameLayout>
 
                 <ImageButton
-                    android:id="@+id/ml_button_01"
+                    android:id="@+id/insert_emoji"
                     android:layout_width="@dimen/chat_input_icon_size"
                     android:layout_height="@dimen/chat_input_icon_size"
                     android:layout_gravity="center_vertical"
                     android:layout_margin="@dimen/chat_input_icon_margin"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
                     android:padding="@dimen/chat_input_icon_padding"
                     android:scaleType="fitCenter"
-                    tools:ignore="ContentDescription" />
+                    app:srcCompat="@drawable/i_emoji_google_category_people"
+                    tools:ignore="ContentDescription"
+                    app:tint="@color/tg_chat_input_icon"
+                    />
 
                 <ImageButton
                     android:id="@+id/ml_button_recaudio"
@@ -449,7 +453,9 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:padding="@dimen/chat_input_icon_padding"
                     android:scaleType="fitCenter"
-                    android:src="@drawable/baseline_keyboard_voice_24" />
+                    android:src="@drawable/baseline_keyboard_voice_24"
+                    app:tint="@color/tg_chat_input_icon"
+                    />
 
                 </LinearLayout>
 

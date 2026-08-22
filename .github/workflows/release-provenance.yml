@@ -57,11 +57,57 @@ jobs:
       # This also gates R-07's published-metadata check, for the same reason -- the version and
       # package a release claims are worth checking against the build files at the moment the release
       # is built, not only on pull requests.
+      # KHANDAQ (release 0.2.40): fetch the native library the app is supposed to ship.
+      #
+      # THIS IS THE ROOT CAUSE OF THE WORST DEFECT THIS PROJECT HAS SHIPPED. app/build.gradle points
+      # jniLibs.srcDirs at `nativelibs`, and .gitignore excludes the .so from the repository - so on a
+      # clean CI checkout that directory is EMPTY and the build silently falls back to the .so inside
+      # the prebuilt AAR pkgs_ToxAndroidRefImpl:1.0.175. That AAR predates three JNI functions this
+      # repository implements (jni-c-toxcore.c:4590/4648/4707), so every release built here shipped an
+      # app whose khandaq_ed25519_keypair/_sign/_verify did not exist. On real phones that threw
+      # UnsatisfiedLinkError about thirty-three times a second, forever, and left the HSK directory
+      # permanently empty - which means the K-01 anti-downgrade rule could never once fire.
+      #
+      # Nothing failed. javac does not need a native implementation, the JVM tests never load the
+      # library, and the instrumented tests that call these functions are run by no workflow.
+      #
+      # So the release now goes and gets the real library, and check-jni-symbols.py below verifies the
+      # bytes actually export what Java declares. If no artifact is available the release STOPS.
+      - name: Fetch libjni-c-toxcore.so from the latest successful native build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NL=khandaq-android-trifa/android-refimpl-app/app/nativelibs
+          run_id=$(gh run list --workflow=android-native-so.yml --status=success \
+                     --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+          if [ -z "${run_id:-}" ]; then
+            echo "::error::no successful android-native-so run to take libjni-c-toxcore.so from." >&2
+            echo "         Run that workflow first: gh workflow run android-native-so.yml" >&2
+            exit 1
+          fi
+          echo "taking the native library from android-native-so run $run_id"
+          rm -rf /tmp/natso && mkdir -p /tmp/natso
+          gh run download "$run_id" -n libjni-c-toxcore-so-201 -D /tmp/natso
+          # The build emits the 32-bit ARM slice as `armeabi`; the app packages `armeabi-v7a`.
+          for abi in arm64-v8a x86 x86_64; do
+            [ -f "/tmp/natso/$abi/libjni-c-toxcore.so" ] && cp "/tmp/natso/$abi/libjni-c-toxcore.so" "$NL/$abi/"
+          done
+          [ -f /tmp/natso/armeabi/libjni-c-toxcore.so ] \
+            && cp /tmp/natso/armeabi/libjni-c-toxcore.so "$NL/armeabi-v7a/"
+          ls -l "$NL"/*/libjni-c-toxcore.so
+          echo "native-so-run-id=$run_id" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Release gates - dependency waivers and published metadata
         run: |
           set -euo pipefail
           python3 scripts/check-bundled-deps-eol.py --release
           python3 scripts/check-release-metadata.py
+          # KHANDAQ (release 0.2.40): every Java `native` must exist in the library that ships. Three
+          # implemented JNI functions were absent from the shipped .so for months because the app
+          # silently fell back to a prebuilt AAR; the result threw UnsatisfiedLinkError 33 times a
+          # second on users' phones and left the anti-downgrade gate unable to ever fire.
+          python3 scripts/check-jni-symbols.py
 
       - name: Provide google-services.json (real from secret, else placeholder for the build)
         env:

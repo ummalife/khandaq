@@ -5,7 +5,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/docs/design-handoff/screenshots"
 APK="${KHANDAQ_SCREENSHOT_APK:-$ROOT/khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk}"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 AVD="${KHANDAQ_SCREENSHOT_AVD:-Khandaq_medium}"
 EMU_LOG="/tmp/khandaq-screenshot-emu.log"

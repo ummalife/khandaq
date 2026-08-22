@@ -3,7 +3,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 APK="${APK:-$ROOT/khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk}"
 OUT="${OUT:-$ROOT/docs/qa-groups-latency-$(date +%Y%m%d-%H%M%S)}"
 CREATOR="${CREATOR:-emulator-5554}"

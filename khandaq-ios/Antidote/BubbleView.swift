@@ -558,6 +558,24 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         }, completion: nil)
     }
 
+    /// SF Symbol name -> shared (Figma/Material) asset used on both platforms.
+    private static let sharedGlyphNames: [String: String] = [
+        "arrowshape.turn.up.left": "msg-action-reply",
+        "doc.on.doc": "msg-action-copy",
+        "pencil": "msg-action-edit",
+        "pin": "msg-action-pin",
+        "arrowshape.turn.up.right": "msg-action-forward",
+        "checkmark.circle": "msg-action-select",
+        "trash": "msg-action-delete",
+    ]
+
+    static func sharedGlyph(for systemImageName: String) -> UIImage? {
+        guard let assetName = sharedGlyphNames[systemImageName] else {
+            return nil
+        }
+        return UIImage(named: assetName)?.withRenderingMode(.alwaysTemplate)
+    }
+
     private func buildMenuCard(actions: [ChatContextMenuAction], dark: Bool) -> UIView {
         let cardW: CGFloat = 250
         let rowH: CGFloat = 48
@@ -595,9 +613,10 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
 
             let icon = UIImageView()
             icon.contentMode = .scaleAspectFit
-            if #available(iOS 13.0, *) {
-                icon.image = UIImage(systemName: action.systemImageName)?.withRenderingMode(.alwaysTemplate)
-            }
+            // KHANDAQ (18.08): one icon set across platforms — the context menu draws the same Material
+            // glyphs Android uses, falling back to the SF Symbol if an asset is ever missing.
+            icon.image = ChatReactionPopup.sharedGlyph(for: action.systemImageName)
+                    ?? UIImage(systemName: action.systemImageName)?.withRenderingMode(.alwaysTemplate)
             icon.tintColor = tint
 
             row.addSubview(label); row.addSubview(icon)

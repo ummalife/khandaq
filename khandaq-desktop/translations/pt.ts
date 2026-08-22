@@ -139,6 +139,11 @@ o que pode levar a problemas com as vídeo-chamadas.</translation>
         <translation>Sobre</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Proprietário e programador — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Autor original: %1</translation>
     </message>

@@ -105,6 +105,13 @@ def main():
     min_android = manifest["site"]["minAndroidReleaseClaimed"]
 
     site = read(SITE)
+    # KHANDAQ (release 0.2.40): the "Recent beta improvements" list is a HISTORY of past builds --
+    # "voice notes fixed ... TestFlight build 142980" is a true statement about when that fix landed,
+    # and rewriting it on every version bump would turn the page into a lie to satisfy a checker.
+    # Only CURRENT claims are checked, so that block is excluded before scanning. Everything outside
+    # it -- the download cards, the Play link, the README table -- is still required to match, and the
+    # per-claim "matched nothing" failure below still guarantees this cannot silently cover the page.
+    site_current = re.sub(r'<ul class="highlights">.*?</ul>', "", site, flags=re.S)
     # KHANDAQ (audit round 3, F-24): required, not optional.
     #
     # This was `required=False` with an `if downloads:` guard below, so moving or renaming the
@@ -116,26 +123,26 @@ def main():
     readme = read(README)
 
     # --- the website -----------------------------------------------------------------------
-    claim("web/index.html", site, r"Package <code>([a-z0-9_.]+)</code>",
+    claim("web/index.html", site_current, r"Package <code>([a-z0-9_.]+)</code>",
           "Android package", android["applicationId"])
-    claim("web/index.html", site, r"play\.google\.com/store/apps/details\?id=([a-z0-9_.]+)",
+    claim("web/index.html", site_current, r"play\.google\.com/store/apps/details\?id=([a-z0-9_.]+)",
           "Play listing id", android["applicationId"])
-    claim("web/index.html", site, r"Android (\d+)\+",
+    claim("web/index.html", site_current, r"Android (\d+)\+",
           "minimum Android release", min_android)
-    claim("web/index.html", site, r"TestFlight build (\d+)",
+    claim("web/index.html", site_current, r"TestFlight build (\d+)",
           "iOS build number", ios["buildNumber"])
-    claim("web/index.html", site, r"var release = '(v[0-9.]+)'",
+    claim("web/index.html", site_current, r"var release = '(v[0-9.]+)'",
           "desktop release tag", tag)
     # The three desktop cards each label which release their download came from. They had drifted a
     # tag behind the links right next to them, which is the most confusing possible combination.
-    claim("web/index.html", site, r"(v[0-9.]+) release ", "desktop card release tag", tag)
+    claim("web/index.html", site_current, r"(v[0-9.]+) release ", "desktop card release tag", tag)
 
     # The Android card states the PLAY version, which is versionName — not the desktop release tag.
-    m = re.search(r"<h3>Android</h3>.*?<span class=\"meta\">v([0-9.]+)", site, re.S)
+    m = re.search(r"<h3>Android</h3>.*?<span class=\"meta\">v([0-9.]+)", site_current, re.S)
     if not m:
         die("web/index.html: the Android card's version line no longer matches — refusing to pass "
             "vacuously on the one number Play users compare against")
-    CLAIMS.append(("web/index.html", site[:m.start(1)].count("\n") + 1, "Android card version",
+    CLAIMS.append(("web/index.html", site_current[:m.start(1)].count("\n") + 1, "Android card version",
                    m.group(1), android["versionName"], "<span class=\"meta\">v%s ..." % m.group(1)))
 
     claim("web/downloads/index.html", downloads,

@@ -139,6 +139,11 @@ Rýchlosť vášho pripojenia nemusí byť vždy dostačujúca pre vyššiu kval
         <translation>O programe</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Vlastník a vývojár — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Pôvodný autor: %1</translation>
     </message>

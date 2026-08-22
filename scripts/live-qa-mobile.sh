@@ -4,7 +4,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SS="$ROOT/docs/qa-screenshots-v2"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 SIM_ID="${IOS_SIM_ID:-741D68CF-E57E-41C5-8AFD-488051D1E86B}"
 IOS_APP="${IOS_APP:-$ROOT/khandaq-ios/build/DerivedData/Build/Products/Release-iphonesimulator/Khandaq.app}"
 LOG="$SS/qa-summary.txt"

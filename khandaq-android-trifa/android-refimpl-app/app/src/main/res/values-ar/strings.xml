@@ -16,7 +16,7 @@
     <string name="title_activity_aboutpage">حول</string>
     <string name="title_activity_set_password">ضبط كلمة السر</string>
     <string name="title_activity_check_password">أدخل كلمة المرور</string>
-    <string name="title_activity_share">مفتوح مع TRIfA</string>
+    <string name="title_activity_share">مفتوح مع Khandaq</string>
     <string name="title_activity_maintenance">اعمال صيانة</string>
     <string-array name="spinner_own_status_array">
         <item>عبر الانترنت</item>
@@ -203,7 +203,7 @@
     <string name="MainActivity_no_button">لا</string>
     <string name="MainActivity_ok_take_me_there_button">حسنا ، خذني هناك</string>
     <string name="MainActivity_info_dialog_title">INFO</string>
-    <string name="MainActivity_add_to_batt_opt">الرجاء إضافة TRIfA إلى قائمة الاستثناءات لتحسين البطارية!</string>
+    <string name="MainActivity_add_to_batt_opt">الرجاء إضافة Khandaq إلى قائمة الاستثناءات لتحسين البطارية!</string>
     <string name="MainActivity_friend_is_typing">صديق يكتب ...</string>
     <string name="MainActivity_notification_new_message">رسالة جديدة</string>
     <string name="MainActivity_notification_new_message2">رسالة جديدة</string>
@@ -216,10 +216,10 @@
     <string name="MainActivity_notification_new_message3">رسالة جديدة</string>
     <string name="MainActivity_notification_new_message4">رسالة جديدة</string>
     <string name="MainActivity_notification_new_message5">رسالة جديدة</string>
-    <string name="Aboutpage_0">TRIfA سجل الأعطال</string>
+    <string name="Aboutpage_0">Khandaq سجل الأعطال</string>
     <string name="Aboutpage_2">إرسال تقرير الأعطال عبر البريد الإلكتروني</string>
     <string name="Aboutpage_4">قراءة معلومات الأعطال ...</string>
-    <string name="Aboutpage_5a">TRIfA عميل Tox لنظام Android</string>
+    <string name="Aboutpage_5a">Khandaq Messenger</string>
     <string name="Aboutpage_5b">الإصدار:</string>
     <string name="Aboutpage_6">ما هو التوكس؟</string>
     <string name="Aboutpage_8">المكتبات المستعملة:</string>
@@ -323,7 +323,7 @@
     <string name="layout___create_new_public_group">إنشاء مجموعة عامة جديدة</string>
     <string name="layout___join_public_group">انضم إلى مجموعة عامة</string>
     <string name="pref_title_speakerphone_tweak">إصلاح مكبر الصوت للمكالمات</string>
-    <string name="pref_description_allow_open_encrypted_file_via_intent">فتح الملفات مباشرة من التخزين المشفر عبر Intent. قد يكون هذا خطيرًا ، لأن التطبيقات الضارة الأخرى يمكن أن تفتح ملفات أخرى في وحدة التخزين المشفرة في TRIfA.</string>
+    <string name="pref_description_allow_open_encrypted_file_via_intent">فتح الملفات مباشرة من التخزين المشفر عبر Intent. قد يكون هذا خطيرًا ، لأن التطبيقات الضارة الأخرى يمكن أن تفتح ملفات أخرى في وحدة التخزين المشفرة في Khandaq.</string>
     <string name="pref_title_mic_gain_factor_toggle">كسب الميكروفون لخفض مستوى الصوت</string>
     <string name="pref_description_mic_gain_factor_toggle">إذا كان الميكروفون الخاص بك يسجل بحساسية كبيرة جدًا ، فقم بتمكين هذا الإعداد وسيقوم عامل كسب الميكروفون في الواقع بخفض مستوى صوت الميكروفون</string>
     <string name="pref_description_use_push_service">تحذير: سيستخدم هذا Google FCM أو Unified Push لحفظ البطارية والنطاق الترددي.
@@ -331,7 +331,7 @@
 \nقم بتنشيط هذا فقط إذا قبلت ذلك.
 \nتحتاج هذه الميزة إلى تثبيت تطبيق Tox Push Message.</string>
     <string name="pref_title_download_push_msg_app">تحميل تطبيقة جوجل الخاصة بخدمة push</string>
-    <string name="pref_description_allow_file_sharing_to_trifa_via_intent">مشاركة الملفات على TRIfA عبر Share Intent.</string>
+    <string name="pref_description_allow_file_sharing_to_trifa_via_intent">مشاركة الملفات على Khandaq عبر Share Intent.</string>
     <string name="add_private_group_success">لقد قمت بإنشاء مجموعة خاصة</string>
     <string name="pref_title_use_camera_x">إزالة الخلفية</string>
     <string name="pref_description_enable_ngc_features">دردشات جماعية جديدة (NGC) مع رسائل وصوت وفيديو محسّنة.</string>
@@ -387,7 +387,7 @@
     <string name="join_public_activity_name">انضم إلى المجموعة العامة</string>
     <string name="layout___export_tox_encrypted_chats_unsecure">تصدير تلمحلدثات المشفرة
 \n\"غير آمن\"</string>
-    <string name="MainActivity_setup_push_tip_text">لم تقم بتثبيت تطبيق Push Notification وإعداد إعلام Push Notification. ستعمل TRIfA بشكل كامل بدون إشعار الدفع ، ولكن يجب أن تكون متصلاً بالإنترنت باستمرار لتلقي الرسائل. مع التنبيه الفوري يمكنك حفظ البطارية وعرض النطاق الترددي للإنترنت.
+    <string name="MainActivity_setup_push_tip_text">لم تقم بتثبيت تطبيق Push Notification وإعداد إعلام Push Notification. ستعمل Khandaq بشكل كامل بدون إشعار الدفع ، ولكن يجب أن تكون متصلاً بالإنترنت باستمرار لتلقي الرسائل. مع التنبيه الفوري يمكنك حفظ البطارية وعرض النطاق الترددي للإنترنت.
 \n
 \nهل تريد أن ترى كيف يمكنك إعداد إشعارات الدفع الآن؟</string>
     <string name="layout___group_myname2">اسمي في المجموعة:</string>
@@ -918,6 +918,8 @@
     <string name="about_upstream_commit">commit مشروع TRIfA الأصلي</string>
     <string name="about_jni_commit">commit الخاص بـ JNI</string>
     <string name="about_toxcore_commit">commit الخاص بـ c-toxcore</string>
+    <!-- KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ -->
+    <string name="about_credit_owner">المالك والمطور — عيسى الداغستاني</string>
     <string name="add_id_dialog_title">إضافة المعرف؟</string>
     <string name="id_copied_to_clipboard">تم نسخ المعرف إلى الحافظة</string>
     <string name="text_copied_to_clipboard">تم النسخ إلى الحافظة</string>

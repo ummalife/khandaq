@@ -58,16 +58,59 @@ parse_gradle() {
     [ -n "$COMPILE_SDK" ] || die "could not read compileSdkVersion out of $app"
     [ -n "$BUILD_TOOLS" ] || die "could not read buildToolsVersion out of $app"
 
+    # The build files that actually take part in the build, read out of settings.gradle rather than
+    # found on disk. `find` alone also picks up jnilib/, which no longer appears in settings.gradle:
+    # its compileSdkVersion 25 would then be installed on every CI run for a module that is never
+    # compiled. What is not in settings.gradle cannot download anything, so it does not belong here.
+    MODULE_GRADLE_FILES=""
+    local mod
+    for mod in $(sed -n "s/^[[:space:]]*include[[:space:]]*['\"]:\([A-Za-z0-9_.-]*\)['\"].*/\1/p" "$PROJ/settings.gradle"); do
+        [ -f "$PROJ/$mod/build.gradle" ] || die "settings.gradle includes :$mod but $PROJ/$mod/build.gradle is missing"
+        MODULE_GRADLE_FILES="$MODULE_GRADLE_FILES $PROJ/$mod/build.gradle"
+    done
+    [ -n "$MODULE_GRADLE_FILES" ] || die "no modules parsed out of $PROJ/settings.gradle"
+
     # EVERY module's ndkVersion, not just :app's. :app declares one but compiles no native code
     # itself; the modules it depends on declare another and do. Installing only :app's would repeat
     # the original defect in a new place.
+    # shellcheck disable=SC2086
     NDK_VERSIONS=$(
-        find "$PROJ" -name build.gradle -not -path '*/build/*' -print0 \
-        | xargs -0 -r sed -n 's/^[[:space:]]*ndkVersion[[:space:]]*"\([^"]*\)".*/\1/p' \
+        sed -n 's/^[[:space:]]*ndkVersion[[:space:]]*"\([^"]*\)".*/\1/p' $MODULE_GRADLE_FILES \
         | sort -u | tr '\n' ' '
     )
     NDK_VERSIONS=${NDK_VERSIONS% }
     [ -n "$NDK_VERSIONS" ] || die "no ndkVersion declared anywhere under $PROJ"
+
+    # Same argument as the NDKs, and it was missed the first time round: :app's compileSdkVersion is
+    # not the only one. The two native modules compile against 29 and 32, so a build that installed
+    # only :app's 36 went and fetched those two platforms itself, mid-build, unpinned — which is
+    # precisely what `assert-unchanged` exists to catch, and did. Both spellings occur in these files
+    # (`compileSdkVersion 36` in :app, `compileSdkVersion = 29` in the modules).
+    # shellcheck disable=SC2086
+    COMPILE_SDKS=$(
+        sed -n 's/^[[:space:]]*compileSdkVersion[[:space:]]*=\{0,1\}[[:space:]]*\([0-9][0-9]*\).*/\1/p' $MODULE_GRADLE_FILES \
+        | sort -un | tr '\n' ' '
+    )
+    COMPILE_SDKS=${COMPILE_SDKS% }
+    [ -n "$COMPILE_SDKS" ] || die "no compileSdkVersion declared anywhere under $PROJ"
+
+    # CMake likewise. Leaving `version` out of an externalNativeBuild block does not mean "no CMake"
+    # — it means AGP picks its own default and downloads it, unpinned and invisibly. So the version
+    # is declared in the module build files and read from them here; an undeclared one is an error,
+    # not a silent fallback, because a fallback constant in this script is exactly the drift the
+    # header of this file argues against.
+    # shellcheck disable=SC2086
+    CMAKE_VERSIONS=$(
+        sed -n 's/^[[:space:]]*version[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' $MODULE_GRADLE_FILES \
+        | sort -u | tr '\n' ' '
+    )
+    CMAKE_VERSIONS=${CMAKE_VERSIONS% }
+    local cmake_blocks
+    # shellcheck disable=SC2086
+    cmake_blocks=$(grep -lE '^[[:space:]]*cmake[[:space:]]*\{' $MODULE_GRADLE_FILES | wc -l | tr -d ' ')
+    if [ "$cmake_blocks" != "0" ] && [ -z "$CMAKE_VERSIONS" ]; then
+        die "$cmake_blocks module(s) declare an externalNativeBuild cmake block but none pins a version — AGP would download its default unpinned"
+    fi
 }
 
 # One installed package, one assertion, against the property Gradle itself keys on.
@@ -96,7 +139,12 @@ verify_installed() {
     for v in $NDK_VERSIONS; do
         assert_prop "$root/ndk/$v/source.properties"                        "Pkg.Revision"            "$v"
     done
-    assert_prop "$root/platforms/android-$COMPILE_SDK/source.properties"    "AndroidVersion.ApiLevel" "$COMPILE_SDK"
+    for v in $COMPILE_SDKS; do
+        assert_prop "$root/platforms/android-$v/source.properties"          "AndroidVersion.ApiLevel" "$v"
+    done
+    for v in $CMAKE_VERSIONS; do
+        assert_prop "$root/cmake/$v/source.properties"                      "Pkg.Revision"            "$v"
+    done
     assert_prop "$root/build-tools/$BUILD_TOOLS/source.properties"          "Pkg.Revision"            "$BUILD_TOOLS"
 }
 
@@ -143,17 +191,21 @@ case "$cmd" in
         parse_gradle "${2:?usage: parse <gradle-project-dir>}"
         echo "NDK_VERSIONS=$NDK_VERSIONS"
         echo "COMPILE_SDK=$COMPILE_SDK"
+        echo "COMPILE_SDKS=$COMPILE_SDKS"
+        echo "CMAKE_VERSIONS=$CMAKE_VERSIONS"
         echo "BUILD_TOOLS=$BUILD_TOOLS"
         ;;
     install)
         parse_gradle "${2:?usage: install <gradle-project-dir>}"
         [ -n "${ANDROID_SDK_ROOT:-}" ] || die "ANDROID_SDK_ROOT is not set"
         M=$(sdkmgr)
-        echo "build files ask for: ndk=[$NDK_VERSIONS] compileSdk=$COMPILE_SDK buildTools=$BUILD_TOOLS"
+        echo "build files ask for: ndk=[$NDK_VERSIONS] compileSdk=[$COMPILE_SDKS] cmake=[$CMAKE_VERSIONS] buildTools=$BUILD_TOOLS"
 
         PKGS=""
-        for v in $NDK_VERSIONS; do PKGS="$PKGS ndk;$v"; done
-        PKGS="$PKGS platforms;android-$COMPILE_SDK build-tools;$BUILD_TOOLS"
+        for v in $NDK_VERSIONS;  do PKGS="$PKGS ndk;$v"; done
+        for v in $COMPILE_SDKS;  do PKGS="$PKGS platforms;android-$v"; done
+        for v in $CMAKE_VERSIONS; do PKGS="$PKGS cmake;$v"; done
+        PKGS="$PKGS build-tools;$BUILD_TOOLS"
 
         # One invocation, and the pipeline status read explicitly. `yes |` stays because sdkmanager
         # prompts for licences on a cold SDK, but its SIGPIPE death must not be mistaken for the

@@ -3,7 +3,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 MAIN="com.zoffcc.applications.trifa.MainActivity"
 ADD_PUB="com.zoffcc.applications.trifa.AddPublicGroupActivity"
 ADD_PRIV="com.zoffcc.applications.trifa.AddPrivateGroupActivity"

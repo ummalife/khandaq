@@ -111,6 +111,13 @@ public class Aboutpage extends AppCompatActivity implements Logging.AsyncRespons
                 "khandaq.org",
                 () -> openUrl(KhandaqSupport.WEBSITE_URL));
 
+        // KHANDAQ (18.08): credit the owner/developer on the same openUrl() path as the website and
+        // licenses rows, so the link opens in the system browser and a missing browser stays swallowed.
+        bindActionRow(findViewById(R.id.about_developer_row),
+                getString(R.string.about_credit_owner),
+                "1sa.me",
+                () -> openUrl(KhandaqSupport.DEVELOPER_URL));
+
         bindActionRow(findViewById(R.id.about_licenses_row),
                 getString(R.string.Aboutpage_opensource),
                 null,

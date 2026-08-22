@@ -5,6 +5,10 @@
 import Foundation
 
 class StaticTableDefaultCellModel: StaticTableSelectableCellModel {
+    /// Optional stable hook for UI tests — applied to the cell so a test can find the row without
+    /// depending on its (localized) text.
+    var accessibilityIdentifier: String?
+
     enum RightImageType {
         case none
         case arrow
@@ -21,6 +25,11 @@ class StaticTableDefaultCellModel: StaticTableSelectableCellModel {
     var rightButtonHandler: (() -> Void)?
 
     var rightImageType: RightImageType = .none
+
+    // KHANDAQ (18.08): let a row's caption wrap instead of being clipped by the fixed one-line
+    // title (the About screen credits the owner with a whole sentence). Off by default, so every
+    // row that existed before keeps its exact single-line layout.
+    var multilineTitle: Bool = false
 
     var userInteractionEnabled: Bool = true
 

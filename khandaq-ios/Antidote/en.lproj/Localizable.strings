@@ -780,3 +780,6 @@
 "attachments_voice" = "Voice";
 "attachments_empty" = "Nothing here yet";
 "attachments_not_downloaded" = "This file has not been downloaded yet.";
+
+/* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
+"settings_credit_owner" = "Owner and developer — Isa Dagestani";

@@ -140,6 +140,11 @@ co może powodować problemy z rozmowami wideo.</translation>
         <translation>O programie</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Właściciel i programista – Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Oryginalny autor: %1</translation>
     </message>

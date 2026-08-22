@@ -20,6 +20,7 @@ qt5_add_translation(translations_FILES
   ber.ts
   be.ts
   bg.ts
+  bn.ts
   cs.ts
   da.ts
   de.ts
@@ -42,8 +43,10 @@ qt5_add_translation(translations_FILES
   kn.ts
   ko.ts
   lt.ts
+  lv.ts
   mk.ts
   nl.ts
+  nl_BE.ts
   no_nb.ts
   pl.ts
   pr.ts
@@ -64,6 +67,7 @@ qt5_add_translation(translations_FILES
   ug.ts
   uk.ts
   ur.ts
+  vi.ts
   zh_CN.ts
   zh_TW.ts
 )

@@ -3,7 +3,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APK="${APK:-$ROOT/dist/android/khandaq-release.apk}"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 GROUP="${GROUP:-QA-PUBLIC-1781284029}"
 LOG="$ROOT/docs/qa-msg-live-$(date +%s)"
 mkdir -p "$LOG"

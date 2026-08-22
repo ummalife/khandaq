@@ -1,6 +1,12 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.Context;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.OvalShape;
+import android.util.TypedValue;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -22,6 +28,39 @@ final class ChatInputBarHelper
 
     private ChatInputBarHelper()
     {
+    }
+
+    /**
+     * Send button glyph: a white paper plane on a brand-green circle.
+     *
+     * KHANDAQ (18.08): iOS draws "paperplane.circle.fill" in #029B7D (Figma). Android used a bare
+     * Material send arrow tinted grey, so the same button looked different on the two platforms.
+     * Building it as a LayerDrawable keeps the circle tied to the icon, so swapping mic <-> send
+     * does not leave a green circle behind the microphone.
+     */
+    static Drawable makeCircularSendIcon(final Context context)
+    {
+        final int sizePx = dpToPx(context, CHAT_INPUT_ICON_DP);
+        final ShapeDrawable circle = new ShapeDrawable(new OvalShape());
+        circle.getPaint().setColor(context.getResources().getColor(R.color.khandaq_teal));
+        circle.setIntrinsicWidth(sizePx);
+        circle.setIntrinsicHeight(sizePx);
+
+        final Drawable glyph = new com.mikepenz.iconics.IconicsDrawable(context).
+                icon(com.mikepenz.google_material_typeface_library.GoogleMaterial.Icon.gmd_send).
+                color(Color.WHITE).
+                sizeDp(CHAT_INPUT_ICON_DP - 12);
+
+        final LayerDrawable layered = new LayerDrawable(new Drawable[]{circle, glyph});
+        final int inset = dpToPx(context, 6);
+        layered.setLayerInset(1, inset, inset, inset, inset);
+        return layered;
+    }
+
+    private static int dpToPx(final Context context, final int dp)
+    {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp,
+                                               context.getResources().getDisplayMetrics());
     }
 
     // The chat activities open with SOFT_INPUT_STATE_HIDDEN while the input field is
@@ -129,8 +168,29 @@ final class ChatInputBarHelper
         micSendButton.setScaleY(1f);
         micSendButton.setAlpha(1f);
         micSendButton.setTag(TAG_MIC_SEND_MODE, Boolean.FALSE);
+        applyIconTint(micSendButton, false);
         micSendButton.setImageDrawable(micIcon);
         micSendButton.setColorFilter(null);
+    }
+
+    /// Send mode paints itself; mic mode keeps the input-bar icon tint.
+    private static void applyIconTint(final ImageButton button, final boolean sendMode)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        if (sendMode)
+        {
+            androidx.core.widget.ImageViewCompat.setImageTintList(button, null);
+        }
+        else
+        {
+            androidx.core.widget.ImageViewCompat.setImageTintList(button,
+                    android.content.res.ColorStateList.valueOf(
+                            button.getResources().getColor(R.color.tg_chat_input_icon)));
+        }
     }
 
     static void updateMicSendIcon(final ImageButton button,
@@ -158,6 +218,10 @@ final class ChatInputBarHelper
                 .alpha(0f)
                 .setDuration(MIC_SEND_ANIM_MS / 2)
                 .withEndAction(() -> {
+                    // The XML puts app:tint on this button for the grey microphone. The send icon
+                    // brings its own colours (white plane on a green circle), and leaving the tint on
+                    // flattened it into a plain grey disc — clear it in send mode, restore for the mic.
+                    applyIconTint(button, showSend);
                     button.setImageDrawable(showSend ? sendDrawable : micDrawable);
                     button.animate()
                             .scaleX(1f)

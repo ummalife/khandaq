@@ -3,7 +3,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 APK="${APK:-$ROOT/khandaq-android-trifa/android-refimpl-app/app/build/outputs/apk/debug/app-debug.apk}"
 DEVICES=("$@")
 if ((${#DEVICES[@]} == 0)); then

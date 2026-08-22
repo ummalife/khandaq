@@ -139,6 +139,10 @@ jobs:
       # KHANDAQ (audit round 3, F-03): the rule was enforced on the TEXT packet only, on both clients.
       - name: Both history packet types must be gated on both clients
         run: python3 scripts/check-history-file-gate.py
+      # KHANDAQ (release 0.2.40): 15 QA scripts drove org.khandaq.messenger (the namespace) while the
+      # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
+      - name: QA scripts must target the package the app installs as
+        run: python3 scripts/check-qa-script-package.py
       # KHANDAQ (audit round 3, F-01): the vendored iOS toxav is a generation behind the desktop one
       # and install-tox-ngc.sh deliberately does not sync it, so the video reassembler has to be held
       # in place by something. This compiles the real function out of the shipped .m and attacks it.

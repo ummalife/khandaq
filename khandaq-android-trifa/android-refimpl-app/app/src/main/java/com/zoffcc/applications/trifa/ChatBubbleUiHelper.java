@@ -669,11 +669,13 @@ final class ChatBubbleUiHelper
             titleView.setTextColor(titleColor);
         }
 
-        set_chat_header_action_icon(phoneIcon, FontAwesome.Icon.faw_phone, iconColor, context);
-        set_chat_header_action_icon(videoIcon, FontAwesome.Icon.faw_video, iconColor, context);
+        // KHANDAQ (18.08): shared icon set — the header call/video glyphs come from the same Material
+        // vectors iOS ships, instead of FontAwesome (which drew a visibly different phone/camera).
+        set_chat_header_action_icon(phoneIcon, R.drawable.ic_header_call, iconColor, context);
+        set_chat_header_action_icon(videoIcon, R.drawable.ic_header_video, iconColor, context);
     }
 
-    private static void set_chat_header_action_icon(@Nullable ImageButton button, FontAwesome.Icon icon,
+    private static void set_chat_header_action_icon(@Nullable ImageButton button, int drawableRes,
                                                     int color, Context context)
     {
         if (button == null)
@@ -681,7 +683,17 @@ final class ChatBubbleUiHelper
             return;
         }
 
-        button.setImageDrawable(new IconicsDrawable(context).icon(icon).color(color).sizeDp(80));
+        final android.graphics.drawable.Drawable icon =
+                androidx.core.content.ContextCompat.getDrawable(context, drawableRes);
+        if (icon == null)
+        {
+            return;
+        }
+
+        final android.graphics.drawable.Drawable tinted =
+                androidx.core.graphics.drawable.DrawableCompat.wrap(icon.mutate());
+        androidx.core.graphics.drawable.DrawableCompat.setTint(tinted, color);
+        button.setImageDrawable(tinted);
     }
 
     static void set_outgoing_row_gravity(final LinearLayout bubbleRow)

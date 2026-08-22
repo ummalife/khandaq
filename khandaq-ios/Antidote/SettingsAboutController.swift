@@ -14,6 +14,7 @@ class SettingsAboutController: StaticTableController {
     fileprivate let khandaqVersionModel = StaticTableInfoCellModel()
     fileprivate let khandaqBuildModel = StaticTableInfoCellModel()
     fileprivate let websiteModel = StaticTableDefaultCellModel()
+    fileprivate let creditModel = StaticTableDefaultCellModel()
     fileprivate let toxcoreVersionModel = StaticTableInfoCellModel()
     fileprivate let acknowledgementsModel = StaticTableDefaultCellModel()
 
@@ -23,6 +24,7 @@ class SettingsAboutController: StaticTableController {
                 khandaqVersionModel,
                 khandaqBuildModel,
                 websiteModel,
+                creditModel,
             ],
             [
                 toxcoreVersionModel,
@@ -50,9 +52,23 @@ private extension SettingsAboutController {
         khandaqBuildModel.value = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
 
         websiteModel.title = String(localized: "settings_website")
-        websiteModel.value = "https://khandaq.org"
+        // KHANDAQ (18.08): bare host, so this row and the credit row below read the same way
+        // (Android already shows both as bare hosts). The tap still opens the full URL.
+        websiteModel.value = "khandaq.org"
         websiteModel.didSelectHandler = openWebsite
         websiteModel.rightImageType = .arrow
+
+        // KHANDAQ (18.08): credit the owner/developer directly under the project's own site — the
+        // same row shape as "Website" above, so the tap opens https://1sa.me/ in the browser. The
+        // caption is a whole sentence, hence multilineTitle: one fixed line clips it in ru.
+        creditModel.title = String(localized: "settings_credit_owner")
+        // Stable hook for the QA regression: the Arabic catalogue transliterates the name, so a test
+        // matching on "Isa Dagestani" can never pass there.
+        creditModel.accessibilityIdentifier = "about.ownerCredit"
+        creditModel.multilineTitle = true
+        creditModel.value = "1sa.me"
+        creditModel.didSelectHandler = openDeveloperWebsite
+        creditModel.rightImageType = .arrow
 
         toxcoreVersionModel.title = String(localized: "settings_toxcore_version")
         toxcoreVersionModel.value = OCTTox.version()
@@ -68,6 +84,11 @@ private extension SettingsAboutController {
 
     func openWebsite(_: StaticTableBaseCell) {
         guard let url = URL(string: "https://khandaq.org") else { return }
+        UIApplication.shared.open(url)
+    }
+
+    func openDeveloperWebsite(_: StaticTableBaseCell) {
+        guard let url = URL(string: "https://1sa.me/") else { return }
         UIApplication.shared.open(url)
     }
 }

@@ -139,6 +139,11 @@ ceea ce poate duce la probleme cu apelurile video.</translation>
         <translation>Despre</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Proprietar și dezvoltator — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Autorul original: %1</translation>
     </message>

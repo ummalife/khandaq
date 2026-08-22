@@ -5,7 +5,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 APK="${APK:-$ROOT/dist/android/khandaq-release.apk}"
-PKG="org.khandaq.messenger"
+PKG="com.khandaq.messenger"
 TS="$(date +%s)"
 LOG="$ROOT/docs/qa-live-visible-$TS"
 mkdir -p "$LOG"

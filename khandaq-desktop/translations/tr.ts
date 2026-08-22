@@ -140,6 +140,11 @@ bu da video görüşmelerinde sorunlara yol açabilir.</translation>
         <translation>Hakkında</translation>
     </message>
     <message>
+        <source>Owner and developer — Isa Dagestani (%1)</source>
+        <comment>`%1` is replaced with a link to the developer homepage</comment>
+        <translation>Sahibi ve geliştiricisi — Isa Dagestani (%1)</translation>
+    </message>
+    <message>
         <source>Original author: %1</source>
         <translation>Özgün yazar: %1</translation>
     </message>

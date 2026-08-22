@@ -544,8 +544,24 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     // KHANDAQ (#181): byte-counter-only transfer ticks go out as a PROGRESS payload —
                     // a full rebind restarted the holder's spinner/Glide load on every tick and the
                     // bubble blinked through the whole transfer.
+                    // KHANDAQ (release 0.2.40, found by QA on a real phone): when the caller mutated
+                    // the STORED instance in place, old_item and new_item are the same object, so
+                    // every comparison below is trivially true — including the reactions guard that
+                    // exists precisely to force a rebind. That is how reacting to a voice note left
+                    // the chip frozen: the write reached the database (the correct state appeared
+                    // after a restart) and the row simply never rebound.
+                    //
+                    // HelperMessageReaction and HelperMessageEdit both do `gm.reactions = ...` on the
+                    // adapter's own object and then hand it back. The transfer-progress path does
+                    // not: it re-reads the row from ORM, so a fresh object arrives there and this
+                    // stays a progress-only update, keeping the #172 anti-flicker behaviour intact.
+                    //
+                    // Aliasing means "we cannot know what changed", and the only safe answer to that
+                    // is a full rebind.
+                    final boolean aliased = (old_item == new_item);
                     final boolean progressOnly =
-                            old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
+                            !aliased
+                            && old_item.TRIFA_MESSAGE_TYPE == TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value
                             && old_item.TRIFA_MESSAGE_TYPE == new_item.TRIFA_MESSAGE_TYPE
                             && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null))
                             && old_item.filesize == new_item.filesize

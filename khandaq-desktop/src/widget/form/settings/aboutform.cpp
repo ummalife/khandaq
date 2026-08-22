@@ -161,8 +161,14 @@ void AboutForm::replaceVersions()
                    QString("<b>%1</b>").arg(tr("Click here to report a bug."))));
 
 
+    // KHANDAQ (18.08): the "Authors" box is the only section of this screen meant for
+    // authorship, so the Khandaq owner credit belongs here, as the first paragraph above the
+    // upstream qTox credits. createLink() is reused so the link picks up the theme link color.
     QString authorInfo =
-        QString("<p>%1</p><p>%2</p>")
+        QString("<p>%1</p><p>%2</p><p>%3</p>")
+            .arg(tr("Owner and developer — Isa Dagestani (%1)",
+                    "`%1` is replaced with a link to the developer homepage")
+                     .arg(createLink("https://1sa.me/", "1sa.me")))
             .arg(tr("Original author: %1").arg(createLink("https://github.com/tux3", "tux3")))
             .arg(
                 tr("See a full list of %1 at Github",

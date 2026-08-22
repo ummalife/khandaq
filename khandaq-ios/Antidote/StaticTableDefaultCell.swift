@@ -11,6 +11,7 @@ private struct Constants {
     static let TitleToUserStatusOffset = 7.0
     static let TitleToValueOffset = 2.0
     static let MinValueLabelHeight = 20.0
+    static let MultilineTitleToArrowOffset = 6.0
 }
 
 class StaticTableDefaultCell: StaticTableBaseCell {
@@ -22,6 +23,9 @@ class StaticTableDefaultCell: StaticTableBaseCell {
 
     fileprivate var userStatusViewVisibleConstraint: Constraint!
     fileprivate var userStatusViewHiddenConstraint: Constraint!
+
+    fileprivate var titleHeightConstraint: Constraint!
+    fileprivate var titleTrailingConstraint: Constraint!
 
     fileprivate var valueLabelToTitleConstraint: Constraint!
     fileprivate var valueLabelToContentTopConstraint: Constraint!
@@ -40,6 +44,9 @@ class StaticTableDefaultCell: StaticTableBaseCell {
             assert(false, "Wrong model \(model) passed to cell \(self)")
             return
         }
+
+        // Reset on every dequeue: a reused cell must not keep the previous row's test hook.
+        accessibilityIdentifier = defaultModel.accessibilityIdentifier
 
         if let userStatus = defaultModel.userStatus {
             userStatusView.theme = theme
@@ -96,6 +103,20 @@ class StaticTableDefaultCell: StaticTableBaseCell {
             selectionStyle = .none
         }
 
+        // KHANDAQ (18.08): opt-in multi-line caption. The About screen's owner credit is a whole
+        // sentence and the fixed 20pt single line truncated it in ru; pinning the trailing edge
+        // gives the label a width to wrap into while keeping it clear of the disclosure arrow.
+        titleLabel.numberOfLines = defaultModel.multilineTitle ? 0 : 1
+
+        if defaultModel.multilineTitle {
+            titleHeightConstraint.deactivate()
+            titleTrailingConstraint.activate()
+        }
+        else {
+            titleTrailingConstraint.deactivate()
+            titleHeightConstraint.activate()
+        }
+
         if defaultModel.title != nil {
             valueLabelToContentTopConstraint.deactivate()
             valueLabelToTitleConstraint.activate()
@@ -142,6 +163,13 @@ class StaticTableDefaultCell: StaticTableBaseCell {
         customContentView.addSubview(rightButton)
 
         rightImageView = UIImageView()
+        // KHANDAQ (18.08): the arrow used to be sized only by its intrinsic width. Once a multiline
+        // title started pulling on its leading edge (see multilineTitle), it stretched into a smeared
+        // chevron — hugging at required priority keeps it at the image's own size.
+        rightImageView.contentMode = .scaleAspectFit
+        rightImageView.setContentHuggingPriority(.required, for: .horizontal)
+        rightImageView.setContentHuggingPriority(.required, for: .vertical)
+        rightImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
         customContentView.addSubview(rightImageView)
     }
 
@@ -156,7 +184,7 @@ class StaticTableDefaultCell: StaticTableBaseCell {
 
         titleLabel.snp.makeConstraints {
             $0.top.equalTo(customContentView).offset(Constants.EdgesVerticalOffset)
-            $0.height.equalTo(Constants.TitleHeight)
+            titleHeightConstraint = $0.height.equalTo(Constants.TitleHeight).constraint
 
             userStatusViewVisibleConstraint = $0.leading.equalTo(userStatusView.snp.trailing).offset(Constants.TitleToUserStatusOffset).constraint
         }
@@ -166,6 +194,12 @@ class StaticTableDefaultCell: StaticTableBaseCell {
         titleLabel.snp.makeConstraints {
             userStatusViewHiddenConstraint = $0.leading.equalTo(customContentView).constraint
         }
+
+        titleLabel.snp.makeConstraints {
+            titleTrailingConstraint = $0.trailing.equalTo(rightImageView.snp.leading).offset(-Constants.MultilineTitleToArrowOffset).constraint
+        }
+
+        titleTrailingConstraint.deactivate()
 
         valueLabel.snp.makeConstraints {
             valueLabelToTitleConstraint = $0.top.equalTo(titleLabel.snp.bottom).offset(Constants.TitleToValueOffset).constraint

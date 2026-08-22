@@ -31,6 +31,15 @@ class SnapshotBaseTest: FBSnapshotTestCase {
         // Re-record after a deliberate visual change: FB_RECORD_MODE=1 in the scheme's test action.
         recordMode = (ProcessInfo.processInfo.environment["FB_RECORD_MODE"] == "1")
 
+        // The reference images are English. Without pinning the language the snapshots render in
+        // whatever the machine/simulator happens to be set to (a QA pass left this one on ru/ar) and
+        // every text-bearing cell "differs from the reference" for no reason at all.
+        // Only the string lookup is pinned — AppLanguage.set() would also force a layout direction on
+        // UIView.appearance(), which is exactly what verifyView() flips per snapshot.
+        if let english = Bundle.main.path(forResource: "en", ofType: "lproj").flatMap(Bundle.init(path:)) {
+            Bundle.setLanguageBundle(english)
+        }
+
 
         let filepath = Bundle.main.path(forResource: "default-theme", ofType: "yaml")!
         let yamlString = try! NSString(contentsOfFile:filepath, encoding:String.Encoding.utf8.rawValue) as String

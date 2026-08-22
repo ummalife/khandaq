@@ -201,19 +201,31 @@
         </ol>
       </details>
       <details class="install">
-        <summary>Windows — SmartScreen warning</summary>
+        <summary>Verify a download before you run it</summary>
+        <p class="lead-sub">Every desktop file is signed with a key published in the source repository — a different place from this website. A checksum alone cannot help you here: whoever could replace the download could replace the checksum beside it. A signature made with a key we do not serve from this server can.</p>
         <ol>
-          <li>Unzip the archive, then run <code>Khandaq.exe</code>. If Windows shows a protection warning, click <strong>More info</strong> → <strong>Run anyway</strong>.</li>
-          <li>The beta build is not Authenticode-signed yet.</li>
-          <li>If antivirus blocks the file, verify SHA-256 and add an exception.</li>
+          <li>Get the signing key and the signer list from the repository (not from this page):<br>
+            <code>curl -O https://raw.githubusercontent.com/ummalife/khandaq/master/web/downloads/allowed_signers</code></li>
+          <li>Download the file and its <code>.sig</code>, then check them:<br>
+            <code>ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-release -s khandaq-messenger_amd64.deb.sig &lt; khandaq-messenger_amd64.deb</code></li>
+          <li><code>Good "khandaq-release" signature</code> means the file is the one we built. Anything else means do not run it, and please tell us.</li>
+        </ol>
+        <p class="fine-print"><code>ssh-keygen</code> is already on macOS and Linux, and comes with Git for Windows. <code>SHA256SUMS.txt</code> is still published for convenience, but it is an integrity check, not a trust anchor.</p>
+      </details>
+      <details class="install">
+        <summary>Windows</summary>
+        <ol>
+          <li>Verify the signature as above, then unzip the archive and run <code>Khandaq.exe</code>.</li>
+          <li>Windows will warn that the publisher is unknown: the desktop build is <strong>not yet Authenticode-signed</strong>, and we are not going to pretend that is fine. Verifying the signature above is what tells you the file is genuine; the Windows warning is telling you something true, which is that it cannot check that for you.</li>
+          <li>We are not asking you to add antivirus exceptions. If your antivirus objects to a file whose signature verifies, please report it to us — that is a false positive worth chasing, not something to switch off.</li>
         </ol>
       </details>
       <details class="install">
-        <summary>macOS — Gatekeeper</summary>
+        <summary>macOS</summary>
         <ol>
-          <li>Unzip and move <code>khandaq.app</code> to Applications.</li>
-          <li>If blocked: <code>xattr -cr /Applications/khandaq.app</code></li>
-          <li>Or right-click the app → <strong>Open</strong> → confirm in the dialog.</li>
+          <li>Verify the signature as above, then unzip and move <code>khandaq.app</code> to Applications.</li>
+          <li>The build is <strong>not yet notarized by Apple</strong>, so Gatekeeper will not open it on a first double-click. Right-click the app → <strong>Open</strong> → confirm: that is the documented way to run an app Gatekeeper cannot vouch for, and it keeps the rest of Gatekeeper working.</li>
+          <li>Previous versions of this page suggested <code>xattr -cr</code>. It is no longer recommended: it strips the quarantine flag from everything in the bundle and turns off exactly the check you would want on the day a download is not genuine.</li>
         </ol>
       </details>
       <details class="install" open>

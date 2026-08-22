@@ -249,7 +249,35 @@ def main() -> int:
         if not re.search(r"^Contact:\s*\S+", text, re.M):
             fail("в security.txt нет поля Contact")
 
-    # 5. TLS: 1.0/1.1 must be refused, 1.2/1.3 must work
+    # 5. every published artifact must have a published signature beside it
+    print("-- подписи артефактов")
+    status, _, body = get(f"{base}/downloads/SHA256SUMS.txt")
+    if status != 200:
+        fail(f"/downloads/SHA256SUMS.txt вернул {status}")
+    else:
+        names = [m.group(1) for m in re.finditer(r"^[0-9a-fA-F]{64}\s+\*?(\S+)\s*$",
+                                                 body.decode("utf-8", "replace"), re.M)]
+        if not names:
+            fail("SHA256SUMS.txt опубликован, но не содержит ни одной записи")
+        missing = []
+        for name in names:
+            st, _, _ = get(f"{base}/downloads/{name}.sig")
+            if st != 200:
+                missing.append(name)
+        if missing:
+            # Not fatal on its own — the artifacts predate the signing work and are re-signed on the
+            # next deploy that stages them — but it must be visible, because "there is a signature"
+            # is the claim the download page now makes.
+            fail("нет опубликованной подписи для: " + ", ".join(missing))
+        else:
+            ok(f"подписи на месте для всех {len(names)} артефактов")
+        st, _, _ = get(f"{base}/downloads/allowed_signers")
+        if st != 200:
+            fail("/downloads/allowed_signers недоступен — проверить подпись нечем")
+        else:
+            ok("allowed_signers опубликован")
+
+    # 6. TLS: 1.0/1.1 must be refused, 1.2/1.3 must work
     if not args.skip_tls:
         print("-- TLS")
         host = base.split("://", 1)[1].split("/", 1)[0]

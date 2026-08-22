@@ -110,6 +110,15 @@ WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
   } )
 echo "    SHA256SUMS.txt: $(wc -l < "$DL/SHA256SUMS.txt" 2>/dev/null || echo 0) entries"
 
+# KHANDAQ (re-audit 2026-08-22, K-05): sign what is about to be published, with a key that is not
+# this web server. A checksum list beside a download is an integrity check, not a trust anchor —
+# whoever can replace the binary can replace the list, because both come down the same pipe. The
+# detached signatures below are made with a key held on the release machine whose PUBLIC half is
+# committed to the repository, so an attacker who owns the site still cannot produce one that
+# verifies. Authenticode and Developer ID close the rest; see docs/DESKTOP-SIGNING.md.
+echo "==> Sign desktop artifacts"
+bash "$ROOT/scripts/sign-desktop-artifacts.sh"
+
 echo "==> Backup Element/Matrix static site on server"
 ssh "$REMOTE" "mkdir -p '$REMOTE_BACKUP_ROOT' && \
   if [[ -d /var/www/element ]]; then \

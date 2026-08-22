@@ -51,7 +51,11 @@ android {
 
     externalNativeBuild {
         cmake {
-            // version "3.10.2"
+            // KHANDAQ: pinned, not left to AGP's default. With no version here AGP silently picked
+            // its own (3.22.1) and the SDK auto-downloaded it mid-build, which is exactly the
+            // unpinned-component case scripts/ci-android-toolchain.sh refuses to attest. 3.22.1 is
+            // the version that was already being used, so the compiled output does not change.
+            version "3.22.1"
             path 'src/main/cpp/CMakeLists.txt'
         }
     }

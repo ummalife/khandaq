@@ -90,6 +90,44 @@ def query_nvd(cpe: str, version: str) -> list[dict]:
     return out
 
 
+def verify_patched(mapping_raw: dict) -> tuple[dict, list[str]]:
+    """Advisories closed by a build-time backport, and proof the backport is still there.
+
+    KHANDAQ (2026-08-23). The scanner asks NVD about a VERSION, so it cannot see a patch. Without
+    this section a fixed vulnerability looked identical to an accepted one — and, worse, the day
+    somebody dropped the patch from deps.sh nothing would have said so, because the version string
+    would not move. So each entry is checked rather than believed: the patch file must exist, and the
+    build script must still apply it at least as many times as it did when the entry was written
+    (libvpx is cloned once per ABI, so one missing site is one architecture left vulnerable).
+    """
+    out, problems = {}, []
+    for cve, rec in (mapping_raw.get("patched") or {}).items():
+        patch = ROOT / str(rec.get("patch_file", ""))
+        applier = ROOT / str(rec.get("applied_by", ""))
+        want = int(rec.get("min_apply_sites", 1))
+        if not patch.is_file():
+            problems.append(f"{cve}: файла патча {rec.get('patch_file')} нет — уязвимость считалась "
+                            f"закрытой, а закрывать её больше нечем")
+            continue
+        if not applier.is_file():
+            problems.append(f"{cve}: нет {rec.get('applied_by')}, который должен применять патч")
+            continue
+        # Считаем строки, которые ПРИМЕНЯЮТ патч, а не любые упоминания имени файла: в шапке
+        # deps.sh стоит комментарий с тем же именем, и подсчёт вхождений давал на единицу больше —
+        # проверка проходила бы даже после удаления одного места применения. Найдено собственным
+        # отрицательным тестом; без него гейт молча ослаб бы на один ABI.
+        sites = sum(1 for ln in applier.read_text(encoding="utf-8", errors="replace").splitlines()
+                    if patch.name in ln and "patch -p1" in ln and not ln.strip().startswith("#"))
+        if sites < want:
+            problems.append(
+                f"{cve}: {applier.name} применяет {patch.name} {sites} раз(а) вместо {want}. "
+                f"libvpx клонируется отдельно под каждый ABI — недостающее место это архитектура, "
+                f"которая уезжает пользователю без исправления.")
+            continue
+        out[(cve, str(rec.get("package")), str(rec.get("version")))] = rec
+    return out, problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", action="store_true")
@@ -101,7 +139,17 @@ def main() -> int:
     if not CPE_MAP.is_file():
         return die(f"нет {CPE_MAP.relative_to(ROOT)} — нативные компоненты не с чем сопоставить")
 
-    mapping = json.loads(CPE_MAP.read_text(encoding="utf-8")).get("components", {})
+    mapping_raw = json.loads(CPE_MAP.read_text(encoding="utf-8"))
+    mapping = mapping_raw.get("components", {})
+    patched, patch_problems = verify_patched(mapping_raw)
+    if patch_problems:
+        for p in patch_problems:
+            print(f"::error::{p}", file=sys.stderr)
+        return 1
+    if patched:
+        print(f"==> Бэкпортов проверено: {len(patched)} (файл патча на месте и применяется)")
+        for (cve, pkg, ver) in sorted(patched):
+            print(f"    ЗАКРЫТО ПАТЧЕМ {cve}  {pkg}@{ver}")
     comps = native_components()
     if not comps:
         return die("в SBOM нет ни одного generic-компонента — это не 'чисто', это сломанный SBOM")
@@ -153,6 +201,9 @@ def main() -> int:
         if hits:
             for h in hits:
                 if args.since and h["published"] and h["published"] < args.since:
+                    continue
+                if (h["id"], c["key"], c["version"]) in patched:
+                    # Закрыто бэкпортом, проверенным выше. Не находка и не waiver.
                     continue
                 if (h["id"], c["key"], c["version"]) in waived:
                     print(f"    ВАЙВЕР {h['id']} {label}")

@@ -50,6 +50,15 @@ REQUIRED_HEADERS = {
     "permissions-policy": None,
 }
 
+# Every host that serves this domain family. Certificates are per-host here — there is no wildcard —
+# so each one expires on its own schedule and each one can fail to renew on its own.
+TLS_HOSTS = ("khandaq.org", "push.khandaq.org", "mail.khandaq.org")
+PUSH_BASE = "https://push.khandaq.org"
+# Let's Encrypt renews at 30 days remaining. Warn from there, fail at 14: below that the renewal has
+# had two weeks of attempts and has not succeeded, which is a fault rather than a schedule.
+CERT_WARN_DAYS = 30
+CERT_FAIL_DAYS = 14
+
 CSP_MUST_CONTAIN = ("default-src 'none'", "object-src 'none'", "base-uri 'none'",
                     # KQ-09: the value matters, not merely the directive's presence.
                     "frame-ancestors 'none'")
@@ -67,6 +76,12 @@ def ok(msg: str) -> None:
     global checks
     checks += 1
     print(f"  ок: {msg}")
+
+
+def checks_bump() -> None:
+    """Count a warning as a performed check: it was verified, it just is not comfortable."""
+    global checks
+    checks += 1
 
 
 def get(url: str, *, method: str = "GET", allow_redirect: bool = False):
@@ -311,7 +326,83 @@ def main() -> int:
         else:
             ok("allowed_signers опубликован")
 
-    # 6. TLS: 1.0/1.1 must be refused, 1.2/1.3 must work
+    # 5b. the push relay, from outside
+    #
+    # KHANDAQ (re-review 2026-08-22, KQ-02): the regression matrix asks for the legacy-endpoint row
+    # to be checked "live", and nothing did — the emission-shape gate reads source on a pull request,
+    # and the evidence recorder needs ssh and is in no workflow. This runs wherever this probe runs,
+    # including the weekly CI job, and asks the relay itself.
+    print("-- push-реле снаружи")
+    status, headers, body = get(f"{PUSH_BASE}/health")
+    if status != 200:
+        fail(f"{PUSH_BASE}/health вернул {status}")
+    else:
+        try:
+            keys = sorted(json.loads(body).keys())
+        except ValueError:
+            keys = None
+        if keys is None:
+            fail("публичный /health реле не разбирается как JSON")
+        elif keys != ["status"]:
+            # Adoption percentages tell an outsider how much of the fleet is still unprotected.
+            fail(f"публичный /health реле раскрывает лишнее: {', '.join(keys)}")
+        else:
+            ok("публичный /health реле отдаёт только status")
+
+    # The legacy endpoint must answer consistently with the published retirement state: served today,
+    # 410 once PUSH_LEGACY_GET is stepped. Either is fine; silence or a 500 is not.
+    status, _, _ = get(f"{PUSH_BASE}/toxfcm/fcm.php?id=probe-not-a-real-token")
+    # 502 belongs in the "serving" set: the probe token is deliberately fake, so in soft mode the
+    # relay accepts the request and only the upstream FCM send fails. That is the endpoint working.
+    if status in (400, 401, 429, 502):
+        ok(f"legacy-эндпоинт ещё обслуживается ({status}) — совпадает с PUSH_LEGACY_GET=serve")
+    elif status in (404, 410):
+        ok(f"legacy-эндпоинт выведен ({status})")
+    else:
+        fail(f"legacy-эндпоинт ответил {status} — ни обслуживание, ни вывод")
+
+    # A body-less POST must be refused rather than crash: this is the path every current client uses.
+    status, _, _ = get(f"{PUSH_BASE}/wake", method="POST")
+    if status == 400:
+        ok("POST /wake без тела отвергается (400)")
+    else:
+        fail(f"POST /wake без тела ответил {status}, ожидался 400")
+
+    # 6. certificate expiry, on every host that serves this domain
+    #
+    # KHANDAQ (re-review 2026-08-22, KQ-09): "confirm push.khandaq.org and any operational hosts have
+    # valid HTTPS and renewal monitoring". Renewal being CONFIGURED is not the same as renewal
+    # HAPPENING — an ACME challenge that a redirect swallows fails silently and the first symptom is
+    # a browser warning. This is the monitoring half: it runs on every deploy and weekly from CI, and
+    # it fails while there is still time to fix the cause rather than after the certificate lapses.
+    print("-- сроки сертификатов")
+    for host in TLS_HOSTS:
+        try:
+            ctx = ssl.create_default_context()
+            with socket.create_connection((host, 443), timeout=15) as sock:
+                with ctx.wrap_socket(sock, server_hostname=host) as tls:
+                    cert = tls.getpeercert()
+        except Exception as exc:  # noqa: BLE001 - any failure here is a real problem to report
+            fail(f"{host}: сертификат не читается ({exc})")
+            continue
+        try:
+            not_after = dt.datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(
+                tzinfo=dt.timezone.utc)
+        except (KeyError, ValueError) as exc:
+            fail(f"{host}: не разобрать notAfter ({exc})")
+            continue
+        left = (not_after - dt.datetime.now(dt.timezone.utc)).days
+        if left <= CERT_FAIL_DAYS:
+            fail(f"{host}: сертификат истекает через {left} дн. ({cert['notAfter']}) — "
+                 f"автопродление не сработало, чинить сейчас")
+        elif left <= CERT_WARN_DAYS:
+            print(f"  ВНИМАНИЕ: {host} — {left} дн. до истечения ({cert['notAfter']}); "
+                  f"продление должно было пройти, проверьте его")
+            checks_bump()
+        else:
+            ok(f"{host}: сертификат действителен ещё {left} дн.")
+
+    # 7. TLS: 1.0/1.1 must be refused, 1.2/1.3 must work
     if not args.skip_tls:
         print("-- TLS")
         host = base.split("://", 1)[1].split("/", 1)[0]
@@ -321,6 +412,13 @@ def main() -> int:
             ("TLS 1.2", ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_2, True),
             ("TLS 1.3", ssl.TLSVersion.TLSv1_3, ssl.TLSVersion.TLSv1_3, True),
         ):
+            # REVIEWED (re-review 2026-08-22, KQ-10): CodeQL reports py/insecure-protocol here,
+            # and it is right about the shape — the loop deliberately lowers minimum_version to TLS
+            # 1.0 and 1.1. That is the POINT: the only way to prove the server refuses an obsolete
+            # protocol is to offer it. Nothing is transmitted, the handshake is expected to fail, and
+            # a handshake that SUCCEEDS is reported as a failure of the site. The exclusion lives in
+            # .github/codeql/codeql-config.yml — inline codeql[] comments do not clear alerts in
+            # GitHub code scanning.
             ctx = ssl.create_default_context()
             if not want_ok:
                 # A modern OpenSSL will not even OFFER TLS 1.0/1.1 at the default security level, so

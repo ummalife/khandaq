@@ -1461,7 +1461,14 @@ private extension ChatGroupController {
         cell.replySwipeDelegate = self
 
         if incoming, let peerName = peerName(for: message), !model.isVoiceMessage {
-            model.fileName = "\(peerName)\n\(messageFile.fileName ?? "")"
+            // KHANDAQ (re-review 2026-08-22, KQ-03): the same rule the text bubble applies, and the
+            // case that matters more. A file record can never carry a signature — the 0x03 packet has
+            // no signed form — so a stale-key author's file row is the cheapest thing in the protocol
+            // to put somebody else's name on.
+            let shownName = submanagerGroups.isGroupMessageAttributable(message, in: chat)
+                ? peerName
+                : String(localized: "group_msg_relayed_unattributed")
+            model.fileName = "\(shownName)\n\(messageFile.fileName ?? "")"
         }
 
         model.dateString = dateText

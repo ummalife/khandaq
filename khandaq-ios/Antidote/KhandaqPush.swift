@@ -287,15 +287,42 @@ enum KhandaqPush {
         return true
     }
 
-    /// Stop honouring one contact's capability. Presenting it is the proof of the right to drop it.
+    /// Stop honouring one contact's capability.
+    ///
+    /// KHANDAQ (re-review follow-up 2026-08-22): needs the same device proof as registering.
+    /// Presenting the capability used to be enough — right about ACCESS, wrong about the DEVICE:
+    /// revoking the LAST capability returns the token to the state where none is required, so a
+    /// contact holding the only one could hand back its own access and silently return this device
+    /// to being wakeable by anyone who knows the token. The relay refuses a revoke without a
+    /// challenge now.
     static func revokeCapability(forFriend publicKey: String, ownToken: String) {
         let key = capabilityKey(forFriend: publicKey)
         guard let cap = capabilityValue(key), !cap.isEmpty else { return }
-        postJSON(relayBase + "/register/revoke", ["token": ownToken, "cap": cap]) { _ in }
-        keychainDelete(key)
-        // Also clear any pre-KQ-08 copy, so a revoked capability cannot come back from a preference
-        // that a migration had not reached yet.
-        UserDefaults.standard.removeObject(forKey: key)
+
+        postJSON(relayBase + "/register/challenge", ["token": ownToken]) { response in
+            guard let cid = response?["cid"] as? String, !cid.isEmpty else { return }
+            var settled = false
+            let finish: (String?) -> Void = { nonce in
+                guard !settled else { return }
+                settled = true
+                capQueue.sync { pendingChallenges[cid] = nil }
+                guard let nonce = nonce else { return }
+                postJSON(relayBase + "/register/revoke",
+                         ["cid": cid, "nonce": nonce, "cap": cap]) { confirmed in
+                    guard confirmed != nil else {
+                        // The relay still honours it; dropping the local copy would leave a
+                        // capability this device can no longer name in order to revoke.
+                        return
+                    }
+                    keychainDelete(key)
+                    // Also clear any pre-KQ-08 copy, so a revoked capability cannot come back from a
+                    // preference that a migration had not reached yet.
+                    UserDefaults.standard.removeObject(forKey: key)
+                }
+            }
+            capQueue.sync { pendingChallenges[cid] = { nonce in finish(nonce) } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 30) { finish(nil) }
+        }
     }
 
     private static func postJSON(_ url: String, _ body: [String: String],

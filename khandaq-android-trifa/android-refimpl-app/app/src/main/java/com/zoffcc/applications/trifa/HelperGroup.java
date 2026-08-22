@@ -10918,13 +10918,27 @@ public class HelperGroup
             final NgcHskDirectory.Record file_author_hsk = NgcHskDirectory.decode(
                     HelperGeneric.get_g_opts(NgcHskDirectory.rowKey(group_identifier,
                                                                     original_sender_peerpubkey)));
-            if (NgcHistoryDowngradePolicy.decide(file_author_hsk, false, System.currentTimeMillis())
-                    == NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE)
+            // KHANDAQ (re-review 2026-08-22, KQ-03): the decision is kept, not just tested.
+            //
+            // The REJECT branch below was already here. What was missing is the OTHER outcome the
+            // review is about: ACCEPT_KEY_STALE. A file record can never carry a signature — the
+            // 0x03 packet has no signed form — so `verdictMatchesThisRow` is false by construction
+            // and a stale-key author's file row was accepted AND displayed under their name, which
+            // is exactly the attribution the text path stopped granting. Two paths, one rule.
+            final NgcHistoryDowngradePolicy.Decision file_decision =
+                    NgcHistoryDowngradePolicy.decide(file_author_hsk, false, System.currentTimeMillis());
+            if (file_decision == NgcHistoryDowngradePolicy.Decision.REJECT_DOWNGRADE)
             {
                 HelperGeneric.logI(TAG, "handle_incoming_sync_group_file: refusing unsigned file "
                         + "history for an author that signs");
                 return;
             }
+            final boolean file_syncer_is_author = syncer_pubkey != null
+                    && syncer_pubkey.equalsIgnoreCase(original_sender_peerpubkey);
+            final int file_sync_type =
+                    NgcHistoryDowngradePolicy.rendersAsClaimedAuthor(file_decision, file_syncer_is_author)
+                    ? TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value
+                    : TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value;
             //
             //
             // HINT: putting 4 bytes unsigned int in big endian format into a java "long" is more complex than i thought
@@ -11028,7 +11042,7 @@ public class HelperGroup
                 group_file_add_from_sync(group_identifier, syncer_pubkey, sender_peer_num, original_sender_peerpubkey,
                                             file_byte_buf, filename, peer_name,
                                             (timestamp * 1000), message_id_hash,
-                                            TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value);
+                                            file_sync_type);
             }
             catch(Exception e)
             {

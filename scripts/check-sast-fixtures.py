@@ -63,6 +63,9 @@ def rule_ids() -> list[str]:
     return re.findall(r"^  - id: (\S+)", RULES.read_text(encoding="utf-8"), re.M)
 
 
+problems: list[str] = []
+
+
 def main() -> int:
     if not RULES.is_file() or not FIXTURES.is_dir():
         print("::error::нет security/semgrep-khandaq.yml или security/sast-fixtures/", file=sys.stderr)
@@ -84,6 +87,37 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
+    # KHANDAQ (re-review 2026-08-22, KQ-10): "require security review for new suppressions".
+    #
+    # A suppression is a security decision written in one line, and the line itself says nothing about
+    # why. Requiring a REVIEWED note beside each one does not force anybody to be right, but it does
+    # force the argument to exist where the next reader will find it — and it makes adding a silent
+    # one impossible without also writing the sentence.
+    print("\n==> Подавления")
+    suppressions = 0
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or ".git/" in str(path) or "sast-fixtures" in str(path):
+            continue
+        if path.suffix not in (".m", ".mm", ".h", ".swift", ".java", ".kt", ".py", ".js"):
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for n, line in enumerate(lines, 1):
+            if "nosemgrep" not in line or "check-sast-fixtures" in str(path):
+                continue
+            suppressions += 1
+            window = "\n".join(lines[max(0, n - 8):n])
+            if "REVIEWED" not in window:
+                problems.append(
+                    f"{path.relative_to(ROOT)}:{n}: подавление nosemgrep без пометки REVIEWED и "
+                    f"обоснования в предшествующих строках — решение о безопасности, о котором "
+                    f"никто не написал, почему")
+            else:
+                print(f"  ок: {path.relative_to(ROOT)}:{n} — обосновано")
+    print(f"  всего подавлений: {suppressions}")
+
     print("\n==> Настоящее дерево")
     real = [p for p in REAL_PATHS if (ROOT / p).exists()]
     results = semgrep(real).get("results", [])
@@ -93,6 +127,11 @@ def main() -> int:
             loc = f.get("path", "?")
             line = (f.get("start") or {}).get("line", "?")
             print(f"::error::  {f['check_id'].split('.')[-1]}  {loc}:{line}", file=sys.stderr)
+        return 1
+
+    if problems:
+        for p in problems:
+            print(f"::error::{p}", file=sys.stderr)
         return 1
 
     print(f"  чисто: {len(real)} каталог(ов), находок нет")

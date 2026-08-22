@@ -163,6 +163,27 @@ jobs:
             exit 1
           fi
 
+  live-site:
+    # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из
+    # trusted CI environment" and for an external check that notices a stale site or an expiring
+    # security.txt. deploy-site.sh already probes after every deploy, but that only runs when
+    # somebody deploys — and W-02 was precisely a site nobody had deployed for a while.
+    #
+    # So the same probe runs on a schedule, from a machine that is neither the web server nor a
+    # maintainer's laptop. It does not demand the site be at HEAD (it never is for long); it demands
+    # the published commit EXISTS, the header baseline is intact on every response class, the CSP
+    # still covers what is actually being served, security.txt has not lapsed, every artifact has a
+    # signature beside it, and TLS 1.0/1.1 stay refused.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Probe the live site from outside
+        run: python3 scripts/verify-site-deploy.py --any-sha
+
   relay-tests:
     # KHANDAQ (audit round 3, F-15): until now NO workflow ran these.
     #

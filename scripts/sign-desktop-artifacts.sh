@@ -93,6 +93,15 @@ for f in "$DL"/*; do
     *.sig|*allowed_signers|*.pub|*SHA256SUMS.txt|*/index.html) continue ;;
   esac
   [ -f "$f" ] || continue
+  # Skip what is already signed AND still verifies. Signing reads the whole file, and the artifacts
+  # come to about 400 MB — re-signing unchanged bytes on every deploy costs minutes and proves
+  # nothing. The verify is the check: a file that changed, or a signature that does not match it,
+  # fails here and gets re-signed.
+  if [ -f "$f.sig" ] && ssh-keygen -Y verify -f "$ALLOWED" -I "$IDENTITY" -n "$NAMESPACE" \
+                                   -s "$f.sig" < "$f" >/dev/null 2>&1; then
+    echo "  уже подписан: $(basename "$f")"
+    continue
+  fi
   ssh-keygen -Y sign -f "$KEY" -n "$NAMESPACE" "$f" >/dev/null 2>&1
   # ssh-keygen writes <file>.sig next to the input, which is exactly where it is published.
   echo "  подписан: $(basename "$f")"

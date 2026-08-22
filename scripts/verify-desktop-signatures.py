@@ -63,6 +63,7 @@ def fetch(url: str, dest: Path | None = None):
 
 def main() -> int:
     global checked
+    tamper_target: str | None = None
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--keep", default=None, help="каталог для скачанного (по умолчанию — временный)")
@@ -150,6 +151,29 @@ def main() -> int:
         else:
             failures.append(f"{name}: подпись НЕ проходит проверку — "
                             f"{(proc.stderr or proc.stdout).strip().splitlines()[0] if (proc.stderr or proc.stdout).strip() else 'без деталей'}")
+
+        # KHANDAQ (re-review 2026-08-22): the review's regression matrix asks for "bit-flip published
+        # installer/archive -> all signature checks fail". A verifier that has only ever been shown
+        # matching bytes has not demonstrated it can tell them apart — an empty allowed_signers, a
+        # wrong namespace or a verify call whose exit status nobody reads would all still print "ok".
+        # So one artifact per run is deliberately corrupted and must fail.
+        if tamper_target is None:
+            tamper_target = name
+            corrupted = work / (name + ".tampered")
+            data = bytearray(art.read_bytes())
+            data[len(data) // 2] ^= 0x01
+            corrupted.write_bytes(bytes(data))
+            bad = subprocess.run(
+                ["ssh-keygen", "-Y", "verify", "-f", str(signers_path), "-I", IDENTITY,
+                 "-n", NAMESPACE, "-s", str(sig)],
+                stdin=corrupted.open("rb"), capture_output=True, text=True)
+            corrupted.unlink(missing_ok=True)
+            if bad.returncode == 0:
+                failures.append(f"{name}: ОДИН ПЕРЕВЁРНУТЫЙ БИТ прошёл проверку — проверка подписи "
+                                f"не работает вовсе, и все \"ок\" выше ничего не значат")
+            else:
+                print(f"     ок: подделка одного бита отвергнута ({bad.stderr.strip().splitlines()[0][:60] if bad.stderr.strip() else 'verify failed'})")
+                checked += 1
 
         if not args.keep:
             art.unlink(missing_ok=True)

@@ -1602,20 +1602,49 @@ def register_confirm():
 
 @app.route("/register/revoke", methods=["POST"])
 def register_revoke():
-    """Give up one capability. Presenting it is the proof; holding it was the whole authority."""
+    """
+    Drop one capability. Requires the same device proof as registering does.
+
+    KHANDAQ (re-review follow-up 2026-08-22): this used to accept the capability alone, on the
+    reasoning that presenting it proves you hold it and holding it was the whole authority being
+    given up. That reasoning is right about ACCESS and wrong about the DEVICE, and end-to-end testing
+    over HTTP showed why: revoking the LAST capability returns the token to the "none" state, in
+    which no capability is required at all. A contact holding the only capability could therefore
+    revoke it and silently return the recipient to being wakeable by anyone who knows the token —
+    undoing, from the outside, exactly the property KQ-01 asks for.
+
+    Requiring the challenge closes it without trading one failure for another. Refusing the
+    downgrade instead would have let the same contact deny that device every notification until its
+    next foreground, which is the "fail toward delivery" requirement broken in the other direction.
+    Now a contact cannot change the recipient's protection state at all; only the device that
+    receives the FCM push can. A contact that no longer wants its capability simply stops using it.
+    """
     if not _register_rate_ok():
         return jsonify({"error": "rate limit"}), 429
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify({"error": "expected a json object body"}), 400
-    token, cap = body.get("token"), body.get("cap")
-    if not isinstance(token, str) or not isinstance(cap, str) or not _CAP_RE.match(cap):
-        return jsonify({"error": "token and cap are required"}), 400
+    cid, nonce, cap = body.get("cid"), body.get("nonce"), body.get("cap")
+    if not all(isinstance(v, str) for v in (cid, nonce, cap)) or not _CAP_RE.match(cap):
+        return jsonify({"error": "cid, nonce and cap are required"}), 400
+
+    now = int(time.time())
     with _stats_lock:
         conn = _stats_conn()
         try:
-            cur = conn.execute("DELETE FROM pushcap WHERE th = ? AND caph = ?",
-                               (_th(token.strip()), _caph(cap)))
+            conn.execute("DELETE FROM pushchallenge WHERE exp < ?", (now,))
+            row = conn.execute("SELECT th, nonceh FROM pushchallenge WHERE cid = ?", (cid,)).fetchone()
+            if row is None:
+                conn.commit()
+                return jsonify({"error": "unknown or expired challenge"}), 400
+            th, nonceh = row
+            if not hmac.compare_digest(nonceh, hashlib.sha256(nonce.encode()).hexdigest()):
+                # Consumed on a wrong nonce, exactly as in confirm: otherwise this is an oracle.
+                conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+                conn.commit()
+                return jsonify({"error": "unknown or expired challenge"}), 400
+            conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+            cur = conn.execute("DELETE FROM pushcap WHERE th = ? AND caph = ?", (th, _caph(cap)))
             conn.commit()
             removed = cur.rowcount
         finally:

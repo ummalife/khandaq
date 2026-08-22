@@ -349,6 +349,16 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                 {
                     peer_name_text.setText("-system-");
                 }
+                else if (GroupMessageListHolder_text_incoming_not_read
+                                 .should_hide_claimed_author(false, m))
+                {
+                    // KHANDAQ (re-review 2026-08-22, KQ-03): the same rule the text bubble applies.
+                    //
+                    // A file record can never carry a signature — the 0x03 packet has no signed form
+                    // — so a stale-key author's file row is the easiest thing in the protocol to put
+                    // somebody else's name on. The row is kept; the identity is not asserted.
+                    peer_name_text.setText(R.string.group_msg_relayed_unattributed);
+                }
                 else
                 {
                     peer_name_text.setText(peer_name);

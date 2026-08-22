@@ -859,6 +859,16 @@ def _register(m, token, cap):
     return cid, nonce
 
 
+def _revoke(m, token, cap):
+    """Revocation needs the same device proof as registration — see register_revoke's docstring."""
+    c = m.app.test_client()
+    r = c.post("/register/challenge", json={"token": token})
+    assert r.status_code == 200, r.get_data(as_text=True)
+    cid = r.get_json()["cid"]
+    nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
+    return c.post("/register/revoke", json={"cid": cid, "nonce": nonce, "cap": cap})
+
+
 CAP_A = "Zm9vYmFyLWNhcGFiaWxpdHktYWFhYWFhYWFhYQ"
 CAP_B = "Zm9vYmFyLWNhcGFiaWxpdHktYmJiYmJiYmJiYg"
 
@@ -935,8 +945,7 @@ def test_a_capability_can_be_revoked_without_shipping_an_app(relay):
     _register(m, TOKEN, CAP_A)
     _register(m, TOKEN, CAP_B)
     assert _wake(m, cap=CAP_B).status_code == 200
-    assert m.app.test_client().post("/register/revoke",
-                                    json={"token": TOKEN, "cap": CAP_B}).status_code == 200
+    assert _revoke(m, TOKEN, CAP_B).status_code == 200
     assert _wake(m, cap=CAP_B).status_code == 401, "a revoked capability must stop working"
     assert _wake(m, cap=CAP_A).status_code == 200, "revoking one must not affect the others"
 
@@ -945,7 +954,7 @@ def test_revoking_the_last_capability_returns_the_device_to_legacy_behaviour(rel
     """Fail toward delivery: a device with nothing registered must never be left unwakeable."""
     m = _stub_challenge(relay(enforce="1"))
     _register(m, TOKEN, CAP_A)
-    m.app.test_client().post("/register/revoke", json={"token": TOKEN, "cap": CAP_A})
+    _revoke(m, TOKEN, CAP_A)
     assert _wake(m, cap=None).status_code == 200
 
 
@@ -978,6 +987,48 @@ def test_a_malformed_capability_is_refused_at_registration(relay):
     nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
     r = c.post("/register/confirm", json={"cid": cid, "nonce": nonce, "cap": "short"})
     assert r.status_code == 400, "a guessable capability must not enter the authorisation path"
+
+
+def test_a_contact_cannot_revoke_and_thereby_disarm_the_device(relay):
+    """
+    KHANDAQ (re-review follow-up 2026-08-22) — found by running the flow over real HTTP.
+
+    Revocation used to accept the capability alone: presenting it proved you held it, and holding it
+    was the whole authority being given up. True about ACCESS, false about the DEVICE. Revoking the
+    LAST capability returns the token to the "none" state, in which no capability is required — so a
+    contact holding the only one could hand back its own access and, in the same call, silently
+    return the recipient to being wakeable by anyone who knows the token.
+
+    A contact has the capability and not the device, so it can no longer do this at all.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    assert _wake(m, cap=None).status_code == 401, "precondition: the device is protected"
+
+    # Everything a malicious contact holds: the token and its own capability.
+    r = m.app.test_client().post("/register/revoke", json={"token": TOKEN, "cap": CAP_A})
+    assert r.status_code == 400, "revocation without device proof must be refused"
+
+    # ...and the protection is still in place.
+    assert _wake(m, cap=None).status_code == 401
+    assert _wake(m, cap=CAP_A).status_code == 200
+
+
+def test_the_device_itself_can_still_revoke(relay):
+    """
+    The other half: proving possession of the FCM registration is enough, as it is for registering.
+
+    Two capabilities on purpose. Revoking the LAST one returns the token to the unregistered state,
+    in which no capability is required — which is the device choosing to go back to pre-capability
+    behaviour and is covered separately below. With two, the revocation is observable as such: the
+    revoked one stops working while the other keeps working.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    _register(m, TOKEN, CAP_A)
+    _register(m, TOKEN, CAP_B)
+    assert _revoke(m, TOKEN, CAP_B).status_code == 200
+    assert _wake(m, cap=CAP_B).status_code == 401, "the revoked capability must stop working"
+    assert _wake(m, cap=CAP_A).status_code == 200, "and only that one"
 
 
 def test_a_contact_holding_the_old_url_keeps_working_during_the_grace_window(relay):

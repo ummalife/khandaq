@@ -1200,8 +1200,17 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         return YES;
     }
 
-    OCTMessageText *messageText = message.messageText;
-    if (messageText.groupSenderPubkey.length == 0 || chat.groupChatIdHex.length == 0) {
+    // KHANDAQ (re-review 2026-08-22, KQ-03): text OR file.
+    //
+    // Only the text row was consulted at first, which left the easier case open: a FILE record can
+    // never carry a signature (the 0x03 packet has no signed form), so a stale-key author's file row
+    // is the cheapest thing in the protocol to put somebody else's name on. Its frozen author lives
+    // on messageFile, not messageText.
+    NSString *authorPubHex = message.messageText.groupSenderPubkey;
+    if (authorPubHex.length == 0) {
+        authorPubHex = message.messageFile.groupSenderPubkey;
+    }
+    if (authorPubHex.length == 0 || chat.groupChatIdHex.length == 0) {
         // No frozen author to reason about (pre-schema-42 rows): unchanged behaviour.
         return YES;
     }
@@ -1215,7 +1224,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     // AUTHOR, not about a verdict for a specific text, and the verdict was already checked above.
     OCTNgcDowngradeDecision decision =
         [self.signedHistory downgradeDecisionForUnsignableRecordInGroupNumber:(uint32_t)chat.groupNumber
-                                                                 authorPubHex:messageText.groupSenderPubkey];
+                                                                 authorPubHex:authorPubHex];
 
     // syncerIsAuthor:NO — see the header. iOS does not store which peer relayed the row, so it takes
     // the conservative branch rather than guessing; that withholds a name in a rare case where

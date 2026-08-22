@@ -164,7 +164,18 @@ public final class KhandaqPushCapability
         return cap;
     }
 
-    /** Stop honouring one contact's capability. Presenting it is the proof of the right to give it up. */
+    /**
+     * Stop honouring one contact's capability.
+     *
+     * KHANDAQ (re-review follow-up 2026-08-22): this needs the same device proof as registering.
+     * Presenting the capability used to be enough — right about ACCESS, wrong about the DEVICE:
+     * revoking the LAST capability returns the token to the state where none is required, so a
+     * contact holding the only one could hand back its own access and silently return this device to
+     * being wakeable by anyone who knows the token. The relay refuses a revoke without a challenge
+     * now; this walks the same challenge/confirm the registration does.
+     *
+     * Blocking on the network. Call from a background thread.
+     */
     static boolean revokeFor(final String friendPubkey, final String ownFcmToken)
     {
         try
@@ -174,16 +185,68 @@ public final class KhandaqPushCapability
             {
                 return true;
             }
-            final int code = postJson(REVOKE_URL,
-                                      "{\"token\":" + org.khandaq.messenger.KhandaqPush.jsonString(ownFcmToken)
-                                      + ",\"cap\":" + org.khandaq.messenger.KhandaqPush.jsonString(cap) + "}");
-            del_g_opts(capKey(friendPubkey));
+            final String[] proof = challenge(ownFcmToken);
+            if (proof == null)
+            {
+                // Without the proof the relay will refuse, and dropping the local copy would leave a
+                // capability the relay still honours and this device can no longer name.
+                Log.i(TAG, "revokeFor: no challenge proof, keeping the capability");
+                return false;
+            }
+            final String body = "{\"cid\":" + org.khandaq.messenger.KhandaqPush.jsonString(proof[0])
+                    + ",\"nonce\":" + org.khandaq.messenger.KhandaqPush.jsonString(proof[1])
+                    + ",\"cap\":" + org.khandaq.messenger.KhandaqPush.jsonString(cap) + "}";
+            final int code = postJson(REVOKE_URL, body);
+            if (code == 200)
+            {
+                del_g_opts(capKey(friendPubkey));
+            }
             return code == 200;
         }
         catch (Exception e)
         {
             Log.i(TAG, "revokeFor:EE:" + e.getMessage());
             return false;
+        }
+    }
+
+    /** Ask for a challenge and wait for the data push carrying its nonce. Returns {cid, nonce}. */
+    private static String[] challenge(final String ownFcmToken)
+    {
+        try
+        {
+            final String[] response = new String[1];
+            final int code = postJson(CHALLENGE_URL,
+                    "{\"token\":" + org.khandaq.messenger.KhandaqPush.jsonString(ownFcmToken) + "}",
+                    response);
+            if (code != 200 || response[0] == null)
+            {
+                return null;
+            }
+            final String cid = jsonValue(response[0], "cid");
+            if (cid.isEmpty())
+            {
+                return null;
+            }
+            set_g_opts(PENDING_CID_KEY, cid);
+            for (int waited = 0; waited < 30_000; waited += 250)
+            {
+                final String nonce = get_g_opts(nonceKey(cid));
+                if (nonce != null && !nonce.isEmpty())
+                {
+                    del_g_opts(nonceKey(cid));
+                    del_g_opts(PENDING_CID_KEY);
+                    return new String[]{cid, nonce};
+                }
+                Thread.sleep(250);
+            }
+            del_g_opts(PENDING_CID_KEY);
+            return null;
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "challenge:EE:" + e.getMessage());
+            return null;
         }
     }
 

@@ -63,6 +63,22 @@ AUTH_ARGS=(
 )
 
 echo "==> Archive Release (generic iOS device)"
+# KHANDAQ (re-review 2026-08-22, KQ-01): provision the push auth secret at BUILD time, the same way
+# the Android build reads KHANDAQ_PUSH_AUTH_SECRET from the environment. It is a build setting, never
+# a committed value — Antidote-Info.plist holds $(KHANDAQ_PUSH_AUTH_SECRET) and the project defaults
+# it to empty, which the client treats as "signing dormant" rather than "sign with an empty key".
+#
+# Without this the two platforms diverge silently: an Android release could ship signing wake
+# requests while every iOS build stayed dormant no matter what the environment said, and the relay's
+# adoption numbers would read as an iOS problem instead of a build-path one.
+PUSH_SECRET_ARGS=()
+if [[ -n "${KHANDAQ_PUSH_AUTH_SECRET:-}" ]]; then
+  PUSH_SECRET_ARGS+=(KHANDAQ_PUSH_AUTH_SECRET="$KHANDAQ_PUSH_AUTH_SECRET")
+  echo "==> push auth secret: provisioned (${#KHANDAQ_PUSH_AUTH_SECRET} chars, value never printed)"
+else
+  echo "==> push auth secret: not set - this build ships with wake signing dormant"
+fi
+
 xcodebuild \
   -workspace "$WORKSPACE" \
   -scheme "$SCHEME" \
@@ -72,6 +88,7 @@ xcodebuild \
   DEVELOPMENT_TEAM="$ASC_TEAM_ID" \
   CODE_SIGN_STYLE=Automatic \
   "${AUTH_ARGS[@]}" \
+  ${PUSH_SECRET_ARGS[@]+"${PUSH_SECRET_ARGS[@]}"} \
   archive
 
 echo "==> Export IPA"

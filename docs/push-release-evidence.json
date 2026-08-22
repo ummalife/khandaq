@@ -4,7 +4,7 @@
     "moment this release was cut. Written by scripts/record-push-release-evidence.py from",
     "the relay's own /health/detail. Not a plan and not a design statement: a measurement."
   ],
-  "commit": "cd633e57c8b96fed6270ff4bd9cdfb91f434fdfc",
+  "commit": "62f2c6f794e0b0b7453e0ba691fab341583c05fe",
   "relay": {
     "auth_mode": "soft",
     "enforce_by": "2026-11-19",
@@ -21,12 +21,12 @@
   },
   "emission": {
     "legacy_mode": "serve",
-    "legacy_pct": 97.3,
+    "legacy_pct": 98.36,
     "retire_target": "2026-11-20 (step to 410); see docs/PUSH-COMPATIBILITY.md",
     "counts": {
       "json_post": 1,
-      "legacy_get": 15,
-      "legacy_post": 21
+      "legacy_get": 21,
+      "legacy_post": 39
     }
   },
   "auth_adoption": {
@@ -34,7 +34,7 @@
     "window_outcomes": {
       "badmac": 0,
       "malformed_ts": 0,
-      "missing": 29,
+      "missing": 53,
       "ok": 0,
       "replay": 0,
       "stale": 15,

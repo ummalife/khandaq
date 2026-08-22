@@ -1,0 +1,114 @@
+# KHANDAQ (re-review 2026-08-22, KQ-10) — repository-specific dangerous patterns.
+#
+# CodeQL covers Java/Kotlin, Python and JavaScript. It does not cover Objective-C or Swift, which is
+# where the iOS client and the objcTox pod live — so those need Semgrep. The rules here are
+# deliberately LOCAL rather than pulled from the registry: a scan whose ruleset can change under it
+# is a scan whose results cannot be compared between runs, and the network is not a dependency a
+# security gate should have.
+#
+# Each rule has a fixture under security/sast-fixtures/ and scripts/check-sast-fixtures.py asserts
+# the rule actually fires on it. A rule nobody has seen fire is a rule that might match nothing.
+rules:
+  - id: khandaq-objc-format-string-from-variable
+    # `generic`, not `objc`: the open-source Semgrep engine has no Objective-C parser at all (the
+    # language list it prints does not contain it), and pretending otherwise produces a config error
+    # rather than a scan. Generic mode is regex over tokens — coarser than an AST, and the honest
+    # option available here. The alternative was a rule that never runs, which is worse than a
+    # coarse one because it reads as coverage.
+    languages: [generic]
+    paths:
+      include: ["*.m", "*.mm"]
+    severity: ERROR
+    message: >-
+      Format string comes from a variable rather than a literal. If any part of it is attacker
+      controlled — and in this app a peer's name, a push URL and a group topic all are — this is a
+      format-string bug with %n-style consequences in C and a crash at minimum.
+    patterns:
+      - pattern-either:
+          - pattern-regex: 'NSLog\(\s*[A-Za-z_][A-Za-z0-9_]*\s*[,)]'
+          - pattern-regex: 'stringWithFormat:\s*[A-Za-z_][A-Za-z0-9_]*\s*[,\]]'
+      # A format read out of the app's own .strings bundle is not attacker-controlled — the key is
+      # ours and the value ships with the binary. The genuine hit this exempted was
+      # groupSystemMessageWithFormatKey:, where `format` is localizedStringForKey: and the untrusted
+      # value is the ARGUMENT, which is the safe position for it.
+      - pattern-not-regex: 'localizedStringForKey'
+
+  - id: khandaq-swift-unsafe-shell
+    languages: [swift]
+    severity: ERROR
+    message: >-
+      Process/NSTask launched through a shell. Anything interpolated into that string is command
+      injection; run the binary directly with an argument array instead.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $P.launchPath = "/bin/sh"
+          - pattern: |
+              $P.executableURL = URL(fileURLWithPath: "/bin/sh")
+
+  - id: khandaq-python-subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: >-
+      subprocess with shell=True. Every deploy and check script in this repository takes paths and
+      hostnames from the environment; with a shell in the middle those become command injection.
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.run(..., shell=True, ...)
+          - pattern: subprocess.call(..., shell=True, ...)
+          - pattern: subprocess.Popen(..., shell=True, ...)
+          - pattern: os.system(...)
+
+  - id: khandaq-python-path-join-from-request
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A filesystem path is built from request data. The relay serves no files, so this should not
+      exist; if it ever does, it is path traversal.
+    patterns:
+      - pattern-either:
+          - pattern: os.path.join(..., request.args.get(...), ...)
+          - pattern: os.path.join(..., request.json[...], ...)
+          - pattern: open(request.args.get(...), ...)
+
+  - id: khandaq-java-runtime-exec-nonliteral
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Runtime.exec / ProcessBuilder with a command that is not a literal. A constant `ps` or
+      `cat /proc/net/tcp` cannot be injected into; a concatenated or variable command can, and that
+      is the whole difference. If the string is genuinely constant, write it as one.
+    # Concatenation specifically, not "any non-literal". An argv ARRAY is the safe form and passing
+    # one must not be flagged — that is the fix this rule is meant to push people towards, and a rule
+    # that still complains after the fix is a rule people stop believing. High confidence by
+    # construction: a command assembled with `+` has, by definition, something variable in it.
+    pattern-either:
+      - pattern: Runtime.getRuntime().exec($A + $B, ...)
+      - pattern: new ProcessBuilder($A + $B, ...)
+      - pattern: Runtime.getRuntime().exec(String.format(...), ...)
+      - pattern: new ProcessBuilder(String.format(...), ...)
+
+  - id: khandaq-java-random-fills-buffer
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A byte buffer is filled from java.util.Random. That is a 48-bit LCG whose entire output stream
+      is recoverable from two values, and a filled byte[] is indistinguishable from key or nonce
+      material to the next reader. Use java.security.SecureRandom.
+    patterns:
+      # Both spellings. Without type resolution Semgrep treats `Random` and `java.util.Random` as
+      # different tokens, so matching only one leaves the other silent — which the fixture caught.
+      - pattern-either:
+          - pattern: |
+              $R = new Random(...);
+              ...
+              $R.nextBytes(...);
+          - pattern: |
+              $R = new java.util.Random(...);
+              ...
+              $R.nextBytes(...);
+          - pattern: new Random(...).nextBytes(...)
+          - pattern: new java.util.Random(...).nextBytes(...)
+    # Deliberately NOT "any new Random()". Jitter and a throwaway display string are legitimate uses
+    # and flagging them trains people to ignore the rule; filling a buffer is the shape that is
+    # almost never innocent.

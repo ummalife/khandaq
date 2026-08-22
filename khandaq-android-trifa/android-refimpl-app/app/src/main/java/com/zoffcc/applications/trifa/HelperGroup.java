@@ -10814,10 +10814,33 @@ public class HelperGroup
                 peer_name = resolve_synced_peer_name(group_identifier, original_sender_peerpubkey, sender_peer_num,
                                                      peer_name);
 
+                // KHANDAQ (re-review 2026-08-22, KQ-03): decide here whether this row may carry the
+                // author's identity at all.
+                //
+                // ACCEPT_KEY_STALE means the author signs, this record does not, and their key is old
+                // enough that we treat them as having lost it rather than as being impersonated. That
+                // is the right call for keeping history — and it is exactly the case in which another
+                // member can relay a record naming an absent author. The row is kept; the identity is
+                // not granted. Attribution needs a signature over this row, or the peer that relayed
+                // it being the author, which the transport already authenticated.
+                final boolean syncer_is_author = syncer_pubkey != null
+                        && syncer_pubkey.equalsIgnoreCase(original_sender_peerpubkey);
+                final int sync_type_for_row =
+                        NgcHistoryDowngradePolicy.rendersAsClaimedAuthor(downgrade_decision, syncer_is_author)
+                        ? TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value
+                        : TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value;
+                if (sync_type_for_row
+                        == TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value)
+                {
+                    HelperGeneric.logI(TAG, "handle_incoming_sync_group_message: keeping relayed row "
+                            + "but WITHOUT author attribution (stale signing key, relayed by another "
+                            + "peer), msgid=" + message_id_tox);
+                }
+
                 group_message_add_from_sync(group_identifier, syncer_pubkey, sender_peer_num, original_sender_peerpubkey,
                                             TRIFA_MSG_TYPE_TEXT.value, message_str, message_str.length(),
                                             (timestamp * 1000), message_id_tox,
-                                            TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value,
+                                            sync_type_for_row,
                                             peer_name);
 
                 if (message_id_tox != null && message_id_tox.length() >= 4)

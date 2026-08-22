@@ -1,0 +1,14 @@
+# KHANDAQ (re-review 2026-08-22, KQ-10) — CodeQL configuration.
+#
+# security/sast-fixtures/ is deliberately vulnerable code. It exists so that
+# scripts/check-sast-fixtures.py can prove each Semgrep rule actually fires, and it is compiled by
+# nothing and shipped in nothing. CodeQL found it immediately and correctly — a high-severity
+# py/path-injection on the traversal fixture — which is the fixture working as designed and also a
+# permanent red check on every pull request that touches it.
+#
+# So it is excluded here rather than suppressed alert by alert. The exclusion is narrow and stated:
+# one directory whose entire purpose is to contain findings.
+name: khandaq
+
+paths-ignore:
+  - security/sast-fixtures/**

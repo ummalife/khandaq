@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "KHANDAQ (re-review 2026-08-22, KQ-01) — the state of the production push relay at the",
+    "moment this release was cut. Written by scripts/record-push-release-evidence.py from",
+    "the relay's own /health/detail. Not a plan and not a design statement: a measurement."
+  ],
+  "commit": "cd633e57c8b96fed6270ff4bd9cdfb91f434fdfc",
+  "relay": {
+    "auth_mode": "soft",
+    "enforce_by": "2026-11-19",
+    "enforce_overdue": false,
+    "fcm_mode": "v1",
+    "break_glass": null
+  },
+  "capabilities": {
+    "mode": "auto",
+    "devices_registered": 0,
+    "capabilities_registered": 0,
+    "grace_days": 14,
+    "grace_still_used": 0
+  },
+  "emission": {
+    "legacy_mode": "serve",
+    "legacy_pct": 97.3,
+    "retire_target": "2026-11-20 (step to 410); see docs/PUSH-COMPATIBILITY.md",
+    "counts": {
+      "json_post": 1,
+      "legacy_get": 15,
+      "legacy_post": 21
+    }
+  },
+  "auth_adoption": {
+    "window_signed_pct": 0.0,
+    "window_outcomes": {
+      "badmac": 0,
+      "malformed_ts": 0,
+      "missing": 29,
+      "ok": 0,
+      "replay": 0,
+      "stale": 15,
+      "store_error": 0
+    }
+  }
+}

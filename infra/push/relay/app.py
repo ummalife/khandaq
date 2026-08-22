@@ -1308,6 +1308,10 @@ def _path_summary() -> dict:
             "legacy_pct": round(100.0 * legacy / total, 2) if total else None,
             "legacy_mode": PUSH_LEGACY_GET,
             "retire_when": "legacy_pct is 0 over a full store-rollout window; then PUSH_LEGACY_GET=410",
+            # KHANDAQ (re-review 2026-08-22, KQ-02): "publish the retirement date in the
+            # compatibility matrix". Published in docs/PUSH-COMPATIBILITY.md and repeated here, so an
+            # operator reading /health/detail does not have to go and find the document.
+            "retire_target": "2026-11-20 (step to 410); see docs/PUSH-COMPATIBILITY.md",
         }
     except Exception:
         return {"error": "unavailable"}

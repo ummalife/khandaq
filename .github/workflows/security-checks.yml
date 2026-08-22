@@ -86,6 +86,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Compose environment entries must be plain strings
         run: python3 scripts/check-compose-env-strings.py
+      # KHANDAQ (re-review 2026-08-22, KQ-01): a release must carry the relay state it shipped
+      # against. Only the presence and shape are checked here — refreshing the numbers needs the
+      # production host, which CI deliberately cannot reach.
+      - name: A release must carry recorded push-relay evidence
+        run: python3 scripts/record-push-release-evidence.py --check
       # Same family, found the same way: an unquoted heredoc runs backticks on the LOCAL machine, so a
       # comment explaining a bug executed `ssh bash -s` on the workstation in the middle of a deploy.
       - name: No unescaped backticks inside unquoted heredocs
@@ -162,6 +167,45 @@ jobs:
             echo "::error::testDebugUnitTest reported no executed tests" >&2
             exit 1
           fi
+
+  dependencies-sbom:
+    # KHANDAQ (re-review 2026-08-22, KQ-06). Pinning is not monitoring: witness.gradle, Podfile.lock,
+    # Gemfile.lock and the hash-locked relay requirements all guarantee that today's build matches
+    # yesterday's, and say nothing about a version that became vulnerable overnight. Android's 338
+    # Maven artifacts, the pods and the gems had no advisory coverage at all.
+    #
+    # Runs on pull requests AND weekly, because the failure mode this closes is a new advisory
+    # against unchanged source — which no PR-only gate can ever see.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: The SBOM must still describe the lockfiles
+        run: python3 scripts/generate-sbom.py --check
+      - name: Waiver shape and expiry, without touching the network
+        run: python3 scripts/check-vulnerable-deps.py --offline
+      - name: Scan every ecosystem against OSV
+        run: python3 scripts/check-vulnerable-deps.py
+
+  sast:
+    # KHANDAQ (re-review 2026-08-22, KQ-10). CodeQL (see codeql.yml) covers Java/Kotlin, Python and
+    # JavaScript and is advisory for its first cycle. This is the other half: repository-specific
+    # dangerous patterns, plus Objective-C and Swift, which CodeQL does not reach here.
+    #
+    # This job IS blocking, and can be, because it is not a general-purpose scanner tuned against an
+    # inherited codebase — it is six rules that are green today, each proven to fire on a fixture. A
+    # new finding therefore means new code, not a new query.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install semgrep
+        run: python3 -m pip install --quiet semgrep
+      - name: Rules must fire on their fixtures and be silent on the tree
+        run: python3 scripts/check-sast-fixtures.py
 
   live-site:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из
@@ -247,6 +291,13 @@ jobs:
       # permission cannot be added without a line saying which feature needs it.
       - name: Android permissions must match the documented matrix
         run: python3 scripts/check-android-permissions.py
+
+      # KHANDAQ (re-review 2026-08-22, KQ-08): a per-contact capability is a bearer secret. Both
+      # halves that touch it are in different languages and different targets, and a service string
+      # changed on one side only fails silently — URLs go out with no capability, which looks exactly
+      # like a device that has not registered.
+      - name: iOS push capabilities must stay in the Keychain
+        run: python3 scripts/check-ios-capability-storage.py
 
       # KHANDAQ (re-audit 2026-08-22): a device build overwrites this tracked binary with its own
       # slice. It has been swept into a commit twice, and in a diff it looks like a deliberate change.

@@ -134,6 +134,13 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         return false
     }
 
+    /// KHANDAQ (re-review 2026-08-22, KQ-03). true, not false: the mock has no HSK directory, and
+    /// the question is "must this row's author be hidden". Answering false here would strip the
+    /// sender name from every message in every preview and test that uses the mock.
+    func isGroupMessageAttributable(_ message: OCTMessageAbstract?, in chat: OCTChat?) -> Bool {
+        return true
+    }
+
     func groupPeerLastSeenDateInterval(forPeerId peerId: UInt32, in chat: OCTChat!) -> TimeInterval {
         return 0
     }

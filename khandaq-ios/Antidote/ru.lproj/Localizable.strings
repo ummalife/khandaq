@@ -785,3 +785,7 @@
 
 /* KHANDAQ (18.08): About screen — owner/developer credit, links to https://1sa.me/ */
 "settings_credit_owner" = "Владелец и разработчик — Isa Dagestani";
+
+/* KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the sender name when relayed
+   history names an author whose signing key is stale. The row is kept; the identity is not. */
+"group_msg_relayed_unattributed" = "Пересланная история — автор не подтверждён";

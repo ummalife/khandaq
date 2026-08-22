@@ -69,10 +69,13 @@ public class Detector
 
     //Members
     //Get commands for shell readin
-    private static final String commandTcp = "cat /proc/net/tcp";
-    private static final String commandTcp6 = "cat /proc/net/tcp6";
-    private static final String commandUdp = "cat /proc/net/udp";
-    private static final String commandUdp6 = "cat /proc/net/udp6";
+    // KHANDAQ (re-review 2026-08-22, KQ-10): argv arrays, not command lines. Runtime.exec(String)
+    // splits on whitespace, so these were already two tokens each — writing them as arrays says so,
+    // and removes the shape a future caller could interpolate into.
+    private static final String[] commandTcp = {"cat", "/proc/net/tcp"};
+    private static final String[] commandTcp6 = {"cat", "/proc/net/tcp6"};
+    private static final String[] commandUdp = {"cat", "/proc/net/udp"};
+    private static final String[] commandUdp6 = {"cat", "/proc/net/udp6"};
 
     static HashMap<Integer, Report> sReportMap = new HashMap<>();
 

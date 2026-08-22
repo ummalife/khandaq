@@ -286,7 +286,19 @@ android {
         // claimed on Android by the debug-signed official APKs). namespace stays org.khandaq.messenger
         // so R/BuildConfig/code are untouched; only the Play/device applicationId changes.
         applicationId "com.khandaq.messenger"
-        minSdkVersion 21
+        // KHANDAQ (re-review 2026-08-22, KQ-07): 26, not 21.
+        //
+        // The package was installable on Android 5, 6 and 7 while the product has claimed "Android
+        // 8+" everywhere a user can read it, and while those versions were never part of the tested
+        // support matrix. That is a policy mismatch with a security consequence: Android 5-7 stopped
+        // receiving platform security fixes years ago, so the app was shipping onto systems whose
+        // kernel, WebView and TLS stack Khandaq cannot patch, through code paths nobody exercises.
+        //
+        // Raising it to API 26 makes the package agree with the claim. Nobody who was promised
+        // support loses it — the promise was already Android 8. Devices below it keep the version
+        // they have; Play simply stops offering updates, which is the honest outcome for a platform
+        // the project does not test on and cannot secure.
+        minSdkVersion 26
         //noinspection OldTargetApi
         targetSdkVersion 36
         versionCode 10410

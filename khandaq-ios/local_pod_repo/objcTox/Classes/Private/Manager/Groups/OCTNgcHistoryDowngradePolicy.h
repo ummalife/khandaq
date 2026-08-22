@@ -60,4 +60,25 @@ extern OCTNgcDowngradeDecision OCTNgcHistoryDowngradeDecide(OCTNgcHskRecord *_Nu
                                                            BOOL verdictMatchesThisRow,
                                                            uint64_t nowMs);
 
+/**
+ * KHANDAQ (re-review 2026-08-22, KQ-03) — may a row that survived the decision above be shown as an
+ * ordinary message FROM the author it names?
+ *
+ * AcceptKeyStale exists so a peer that reinstalled and lost its signing key is not locked out of
+ * relayed history. The cost, which the re-review identified: once an author has been absent longer
+ * than the stale window, any other member can relay an unsigned record naming them, and it was then
+ * displayed under that identity. Notification was already suppressed; the on-screen attribution was
+ * not. A "sender not verified" marker beside a familiar name is easy to overlook.
+ *
+ * Attribution therefore requires a signature over this exact row, or that the peer who relayed it IS
+ * the author — in which case the transport already authenticated the claim. Anything else is kept
+ * (dropping it would lose real history whenever a peer loses its key) but rendered as relayed
+ * content of unknown authorship.
+ *
+ * Must agree with Java's NgcHistoryDowngradePolicy.rendersAsClaimedAuthor byte for byte;
+ * scripts/check-ios-downgrade-policy.py compiles this function and asserts the same truth table.
+ */
+extern BOOL OCTNgcHistoryDowngradeRendersAsClaimedAuthor(OCTNgcDowngradeDecision decision,
+                                                        BOOL syncerIsAuthor);
+
 NS_ASSUME_NONNULL_END

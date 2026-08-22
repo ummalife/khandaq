@@ -43,11 +43,26 @@ try:
     src = open(M, encoding="utf-8").read()
 except OSError as exc:
     die("cannot read %s (%s)" % (M, exc))
-m = re.search(r"OCTNgcDowngradeDecision OCTNgcHistoryDowngradeDecide\([^)]*\)\s*\{(.*)\n\}",
+# Non-greedy: with a greedy `(.*)` this swallowed everything up to the LAST closing brace in the
+# file, so adding a second function to the .m silently pulled its body into decide()'s. It compiled
+# as a confusing error about an undeclared `NO` rather than as "your regex is wrong", which is the
+# worst kind of failure — the message points away from the cause.
+m = re.search(r"OCTNgcDowngradeDecision OCTNgcHistoryDowngradeDecide\([^)]*\)\s*\{(.*?)\n\}",
               src, re.S)
 if not m:
     sys.exit("could not find OCTNgcHistoryDowngradeDecide in the .m file")
 body = m.group(1)
+
+# KHANDAQ (re-review 2026-08-22, KQ-03): the attribution rule is a SECOND function that must match
+# Android, and it decides whether a kept row may carry the author's name. Extracted the same way,
+# for the same reason: two implementations of one security rule in two languages is not evidence
+# that they agree.
+ma = re.search(r"BOOL OCTNgcHistoryDowngradeRendersAsClaimedAuthor\([^)]*\)\s*\{(.*?)\n\}",
+               src, re.S)
+if not ma:
+    die("could not find OCTNgcHistoryDowngradeRendersAsClaimedAuthor in the .m file — the KQ-03 "
+        "attribution rule is missing from the iOS client, so the two platforms disagree")
+attrib_body = ma.group(1).replace("NO", "0").replace("YES", "1")
 
 grace = re.search(r"\+ \(uint64_t\)replaceGraceMs\s*\{\s*return ([^;]+);",
                   open(HSK, encoding="utf-8").read())
@@ -87,9 +102,19 @@ static OCTNgcDowngradeDecision decide(Record *authorHsk, BOOL verdictMatchesThis
 %s
 }
 
+static BOOL rendersAsClaimedAuthor(OCTNgcDowngradeDecision decision, BOOL syncerIsAuthor)
+{
+%s
+}
+
 #define NOW 1700000000000ULL
 static int fails = 0;
 static void check(const char *name, OCTNgcDowngradeDecision got, OCTNgcDowngradeDecision want)
+{
+    if (got != want) { printf("  FAIL %%-46s got %%d want %%d\\n", name, got, want); fails++; }
+    else             { printf("  ok   %%s\\n", name); }
+}
+static void checkb(const char *name, BOOL got, BOOL want)
 {
     if (got != want) { printf("  FAIL %%-46s got %%d want %%d\\n", name, got, want); fails++; }
     else             { printf("  ok   %%s\\n", name); }
@@ -124,6 +149,18 @@ int main(void)
     check("unset clock + corrupt lastSeen must not reject", decide(&corrupt, 0, 1000ULL),
           OCTNgcDowngradeDecisionAcceptKeyStale);
 
+    /* KQ-03: the attribution rule, same truth table as StaleAuthorAttributionTest on Android. */
+    checkb("stale key relayed by a third party must NOT attribute",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionAcceptKeyStale, 0), 0);
+    checkb("stale key relayed by the author itself keeps the name",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionAcceptKeyStale, 1), 1);
+    checkb("a verified row always attributes",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionAcceptVerified, 0), 1);
+    checkb("an author that never signed is unaffected",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionAcceptLegacy, 0), 1);
+    checkb("a rejected row never reaches rendering, but must not claim attribution either",
+           rendersAsClaimedAuthor(OCTNgcDowngradeDecisionReject, 0), 1);
+
     printf("KEY_STALE_MS = %%llu ms (%%llu h)\\n",
            (unsigned long long)KEY_STALE_MS, (unsigned long long)(KEY_STALE_MS / 3600000ULL));
     if (KEY_STALE_MS != 24ULL * 60ULL * 60ULL * 1000ULL) {
@@ -132,7 +169,7 @@ int main(void)
     printf(fails ? "\\n%%d FAILED\\n" : "\\nall checks passed\\n", fails);
     return fails ? 1 : 0;
 }
-""" % (GRACE_EXPR, body)
+""" % (GRACE_EXPR, body, attrib_body)
 
 work = tempfile.mkdtemp(prefix="khandaq-ios-policy-")
 c = os.path.join(work, "check.c")

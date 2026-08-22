@@ -59,16 +59,27 @@ import java.io.InputStream;
 public class ExecCom extends Thread
 {
 
-    //Execute user commands on shell
-    static void user(String string)
+    /**
+     * KHANDAQ (re-review 2026-08-22, KQ-10): takes argv, not a command line.
+     *
+     * It used to take a String and hand it to Runtime.exec(String), which splits on whitespace — so
+     * a value with a space in it silently became two arguments, and anything concatenated into it
+     * became argument injection. Every caller in this tree passes a compile-time constant, so
+     * nothing was exploitable; the point is that the signature no longer INVITES a caller to build
+     * one from a variable, which is how these become exploitable later.
+     *
+     * (Runtime.exec(String) never used a shell either, which is why the removed getIfs() with its
+     * `netcfg | grep UP ->` could not have worked in the first place.)
+     */
+    static void user(String[] argv)
     {
         if (Const.IS_DEBUG)
         {
-            Log.d(Const.LOG_TAG, "Executing as user: " + string);
+            Log.d(Const.LOG_TAG, "Executing as user: " + java.util.Arrays.toString(argv));
         }
         try
         {
-            Process user = Runtime.getRuntime().exec(string);
+            Process user = Runtime.getRuntime().exec(argv);
             try
             {
                 user.waitFor();
@@ -85,18 +96,18 @@ public class ExecCom extends Thread
     }
 
     //Execute user commands and get the result.
-    public static String userForResult(String string)
+    public static String userForResult(String[] argv)
     {
         if (Const.IS_DEBUG)
         {
-            Log.d(Const.LOG_TAG, "Executing for result as user: " + string);
+            Log.d(Const.LOG_TAG, "Executing for result as user: " + java.util.Arrays.toString(argv));
         }
         String res = "";
         DataOutputStream outputStream = null;
         InputStream response = null;
         try
         {
-            Process user = Runtime.getRuntime().exec(string);
+            Process user = Runtime.getRuntime().exec(argv);
 
             outputStream = new DataOutputStream(user.getOutputStream());
             response = user.getInputStream();
@@ -117,7 +128,7 @@ public class ExecCom extends Thread
         {
             if (Const.IS_DEBUG)
             {
-                Log.i(Const.LOG_TAG, "IO operation unsuccessful. Pipe Broken?" + string);
+                Log.i(Const.LOG_TAG, "IO operation unsuccessful. Pipe Broken?" + java.util.Arrays.toString(argv));
             }
         }
         finally

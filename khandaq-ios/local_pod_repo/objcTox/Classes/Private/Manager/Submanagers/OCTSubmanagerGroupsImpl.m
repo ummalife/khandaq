@@ -1189,6 +1189,40 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                      text:messageText.text];
 }
 
+- (BOOL)isGroupMessageAttributable:(OCTMessageAbstract *)message inChat:(OCTChat *)chat
+{
+    // A live row and a system message are outside the question, exactly as for verification.
+    if (message == nil || chat == nil || ! message.groupHistorySync || message.groupSystemMessage) {
+        return YES;
+    }
+
+    if ([self isGroupMessageAuthorVerified:message inChat:chat]) {
+        return YES;
+    }
+
+    OCTMessageText *messageText = message.messageText;
+    if (messageText.groupSenderPubkey.length == 0 || chat.groupChatIdHex.length == 0) {
+        // No frozen author to reason about (pre-schema-42 rows): unchanged behaviour.
+        return YES;
+    }
+
+    if (self.signedHistory == nil || chat.groupNumber < 0) {
+        return YES;
+    }
+
+    // Reuse the existing "is this author known to sign?" query rather than re-implementing the
+    // directory lookup here. It is the unsignable-record form on purpose: this asks about the
+    // AUTHOR, not about a verdict for a specific text, and the verdict was already checked above.
+    OCTNgcDowngradeDecision decision =
+        [self.signedHistory downgradeDecisionForUnsignableRecordInGroupNumber:(uint32_t)chat.groupNumber
+                                                                 authorPubHex:messageText.groupSenderPubkey];
+
+    // syncerIsAuthor:NO — see the header. iOS does not store which peer relayed the row, so it takes
+    // the conservative branch rather than guessing; that withholds a name in a rare case where
+    // Android would show it, which is the safe direction to be wrong in.
+    return OCTNgcHistoryDowngradeRendersAsClaimedAuthor(decision, NO);
+}
+
 - (BOOL)isGroupPeerOnlineWithId:(uint32_t)peerId inChat:(OCTChat *)chat
 {
     NSParameterAssert(chat);
@@ -5562,6 +5596,12 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return format;
     }
 
+    // REVIEWED (re-review 2026-08-22, KQ-10): `format` is localizedStringForKey: eight lines up —
+    // a value that ships inside the binary under a key we choose. The untrusted value is `argument`,
+    // which sits in the ARGUMENT position where it belongs. Semgrep runs in generic mode here (the
+    // open-source engine has no Objective-C parser) and cannot see that far, so the suppression is
+    // pinned to this line with its reason beside it.
+    // nosemgrep: khandaq-objc-format-string-from-variable
     return [NSString stringWithFormat:format, argument];
 }
 

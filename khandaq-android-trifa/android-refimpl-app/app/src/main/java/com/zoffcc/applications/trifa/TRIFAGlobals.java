@@ -342,7 +342,19 @@ public class TRIFAGlobals
 
     public static enum TRIFA_SYNC_TYPE
     {
-        TRIFA_SYNC_TYPE_NONE(0), TRIFA_SYNC_TYPE_TOXPROXY(1), TRIFA_SYNC_TYPE_NGC_PEERS(2);
+        TRIFA_SYNC_TYPE_NONE(0), TRIFA_SYNC_TYPE_TOXPROXY(1), TRIFA_SYNC_TYPE_NGC_PEERS(2),
+        /**
+         * KHANDAQ (re-review 2026-08-22, KQ-03): relayed history whose claimed author cannot be
+         * attributed — the author is known to sign, this row is not signed, their key is stale, and
+         * the peer that relayed it is somebody else. Kept, because discarding it would lose real
+         * history when a peer loses its key; rendered as relayed content of unknown authorship
+         * rather than as a message from the person it names.
+         *
+         * A new enum VALUE rather than a new column on purpose: nothing in the tree branches on this
+         * field (it is written and logged, never compared), so the existing int carries it with no
+         * schema migration on a database full of users' messages.
+         */
+        TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED(3);
 
         public int value;
 

@@ -1091,10 +1091,18 @@ extension ChatGroupController: UITableViewDataSource {
             model.locationLongitude = location.longitude
         }
         else if let header = peerHeader(for: message) {
-            model.message = "\(header)\n\(MessageReplyHelper.normalizeForwardedHeader(body))"
+            // KHANDAQ (re-review 2026-08-22, KQ-03): a relayed row naming an author whose signing key
+            // has gone stale is kept but not attributed. Any other member could have produced it, and
+            // a "sender not verified" marker beside a familiar name is easy to overlook — so the name
+            // is replaced rather than annotated. The bubble keeps its unverified marker as well.
+            let attributable = submanagerGroups.isGroupMessageAttributable(message, in: chat)
+            let shownHeader = attributable ? header : String(localized: "group_msg_relayed_unattributed")
+            model.message = "\(shownHeader)\n\(MessageReplyHelper.normalizeForwardedHeader(body))"
             // KHANDAQ (Figma): per-peer colored sender header, keyed by the frozen display name.
-            model.senderHeaderLength = header.count
-            model.senderColor = GroupPeerColors.color(forName: peerName(for: message) ?? header)
+            model.senderHeaderLength = shownHeader.count
+            model.senderColor = attributable
+                ? GroupPeerColors.color(forName: peerName(for: message) ?? header)
+                : nil
         }
         else {
             model.message = MessageReplyHelper.normalizeForwardedHeader(body)

@@ -1035,4 +1035,8 @@
     <string name="settings_hide_living_emoji">隐藏含生物的表情符号</string>
     <string name="settings_hide_living_emoji_hint">从表情面板中隐藏人脸、人物和动物。十字、星形、星座、恶魔和 LGBT 图案始终隐藏。</string>
     <string name="files_export_failed">无法保存文件</string>
+    <!-- KHANDAQ (re-review 2026-08-22, KQ-03): shown INSTEAD of the claimed author name
+         when relayed history names an author whose signing key is stale and the relaying
+         peer is somebody else. The row is kept; the identity is not asserted. -->
+    <string name="group_msg_relayed_unattributed">转发的历史记录 — 作者未验证</string>
 </resources>

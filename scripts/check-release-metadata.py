@@ -102,7 +102,25 @@ def main():
 
     android, ios = manifest["android"], manifest["ios"]
     tag = manifest["desktop"]["releaseTag"]
-    min_android = manifest["site"]["minAndroidReleaseClaimed"]
+    # KHANDAQ (re-review 2026-08-22, KQ-07): derived, not declared. While the package installed on
+    # Android 5 and the site said 8, the claim had to be written down separately and reconciled by
+    # hand. minSdkVersion is 26 now, so the site is checked against what the build files actually
+    # produce — if someone lowers minSdkVersion, the site claim becomes wrong and this fails.
+    # KHANDAQ (re-review 2026-08-22, KQ-07): a hard floor, not just consistency.
+    #
+    # Tying the site claim to minSdkVersion means the two can never disagree — but they could agree
+    # at a LOWER number if somebody lowered both. Android 5, 6 and 7 receive no platform security
+    # fixes, so shipping onto them is a decision that must be argued in a diff to this line, not made
+    # by editing a build file.
+    SUPPORTED_ANDROID_API_FLOOR = 26
+    if int(android["minSdk"]) < SUPPORTED_ANDROID_API_FLOOR:
+        die("minSdkVersion is %s, below the supported security floor of API %d (Android 8). Android "
+            "5-7 no longer receive platform security fixes, so the app would be installing onto "
+            "systems whose kernel, WebView and TLS stack it cannot patch. Lowering this is a product "
+            "decision that belongs in a reviewed change to scripts/check-release-metadata.py."
+            % (android["minSdk"], SUPPORTED_ANDROID_API_FLOOR))
+
+    min_android = manifest["android"]["minAndroidRelease"]
 
     site = read(SITE)
     # KHANDAQ (release 0.2.40): the "Recent beta improvements" list is a HISTORY of past builds --

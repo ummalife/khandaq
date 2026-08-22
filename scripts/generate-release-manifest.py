@@ -104,12 +104,14 @@ HAND_MAINTAINED = {
         # a failed deploy, and verify-site-deploy.py treats it as one.
         "gitSha": None,
         "artifacts": None,
-        "minAndroidReleaseClaimed": "8",
-        "_comment": "The site says 'Android 8+' while minSdkVersion is 21 (Android 5). Deliberate for "
-                    "now: the app has never been QA'd below 8, and the database-key path was crashing "
-                    "outright on 5.x until the re-audit fix. Raising minSdkVersion to 23+ would let "
-                    "this field go away — a product decision about which users to drop, so it is "
-                    "recorded here rather than silently taken.",
+        # KHANDAQ (re-review 2026-08-22, KQ-07): gone as a hand-maintained value. It existed because
+        # the package installed on Android 5 while every page said "Android 8+", and recording the
+        # gap was better than hiding it. minSdkVersion is 26 now, so the derived
+        # android.minAndroidRelease IS the claim, and the site is checked against that — one source
+        # of truth, which is what the review asks for.
+        "_comment": "Android's minimum is no longer stated twice. minSdkVersion 26 = Android 8, which "
+                    "is what the site has always claimed, so the published claim is checked against "
+                    "the value derived from the build files rather than against a copy kept here.",
     },
 }
 

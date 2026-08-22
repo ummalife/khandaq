@@ -12,7 +12,38 @@ static NSString *const kKhandaqRelayHost = @"push.khandaq.org";
 static NSString *const kLegacyRelayHost = @"tox.zoff.xyz";
 static NSString *const kWakePath = @"/toxfcm/fcm.php";
 
+/// Where the app target leaves a registered capability. Must match KhandaqPushCapability.swift.
+static NSString *const kCapabilityDefaultsPrefix = @"khandaq_pushcap_";
+/// The FCM token those capabilities were registered against.
+static NSString *const kCapabilityTokenKey = @"khandaq_pushcap_token";
+
 @implementation OCTPushUrlValidator
+
++ (NSString *)ownWakeURLForToken:(NSString *)fcmToken friendPublicKey:(nullable NSString *)friendPublicKey
+{
+    NSString *base = [NSString stringWithFormat:@"https://%@%@?id=%@&type=1",
+                                                kKhandaqRelayHost, kWakePath, fcmToken ?: @""];
+    if (fcmToken.length == 0 || friendPublicKey.length == 0) {
+        return base;
+    }
+
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *registeredFor = [defaults stringForKey:kCapabilityTokenKey];
+    if (registeredFor == nil || ![registeredFor isEqualToString:fcmToken]) {
+        // The FCM token has rotated. Every capability was registered against the old one and can
+        // never be used again, so publishing one would be worse than publishing none: the relay
+        // would be handed a capability it does not recognise. The app re-registers against the new
+        // token and the next publish carries the new capability.
+        return base;
+    }
+
+    NSString *key = [kCapabilityDefaultsPrefix stringByAppendingString:friendPublicKey.uppercaseString];
+    NSString *cap = [defaults stringForKey:key];
+    if (cap.length == 0) {
+        return base;
+    }
+    return [NSString stringWithFormat:@"%@&cap=%@", base, cap];
+}
 
 + (BOOL)isAllowedPushURL:(nullable NSString *)pushUrl
 {

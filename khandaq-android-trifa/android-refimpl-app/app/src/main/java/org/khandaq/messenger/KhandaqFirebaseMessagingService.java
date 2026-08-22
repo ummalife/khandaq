@@ -19,6 +19,21 @@ public class KhandaqFirebaseMessagingService extends FirebaseMessagingService {
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
+        // KHANDAQ (re-audit 2026-08-22, K-01): a registration challenge, not a wake.
+        //
+        // This is the proof that makes per-contact capabilities safe to register: the relay pushes a
+        // nonce to the FCM token and only the device that owns that token receives it. It is
+        // data-only and must stay invisible — no broadcast, no service wake-up, nothing on screen.
+        // A device that lit up "New message" because it registered a capability would have turned a
+        // security fix into a support ticket.
+        final java.util.Map<String, String> data = message.getData();
+        if (data != null && data.containsKey("khandaq_reg_nonce")) {
+            Log.i(TAG, "push capability challenge received");
+            com.zoffcc.applications.trifa.KhandaqPushCapability.onRegistrationNonce(
+                    data.get("khandaq_reg_cid"), data.get("khandaq_reg_nonce"));
+            return;
+        }
+
         Log.i(TAG, "wake push received");
         android.content.Intent wake = new android.content.Intent("com.zoffcc.applications.trifa.TOXSERVICE_ALARM");
         wake.setPackage(getPackageName());

@@ -2424,32 +2424,55 @@ public class HelperFriend
                     build();
         }
 
-        RequestBody formBody = new FormBody.Builder().
-                add("ping", "1").
-                build();
-
-        String pushurl_to_call = pushurl_for_friend;
+        String sender_pubkey = "";
         try
         {
             if ((global_my_toxid != null) && (global_my_toxid.length() >= (TOX_PUBLIC_KEY_SIZE * 2)))
             {
-                final String sender_pubkey = global_my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
-                pushurl_to_call = org.khandaq.messenger.KhandaqPush.withWakeParams(pushurl_for_friend, sender_pubkey);
+                sender_pubkey = global_my_toxid.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
             }
         }
         catch (Exception ignored)
         {
         }
 
-        Request request = new Request.
-                Builder().
+        // KHANDAQ (re-audit 2026-08-22, K-03): for OUR relay this is now a JSON POST with the token,
+        // the sender and the recipient's capability in the BODY and the authentication in headers.
+        // The registration token is a targeting secret and it used to sit in the request URI, where
+        // it reaches every log along the path — proxies, crash reporters, client diagnostics — not
+        // only the one nginx redacts. A body reaches none of them by default.
+        //
+        // For any other host the request is byte-for-byte what it was. A push URL we do not own is
+        // not ours to reinterpret, and the legacy tox.zoff.xyz relay speaks only the old shape.
+        final org.khandaq.messenger.KhandaqPush.WakeRequest wake =
+                org.khandaq.messenger.KhandaqPush.buildWakeRequest(pushurl_for_friend, sender_pubkey);
+
+        final Request.Builder builder = new Request.Builder().
                 cacheControl(new CacheControl.Builder().noCache().build()).
-                url(pushurl_to_call).
+                url(wake.url).
                 header("User-Agent", GENERIC_TOR_USERAGENT).
-                header("TTL", "" + GENERIC_UNIFIED_WEBPUSH_TTL_SECONDS).
-                header("Content-Encoding", GENERIC_UNIFIED_WEBPUSH_CONTENT_ENCODING).
-                post(formBody).
-                build();
+                header("TTL", "" + GENERIC_UNIFIED_WEBPUSH_TTL_SECONDS);
+
+        if (wake.isJson())
+        {
+            // Deliberately NO Content-Encoding here. The legacy request carries the WebPush
+            // aes128gcm value, which is a lie about a plaintext form body and would be a worse lie
+            // about a JSON one — an intermediary that believes it would try to decode the body.
+            builder.post(RequestBody.create(wake.jsonBody,
+                                            okhttp3.MediaType.parse("application/json; charset=utf-8")));
+            if (wake.auth != null)
+            {
+                builder.header("Authorization", wake.auth);
+                builder.header("X-Khandaq-Ts", wake.ts);
+            }
+        }
+        else
+        {
+            builder.header("Content-Encoding", GENERIC_UNIFIED_WEBPUSH_CONTENT_ENCODING);
+            builder.post(new FormBody.Builder().add("ping", "1").build());
+        }
+
+        Request request = builder.build();
 
         try (Response response = client.newCall(request).execute())
         {
@@ -2529,7 +2552,45 @@ public class HelperFriend
 
         if (TRIFAGlobals.global_notification_token != null)
         {
-            final String notification_push_url = push_token_to_push_url(TRIFAGlobals.global_notification_token);
+            String notification_push_url = push_token_to_push_url(TRIFAGlobals.global_notification_token);
+            // KHANDAQ (re-audit 2026-08-22, K-01): publish the capability this device issued to THIS
+            // contact, so the relay will wake us for them and for nobody who merely unpacked the APK.
+            //
+            // Reading it is non-blocking; minting one is not, because registering it means a network
+            // round trip and waiting for the relay's challenge push. So the URL goes out immediately
+            // in whatever form is ready — without a capability on the first publish, which is exactly
+            // the behaviour that existed before this feature — and the capability is registered on a
+            // background thread that re-publishes once it succeeds. A contact therefore never waits
+            // on the relay to receive a working push URL.
+            final String own_token = TRIFAGlobals.global_notification_token;
+            final String cap = KhandaqPushCapability.capabilityFor(friend_pubkey, own_token);
+            if ((cap != null) && (notification_push_url != null))
+            {
+                notification_push_url = notification_push_url + "&cap=" + cap;
+            }
+            else if (notification_push_url != null)
+            {
+                new Thread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        try
+                        {
+                            if (KhandaqPushCapability.issueFor(friend_pubkey, own_token) != null)
+                            {
+                                // Now that one exists, publish the real URL. capabilityFor() returns
+                                // it this time, so this recurses exactly once.
+                                send_pushurl_to_friend(friend_pubkey);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Log.i(TAG, "send_pushurl_to_friend:cap:EE:" + e.getMessage());
+                        }
+                    }
+                }).start();
+            }
             if (notification_push_url != null)
             {
                 String temp_string = "A" + notification_push_url; //  "A" is a placeholder to put the pkgID later

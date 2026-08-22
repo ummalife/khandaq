@@ -56,6 +56,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
             toxManager.friends.refreshConnectionStatuses()
             toxManager.chats.sendOwnPush()
+            // KHANDAQ (re-audit 2026-08-22, K-01): make sure every connected contact has a
+            // capability of its own before the URLs go out, then broadcast.
+            //
+            // Registration is a network round trip and a wait for the relay's challenge push, so it
+            // cannot block coming to the foreground. The broadcast below therefore goes out with
+            // whatever is ready — nothing at all on the very first run, which is exactly the
+            // behaviour that existed before capabilities — and re-broadcasts once registration
+            // lands. A contact never waits on the relay to hold a working push URL.
+            ensurePushCapabilities(for: session, toxManager: toxManager)
             toxManager.chats.broadcastOwnPushURLToConnectedFriends()
             QaCommandHandler.consumePendingCommands(coordinator: session)
         }
@@ -303,6 +312,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult)
                      -> Void) {
+    // KHANDAQ (re-audit 2026-08-22, K-01): a push-capability registration challenge, not a wake.
+    //
+    // This is the proof that makes per-contact capabilities registrable at all: the relay pushes a
+    // nonce to the FCM token, and only the device that owns that registration receives it. It is
+    // data-only and must stay invisible — returning immediately keeps it from waking the Tox
+    // service or spending the 25-second background budget below on a message that does not exist.
+    if KhandaqPush.handleRegistrationChallenge(userInfo: userInfo) {
+      os_log("AppDelegate:push capability challenge received")
+      completionHandler(.noData)
+      return
+    }
+
     if let messageID = userInfo[gcmMessageIDKey] {
       log("Message ID: \(messageID)")
     }
@@ -418,6 +439,48 @@ extension AppDelegate: MessagingDelegate {
       userInfo: dataDict
     )
   }
+}
+
+extension AppDelegate {
+    /// Issue and register one capability per connected contact, then re-publish.
+    ///
+    /// Deliberately limited to CONNECTED contacts: a capability is only useful once the contact can
+    /// receive the URL carrying it, and registering for a contact who has been offline for months
+    /// would put a row in the relay for a relationship nothing is using. Offline contacts pick one
+    /// up the next time both sides are up.
+    func ensurePushCapabilities(for session: ActiveSessionCoordinator, toxManager: OCTManager) {
+        guard let ownToken = Messaging.messaging().fcmToken, !ownToken.isEmpty else {
+            return
+        }
+        // Indexed, not filter/map: Results is this app's own thin wrapper over RLMResults and is
+        // not a Swift Sequence, so the functional forms do not exist on it. The predicate does the
+        // filtering in Realm, which is also where it belongs.
+        guard let objects = session.toxManager?.objects else { return }
+        let results = objects.friends(predicate: NSPredicate(format: "isConnected == YES"))
+        var connected: [String] = []
+        for i in 0..<results.count {
+            connected.append(results[i].publicKey)
+        }
+        guard !connected.isEmpty else { return }
+
+        let group = DispatchGroup()
+        var issuedAny = false
+        for publicKey in connected {
+            if KhandaqPush.capability(forFriend: publicKey, ownToken: ownToken) != nil {
+                continue
+            }
+            group.enter()
+            KhandaqPush.issueCapability(forFriend: publicKey, ownToken: ownToken) { cap in
+                if cap != nil { issuedAny = true }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            guard issuedAny else { return }
+            // Now that the URLs would carry a capability, send them again.
+            toxManager.chats.broadcastOwnPushURLToConnectedFriends()
+        }
+    }
 }
 
 // Convenience AppWide Simple Alert

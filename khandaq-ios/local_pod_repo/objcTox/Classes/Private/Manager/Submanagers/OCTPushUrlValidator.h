@@ -34,6 +34,22 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (BOOL)isAllowedPushURL:(nullable NSString *)pushUrl;
 
+/**
+ * KHANDAQ (re-audit 2026-08-22, K-01) — our own wake URL to hand to ONE contact.
+ *
+ * The shared push HMAC is baked into every published binary, so anyone who unpacks one holds a
+ * credential that wakes any device whose token they also have. The fix is a secret per relationship:
+ * this device mints 32 random bytes for each contact, registers their SHA-256 with the relay, and
+ * publishes them inside the wake URL that contact already receives over Tox.
+ *
+ * The minting and registration happen in the app target (`KhandaqPushCapability.swift`) — the pod
+ * cannot reach app-target Swift, and registration needs the FCM challenge push, which only the app
+ * receives. The result is left in NSUserDefaults, and this reads it. When there is none the URL is
+ * returned unchanged, which is the pre-capability behaviour and is always safe: the relay never
+ * requires a capability it was not given.
+ */
++ (NSString *)ownWakeURLForToken:(NSString *)fcmToken friendPublicKey:(nullable NSString *)friendPublicKey;
+
 @end
 
 NS_ASSUME_NONNULL_END

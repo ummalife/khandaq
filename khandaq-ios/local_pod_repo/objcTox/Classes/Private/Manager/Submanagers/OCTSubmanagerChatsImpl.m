@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import "OCTSubmanagerChatsImpl.h"
+#import "OCTPushUrlValidator.h"
 #import "OCTSubmanagerFriends.h"
 #import "OCTSubmanagerFiles.h"
 #import "OCTTox.h"
@@ -30,6 +31,7 @@ static void triggerPush(NSString *used_pushToken,
                         OCTSubmanagerChatsImpl *strongSelf,
                         OCTChat *chat);
 static NSString *khandaqAppendRelayAuth(NSString *baseURL);
+static NSMutableURLRequest *khandaqBuildWakeRequest(NSString *pushToken);
 int bin_to_hex(const char *bin_id, size_t bin_id_size, char *output);
 
 #pragma mark - KHANDAQ (audit A47) push.khandaq.org certificate pinning
@@ -223,7 +225,11 @@ static NSURLSession *khandaqPinnedPushSession(void)
     }
     NSString *token = [FIRMessaging messaging].FCMToken;
     if (token.length > 0) {
-        NSString *my_pushToken = [NSString stringWithFormat:@"https://push.khandaq.org/toxfcm/fcm.php?id=%@&type=1", token];
+        // No friend public key: this wakes our OWN device, so there is no relationship to scope a
+        // capability to. The relay does not require one from a token that has none registered, and
+        // a device that HAS registered is inside its own grace window here — the self-wake path is
+        // the one case where the sender and the recipient are the same installation.
+        NSString *my_pushToken = [OCTPushUrlValidator ownWakeURLForToken:token friendPublicKey:nil];
         triggerPush(my_pushToken, nil, nil, nil);
     } else {
         NSLog(@"PUSH:sendOwnPush:no token");
@@ -250,12 +256,16 @@ static NSURLSession *khandaqPinnedPushSession(void)
     OCTTox *tox = [self.dataSource managerGetTox];
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     RLMResults *friends = [realmManager objectsWithClass:[OCTFriend class] predicate:nil];
-    NSString *data = [NSString stringWithFormat:@"Ahttps://push.khandaq.org/toxfcm/fcm.php?id=%@&type=1", token];
-
     for (OCTFriend *friend in friends) {
         if (!friend.isConnected) {
             continue;
         }
+        // KHANDAQ (re-audit 2026-08-22, K-01): built INSIDE the loop, because the capability is per
+        // contact. One URL for everybody would be one bearer token shared by every contact — leak it
+        // and there is nothing to attribute and nothing to revoke short of rotating the FCM token.
+        NSString *data = [@"A" stringByAppendingString:
+                          [OCTPushUrlValidator ownWakeURLForToken:token
+                                                  friendPublicKey:friend.publicKey]];
         NSError *error = nil;
         [tox sendLosslessPacketWithFriendNumber:friend.friendNumber
                                           pktid:181
@@ -324,6 +334,117 @@ static NSURLSession *khandaqPinnedPushSession(void)
 //   ts   = unix seconds (integer string)
 //   msg  = id + "\n" + from + "\n" + ts   (raw, URL-decoded values, UTF-8)
 //   auth = lowercase hex HMAC-SHA256(secret, msg)
+/// The relay's HMAC pre-image, in one place.
+///
+/// KHANDAQ (re-audit 2026-08-22, K-03): factored out because the JSON wake path needs the same
+/// signature over the same bytes. Moving the request SHAPE must not move the signature — a client
+/// that switches endpoints and starts signing something else looks to the relay exactly like a
+/// client carrying the wrong secret, and the adoption counters would report a fleet that never
+/// finishes rolling out.
+static NSString *khandaqRelayAuthHex(NSString *idValue, NSString *fromValue, NSString *ts)
+{
+    NSString *secret = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"KhandaqPushRelayAuthSecret"];
+    if (secret == nil || secret.length == 0) {
+        return nil; // dormant until a secret is provisioned
+    }
+    NSString *message = [NSString stringWithFormat:@"%@\n%@\n%@", idValue ?: @"", fromValue ?: @"", ts];
+    NSData *keyData = [secret dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *msgData = [message dataUsingEncoding:NSUTF8StringEncoding];
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CCHmac(kCCHmacAlgSHA256, keyData.bytes, keyData.length, msgData.bytes, msgData.length, digest);
+    NSMutableString *authHex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) {
+        [authHex appendFormat:@"%02x", digest[i]];
+    }
+    return authHex;
+}
+
+/// Build the wake request for one recipient's push URL.
+///
+/// KHANDAQ (re-audit 2026-08-22, K-03). The FCM registration token is a targeting secret — hold it
+/// and you can push to that device — and it travelled in the request URI beside the HMAC and the
+/// timestamp. nginx redacts that query string, which is worth having and is not the whole path: a
+/// URL also reaches crash reporters, intermediary proxies, client diagnostics and anything that logs
+/// before our redaction applies. A body reaches none of them by default.
+///
+/// So a call to OUR relay becomes POST /wake with the token, the sender and the recipient's
+/// capability in a JSON body and the authentication in headers. Any other host keeps the old shape
+/// byte for byte: a push URL we do not own is not ours to reinterpret, and the legacy tox.zoff.xyz
+/// relay speaks only the old form.
+///
+/// Returns nil when the URL cannot be parsed — a push token is a string a CONTACT sent us, so it is
+/// not necessarily a URL at all, and a wake that cannot be built must be skipped rather than crash
+/// the process (audit 2026-08-20).
+static NSMutableURLRequest *khandaqBuildWakeRequest(NSString *pushToken)
+{
+    if (pushToken == nil) {
+        return nil;
+    }
+
+    BOOL isOurs = [pushToken hasPrefix:@"https://push.khandaq.org/toxfcm/fcm.php?"];
+    if (!isOurs) {
+        NSString *signed_pushToken = khandaqAppendRelayAuth(pushToken);
+        NSURL *pushURL = [NSURL URLWithString:signed_pushToken];
+        if (pushURL == nil) {
+            return nil;
+        }
+        NSMutableURLRequest *req = [[NSMutableURLRequest alloc] initWithURL:pushURL];
+        [req setHTTPMethod:@"POST"];
+        [req setHTTPBody:[@"&text=1" dataUsingEncoding:NSUTF8StringEncoding]];
+        return req;
+    }
+
+    NSURLComponents *components = [NSURLComponents componentsWithString:pushToken];
+    if (components == nil) {
+        return nil;
+    }
+    NSString *idValue = @"";
+    NSString *fromValue = @"";
+    NSString *capValue = @"";
+    for (NSURLQueryItem *item in components.queryItems) {
+        if ([item.name isEqualToString:@"id"]) {
+            idValue = item.value ?: @"";
+        } else if ([item.name isEqualToString:@"from"]) {
+            fromValue = item.value ?: @"";
+        } else if ([item.name isEqualToString:@"cap"]) {
+            capValue = item.value ?: @"";
+        }
+    }
+    if (idValue.length < 10) {
+        return nil;
+    }
+
+    NSURL *wakeURL = [NSURL URLWithString:@"https://push.khandaq.org/wake"];
+    NSMutableURLRequest *req = [[NSMutableURLRequest alloc] initWithURL:wakeURL];
+    [req setHTTPMethod:@"POST"];
+    [req setValue:@"application/json; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+
+    NSMutableDictionary *body = [NSMutableDictionary dictionary];
+    body[@"token"] = idValue;
+    body[@"sender"] = fromValue;
+    if (capValue.length > 0) {
+        // The capability the RECIPIENT minted for us and published in its wake URL. Carried across
+        // verbatim; we never mint one for somebody else's device.
+        body[@"cap"] = capValue;
+    }
+    NSError *jsonError = nil;
+    NSData *bodyData = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];
+    if (bodyData == nil) {
+        NSLog(@"PUSH:could not serialise wake body -> skipping wake");
+        return nil;
+    }
+    [req setHTTPBody:bodyData];
+
+    long long tsInt = (long long)[[NSDate date] timeIntervalSince1970];
+    NSString *ts = [NSString stringWithFormat:@"%lld", tsInt];
+    NSString *auth = khandaqRelayAuthHex(idValue, fromValue, ts);
+    if (auth != nil) {
+        [req setValue:[NSString stringWithFormat:@"Bearer %@", auth] forHTTPHeaderField:@"Authorization"];
+        [req setValue:ts forHTTPHeaderField:@"X-Khandaq-Ts"];
+    }
+    return req;
+}
+
 static NSString *khandaqAppendRelayAuth(NSString *baseURL)
 {
     if (baseURL == nil) {
@@ -415,8 +536,10 @@ static void triggerPush(NSString *used_pushToken,
                             break;
                         }
                     }
-                    // Sign per-request with a fresh timestamp (resends happen up to ~3 min apart).
-                    NSString *signed_pushToken = khandaqAppendRelayAuth(strong_pushToken);
+                    // Signed per-request with a fresh timestamp (resends happen up to ~3 min apart),
+                    // and — for our own relay — with the token, the sender and the capability in the
+                    // BODY rather than the URL. See khandaqBuildWakeRequest.
+                    //
                     // KHANDAQ (audit 2026-08-20): the push URL is a string a CONTACT sent us over
                     // the wire, so it is not necessarily a URL at all. +URLWithString: returns nil
                     // for input the platform cannot parse (a raw space is enough on the older
@@ -426,19 +549,12 @@ static void triggerPush(NSString *used_pushToken,
                     // therefore crash us on demand, repeatedly, by sending one malformed token and
                     // then simply being messaged. A wake push that cannot be built must be skipped;
                     // it must never be able to take the process down.
-                    NSURL *pushURL = [NSURL URLWithString:signed_pushToken];
-                    if (pushURL == nil) {
+                    NSMutableURLRequest *urlRequest = khandaqBuildWakeRequest(strong_pushToken);
+                    if (urlRequest == nil) {
                         // NSLog, not OCTLogWarn: this is a C function, and that macro needs `self`.
                         NSLog(@"PUSH:push token is not a usable URL -> skipping wake");
                         break;
                     }
-                    NSMutableURLRequest *urlRequest = [[NSMutableURLRequest alloc] initWithURL:pushURL];
-                    NSString *userUpdate = [NSString stringWithFormat:@"&text=1", nil];
-                    [urlRequest setHTTPMethod:@"POST"];
-
-                    NSData *data1 = [userUpdate dataUsingEncoding:NSUTF8StringEncoding];
-
-                    [urlRequest setHTTPBody:data1];
                     [urlRequest setCachePolicy:NSURLRequestReloadIgnoringCacheData];
                     [urlRequest setTimeoutInterval:10]; // HINT: 10 seconds
                     NSString *userAgent = @"Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0";

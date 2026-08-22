@@ -55,6 +55,129 @@ public final class KhandaqPush {
         return sb.toString();
     }
 
+    /**
+     * How to emit one wake, decided from the recipient's push URL.
+     *
+     * KHANDAQ (re-audit 2026-08-22, K-03). The FCM registration token is a targeting secret — hold
+     * it and you can push to that device — and it used to travel in the request URI, next to the
+     * HMAC and its timestamp. nginx redacts the query string, but a URL leaks through more than one
+     * log: client diagnostics, crash reporters, an intermediary proxy, a copied link, a screenshot.
+     * A request BODY leaks through none of those by default.
+     *
+     * So for our own relay the token, the sender and the capability move into a JSON body and the
+     * authentication into headers. Anything else — the legacy tox.zoff.xyz relay, a URL we do not
+     * recognise — keeps the old form exactly, because a push URL we do not own is not ours to
+     * reinterpret.
+     */
+    public static final class WakeRequest
+    {
+        /** Absolute URL to call. */
+        public final String url;
+        /** JSON body, or null when this is the legacy form-post shape. */
+        public final String jsonBody;
+        /** Bearer value for Authorization, or null when no secret is provisioned. */
+        public final String auth;
+        /** Value for X-Khandaq-Ts, or null. */
+        public final String ts;
+
+        WakeRequest(String url, String jsonBody, String auth, String ts)
+        {
+            this.url = url;
+            this.jsonBody = jsonBody;
+            this.auth = auth;
+            this.ts = ts;
+        }
+
+        public boolean isJson()
+        {
+            return jsonBody != null;
+        }
+    }
+
+    /** True when this URL is our own relay's wake endpoint, and therefore ours to modernise. */
+    public static boolean isOwnRelayWakeUrl(final String pushUrl)
+    {
+        return pushUrl != null
+               && pushUrl.startsWith(RELAY_BASE + "/toxfcm/fcm.php")
+               && !queryValue(pushUrl, "id").isEmpty();
+    }
+
+    public static WakeRequest buildWakeRequest(final String pushUrl, final String senderPubkeyHex)
+    {
+        if (!isOwnRelayWakeUrl(pushUrl))
+        {
+            // Unchanged behaviour for every URL that is not ours.
+            return new WakeRequest(withWakeParams(pushUrl, senderPubkeyHex), null, null, null);
+        }
+
+        final String id = queryValue(pushUrl, "id");
+        final String from = (senderPubkeyHex == null) ? "" : senderPubkeyHex;
+        // The capability the RECIPIENT minted for us and published inside its wake URL. We carry it
+        // across verbatim; we never mint or guess one for somebody else's device.
+        final String cap = queryValue(pushUrl, "cap");
+
+        final StringBuilder body = new StringBuilder(128);
+        body.append("{\"token\":").append(jsonString(id));
+        body.append(",\"sender\":").append(jsonString(from));
+        if (!cap.isEmpty())
+        {
+            body.append(",\"cap\":").append(jsonString(cap));
+        }
+        body.append('}');
+
+        String auth = null;
+        String ts = null;
+        final String secret = BuildConfig.PUSH_RELAY_AUTH_SECRET;
+        if (secret != null && !secret.isEmpty())
+        {
+            ts = Long.toString(System.currentTimeMillis() / 1000L);
+            // Byte-for-byte the pre-image the legacy path signs: id + "\n" + from + "\n" + ts.
+            // Moving the request shape must not move the signature, or a client that switches
+            // endpoints looks to the relay like a client with the wrong secret.
+            final String mac = hmacSha256Hex(secret, id + "\n" + from + "\n" + ts);
+            if (!mac.isEmpty())
+            {
+                auth = "Bearer " + mac;
+            }
+            else
+            {
+                ts = null;
+            }
+        }
+        return new WakeRequest(RELAY_BASE + "/wake", body.toString(), auth, ts);
+    }
+
+    /** Minimal JSON string escaping. The values here are base64url/hex, but assuming that is how a
+     *  quote ends up unescaped in a body the relay then fails to parse. */
+    public static String jsonString(final String s)
+    {
+        final StringBuilder out = new StringBuilder(s.length() + 2);
+        out.append('"');
+        for (int i = 0; i < s.length(); i++)
+        {
+            final char c = s.charAt(i);
+            switch (c)
+            {
+                case '"':  out.append("\\\""); break;
+                case '\\': out.append("\\\\"); break;
+                case '\n': out.append("\\n"); break;
+                case '\r': out.append("\\r"); break;
+                case '\t': out.append("\\t"); break;
+                default:
+                    if (c < 0x20)
+                    {
+                        out.append(String.format("\\u%04x", (int) c));
+                    }
+                    else
+                    {
+                        out.append(c);
+                    }
+            }
+        }
+        out.append('"');
+        return out.toString();
+    }
+
     /** Extract the URL-decoded value of a query parameter (to match the server's request.args view). */
     private static String queryValue(final String url, final String key)
     {

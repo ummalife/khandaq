@@ -36,13 +36,26 @@ jobs:
         # java-kotlin covers the Android client, python the relay and every script under scripts/,
         # javascript the website, actions the workflows themselves.
         #
-        # NOT c-cpp: CodeQL needs to observe a real compilation for it, and the desktop needs a Qt
-        # toolchain this runner does not have. The desktop's memory-safety coverage is the extracted-
-        # and-compiled harnesses (check-ios-rtp-reassembly.py, check-ios-downgrade-policy.py) plus
-        # the bundled-dependency lifecycle gate. Stated here rather than left as a silent gap.
-        language: [java-kotlin, python, javascript-typescript, actions]
+        # c-cpp added 2026-08-23 (RR2-12). It used to be excluded on the grounds that CodeQL needs
+        # to observe a real compilation and the desktop needs a Qt toolchain this runner lacks —
+        # true of the desktop GUI, and beside the point for the code that matters. The native attack
+        # surface is toxcore: DHT, onion, messenger, group chats and toxav, i.e. every parser that
+        # touches bytes from another peer. It ships as a single amalgamation with a Makefile of its
+        # own, needs no Qt, and compiles clean (verified: 90k lines, zero errors), so CodeQL can
+        # watch exactly the compilation that produces what users run.
+        language: [java-kotlin, python, javascript-typescript, actions, c-cpp]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Only for c-cpp: the libraries the amalgamation links against. Everything else uses
+      # build-mode none and needs nothing installed.
+      - name: Install the native build dependencies
+        if: matrix.language == 'c-cpp'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libsodium-dev libopus-dev libvpx-dev libx264-dev \
+            libavcodec-dev libavutil-dev pkg-config
 
       - name: Initialise CodeQL
         uses: github/codeql-action/init@6d786de4d6f3531a740e445b53a42b622bbbace8 # v3 (codeql-bundle-v2.26.3)
@@ -50,10 +63,20 @@ jobs:
           languages: ${{ matrix.language }}
           # build-mode none keeps java-kotlin from needing the Android SDK and a full Gradle build,
           # which would put a 20-minute build on every pull request for an advisory scan.
-          build-mode: ${{ matrix.language == 'java-kotlin' && 'none' || 'none' }}
+          build-mode: ${{ matrix.language == 'c-cpp' && 'manual' || 'none' }}
           queries: security-extended
           # Excludes security/sast-fixtures/, which is deliberately vulnerable by construction.
           config-file: ./.github/codeql/codeql-config.yml
+
+      # The compilation CodeQL observes. One translation unit, the whole of toxcore.
+      - name: Build toxcore for CodeQL
+        if: matrix.language == 'c-cpp'
+        run: |
+          set -euo pipefail
+          cd khandaq-desktop/buildscripts/toxcore/amalgamation
+          cc -c -o libtoxcore.o toxcore_amalgamation.c -O1 -fPIC -pthread \
+            $(pkg-config --cflags libsodium opus vpx libavcodec libavutil x264)
+          ls -l libtoxcore.o
 
       - name: Analyse
         uses: github/codeql-action/analyze@6d786de4d6f3531a740e445b53a42b622bbbace8 # v3 (codeql-bundle-v2.26.3)

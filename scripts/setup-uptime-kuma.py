@@ -99,7 +99,10 @@ def main() -> int:
                 print(f"  ! {name}: {exc}")
 
     os.makedirs(os.path.dirname(creds_file), exist_ok=True)
-    with open(creds_file, "w", encoding="utf-8") as fh:
+    # KHANDAQ (2026-08-23): create with 0600 rather than writing first and tightening after — the
+    # password was briefly on disk under whatever the umask allowed.
+    fd = os.open(creds_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(f"KUMA_URL={url}\nKUMA_ADMIN_USER={user}\nKUMA_ADMIN_PASS={password}\n")
     os.chmod(creds_file, 0o600)
 

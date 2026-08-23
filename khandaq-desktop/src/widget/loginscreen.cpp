@@ -199,7 +199,10 @@ void LoginScreen::onCreateNewProfile()
         return;
     }
 
-    emit createNewProfile(name, pass);
+    // KHANDAQ (deep review 2026-08-23, RR3-09): the password goes into the system credential store
+    // only if the person creating the profile asked for that. It used to happen unconditionally, at
+    // the moment the profile was made, with nothing on screen saying so.
+    emit createNewProfile(name, pass, ui->createAutoLoginCB->isChecked());
 }
 
 void LoginScreen::onLoginUsernameSelected(const QString& name)

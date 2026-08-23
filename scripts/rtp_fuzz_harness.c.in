@@ -1,0 +1,174 @@
+/*
+ * KHANDAQ (RR2-12, 2026-08-23) — sanitizer harness that drives the REAL RTP reassembly with
+ * attacker-shaped packet sequences.
+ *
+ * The sibling harness (rtp_reassembly_harness.c.in) checks a fixed list of cases somebody thought
+ * of. This one does the part a case list cannot: it generates sequences nobody wrote down, and lets
+ * AddressSanitizer say whether any of them corrupts memory. Both drive the same function, lifted
+ * verbatim from the shipped source by the Python around them — nothing here re-implements it.
+ *
+ * The two defects the 2026-08-23 review found in this exact function are the reason it exists:
+ *  * a packet rejected AFTER its slot was opened left next_free_entry incremented, and repeating it
+ *    walked an int8_t counter off a three-entry array;
+ *  * a zero-length payload reached the same state without failing any check at all.
+ * Both are memory errors reachable from a peer during a call, and both are found in seconds here.
+ *
+ * Two front ends, same body:
+ *   libFuzzer  — LLVMFuzzerTestOneInput, coverage-guided (CI, Linux clang).
+ *   standalone — a deterministic PRNG corpus, so the check runs anywhere and gives the same answer
+ *                twice. Apple clang ships no libFuzzer runtime; that must not mean no fuzzing.
+ */
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define USED_RTP_WORKBUFFER_COUNT 3
+#define nullptr NULL
+typedef struct Logger Logger;
+static int log_calls;
+#define LOGGER_DEBUG(...)   ((void)0)
+#define LOGGER_INFO(...)    ((void)0)
+#define LOGGER_WARNING(...) (++log_calls)
+#define LOGGER_ERROR(...)   (++log_calls)
+
+enum { RTP_LARGE_FRAME = 1 << 0, RTP_KEY_FRAME = 1 << 1 };
+
+struct RTPHeader {
+    uint16_t sequnum;
+    uint32_t timestamp;
+    uint16_t flags;
+    uint32_t offset_full;
+    uint32_t data_length_full;
+    uint32_t received_length_full;
+};
+
+struct RTPMessage {
+    uint16_t len;
+    struct RTPHeader header;
+    uint8_t data[];
+};
+
+struct RTPWorkBuffer {
+    bool is_keyframe;
+    uint32_t received_len;
+    struct RTPMessage *buf;
+};
+
+struct RTPWorkBufferList {
+    int8_t next_free_entry;
+    struct RTPWorkBuffer work_buffer[USED_RTP_WORKBUFFER_COUNT];
+};
+
+#define MAX_RTP_FRAME_SIZE_FALLBACK (32 * 1024 * 1024)
+
+/* --- the real code, lifted verbatim out of the shipped file ---------------------------------- */
+@@DEFINES@@
+
+@@FUNCTION@@
+/* --------------------------------------------------------------------------------------------- */
+
+static void wipe(struct RTPWorkBufferList *w)
+{
+    for (int i = 0; i < USED_RTP_WORKBUFFER_COUNT; ++i) {
+        free(w->work_buffer[i].buf);
+    }
+    memset(w, 0, sizeof(*w));
+}
+
+/*
+ * One fuzz input = a sequence of packets. Each packet takes 12 bytes of input, read as fields
+ * rather than as a blob: feeding raw bytes straight into the struct would spend the whole budget on
+ * inputs the caller would already have rejected, and would never explore the interesting axis —
+ * WHICH SLOT a packet lands in and in what order.
+ *
+ * The caps mirror what the real caller enforces before this function is reached, EXCEPT that
+ * offset/length are deliberately allowed to be inconsistent: rejecting inconsistent packets is the
+ * behaviour under test.
+ */
+static void drive(const uint8_t *data, size_t size)
+{
+    struct RTPWorkBufferList w;
+    memset(&w, 0, sizeof(w));
+
+    const size_t PKT = 12;
+    size_t n = size / PKT;
+    if (n > 64) n = 64;                 /* bounded: long runs add time, not coverage */
+
+    static uint8_t payload[4096];
+    memset(payload, 0x41, sizeof(payload));
+
+    for (size_t i = 0; i < n; ++i) {
+        const uint8_t *p = data + i * PKT;
+
+        struct RTPHeader h;
+        memset(&h, 0, sizeof(h));
+        h.sequnum          = (uint16_t)(p[0] | (p[1] << 8));
+        h.timestamp        = (uint32_t)(p[2] | (p[3] << 8));
+        h.flags            = RTP_LARGE_FRAME | ((p[4] & 1) ? RTP_KEY_FRAME : 0);
+        h.data_length_full = (uint32_t)(p[5] | (p[6] << 8) | ((uint32_t)(p[7] & 0x0f) << 16));
+        h.offset_full      = (uint32_t)(p[8] | (p[9] << 8) | ((uint32_t)(p[10] & 0x0f) << 16));
+
+        uint16_t chunk = (uint16_t)(p[11] * 16);        /* 0..4080, zero-length included on purpose */
+        if (chunk > sizeof(payload)) chunk = sizeof(payload);
+
+        /* Slot choice is the interesting axis, and it is what get_slot() would decide. Mirror its
+         * contract rather than its body: a slot in range, or the next free one. */
+        uint8_t slot = (uint8_t)(p[4] >> 1);
+        int8_t nfe = w.next_free_entry;
+        if (nfe < 0) nfe = 0;
+        if (nfe > USED_RTP_WORKBUFFER_COUNT) nfe = USED_RTP_WORKBUFFER_COUNT;
+        slot = (uint8_t)(slot % (nfe + 1));
+        if (slot >= USED_RTP_WORKBUFFER_COUNT) slot = USED_RTP_WORKBUFFER_COUNT - 1;
+
+        (void)fill_data_into_slot(NULL, &w, slot, (h.flags & RTP_KEY_FRAME) != 0, &h, payload, chunk);
+
+        /* The invariant the reviewed defects broke. Assert it every step: a counter that has left
+         * the array is the bug, and waiting for the eventual out-of-bounds free would let a run
+         * pass that had already gone wrong. */
+        if (w.next_free_entry < 0 || w.next_free_entry > USED_RTP_WORKBUFFER_COUNT) {
+            fprintf(stderr, "INVARIANT: next_free_entry = %d, outside 0..%d\n",
+                    (int)w.next_free_entry, USED_RTP_WORKBUFFER_COUNT);
+            abort();
+        }
+    }
+    wipe(&w);
+}
+
+#ifdef KHANDAQ_LIBFUZZER
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+    drive(data, size);
+    return 0;
+}
+#else
+/* Deterministic corpus: same sequence every run, on every machine. xorshift32 rather than rand(),
+ * whose output is libc-dependent — a check that answers differently on two machines is not a check. */
+static uint32_t rng_state;
+static uint32_t xorshift32(void)
+{
+    uint32_t x = rng_state;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    return rng_state = x;
+}
+
+int main(int argc, char **argv)
+{
+    unsigned long iterations = (argc > 1) ? strtoul(argv[1], NULL, 10) : 200000UL;
+    uint8_t buf[12 * 64];
+
+    for (unsigned long it = 0; it < iterations; ++it) {
+        rng_state = (uint32_t)(it + 1) * 2654435761u;   /* seed per iteration, reproducible */
+        size_t size = 12 * (1 + (xorshift32() % 24));
+        for (size_t i = 0; i < size; ++i) {
+            buf[i] = (uint8_t)(xorshift32() >> 16);
+        }
+        drive(buf, size);
+    }
+    printf("ok: %lu sequences driven through the real fill_data_into_slot, no sanitizer report\n",
+           iterations);
+    return 0;
+}
+#endif

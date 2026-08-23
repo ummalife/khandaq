@@ -79,8 +79,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/hls.c (HLS demuxer) + libavformat data: URI protocol handling — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -101,8 +101,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/tty.c (TTY/ANSI-art демуксер), эксплуатируется через HLS-плейлист — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -123,8 +123,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/hls.c (разбор HLS-плейлиста, NULL-разыменование при инициализации) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -145,8 +145,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/xbin.c (XBIN-демуксер), эксплуатируется через HLS — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят. Отдельно проверено: совпадение по strings — это статическая таблица имён codec ID (libavcodec/codec_desc.c), исполняемого кода за ней нет.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -167,8 +167,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/dashdec.c (DASH-демуксер) + HTTP-протокол libavformat/http.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -189,8 +189,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavutil/hwcontext.c (av_hwframe_ctx_init), провоцируется отказом vulkan_frames_init в libavutil/hwcontext_vulkan.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -211,8 +211,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/avf_showspectrum.c (фильтры showspectrum/showspectrumpic) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -222,8 +222,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/cafdec.c (демуксер CAF, Apple Core Audio Format) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -233,8 +233,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/pnmdec.c (декодер PNM/PGM/PPM/PBM/PAM, функция pnm_decode_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -255,8 +255,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/af_firequalizer.c (аудиофильтр firequalizer, config_input) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -277,8 +277,8 @@
       "severity": "LOW",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mov.c (демуксер MOV/MP4, функция mov_read_trak) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -299,8 +299,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/aacenc_tns.c (AAC-энкодер, функция ff_aac_search_for_tns) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -321,8 +321,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mux.c (ff_interleave_add_packet) + fftools/ffmpeg_mux.c; libavutil/mem.c указан лишь как точка av_malloc — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -343,8 +343,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/iamf_parse.c (param_parse / mix_presentation_obu) и libavformat/iamfdec.c; аллокация в libavutil/iamf.c:av_iamf_param_definition_alloc — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -365,8 +365,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/av1dec.c, функция read_global_param() (декодер AV1) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -387,8 +387,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — tools/zmqsend.c — отдельная утилита из каталога tools/, не часть библиотек — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -409,8 +409,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026, ВЕРДИКТ С ОГОВОРКОЙ — единственная из 32, по которой недостижимость НЕ доказана. Функция av_bprint_finalize в бинарнике ПРИСУТСТВУЕТ (проверено nm), и advisory называет именно её, а не tools/zmqsend.c из ссылок. Разбор дизассемблера показывает восемь вызывающих: av_escape, av_opt_serialize, bsf_list_item_name, av_strireplace, av_dict_get_string, av_log_format_line, av_log_format_line2, av_log_default_callback — то есть единственный путь от недоверенных данных лежит через логирование ошибок разбора H.264. Уровень логов в поставляемом Android-бинарнике = AV_LOG_ERROR (в vc_new_h264 инструкция orr w0, wzr, #0x10 = 16); ветка с AV_LOG_TRACE закрыта #ifdef NGC___TRIFA_CODEC_DECODER_, а сам define закомментирован (toxav.c:2797) — то есть не компилируется. Первоисточник репортёра озаглавлен «Memory Leak», NVD переформулировал как heap buffer overflow; воспроизведение шло через утилиту zmqsend, которой в сборке нет (--disable-programs). ЧТО НЕ СДЕЛАНО: не установлено, может ли содержимое H.264-потока довести bprint-буфер до состояния, в котором дефект проявляется. Пересмотреть при обновлении ffmpeg.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -431,8 +431,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mov.c (обработка CENC subsample, MP4/ISOBMFF-демуксер) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -453,8 +453,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mpeg.c (демуксер субтитров VobSub) + ff_subtitles_queue_insert из libavformat/subtitles.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -475,8 +475,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/nvdec.c (аппаратный декодер NVIDIA NVDEC, ff_nvdec_start_frame_sep_ref / nvdec_fdd_priv_free) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -497,8 +497,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/spdifenc.c (S/PDIF мультиплексор, функция spdif_header_dts4) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -519,8 +519,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/rtpdec_asf.c (RTP/ASF демуксер, функция rtp_asf_fix_header) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -541,8 +541,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/adxdec.c (аудиодекодер ADX/AAX, функция adx_decode_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят. Отдельно проверено: совпадение по strings — это статическая таблица имён codec ID (libavcodec/codec_desc.c), исполняемого кода за ней нет.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -563,8 +563,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/tdsc.c (видеодекодер TDSC, функции tdsc_parse_tdsf/tdsc_blit/tdsc_yuv2rgb) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -585,8 +585,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/tydemux.c (TY demuxer, demux_audio) + libavcodec/shorten.c (Shorten decoder, shorten_decode_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -607,8 +607,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_floodfill.c (filter_frame/config_input) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -629,8 +629,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_swaprect.c (filter_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -651,8 +651,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_hqdn3d.c (config_input/denoise_spatial) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -673,8 +673,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/iamf_parse.c — IAMF demuxer, mix_presentation_obu() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -695,8 +695,8 @@
       "severity": "MEDIUM",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/lcldec.c — LCL/ZLIB (MSZH/ZLIB) видеодекодер, zlib_decomp() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -717,8 +717,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/mace.c — MACE6 аудиодекодер, mace_decode_frame() (вход — CAF-демуксер libavformat/cafdec.c) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {
@@ -739,8 +739,8 @@
       "severity": "HIGH",
       "platform": "android",
       "owner": "Isa (repository owner)",
-      "exploitability": "ffmpeg 6.0 внутри libjni-c-toxcore.so. Поверхность реальна: ffmpeg участвует в кодеке H264/H265 для звонков, то есть декодирует данные от собеседника. ЭТИ ADVISORY ПОИМЁННО НЕ РАЗБИРАЛИСЬ — здесь не утверждается, что они недостижимы, здесь фиксируется, что разбор не сделан. Обновление связано с той же миграцией с NDK r13b, что и libvpx (см. circle_scripts/deps.sh): в лоб версия не поднимается. Дата намеренно короткая, чтобы вернуться к разбору, а не чтобы считать вопрос закрытым.",
-      "expires": "2026-09-30",
+      "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/pngenc.c — нативные PNG/APNG ЭНКОДЕРЫ, add_exif_profile_size()/png_write_chunk() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
+      "expires": "2026-11-19",
       "version": "6.0"
     },
     {

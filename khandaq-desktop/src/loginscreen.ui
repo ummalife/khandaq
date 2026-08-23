@@ -143,6 +143,19 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="createAutoLoginCB">
+         <property name="accessibleDescription">
+          <string>Remember the password and skip the login screen</string>
+         </property>
+         <property name="text">
+          <string>Запомнить пароль и входить автоматически</string>
+         </property>
+         <property name="toolTip">
+          <string>Пароль будет сохранён в системном хранилище учётных данных этого компьютера. Не включайте на общем компьютере.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer">
          <property name="orientation">
           <enum>Qt::Vertical</enum>

@@ -1045,6 +1045,15 @@ void update_savedata_file(const Tox *tox, const uint8_t *passphrase, size_t pass
 }
 
 
+// KHANDAQ (deep review follow-up 2026-08-23): `passphrase` and `passphrase_len` are ACCEPTED AND
+// IGNORED. This function writes the raw savedata — the Tox private key — and encrypts nothing; the
+// name is the honest part of the contract and the parameters are not.
+//
+// Left in place rather than removed because every caller already passes a placeholder ("_" or ""),
+// so nothing today is fooled, and changing the signature means rebuilding libjni-c-toxcore.so.
+// Noted because the next person to want an encrypted export will read the signature, pass a real
+// passphrase, and get a plaintext private key on disk with no error. If you need that, use
+// tox_pass_encrypt (see update_savedata_file above) — do not extend this one silently.
 void export_savedata_file_unsecure(const Tox *tox, const uint8_t *passphrase, size_t passphrase_len,
                                    const char *export_full_path_of_file)
 {

@@ -87,6 +87,12 @@ jobs:
       # are the digests that were reviewed.
       - name: The native library must match its committed digests
         run: python3 scripts/check-native-lib-pins.py
+      # KHANDAQ (2026-08-23): 31 of the 32 ffmpeg advisories are waived as unreachable, and every one
+      # of those arguments rests on the same measured fact — the binary links exactly one ffmpeg
+      # decoder and nothing else. Enabling one more codec is a reasonable thing to do and would make
+      # a pile of waivers quietly false, so the fact is held here rather than assumed.
+      - name: The ffmpeg surface must stay the one the waivers were argued against
+        run: python3 scripts/check-ffmpeg-surface.py
       # KHANDAQ (deep review 2026-08-23, RR3-11): the bootstrap lists are DHT trust anchors, and they
       # are edited by scripts no workflow calls. Three retired anchors were still shipping.
       - name: No client may ship a retired DHT anchor
@@ -257,10 +263,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Install cppcheck
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck
+      - name: Install cppcheck and the Qt form compiler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck qtbase5-dev-tools
       - name: No new static-analysis findings in the desktop sources
         run: python3 scripts/check-native-static-analysis.py
+      # KHANDAQ (deep review follow-up 2026-08-23): there is no desktop BUILD in CI, so a broken .ui
+      # or a mistyped widget name reaches a release build with nothing in between. uic parsing each
+      # form and cross-checking every `ui->widget` against it costs seconds and catches that class.
+      # A small part of RR2-12, not a substitute for compiling the desktop.
+      - name: Qt forms must compile and match the widgets the code names
+        run: python3 scripts/check-desktop-ui-forms.py
 
   live-site:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из
@@ -374,3 +386,9 @@ jobs:
       # in place by something. This compiles the real function out of the shipped .m and attacks it.
       - name: iOS video-RTP reassembly must refuse the F-01 overflow
         run: python3 scripts/check-ios-rtp-reassembly.py
+      # KHANDAQ (RR2-12, 2026-08-23): the case list above pins defects somebody already understood.
+      # This drives the same real function with sequences nobody wrote down, under ASan+UBSan. It
+      # finds both memory defects the 2026-08-23 review found by hand — verified by restoring the
+      # pre-fix logic, where it reports `next_free_entry = 4, outside 0..3` within seconds.
+      - name: Fuzz the RTP reassembly under sanitizers
+        run: python3 scripts/check-rtp-fuzz.py --libfuzzer --seconds 45

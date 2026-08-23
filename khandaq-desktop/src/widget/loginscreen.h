@@ -46,7 +46,7 @@ signals:
 
     void windowStateChanged(Qt::WindowStates states);
     void autoLoginChanged(bool state);
-    void createNewProfile(QString name, const QString& pass);
+    void createNewProfile(QString name, const QString& pass, bool autoLogin);
     void loadProfile(QString name, const QString& pass);
 
 public slots:

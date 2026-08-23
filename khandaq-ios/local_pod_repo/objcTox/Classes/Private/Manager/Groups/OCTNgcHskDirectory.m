@@ -38,6 +38,11 @@ static NSString *const kRowPrefix = @"kqhskdir_";
     return 24ULL * 60ULL * 60ULL * 1000ULL;
 }
 
++ (uint64_t)refreshMinIntervalMs
+{
+    return 5ULL * 60ULL * 1000ULL;
+}
+
 + (OCTNgcHskDecision)decideWithExisting:(nullable OCTNgcHskRecord *)existing
                             incomingPub:(nullable NSData *)incomingHskPub
                        peerConnectedNow:(BOOL)peerConnectedNow
@@ -50,6 +55,19 @@ static NSString *const kRowPrefix = @"kqhskdir_";
         return OCTNgcHskDecisionLearn;
     }
     if ([existing.hskPub isEqualToData:incomingHskPub]) {
+        // KHANDAQ (internal audit 2026-08-22): do not write for every repeat.
+        //
+        // A member of a public group can resend the identical, correctly signed announcement as fast
+        // as the link allows, and each one used to cost a Realm write transaction and a read-back on
+        // the callback thread — a remote way to make every other participant's client stall. Android
+        // has bounded this from the start (NgcHskDirectory.REFRESH_MIN_INTERVAL_MS); iOS had not.
+        //
+        // Same guard against a clock that moved backwards as below: compare the stamps rather than
+        // subtracting blindly, since these are unsigned.
+        if (nowMs >= existing.lastSeenMs &&
+            (nowMs - existing.lastSeenMs) < [self refreshMinIntervalMs]) {
+            return OCTNgcHskDecisionUpToDate;
+        }
         return OCTNgcHskDecisionRefresh;
     }
 

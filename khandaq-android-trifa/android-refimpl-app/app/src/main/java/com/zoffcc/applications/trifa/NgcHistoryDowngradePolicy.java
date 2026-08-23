@@ -148,7 +148,20 @@ final class NgcHistoryDowngradePolicy
      */
     static boolean rendersAsClaimedAuthor(final Decision decision, final boolean syncerIsAuthor)
     {
-        if (decision == Decision.ACCEPT_KEY_STALE && !syncerIsAuthor)
+        // KHANDAQ (internal audit 2026-08-22): REJECT_DOWNGRADE joins ACCEPT_KEY_STALE here.
+        //
+        // A rejected row used to be simply dropped, which is right for text — a signed form exists,
+        // so its absence really is a downgrade. It is wrong for a FILE record, which has no signed
+        // form at all: every author with a fresh key produced REJECT_DOWNGRADE, so the rule refused
+        // not an attack but the feature, and a photo posted by an up-to-date member never reached
+        // anyone who had been offline.
+        //
+        // The file path therefore keeps such a row and asks this instead. Saying "not as the claimed
+        // author" for a rejected row is what makes that safe: a third party's claim is stored as
+        // relayed content of unknown authorship, while an author relaying their OWN row is still
+        // shown as themselves, because the group layer authenticated who is speaking.
+        if (!syncerIsAuthor
+            && (decision == Decision.ACCEPT_KEY_STALE || decision == Decision.REJECT_DOWNGRADE))
         {
             return false;
         }

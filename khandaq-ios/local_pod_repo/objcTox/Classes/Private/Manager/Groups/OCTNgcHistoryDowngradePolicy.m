@@ -42,7 +42,13 @@ OCTNgcDowngradeDecision OCTNgcHistoryDowngradeDecide(OCTNgcHskRecord *_Nullable 
 BOOL OCTNgcHistoryDowngradeRendersAsClaimedAuthor(OCTNgcDowngradeDecision decision,
                                                   BOOL syncerIsAuthor)
 {
-    if (decision == OCTNgcDowngradeDecisionAcceptKeyStale && !syncerIsAuthor) {
+    // KHANDAQ (internal audit 2026-08-22): Reject joins AcceptKeyStale — see the Java twin.
+    //
+    // A file record has no signed form, so every author with a fresh key produced Reject and the
+    // record was dropped: the rule refused the feature rather than an attack. The file path now keeps
+    // the row and asks this, and answering NO for a rejected row is what makes keeping it safe.
+    if (!syncerIsAuthor && (decision == OCTNgcDowngradeDecisionAcceptKeyStale ||
+                            decision == OCTNgcDowngradeDecisionReject)) {
         return NO;
     }
     return YES;

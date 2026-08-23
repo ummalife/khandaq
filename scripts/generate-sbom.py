@@ -48,6 +48,7 @@ PODFILE = ROOT / "khandaq-ios/Podfile.lock"
 GEMFILE = ROOT / "khandaq-ios/Gemfile.lock"
 REQS = ROOT / "infra/push/relay/requirements.txt"
 DESKTOP = ROOT / "khandaq-desktop/buildscripts/bundled-deps.json"
+ANDROID_NATIVE = ROOT / "khandaq-android-trifa/circle_scripts/deps.sh"
 
 
 def read(p: Path) -> str:
@@ -157,6 +158,45 @@ def desktop_components() -> list[dict]:
     return out
 
 
+def android_native_components() -> list[dict]:
+    """The C libraries compiled into libjni-c-toxcore.so, which is in every APK.
+
+    KHANDAQ (internal audit 2026-08-22). This was missing entirely, and its absence was worse than a
+    gap: the desktop inventory contributed `pkg:generic/vpx@1.14.1`, so the SBOM positively asserted
+    a version of libvpx that no Android user has. What ships on Android is 1.8.0 — a 2019 release
+    that decodes video out of untrusted NGC packets. A reader checking whether a new libvpx advisory
+    affects this product would have looked at the SBOM and concluded it does not.
+
+    The versions are read from the build script that actually fetches them, so they cannot drift from
+    what is compiled. Names are prefixed and the purl carries a platform qualifier, because the same
+    library at a different version ships on the desktop and the two must not merge into one row.
+    """
+    text = read(ANDROID_NATIVE)
+    if not text:
+        return []
+    out = []
+    for var, name in (("_FFMPEG_VERSION_", "ffmpeg"), ("_OPUS_VERSION_", "opus"),
+                      ("_VPX_VERSION_", "vpx"), ("_LIBSODIUM_VERSION_", "libsodium"),
+                      ("_X264_VERSION_", "x264")):
+        m = re.search(rf'^{re.escape(var)}="([^"]+)"', text, re.M)
+        if not m:
+            continue
+        ver = m.group(1).lstrip("nv") if re.match(r"^[nv][0-9]", m.group(1)) else m.group(1)
+        out.append({
+            "type": "library",
+            "name": f"android-native-{name}",
+            "version": ver,
+            "purl": f"pkg:generic/{name}@{ver}?platform=android",
+            "description": f"compiled into libjni-c-toxcore.so, shipped in every APK ({name})",
+            "properties": [
+                {"name": "khandaq:platform", "value": "android"},
+                {"name": "khandaq:pin_file", "value": "khandaq-android-trifa/circle_scripts/deps.sh"},
+                {"name": "khandaq:pin_var", "value": var},
+            ],
+        })
+    return out
+
+
 def build() -> dict:
     groups = [
         ("maven", maven_components()),
@@ -164,6 +204,7 @@ def build() -> dict:
         ("gem", rubygems_components()),
         ("pypi", pypi_components()),
         ("generic", desktop_components()),
+        ("android-native", android_native_components()),
     ]
     components = []
     for eco, items in groups:

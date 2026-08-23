@@ -74,7 +74,10 @@ public final class NetworkDiagnosticsLog
     {
         try
         {
-            final File dir = new File(context.getCacheDir(), "network_diag");
+            // KHANDAQ (internal audit 2026-08-22): write where the declared FileProvider can actually
+            // reach. getCacheDir() is covered by no entry in stdfilepaths.xml, so even with the right
+            // authority getUriForFile would have thrown.
+            final File dir = new File(MainActivity.SD_CARD_TMP_DIR, "network_diag");
             if (!dir.exists())
             {
                 dir.mkdirs();
@@ -88,8 +91,12 @@ public final class NetworkDiagnosticsLog
                 w.write(NetworkDiagnosticsCollector.collect(context));
             }
 
-            final Uri uri = FileProvider.getUriForFile(context,
-                    context.getPackageName() + ".fileprovider", out);
+            // KHANDAQ (internal audit 2026-08-22): the authority was assembled by hand as
+            // "<package>.fileprovider", and the provider this app declares is ".std_fileprovider".
+            // getUriForFile therefore threw IllegalArgumentException on every call, the catch below
+            // swallowed it, and "Share network diagnostics" did nothing at all on every device and
+            // every build — silently, which is why nobody noticed. Use the declared constant.
+            final Uri uri = FileProvider.getUriForFile(context, KhandaqProviders.STD_FILE_PROVIDER, out);
             final Intent share = new Intent(Intent.ACTION_SEND);
             share.setType("text/plain");
             share.putExtra(Intent.EXTRA_STREAM, uri);

@@ -35,6 +35,16 @@ OSV_BATCH = "https://api.osv.dev/v1/querybatch"
 BATCH = 500
 
 REQUIRED_WAIVER_FIELDS = ("id", "package", "owner", "exploitability", "expires")
+OSV_VULN = "https://api.osv.dev/v1/vulns/"
+
+# KHANDAQ (re-review v2 2026-08-22, RR2-09): a class waiver may auto-cover a finding only when BOTH
+# hold — the package is enumerated by name, and the advisory is below this severity. "Build-only" is
+# not a synonym for harmless: annotation processors, Gradle plugins, linters and test runners execute
+# inside a trusted build environment with access to source, signing material and CI tokens. A
+# critical remote-code-execution advisory in one of those is exactly the finding that must not be
+# absorbed silently by a rule written months earlier for a different advisory.
+SEVERITY_ORDER = {"UNKNOWN": 0, "LOW": 1, "MODERATE": 2, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+REQUIRED_REVIEW_FIELDS = ("id", "package", "first_seen", "reviewer", "rationale", "expires")
 
 
 def die(msg: str) -> None:
@@ -106,6 +116,56 @@ def load_waivers() -> dict:
     return out
 
 
+def load_reviewed(raw: dict) -> dict:
+    """Individually triaged build-only advisories. Same discipline as a waiver, plus first_seen."""
+    out, problems = {}, []
+    today = dt.date.today()
+    for w in raw.get("build_only_reviewed", []):
+        missing = [f for f in REQUIRED_REVIEW_FIELDS if not str(w.get(f, "")).strip()]
+        if missing:
+            problems.append(f"build_only_reviewed {w.get('id', '?')}: нет полей {', '.join(missing)}")
+            continue
+        try:
+            expires = dt.date.fromisoformat(str(w["expires"]))
+        except ValueError:
+            problems.append(f"build_only_reviewed {w['id']}: expires={w['expires']!r} не дата ISO")
+            continue
+        if expires < today:
+            problems.append(f"build_only_reviewed {w['id']} для {w['package']} истёк {w['expires']} "
+                            f"(разбирал {w['reviewer']}) — пересмотрите или обновите инструмент")
+            continue
+        out[(w["id"], w["package"])] = w
+    if problems:
+        for p in problems:
+            print(f"::error::{p}", file=sys.stderr)
+        sys.exit(1)
+    return out
+
+
+def severity_of(advisory_id: str) -> str:
+    """Coarse severity for one advisory. Only ever called for findings nobody has triaged yet."""
+    req = urllib.request.Request(OSV_VULN + advisory_id,
+                                 headers={"User-Agent": "khandaq-depscan/1"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - fixed https host
+            data = json.load(resp)
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError):
+        # Unknown is deliberately the WORST case to reason about, so it is not auto-covered: an
+        # advisory whose severity could not be read is one nobody has looked at.
+        return "UNKNOWN"
+    db = data.get("database_specific") or {}
+    label = str(db.get("severity") or "").upper()
+    if label in SEVERITY_ORDER:
+        return label
+    for sev in data.get("severity") or []:
+        score = str(sev.get("score") or "")
+        # CVSS vectors carry no label; map the base score band the way GitHub does.
+        m = re.search(r"CVSS:3\.[01]/", score)
+        if m:
+            return "UNKNOWN"
+    return "UNKNOWN"
+
+
 def query_osv(purls: list[str]) -> dict[str, list[str]]:
     """purl -> advisory ids. A transport failure is fatal: a scanner that fails open is decoration."""
     hits: dict[str, list[str]] = {}
@@ -175,6 +235,7 @@ def main() -> int:
     # they are printed in full and still require a waiver. They just do not carry the same verdict as
     # something in a user's hands.
     scope_waiver = scope_waivers.get("build-only")
+    reviewed = load_reviewed(raw_waivers)
     unwaived, build_only, used_waivers = [], [], set()
     for purl, ids in sorted(hits.items()):
         comp = by_purl.get(purl, {})
@@ -192,18 +253,50 @@ def main() -> int:
             else:
                 build_only.append((vid, label, purl))
 
+    # KHANDAQ (re-review v2 2026-08-22, RR2-09): the class waiver is a REVIEW CACHE, not a blanket
+    # exemption.
+    #
+    # It used to absorb every build-only advisory automatically and for ever. "Build-only" is not a
+    # synonym for harmless: annotation processors, Gradle plugins, linters and test runners run
+    # inside a trusted build environment with access to source, signing material and CI tokens, and a
+    # newly disclosed critical RCE in one of them would have been waived on arrival with nobody
+    # reading it. Now a previously unseen advisory fails once and must be triaged; only enumerated
+    # packages below a stated severity are absorbed without a human.
     if build_only:
+        enumerated = set(scope_waiver.get("packages") or []) if scope_waiver else set()
+        max_sev = SEVERITY_ORDER.get(str((scope_waiver or {}).get("max_severity", "HIGH")).upper(), 3)
         print(f"\n  --- {len(build_only)} advisory только в сборочной цепочке (в APK не попадают) ---")
-        for vid, label, _purl in build_only:
-            print(f"      {vid}  {label}")
-        if scope_waiver is None:
-            print("::error::advisory в сборочной цепочке не покрыты ни одним waiver. Добавьте в "
-                  "security-waivers.json запись scope_waivers['build-only'] с владельцем, оценкой "
-                  "эксплуатируемости и датой истечения — либо обновите инструменты сборки.",
+        untriaged = []
+        for vid, label, purl in build_only:
+            pkg = by_purl.get(purl, {}).get("name", purl)
+            key = (vid, pkg)
+            if key in reviewed:
+                w = reviewed[key]
+                print(f"      РАЗОБРАНО {vid}  {label} — до {w['expires']}, "
+                      f"смотрел {w['reviewer']}: {w['rationale'][:90]}")
+                continue
+            if pkg in enumerated:
+                sev = severity_of(vid)
+                if SEVERITY_ORDER.get(sev, 4) <= max_sev:
+                    print(f"      область [{sev}] {vid}  {label}")
+                    continue
+                untriaged.append((vid, pkg, label, sev))
+                continue
+            untriaged.append((vid, pkg, label, severity_of(vid)))
+
+        if untriaged:
+            print(f"\n::error::{len(untriaged)} advisory в сборочной цепочке никто не смотрел",
                   file=sys.stderr)
+            for vid, pkg, label, sev in untriaged:
+                print(f"::error::  [{sev}] {vid}  {label}", file=sys.stderr)
+            print("::error::Разберите каждое и добавьте в security-waivers.json -> "
+                  "build_only_reviewed запись с полями id, package, first_seen, reviewer, rationale, "
+                  "expires. Пакет ниже порога серьёзности можно внести в scope_waivers['build-only']"
+                  ".packages, но критические туда не попадают никогда.", file=sys.stderr)
             return 1
-        print(f"      покрыты waiver-ом области: до {scope_waiver['expires']}, "
-              f"владелец {scope_waiver['owner']} — {scope_waiver['exploitability']}")
+        if scope_waiver:
+            print(f"      область покрыта до {scope_waiver['expires']}, "
+                  f"владелец {scope_waiver['owner']}")
 
     stale = [k for k in waivers if k not in used_waivers]
     for vid, purl in stale:

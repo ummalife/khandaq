@@ -216,6 +216,59 @@ int main(void)
         reset(&w);
     }
 
+    /* 8. KHANDAQ (deep review 2026-08-23, RR3-01): a REJECTED packet must not leave the work buffer
+     *    in a state that costs the next frame.
+     *
+     *    The length check used to run after calloc and after ++next_free_entry, so a refusal left a
+     *    slot allocated with received_len == 0 and the counter advanced. Repeating that walked the
+     *    counter off a three-entry array. This case rejects a packet, then feeds an ordinary frame:
+     *    if the counter or the slot survived the refusal, the frame does not reassemble. */
+    {
+        /* offset beyond the declared total: refused. */
+        struct RTPHeader bad = hdr(100, 200);
+        expect("rejected packet refused", feed(&w, &bad, 50, NULL), false);
+
+        if (w.next_free_entry != 0) {
+            printf("  FAIL rejected packet advanced next_free_entry to %d\n", (int)w.next_free_entry);
+            ++failures;
+        } else {
+            printf("  ok   rejected packet left the counter at zero\n");
+        }
+        if (w.work_buffer[0].buf != NULL) {
+            printf("  FAIL rejected packet left a slot allocated\n");
+            ++failures;
+        } else {
+            printf("  ok   rejected packet left no slot behind\n");
+        }
+
+        /* And a perfectly ordinary frame still works afterwards. */
+        bool done = false;
+        struct RTPHeader a = hdr(200, 0);
+        struct RTPHeader b = hdr(200, 100);
+        expect("frame after a refusal: part 1", feed(&w, &a, 100, NULL), true);
+        expect("frame after a refusal: part 2", feed(&w, &b, 100, &done), true);
+        expect("frame after a refusal: completes", done, true);
+        reset(&w);
+    }
+
+    /* 9. A zero-length payload carries nothing and must not open a slot at all.
+     *
+     *    It was the second route into RR3-01: a packet that passed every check but copied no bytes
+     *    left received_len at 0, and the old "is this slot open" test read that as "empty", so the
+     *    next packet with the same sequnum opened it again. Refusing outright is both simpler and
+     *    stricter than tracking it, and nothing legitimate sends an empty RTP part. */
+    {
+        struct RTPHeader a = hdr(300, 0);
+        expect("zero-length part refused", feed(&w, &a, 0, NULL), false);
+        if (w.next_free_entry != 0 || w.work_buffer[0].buf != NULL) {
+            printf("  FAIL zero-length part left state behind (counter %d)\n", (int)w.next_free_entry);
+            ++failures;
+        } else {
+            printf("  ok   zero-length part left nothing behind\n");
+        }
+        reset(&w);
+    }
+
     free(payload);
 
     if (failures) {

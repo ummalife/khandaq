@@ -239,10 +239,22 @@ enum KhandaqPush {
             // Wait for the relay's data push. Bounded: a device with notifications switched off at
             // the OS level will never receive one, and that must degrade to "no capability", not to
             // a callback that never fires.
+            // KHANDAQ (re-review v2 2026-08-22, RR2-14): claim the right to continue exactly once,
+            // atomically. `settled` was a plain Bool read and written by two callbacks that race —
+            // the relay's data push and the 30-second timeout on a global queue — so around that
+            // boundary both could see it false, and the device would send two confirms and call the
+            // completion twice. Capability registration is security-state transition code; the same
+            // primitive is used by revokeCapability below rather than a second near-copy of it.
             var settled = false
+            let claim: () -> Bool = {
+                return capQueue.sync {
+                    if settled { return false }
+                    settled = true
+                    return true
+                }
+            }
             let finish: (String?) -> Void = { nonce in
-                guard !settled else { return }
-                settled = true
+                guard claim() else { return }
                 capQueue.sync { pendingChallenges[cid] = nil }
                 guard let nonce = nonce else {
                     completion(nil)
@@ -301,10 +313,17 @@ enum KhandaqPush {
 
         postJSON(relayBase + "/register/challenge", ["token": ownToken]) { response in
             guard let cid = response?["cid"] as? String, !cid.isEmpty else { return }
+            // Same one-shot claim as issueCapability — see the note there.
             var settled = false
+            let claim: () -> Bool = {
+                return capQueue.sync {
+                    if settled { return false }
+                    settled = true
+                    return true
+                }
+            }
             let finish: (String?) -> Void = { nonce in
-                guard !settled else { return }
-                settled = true
+                guard claim() else { return }
                 capQueue.sync { pendingChallenges[cid] = nil }
                 guard let nonce = nonce else { return }
                 postJSON(relayBase + "/register/revoke",

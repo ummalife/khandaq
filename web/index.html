@@ -178,13 +178,13 @@
         </div>
         <div class="panel">
           <h3>Recent beta improvements</h3>
-          <p class="lead-sub">Highlights from the latest builds (v0.2.12) — see the <a href="/changelog">full changelog →</a></p>
+          <p class="lead-sub">Highlights from recent builds — see the <a href="/changelog">full changelog →</a></p>
           <ul class="highlights">
-            <li><strong>Android &amp; iOS — cross-platform video calls.</strong> 1:1 video calls now work both ways between Android and iPhone: full-screen, upright, no more black or sideways picture.</li>
-            <li><strong>Android on Google Play.</strong> Install and auto-update from the Play Store. Plus a redesigned incoming-call screen with a proper ringtone, Arabic (RTL) header fixes, and Android 16 (API 36) support.</li>
-            <li><strong>iOS voice notes fixed on older iPhones.</strong> Voice messages record and send reliably on models like the iPhone 11 (they were silently failing). TestFlight build 142980.</li>
-            <li><strong>Both platforms.</strong> Edit sent messages; reactions, delete-for-everyone and swipe-to-reply on photos, videos, voice and files; smoother scrolling and a batch of crash fixes.</li>
-            <li><strong>Desktop.</strong> Bundled media/crypto libraries updated past known CVEs; portable Windows, macOS and Linux builds.</li>
+            <li><strong>A relayed message cannot borrow an absent person's name.</strong> When you join a group and other members send you the history you missed, a message is now shown as relayed content of unknown authorship unless its author can actually be vouched for. Text and files, both platforms.</li>
+            <li><strong>Each contact gets its own key to wake your phone, and you can revoke one.</strong> Knowing your notification address used to be enough. Wake requests are now signed by the device that sends them, and your token no longer travels in the web address where servers write it down.</li>
+            <li><strong>Fewer permissions, and a higher floor.</strong> Android drops three permissions the app never used and bounds two more to the versions that need them. Android 8 is now the minimum — below that the app had depended on behaviour the system did not provide.</li>
+            <li><strong>Desktop downloads are signed.</strong> Every download has a detached signature beside it, and the key that made it lives in the project's git repository rather than on this web server — so the file and the means of checking it arrive by different routes.</li>
+            <li><strong>Earlier builds.</strong> Cross-platform 1:1 video calls between Android and iPhone; edit sent messages; reactions, delete-for-everyone and swipe-to-reply on photos, videos, voice and files; voice notes fixed on older iPhones (TestFlight build 142980).</li>
           </ul>
         </div>
       </div>

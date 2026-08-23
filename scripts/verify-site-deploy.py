@@ -30,11 +30,17 @@ import json
 import re
 import socket
 import ssl
+import sys as _sys
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+# Соседний модуль: зонд устаревших версий TLS вынесен отдельно, чтобы исключение
+# py/insecure-protocol в CodeQL относилось к одному файлу, а не ко всему репозиторию.
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tls_probe  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASE = "https://khandaq.org"
@@ -406,47 +412,20 @@ def main() -> int:
     if not args.skip_tls:
         print("-- TLS")
         host = base.split("://", 1)[1].split("/", 1)[0]
-        for name, lo, hi, want_ok in (
-            ("TLS 1.0", ssl.TLSVersion.TLSv1, ssl.TLSVersion.TLSv1, False),
-            ("TLS 1.1", ssl.TLSVersion.TLSv1_1, ssl.TLSVersion.TLSv1_1, False),
-            ("TLS 1.2", ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_2, True),
-            ("TLS 1.3", ssl.TLSVersion.TLSv1_3, ssl.TLSVersion.TLSv1_3, True),
-        ):
-            # REVIEWED (re-review 2026-08-22, KQ-10): CodeQL reports py/insecure-protocol here,
-            # and it is right about the shape — the loop deliberately lowers minimum_version to TLS
-            # 1.0 and 1.1. That is the POINT: the only way to prove the server refuses an obsolete
-            # protocol is to offer it. Nothing is transmitted, the handshake is expected to fail, and
-            # a handshake that SUCCEEDS is reported as a failure of the site. The exclusion lives in
-            # .github/codeql/codeql-config.yml — inline codeql[] comments do not clear alerts in
-            # GitHub code scanning.
-            ctx = ssl.create_default_context()
-            if not want_ok:
-                # A modern OpenSSL will not even OFFER TLS 1.0/1.1 at the default security level, so
-                # without this the handshake fails locally and the check would pass for the wrong
-                # reason — reporting "the server refused it" when in fact we never asked.
-                try:
-                    ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
-                except ssl.SSLError:
-                    print(f"  пропуск {name}: локальный OpenSSL не даёт его предложить")
-                    continue
-            try:
-                ctx.minimum_version, ctx.maximum_version = lo, hi
-            except (ValueError, OSError):
-                print(f"  пропуск {name}: локальный OpenSSL его не поддерживает")
+        # KHANDAQ (re-review v2 2026-08-22, RR2-11): the probe itself lives in scripts/tls_probe.py.
+        # It is the only file allowed to offer TLS 1.0/1.1, and CodeQL's py/insecure-protocol is
+        # excluded for that ONE PATH rather than for the whole repository, so an accidental use of an
+        # obsolete protocol anywhere else is still reported.
+        for r in tls_probe.probe(host):
+            if r.skipped:
+                print(f"  пропуск {r.name}: {r.skipped}")
                 continue
-            try:
-                with socket.create_connection((host, 443), timeout=15) as sock:
-                    with ctx.wrap_socket(sock, server_hostname=host) as tls:
-                        negotiated = tls.version()
-                connected = True
-            except Exception:  # noqa: BLE001 - any failure means "refused", which is the point
-                connected, negotiated = False, None
-            if want_ok and not connected:
-                fail(f"{name} не согласуется — современные клиенты не смогут подключиться")
-            elif not want_ok and connected:
-                fail(f"{name} всё ещё принимается сервером ({negotiated})")
+            if r.want_ok and not r.connected:
+                fail(f"{r.name} не согласуется — современные клиенты не смогут подключиться")
+            elif not r.want_ok and r.connected:
+                fail(f"{r.name} всё ещё принимается сервером ({r.negotiated})")
             else:
-                ok(f"{name}: {'работает' if connected else 'отклонён'}")
+                ok(f"{r.name}: {'работает' if r.connected else 'отклонён'}")
 
     print()
     if failures:

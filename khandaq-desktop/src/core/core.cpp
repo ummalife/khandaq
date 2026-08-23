@@ -2298,6 +2298,11 @@ bool Core::sendGroupFile(int groupId, const QString& fileName, const QString& lo
 
 bool Core::sendGroupFileFromPath(int groupId, const QString& fileName, const QString& localPath)
 {
+    // KHANDAQ (internal audit 2026-08-22): every other entry point into toxcore takes this lock; this
+    // one did not, so a group file sent from the GUI thread raced tox_iterate on the core thread.
+    // coreLoopLock is a CompatibleRecursiveMutex (core.h), so the nested sendGroupFile call below
+    // re-enters it rather than deadlocking.
+    QMutexLocker ml{&coreLoopLock};
     QFile in(localPath);
     if (!in.open(QIODevice::ReadOnly)) {
         qWarning() << "sendGroupFileFromPath: cannot open" << localPath;

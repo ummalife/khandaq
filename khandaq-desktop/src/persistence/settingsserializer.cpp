@@ -77,7 +77,18 @@ QDataStream& writeStream(QDataStream& dataStream, const QString& str)
 
 QDataStream& readStream(QDataStream& dataStream, SettingsSerializer::RecordTag& tag)
 {
-    return dataStream >> reinterpret_cast<quint8&>(tag);
+    // KHANDAQ (internal audit 2026-08-22, cppcheck uninitvar/ctuuninitvar): leave the tag DEFINED
+    // even when the read fails.
+    //
+    // The old form reinterpreted the enum reference as quint8 and streamed into it. On a truncated
+    // or corrupt settings file QDataStream sets its error flag and writes nothing, so `tag` kept
+    // whatever was on the stack and the switch that dispatches on it ran on garbage. Reading through
+    // a reinterpret_cast also assumed the enum's underlying type is exactly one byte, which is the
+    // compiler's choice rather than ours.
+    quint8 raw = 0;
+    dataStream >> raw;
+    tag = static_cast<SettingsSerializer::RecordTag>(raw);
+    return dataStream;
 }
 
 

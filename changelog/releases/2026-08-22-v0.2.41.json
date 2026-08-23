@@ -1,0 +1,57 @@
+{
+  "version": "0.2.41",
+  "date": "2026-08-22",
+  "title": "Who a message came from, and who may wake your phone",
+  "summary": "The largest security release so far, and most of it is about attribution: two places where the app showed a name it could not vouch for, and one where anyone holding your notification address could use it. Found by an outside review and a second, adversarial pass over the same code — every finding below had to survive somebody actively trying to disprove it.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "A relayed message can no longer carry an absent person's name",
+      "description": "When you join a group, other members send you the messages you missed. Each one names its author — and until now the app displayed that name on trust. If the author had been away long enough for the app to lose track of their signing key, whoever relayed the history could put their name on text they never wrote, and it appeared in the chat exactly as if they had. The rule is now the same for text and for files: if the relaying peer is not the author and the author's key cannot be checked, the message is kept but shown as relayed content of unknown authorship rather than as them. Nothing is silently dropped — losing real history is its own harm — but nothing borrows a name it has not earned.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Your notification address no longer carries your token in the URL",
+      "description": "To be woken for a message while offline, your device gives each contact an address that the sender's app calls. That address used to carry your notification token as part of the web address itself, which meant it appeared in ordinary server logs. It now travels inside the request instead, where a web server does not write it down. Older installations still use the previous form and keep working; the retirement date for it is published in the project repository rather than decided quietly.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "important",
+      "title": "Each contact gets its own key to wake you, and you can revoke one",
+      "description": "Knowing your notification address was previously enough to wake your device. Now each contact is given a separate per-contact credential, registered by your device after proving it holds the notification registration — a proof a contact cannot produce. Revoking one contact's credential stops that relationship and leaves every other one working. During the changeover the relay accepts both forms, so nobody's notifications break while the update spreads.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "iOS: per-contact credentials moved into the Keychain",
+      "description": "They were kept in the app's preferences file, which is included in an unencrypted device backup. They are now Keychain items marked as available only after the first unlock and only on this device, so they do not travel to a restored backup on different hardware. Existing installations move their stored values across once, on first launch after the update.",
+      "platforms": ["ios"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android: three permissions removed, two more bounded",
+      "description": "The app declared permission to draw over other apps, to dismiss the lock screen, and a vendor-specific thread-priority permission — and called none of them. A permission that grants nothing is still one an attacker inherits if the app is ever compromised, so they are gone. The two legacy storage permissions that remain are now limited to the Android versions that actually need them. Every permission the app requests is now listed in the repository with what asks for it, and the build fails if the two disagree.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Android 8 is now the minimum",
+      "description": "The app declared support back to Android 5 while depending on platform behaviour that arrived in Android 8 — so on those versions parts of it never worked correctly, quietly. Google Play will no longer offer updates to devices below Android 8. Installed copies keep running; they simply stop receiving new versions.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Desktop downloads are signed, and the page says how to check",
+      "description": "The Windows and macOS builds were unsigned, and the download page explained how to click past the operating system's warnings — which are the defence a substituted binary would have to get past. Each download now has a detached signature beside it, made with a key whose public half lives in the project's git repository rather than on the web server, so the file and the means of checking it travel by different routes. The verification command uses ssh-keygen, which is already present on macOS, Linux and Git for Windows.",
+      "platforms": ["desktop"]
+    },
+    {
+      "severity": "low",
+      "title": "Website: stricter headers, and a check that they stay that way",
+      "description": "The site now sends a hash-based content policy, refuses to be framed, and declares a restrictive permissions policy. More usefully, an external check runs on a schedule and asserts all of it against the live site — the previous arrangement could only tell you what the configuration said, not what the server actually sent.",
+      "platforms": ["web"]
+    }
+  ]
+}

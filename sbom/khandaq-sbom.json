@@ -2,6 +2,116 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
+      "description": "compiled into libjni-c-toxcore.so, shipped in every APK (ffmpeg)",
+      "group": "android-native",
+      "name": "android-native-ffmpeg",
+      "properties": [
+        {
+          "name": "khandaq:platform",
+          "value": "android"
+        },
+        {
+          "name": "khandaq:pin_file",
+          "value": "khandaq-android-trifa/circle_scripts/deps.sh"
+        },
+        {
+          "name": "khandaq:pin_var",
+          "value": "_FFMPEG_VERSION_"
+        }
+      ],
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "type": "library",
+      "version": "6.0"
+    },
+    {
+      "description": "compiled into libjni-c-toxcore.so, shipped in every APK (libsodium)",
+      "group": "android-native",
+      "name": "android-native-libsodium",
+      "properties": [
+        {
+          "name": "khandaq:platform",
+          "value": "android"
+        },
+        {
+          "name": "khandaq:pin_file",
+          "value": "khandaq-android-trifa/circle_scripts/deps.sh"
+        },
+        {
+          "name": "khandaq:pin_var",
+          "value": "_LIBSODIUM_VERSION_"
+        }
+      ],
+      "purl": "pkg:generic/libsodium@1.0.18?platform=android",
+      "type": "library",
+      "version": "1.0.18"
+    },
+    {
+      "description": "compiled into libjni-c-toxcore.so, shipped in every APK (opus)",
+      "group": "android-native",
+      "name": "android-native-opus",
+      "properties": [
+        {
+          "name": "khandaq:platform",
+          "value": "android"
+        },
+        {
+          "name": "khandaq:pin_file",
+          "value": "khandaq-android-trifa/circle_scripts/deps.sh"
+        },
+        {
+          "name": "khandaq:pin_var",
+          "value": "_OPUS_VERSION_"
+        }
+      ],
+      "purl": "pkg:generic/opus@1.3.1?platform=android",
+      "type": "library",
+      "version": "1.3.1"
+    },
+    {
+      "description": "compiled into libjni-c-toxcore.so, shipped in every APK (vpx)",
+      "group": "android-native",
+      "name": "android-native-vpx",
+      "properties": [
+        {
+          "name": "khandaq:platform",
+          "value": "android"
+        },
+        {
+          "name": "khandaq:pin_file",
+          "value": "khandaq-android-trifa/circle_scripts/deps.sh"
+        },
+        {
+          "name": "khandaq:pin_var",
+          "value": "_VPX_VERSION_"
+        }
+      ],
+      "purl": "pkg:generic/vpx@1.8.0?platform=android",
+      "type": "library",
+      "version": "1.8.0"
+    },
+    {
+      "description": "compiled into libjni-c-toxcore.so, shipped in every APK (x264)",
+      "group": "android-native",
+      "name": "android-native-x264",
+      "properties": [
+        {
+          "name": "khandaq:platform",
+          "value": "android"
+        },
+        {
+          "name": "khandaq:pin_file",
+          "value": "khandaq-android-trifa/circle_scripts/deps.sh"
+        },
+        {
+          "name": "khandaq:pin_var",
+          "value": "_X264_VERSION_"
+        }
+      ],
+      "purl": "pkg:generic/x264@31e19f92f00c7003fa115047ce50978bc98c3a0d?platform=android",
+      "type": "library",
+      "version": "31e19f92f00c7003fa115047ce50978bc98c3a0d"
+    },
+    {
       "group": "cocoapods",
       "hashes": [
         {

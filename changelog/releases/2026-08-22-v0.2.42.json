@@ -1,0 +1,21 @@
+{
+  "version": "0.2.42",
+  "date": "2026-08-22",
+  "title": "Wake requests are now signed by the device that sends them",
+  "summary": "A short release with one change in it, and the change is that a mechanism which had been fully built finally started running. The signing was implemented on both apps and on the relay; what no shipped build carried was the key, so every release until this one went out with it switched off — and nothing said so.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Notification wake requests carry a signature",
+      "description": "When your app asks the relay to wake somebody's device, that request is now signed. The signature covers the recipient, the sender and the time, so it cannot be replayed or reused for a different person, and the relay refuses a second use of the same one. Until this release the apps contained the code to do it and no key to do it with, which meant the check existed and never ran. The relay still accepts unsigned requests from older installations — refusing them today would silence notifications for everyone who has not updated — and will stop once enough of the installed base has moved over.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "low",
+      "title": "The relay's own numbers are recorded with each release",
+      "description": "Deciding when it is safe to start refusing unsigned requests depends on knowing what share of real traffic is signed. That measurement is now captured from the running relay at the moment a release is cut and committed beside it, so the decision rests on a number taken at a known time rather than on a description written from memory. The threshold that has to be met is written down as figures, not as judgement.",
+      "platforms": ["android", "ios"]
+    }
+  ]
+}

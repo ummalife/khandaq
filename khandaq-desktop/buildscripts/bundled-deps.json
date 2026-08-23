@@ -29,6 +29,9 @@
       "pin_var": "AITOOL_HASH",
       "platforms": [
         "windows"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -41,7 +44,10 @@
         "windows",
         "macos"
       ],
-      "note": "4.4 is an upstream LONG-TERM branch that still receives point releases (4.4.8), so it is not EOL — but it is the oldest maintained line and worth revisiting with the Qt 6 work."
+      "note": "4.4 is an upstream LONG-TERM branch that still receives point releases (4.4.8), so it is not EOL — but it is the oldest maintained line and worth revisiting with the Qt 6 work.",
+      "pin_governs": [
+        "windows"
+      ]
     },
     {
       "name": "gdb",
@@ -50,6 +56,9 @@
       "pin_file": "khandaq-desktop/buildscripts/download/download_gdb.sh",
       "pin_var": "GDB_VERSION",
       "platforms": [
+        "windows"
+      ],
+      "pin_governs": [
         "windows"
       ]
     },
@@ -61,6 +70,9 @@
       "pin_var": "GMP_VERSION",
       "platforms": [
         "windows"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -71,6 +83,9 @@
       "pin_var": "LINUXDEPLOYQT_VERSION",
       "platforms": [
         "linux"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -82,6 +97,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -95,7 +113,10 @@
       ],
       "min_version": "2.7.0",
       "min_version_source": "CVE-2024-8176 (improper restriction of XML entity expansion depth) is fixed in libexpat 2.7.0. 2.4.1 (May 2021) also predates the Feb-Mar 2022 CVE wave fixed across 2.4.5-2.4.7. Upstream is at 2.8.3 as of 2026-08-21.",
-      "note": "Bumped 2.8.3 on 2026-08-21 (re-audit R-03), clearing the floor unwaived. Nothing structural blocked it: expat is its own Docker layer built immediately before gdb and consumed by nothing else, so the messenger never parses untrusted XML with it. Verified before the bump: the tarball digest was computed from the downloaded bytes and agrees with the one GitHub publishes, and 2.8.3 configures and builds with this repository's exact flags for x86_64-w64-mingw32, producing a static libexpat.a that still exports every symbol gdb 11.1 needs. NOT verified: a full Windows container build — there is no Docker here."
+      "note": "Bumped 2.8.3 on 2026-08-21 (re-audit R-03), clearing the floor unwaived. Nothing structural blocked it: expat is its own Docker layer built immediately before gdb and consumed by nothing else, so the messenger never parses untrusted XML with it. Verified before the bump: the tarball digest was computed from the downloaded bytes and agrees with the one GitHub publishes, and 2.8.3 configures and builds with this repository's exact flags for x86_64-w64-mingw32, producing a static libexpat.a that still exports every symbol gdb 11.1 needs. NOT verified: a full Windows container build — there is no Docker here.",
+      "pin_governs": [
+        "windows"
+      ]
     },
     {
       "name": "mingw_debug_scripts",
@@ -104,6 +125,9 @@
       "pin_file": "khandaq-desktop/buildscripts/download/download_mingw_debug_scripts.sh",
       "pin_var": "MINGW_W64_DEBUG_SCRIPTS_VERSION",
       "platforms": [
+        "windows"
+      ],
+      "pin_governs": [
         "windows"
       ]
     },
@@ -115,6 +139,9 @@
       "pin_var": "MINGW_LDD_VERSION",
       "platforms": [
         "windows"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -124,6 +151,9 @@
       "pin_file": "khandaq-desktop/buildscripts/download/download_nsisshellexecasuser.sh",
       "pin_var": "NSISSHELLEXECASUSER_HASH",
       "platforms": [
+        "windows"
+      ],
+      "pin_governs": [
         "windows"
       ]
     },
@@ -136,6 +166,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -156,7 +189,10 @@
         "opened": "2026-08-21",
         "expires": "2026-11-19",
         "tracking": "DESIGN-qt6-openssl3-migration-scope.md"
-      }
+      },
+      "pin_governs": [
+        "windows"
+      ]
     },
     {
       "name": "opus",
@@ -167,6 +203,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -178,6 +217,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -201,7 +243,10 @@
         "opened": "2026-08-21",
         "expires": "2026-11-19",
         "tracking": "DESIGN-qt6-openssl3-migration-scope.md"
-      }
+      },
+      "pin_governs": [
+        "windows"
+      ]
     },
     {
       "name": "snore",
@@ -210,6 +255,9 @@
       "pin_file": "khandaq-desktop/buildscripts/download/download_snore.sh",
       "pin_var": "SNORE_VERSION",
       "platforms": [
+        "windows"
+      ],
+      "pin_governs": [
         "windows"
       ]
     },
@@ -223,7 +271,10 @@
         "windows",
         "macos"
       ],
-      "note": "1.0.18 (2019) is old for a crypto primitive; 1.0.20 is current upstream. Not EOL, no waiver, but it should move with the next desktop toolchain refresh."
+      "note": "1.0.18 (2019) is old for a crypto primitive; 1.0.20 is current upstream. Not EOL, no waiver, but it should move with the next desktop toolchain refresh.",
+      "pin_governs": [
+        "windows"
+      ]
     },
     {
       "name": "sqlcipher",
@@ -235,7 +286,10 @@
         "windows",
         "macos"
       ],
-      "note": "4.5.0 (2021) encrypts the local profile database; upstream is on 4.6.x."
+      "note": "4.5.0 (2021) encrypts the local profile database; upstream is on 4.6.x.",
+      "pin_governs": [
+        "windows"
+      ]
     },
     {
       "name": "toxcore",
@@ -246,6 +300,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -257,6 +314,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -268,6 +328,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -279,6 +342,9 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     },
     {
@@ -290,7 +356,32 @@
       "platforms": [
         "windows",
         "macos"
+      ],
+      "pin_governs": [
+        "windows"
       ]
     }
-  ]
+  ],
+  "platform_sources": {
+    "_comment": [
+      "KHANDAQ (internal audit 2026-08-22, #20). Откуда на самом деле берутся версии по платформам.",
+      "Раньше компоненты объявляли platforms:[windows,macos], а pin_file у всех указывал на скрипты",
+      "кросс-сборки под Windows. То есть про macOS инвентарь утверждал то, чего не закреплял, и SBOM",
+      "повторял это утверждение дальше."
+    ],
+    "windows": {
+      "pinned": true,
+      "how": "buildscripts/download/download_*.sh — версия и sha256 в самом скрипте; это и есть pin_file компонентов"
+    },
+    "macos": {
+      "pinned": false,
+      "how": "Homebrew-формулы в CI-образе; версии не закреплены и в этом файле не отражены",
+      "gap": "Закрепить через Brewfile.lock.json и генерировать состав из готового .app (otool -L). До тех пор поле platforms описывает, ГДЕ компонент используется, а не что закреплено."
+    },
+    "linux": {
+      "pinned": false,
+      "how": "apt-пакеты образа Ubuntu",
+      "gap": "Та же работа, что и для macOS: состав снимать с готового тарбола (dpkg-query/ldd)."
+    }
+  }
 }

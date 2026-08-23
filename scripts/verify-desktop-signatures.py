@@ -78,13 +78,37 @@ def main() -> int:
     work.mkdir(parents=True, exist_ok=True)
     print(f"==> Проверка {base}  (рабочий каталог {work})")
 
-    signers = fetch(f"{base}/downloads/allowed_signers")
-    if signers is None:
-        print("не удалось получить allowed_signers — дальше идти незачем", file=sys.stderr)
+    # KHANDAQ (internal audit 2026-08-22): the trust anchor comes from the REPOSITORY, never from
+    # the site being checked.
+    #
+    # This used to download allowed_signers from the same host it was about to verify. That makes
+    # the whole exercise circular: an attacker who can replace an artifact can replace the list of
+    # keys it is checked against, publish a signature made with their own key, and every check here
+    # goes green. The two-channel design — binaries over HTTPS, public key in git — only means
+    # something if the two channels are actually used as two.
+    repo_signers = Path(__file__).resolve().parent.parent / "web" / "downloads" / "allowed_signers"
+    if not repo_signers.is_file():
+        print(f"ОШИБКА: нет {repo_signers} — якорь доверия берётся из репозитория, и без него "
+              f"проверять нечем", file=sys.stderr)
         return 1
+    signers = repo_signers.read_bytes()
     signers_path = work / "allowed_signers"
     signers_path.write_bytes(signers)
-    print(f"    список подписантов: {len(signers.splitlines())} запись(ей)")
+    print(f"    список подписантов из репозитория: {len(signers.splitlines())} запись(ей)")
+
+    # What the site serves is still worth looking at — but as a FINDING, not as the anchor. A site
+    # advertising a different key is either a stale deploy or someone establishing their own key as
+    # the one users will fetch, and both need to be seen.
+    published = fetch(f"{base}/downloads/allowed_signers")
+    if published is None:
+        failures.append("сайт не отдаёт allowed_signers — пользователю нечем проверить подпись")
+    elif published.split() != signers.split():
+        failures.append(
+            "allowed_signers на сайте НЕ совпадает с закоммиченным в репозитории. Проверка здесь "
+            "идёт по репозиторию и от этого не страдает, но пользователь, который скачает список с "
+            "сайта, будет проверять подписи по чужому ключу.")
+    else:
+        print("    ок: опубликованный список совпадает с репозиторным")
 
     sums_raw = fetch(f"{base}/downloads/SHA256SUMS.txt")
     if sums_raw is None:

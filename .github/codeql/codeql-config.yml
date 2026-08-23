@@ -10,21 +10,16 @@
 # one directory whose entire purpose is to contain findings.
 name: khandaq
 
+# KHANDAQ (re-review v2 2026-08-22, RR2-11) — the TLS probe is excluded BY PATH, not by query.
+#
+# py/insecure-protocol used to be switched off for the entire repository because one loop in
+# scripts/verify-site-deploy.py deliberately offers TLS 1.0 and 1.1 — the only way to establish that
+# the server refuses them. The argument for that loop was sound and the cost was not: the same
+# exclusion silently covered any future accidental use of an obsolete protocol in deployment or relay
+# tooling, which is exactly what the query is for.
+#
+# The probe now lives alone in scripts/tls_probe.py, so the exclusion is that file. Everywhere else
+# the query runs, and security/semgrep-khandaq.yml flags the same constants outside it.
 paths-ignore:
   - security/sast-fixtures/**
-
-# KHANDAQ (re-review 2026-08-22, KQ-10) — one query excluded, with the argument.
-#
-# py/insecure-protocol fires on scripts/verify-site-deploy.py, which deliberately lowers
-# minimum_version to TLS 1.0 and 1.1. That is the point of those lines: the only way to establish
-# that the SERVER refuses an obsolete protocol is to offer it. Nothing is transmitted, the handshake
-# is expected to fail, and a handshake that SUCCEEDS is reported as a failure of the site.
-#
-# Inline `# codeql[...]` comments do not clear alerts in GitHub code scanning (that is an LGTM-era
-# feature), so the filter is the mechanism that works. It is repository-wide for this one query,
-# which is the honest cost — and the property the query protects is covered here by something
-# stronger than a static check: the same script asserts against PRODUCTION, on every deploy and
-# weekly, that TLS 1.0 and 1.1 are refused and 1.2/1.3 negotiate.
-query-filters:
-  - exclude:
-      id: py/insecure-protocol
+  - scripts/tls_probe.py

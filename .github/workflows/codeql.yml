@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Initialise CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@6d786de4d6f3531a740e445b53a42b622bbbace8 # v3 (codeql-bundle-v2.26.3)
         with:
           languages: ${{ matrix.language }}
           # build-mode none keeps java-kotlin from needing the Android SDK and a full Gradle build,
@@ -56,6 +56,6 @@ jobs:
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyse
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@6d786de4d6f3531a740e445b53a42b622bbbace8 # v3 (codeql-bundle-v2.26.3)
         with:
           category: /language:${{ matrix.language }}

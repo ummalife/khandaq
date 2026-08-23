@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:placeholder000000",
         "android_client_info": {
-          "package_name": "org.khandaq.messenger"
+          "package_name": "com.khandaq.messenger"
         }
       },
       "oauth_client": [],

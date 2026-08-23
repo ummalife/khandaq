@@ -21,6 +21,7 @@
 #include "ui_profileform.h"
 #include "src/core/core.h"
 #include "src/model/profile/iprofileinfo.h"
+#include "src/persistence/credentialstore.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/profilelocker.h"
 #include "src/persistence/settings.h"
@@ -450,6 +451,14 @@ void ProfileForm::onDeletePassClicked()
 
     if (!profileInfo->deletePassword()) {
         messageBoxManager.showInfo(CAN_NOT_CHANGE_PASSWORD.first, CAN_NOT_CHANGE_PASSWORD.second);
+        return;
+    }
+
+    // KHANDAQ (deep review 2026-08-23, RR3-09): the copy in the system credential store has to go
+    // with it. Removing the profile password used to leave that copy behind, so the secret the user
+    // just chose to delete stayed in Keychain / Credential Manager indefinitely.
+    if (CredentialStore::isSupported()) {
+        CredentialStore::remove(profileInfo->getProfileName());
     }
 }
 
@@ -464,6 +473,19 @@ void ProfileForm::onChangePassClicked()
     QString newPass = dialog->getPassword();
     if (!profileInfo->setPassword(newPass)) {
         messageBoxManager.showInfo(CAN_NOT_CHANGE_PASSWORD.first, CAN_NOT_CHANGE_PASSWORD.second);
+        return;
+    }
+
+    // KHANDAQ (deep review 2026-08-23, RR3-09): keep the credential store in step. It held the OLD
+    // password after a change — so the previous secret survived where the user could not see it, and
+    // auto-login silently stopped working because the stored value no longer opened the profile.
+    if (CredentialStore::isSupported()) {
+        const QString profileName = profileInfo->getProfileName();
+        if (newPass.isEmpty()) {
+            CredentialStore::remove(profileName);
+        } else {
+            CredentialStore::save(profileName, newPass);
+        }
     }
 }
 

@@ -40,6 +40,15 @@ public class NetworkDiagnosticsActivity extends AppCompatActivity
             {
                 startActivity(android.content.Intent.createChooser(intent, getString(R.string.network_diag_export)));
             }
+            else
+            {
+                // KHANDAQ (internal audit 2026-08-22): say something. This button did nothing at all
+                // for the whole life of the feature (wrong FileProvider authority) and produced no
+                // chooser, no toast and no visible error — a support request would have gone
+                // "nothing happens", which is the least actionable report there is.
+                android.widget.Toast.makeText(this, R.string.network_diag_export_failed,
+                                              android.widget.Toast.LENGTH_LONG).show();
+            }
         });
 
         refreshContent();

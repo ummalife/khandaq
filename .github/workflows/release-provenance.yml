@@ -28,6 +28,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # KHANDAQ (deep review 2026-08-23, RR3-07): the native-library step asks whether another
+          # workflow run's commit is an ANCESTOR of this release. At the default depth of 1 the only
+          # object in the local repository is GITHUB_SHA, so `git merge-base --is-ancestor` exits 128
+          # for every other sha, the redirect hides it, and a non-zero status reads as "not an
+          # ancestor". The check silently degenerated into `cand_sha == GITHUB_SHA`, which no
+          # dispatched native run can satisfy — the next tag would not have built at all.
+          fetch-depth: 0
 
       - uses: actions/setup-java@d7793b545071e98d581d3bf084a51c3213318a07 # v4
         with:
@@ -79,11 +87,37 @@ jobs:
         run: |
           set -euo pipefail
           NL=khandaq-android-trifa/android-refimpl-app/app/nativelibs
-          run_id=$(gh run list --workflow=android-native-so.yml --status=success \
-                     --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+          # KHANDAQ (internal audit 2026-08-22): the run must come from a commit that is IN this
+          # release's history.
+          #
+          # "Latest successful, any branch" meant anyone with write access could push a branch that
+          # patched circle_scripts/deps.sh, run the native workflow there, and have the next tag cut
+          # from clean master pick up their library — signed with the upload key and carrying an
+          # attestation that says it was built from a reviewed commit. Nothing in the pipeline
+          # compared the two.
+          run_json=$(gh run list --workflow=android-native-so.yml --status=success \
+                       --branch master --limit 20 --json databaseId,headSha 2>/dev/null || echo '[]')
+          run_id=""
+          for row in $(echo "$run_json" | jq -r '.[] | "\(.databaseId):\(.headSha)"'); do
+            cand_id="${row%%:*}"; cand_sha="${row##*:}"
+            # An object we cannot resolve is a BROKEN CHECK, not a negative answer. Without this the
+            # next person to change the checkout depth turns the ancestry test back into an equality
+            # test and nothing says so.
+            if ! git cat-file -e "${cand_sha}^{commit}" 2>/dev/null; then
+              echo "::error::cannot resolve $cand_sha locally — the checkout is too shallow for an" >&2
+              echo "         ancestry test, so this gate cannot answer the question it exists for." >&2
+              exit 1
+            fi
+            if git merge-base --is-ancestor "$cand_sha" "${GITHUB_SHA}"; then
+              run_id="$cand_id"
+              echo "native build $cand_id was made at $cand_sha, which is an ancestor of this release"
+              break
+            fi
+          done
           if [ -z "${run_id:-}" ]; then
-            echo "::error::no successful android-native-so run to take libjni-c-toxcore.so from." >&2
-            echo "         Run that workflow first: gh workflow run android-native-so.yml" >&2
+            echo "::error::no successful android-native-so run on master whose commit is an" >&2
+            echo "         ancestor of this release. A native library built somewhere else must not" >&2
+            echo "         enter a release: run the workflow on the release commit." >&2
             exit 1
           fi
           echo "taking the native library from android-native-so run $run_id"
@@ -96,7 +130,17 @@ jobs:
           [ -f /tmp/natso/armeabi/libjni-c-toxcore.so ] \
             && cp /tmp/natso/armeabi/libjni-c-toxcore.so "$NL/armeabi-v7a/"
           ls -l "$NL"/*/libjni-c-toxcore.so
+
+          # And do not trust the run selection alone. These digests are committed, so bytes that do
+          # not match what was reviewed cannot enter the build no matter which run produced them.
+          echo "==> verifying the native slices against the committed digests"
+          ( cd "$NL" && shasum -a 256 -c SHA256SUMS.txt ) || {
+            echo "::error::a native slice does not match nativelibs/SHA256SUMS.txt. Either the" >&2
+            echo "         native stack was rebuilt (update the digests in the same PR that changes" >&2
+            echo "         circle_scripts/deps.sh) or these are not the bytes that were reviewed." >&2
+            exit 1; }
           echo "native-so-run-id=$run_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "native-so-digests=verified against committed SHA256SUMS.txt" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Release gates - dependency waivers and published metadata
         run: |

@@ -286,6 +286,11 @@ static NSTimeInterval announceJitterSeconds(NSString *groupKey, NSString *selfGr
             self.setValueBlock(row, [OCTNgcHskDirectory encodeRecord:bumped]);
             break;
         }
+        case OCTNgcHskDecisionUpToDate:
+            // KHANDAQ (internal audit 2026-08-22): the same key, seen again inside the refresh
+            // interval. Nothing to write — which is the entire point: this is the branch that stops a
+            // repeated announcement from costing a Realm transaction each time.
+            break;
         case OCTNgcHskDecisionRecordOnly:
             // Deliberately not stored anywhere verification reads. A rejected key is only a
             // diagnostic, and writing it beside the trusted one is how "recorded" quietly becomes

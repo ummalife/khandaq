@@ -1015,6 +1015,7 @@
     <string name="network_diag_summary">Статус DHT, реле, журнал переподключений</string>
     <string name="network_diag_refresh">Обновить</string>
     <string name="network_diag_export">Экспорт журнала</string>
+    <string name="network_diag_export_failed">Не удалось выгрузить журнал</string>
     <string name="pref_title_network_diagnostics">Диагностика сети</string>
     <string name="pref_title_use_H264_hw_encoding">Аппаратное кодирование H264</string>
     <string name="pref_description_use_H264_hw_encoding">Использовать аппаратное ускорение для кодирования H264</string>

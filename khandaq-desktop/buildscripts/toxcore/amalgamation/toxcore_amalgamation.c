@@ -74437,6 +74437,15 @@ static struct RTPMessage *new_message(Tox *tox, const struct RTPHeader *header, 
                                       uint16_t data_length)
 {
     assert(allocate_len >= data_length);
+    /* KHANDAQ (deep review 2026-08-23, RR3-02): a real check, not an assert.
+     *
+     * Release builds define NDEBUG (desktop CMAKE_BUILD_TYPE=Release, Android -DNDEBUG in
+     * circle_scripts/deps.sh), so this assertion is compiled out of exactly the binaries users run.
+     * The invariant it states is the one standing between a header field and a heap overflow, so it
+     * has to hold at runtime. */
+    if (allocate_len < data_length) {
+        return nullptr;
+    }
     // AV_INPUT_BUFFER_PADDING_SIZE --> is needed later if we give it to ffmpeg!
     struct RTPMessage *msg = (struct RTPMessage *)calloc(1,
                              sizeof(struct RTPMessage) + allocate_len + AV_INPUT_BUFFER_PADDING_SIZE);
@@ -74620,14 +74629,36 @@ static bool fill_data_into_slot(Tox *tox, struct RTPWorkBufferList *wkbl, const 
 
     assert(header != nullptr);
 
-    if (slot->received_len == 0) {
-        assert(slot->buf == nullptr);
+    /* KHANDAQ (deep review 2026-08-23, RR3-01): validate the packet BEFORE opening a slot for it,
+     * and decide "is this slot open" by the buffer rather than by how many bytes have arrived.
+     *
+     * The length check used to sit below, after calloc and after ++next_free_entry, so a packet that
+     * failed it left a slot with buf != nullptr, received_len == 0 and the counter already advanced.
+     * get_slot() then matched the same sequnum/timestamp back to that slot, received_len == 0 sent
+     * it down the "new slot" path again, and the previous allocation leaked while the counter moved
+     * once more. next_free_entry is int8_t over a 3-entry array: a few dozen such packets walked it
+     * past the end (an out-of-bounds free in rtp_kill) and past 127 into negative territory (a write
+     * before the array). A zero-length payload reached the same state without failing anything at
+     * all, which is why the test is now on slot->buf. */
+    if (header->data_length_full > MAX_RTP_FRAME_SIZE) {
+        LOGGER_API_WARNING(tox, "RTP frame too large: %u > %u", (unsigned)header->data_length_full,
+                        (unsigned)MAX_RTP_FRAME_SIZE);
+        return false;
+    }
 
-        if (header->data_length_full > MAX_RTP_FRAME_SIZE) {
-            LOGGER_API_WARNING(tox, "RTP frame too large: %u > %u", (unsigned)header->data_length_full, (unsigned)MAX_RTP_FRAME_SIZE);
-            return false;
-        }
+    /* A part that carries no bytes cannot advance a frame, and letting it open a slot was the second
+     * route into the counter corruption above: it passed every check, copied nothing, and left
+     * received_len at 0 so the next packet with the same sequnum opened the slot again. */
+    if (incoming_data_length == 0 ||
+            header->offset_full >= header->data_length_full ||
+            header->data_length_full - header->offset_full < incoming_data_length) {
+        LOGGER_API_ERROR(tox, "Packet too long for buffer: offset %u + len %u > total %u",
+                    (unsigned)header->offset_full, (unsigned)incoming_data_length,
+                    (unsigned)header->data_length_full);
+        return false;
+    }
 
+    if (slot->buf == nullptr) {
         // No data for this slot has been received, yet, so we create a new
         // message for it with enough memory for the entire frame.
         // AV_INPUT_BUFFER_PADDING_SIZE --> is needed later if we give it to ffmpeg!
@@ -74652,7 +74683,15 @@ static bool fill_data_into_slot(Tox *tox, struct RTPWorkBufferList *wkbl, const 
 
 
 
-        assert(wkbl->next_free_entry < USED_RTP_WORKBUFFER_COUNT);
+        /* A real bound, not an assertion: release builds define NDEBUG, so the assert was absent
+         * from exactly the binaries that ship. */
+        if (wkbl->next_free_entry >= USED_RTP_WORKBUFFER_COUNT || wkbl->next_free_entry < 0) {
+            LOGGER_API_WARNING(tox, "RTP work buffer exhausted (%d)", (int)wkbl->next_free_entry);
+            free(msg);
+            slot->buf = nullptr;
+            return false;
+        }
+
         ++wkbl->next_free_entry;
     } else {
         if (slot->buf->header.data_length_full != header->data_length_full) {
@@ -74662,15 +74701,7 @@ static bool fill_data_into_slot(Tox *tox, struct RTPWorkBufferList *wkbl, const 
         }
     }
 
-    // We already checked this when we received the packet, but we rely on it
-    // here, so assert again.
-    assert(header->offset_full < header->data_length_full);
-
-    if (header->data_length_full - header->offset_full < incoming_data_length) {
-        LOGGER_API_ERROR(tox, "Packet too long for buffer: offset %u + len %u > total %u",
-                    (unsigned)header->offset_full, (unsigned)incoming_data_length, (unsigned)header->data_length_full);
-        return false;
-    }
+    // Bounds were established at the top of this function, before any slot was opened.
 
     // Copy the incoming chunk of data into the correct position in the full
     // frame data array.
@@ -75215,6 +75246,15 @@ void handle_rtp_packet(Tox *tox, uint32_t friendnumber, const uint8_t *data, siz
          */
 
         session->mp = new_message(tox, &header, length - RTP_HEADER_SIZE, data + RTP_HEADER_SIZE, length - RTP_HEADER_SIZE);
+
+        /* KHANDAQ (deep review 2026-08-23, RR3-02): new_message can now refuse, so the result has to
+         * be looked at. It could refuse before too — calloc fails — and the callback was handed the
+         * null either way. */
+        if (session->mp == nullptr) {
+            pthread_mutex_unlock(endcall_mutex);
+            return;
+        }
+
         session->mcb(rtp_get_mono_time_from_rtpsession(session), session->cs, session->mp);
         session->mp = nullptr;
         pthread_mutex_unlock(endcall_mutex);
@@ -75287,6 +75327,16 @@ NEW_MULTIPARTED:
             LOGGER_API_WARNING(tox, "Packet too long for buffer: offset %u + len %u > total %u",
                             (unsigned)header.offset_lower, (unsigned)(length - RTP_HEADER_SIZE),
                             (unsigned)header.data_length_lower);
+            /* KHANDAQ (deep review 2026-08-23, RR3-03): the one return in this function that left
+             * endcall_mutex held.
+             *
+             * Every other exit unlocks. One malformed packet from a contact already in a call took
+             * the lock and never gave it back, and the lock is taken by another thread: on the
+             * desktop tox_iterate runs on the Core thread while toxav_iterate and toxav_call_control
+             * run on "qTox CoreAV". The user could then not hang up (call_kill_transmission blocks
+             * on this mutex) and the app hung on exit (toxav_kill locks, then destroys a held
+             * mutex, which is undefined behaviour on top). */
+            pthread_mutex_unlock(endcall_mutex);
             return;
         }
 
@@ -75297,6 +75347,13 @@ NEW_MULTIPARTED:
         /* Store message.
          */
         session->mp = new_message(tox, &header, header.data_length_lower, data + RTP_HEADER_SIZE, length - RTP_HEADER_SIZE);
+
+        /* Same as above: an unchecked null here was a dereference one packet away. */
+        if (session->mp == nullptr) {
+            pthread_mutex_unlock(endcall_mutex);
+            return;
+        }
+
         memmove(session->mp->data + header.offset_lower, session->mp->data, session->mp->len);
     }
 

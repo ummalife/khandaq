@@ -9,7 +9,6 @@ import os
 private struct Constants {
     static let MaxFileSizeWiFi: OCTToxFileSize = 200 * 1024 * 1024
     static let MaxFileSizeWWAN: OCTToxFileSize = 200 * 1024 * 1024
-    static let MaxVoiceNoteAutoSize: OCTToxFileSize = 20 * 1024 * 1024
 }
 
 class AutomationCoordinator: NSObject {
@@ -64,24 +63,37 @@ private extension AutomationCoordinator {
         let usingWiFi = self.usingWiFi()
         os_log("AutomationCoordinator:usingWiFi=%d", usingWiFi)
 
-        // KHANDAQ (#156): voice notes are part of core messaging (Telegram-style) — always fetch
-        // them from accepted friends regardless of the attachment-autodownload setting, which
-        // defaults to Never and otherwise leaves incoming voice bubbles permanently unloadable.
-        let isVoiceNote = VoiceMessageHelper.isVoiceMessage(fileName: message.messageFile!.fileName,
-                                                            filePath: nil)
-            && message.messageFile!.fileSize <= Constants.MaxVoiceNoteAutoSize
+        // KHANDAQ (#156): voice notes are part of core messaging (Telegram-style) — fetched from
+        // accepted friends even when the attachment-autodownload setting says Never, which is its
+        // default and would otherwise leave incoming voice bubbles permanently unloadable.
+        //
+        // KHANDAQ (internal audit 2026-08-22): the test is now the strict one, and the exemption is
+        // narrower than it was.
+        //
+        // It used to accept any name CONTAINING ".file.m4a" up to 20 MB, so `photo.file.m4a.jpg`
+        // qualified: a contact could push arbitrary content of any type onto the device, over
+        // cellular, while the user's setting said Never. The name comes from the sender and decides
+        // nothing on its own any more — the suffix must be exactly the one the sending side writes,
+        // and the size must be one a voice note actually has.
+        //
+        // The exemption also no longer overrides "Wi-Fi only". Never is about consent and is worth
+        // overriding for core messaging; Wi-Fi only is about the user's data plan, and silently
+        // spending someone's cellular allowance is not a thing to do on their behalf.
+        let isVoiceNote = VoiceMessageHelper.isAutoFetchableVoiceNote(
+            fileName: message.messageFile!.fileName,
+            fileSize: message.messageFile!.fileSize)
 
-        if !isVoiceNote {
-            switch userDefaults.autodownloadImages {
-                case .Never:
+        switch userDefaults.autodownloadImages {
+            case .Never:
+                if !isVoiceNote {
                     return
-                case .UsingWiFi:
-                    if !usingWiFi {
-                        return
-                    }
-                case .Always:
-                    break
-            }
+                }
+            case .UsingWiFi:
+                if !usingWiFi {
+                    return
+                }
+            case .Always:
+                break
         }
 
         // HINT: now we apply autodownload to all files, not only images

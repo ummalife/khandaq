@@ -8248,6 +8248,35 @@ public class HelperGroup
         {
             return;
         }
+        // KHANDAQ (2026-08-23): do not broadcast a PRIVATE group's chat id. M-01 made the receiving
+        // side refuse this packet for private groups — knowing the id is not membership there — so for
+        // those groups every one of these is now guaranteed to be declined. What it still does is hand
+        // the 32-byte chat id of a private group to every online friend, including the ones who are not
+        // in it, every 30 seconds while we are trying to reconnect. That is the exact identifier M-01
+        // treats as not-a-credential-but-still-sensitive, sent to people with no business having it.
+        //
+        // The privacy state is read from the database rather than from tox: this runs precisely when we
+        // are NOT connected to the group, so tox_group_get_privacy_state has nothing to answer with. A
+        // group with no row is treated as before (sent), so nothing regresses for public groups.
+        try
+        {
+            if (orma != null)
+            {
+                final java.util.List<GroupDB> rows = orma.selectFromGroupDB().
+                        group_identifierEq(id_lower).toList();
+                if (!rows.isEmpty() && (rows.get(0).privacy_state
+                        == ToxVars.TOX_GROUP_PRIVACY_STATE.TOX_GROUP_PRIVACY_STATE_PRIVATE.value))
+                {
+                    HelperGeneric.logI(TAG, "send_group_invite_request:skip_private:id="
+                            + group_identifier_short(id_lower, false));
+                    return;
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+
         pending_friend_assisted_joins.put(id_lower, System.currentTimeMillis());
 
         final byte[] chat_id_bytes = HelperGeneric.hex_to_bytes(id_lower);

@@ -5396,6 +5396,19 @@ groupNumber:(OCTToxGroupNumber)groupNumber
     }
 
     NSString *chatIdLower = chatIdHex.lowercaseString;
+
+    // KHANDAQ (2026-08-23): do not broadcast a PRIVATE group's chat id. The receiving side refuses
+    // this packet for private groups (knowing the id is not membership there), so every one of these
+    // is now certain to be declined — while still handing the group's 32-byte chat id to every online
+    // friend, including those not in it, every 30 seconds for as long as the reconnect keeps retrying.
+    // Read from the stored chat rather than from tox: this runs exactly when the group is not
+    // connected. A chat we do not have stored is treated as before, so public groups are unaffected.
+    OCTChat *storedChat = [[self.dataSource managerGetRealmManager] chatWithGroupChatIdHex:chatIdLower];
+
+    if (storedChat && (storedChat.groupPrivacyState == (int32_t)OCTToxGroupPrivacyStatePrivate)) {
+        return;
+    }
+
     uint8_t *chatIdBytes = [OCTTox hexStringToBin:chatIdLower];
 
     if (! chatIdBytes) {

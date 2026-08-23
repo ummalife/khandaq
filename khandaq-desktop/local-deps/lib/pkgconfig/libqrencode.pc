@@ -1,0 +1,11 @@
+prefix=/Users/lucyok/Khandaq-rc/khandaq-desktop/local-deps
+exec_prefix=/Users/lucyok/Khandaq-rc/khandaq-desktop/local-deps/bin
+libdir=/Users/lucyok/Khandaq-rc/khandaq-desktop/local-deps/lib
+includedir=/Users/lucyok/Khandaq-rc/khandaq-desktop/local-deps/include
+
+Name: libqrencode
+Description: A QR Code encoding library
+Version: 4.1.1
+Libs: -L${libdir} -lqrencode
+Libs.private: 
+Cflags: -I${includedir}

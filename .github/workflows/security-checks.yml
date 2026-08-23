@@ -257,10 +257,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Install cppcheck
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck
+      - name: Install cppcheck and the Qt form compiler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck qtbase5-dev-tools
       - name: No new static-analysis findings in the desktop sources
         run: python3 scripts/check-native-static-analysis.py
+      # KHANDAQ (deep review follow-up 2026-08-23): there is no desktop BUILD in CI, so a broken .ui
+      # or a mistyped widget name reaches a release build with nothing in between. uic parsing each
+      # form and cross-checking every `ui->widget` against it costs seconds and catches that class.
+      # A small part of RR2-12, not a substitute for compiling the desktop.
+      - name: Qt forms must compile and match the widgets the code names
+        run: python3 scripts/check-desktop-ui-forms.py
 
   live-site:
     # KHANDAQ (re-audit 2026-08-22, W-01/W-02/W-03). The audit asks for header assertions "из

@@ -91,7 +91,7 @@ signals:
     void saveGlobal();
 
 public slots:
-    void onCreateNewProfile(const QString& name, const QString& pass);
+    void onCreateNewProfile(const QString& name, const QString& pass, bool autoLogin);
     void onLoadProfile(const QString& name, const QString& pass);
     int showLogin(const QString& profileName = QString());
     void bootstrapWithProfile(Profile* p);

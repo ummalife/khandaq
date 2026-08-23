@@ -364,8 +364,18 @@ public class HelperMessageReaction
     {
         try
         {
+            // KHANDAQ (2026-08-23): check the length BEFORE reading data[4], the way the group twin
+            // below already does. Reading first meant a packet shorter than five bytes threw
+            // ArrayIndexOutOfBoundsException, which the surrounding catch swallowed — the packet was
+            // dropped, so nothing broke, but the bound was being enforced by an exception handler
+            // rather than by the check written for it. That works until somebody narrows the catch.
+            if (length < (FRIEND_HEADER_LEN + 1))
+            {
+                return;
+            }
+
             final byte anchorType = data[4];
-            if (length < (FRIEND_HEADER_LEN + 1) || data[1] != MAGIC_1 || data[2] != MAGIC_2
+            if (data[1] != MAGIC_1 || data[2] != MAGIC_2
                 || data[3] != VERSION
                 || (anchorType != ANCHOR_MSGV3_HASH && anchorType != ANCHOR_MSG_ID_HASH))
             {

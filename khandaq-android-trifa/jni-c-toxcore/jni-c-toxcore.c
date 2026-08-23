@@ -8646,6 +8646,31 @@ Java_com_zoffcc_applications_trifa_MainActivity_toxav_1ngc_1audio_1decode(JNIEnv
         return (jint)-21;
     }
 
+    /* KHANDAQ (2026-08-23): check both arrays against what the decoder will do with them, the way
+     * the video bridge above already does. This one trusted encoded_frame_size_bytes without
+     * comparing it to the array it indexes, and did not look at the output capacity at all.
+     *
+     * Today the caller passes byte[20000] and the decoder writes at most 5760 samples * 1 channel *
+     * 2 bytes = 11520, so there is room — but the margin is a property of the CALLER, checked
+     * nowhere, and it disappears the moment channels becomes 2 (23040 > 20000). An asymmetry with
+     * the video bridge is exactly the shape a later change walks into. */
+    if (encoded_frame_size_bytes < 0
+            || (jlong)(*env)->GetArrayLength(env, encoded_frame_bytes) < (jlong)encoded_frame_size_bytes)
+    {
+        return (jint)-21;
+    }
+
+    {
+        const jlong pcm_capacity_bytes = (jlong)(*env)->GetArrayLength(env, pcm_decoded);
+        /* 5760 samples per channel is what toxav_ngc_audio_decode passes to opus_decode. */
+        const jlong pcm_needed_bytes = (jlong)5760 * 2 /* int16 */ * 1 /* channel, see above */;
+
+        if (pcm_capacity_bytes < pcm_needed_bytes)
+        {
+            return (jint)-21;
+        }
+    }
+
     jbyte *pcm_decoded_c = (*env)->GetByteArrayElements(env, pcm_decoded, 0);
     jbyte *enc_c = (*env)->GetByteArrayElements(env, encoded_frame_bytes, 0);
 

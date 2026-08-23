@@ -1,0 +1,131 @@
+/*
+ * KHANDAQ (2026-08-23) — sanitizer harness for the NGC H.264 Annex-B → AVCC converter.
+ *
+ * ngc_annexb_to_avcc rewrites a video frame from a group participant: it scans for start codes and
+ * copies each NAL into a fresh buffer with a 4-byte length prefix. Every byte it scans comes from
+ * another peer, and the output is what gets handed to the decoder.
+ *
+ * It is worth fuzzing rather than reading because the arithmetic is the awkward kind: the outer
+ * loop steps while `pos + 4 <= annexb_len`, the inner scan while `next + 3 < annexb_len`, and the
+ * output can be LARGER than the input (4 bytes of length written per 3 bytes of start code
+ * consumed) — so the whole thing rests on one comparison against `annexb_len + 64`.
+ *
+ * The function is lifted verbatim by the Python around this file.
+ */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* --- the real converter, lifted verbatim out of the shipped file ----------------------------- */
+@@FUNCTION@@
+/* -------------------------------------------------------------------------------------------- */
+
+static void drive(const uint8_t *data, size_t size)
+{
+	if (size == 0 || size > (1u << 20)) {
+		return;
+	}
+
+	/* Exactly-sized copy: reading past the logical end inside a fuzzer's own arena would not be
+	 * caught, and an over-read is the thing being looked for. */
+	uint8_t *exact = (uint8_t *)malloc(size);
+	if (exact == NULL) {
+		return;
+	}
+	memcpy(exact, data, size);
+
+	uint8_t *out = NULL;
+	uint32_t out_len = 0;
+
+	if (ngc_annexb_to_avcc(exact, (uint32_t)size, &out, &out_len)) {
+		if (out == NULL) {
+			fprintf(stderr, "INVARIANT: reported success with a null buffer\n");
+			abort();
+		}
+		/* The converter allocates size + 64 and the caller trusts out_len. Anything beyond
+		 * that is a write the allocation never covered. */
+		if (out_len > size + 64) {
+			fprintf(stderr, "INVARIANT: out_len %u exceeds the %zu-byte allocation\n",
+				out_len, size + 64);
+			abort();
+		}
+		/* Read every byte the caller would read, so ASan sees the same accesses. */
+		volatile uint8_t sink = 0;
+		for (uint32_t i = 0; i < out_len; ++i) {
+			sink ^= out[i];
+		}
+		(void)sink;
+		free(out);
+	}
+	free(exact);
+}
+
+#ifdef KHANDAQ_LIBFUZZER
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+	drive(data, size);
+	return 0;
+}
+#else
+static uint32_t rng_state;
+static uint32_t xorshift32(void)
+{
+	uint32_t x = rng_state;
+	x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+	return rng_state = x;
+}
+
+int main(int argc, char **argv)
+{
+	unsigned long iterations = (argc > 1) ? strtoul(argv[1], NULL, 10) : 200000UL;
+	uint8_t buf[512];
+
+	for (unsigned long it = 0; it < iterations; ++it) {
+		rng_state = (uint32_t)(it + 1) * 2654435761u;
+		size_t size = 1 + (xorshift32() % sizeof(buf));
+
+		/*
+		 * Random bytes almost never contain a start code, and a corpus that never reaches the
+		 * copy path tests nothing. Two shapes, and the second one is the whole point.
+		 *
+		 * SPARSE: a few start codes at random offsets — ordinary-looking frames.
+		 *
+		 * DENSE: the buffer packed with back-to-back "00 00 01". This is the shape that can
+		 * make the OUTPUT LARGER THAN THE INPUT: three bytes consumed per start code, four
+		 * bytes of length prefix written. Past ~64 of them the output passes annexb_len + 64
+		 * and only the size check stands between that and a heap overflow. The first version
+		 * of this generator used the sparse shape alone, could not reach that state, and
+		 * therefore did NOT fail when the size check was deleted — a fuzzer that cannot catch
+		 * the defect its target guards against is decoration. Found by deleting it and
+		 * watching nothing happen.
+		 */
+		for (size_t i = 0; i < size; ++i) {
+			buf[i] = (uint8_t)(xorshift32() >> 16);
+		}
+		if ((xorshift32() & 3) == 0) {
+			for (size_t i = 0; i + 2 < size; i += 3) {
+				buf[i] = 0x00;
+				buf[i + 1] = 0x00;
+				buf[i + 2] = 0x01;
+			}
+		} else {
+			unsigned marks = xorshift32() % 8;
+			for (unsigned m = 0; m < marks; ++m) {
+				size_t at = xorshift32() % size;
+				if (at + 3 < size) {
+					buf[at] = 0x00;
+					buf[at + 1] = 0x00;
+					buf[at + 2] = (xorshift32() & 1) ? 0x01 : 0x00;
+					buf[at + 3] = 0x01;
+				}
+			}
+		}
+		drive(buf, size);
+	}
+	printf("ok: %lu frames through the real ngc_annexb_to_avcc, no sanitizer report\n",
+	       iterations);
+	return 0;
+}
+#endif

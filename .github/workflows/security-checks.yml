@@ -403,3 +403,13 @@ jobs:
       # shift-width UB in the read macro that had been decoding every 8-byte field wrong.
       - name: Fuzz the toxext messages parser under sanitizers
         run: python3 scripts/check-toxext-fuzz.py --libfuzzer --seconds 45
+      # KHANDAQ (2026-08-23): the H.264 Annex-B → AVCC converter rewrites a frame from a group
+      # participant, and its output can be LARGER than its input (4 bytes of length prefix per 3
+      # bytes of start code), so the whole thing rests on one size comparison.
+      - name: Fuzz the NGC Annex-B converter under sanitizers
+        run: python3 scripts/check-annexb-fuzz.py --libfuzzer --seconds 45
+      # KHANDAQ (2026-08-23): MSI signalling is the EARLIEST-reachable parser — handle_msi_packet
+      # runs for any accepted contact before a call exists, since the call is created from what it
+      # parses.
+      - name: Fuzz the MSI signalling parser under sanitizers
+        run: python3 scripts/check-msi-fuzz.py --libfuzzer --seconds 45

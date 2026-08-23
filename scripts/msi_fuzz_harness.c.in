@@ -1,0 +1,154 @@
+/*
+ * KHANDAQ (2026-08-23) — sanitizer harness for the MSI signalling parser.
+ *
+ * msg_parse_in is the earliest-reachable parser in the call stack: handle_msi_packet runs for any
+ * accepted contact BEFORE a call exists — the call is created from the parsed REQU_INIT. So unlike
+ * the RTP paths, nothing has to be established first.
+ *
+ * It is a hand-rolled TLV walker: `|id|size|data...|` repeated, terminated by a zero byte, with the
+ * bounds kept by one `int size_constraint` that check_size decrements. Reads at it[1] and it[2]
+ * happen on the strength of that counter, so the harness exists to ask whether the counter and the
+ * reads can ever disagree.
+ *
+ * The three functions are lifted verbatim by the Python around this file.
+ */
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct Tox Tox;
+#define LOGGER_API_ERROR(...) ((void)0)
+#define LOGGER_API_INFO(...)  ((void)0)
+#define LOGGER_API_WARNING(...) ((void)0)
+#define LOGGER_API_DEBUG(...) ((void)0)
+
+/* Verbatim from toxav/msi.c */
+typedef enum MSIHeaderID {
+    ID_REQUEST = 1,
+    ID_ERROR,
+    ID_CAPABILITIES,
+} MSIHeaderID;
+
+typedef enum MSIRequest {
+    REQU_INIT,
+    REQU_PUSH,
+    REQU_POP,
+} MSIRequest;
+
+@@ERROR_ENUM@@
+
+typedef struct MSIHeaderRequest {
+    MSIRequest value;
+    bool exists;
+} MSIHeaderRequest;
+
+typedef struct MSIHeaderError {
+    MSIError value;
+    bool exists;
+} MSIHeaderError;
+
+typedef struct MSIHeaderCapabilities {
+    uint8_t value;
+    bool exists;
+} MSIHeaderCapabilities;
+
+typedef struct MSIMessage {
+    MSIHeaderRequest      request;
+    MSIHeaderError        error;
+    MSIHeaderCapabilities capabilities;
+} MSIMessage;
+
+/* --- the real code, lifted verbatim out of the shipped file ---------------------------------- */
+@@CHECK_SIZE@@
+
+@@CHECK_ENUM@@
+
+@@PARSER@@
+/* -------------------------------------------------------------------------------------------- */
+
+static void drive(const uint8_t *data, size_t size)
+{
+	if (size == 0 || size > 4096) {
+		return;
+	}
+	/* Exactly-sized copy so a read past the end is a real ASan event. */
+	uint8_t *exact = (uint8_t *)malloc(size);
+	if (exact == NULL) {
+		return;
+	}
+	memcpy(exact, data, size);
+
+	MSIMessage msg;
+	memset(&msg, 0, sizeof(msg));
+	(void)msg_parse_in(NULL, &msg, exact, (uint16_t)size);
+
+	free(exact);
+}
+
+#ifdef KHANDAQ_LIBFUZZER
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+	drive(data, size);
+	return 0;
+}
+#else
+static uint32_t rng_state;
+static uint32_t xorshift32(void)
+{
+	uint32_t x = rng_state;
+	x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+	return rng_state = x;
+}
+
+int main(int argc, char **argv)
+{
+	unsigned long iterations = (argc > 1) ? strtoul(argv[1], NULL, 10) : 200000UL;
+	uint8_t buf[128];
+
+	for (unsigned long it = 0; it < iterations; ++it) {
+		rng_state = (uint32_t)(it + 1) * 2654435761u;
+		size_t size = 1 + (xorshift32() % sizeof(buf));
+
+		/*
+		 * The parser rejects anything whose last byte is non-zero, so a purely random corpus
+		 * is thrown out at the first line and tests nothing. Build TLV records the parser will
+		 * actually walk — valid ids with attacker-chosen sizes, which is where a disagreement
+		 * between the size counter and the reads would live — and terminate properly.
+		 */
+		/*
+		 * The shape that can walk off the end, worked out rather than hoped for.
+		 *
+		 * Records are consumed three bytes at a time, so if the length is a MULTIPLE OF THREE the
+		 * terminating zero is the third byte of the last record — a payload byte the loop reads and
+		 * steps over, rather than the sentinel it stops on. `it` then lands one past the end and
+		 * `while (*it)` reads there. Only the size_constraint counter stands in the way.
+		 *
+		 * Every other byte must be non-zero (an early zero ends the walk) and every size byte must
+		 * be 1 (check_size rejects anything else immediately, so a random size means no record is
+		 * ever accepted and the walk never advances).
+		 *
+		 * Two earlier versions of this generator got this wrong and did NOT fail when the bounds
+		 * check was deleted — the same failure as the Annex-B harness. Both were found by deleting
+		 * the check and watching nothing happen, which is the only way to tell a fuzzer from a
+		 * decoration.
+		 */
+		size = 3 * (1 + (xorshift32() % 12));
+		for (size_t at = 0; at + 2 < size; at += 3) {
+			buf[at] = (uint8_t)(1 + (xorshift32() % 3));        /* a real header id */
+			buf[at + 1] = ((xorshift32() & 7) == 0)
+					  ? (uint8_t)(1 + (xorshift32() % 255))  /* sometimes a bad size */
+					  : 1;                                  /* usually the valid one */
+			buf[at + 2] = (uint8_t)(xorshift32() % 3);          /* payload: inside enum range */
+		}
+		buf[size - 1] = 0;                                          /* required end byte */
+
+		drive(buf, size);
+	}
+	printf("ok: %lu MSI messages through the real msg_parse_in, no sanitizer report\n",
+	       iterations);
+	return 0;
+}
+#endif

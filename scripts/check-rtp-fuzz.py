@@ -52,9 +52,9 @@ def read(path):
         die("cannot read %s (%s)" % (path, exc))
 
 
-def extract_function(src, name, where):
+def extract_function(src, name, where, signature=r"static\s+bool"):
     """Same brace-matching extractor as check-ios-rtp-reassembly.py. A failure is an error, not a skip."""
-    m = re.search(r"^static\s+bool\s+%s\s*\(" % re.escape(name), src, re.M)
+    m = re.search(r"^%s\s+%s\s*\(" % (signature, re.escape(name)), src, re.M)
     if not m:
         die("%s: cannot find `static bool %s(` — the file changed shape and this check would have "
             "become vacuous. Fix the extractor rather than deleting the check." % (where, name))
@@ -86,17 +86,34 @@ def main():
     if not os.path.isfile(src_path):
         die("не найден rtp.m — проверять нечего, а пустой прогон выглядел бы как успех")
     ios = read(src_path)
-    fn = extract_function(ios, "fill_data_into_slot", os.path.relpath(src_path, ROOT))
+    where = os.path.relpath(src_path, ROOT)
+    fn = extract_function(ios, "fill_data_into_slot", where)
+    # The header unpacker: the code that turns 80 attacker-controlled bytes into the fields
+    # everything downstream trusts. Lifted the same way, so it cannot drift into being a copy.
+    unpack = extract_function(ios, "rtp_header_unpack", where, signature=r"size_t")
 
-    defines = ""
     m = re.search(r"^#define\s+MAX_RTP_FRAME_SIZE\s+.*$", ios, re.M)
     defines = m.group(0) if m else "#define MAX_RTP_FRAME_SIZE MAX_RTP_FRAME_SIZE_FALLBACK"
 
+    # RTP_HEADER_SIZE and RTP_PADDING_FIELDS come from the shipped rtp.h, not from a number written
+    # here: the two clients disagree on the padding split (iOS 11 fields, desktop 4 plus extra wire
+    # fields), and a hard-coded value would quietly fuzz the wrong layout.
+    rtp_h = os.path.join(os.path.dirname(src_path), "rtp.h")
+    hdr = read(rtp_h) if os.path.isfile(rtp_h) else ""
+    for macro in ("RTP_HEADER_SIZE", "RTP_PADDING_FIELDS"):
+        mm = re.search(r"^#define\s+%s\s+.*$" % macro, hdr, re.M)
+        if not mm:
+            die("не найден #define %s в %s — подставлять своё число нельзя, разбор заголовка "
+                "зависит от него" % (macro, os.path.relpath(rtp_h, ROOT)))
+        defines += "\n" + mm.group(0)
+
     harness = read(HARNESS)
-    for marker in ("@@DEFINES@@", "@@FUNCTION@@"):
+    for marker in ("@@DEFINES@@", "@@FUNCTION@@", "@@UNPACK@@"):
         if marker not in harness:
             die("%s: нет маркера %s" % (HARNESS, marker))
-    harness = harness.replace("@@DEFINES@@", defines).replace("@@FUNCTION@@", fn)
+    harness = (harness.replace("@@DEFINES@@", defines)
+                      .replace("@@FUNCTION@@", fn)
+                      .replace("@@UNPACK@@", unpack))
 
     tmp = tempfile.mkdtemp(prefix="khandaq-rtpfuzz-")
     csrc = os.path.join(tmp, "fuzz.c")

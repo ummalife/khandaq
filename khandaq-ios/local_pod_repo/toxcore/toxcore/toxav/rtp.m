@@ -57,6 +57,15 @@ static struct RTPMessage *new_message(const struct RTPHeader *header, size_t all
                                       uint16_t data_length)
 {
     assert(allocate_len >= data_length);
+    /* KHANDAQ (deep review 2026-08-23, RR3-02): a real check, not an assert.
+     *
+     * Release builds define NDEBUG (desktop CMAKE_BUILD_TYPE=Release, Android -DNDEBUG in
+     * circle_scripts/deps.sh), so this assertion is compiled out of exactly the binaries users run.
+     * The invariant it states is the one standing between a header field and a heap overflow, so it
+     * has to hold at runtime. */
+    if (allocate_len < data_length) {
+        return nullptr;
+    }
     struct RTPMessage *msg = (struct RTPMessage *)calloc(1, sizeof(struct RTPMessage) + allocate_len);
 
     if (msg == nullptr) {
@@ -274,16 +283,28 @@ static bool fill_data_into_slot(const Logger *log, struct RTPWorkBufferList *wkb
     assert(header != nullptr);
     assert(is_keyframe == (bool)((header->flags & RTP_KEY_FRAME) != 0));
 
-    if (slot->received_len == 0) {
-        assert(slot->buf == nullptr);
+    // KHANDAQ (deep review 2026-08-23, RR3-01): validate BEFORE opening a slot, and decide occupancy
+    // by the buffer rather than by how many bytes have arrived. The desktop twin carries the same
+    // change; see the note there for why a rejected packet used to leave the counter advanced and a
+    // zero-length payload reached that state without failing anything.
+    if (header->data_length_full > MAX_RTP_FRAME_SIZE) {
+        LOGGER_WARNING(log, "RTP frame too large: %u > %u",
+                       (unsigned)header->data_length_full, (unsigned)MAX_RTP_FRAME_SIZE);
+        return false;
+    }
 
-        // KHANDAQ (audit round 3, F-01): refuse an absurd declared frame size before it becomes an
-        // allocation. See MAX_RTP_FRAME_SIZE above.
-        if (header->data_length_full > MAX_RTP_FRAME_SIZE) {
-            LOGGER_WARNING(log, "RTP frame too large: %u > %u",
-                           (unsigned)header->data_length_full, (unsigned)MAX_RTP_FRAME_SIZE);
-            return false;
-        }
+    /* A part that carries no bytes cannot advance a frame, and letting it open a slot was the second
+     * route into the counter corruption above. */
+    if (incoming_data_length == 0
+            || header->offset_full >= header->data_length_full
+            || header->data_length_full - header->offset_full < incoming_data_length) {
+        LOGGER_ERROR(log, "Packet too long for buffer: offset %u + len %u > total %u",
+                     (unsigned)header->offset_full, (unsigned)incoming_data_length,
+                     (unsigned)header->data_length_full);
+        return false;
+    }
+
+    if (slot->buf == nullptr) {
 
         // No data for this slot has been received, yet, so we create a new
         // message for it with enough memory for the entire frame.
@@ -305,7 +326,14 @@ static bool fill_data_into_slot(const Logger *log, struct RTPWorkBufferList *wkb
         slot->is_keyframe = is_keyframe;
         slot->received_len = 0;
 
-        assert(wkbl->next_free_entry < USED_RTP_WORKBUFFER_COUNT);
+        // A real bound, not an assertion: the release pod is built with NDEBUG.
+        if (wkbl->next_free_entry >= USED_RTP_WORKBUFFER_COUNT || wkbl->next_free_entry < 0) {
+            LOGGER_WARNING(log, "RTP work buffer exhausted (%d)", (int)wkbl->next_free_entry);
+            free(msg);
+            slot->buf = nullptr;
+            return false;
+        }
+
         ++wkbl->next_free_entry;
     } else {
         // KHANDAQ (audit round 3, F-01): the slot was sized from the FIRST packet of this frame, but
@@ -321,9 +349,7 @@ static bool fill_data_into_slot(const Logger *log, struct RTPWorkBufferList *wkb
         }
     }
 
-    // We already checked this when we received the packet, but we rely on it
-    // here, so assert again.
-    assert(header->offset_full < header->data_length_full);
+    // Bounds were established at the top, before any slot was opened.
 
     // KHANDAQ (audit round 3, F-01): the bound the memcpy below actually needs, checked rather than
     // asserted. assert() disappears under NDEBUG, and the release pod is exactly where it matters.
@@ -577,8 +603,17 @@ static int handle_rtp_packet_for_session(RTPSession *session, const uint8_t *dat
             /* First case */
 
             /* Make sure we have enough allocated memory */
-            if (session->mp->header.data_length_lower - session->mp->len < length - RTP_HEADER_SIZE ||
-                    session->mp->header.data_length_lower <= header.offset_lower) {
+            /* KHANDAQ (deep review 2026-08-23, RR3-02): the third condition, which the desktop copy
+             * has and this one did not.
+             *
+             * The two above bound the total and the offset separately; neither bounds
+             * offset_lower + this chunk. A second packet with the same sequnum and timestamp,
+             * offset_lower just under data_length_lower and a large payload passed both and wrote
+             * past the end of the buffer allocated for the first one. Unsigned throughout, so the
+             * 16-bit header fields cannot be promoted into a negative comparison. */
+            if (session->mp->header.data_length_lower - session->mp->len < (uint32_t)(length - RTP_HEADER_SIZE) ||
+                    session->mp->header.data_length_lower <= header.offset_lower ||
+                    session->mp->header.data_length_lower - header.offset_lower < (uint32_t)(length - RTP_HEADER_SIZE)) {
                 /* There happened to be some corruption on the stream;
                  * continue wihtout this part
                  */
@@ -617,6 +652,20 @@ static int handle_rtp_packet_for_session(RTPSession *session, const uint8_t *dat
          */
         /* This is also a point for new multiparted messages */
 NEW_MULTIPARTED:
+
+        /* KHANDAQ (deep review 2026-08-23, RR3-02): bound the chunk against the declared total
+         * BEFORE allocating for it. The desktop copy has had this check; this one did not.
+         *
+         * new_message() allocates data_length_lower bytes and then copies length - RTP_HEADER_SIZE
+         * into it. A single packet declaring data_length_lower = 1 with a 1292-byte payload
+         * therefore wrote 1292 attacker-controlled bytes into a 49-byte allocation — one packet from
+         * an accepted contact during a call, no state required. */
+        if (header.data_length_lower - header.offset_lower < (uint32_t)(length - RTP_HEADER_SIZE)) {
+            LOGGER_WARNING(log, "Packet too long for buffer: offset %u + len %u > total %u",
+                           (unsigned)header.offset_lower, (unsigned)(length - RTP_HEADER_SIZE),
+                           (unsigned)header.data_length_lower);
+            return -1;
+        }
 
         /* Message is not late; pick up the latest parameters */
         session->rsequnum = header.sequnum;

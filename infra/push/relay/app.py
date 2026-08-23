@@ -200,6 +200,12 @@ PUSH_CHALLENGE_TTL_SEC = max(30, int(os.environ.get("PUSH_CHALLENGE_TTL_SEC", "3
 PUSH_CHALLENGE_MIN_INTERVAL_SEC = max(1, int(os.environ.get("PUSH_CHALLENGE_MIN_INTERVAL_SEC", "45")))
 PUSH_CHALLENGE_BURST = max(1, int(os.environ.get("PUSH_CHALLENGE_BURST", "2")))
 PUSH_CHALLENGE_MAX_OUTSTANDING = max(100, int(os.environ.get("PUSH_CHALLENGE_MAX_OUTSTANDING", "10000")))
+# Сколько живых challenge допускается на один токен. Больше одного — чтобы посторонний не мог занять
+# единственный слот; немного — чтобы это не стало способом множить пуши (см. RR3-05).
+PUSH_CHALLENGE_MAX_LIVE_PER_TOKEN = max(1, int(os.environ.get("PUSH_CHALLENGE_MAX_LIVE_PER_TOKEN", "3")))
+# Неверных nonce на один challenge, прежде чем он сгорит. Мало — чтобы эндпойнт не стал оракулом;
+# больше одного — чтобы чужой запрос с мусором не гасил регистрацию устройства.
+PUSH_CHALLENGE_MAX_TRIES = max(1, int(os.environ.get("PUSH_CHALLENGE_MAX_TRIES", "3")))
 # The gap that would otherwise cost real notifications, and the only one in this design.
 #
 # A recipient registers a capability and re-publishes its wake URL to every contact over Tox. A
@@ -334,7 +340,14 @@ def _stats_conn():
     # store keeps hashes: a database read must not yield anything replayable.
     conn.execute("CREATE TABLE IF NOT EXISTS pushchallenge ("
                  "cid TEXT PRIMARY KEY, th TEXT NOT NULL, nonceh TEXT NOT NULL, "
-                 "exp INTEGER NOT NULL)")
+                 "exp INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0)")
+    # KHANDAQ (deep review 2026-08-23, RR3-05): `tries` on an existing database. A wrong nonce used
+    # to delete the challenge outright, so anyone who knew a live cid could extinguish the device's
+    # own registration with one request.
+    try:
+        conn.execute("ALTER TABLE pushchallenge ADD COLUMN tries INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # уже есть
     # KHANDAQ (re-review v2 2026-08-22, RR2-04): the per-token challenge budget, shared by every
     # gunicorn worker for the same reason the per-IP window is. Keyed by a KEYED hash: this table is
     # indexed by a value a contact already knows, so a plain digest would let anyone holding a token
@@ -420,15 +433,26 @@ def _challenge_gate(token: str) -> tuple[str, str | None]:
                     return "saturated", None
 
                 th = _th(token)
-                row = conn.execute(
-                    "SELECT cid FROM pushchallenge WHERE th = ? AND exp > ? ORDER BY exp DESC LIMIT 1",
-                    (th, inow)).fetchone()
-                if row is not None:
-                    # Returning the existing cid leaks nothing: the cid is not the proof, the nonce
-                    # is, and the nonce only ever went to the device.
+                # KHANDAQ (deep review 2026-08-23, RR3-05): more than one live challenge per token.
+                #
+                # With exactly one, a stranger who knew the token — every contact does, it is in the
+                # wake URL — could take the slot and never confirm it. The device's own request then
+                # got that cid back, the push for it had already been delivered and discarded as
+                # unsolicited, and registration timed out. One request every five minutes held a
+                # device out of the capability scheme indefinitely.
+                #
+                # The abuse bound is the token bucket and the relay-wide ceiling, which are unchanged;
+                # this only stops one caller from occupying the one slot. Reuse still happens once the
+                # small allowance is taken, so a repeat storm still costs no extra push.
+                live = conn.execute(
+                    "SELECT cid FROM pushchallenge WHERE th = ? AND exp > ? ORDER BY exp DESC",
+                    (th, inow)).fetchall()
+                if len(live) >= PUSH_CHALLENGE_MAX_LIVE_PER_TOKEN:
+                    # Returning the newest cid leaks nothing: the cid is not the proof, the nonce is,
+                    # and the nonce only ever went to the device.
                     _chal_count(conn, "reused")
                     conn.commit()
-                    return "reuse", row[0]
+                    return "reuse", live[0][0]
 
                 brow = conn.execute("SELECT last, budget FROM pushchalrate WHERE th = ?",
                                     (th,)).fetchone()
@@ -1785,9 +1809,17 @@ def register_confirm():
                 return jsonify({"error": "unknown or expired challenge"}), 400
             th, nonceh = row
             if not hmac.compare_digest(nonceh, hashlib.sha256(nonce.encode()).hexdigest()):
-                # Consume the challenge on a wrong nonce. Otherwise the endpoint is an oracle that
-                # can be tried repeatedly for the lifetime of the challenge.
-                conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+                # KHANDAQ (deep review 2026-08-23, RR3-05): count the attempt, do not delete on the
+                # first one.
+                #
+                # Burning the challenge on a single wrong nonce kept the endpoint from being an
+                # oracle — and handed anyone who knew a live cid a way to extinguish the device's own
+                # registration with one request carrying garbage. A small counter keeps both
+                # properties: guessing is still hopeless (three tries against a 256-bit nonce), and a
+                # stranger can no longer cancel somebody else's registration.
+                conn.execute("UPDATE pushchallenge SET tries = tries + 1 WHERE cid = ?", (cid,))
+                conn.execute("DELETE FROM pushchallenge WHERE cid = ? AND tries >= ?",
+                             (cid, PUSH_CHALLENGE_MAX_TRIES))
                 conn.commit()
                 return jsonify({"error": "unknown or expired challenge"}), 400
             conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
@@ -1857,7 +1889,10 @@ def register_revoke():
             th, nonceh = row
             if not hmac.compare_digest(nonceh, hashlib.sha256(nonce.encode()).hexdigest()):
                 # Consumed on a wrong nonce, exactly as in confirm: otherwise this is an oracle.
-                conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))
+                # Тот же счётчик, что в confirm — см. RR3-05.
+                conn.execute("UPDATE pushchallenge SET tries = tries + 1 WHERE cid = ?", (cid,))
+                conn.execute("DELETE FROM pushchallenge WHERE cid = ? AND tries >= ?",
+                             (cid, PUSH_CHALLENGE_MAX_TRIES))
                 conn.commit()
                 return jsonify({"error": "unknown or expired challenge"}), 400
             conn.execute("DELETE FROM pushchallenge WHERE cid = ?", (cid,))

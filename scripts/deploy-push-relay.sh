@@ -148,13 +148,32 @@ echo "    no errors in the startup log"
 # And do not rely on log text alone for the condition that actually broke delivery once: an FCM
 # service account the container cannot read. /health/detail states it directly.
 echo "==> FCM credentials must be usable"
+# KHANDAQ (deep review 2026-08-23, RR3-06): this gate could not fire as first written.
+#
+# It grepped only "fcm_mode", whose values are v1 / legacy / none — the words it tested for
+# (unreadable, missing) live in a DIFFERENT key, fcm_service_account, which the grep discarded. So
+# the case never matched, for any breakage. Worse, fcm_service_account is ABSENT entirely when no
+# service-account path is configured, so matching on it alone would still pass the very deployment
+# that has no credentials at all.
+#
+# Hence a POSITIVE assertion: fcm_mode must be v1. Anything else — legacy, none, or the key missing
+# because the relay did not start properly — is a failed deploy. Both JSON spacings are matched
+# because Flask emits compact output in production and spaced output in debug; the auth_mode gate
+# above lists both for the same reason.
 fcm=\$(curl -sS -m 20 http://127.0.0.1:8088/health/detail </dev/null 2>/dev/null \
-       | tr ',' '\\n' | grep -o '"fcm_mode"[^,}]*' || true)
+       | tr ',' '\\n' | grep -oE '"fcm_(mode|service_account)"[^,}]*' || true)
 echo "    \$fcm"
 case "\$fcm" in
   *unreadable*|*missing*|*error*)
     echo "ERROR: the relay cannot use its FCM credentials — every notification would fail while" >&2
     echo "       /health still says ok. This is the K-05 incident, and it is a failed deploy." >&2
+    exit 1 ;;
+esac
+case "\$fcm" in
+  *'"fcm_mode": "v1"'*|*'"fcm_mode":"v1"'*) ;;
+  *)
+    echo "ERROR: fcm_mode is not v1. The relay is running without usable FCM credentials, so every" >&2
+    echo "       wake would fail while /health keeps saying ok. Refusing to call this deploy good." >&2
     exit 1 ;;
 esac
 REMOTE

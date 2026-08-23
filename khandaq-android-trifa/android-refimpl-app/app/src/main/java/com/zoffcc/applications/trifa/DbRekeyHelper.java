@@ -330,6 +330,7 @@ public final class DbRekeyHelper
             deleteWithSidecars(sibling(mainDb, ".oldk"));
             deleteWithSidecars(sibling(filesDb, ".oldk"));
             cleanupCopies(mainDb, filesDb);
+            deleteCleartextSavedataSnapshot(context);
             //noinspection ResultOfMethodCallIgnored
             sdOldk.delete();
             //noinspection ResultOfMethodCallIgnored
@@ -354,6 +355,9 @@ public final class DbRekeyHelper
 
     private static void abortAndRestore(final Context context, final File mainDb, final File filesDb)
     {
+        // KHANDAQ (deep review 2026-08-23, RR3-10): whatever else goes wrong, the cleartext
+        // copy of the Tox identity key must not survive the attempt.
+        deleteCleartextSavedataSnapshot(context);
         restoreOriginals(mainDb, filesDb);
         // savedata.tox: put the old-key original back if the swap was underway, drop artifacts
         try
@@ -509,6 +513,37 @@ public final class DbRekeyHelper
     {
         deleteWithSidecars(sibling(mainDb, ".rk"));
         deleteWithSidecars(sibling(filesDb, ".rk"));
+        // KHANDAQ (deep review 2026-08-23, RR3-10): the plaintext savedata snapshot must not outlive
+        // the rekey.
+        //
+        // stageSavedataSnapshot exports savedata.tox with an EMPTY passphrase into a .rkplain
+        // sibling, encrypts that into the staged copy and then relies on the happy path to remove it.
+        // A crash or a kill between those steps left the Tox identity private key sitting on disk in
+        // the clear, indefinitely and with nothing to notice it. Deleting it here means every exit
+        // from the rekey — success, abort, or a later run cleaning up after a crash — takes it out.
+    }
+
+    /**
+     * Remove the cleartext savedata snapshot, if an interrupted rekey left one behind.
+     *
+     * The path is the one stageSavedataSnapshot writes: getFilesDir()/savedata.tox.rkplain. Taking it
+     * from the context rather than from a database path on purpose — the databases do not
+     * necessarily live in the same directory, and a cleanup that looks in the wrong place is worse
+     * than none because it reports success.
+     */
+    static void deleteCleartextSavedataSnapshot(final Context context)
+    {
+        if (context == null)
+        {
+            return;
+        }
+        final File plain = new File(context.getFilesDir(), "savedata.tox.rkplain");
+        if (plain.isFile())
+        {
+            Log.w(TAG, "removing a cleartext savedata snapshot left behind by an interrupted rekey");
+            //noinspection ResultOfMethodCallIgnored
+            plain.delete();
+        }
     }
 
     private static boolean renameWithSidecars(final File from, final File to)

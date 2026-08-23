@@ -910,12 +910,17 @@ def test_knowing_the_token_is_not_enough_to_register(relay):
     r = c.post("/register/challenge", json={"token": TOKEN})
     cid = r.get_json()["cid"]
     # The attacker knows the token and the challenge id, and guesses the nonce.
-    r = c.post("/register/confirm", json={"cid": cid, "nonce": "not-the-nonce", "cap": CAP_A})
-    assert r.status_code == 400
-    # And the guess consumed the challenge, so it is not an oracle to be retried.
+    for _ in range(m.PUSH_CHALLENGE_MAX_TRIES):
+        r = c.post("/register/confirm", json={"cid": cid, "nonce": "not-the-nonce", "cap": CAP_A})
+        assert r.status_code == 400
+    # KHANDAQ (deep review 2026-08-23, RR3-05): a SMALL number of guesses is allowed and then the
+    # challenge burns. It used to burn on the first one, which stopped guessing — and also let anyone
+    # who knew a live cid extinguish the device's own registration with a single garbage request.
+    # Three tries against a 256-bit nonce is not an oracle; one hostile request cancelling somebody
+    # else's registration was a denial of service.
     real_nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
     r = c.post("/register/confirm", json={"cid": cid, "nonce": real_nonce, "cap": CAP_A})
-    assert r.status_code == 400
+    assert r.status_code == 400, "after the allowance the challenge must be gone"
     # Nothing was registered, so the victim's wakes still work.
     assert _wake(m).status_code == 200
 
@@ -1427,19 +1432,30 @@ def test_one_token_cannot_be_hammered_from_many_addresses(relay):
     assert len(m.pushed) >= 1, "the first, legitimate-looking request must still be served"
 
 
-def test_a_repeat_inside_the_window_reuses_the_live_challenge(relay):
-    """A second request while one is outstanding must return the same cid and send NOTHING."""
+def test_repeats_reuse_a_live_challenge_once_the_small_allowance_is_taken(relay):
+    """
+    KHANDAQ (deep review 2026-08-23, RR3-05). A token may hold a few live challenges, not one.
+
+    With exactly one, a stranger who knew the token — every contact does — could take the slot and
+    never confirm it; the device's own request then got that cid back, the push for it had already
+    been delivered and discarded as unsolicited, and registration timed out. One request every five
+    minutes held a device out of the capability scheme for good.
+
+    So repeats create their own challenge up to a small allowance, and only then reuse. The flood
+    bound is unchanged: it is the token bucket, not this number.
+    """
     m = _stub_challenge(relay(rate_limit="100000"))
     c = m.app.test_client()
     first = c.post("/register/challenge", json={"token": TOKEN})
     assert first.status_code == 200
-    sent_after_first = len(m.pushed)
-    second = c.post("/register/challenge", json={"token": TOKEN},
-                    environ_base={"REMOTE_ADDR": "198.51.100.7"})
-    assert second.status_code == 200
-    assert second.get_json()["cid"] == first.get_json()["cid"], "a live challenge must be reused"
-    assert second.get_json().get("reused") == 1
-    assert len(m.pushed) == sent_after_first, "reuse must not cost the device a second push"
+    codes = [c.post("/register/challenge", json={"token": TOKEN},
+                    environ_base={"REMOTE_ADDR": f"198.51.100.{i + 1}"})
+             for i in range(6)]
+    reused = [r for r in codes if r.status_code == 200 and r.get_json().get("reused") == 1]
+    throttled = [r for r in codes if r.status_code == 429]
+    assert reused or throttled, "a repeat storm must end in reuse or a refusal, never in more pushes"
+    assert len(m.pushed) <= m.PUSH_CHALLENGE_MAX_LIVE_PER_TOKEN, (
+        f"{len(m.pushed)} pushes reached the device — the live-challenge allowance is not bounding")
 
 
 def test_the_per_ip_limiter_still_bounds_many_tokens_from_one_address(relay):
@@ -1504,9 +1520,11 @@ def test_challenge_throttling_is_reported_without_identifying_anyone(relay):
     # tighter bound than the token bucket behind it — the bucket is what catches the case where the
     # challenge has expired or been consumed, which test_a_failed_delivery_does_not_refund_the_budget
     # exercises. Asserting "throttled >= 1" here would have been asserting the weaker path.
-    assert ch["outcomes"].get("sent", 0) == 1, "only the first request may reach the device"
-    assert ch["outcomes"].get("reused", 0) >= 6, "the rest must be absorbed by the live challenge"
-    assert ch["outstanding"] == 1
+    sent = ch["outcomes"].get("sent", 0)
+    refused = ch["outcomes"].get("reused", 0) + ch["outcomes"].get("throttled", 0)
+    assert sent <= m.PUSH_CHALLENGE_MAX_LIVE_PER_TOKEN, "the device must not be woken repeatedly"
+    assert refused >= 1, "the rest must be absorbed, by reuse or by the budget"
+    assert ch["outstanding"] >= 1
     blob = repr(body)
     assert TOKEN not in blob, "no token may appear in health output"
     assert hashlib.sha256(TOKEN.encode()).hexdigest()[:32] not in blob, "nor a token hash"
@@ -1592,3 +1610,50 @@ def test_the_fleet_hmac_alone_cannot_wake_a_capability_protected_token(relay):
     assert _revoke(m, TOKEN, CAP_A).status_code == 200
     assert _wake(m, cap=CAP_A).status_code == 401, "the revoked relationship stops"
     assert _wake(m, cap=CAP_B).status_code == 200, "and only that one"
+
+
+def test_a_stranger_cannot_extinguish_the_devices_own_challenge(relay):
+    """
+    KHANDAQ (deep review 2026-08-23, RR3-05). A wrong nonce used to delete the challenge outright, so
+    anyone who learned a live cid could cancel somebody else's registration with one garbage request.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0"))
+    c = m.app.test_client()
+    r = c.post("/register/challenge", json={"token": TOKEN})
+    cid = r.get_json()["cid"]
+    nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
+
+    # Посторонний с чужого адреса пробует мусорный nonce — один раз, как это и делают.
+    bad = c.post("/register/confirm", json={"cid": cid, "nonce": "garbage", "cap": CAP_B},
+                 environ_base={"REMOTE_ADDR": "203.0.113.44"})
+    assert bad.status_code == 400
+
+    # Устройство завершает СВОЮ регистрацию как ни в чём не бывало.
+    ok = c.post("/register/confirm", json={"cid": cid, "nonce": nonce, "cap": CAP_A})
+    assert ok.status_code == 200, "чужой мусорный запрос не должен гасить регистрацию устройства"
+    assert _wake(m, cap=CAP_A).status_code == 200
+
+
+def test_a_held_challenge_slot_does_not_lock_the_device_out(relay):
+    """
+    The other half of RR3-05: a stranger who takes a slot and never confirms it must not prevent the
+    device from obtaining a challenge whose nonce it actually receives.
+    """
+    m = _stub_challenge(relay(enforce="1", cap_grace="0", rate_limit="100000"))
+    c = m.app.test_client()
+
+    # Посторонний занимает слот и ничего не подтверждает.
+    held = c.post("/register/challenge", json={"token": TOKEN},
+                  environ_base={"REMOTE_ADDR": "203.0.113.9"})
+    assert held.status_code == 200
+    held_cid = held.get_json()["cid"]
+
+    # Устройство просит свой challenge и должно получить ДРУГОЙ, с доставленным ему nonce.
+    mine = c.post("/register/challenge", json={"token": TOKEN})
+    assert mine.status_code == 200
+    assert mine.get_json()["cid"] != held_cid, \
+        "устройство получило чужой cid — nonce к нему уже был доставлен и отброшен"
+    nonce = m.pushed[-1][1]["khandaq_reg_nonce"]
+    r = c.post("/register/confirm", json={"cid": mine.get_json()["cid"], "nonce": nonce, "cap": CAP_A})
+    assert r.status_code == 200, "устройство должно суметь зарегистрироваться при занятом слоте"
+    assert _wake(m, cap=CAP_A).status_code == 200

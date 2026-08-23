@@ -87,6 +87,10 @@ jobs:
       # are the digests that were reviewed.
       - name: The native library must match its committed digests
         run: python3 scripts/check-native-lib-pins.py
+      # KHANDAQ (deep review 2026-08-23, RR3-11): the bootstrap lists are DHT trust anchors, and they
+      # are edited by scripts no workflow calls. Three retired anchors were still shipping.
+      - name: No client may ship a retired DHT anchor
+        run: python3 scripts/check-bootstrap-nodes.py
 
   compose-parses:
     # KHANDAQ (production deploy 2026-08-21): a compose file that docker cannot load is an outage with

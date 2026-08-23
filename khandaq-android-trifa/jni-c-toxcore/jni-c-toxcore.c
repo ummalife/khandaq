@@ -8470,9 +8470,16 @@ Java_com_zoffcc_applications_trifa_MainActivity_toxav_1ngc_1video_1decode(JNIEnv
                                       &y_stride, &u_stride, &v_stride,
                                       flush_decoder);
 
-    (*env)->ReleaseByteArrayElements(env, y, y_c, JNI_COMMIT); /* DO copy back contents */
-    (*env)->ReleaseByteArrayElements(env, u, u_c, JNI_COMMIT); /* DO copy back contents */
-    (*env)->ReleaseByteArrayElements(env, v, v_c, JNI_COMMIT); /* DO copy back contents */
+    /* KHANDAQ (deep review 2026-08-23, RR3-04): mode 0, not JNI_COMMIT.
+     *
+     * JNI_COMMIT copies the buffer back and DOES NOT release it — it exists for the case where you
+     * intend to keep using the pointer. Every one of these six calls was the last use, so each
+     * decoded audio or video frame leaked its native copy: on a group audio call that is a steady
+     * few kilobytes per frame with nothing ever reclaiming it. Mode 0 copies back AND frees, which
+     * is what the surrounding comments always said was intended. */
+    (*env)->ReleaseByteArrayElements(env, y, y_c, 0); /* DO copy back contents AND free the copy */
+    (*env)->ReleaseByteArrayElements(env, u, u_c, 0); /* DO copy back contents AND free the copy */
+    (*env)->ReleaseByteArrayElements(env, v, v_c, 0); /* DO copy back contents AND free the copy */
     (*env)->ReleaseByteArrayElements(env, encoded_frame_bytes, enc_c, JNI_ABORT); /* abort to not copy back contents */
 
     if(res == true)
@@ -8534,7 +8541,7 @@ Java_com_zoffcc_applications_trifa_MainActivity_toxav_1ngc_1video_1encode(JNIEnv
     (*env)->ReleaseByteArrayElements(env, y, y_c, JNI_ABORT); /* abort to not copy back contents */
     (*env)->ReleaseByteArrayElements(env, u, u_c, JNI_ABORT); /* abort to not copy back contents */
     (*env)->ReleaseByteArrayElements(env, v, v_c, JNI_ABORT); /* abort to not copy back contents */
-    (*env)->ReleaseByteArrayElements(env, encoded_frame_bytes, enc_c, JNI_COMMIT); /* DO copy back contents */
+    (*env)->ReleaseByteArrayElements(env, encoded_frame_bytes, enc_c, 0); /* DO copy back contents AND free the copy */
 
     if(res == true)
     {
@@ -8586,7 +8593,7 @@ Java_com_zoffcc_applications_trifa_MainActivity_toxav_1ngc_1audio_1encode(JNIEnv
                                       (const int32_t)sample_count_per_frame,
                                       (uint8_t *)enc_c, &encoded_frame_size_bytes);
     (*env)->ReleaseByteArrayElements(env, pcm, pcm_c, JNI_ABORT); /* abort to not copy back contents */
-    (*env)->ReleaseByteArrayElements(env, encoded_frame_bytes, enc_c, JNI_COMMIT); /* DO copy back contents */
+    (*env)->ReleaseByteArrayElements(env, encoded_frame_bytes, enc_c, 0); /* DO copy back contents AND free the copy */
 
     if(res == true)
     {
@@ -8637,7 +8644,7 @@ Java_com_zoffcc_applications_trifa_MainActivity_toxav_1ngc_1audio_1decode(JNIEnv
                                                 (const uint8_t *)enc_c, encoded_frame_size_bytes,
                                                 (int16_t *)pcm_decoded_c);
 
-    (*env)->ReleaseByteArrayElements(env, pcm_decoded, pcm_decoded_c, JNI_COMMIT); /* DO copy back contents */
+    (*env)->ReleaseByteArrayElements(env, pcm_decoded, pcm_decoded_c, 0); /* DO copy back contents AND free the copy */
     (*env)->ReleaseByteArrayElements(env, encoded_frame_bytes, enc_c, JNI_ABORT); /* abort to not copy back contents */
 
     if(samples_decoded > 0)

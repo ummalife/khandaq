@@ -29,12 +29,13 @@ SIGNER = ROOT / "scripts" / "sign-desktop-artifacts.sh"
 failures: list[str] = []
 
 
-def run(dl: Path, keydir: Path, fetched: str = "") -> subprocess.CompletedProcess:
+def run(dl: Path, keydir: Path, fetched: str = "", *args: str) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["KHANDAQ_DOWNLOADS_DIR"] = str(dl)
     env["KHANDAQ_SIGNING_DIR"] = str(keydir)
     env["FETCHED_ARTIFACTS"] = fetched
-    return subprocess.run(["bash", str(SIGNER)], capture_output=True, text=True, env=env, timeout=180)
+    return subprocess.run(["bash", str(SIGNER), *args],
+                          capture_output=True, text=True, env=env, timeout=180)
 
 
 def fresh(tmp: Path, name: str) -> tuple[Path, Path]:
@@ -101,6 +102,44 @@ def main() -> int:
                 failures.append("отказ не объясняет, что это инцидент — оператор переподпишет вручную")
             if len(failures) == failures_before:
                 print("  ок: расхождение с подписью остановило выкат")
+        # --- 4. Пересборка: стейджинг снял подпись, значит артефакт должен подписаться заново.
+        #
+        # KHANDAQ (deep review 2026-08-23, RR3-08). Без этого случая тест закреплял сломанное
+        # поведение: он проверял только отказы, а отказ на ЛЕГИТИМНОЙ пересборке останавливал релиз.
+        dl4, keydir4 = fresh(tmp, "rebuilt")
+        shutil.copy2(keydir / "khandaq-release-ed25519", keydir4 / "khandaq-release-ed25519")
+        shutil.copy2(keydir / "khandaq-release-ed25519.pub", keydir4 / "khandaq-release-ed25519.pub")
+        (dl4 / "khandaq-windows-installer.exe").write_bytes(b"rebuilt installer bytes\n" * 64)
+        # deploy-site.sh снимает соседнюю .sig при стейджинге — воспроизводим это состояние.
+        r = run(dl4, keydir4)
+        if r.returncode != 0:
+            failures.append(f"пересобранный локально артефакт не подписался: "
+                            f"{(r.stderr or r.stdout).strip()[:200]}")
+        elif not (dl4 / "khandaq-windows-installer.exe.sig").is_file():
+            failures.append("пересборка не получила подписи")
+        else:
+            print("  ок: пересобранный артефакт подписывается заново")
+
+        # --- 5. Ротация ключа: расхождение со ВСЕМИ старыми подписями — это и есть процедура.
+        dl5, keydir5 = fresh(tmp, "rotate")
+        shutil.copy2(art.with_suffix(".exe.sig"), dl5 / "khandaq-windows-installer.exe.sig")
+        (dl5 / "khandaq-windows-installer.exe").write_bytes(b"same bytes, new key\n" * 64)
+        r = run(dl5, keydir5, "", "--rotate")
+        if r.returncode != 0:
+            failures.append(f"--rotate не смог переподписать: {(r.stderr or r.stdout).strip()[:200]}")
+        else:
+            print("  ок: --rotate переподписывает при смене ключа")
+
+        # --- 6. Ротация НЕ ослабляет запрет на байты с сервера раздачи.
+        dl6, keydir6 = fresh(tmp, "rotate-fetched")
+        shutil.copy2(keydir / "khandaq-release-ed25519", keydir6 / "khandaq-release-ed25519")
+        shutil.copy2(keydir / "khandaq-release-ed25519.pub", keydir6 / "khandaq-release-ed25519.pub")
+        r = run(dl6, keydir6, " khandaq-windows-installer.exe ", "--rotate")
+        if r.returncode == 0:
+            failures.append("--rotate подписал байты, доставленные с сервера раздачи — режим "
+                            "ротации не должен ослаблять правило H-01")
+        else:
+            print("  ок: --rotate не подписывает байты с сервера раздачи")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

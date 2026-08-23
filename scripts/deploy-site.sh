@@ -34,6 +34,14 @@ if [[ "${1:-}" == "--rollback" ]]; then
   ssh "$REMOTE" "set -e
     rm -rf '$REMOTE_SITE_DIR.rollback-tmp'
     cp -al '$PREV' '$REMOTE_SITE_DIR.rollback-tmp' 2>/dev/null || cp -a '$PREV' '$REMOTE_SITE_DIR.rollback-tmp'
+    # KHANDAQ (deep review 2026-08-23, RR3-12): drop the snapshot's nginx copy BEFORE the tree is
+    # served, not after.
+    #
+    # The snapshot keeps the CSP snippet and the vhost inside itself so a rollback can restore them
+    # together with the content. Removing them after the swap left them reachable over HTTP for the
+    # seconds in between — and the chmod -R a+r on the way past made them world-readable first. They
+    # are read from $PREV/_nginx below, so the served tree never needs to contain them at all.
+    rm -rf '$REMOTE_SITE_DIR.rollback-tmp/_nginx'
     rm -rf '$REMOTE_SITE_DIR.superseded'
     mv '$REMOTE_SITE_DIR' '$REMOTE_SITE_DIR.superseded'
     mv '$REMOTE_SITE_DIR.rollback-tmp' '$REMOTE_SITE_DIR'
@@ -52,8 +60,8 @@ if [[ "${1:-}" == "--rollback" ]]; then
       cp -a '$PREV/_nginx/site.conf' '$NGINX_SITE'
       echo '    restored: nginx site'
     fi
-    # The snapshot carries its nginx copy inside it, so the restored tree contains _nginx. Remove it
-    # BEFORE the reload: for the moments in between it would be reachable over HTTP.
+    # Belt to the braces above: if a future change reintroduces _nginx into the served tree, this
+    # still takes it out. It is not the control — the control is that it was never copied in.
     rm -rf '$REMOTE_SITE_DIR/_nginx'
     # Explicit rather than 'nginx -t && reload': in an AND-list a failing first command does not trip
     # set -e, so a bad config would have been followed by a silent non-reload and a green rollback.
@@ -102,10 +110,26 @@ python3 "$ROOT/scripts/vendor-webfonts.py" --check
 # to the GitHub release for internal testers only — never to the public site.
 echo "==> Android: skipping APK hosting (site links to Google Play)"
 
+# KHANDAQ (deep review 2026-08-23, RR3-08): staging a freshly built artifact must take its stale
+# signature with it.
+#
+# The signer treats "file present, signature present, does not verify" as an incident and stops the
+# deploy — correct, and it rests on the claim that a rebuild never leaves an old .sig beside the new
+# bytes. That claim was false HERE: every line below copies into web/downloads over the previous
+# file, the .sig files are committed (the binaries are gitignored, so a clean checkout has the
+# signature and not the artifact), and nothing removed them. The first desktop rebuild would have
+# hit the incident path and refused to publish a legitimate build.
+drop_stale_sig() {
+  for name in "$@"; do
+    rm -f "$DL/$name.sig"
+  done
+}
+
 echo "==> Package desktop/mobile mirrors (optional — skip missing)"
 if [[ -d "$ROOT/dist/macos/khandaq.app" ]]; then
   rm -f "$DL/khandaq-macos.zip"
   ditto -c -k --keepParent "$ROOT/dist/macos/khandaq.app" "$DL/khandaq-macos.zip"
+  drop_stale_sig khandaq-macos.zip
 fi
 if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "$ROOT/dist/linux/lib" ]]; then
   # Only ship the -portable name; the bare khandaq-linux-x86_64.tar.gz was an
@@ -114,6 +138,7 @@ if [[ -f "$ROOT/dist/linux/khandaq" && -f "$ROOT/dist/linux/khandaq.bin" && -d "
   tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" \
     khandaq khandaq.bin lib plugins khandaq.desktop org.khandaq.messenger.appdata.xml INSTALL.txt 2>/dev/null \
     || tar -C "$ROOT/dist/linux" -czf "$DL/khandaq-linux-x86_64-portable.tar.gz" khandaq khandaq.bin lib INSTALL.txt
+  drop_stale_sig khandaq-linux-x86_64-portable.tar.gz khandaq-linux-x86_64.tar.gz
 fi
 # KHANDAQ (re-audit 2026-08-22, W-02 — root cause): this line used to end the deploy.
 #
@@ -129,13 +154,15 @@ DEB="$(ls -1t "$ROOT"/dist/linux/khandaq-messenger_*_amd64.deb 2>/dev/null | hea
 if [[ -n "$DEB" && -f "$DEB" ]]; then
   DEB_VER="$(basename "$DEB" | sed -n 's/khandaq-messenger_\(.*\)_amd64\.deb/\1/p')"
   cp -f "$DEB" "$DL/khandaq-messenger_amd64.deb"
+  drop_stale_sig khandaq-messenger_amd64.deb
   if [[ -n "$DEB_VER" ]]; then
     cp -f "$DEB" "$DL/khandaq-messenger_${DEB_VER}_amd64.deb"
+    drop_stale_sig "khandaq-messenger_${DEB_VER}_amd64.deb"
   fi
 fi
 WIN_EXE="$ROOT/dist/windows/x86_64/khandaq-windows-installer.exe"
 [[ -f "$WIN_EXE" ]] || WIN_EXE="$ROOT/dist/windows/x86_64/Khandaq-installer.exe"
-[[ -f "$WIN_EXE" ]] && cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"
+[[ -f "$WIN_EXE" ]] && { cp -f "$WIN_EXE" "$DL/khandaq-windows-installer.exe"; drop_stale_sig khandaq-windows-installer.exe; }
 
 # KHANDAQ (audit 2026-08-20): MERGE the checksum list, never blindly overwrite it.
 #

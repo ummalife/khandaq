@@ -270,12 +270,15 @@ void Nexus::onCreateNewProfile(const QString& name, const QString& pass)
 {
     Profile* p = Profile::createProfile(name, pass, settings, parser, cameraSource,
                                         messageBoxManager);
-    if (p && !pass.isEmpty() && CredentialStore::isSupported()) {
-        if (CredentialStore::save(name, pass)) {
-            settings.setAutoLogin(true);
-            settings.saveGlobal();
-        }
-    }
+    // KHANDAQ (deep review 2026-08-23, RR3-09): creating a profile no longer decides, on the user's
+    // behalf, that the password goes into the system credential store and that the app logs in
+    // automatically from now on.
+    //
+    // The password to a profile is the key to the whole local history; putting a copy of it in
+    // Keychain / Credential Manager and turning off the prompt is a meaningful reduction in what an
+    // attacker with the unlocked machine has to get past, and it was done silently at the moment the
+    // profile was made, with nothing on screen saying so. Auto-login remains available — it is a
+    // checkbox on the login screen — but it is now something the user turns on.
     setProfile(p);
     parser = nullptr; // only apply cmdline proxy settings once
 }

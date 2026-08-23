@@ -81,8 +81,18 @@ def patch_method(src: str, method: str, body_lines: list[str]) -> str:
 
 def main():
     data = json.loads(CONFIG.read_text())
-    khandaq = [n for n in data.get("khandaq_owned_nodes", []) if n.get("status") != "planned" or is_valid_key(n.get("public_key", ""))]
-    khandaq_valid = [n for n in data.get("khandaq_owned_nodes", []) if is_valid_key(n.get("public_key", ""))]
+    # KHANDAQ (deep review 2026-08-23, RR3-11): filter on STATUS, exactly as sync-all-bootstrap-nodes
+    # does. This one ignored it, so every run put the three retired bootstrap*.khandaq.org anchors
+    # back into the shipped TRIfA seed list — names that no longer resolve, in the head of the DHT
+    # bootstrap order, on a client whose only way to update that list is this script. A client that
+    # trusts a name with no infrastructure behind it is the shape an eclipse attack is built from,
+    # and the retirement was recorded in the registry precisely so that could not happen.
+    khandaq_valid = [
+        n for n in data.get("khandaq_owned_nodes", [])
+        if n.get("status", "active") == "active" and is_valid_key(n.get("public_key", ""))
+    ]
+    if not khandaq_valid:
+        raise SystemExit("В реестре нет ни одной активной ноды Khandaq — нечего синхронизировать")
     public = data.get("public_bootstrap_nodes", [])
 
     # Order: Khandaq owned first, then public fallback

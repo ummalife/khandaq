@@ -97,7 +97,7 @@ advisory вылезла `GHSA-574f-3g2m-x479` в bouncycastle — повторн
 
 | Что | Срок | Почему не мы |
 |---|---|---|
-| Разобрать 32 advisory ffmpeg 6.0 на Android поимённо | **30.09.2026** | ffmpeg декодирует медиа собеседника; поимённый разбор не сделан. libvpx из этой строки убран: обе оставшиеся CVE энкодерные и недостижимы — см. [разбор](REMEDIATION-DEEP-2026-08-23.md) |
+| ~~Пересборка нативного стека Android~~ | — | **снято 23.08**: 32 advisory ffmpeg разобраны поимённо — 31 недостижима, 1 с оговоркой, 0 достижимых; обе оставшиеся CVE libvpx энкодерные и недостижимы. [Разбор](REMEDIATION-DEEP-2026-08-23.md) |
 | App Group `group.org.khandaq.messenger` в портале Apple | 20.11.2026 | действие в Developer portal; без него подпись не проходит |
 | Qt 6 / OpenSSL 3 | 19.11.2026 | миграция десктопа |
 | Сертификаты Windows Authenticode и Developer ID | — | покупка, Account Holder |

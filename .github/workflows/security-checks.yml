@@ -386,3 +386,9 @@ jobs:
       # in place by something. This compiles the real function out of the shipped .m and attacks it.
       - name: iOS video-RTP reassembly must refuse the F-01 overflow
         run: python3 scripts/check-ios-rtp-reassembly.py
+      # KHANDAQ (RR2-12, 2026-08-23): the case list above pins defects somebody already understood.
+      # This drives the same real function with sequences nobody wrote down, under ASan+UBSan. It
+      # finds both memory defects the 2026-08-23 review found by hand — verified by restoring the
+      # pre-fix logic, where it reports `next_free_entry = 4, outside 0..3` within seconds.
+      - name: Fuzz the RTP reassembly under sanitizers
+        run: python3 scripts/check-rtp-fuzz.py --libfuzzer --seconds 45

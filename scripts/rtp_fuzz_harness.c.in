@@ -36,14 +36,53 @@ static int log_calls;
 
 enum { RTP_LARGE_FRAME = 1 << 0, RTP_KEY_FRAME = 1 << 1 };
 
+/* Faithful to toxav/rtp.h. The wire fields are here in full because rtp_header_unpack below is
+ * lifted verbatim and writes every one of them; a trimmed struct would compile and then have the
+ * unpacker scribble past the end of it, which is a bug in the harness masquerading as a finding. */
 struct RTPHeader {
+    uint8_t  ve;
+    uint8_t  pe;
+    uint8_t  xe;
+    uint8_t  cc;
+    uint8_t  ma;
+    uint8_t  pt;
     uint16_t sequnum;
     uint32_t timestamp;
-    uint16_t flags;
+    uint32_t ssrc;
+    uint64_t flags;
     uint32_t offset_full;
     uint32_t data_length_full;
     uint32_t received_length_full;
+    uint16_t offset_lower;
+    uint16_t data_length_lower;
 };
+
+/* Verbatim from toxcore/network.c — big-endian readers the unpacker is built on. */
+static size_t net_unpack_u16(const uint8_t *bytes, uint16_t *v)
+{
+    const uint8_t hi = bytes[0];
+    const uint8_t lo = bytes[1];
+    *v = ((uint16_t)hi << 8) | lo;
+    return sizeof(*v);
+}
+static size_t net_unpack_u32(const uint8_t *bytes, uint32_t *v)
+{
+    const uint8_t *p = bytes;
+    uint16_t hi, lo;
+    p += net_unpack_u16(p, &hi);
+    p += net_unpack_u16(p, &lo);
+    *v = ((uint32_t)hi << 16) | lo;
+    return p - bytes;
+}
+static size_t net_unpack_u64(const uint8_t *bytes, uint64_t *v)
+{
+    const uint8_t *p = bytes;
+    uint32_t hi, lo;
+    p += net_unpack_u32(p, &hi);
+    p += net_unpack_u32(p, &lo);
+    *v = ((uint64_t)hi << 32) | lo;
+    return p - bytes;
+}
 
 struct RTPMessage {
     uint16_t len;
@@ -68,6 +107,8 @@ struct RTPWorkBufferList {
 @@DEFINES@@
 
 @@FUNCTION@@
+
+@@UNPACK@@
 /* --------------------------------------------------------------------------------------------- */
 
 static void wipe(struct RTPWorkBufferList *w)
@@ -137,10 +178,63 @@ static void drive(const uint8_t *data, size_t size)
     wipe(&w);
 }
 
+/*
+ * The second entry point, and the one closer to the wire: raw bytes straight into the REAL
+ * rtp_header_unpack, then into the REAL fill_data_into_slot.
+ *
+ * drive() above builds header fields directly, which explores slot bookkeeping well and the parser
+ * not at all. This one starts where the network does — an attacker controls every byte of the 80-byte
+ * header — so a mistake in the unpacker itself (a field read at the wrong offset, a length taken on
+ * trust) is in scope here and was not before.
+ */
+static void drive_raw(const uint8_t *data, size_t size)
+{
+    if (size < RTP_HEADER_SIZE + 1) {
+        return;
+    }
+    struct RTPWorkBufferList w;
+    memset(&w, 0, sizeof(w));
+
+    static uint8_t payload[4096];
+    memset(payload, 0x42, sizeof(payload));
+
+    /* Up to 8 packets carved out of one input, each with its own 80-byte header. */
+    size_t off = 0;
+    for (int k = 0; k < 8 && off + RTP_HEADER_SIZE + 1 <= size; ++k) {
+        struct RTPHeader h;
+        memset(&h, 0, sizeof(h));
+        rtp_header_unpack(data + off, &h);
+
+        /* The caller only ever reaches fill_data_into_slot for large-frame packets. */
+        h.flags |= RTP_LARGE_FRAME;
+
+        size_t avail = size - off - RTP_HEADER_SIZE;
+        uint16_t chunk = (uint16_t)(avail > sizeof(payload) ? sizeof(payload) : avail);
+
+        uint8_t slot = (uint8_t)(data[off + RTP_HEADER_SIZE] % USED_RTP_WORKBUFFER_COUNT);
+        int8_t nfe = w.next_free_entry;
+        if (nfe < 0) nfe = 0;
+        if (nfe > USED_RTP_WORKBUFFER_COUNT) nfe = USED_RTP_WORKBUFFER_COUNT;
+        if (slot > nfe) slot = (uint8_t)nfe;
+        if (slot >= USED_RTP_WORKBUFFER_COUNT) slot = USED_RTP_WORKBUFFER_COUNT - 1;
+
+        (void)fill_data_into_slot(NULL, &w, slot, (h.flags & RTP_KEY_FRAME) != 0, &h, payload, chunk);
+
+        if (w.next_free_entry < 0 || w.next_free_entry > USED_RTP_WORKBUFFER_COUNT) {
+            fprintf(stderr, "INVARIANT(raw): next_free_entry = %d, outside 0..%d\n",
+                    (int)w.next_free_entry, USED_RTP_WORKBUFFER_COUNT);
+            abort();
+        }
+        off += RTP_HEADER_SIZE + 1;
+    }
+    wipe(&w);
+}
+
 #ifdef KHANDAQ_LIBFUZZER
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     drive(data, size);
+    drive_raw(data, size);
     return 0;
 }
 #else
@@ -158,6 +252,7 @@ int main(int argc, char **argv)
 {
     unsigned long iterations = (argc > 1) ? strtoul(argv[1], NULL, 10) : 200000UL;
     uint8_t buf[12 * 64];
+    uint8_t raw[(RTP_HEADER_SIZE + 1) * 8 + 512];
 
     for (unsigned long it = 0; it < iterations; ++it) {
         rng_state = (uint32_t)(it + 1) * 2654435761u;   /* seed per iteration, reproducible */
@@ -165,10 +260,14 @@ int main(int argc, char **argv)
         for (size_t i = 0; i < size; ++i) {
             buf[i] = (uint8_t)(xorshift32() >> 16);
         }
+        for (size_t i = 0; i < sizeof(raw); ++i) {
+            raw[i] = (uint8_t)(xorshift32() >> 16);
+        }
         drive(buf, size);
+        drive_raw(raw, sizeof(raw));
     }
-    printf("ok: %lu sequences driven through the real fill_data_into_slot, no sanitizer report\n",
-           iterations);
+    printf("ok: %lu sequences through fill_data_into_slot and %lu through rtp_header_unpack, "
+           "no sanitizer report\n", iterations, iterations);
     return 0;
 }
 #endif

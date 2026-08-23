@@ -78,6 +78,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Published metadata must match the build files
         run: python3 scripts/check-release-metadata.py
+      # KHANDAQ (re-review 2026-08-23, KQ-R1): "the repository is green" and "users are protected"
+      # became different statements — out-of-bounds reads were closed on master while 0.2.42 stayed
+      # in the stores. This counts the gap. It warns rather than fails here on purpose: failing every
+      # PR the moment one security fix merges would block the second one.
+      - name: Count security fixes waiting for a release
+        run: python3 scripts/check-release-freshness.py
       # KHANDAQ (re-review v2 2026-08-22, RR2-13): the privacy policy is part of the control surface.
       # It listed three permissions the app no longer requests and stated the store builds carry no
       # signing key, which stopped being true with 0.2.42. Neither is visible by reading the page.

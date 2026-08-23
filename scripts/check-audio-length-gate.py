@@ -92,7 +92,35 @@ def main() -> int:
                     f"читается за пределами выделенного буфера, а msg->len - 4 уходит в opus_decode "
                     f"отрицательным.")
 
-    print(f"==> Копий пути декодирования аудио: {len(COPIES)}; защищённых чтений: {checked}")
+    # KHANDAQ (2026-08-23): Android is the fourth copy, and it is not in this repository.
+    #
+    # circle_scripts/deps.sh clones zoff99/c-toxcore fresh at a pinned commit, so the edits checked
+    # above never reach the shipped .so — the fix travels as a build-time patch instead, the same way
+    # the libvpx CVE backport does. A patch that stops being applied is invisible: the version string
+    # does not move and the build still succeeds. So the patch file must exist AND still be invoked
+    # once per libvpx-clone site.
+    patch = ROOT / "khandaq-android-trifa/patches/apply_khandaq_audio_length.py"
+    deps = ROOT / "khandaq-android-trifa/circle_scripts/deps.sh"
+    ANDROID_SITES = 4
+    if not patch.is_file():
+        problems.append(f"нет {patch.relative_to(ROOT)} — Android клонирует toxcore заново, и без "
+                        f"этого патча поставляемая .so собирается без проверки длины")
+    elif not deps.is_file():
+        problems.append("нет circle_scripts/deps.sh — непонятно, применяется ли патч вообще")
+    else:
+        sites = sum(1 for ln in deps.read_text(encoding="utf-8", errors="replace").splitlines()
+                    if patch.name in ln and "python3" in ln and not ln.strip().startswith("#"))
+        if sites < ANDROID_SITES:
+            problems.append(
+                f"deps.sh применяет {patch.name} {sites} раз(а) вместо {ANDROID_SITES}. toxcore "
+                f"собирается отдельно под каждый ABI — недостающее место это архитектура, которая "
+                f"уезжает пользователю без проверки длины.")
+        else:
+            checked += 1
+            print(f"    Android: патч сборки применяется в {sites} местах")
+
+    print(f"==> Копий пути декодирования аудио: {len(COPIES)} в дереве + Android через патч; "
+          f"защищённых чтений: {checked}")
     print()
     if problems:
         print(f"ПРОВАЛЕНО: {len(problems)}", file=sys.stderr)

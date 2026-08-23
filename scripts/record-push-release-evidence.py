@@ -93,6 +93,23 @@ def fetch() -> dict | None:
         return None
 
 
+def base_commit() -> str:
+    """
+    The point in master this work branched from.
+
+    KHANDAQ (2026-08-23): `commit` records the branch tip the measurement was taken on, and that SHA
+    STOPS EXISTING the moment the release PR is squash-merged — the branch collapses into one new
+    commit with a different hash. The ancestor check below then fails on master and on every later
+    PR, for a reason that has nothing to do with the evidence being wrong. This records a commit that
+    survives the squash, so the check has something real to verify against.
+    """
+    for ref in ("origin/master", "master"):
+        base = git("merge-base", "HEAD", ref)
+        if base:
+            return base
+    return git("rev-parse", "HEAD") or "unknown"
+
+
 def summarise(health: dict, sha: str, rel: dict) -> dict:
     caps = health.get("capabilities") or {}
     paths = health.get("emission_paths") or {}
@@ -107,6 +124,7 @@ def summarise(health: dict, sha: str, rel: dict) -> dict:
         ],
         "measured_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "commit": sha,
+        "base_commit": base_commit(),
         "release": rel,
         "relay": {
             "auth_mode": health.get("auth_mode"),
@@ -184,14 +202,23 @@ def check() -> int:
 
     # Записанный коммит должен быть предком HEAD: иначе свидетельство снято с ветки, которой в
     # истории релиза нет, и измерение относится не к тому дереву.
-    sha = rec["commit"]
+    # Проверяем base_commit — точку ветвления от master. Сам tip ветки (`commit`) после
+    # squash-мержа перестаёт существовать, поэтому требовать его в предках HEAD означает падать
+    # после каждого релиза. Точка ветвления squash переживает.
+    sha = rec.get("base_commit") or rec["commit"]
+    from_base = "base_commit" in rec
     if re.fullmatch(r"[0-9a-f]{7,40}", str(sha)):
         if git("rev-parse", "--verify", f"{sha}^{{commit}}") is None:
             print(f"::warning::коммит {sha[:12]} из {path.name} не найден локально "
                   f"(мелкий клон?) — проверка предка пропущена", file=sys.stderr)
         elif git("merge-base", "--is-ancestor", sha, "HEAD") is None:
-            return die(f"{path.name}: коммит {sha[:12]} не является предком HEAD — свидетельство "
-                       f"снято с дерева, которого нет в истории этого релиза")
+            if from_base:
+                return die(f"{path.name}: точка ветвления {sha[:12]} не является предком HEAD — "
+                           f"свидетельство снято с ветки, которой в истории этого релиза нет")
+            # Свидетельство старого формата: единственный записанный SHA — исчезающий tip ветки.
+            print(f"::warning::{path.name}: коммит {sha[:12]} не в истории HEAD. В файле нет "
+                  f"base_commit, а tip релизной ветки squash-мерж не сохраняет — проверить нечего. "
+                  f"Переснимите замер, чтобы файл получил точку ветвления.", file=sys.stderr)
     elif sha != "unknown":
         return die(f"{path.name}: поле commit не похоже на SHA ({sha!r})")
 
@@ -205,9 +232,19 @@ def check() -> int:
     if age > STALE_DAYS:
         return die(f"{path.name}: измерению {age} дней (порог {STALE_DAYS}) — переснимите, "
                    f"прежде чем принимать по нему решения о enforce")
+    # Порог наступает молча: до него всё зелено, после — падает каждый PR, включая те, что к реле
+    # отношения не имеют. Предупреждаем за неделю, чтобы замер переснимали заранее, а не в тот день,
+    # когда сборка встала.
+    if age > (STALE_DAYS - 7):
+        print(f"::warning::{path.name}: измерению {age} дней, порог {STALE_DAYS} — "
+              f"осталось {STALE_DAYS - age} дн. до того, как это начнёт валить каждый PR. "
+              f"Переснимите замер с боевого реле.")
 
+    where = f"замер на {str(rec['commit'])[:12]}"
+    if from_base:
+        where += f", ветвление от {str(sha)[:12]}"
     print(f"ок: {path.name} — релиз {want_name} / iOS {rel['ios']['buildNumber']}, "
-          f"коммит {str(sha)[:12]}, измерено {rec['measured_at']} ({age} дн. назад)")
+          f"{where}, измерено {rec['measured_at']} ({age} дн. назад)")
     print(f"    режим {rec['relay']['auth_mode']}, устройств с capability "
           f"{rec['capabilities'].get('devices_registered')}, legacy "
           f"{(rec.get('emission') or {}).get('legacy_pct')}%")

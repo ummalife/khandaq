@@ -87,6 +87,12 @@ jobs:
       # are the digests that were reviewed.
       - name: The native library must match its committed digests
         run: python3 scripts/check-native-lib-pins.py
+      # KHANDAQ (2026-08-23): 31 of the 32 ffmpeg advisories are waived as unreachable, and every one
+      # of those arguments rests on the same measured fact — the binary links exactly one ffmpeg
+      # decoder and nothing else. Enabling one more codec is a reasonable thing to do and would make
+      # a pile of waivers quietly false, so the fact is held here rather than assumed.
+      - name: The ffmpeg surface must stay the one the waivers were argued against
+        run: python3 scripts/check-ffmpeg-surface.py
       # KHANDAQ (deep review 2026-08-23, RR3-11): the bootstrap lists are DHT trust anchors, and they
       # are edited by scripts no workflow calls. Three retired anchors were still shipping.
       - name: No client may ship a retired DHT anchor

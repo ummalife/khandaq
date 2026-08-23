@@ -1,0 +1,141 @@
+/*
+ * KHANDAQ (2026-08-23) — sanitizer harness for the toxext messages parser.
+ *
+ * parse_messages_packet is the first thing that touches a lossless custom packet from a contact:
+ * Core::onLosslessPacket -> CoreExt::onLosslessPacket -> toxext_handle_lossless_custom_packet ->
+ * here. No call is needed, and the bytes it hands back become a QString in the chat window, so an
+ * over-read here is memory disclosure rather than a crash.
+ *
+ * The defect it was written against: three of the four message types read eight bytes without
+ * checking `it + 8 > end` — only MESSAGE_START checked. A one-byte packet therefore read eight
+ * bytes of adjacent heap.
+ *
+ * The function itself is lifted verbatim by the Python around this file; the struct and the read
+ * macro below are copied from the shipped headers so the harness cannot compile against something
+ * different from what ships.
+ */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Verbatim from toxext_messages/tox_extension_messages.c */
+enum Messages {
+	MESSAGE_START,
+	MESSAGE_PART,
+	MESSAGE_FINISH,
+	MESSAGE_RECEIVED,
+	MESSAGE_NEGOTIATE,
+};
+
+struct MessagesPacket {
+	enum Messages message_type;
+	size_t total_message_size;
+	uint8_t const *message_data;
+	size_t message_size;
+	size_t receipt_id;
+	uint64_t max_sending_message_size;
+};
+
+/* Verbatim from toxext/src/toxext_util.h */
+#define toxext_read_from_buf(type, buffer, size)                               \
+	({                                                                     \
+		type __val = 0;                                                \
+		size_t __effective_size =                                      \
+			(size > sizeof(type)) ? sizeof(type) : size;           \
+		for (size_t i = 0; i < __effective_size; ++i) {                \
+			__val |= ((type)(buffer)[i])                           \
+				 << ((__effective_size - i - 1) * 8);          \
+		}                                                              \
+		__val;                                                         \
+	})
+
+/* --- the real parser, lifted verbatim out of the shipped file ------------------------------- */
+@@FUNCTION@@
+/* -------------------------------------------------------------------------------------------- */
+
+/*
+ * The input is the packet, byte for byte — this parser takes a buffer and a length and nothing
+ * else, so there is no shaping to do and no excuse for not fuzzing it directly.
+ *
+ * ASan places the allocation at the end of a page-guarded region, so an eight-byte read past a
+ * one-byte buffer is caught rather than silently returning neighbouring heap. That is precisely
+ * the defect: silence is what made it exploitable, since the bytes reach the chat window.
+ */
+static void drive(const uint8_t *data, size_t size)
+{
+	/* Copy into an exactly-sized allocation. Fuzzing engines hand out a buffer inside a larger
+	 * arena, and reading past the logical end of that would not trip anything. */
+	uint8_t *exact = (uint8_t *)malloc(size ? size : 1);
+	if (exact == NULL) {
+		return;
+	}
+	memcpy(exact, data, size);
+
+	struct MessagesPacket parsed;
+	memset(&parsed, 0, sizeof(parsed));
+
+	if (parse_messages_packet(exact, size, &parsed)) {
+		/* A successful parse must describe memory INSIDE the packet. Checking it here is the
+		 * point: the caller trusts message_data/message_size and forwards them to the UI. */
+		if (parsed.message_data != NULL) {
+			if (parsed.message_data < exact ||
+			    parsed.message_data + parsed.message_size > exact + size) {
+				fprintf(stderr,
+					"INVARIANT: parsed range [%p,+%zu) outside packet [%p,+%zu)\n",
+					(const void *)parsed.message_data, parsed.message_size,
+					(const void *)exact, size);
+				abort();
+			}
+			/* Touch every byte the caller would forward, so ASan sees the same reads. */
+			volatile uint8_t sink = 0;
+			for (size_t i = 0; i < parsed.message_size; ++i) {
+				sink ^= parsed.message_data[i];
+			}
+			(void)sink;
+		}
+	}
+	free(exact);
+}
+
+#ifdef KHANDAQ_LIBFUZZER
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+	drive(data, size);
+	return 0;
+}
+#else
+static uint32_t rng_state;
+static uint32_t xorshift32(void)
+{
+	uint32_t x = rng_state;
+	x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+	return rng_state = x;
+}
+
+int main(int argc, char **argv)
+{
+	unsigned long iterations = (argc > 1) ? strtoul(argv[1], NULL, 10) : 200000UL;
+	uint8_t buf[64];
+
+	for (unsigned long it = 0; it < iterations; ++it) {
+		rng_state = (uint32_t)(it + 1) * 2654435761u;
+		/* Short packets on purpose: the interesting inputs are the ones that end before the
+		 * parser expects them to. */
+		size_t size = xorshift32() % 24;
+		for (size_t i = 0; i < size; ++i) {
+			buf[i] = (uint8_t)(xorshift32() >> 16);
+		}
+		/* And a run where the first byte is a valid message type every time, so the branches
+		 * that read eight bytes are actually reached rather than reached by luck. */
+		if (size > 0) {
+			buf[0] = (uint8_t)(xorshift32() % 5);
+		}
+		drive(buf, size);
+	}
+	printf("ok: %lu packets through the real parse_messages_packet, no sanitizer report\n",
+	       iterations);
+	return 0;
+}
+#endif

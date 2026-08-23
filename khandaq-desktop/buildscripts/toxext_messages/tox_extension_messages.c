@@ -127,7 +127,21 @@ bool parse_messages_packet(uint8_t const *data, size_t size,
 	messages_packet->message_type = *it;
 	it += 1;
 
+	/*
+	 * KHANDAQ (2026-08-23): check the bound before every 8-byte read, not just one of them.
+	 *
+	 * MESSAGE_START checked `it + 8 > end`; RECEIVED, FINISH and NEGOTIATE did not, and all four
+	 * read the same eight bytes. A one-byte segment — just the type — therefore read eight bytes
+	 * of adjacent heap. Combined with the segment-size bug in toxext.c, `size` itself could be
+	 * larger than the buffer, so `message_size = end - it` handed the caller a length spanning
+	 * memory that was never part of the packet; for this extension those bytes reach the chat
+	 * window as text.
+	 */
 	if (messages_packet->message_type == MESSAGE_RECEIVED) {
+		if (it + 8 > end) {
+			return false;
+		}
+
 		messages_packet->receipt_id =
 			toxext_read_from_buf(uint64_t, it, 8);
 		return true;
@@ -142,11 +156,19 @@ bool parse_messages_packet(uint8_t const *data, size_t size,
 		it += 8;
 	}
 	else if (messages_packet->message_type == MESSAGE_FINISH) {
+		if (it + 8 > end) {
+			return false;
+		}
+
 		messages_packet->receipt_id =
 			toxext_read_from_buf(uint64_t, it, 8);
 		it += 8;
 	}
 	else if (messages_packet->message_type == MESSAGE_NEGOTIATE) {
+		if (it + 8 > end) {
+			return false;
+		}
+
 		messages_packet->max_sending_message_size =
 			toxext_read_from_buf(uint64_t, it, 8);
 		it += 8;

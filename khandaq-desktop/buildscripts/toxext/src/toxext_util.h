@@ -28,8 +28,18 @@
 		size_t __effective_size =                                      \
 			(size > sizeof(type)) ? sizeof(type) : size;           \
 		for (size_t i = 0; i < __effective_size; ++i) {                \
-			__val |= (buffer)[i]                                   \
-				 << (__effective_size - i - 1) * 8;            \
+			/* KHANDAQ (2026-08-23): cast to `type` BEFORE shifting.  \
+			 * (buffer)[i] is a uint8_t, which the usual arithmetic   \
+			 * conversions promote to int — 32 bits. Reading a        \
+			 * uint64_t therefore shifted an int by up to 56, which   \
+			 * is undefined behaviour, and in practice the top four   \
+			 * bytes landed in the wrong place: receipt_id,           \
+			 * total_message_size and max_sending_message_size were   \
+			 * decoded wrong for every packet that used them.         \
+			 * Found by UBSan the first time this parser was fuzzed.  \
+			 */                                                      \
+			__val |= ((type)(buffer)[i])                           \
+				 << ((__effective_size - i - 1) * 8);          \
 		}                                                              \
 		__val;                                                         \
 	})

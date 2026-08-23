@@ -5467,8 +5467,11 @@ public class MainActivity extends AppCompatActivity
                     {
                         video_snapshot_buf = new byte[buffer_size_in_bytes];
                     }
-                    // video_buffer_1 is a direct buffer that native fills each frame — copy it out with
-                    // get() (a direct buffer has no backing array on Android, so .array() would throw).
+                    // video_buffer_1 is a direct buffer that native refills every frame, so what is
+                    // needed here is a COPY that native cannot overwrite mid-read — hence get() into
+                    // our own array. (The previous note claimed .array() would throw on a direct
+                    // buffer; on Android it does not — DirectByteBuffer keeps a backing array. The
+                    // reason to copy is aliasing, not an exception.)
                     video_buffer_1.rewind();
                     video_buffer_1.get(video_snapshot_buf, 0, buffer_size_in_bytes);
                     video_snapshot_len = buffer_size_in_bytes;

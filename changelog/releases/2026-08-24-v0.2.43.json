@@ -1,0 +1,39 @@
+{
+  "version": "0.2.43",
+  "date": "2026-08-24",
+  "title": "A filename could point somewhere it had no business pointing",
+  "summary": "Two of the fixes below share a shape: a check that existed, written down and working, applied to one code path and not to its neighbour. The filename rule was on every 1:1 transfer and missing from one kind of group transfer. The audio length check was in all three copies of the source and in none of the Android builds, because Android does not build from that source. Neither gap was visible by reading the fix; both are now held by tests that fail when a path stops being covered.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "A file sent to a group can no longer name a file somewhere else",
+      "description": "Whoever sends a file picks its name, and for one kind of group transfer that name was stored exactly as it arrived. The file itself was saved safely — but the stored name was later joined to a folder, and one of the places doing that reads the file and sends its contents to whoever asked for the group's history. A name pointing up and out of the group's folder therefore read an unrelated file and handed it over: attachments from other conversations, avatars, anything small enough to fit in one packet. The same name was also used as both source and destination when saving a file out of the app. Names are now cleaned before they are stored, the name shown in the chat is still the one the sender chose, and the three places that pass a file's contents onward refuse any path that leaves its own folder. Records already saved by older versions are covered by that refusal. The other two clients were never affected: they keep the display name and the path apart.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "important",
+      "title": "Android calls now actually carry the audio length check",
+      "description": "An earlier release added a check that an audio packet is long enough before its first four bytes are read. It went into all three copies of the underlying library — and Android kept shipping without it, because the Android build does not use those copies: it fetches the library fresh from upstream and compiles that. Editing the source in this repository could not reach the file that ships. The check is now applied during the build itself, for every processor type, and the native library has been rebuilt so the shipped one carries it.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "A password with a quote in it no longer locks you out of your own database",
+      "description": "When changing the password that protects the local database, the new password was placed into a database command without escaping, while the command that opens the database escaped it. For a password containing a quote character the two disagreed: the database could be re-encrypted under a shortened form of the password, and the app would then try to open it with the full one and fail. Both commands now escape identically, and a check keeps them that way.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Private groups no longer announce their identifier to every friend",
+      "description": "While reconnecting to a group, the app asks friends who are in it to invite it back. Since the previous release the receiving side refuses that request for private groups — knowing a private group's identifier is not the same as being a member. The sending side kept asking anyway, which handed that identifier to every online friend, including those not in the group, every thirty seconds, in exchange for a request that could no longer succeed. Both clients now skip it for private groups. Public groups, where this mechanism does work, are unchanged.",
+      "platforms": ["android", "ios"]
+    },
+    {
+      "severity": "low",
+      "title": "Notification relay: an address header is checked to be an address",
+      "description": "The relay takes the caller's address from a header set by its front-end proxy, and used it both as the per-caller rate-limit key and in its own logs without checking it was an address at all. It is now parsed as one and ignored when it is not, so a value chosen by a caller cannot buy a separate rate-limit budget or place text of its choosing into the log an operator reads.",
+      "platforms": ["android", "ios"]
+    }
+  ]
+}

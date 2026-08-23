@@ -1288,6 +1288,14 @@ public class HelperGeneric
 
     static void export_vfs_file_to_real_file(String src_path_name, String src_file_name, String dst_path_name, String dst_file_name)
     {
+        // KHANDAQ (security): both the source read and the destination write are built from a stored
+        // filename, and a row written by an older version may still carry a peer-supplied name. A name
+        // containing ../ read a file outside the chat directory and wrote it outside the export one.
+        if (HelperFiletransfer.path_inside_dir_or_null(src_path_name, src_file_name) == null)
+        {
+            logI(TAG, "export: refusing a source name that leaves its directory");
+            return;
+        }
         try
         {
             if (MainActivity.VFS_ENCRYPT)
@@ -1513,6 +1521,14 @@ public class HelperGeneric
     static String export_vfs_file_to_public_storage(Context context, String src_path_name, String src_file_name,
                                                       String preferred_display_name)
     {
+        // KHANDAQ (security): both the source read and the destination write are built from a stored
+        // filename, and a row written by an older version may still carry a peer-supplied name. A name
+        // containing ../ read a file outside the chat directory and wrote it outside the export one.
+        if (HelperFiletransfer.path_inside_dir_or_null(src_path_name, src_file_name) == null)
+        {
+            logI(TAG, "export: refusing a source name that leaves its directory");
+            return null;
+        }
         if ((context == null) || (!VFS_ENCRYPT) || (src_file_name == null) || (src_file_name.trim().isEmpty()))
         {
             return null;

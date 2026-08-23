@@ -6687,7 +6687,13 @@ public class HelperGroup
 
         final String displayName = (asm.displayFilename != null && !asm.displayFilename.isEmpty())
                 ? asm.displayFilename : asm.filename;
-        existing.file_name = displayName;
+        // KHANDAQ (security): store the SANITISED name, never the peer's raw one. displayFilename
+        // comes straight off the wire (resolveDisplayFilename does no filtering), and file_name is
+        // later concatenated into a path — send_ngch_syncfile reads path_name + "/" + file_name and
+        // ships those bytes to a peer, and the export action uses it on both sides of a copy. So a
+        // name like ../../<something> read a file outside the group directory and sent it out.
+        // The raw name is still what the user sees: it stays in the message text.
+        existing.file_name = HelperFiletransfer.sanitised_stored_filename(asm, displayName);
         existing.text = HelperFiletransfer.buildOutgoingFileMessageText(context_s, displayName, asm.totalSize);
         existing.filesize = asm.totalSize;
         if (asm.outPath != null)
@@ -6760,7 +6766,13 @@ public class HelperGroup
             m.was_synced = false;
             m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
             m.path_name = VFS_PREFIX + VFS_FILE_DIR + "/" + m.group_identifier + "/";
-            m.file_name = displayName;
+            // KHANDAQ (security): store the SANITISED name, never the peer's raw one. displayFilename
+            // comes straight off the wire (resolveDisplayFilename does no filtering), and file_name is
+            // later concatenated into a path — send_ngch_syncfile reads path_name + "/" + file_name and
+            // ships those bytes to a peer, and the export action uses it on both sides of a copy. So a
+            // name like ../../<something> read a file outside the group directory and sent it out.
+            // The raw name is still what the user sees: it stays in the message text.
+            m.file_name = HelperFiletransfer.sanitised_stored_filename(asm, displayName);
             m.filename_fullpath = asm.outPath;
             m.storage_frame_work = false;
             m.filesize = asm.totalSize;
@@ -6808,7 +6820,13 @@ public class HelperGroup
             final GroupMessage existing = find_group_message_by_msg_id_hash(asm.groupId, msgIdHex);
             if (existing != null)
             {
-                existing.file_name = displayName;
+                // KHANDAQ (security): store the SANITISED name, never the peer's raw one. displayFilename
+                // comes straight off the wire (resolveDisplayFilename does no filtering), and file_name is
+                // later concatenated into a path — send_ngch_syncfile reads path_name + "/" + file_name and
+                // ships those bytes to a peer, and the export action uses it on both sides of a copy. So a
+                // name like ../../<something> read a file outside the group directory and sent it out.
+                // The raw name is still what the user sees: it stays in the message text.
+                existing.file_name = HelperFiletransfer.sanitised_stored_filename(asm, displayName);
                 existing.text = HelperFiletransfer.buildOutgoingFileMessageText(context_s, displayName, asm.totalSize);
                 existing.filesize = asm.totalSize;
                 if (asm.outPath != null && !asm.outPath.isEmpty())
@@ -6922,7 +6940,13 @@ public class HelperGroup
             m.was_synced = false;
             m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
             m.path_name = VFS_PREFIX + VFS_FILE_DIR + "/" + m.group_identifier + "/";
-            m.file_name = displayName;
+            // KHANDAQ (security): store the SANITISED name, never the peer's raw one. displayFilename
+            // comes straight off the wire (resolveDisplayFilename does no filtering), and file_name is
+            // later concatenated into a path — send_ngch_syncfile reads path_name + "/" + file_name and
+            // ships those bytes to a peer, and the export action uses it on both sides of a copy. So a
+            // name like ../../<something> read a file outside the group directory and sent it out.
+            // The raw name is still what the user sees: it stays in the message text.
+            m.file_name = HelperFiletransfer.sanitised_stored_filename(asm, displayName);
             m.filename_fullpath = asm.outPath;
             m.storage_frame_work = false;
             m.filesize = asm.totalSize;
@@ -10382,9 +10406,18 @@ public class HelperGroup
                 return;
             }
 
-            final info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(
-                m.path_name + "/" + m.file_name);
-            final java.io.File f2 = new java.io.File(m.path_name + "/" + m.file_name);
+            // KHANDAQ (security): this reads a file and sends its bytes to a peer, so the path it opens
+            // must be inside the group's own directory. Rows stored by earlier versions can still hold a
+            // peer-supplied name containing ../, which would have exfiltrated an unrelated file.
+            final String sync_path = HelperFiletransfer.path_inside_dir_or_null(m.path_name, m.file_name);
+            if (sync_path == null)
+            {
+                HelperGeneric.logI(TAG, "send_ngch_syncfile: refusing name that leaves the group directory");
+                return;
+            }
+
+            final info.guardianproject.iocipher.File f1 = new info.guardianproject.iocipher.File(sync_path);
+            final java.io.File f2 = new java.io.File(sync_path);
 
             long f_length = 0;
             if (m.direction == 1)

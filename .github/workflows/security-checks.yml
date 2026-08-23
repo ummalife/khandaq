@@ -360,6 +360,12 @@ jobs:
       # asserts from the builds users run. One packet from a contact already in a call.
       - name: The audio path must check the payload length before trusting it
         run: python3 scripts/check-audio-length-gate.py
+      # KHANDAQ (2026-08-23, CodeQL triage): a group file's name arrives unfiltered off the wire, and
+      # it was stored as-is on the row. send_ngch_syncfile joins that name with the directory, reads the
+      # file and sends the bytes to a peer — so ../ in a filename read a file outside the group and
+      # handed it out. Same name was both source and destination of the export copy.
+      - name: A peer-supplied filename must never steer a read or write path
+        run: python3 scripts/check-incoming-filename-sanitizer.py
       # KHANDAQ (release 0.2.40): 15 QA scripts drove org.khandaq.messenger (the namespace) while the
       # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
       - name: QA scripts must target the package the app installs as

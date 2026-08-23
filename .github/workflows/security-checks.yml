@@ -397,3 +397,9 @@ jobs:
       # pre-fix logic, where it reports `next_free_entry = 4, outside 0..3` within seconds.
       - name: Fuzz the RTP reassembly under sanitizers
         run: python3 scripts/check-rtp-fuzz.py --libfuzzer --seconds 45
+      # KHANDAQ (2026-08-23): the first code a contact's lossless packet reaches, and what it
+      # reports back becomes a QString in the chat window — so reading past the packet here is
+      # memory disclosure rather than a crash. Fuzzing it found the missing bounds checks AND a
+      # shift-width UB in the read macro that had been decoding every 8-byte field wrong.
+      - name: Fuzz the toxext messages parser under sanitizers
+        run: python3 scripts/check-toxext-fuzz.py --libfuzzer --seconds 45

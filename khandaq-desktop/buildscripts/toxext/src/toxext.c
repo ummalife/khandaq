@@ -1005,12 +1005,36 @@ int toxext_handle_lossless_custom_packet(struct ToxExt *toxext,
 	struct ToxExtPacketList *packet =
 		toxext_packet_list_create(toxext, friend_id);
 	while ((size_t)(it - data) < size) {
-		if (size < TOXEXT_SEGMENT_HEADER_SIZE) {
+		/*
+		 * KHANDAQ (2026-08-23): bound each segment against what is LEFT of the buffer.
+		 *
+		 * The check here was `size < TOXEXT_SEGMENT_HEADER_SIZE`, which looks at the whole
+		 * packet rather than at the remainder — and the caller already guarantees
+		 * size >= TOXEXT_MAGIC_SIZE + TOXEXT_SEGMENT_HEADER_SIZE, so it was identically
+		 * false and never fired. The segment header could therefore be read past the end,
+		 * and segment_size (11 bits, up to 2047) was passed on as a length without ever
+		 * being compared to the bytes actually present.
+		 *
+		 * A seven-byte packet from any accepted contact — no call needed — made the
+		 * handler read up to two kilobytes of adjacent heap, and for the messages
+		 * extension those bytes become a QString and are displayed in the chat window.
+		 * That is memory disclosure, not a crash.
+		 */
+		size_t remaining = size - (size_t)(it - data);
+
+		if (remaining < TOXEXT_SEGMENT_HEADER_SIZE) {
 			return TOXEXT_INVALID_SEGMENT;
 		}
+
 		uint16_t segment_type = toxext_read_segment_id(it);
 		uint16_t segment_size = toxext_read_segment_size(it);
 		it += TOXEXT_SEGMENT_HEADER_SIZE;
+		remaining -= TOXEXT_SEGMENT_HEADER_SIZE;
+
+		if (segment_size > remaining) {
+			return TOXEXT_INVALID_SEGMENT;
+		}
+
 		int err = toxext_handle_lossless_custom_packet_segment(
 			toxext, segment_type, friend_id, it, segment_size,
 			packet);

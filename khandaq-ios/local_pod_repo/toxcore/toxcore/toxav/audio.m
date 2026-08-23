@@ -144,7 +144,25 @@ void ac_iterate(ACSession *ac)
             const int fs = (ac->lp_sampling_rate * ac->lp_frame_duration) / 1000;
             rc = opus_decode(ac->decoder, nullptr, 0, temp_audio_buffer, fs, 1);
         } else {
-            assert(msg->len > 4);
+            // KHANDAQ (2026-08-23): a real length check, not an assert.
+            //
+            // An audio payload is four bytes of sampling rate followed by an Opus frame, so anything of four
+            // bytes or fewer carries no frame at all. Nothing on the path from the network enforced that:
+            // handle_rtp_packet_for_session takes data_length_lower straight from the attacker-controlled
+            // header, ac_queue_message checks only the payload type, and jbuf_write only sequence numbers.
+            // The single statement standing here was `assert(msg->len > 4)`, and release builds define
+            // NDEBUG — so in the binary users run there was nothing at all.
+            //
+            // With msg->len == 1 the reads below take four bytes out of a one-byte allocation (the iOS
+            // new_message deliberately allocates without ffmpeg's AV_INPUT_BUFFER_PADDING_SIZE, unlike the
+            // desktop twin, so nothing absorbs it), and msg->len - 4 reaches opus_decode as a negative
+            // length. Reachable from an accepted contact during a call, one packet.
+            if (msg->len <= 4) {
+                LOGGER_WARNING(ac->log, "Audio packet too short to hold a frame: %u", (unsigned)msg->len);
+                free(msg);
+                pthread_mutex_lock(ac->queue_mutex);
+                continue;
+            }
 
             /* Pick up sampling rate from packet */
             memcpy(&ac->lp_sampling_rate, msg->data, 4);

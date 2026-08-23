@@ -71696,6 +71696,20 @@ uint8_t ac_iterate(ACSession *ac, uint64_t *a_r_timestamp, uint64_t *a_l_timesta
             /* NOTE: This didn't work very well */
 
             /* Pick up sampling rate from packet */
+            /* KHANDAQ (2026-08-23): the same length check as the iOS twin, and for the same reason.
+             * An audio payload is four bytes of sampling rate plus an Opus frame, so four bytes or
+             * fewer carries nothing. Nothing upstream enforced it — ac_queue_message checks only the
+             * payload type — and here there was not even an assert. The oversized allocation
+             * (AV_INPUT_BUFFER_PADDING_SIZE) keeps the reads below inside the buffer on this side,
+             * but msg->len - 4 still reaches opus_decode as a negative length. */
+            if (msg->len <= 4) {
+                LOGGER_API_WARNING(ac->av->tox, "Audio packet too short to hold a frame: %u",
+                                   (unsigned)msg->len);
+                free(msg);
+                msg = nullptr;
+                continue;
+            }
+
             if (msg) {
                 memcpy(&ac->lp_sampling_rate, msg->data, 4);
                 ac->lp_sampling_rate = net_ntohl(ac->lp_sampling_rate);

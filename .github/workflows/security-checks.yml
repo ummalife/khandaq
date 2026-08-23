@@ -349,6 +349,11 @@ jobs:
       # KHANDAQ (audit round 3, F-03): the rule was enforced on the TEXT packet only, on both clients.
       - name: Both history packet types must be gated on both clients
         run: python3 scripts/check-history-file-gate.py
+      # KHANDAQ (2026-08-23): the audio decode path read four bytes out of a payload whose length
+      # nothing had checked — an assert on iOS, nothing at all on the desktop, and NDEBUG removes
+      # asserts from the builds users run. One packet from a contact already in a call.
+      - name: The audio path must check the payload length before trusting it
+        run: python3 scripts/check-audio-length-gate.py
       # KHANDAQ (release 0.2.40): 15 QA scripts drove org.khandaq.messenger (the namespace) while the
       # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
       - name: QA scripts must target the package the app installs as

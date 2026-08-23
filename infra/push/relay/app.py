@@ -601,7 +601,17 @@ def _client_ip() -> str:
     if _is_trusted_proxy(remote):
         real_ip = request.headers.get("X-Real-IP", "").strip()
         if real_ip:
-            return real_ip.split(",")[0].strip()
+            candidate = real_ip.split(",")[0].strip()
+            # KHANDAQ (2026-08-23, CodeQL triage): the header's value is written into the log and used
+            # as the rate-limit key, so accept it only if it really is an address. A proxy that appends
+            # rather than overwrites would otherwise let a caller pick its own bucket, and put chosen
+            # text into a log line an operator reads during exactly the incident it would obscure.
+            try:
+                ipaddress.ip_address(candidate)
+            except ValueError:
+                log.warning("push: ignoring malformed X-Real-IP from trusted proxy %s", remote)
+            else:
+                return candidate
     return remote or "?"
 
 

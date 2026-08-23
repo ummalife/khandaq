@@ -366,6 +366,11 @@ jobs:
       # handed it out. Same name was both source and destination of the export copy.
       - name: A peer-supplied filename must never steer a read or write path
         run: python3 scripts/check-incoming-filename-sanitizer.py
+      # KHANDAQ (2026-08-23, CodeQL triage): PRAGMA key escaped the passphrase and PRAGMA rekey did
+      # not, so a password containing a quote rekeyed the database to a truncated value while the app
+      # kept opening it with the escaped one — the database stops opening with the password just set.
+      - name: The database passphrase must be escaped in every PRAGMA
+        run: python3 scripts/check-sqlcipher-key-escaping.py
       # KHANDAQ (release 0.2.40): 15 QA scripts drove org.khandaq.messenger (the namespace) while the
       # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
       - name: QA scripts must target the package the app installs as

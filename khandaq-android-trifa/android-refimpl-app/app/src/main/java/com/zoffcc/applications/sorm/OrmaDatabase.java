@@ -645,7 +645,11 @@ public class OrmaDatabase
             {
                 // not in WAL mode — fine
             }
-            statement.execute("PRAGMA rekey = '" + new_key + "';");
+            // KHANDAQ (security): escape here too. PRAGMA key below is escaped and this was not, so a
+            // passphrase containing a quote produced different SQL than the one used to reopen the file:
+            // "a'; --" rekeys the database to "a" and the app then tries to open it with "a''; --",
+            // which no longer matches — the database becomes unreadable with the password the user set.
+            statement.execute("PRAGMA rekey = '" + escapeKeyLiteral(new_key) + "';");
         }
         catch (Exception e)
         {
@@ -781,7 +785,11 @@ public class OrmaDatabase
             catch (Exception ignored)
             {
             }
-            statement.execute("PRAGMA rekey = '" + new_key + "';");
+            // KHANDAQ (security): escape here too. PRAGMA key below is escaped and this was not, so a
+            // passphrase containing a quote produced different SQL than the one used to reopen the file:
+            // "a'; --" rekeys the database to "a" and the app then tries to open it with "a''; --",
+            // which no longer matches — the database becomes unreadable with the password the user set.
+            statement.execute("PRAGMA rekey = '" + escapeKeyLiteral(new_key) + "';");
         }
         catch (Exception e)
         {

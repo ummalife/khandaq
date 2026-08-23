@@ -1,7 +1,17 @@
-diff -ruN libvpx/build/make/configure.sh patched/build/make/configure.sh
---- libvpx/build/make/configure.sh	2022-01-08 21:54:57.787015678 -0800
-+++ patched/build/make/configure.sh	2022-01-08 21:55:09.227106767 -0800
-@@ -869,70 +869,6 @@
+# KHANDAQ (2026-08-23): regenerated for libvpx 1.14.1.
+#
+# The previous version of this patch was written in 2022 against a much older libvpx and no
+# longer applied: the hunk targeted line ~869 while the block now sits at ~936, so patch(1)
+# rejected it, and build_vpx.sh runs under set -e — the macOS dependency build died there,
+# every time, before vpx/opus/ffmpeg/toxcore were built at all. That is why the desktop is
+# still published at v0.2.12: it could not be built on a current macOS.
+#
+# The hunk itself is unchanged in intent — remove the -mmacosx-version-min case block, which
+# pins ancient deployment targets (10.4-10.12) that fight the modern SDK. On darwin24 none of
+# its branches match anyway, so this is dead code that only gets in the way.
+--- libvpx/build/make/configure.sh	2026-08-23 22:47:20.592030429 +0300
++++ patched/build/make/configure.sh	2026-08-23 22:47:20.624174912 +0300
+@@ -936,69 +936,6 @@
        ;;
    esac
  
@@ -54,9 +64,9 @@ diff -ruN libvpx/build/make/configure.sh patched/build/make/configure.sh
 -      add_cflags  "-mmacosx-version-min=10.15"
 -      add_ldflags "-mmacosx-version-min=10.15"
 -      ;;
--    *-darwin20-*)
--      add_cflags  "-mmacosx-version-min=10.16 -arch ${toolchain%%-*}"
--      add_ldflags "-mmacosx-version-min=10.16 -arch ${toolchain%%-*}"
+-    *-darwin2[0-3]-*)
+-      add_cflags  "-arch ${toolchain%%-*}"
+-      add_ldflags "-arch ${toolchain%%-*}"
 -      ;;
 -    *-iphonesimulator-*)
 -      add_cflags  "-miphoneos-version-min=${IOS_VERSION_MIN}"
@@ -68,7 +78,6 @@ diff -ruN libvpx/build/make/configure.sh patched/build/make/configure.sh
 -      fi
 -      ;;
 -  esac
--
+ 
    # Handle Solaris variants. Solaris 10 needs -lposix4
    case ${toolchain} in
-     sparc-solaris-*)

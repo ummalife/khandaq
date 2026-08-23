@@ -170,11 +170,14 @@ def main() -> int:
             return die(f"{c['key']}: cpe не задан и причина не написана")
         print(f"    не сканируется {c['key']}@{c['version']} — {why}")
 
-    if args.offline:
-        print("режим --offline: проверены только полнота карты и структура")
-        return 0
-
+    # KHANDAQ (re-review 2026-08-23, KQ-R12): validate the waivers BEFORE the offline exit.
+    #
+    # They used to be parsed only on the network path, and --offline is what runs on every pull
+    # request — so an EXPIRED waiver passed CI silently and would only surface in the weekly
+    # scheduled run. The whole point of an expiry is that somebody is made to re-argue it on time.
+    # Checking dates needs no network.
     waived = set()
+    expired: list[str] = []
     if WAIVERS.is_file():
         raw = json.loads(WAIVERS.read_text(encoding="utf-8"))
         today = dt.date.today()
@@ -186,8 +189,26 @@ def main() -> int:
                     return die(f"native_waivers {w.get('id')}: нужны owner и exploitability")
                 if dt.date.fromisoformat(str(w["expires"])) >= today:
                     waived.add((w["id"], w["package"], str(w["version"])))
+                else:
+                    # An expired waiver is a FAILURE, not merely an inactive entry. Dropping it
+                    # silently meant the advisory came back as "unwaived" — but only on the network
+                    # path, so on a pull request nothing said anything at all. The date exists to
+                    # make somebody re-argue the case on time; letting it slide defeats it.
+                    expired.append(f"{w['id']} для {w['package']}@{w['version']} истёк "
+                                   f"{w['expires']} (владелец {w.get('owner', '?')})")
             except (KeyError, ValueError):
                 return die(f"native_waivers: запись {w!r} без корректных id/package/version/expires")
+
+    if expired:
+        for e in expired:
+            print(f"::error::waiver {e}", file=sys.stderr)
+        return die(f"{len(expired)} waiver-ов истекли. Переобоснуйте с новой датой или закройте "
+                   f"находку — срок для того и ставится.")
+
+    if args.offline:
+        print(f"режим --offline: проверены полнота карты, структура и сроки waiver-ов "
+              f"({len(waived)} действующих)")
+        return 0
 
     findings, errors = [], []
     for i, c in enumerate(scannable):

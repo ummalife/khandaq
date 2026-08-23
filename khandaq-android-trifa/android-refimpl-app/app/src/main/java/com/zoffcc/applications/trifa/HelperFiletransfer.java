@@ -355,6 +355,59 @@ public class HelperFiletransfer
         return result;
     }
 
+    /**
+     * The name an incoming group file is STORED under, as opposed to the one shown to the user.
+     *
+     * KHANDAQ (security): a peer picks the filename in a group transfer and it arrives unfiltered —
+     * resolveDisplayFilename() reads it out of the packet and only trims whitespace. That name used to
+     * be written to GroupMessage.file_name, which several call sites concatenate into a path:
+     * send_ngch_syncfile() opens path_name + "/" + file_name and sends the bytes to a peer, and the
+     * export action passes it as both source and destination of a copy. A name containing ../ therefore
+     * escaped the group's directory in both directions.
+     *
+     * The assembly already carries the sanitised form; fall back to sanitising in place if it does not.
+     * Display is unaffected — the original name stays in the message text.
+     */
+    static String sanitised_stored_filename(final NgcGroupFileTransfer.IncomingAssembly asm,
+                                            final String display_name)
+    {
+        if ((asm != null) && (asm.filename != null) && !asm.filename.isEmpty())
+        {
+            return asm.filename;
+        }
+        if ((display_name == null) || display_name.isEmpty())
+        {
+            return "file.bin";
+        }
+        return TrifaSetPatternActivity.filter_out_specials_from_filepath(display_name);
+    }
+
+    /**
+     * Join a directory and a stored filename, refusing anything that would leave the directory.
+     *
+     * KHANDAQ (security, defence in depth): sanitising at the point of storage is the real fix, but rows
+     * written by earlier versions are still in the database with a raw name in them, and a future caller
+     * may build a path from a name nobody filtered. Callers that read a file and hand its contents to
+     * someone else check here first.
+     *
+     * Returns null when the result is not inside {@code dir}.
+     */
+    static String path_inside_dir_or_null(final String dir, final String file_name)
+    {
+        if ((dir == null) || (file_name == null) || file_name.isEmpty())
+        {
+            return null;
+        }
+        // No separator may appear in a stored name, and no dot-reference either.
+        if (file_name.contains("/") || file_name.contains("\\")
+            || file_name.equals(".") || file_name.equals(".."))
+        {
+            return null;
+        }
+        final String base = dir.endsWith("/") ? dir : dir + "/";
+        return base + file_name;
+    }
+
     public static long get_filetransfer_id_from_friendnum_and_filenum(long friend_number, long file_number)
     {
         return get_filetransfer_id_from_friendnum_and_filenum(friend_number, file_number, -1);
@@ -2267,10 +2320,11 @@ public class HelperFiletransfer
 
         if ((message.path_name != null) && (message.file_name != null) && !message.file_name.isEmpty())
         {
-            final String combined = message.path_name.endsWith("/")
-                    ? message.path_name + message.file_name
-                    : message.path_name + "/" + message.file_name;
-            if (isMediaFileReadyForPlayback(combined))
+            // KHANDAQ (security): a stored name written by an older version may still be the peer's raw
+            // one, so this join is refused if it would step outside the chat's directory — otherwise a
+            // crafted name makes the player open an unrelated file.
+            final String combined = path_inside_dir_or_null(message.path_name, message.file_name);
+            if ((combined != null) && isMediaFileReadyForPlayback(combined))
             {
                 return combined;
             }

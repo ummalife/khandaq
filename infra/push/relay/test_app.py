@@ -321,6 +321,21 @@ def flood(client, times, real_ip=None, remote_addr=BRIDGE_GATEWAY):
     return last
 
 
+def test_malformed_x_real_ip_falls_back_to_the_peer_address(relay):
+    """
+    KHANDAQ (2026-08-23, CodeQL triage): the header is both a log field and the rate-limit key, and
+    nothing checked it was an address. Two callers sending the same junk must share one bucket rather
+    than each inventing their own, and the junk must not become the identity in the log.
+    """
+    m = relay(rate_limit="5")
+    client = m.app.test_client()
+
+    # Same non-address in every request: all of it collapses onto the peer address, so the limit bites.
+    assert flood(client, 5, real_ip="not-an-ip").status_code == 200
+    assert flood(client, 1, real_ip="also not an ip").status_code == 429, (
+        "a value that is not an address must not buy a fresh bucket")
+
+
 def test_one_flooding_client_does_not_rate_limit_everyone_else(relay):
     """The regression itself: without X-Real-IP being honoured, B is 429 because A flooded."""
     m = relay(rate_limit="5")

@@ -17,17 +17,33 @@ build_yasm="1"
 ## ----------------------
 _FFMPEG_VERSION_="n6.0"
 _OPUS_VERSION_="v1.3.1"
-# KHANDAQ (audit #8): pinned libvpx v1.8.0 (2019) predates two CVEs. Rather than bump to 1.14.1 (which
-# BREAKS this script — 1.14.1 removed the `--sdk-path=` configure flag used at all 4 ABI sites, plus the
-# arm64 vpx-android configure patch is pinned to 1.8.0 and NDK-r13b/1.14.1 compat is unvalidated), we
-# BACKPORT the one CVE that is actually reachable, as a targeted patch onto 1.8.0 (see the 4 libvpx-clone
-# sites below applying patches/khandaq-libvpx-cve-2024-5197.patch):
+# KHANDAQ (audit #8, corrected 2026-08-23): pinned libvpx v1.8.0 (2019) predates four CVEs. We BACKPORT
+# the one that is actually reachable and leave the rest, for reasons measured rather than assumed:
+#
+# UPGRADING IS A TOOLCHAIN MIGRATION, NOT A VERSION BUMP. This comment used to say 1.14.1 removed the
+# `--sdk-path=` configure flag. It was earlier than that: in v1.13.1 the whole `android*` branch of
+# build/make/configure.sh is already a four-line stub, `sdk_path` appears nowhere in it, and the
+# GCC-standalone-toolchain discovery this script depends on is gone. Checked by clone, not by memory —
+# 1.8.0 has eight `sdk_path` references, 1.13.1 has none outside Darwin. The arm64 vpx-android configure
+# patch also fails on 1.13.1 (one hunk rejected, one already upstream). So any bump means moving libvpx —
+# and, for ABI consistency, the ffmpeg/x264/opus/sodium/toxcore built beside it — off NDK r13b onto a
+# modern clang NDK. That is a project, and it is not justified by the list below.
+#
+# (see the 4 libvpx-clone sites below applying patches/khandaq-libvpx-cve-2024-5197.patch):
 #   * CVE-2024-5197 — integer overflow in vpx_img_alloc()/vpx_img_wrap() from large d_w/d_h. The DECODER
 #     allocates output buffers sized from the (attacker-controlled) decoded frame dims -> under-alloc ->
 #     heap overflow. IN threat model -> BACKPORTED (dimension guard).
 #   * CVE-2023-5217 — VP8 ENCODER heap overflow via mid-encode thread-count/resize config changes. Our
 #     toxav encoder runs a fixed local config; a remote peer cannot drive it -> NOT in our threat model ->
 #     deliberately NOT backported (an encoder patch would add risk for no benefit here).
+#   * CVE-2023-44488 / CVE-2023-6349 — both VP9 ENCODER, and both about encoding a frame larger than the
+#     configured size. Worth stating plainly because a 2026 review reported them as decoder bugs
+#     "reachable from a video call" and that is wrong: NVD says "related to encoding" and "Encoding a
+#     frame that has larger dimensions than the originally configured size". The encode dimensions here
+#     come from the LOCAL capture — toxav_video_send_frame(av, call, frame.width, frame.height, ...) in
+#     the client (coreav.cpp), with the encoder reconfigured to those same dimensions immediately before
+#     encoding (toxav.c) — so the "frame bigger than configured" state cannot be produced by a peer.
+#     Same conclusion as CVE-2023-5217, and for the same reason -> NOT in our threat model.
 # Needs a CI 4-ABI native .so rebuild (android-native-so.yml) for the patch to take effect; the shipped
 # app uses the PREBUILT .so, so this file does not change what ships today, only the next native rebuild.
 _VPX_VERSION_="v1.8.0"

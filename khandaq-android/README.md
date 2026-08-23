@@ -1,5 +1,16 @@
 # aTox
 
+> **Читателю Khandaq.** Эта линия (aTox, `applicationId ltd.evilcorp.atox`) в Khandaq **не
+> собирается, не подписывается и не публикуется**. Ни один workflow репозитория её не трогает, а её
+> собственные файлы в `khandaq-android/.github/workflows/` GitHub не исполняет: рабочими считаются
+> только те, что лежат в `.github/workflows/` корня. Публикуемый Android-клиент — это
+> `khandaq-android-trifa/` (`com.khandaq.messenger`).
+>
+> Практический смысл: находки в этом каталоге не попадают ни в один выпускаемый артефакт. Два
+> внешних разбора уже потратили на него время и отклонили восемь кандидатов именно по этому
+> основанию — врезка здесь, чтобы третий не начинал с нуля. Судьбу каталога (удалить или оставить как
+> исходный материал) решает владелец; до тех пор он остаётся как есть.
+
 ## This repository and aTox are unmaintained
 
 Thank you to everyone who contributed to aTox and helped make it as good as it

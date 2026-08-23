@@ -8,6 +8,7 @@
   ],
   "measured_at": "2026-08-23T19:37:50+00:00",
   "commit": "3add75f92a79f1ccfea0809e2394fc1047929af4",
+  "base_commit": "83a2c9e5ca3182c095ca09bde57707e7ac28ef89",
   "release": {
     "android": {
       "versionName": "0.2.43",

@@ -378,18 +378,22 @@ h1 {
 .card p { margin: 0; color: var(--muted); font-size: 0.9rem; min-height: 4.6rem; }
 @media (max-width: 520px) { .card p { min-height: 0; } }
 
+/* KHANDAQ (2026-08-24): these were inline data: URIs and the tightened CSP (img-src 'self') blocked
+   every one of them — the cards rendered as five empty green squares. Served as files instead, which
+   the existing policy already allows, rather than widening img-src to admit data: again. */
 .card-icon {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: var(--green) center/28px no-repeat;
+  background: var(--green) center/26px no-repeat;
+  box-shadow: 0 2px 10px rgba(2, 155, 125, 0.28);
 }
 
-.card-icon.android { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M17.6 9.48l1.84-3.18c.16-.27-.04-.62-.36-.62H4.92c-.32 0-.52.35-.36.62L6.4 9.48 12 4.5zM7.5 14.25c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM12 17.5c-2.5 0-4.65-1.58-5.5-3.8h11c-.85 2.22-3 3.8-5.5 3.8z'/%3E%3C/svg%3E"); }
-.card-icon.windows { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M3 5.5L10.5 4.2v7.4H3V5.5zm8.5 0V12H21V3H11.5zm8.5 9.5H11.5v7.3L21 19.5V15zm-10 7.3V12H3v7.8l8.5 1.5z'/%3E%3C/svg%3E"); }
-.card-icon.macos { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z'/%3E%3C/svg%3E"); }
-.card-icon.linux { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M12.5 2c-.8 0-1.5.4-2 1-.3.4-.5.9-.6 1.4-.6-.1-1.2-.1-1.8 0-.1-.5-.3-1-.6-1.4-.5-.6-1.2-1-2-1-1.5 0-2.7 1.2-2.7 2.7 0 .5.1 1 .4 1.4-1.2.8-2 2.2-2 3.8v.1c0 .3.2.5.5.5h.1c-.1.4-.1.8-.1 1.2 0 2.5 1.5 4.6 3.6 5.5-.3.5-.5 1.1-.5 1.7 0 1.8 1.5 3.3 3.3 3.3.6 0 1.2-.2 1.7-.5.5.3 1.1.5 1.7.5 1.8 0 3.3-1.5 3.3-3.3 0-.6-.2-1.2-.5-1.7 2.1-.9 3.6-3 3.6-5.5 0-.4 0-.8-.1-1.2h.1c.3 0 .5-.2.5-.5v-.1c0-1.6-.8-3-2-3.8.3-.4.4-.9.4-1.4 0-1.5-1.2-2.7-2.7-2.7z'/%3E%3C/svg%3E"); }
-.card-icon.ios { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c9a227'%3E%3Cpath d='M16.5 3c-1.2 0-2.6.8-3.5 1.9-.8 1-1.4 2.4-1.2 3.8 1.3.1 2.7-.7 3.5-1.8.8-1.1 1.4-2.5 1.2-3.9zM19.8 17.2c-.6 1.3-1.3 2.5-2.3 2.5-.9 0-1.2-.6-2.3-.6-1.1 0-1.4.6-2.3.6-1 0-2.1-1.2-2.7-2.4-1.5-2.6-2.1-6.4-.5-9.2.8-1.4 2.2-2.3 3.7-2.3.9 0 1.7.6 2.3.6.6 0 1.6-.7 2.7-.7 1.1 0 2.1.6 2.8 1.5-2.5 1.4-2.1 5 .4 6.2-.5 1.2-1.1 2.3-1.8 3.3z'/%3E%3C/svg%3E"); }
+.card-icon.android { background-image: url("assets/icons/android.svg"); }
+.card-icon.windows { background-image: url("assets/icons/windows.svg"); }
+.card-icon.macos { background-image: url("assets/icons/macos.svg"); }
+.card-icon.linux { background-image: url("assets/icons/linux.svg"); }
+.card-icon.ios { background-image: url("assets/icons/ios.svg"); }
 
 .card .btn {
   width: 100%;

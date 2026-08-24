@@ -371,6 +371,11 @@ jobs:
       # kept opening it with the escaped one — the database stops opening with the password just set.
       - name: The database passphrase must be escaped in every PRAGMA
         run: python3 scripts/check-sqlcipher-key-escaping.py
+      # KHANDAQ (2026-08-24): the download cards carried their glyphs as inline data: URIs, and
+      # img-src 'self' made the browser drop all five — the page shipped with empty squares and
+      # nothing failed, because the header check verifies the headers rather than the pages under them.
+      - name: Page assets must survive the site's own CSP
+        run: python3 scripts/check-site-csp-assets.py
       # KHANDAQ (release 0.2.40): 15 QA scripts drove org.khandaq.messenger (the namespace) while the
       # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
       - name: QA scripts must target the package the app installs as

@@ -397,7 +397,8 @@ public class CallAudioService extends Service
         {
             if (GAThread != null)
             {
-                GAThread.join();
+                // KHANDAQ (ANR, 2026-08-26): stop_me() — тот же путь.
+                GAThread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
             }
         }
         catch (Exception e)

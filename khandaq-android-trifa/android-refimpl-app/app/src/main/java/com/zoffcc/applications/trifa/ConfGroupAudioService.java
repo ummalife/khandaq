@@ -165,7 +165,8 @@ public class ConfGroupAudioService extends Service
                     if (!AudioRecording.stopped)
                     {
                         AudioRecording.close();
-                        audio_thread.join();
+                        // KHANDAQ (ANR, 2026-08-26): GAThread ждёт аудиопоток, а stop_me ждёт GAThread с главного потока.
+                        audio_thread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                         audio_thread = null;
                     }
                 }
@@ -179,7 +180,8 @@ public class ConfGroupAudioService extends Service
                     if (!AudioReceiver.stopped)
                     {
                         AudioReceiver.close();
-                        audio_receiver_thread.join();
+                        // KHANDAQ (ANR, 2026-08-26): то же звено.
+                        audio_receiver_thread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                         audio_receiver_thread = null;
                     }
                 }
@@ -529,7 +531,8 @@ public class ConfGroupAudioService extends Service
         {
             if (GAThread != null)
             {
-                GAThread.join();
+                // KHANDAQ (ANR, 2026-08-26): stop_me() — из ButtonReceiver.onReceive и MainActivity.global_stop_tox.
+                GAThread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
             }
         }
         catch (Exception e)

@@ -376,6 +376,12 @@ jobs:
       # nothing failed, because the header check verifies the headers rather than the pages under them.
       - name: Page assets must survive the site's own CSP
         run: python3 scripts/check-site-csp-assets.py
+      # KHANDAQ (2026-08-26): Play reported 2.17% user-perceived ANR against 0.00% crashes — nothing
+      # failing, something hanging. AudioRecording waited on a flag owned by AudioReceiver that could
+      # never change once createEngine() had thrown, close() set a different flag the wait did not
+      # read, and stop_audio_system() then join()ed that thread from onPause() with no timeout.
+      - name: The main thread must never wait on something that may never happen
+        run: python3 scripts/check-main-thread-blocking.py
       # KHANDAQ (release 0.2.40): 15 QA scripts drove org.khandaq.messenger (the namespace) while the
       # app installs as com.khandaq.messenger, so each ran to completion without touching the app.
       - name: QA scripts must target the package the app installs as

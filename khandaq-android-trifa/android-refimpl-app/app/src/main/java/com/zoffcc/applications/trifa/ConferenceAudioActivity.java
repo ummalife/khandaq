@@ -710,7 +710,8 @@ public class ConferenceAudioActivity extends AppCompatActivity
         try
         {
             Log.i(TAG, "Group_audio_play_thread:waiting to stop ...");
-            Group_audio_play_thread.join();
+            // KHANDAQ (ANR, 2026-08-26): onPause() — лайфсайкл активности.
+            Group_audio_play_thread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
         }
         catch (Exception e)
         {

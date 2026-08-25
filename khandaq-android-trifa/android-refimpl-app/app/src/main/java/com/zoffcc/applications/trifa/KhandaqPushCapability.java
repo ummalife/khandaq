@@ -66,6 +66,23 @@ public final class KhandaqPushCapability
             new java.util.concurrent.ConcurrentHashMap<>();
     private static final long RETRY_COOLDOWN_MS = 15 * 60 * 1000L;
 
+    /** Threads waiting on a challenge nonce, keyed by cid.
+     *
+     *  <p>KHANDAQ (ANR, 2026-08-26): the nonce still travels through the database - that is the
+     *  source of truth, and it is what lets a handshake survive a process restart - but a waiter
+     *  that re-read it every 250ms cost two SELECTs a tick for thirty seconds, twice per contact.
+     *  Every one of those goes through the single shared JDBC connection (OrmaDatabase:31) behind a
+     *  FAIR read/write lock (OrmaDatabase:37), and fair means FIFO: the main thread cannot overtake
+     *  the queue, it joins the end of it. With a contact list registering at once after an FCM token
+     *  change, that queue is what the UI ends up behind. Hand the nonce over in memory on the fast
+     *  path and keep the database read as a slow backstop. */
+    private static final java.util.concurrent.ConcurrentHashMap<String,
+            java.util.concurrent.ArrayBlockingQueue<String>> NONCE_WAITERS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final long NONCE_WAIT_TOTAL_MS = 30_000L;
+    private static final long NONCE_DB_RECHECK_MS = 2_000L;
+
     private KhandaqPushCapability() {}
 
     // ------------------------------------------------------------------ minting and storage
@@ -229,16 +246,12 @@ public final class KhandaqPushCapability
                 return null;
             }
             set_g_opts(PENDING_CID_KEY, cid);
-            for (int waited = 0; waited < 30_000; waited += 250)
+            final String nonce = awaitNonce(cid);
+            if (nonce != null && !nonce.isEmpty())
             {
-                final String nonce = get_g_opts(nonceKey(cid));
-                if (nonce != null && !nonce.isEmpty())
-                {
-                    del_g_opts(nonceKey(cid));
-                    del_g_opts(PENDING_CID_KEY);
-                    return new String[]{cid, nonce};
-                }
-                Thread.sleep(250);
+                del_g_opts(nonceKey(cid));
+                del_g_opts(PENDING_CID_KEY);
+                return new String[]{cid, nonce};
             }
             del_g_opts(PENDING_CID_KEY);
             return null;
@@ -282,22 +295,18 @@ public final class KhandaqPushCapability
             // bounded time for it rather than forever: a device with notifications disabled at the
             // OS level will never receive one, and that must degrade to "no capability published",
             // not to a hung thread.
-            for (int waited = 0; waited < 30_000; waited += 250)
+            final String nonce = awaitNonce(cid);
+            if (nonce != null && !nonce.isEmpty())
             {
-                final String nonce = get_g_opts(nonceKey(cid));
-                if (nonce != null && !nonce.isEmpty())
-                {
-                    del_g_opts(nonceKey(cid));
-                    del_g_opts(PENDING_CID_KEY);
-                    del_g_opts(PENDING_CAP_KEY);
-                    final String confirm = "{\"cid\":" + org.khandaq.messenger.KhandaqPush.jsonString(cid)
-                                           + ",\"nonce\":" + org.khandaq.messenger.KhandaqPush.jsonString(nonce)
-                                           + ",\"cap\":" + org.khandaq.messenger.KhandaqPush.jsonString(cap) + "}";
-                    final int ok = postJson(CONFIRM_URL, confirm);
-                    Log.i(TAG, "register:confirm http=" + ok);
-                    return ok == 200;
-                }
-                Thread.sleep(250);
+                del_g_opts(nonceKey(cid));
+                del_g_opts(PENDING_CID_KEY);
+                del_g_opts(PENDING_CAP_KEY);
+                final String confirm = "{\"cid\":" + org.khandaq.messenger.KhandaqPush.jsonString(cid)
+                                       + ",\"nonce\":" + org.khandaq.messenger.KhandaqPush.jsonString(nonce)
+                                       + ",\"cap\":" + org.khandaq.messenger.KhandaqPush.jsonString(cap) + "}";
+                final int ok = postJson(CONFIRM_URL, confirm);
+                Log.i(TAG, "register:confirm http=" + ok);
+                return ok == 200;
             }
             Log.i(TAG, "register: no challenge push arrived within 30s");
             del_g_opts(PENDING_CID_KEY);
@@ -308,6 +317,44 @@ public final class KhandaqPushCapability
         {
             Log.i(TAG, "register:EE:" + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Wait up to 30s for the challenge nonce belonging to {@code cid}, or null if none arrives.
+     *
+     * <p>Returns the moment onRegistrationNonce hands one over in-process. The database is still
+     * re-read every couple of seconds, which covers the two cases the in-memory handoff cannot: a
+     * nonce that landed before this thread began waiting, and one that arrived in a different
+     * process lifetime. Same 30s bound and same null-on-timeout contract as the poll it replaces.
+     */
+    private static String awaitNonce(final String cid) throws InterruptedException
+    {
+        final java.util.concurrent.ArrayBlockingQueue<String> mailbox =
+                new java.util.concurrent.ArrayBlockingQueue<>(1);
+        NONCE_WAITERS.put(cid, mailbox);
+        try
+        {
+            for (long waited = 0; waited < NONCE_WAIT_TOTAL_MS; waited += NONCE_DB_RECHECK_MS)
+            {
+                // Read first: the nonce may already be stored, from before the mailbox existed.
+                final String stored = get_g_opts(nonceKey(cid));
+                if (stored != null && !stored.isEmpty())
+                {
+                    return stored;
+                }
+                final String handed =
+                        mailbox.poll(NONCE_DB_RECHECK_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+                if (handed != null && !handed.isEmpty())
+                {
+                    return handed;
+                }
+            }
+            return null;
+        }
+        finally
+        {
+            NONCE_WAITERS.remove(cid);
         }
     }
 
@@ -341,6 +388,14 @@ public final class KhandaqPushCapability
                 return;
             }
             set_g_opts(nonceKey(cid), nonce);
+            // Wake the waiting registration thread now instead of leaving it to notice on its next
+            // database read. Store first, hand over second: the stored copy is what a waiter in a
+            // later process lifetime will find.
+            final java.util.concurrent.ArrayBlockingQueue<String> mailbox = NONCE_WAITERS.get(cid);
+            if (mailbox != null)
+            {
+                mailbox.offer(nonce);
+            }
         }
         catch (Exception e)
         {

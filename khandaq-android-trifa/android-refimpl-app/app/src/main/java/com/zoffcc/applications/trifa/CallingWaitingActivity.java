@@ -231,7 +231,8 @@ public class CallingWaitingActivity extends AppCompatActivity
         {
             if (CallWThread != null)
             {
-                CallWThread.join();
+                // KHANDAQ (ANR, 2026-08-26): stop_me() — тот же путь.
+                CallWThread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                 CallWThread = null;
             }
         }

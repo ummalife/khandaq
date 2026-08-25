@@ -92,6 +92,42 @@ public class HelperFriend
 {
     private static final String TAG = "trifa.Hlp.Friend";
 
+    /** Capability registration for one contact blocks on two HTTP round trips (8s timeouts each)
+     *  and a wait of up to 30s for the relay's data push - call it three quarters of a minute in the
+     *  bad case.
+     *
+     *  <p>KHANDAQ (ANR, 2026-08-26): this used to be a raw `new Thread` per contact. That is one
+     *  thread per contact all at once whenever the FCM token changes, because every stored
+     *  capability belongs to the previous token and capabilityFor() then returns null for the whole
+     *  list. Each of those threads reads the one shared JDBC connection (OrmaDatabase:31) behind a
+     *  FAIR read/write lock (OrmaDatabase:37), and fair means the main thread queues behind them
+     *  rather than overtaking - which is how a background feature turned into main-thread stalls.
+     *
+     *  <p>Two at a time, a bounded queue, and drop the overflow: nothing waits on the result. The
+     *  URL is published without a capability in the meantime - the behaviour that existed before
+     *  this feature - and the next connection event retries. */
+    private static final java.util.concurrent.ThreadPoolExecutor PUSHCAP_REGISTRATION_POOL;
+
+    static
+    {
+        PUSHCAP_REGISTRATION_POOL = new java.util.concurrent.ThreadPoolExecutor(
+                2, 2, 30L, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<Runnable>(64),
+                new java.util.concurrent.ThreadFactory()
+                {
+                    @Override
+                    public Thread newThread(final Runnable r)
+                    {
+                        final Thread t = new Thread(r, "pushcap-register");
+                        t.setDaemon(true);
+                        t.setPriority(Thread.MIN_PRIORITY);
+                        return t;
+                    }
+                },
+                new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
+        PUSHCAP_REGISTRATION_POOL.allowCoreThreadTimeOut(true);
+    }
+
     // KHANDAQ (audit 2026-08-20): the flat two-hour 429 penalty and its plain HashMap moved to
     // PushBackoffPolicy, which escalates from one minute instead and is unit-tested.
 
@@ -2570,7 +2606,7 @@ public class HelperFriend
             }
             else if (notification_push_url != null)
             {
-                new Thread(new Runnable()
+                PUSHCAP_REGISTRATION_POOL.execute(new Runnable()
                 {
                     @Override
                     public void run()
@@ -2589,7 +2625,7 @@ public class HelperFriend
                             Log.i(TAG, "send_pushurl_to_friend:cap:EE:" + e.getMessage());
                         }
                     }
-                }).start();
+                });
             }
             if (notification_push_url != null)
             {

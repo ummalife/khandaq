@@ -198,11 +198,35 @@ else:
     if "PUSHCAP_REGISTRATION_POOL.execute(" not in pool:
         failures.append("HelperFriend.java: nothing dispatches capability registration any more")
 
+# ------------------------------------------- 6. no unbounded spin on the engine-starting flag
+#
+# The same shape one level out: three places wait for `audio_engine_starting` to clear, and only
+# AudioRoundtripActivity ever bounded its wait. The other two sit on the toxav callback thread, and
+# an engine that never came up wedged them for as long as it stayed down — which, before the
+# recording thread's own wait was bounded, was forever.
+spins = 0
+for path in sorted(TRIFA.glob("*.java")):
+    text = strip_comments(path.read_text(encoding="utf-8", errors="replace"))
+    for m in re.finditer(r"while\s*\((.*?)\)\s*\n", text, re.S):
+        cond = m.group(1)
+        if "audio_engine_starting" not in cond:
+            continue
+        spins += 1
+        if "<" not in cond:
+            lineno = text[:m.start()].count("\n") + 1
+            failures.append(
+                f"{path.name}:~{lineno}: waits for audio_engine_starting with no deadline. The flag "
+                f"is cleared by the recording thread, so a thread that never gets there waits for "
+                f"good — bound it by AudioRecording.NATIVE_AUDIO_ENGINE_START_TIMEOUT_MS, which is "
+                f"the deadline that thread gives itself.")
+if spins == 0:
+    failures.append("nothing waits on audio_engine_starting any more — re-aim or drop this check")
+
 if failures:
     print("FAIL — the main thread can wait on something that may never happen:\n")
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
 
-print(f"ok — {len(seen)} bare joins accounted for, audio shutdown bounded, "
-      f"mention walk guarded, push registration off the database tick")
+print(f"ok — {len(seen)} bare joins accounted for, {spins} engine waits bounded, audio shutdown "
+      f"bounded, mention walk guarded, push registration off the database tick")

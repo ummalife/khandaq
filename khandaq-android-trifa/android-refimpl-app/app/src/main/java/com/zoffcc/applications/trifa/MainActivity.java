@@ -6032,7 +6032,17 @@ public class MainActivity extends AppCompatActivity
                 if (audio_engine_starting)
                 {
                     // native audio engine is down. lets wait for it to get up ...
-                    while (audio_engine_starting == true)
+                    // KHANDAQ (ANR, 2026-08-26): bounded by the SAME deadline the recording thread
+                    // uses to give up on the engine, so the two waits cannot disagree about how long
+                    // the engine gets. Unbounded, this wedged the toxav callback thread for as long
+                    // as the engine stayed down — and that used to be forever, because the recording
+                    // thread's own wait could never end and so never cleared this flag.
+                    // AudioRoundtripActivity:404 has always bounded the identical wait. These two,
+                    // its neighbours, did not — the same one-path-and-not-the-other shape as the
+                    // freeze itself.
+                    int engine_wait_ms = 0;
+                    while ((audio_engine_starting) &&
+                           (engine_wait_ms < AudioRecording.NATIVE_AUDIO_ENGINE_START_TIMEOUT_MS))
                     {
                         try
                         {
@@ -6043,6 +6053,8 @@ public class MainActivity extends AppCompatActivity
                         {
                             e.printStackTrace();
                         }
+                        // Outside the try: an interrupted sleep must still move the deadline.
+                        engine_wait_ms += 20;
                     }
                 }
 
@@ -6227,7 +6239,17 @@ public class MainActivity extends AppCompatActivity
                 if (audio_engine_starting)
                 {
                     // native audio engine is down. lets wait for it to get up ...
-                    while (audio_engine_starting == true)
+                    // KHANDAQ (ANR, 2026-08-26): bounded by the SAME deadline the recording thread
+                    // uses to give up on the engine, so the two waits cannot disagree about how long
+                    // the engine gets. Unbounded, this wedged the toxav callback thread for as long
+                    // as the engine stayed down — and that used to be forever, because the recording
+                    // thread's own wait could never end and so never cleared this flag.
+                    // AudioRoundtripActivity:404 has always bounded the identical wait. These two,
+                    // its neighbours, did not — the same one-path-and-not-the-other shape as the
+                    // freeze itself.
+                    int engine_wait_ms = 0;
+                    while ((audio_engine_starting) &&
+                           (engine_wait_ms < AudioRecording.NATIVE_AUDIO_ENGINE_START_TIMEOUT_MS))
                     {
                         try
                         {
@@ -6238,6 +6260,8 @@ public class MainActivity extends AppCompatActivity
                         {
                             e.printStackTrace();
                         }
+                        // Outside the try: an interrupted sleep must still move the deadline.
+                        engine_wait_ms += 20;
                     }
                 }
 

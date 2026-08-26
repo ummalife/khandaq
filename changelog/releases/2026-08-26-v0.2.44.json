@@ -1,0 +1,27 @@
+{
+  "version": "0.2.44",
+  "date": "2026-08-26",
+  "title": "The app could stop responding, and nothing could bring it back",
+  "summary": "Google Play measures how often an app stops responding. For Khandaq that figure had risen well past the level Play considers acceptable, while the number of outright crashes stayed at zero — nothing was failing, something was getting stuck. It was one wait that had no way of ever finishing. The same release also removes two pieces of work the app was doing on the screen's own thread that it did not need to do at all.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Leaving a group call can no longer freeze the app",
+      "description": "When a call starts, one part of the app waits for the device's audio engine to come up before it begins recording. That wait watched a single signal — and that signal is set by a different part of the app, only once the engine has actually started. On a device where the engine failed to start, it was never set, and the wait had no other way to end: asking it to stop set something the wait did not look at, and shutting the engine down set the very value it was waiting to leave. Closing the call screen then waited for that stuck part to finish before doing anything else, with no time limit, so the whole app stopped responding and stayed that way. The wait now stops when it is asked to and gives up after a few seconds, the audio system is released instead of being left unusable until the app is restarted, and every place where the screen waits for a background task to finish now has a time limit. Nothing else about calls changes.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Sending a group message no longer goes through the whole member list first",
+      "description": "Every message sent to a group was checked for mentions by walking the group's entire membership before looking at the message at all — work that reads from the encrypted database and grows with the size of the group, done on the same thread that draws the screen, for messages that mention nobody. A mention has to start with an @ sign, so a message without one is now recognised as having no mentions without any of that work. Mentions themselves behave exactly as before.",
+      "platforms": ["android"]
+    },
+    {
+      "severity": "medium",
+      "title": "Setting up notifications no longer slows the rest of the app down",
+      "description": "The previous releases added a separate notification permission for each contact, registered in the background. Each registration waited for a reply from the notification server by re-reading the local database four times a second for up to thirty seconds, and one of these ran per contact at the same time. All of them share a single connection to that database with the screen itself, and requests are served strictly in the order they arrive, so the screen ended up queued behind them — which is what made the delays above long enough to be noticed. The reply is now passed directly to whatever is waiting for it, the database is consulted only occasionally as a fallback, and no more than two registrations run at once. Notifications are unaffected; a registration that does not get through is retried the next time that contact comes online, exactly as before.",
+      "platforms": ["android"]
+    }
+  ]
+}

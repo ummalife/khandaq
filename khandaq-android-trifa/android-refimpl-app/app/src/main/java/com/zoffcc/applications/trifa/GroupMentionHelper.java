@@ -129,6 +129,16 @@ final class GroupMentionHelper
             return result;
         }
 
+        // KHANDAQ (ANR, 2026-08-26): the member walk below enumerates every peer in the group,
+        // with JNI and SQLCipher behind it, and it ran on the main thread for every outgoing group
+        // message - including the overwhelming majority that mention nobody. MENTION_TOKEN is
+        // "@([A-Za-z0-9_]+)" and so cannot match without a literal '@', which makes this guard
+        // exactly equivalent to running the walk and finding nothing.
+        if (bodyText.indexOf('@') < 0)
+        {
+            return result;
+        }
+
         final List<HelperGroup.GroupMemberDisplay> members =
                 dedupe_group_members_for_display(collect_group_members_for_display(groupIdentifier));
         final Matcher matcher = MENTION_TOKEN.matcher(bodyText);

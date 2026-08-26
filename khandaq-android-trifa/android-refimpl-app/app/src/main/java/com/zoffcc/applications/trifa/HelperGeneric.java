@@ -231,6 +231,14 @@ public class HelperGeneric
      */
     static final Object audio_system_start_stop_lock = new Object();
 
+    /** stop_audio_system() and stop_ngc_audio_system() are both reached from the main thread -
+     *  ConferenceAudioActivity.onPause(), CallingActivity.stop_active_call() and
+     *  ConfGroupAudioService.ButtonReceiver.onReceive(). An unbounded join() there waits on a thread
+     *  that may never exit, which is an ANR rather than a delay; and two of them in a row must still
+     *  finish well inside the 5s the system allows. A thread that does exit does so within one
+     *  500ms poll of its own loop, so this is generous for the honest case. */
+    static final long AUDIO_THREAD_JOIN_TIMEOUT_MS = 1200L;
+
     private static final Pattern PATTERN_IPV4 = Pattern.compile(
             "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$");
     private static final int INTERVAL_UPDATE_SAVE_FILE_WRAPPER_THROTTLED_MS = 200;
@@ -6678,7 +6686,7 @@ public class HelperGeneric
                 if (!AudioRecording.stopped)
                 {
                     AudioRecording.close();
-                    GroupMessageListActivity.NGC_Group_video_play_thread.join();
+                    GroupMessageListActivity.NGC_Group_video_play_thread.join(AUDIO_THREAD_JOIN_TIMEOUT_MS);
                     GroupMessageListActivity.NGC_Group_video_play_thread = null;
                 }
             }
@@ -6692,7 +6700,7 @@ public class HelperGeneric
                 if (!AudioReceiver.stopped)
                 {
                     AudioReceiver.close();
-                    GroupMessageListActivity.NGC_Group_video_play_thread.join();
+                    GroupMessageListActivity.NGC_Group_video_play_thread.join(AUDIO_THREAD_JOIN_TIMEOUT_MS);
                     GroupMessageListActivity.NGC_Group_video_play_thread = null;
                 }
             }
@@ -6715,7 +6723,7 @@ public class HelperGeneric
                 if (!AudioRecording.stopped)
                 {
                     AudioRecording.close();
-                    CallingActivity.audio_thread.join();
+                    CallingActivity.audio_thread.join(AUDIO_THREAD_JOIN_TIMEOUT_MS);
                     CallingActivity.audio_thread = null;
                 }
             }
@@ -6729,7 +6737,7 @@ public class HelperGeneric
                 if (!AudioReceiver.stopped)
                 {
                     AudioReceiver.close();
-                    CallingActivity.audio_receiver_thread.join();
+                    CallingActivity.audio_receiver_thread.join(AUDIO_THREAD_JOIN_TIMEOUT_MS);
                     CallingActivity.audio_receiver_thread = null;
                 }
             }

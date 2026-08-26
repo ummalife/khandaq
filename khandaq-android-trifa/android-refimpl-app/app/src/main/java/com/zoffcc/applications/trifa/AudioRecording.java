@@ -74,6 +74,29 @@ public class AudioRecording extends Thread
     static boolean audio_engine_starting = false;
     static int global_audio_group_send_res = -9999;
 
+    /** How long the recording thread waits for AudioReceiver to bring the native engine up before
+     *  it gives up and exits. Generous - engine start is tens of milliseconds on a healthy device -
+     *  but finite, which is the whole point (see the wait loop in run()). */
+    static final int NATIVE_AUDIO_ENGINE_START_TIMEOUT_MS = 4000;
+
+    /**
+     * Whether the recording thread should keep waiting for AudioReceiver to bring the native engine
+     * up. Pure on purpose: the wait it replaces had no way of ever becoming false, and nothing but
+     * reading the condition would have shown that, so the condition is now something a test can
+     * hold. See NativeAudioEngineWaitTest.
+     *
+     * @param engine_running  AudioReceiver.native_audio_engine_running - set only after
+     *                        NativeAudio.createEngine() returns, and never set if it throws
+     * @param stop_requested  AudioRecording.stopped - what close() sets, and what the old wait ignored
+     * @param waited_ms       how long this thread has already waited
+     * @param timeout_ms      the deadline, {@link #NATIVE_AUDIO_ENGINE_START_TIMEOUT_MS}
+     */
+    static boolean should_keep_waiting_for_engine(final boolean engine_running, final boolean stop_requested,
+                                                  final int waited_ms, final int timeout_ms)
+    {
+        return (!engine_running) && (!stop_requested) && (waited_ms < timeout_ms);
+    }
+
     // -----------------------
     static ByteBuffer _recBuffer = null;
     // -----------------------
@@ -134,7 +157,18 @@ public class AudioRecording extends Thread
                 int channel_count = 1;
 
 
-                while (native_audio_engine_running == false)
+                // KHANDAQ (ANR, 2026-08-26): this waited on native_audio_engine_running alone, and
+                // nothing could ever end that wait. The flag belongs to AudioReceiver, which sets it
+                // only after NativeAudio.createEngine() returns (AudioReceiver:94) - and that call
+                // sits inside a try/catch, so a device where the engine fails to start leaves it
+                // false forever. close() sets `stopped`, which this loop did not read, and
+                // AudioReceiver.close() sets the flag to false, which is the very value the loop was
+                // waiting to leave. stop_audio_system() then join()ed this thread with no timeout
+                // from the main thread - ConferenceAudioActivity.onPause() among others - and the
+                // app froze for good: an ANR with no crash, which is exactly the shape Play reports.
+                int engine_wait_ms = 0;
+                while (should_keep_waiting_for_engine(native_audio_engine_running, stopped,
+                                                      engine_wait_ms, NATIVE_AUDIO_ENGINE_START_TIMEOUT_MS))
                 {
                     try
                     {
@@ -143,6 +177,22 @@ public class AudioRecording extends Thread
                     catch (Exception e)
                     {
                     }
+                    // Advanced outside the try on purpose: an interrupted sleep must still move the
+                    // deadline, or the bound is not a bound.
+                    engine_wait_ms += 100;
+                }
+
+                if (native_audio_engine_running == false)
+                {
+                    Log.i(TAG, "Audio Thread [OUT]:native audio engine never started, giving up after " +
+                               engine_wait_ms + "ms stopped=" + stopped);
+                    // Nothing below here can work without the engine, and the semaphore taken on
+                    // entry has to go back or the next call cannot start at all.
+                    audio_engine_starting = false;
+                    stopped = true;
+                    finished = true;
+                    semaphore_audioprocessing_02.release();
+                    return;
                 }
 
                 NativeAudio.createAudioRecorder((int) SMAPLINGRATE_TOX, n_rec_audio_in_buffer_max_count);

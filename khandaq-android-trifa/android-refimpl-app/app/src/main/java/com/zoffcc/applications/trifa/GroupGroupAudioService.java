@@ -150,7 +150,8 @@ public class GroupGroupAudioService extends Service
                     if (!AudioRecording.stopped)
                     {
                         AudioRecording.close();
-                        audio_thread.join();
+                        // KHANDAQ (ANR, 2026-08-26): NGCGAThread ждёт аудиопоток, а stop_me ждёт NGCGAThread с главного потока.
+                        audio_thread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                         audio_thread = null;
                     }
                 }
@@ -164,7 +165,8 @@ public class GroupGroupAudioService extends Service
                     if (!AudioReceiver.stopped)
                     {
                         AudioReceiver.close();
-                        audio_receiver_thread.join();
+                        // KHANDAQ (ANR, 2026-08-26): то же звено.
+                        audio_receiver_thread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                         audio_receiver_thread = null;
                     }
                 }
@@ -483,7 +485,8 @@ public class GroupGroupAudioService extends Service
         {
             if (NGCGAThread != null)
             {
-                NGCGAThread.join();
+                // KHANDAQ (ANR, 2026-08-26): stop_me() — тот же путь.
+                NGCGAThread.join(HelperGeneric.AUDIO_THREAD_JOIN_TIMEOUT_MS);
                 NGCGAThread = null;
             }
         }

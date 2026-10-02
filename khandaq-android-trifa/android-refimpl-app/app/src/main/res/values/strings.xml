@@ -1171,6 +1171,7 @@
     <string name="call_waiting_title_top">Waiting for</string>
     <string name="call_waiting_title_bottom">to come online…</string>
     <string name="share_saving_to_favorites">Saving to Favorites…</string>
+    <string name="share_open_app_first">Khandaq is starting. Share again once it is open</string>
     <string name="chat_edit_blocked_not_delivered">You can edit this message once it has been delivered</string>
     <string name="chat_edit_blocked_unsupported">This contact\'s app can\'t receive edits. Ask them to update Khandaq</string>
     <string name="chat_edit_blocked_reply">Replies can\'t be edited yet</string>

@@ -82,6 +82,22 @@ public class ShareActivity extends AppCompatActivity
             return;
         }
 
+        // KHANDAQ (QA 02.10): a share that arrives before the profile is unlocked (cold start after a
+        // reboot or a force-stop) has no database behind it: the target list came up empty, and the
+        // Favorites row led to a chat whose send silently did nothing. Start the app the normal way
+        // (password screen included) and ask to share again once it is open.
+        if ((Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action))
+            && (TrifaToxService.orma == null))
+        {
+            HelperGeneric.logI(TAG, "onCreate:profile not open yet, starting the app first");
+            android.widget.Toast.makeText(this, R.string.share_open_app_first, android.widget.Toast.LENGTH_LONG).show();
+            final Intent start_app = new Intent(this, StartMainActivityWrapper.class);
+            start_app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(start_app);
+            finish();
+            return;
+        }
+
         try
         {
             if (Intent.ACTION_SEARCH.equals(action))

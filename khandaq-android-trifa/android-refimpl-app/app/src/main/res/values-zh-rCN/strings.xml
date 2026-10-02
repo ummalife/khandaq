@@ -1043,6 +1043,7 @@
     <string name="call_waiting_title_top">正在等待</string>
     <string name="call_waiting_title_bottom">上线…</string>
     <string name="share_saving_to_favorites">正在保存到收藏…</string>
+    <string name="share_open_app_first">Khandaq 正在启动，打开后请重新分享</string>
     <string name="chat_edit_blocked_not_delivered">消息送达后才能编辑</string>
     <string name="chat_edit_blocked_unsupported">对方的应用无法接收编辑，请让对方更新 Khandaq</string>
     <string name="chat_edit_blocked_reply">暂不支持编辑回复</string>

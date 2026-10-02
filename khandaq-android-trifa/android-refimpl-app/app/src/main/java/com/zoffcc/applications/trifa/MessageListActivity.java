@@ -2818,7 +2818,10 @@ public class MessageListActivity extends AppCompatActivity
             HelperGeneric.logI(TAG, "add_outgoing_file:favorites_size:EE:" + e.getMessage());
         }
 
-        if (FavoritesChatHelper.isFavoritesChat(resolve_outgoing_file_chat_pubkey()))
+        // KHANDAQ (QA 02.10): only a send that names no friend may fall back to the chat on screen.
+        // Sharing from the gallery passes the contact picked in the share list; with Favorites left
+        // open in the background, the file was quietly saved to Favorites and never sent.
+        if ((friendnum < 0) && FavoritesChatHelper.isFavoritesChat(resolve_outgoing_file_chat_pubkey()))
         {
             if (file_size < 1L && uri != null)
             {

@@ -998,7 +998,7 @@ static void action_free(Action *a)
 
 static uint32_t g_demo_group = UINT32_MAX;
 static uint8_t g_demo_chat_id[TOX_GROUP_CHAT_ID_SIZE];
-static bool g_topic_set;
+static bool g_group_configured;
 static double g_group_tokens = TOKENS_MAX;
 static uint64_t g_group_tokens_ms;
 static unsigned g_group_reply_count;
@@ -1099,8 +1099,12 @@ static void ensure_demo_group(void)
         return;
     }
 
+    /* Public, not private: toxcore never announces a private group to the DHT, so a joiner whose
+     * invite handshake is lost (a UDP/TCP switch is enough) has no second way to find us and sits at
+     * "connecting" for good. A public group is announced, and the joiner finds the founder there.
+     * Nobody can stumble on it either way: Tox has no group directory, joining needs the chat id. */
     Tox_Err_Group_New err;
-    g_demo_group = tox_group_new(g_tox, TOX_GROUP_PRIVACY_STATE_PRIVATE, (const uint8_t *)GROUP_NAME,
+    g_demo_group = tox_group_new(g_tox, TOX_GROUP_PRIVACY_STATE_PUBLIC, (const uint8_t *)GROUP_NAME,
                                  strlen(GROUP_NAME), (const uint8_t *)BOT_NAME, strlen(BOT_NAME), &err);
     if (err != TOX_ERR_GROUP_NEW_OK) {
         log_line("demo group: creation failed (%d), group features disabled", (int)err);
@@ -1111,6 +1115,27 @@ static void ensure_demo_group(void)
     write_group_id();
     g_dirty = true;
     log_line("demo group created (group %" PRIu32 ")", g_demo_group);
+}
+
+/* Bring a restored group to the current settings: public (see ensure_demo_group) and with its
+ * topic. Both need the founder to be online, so this is retried from the loop until it holds. */
+static void configure_demo_group(void)
+{
+    Tox_Err_Group_State_Queries qerr;
+    if (tox_group_get_privacy_state(g_tox, g_demo_group, &qerr) != TOX_GROUP_PRIVACY_STATE_PUBLIC) {
+        Tox_Err_Group_Founder_Set_Privacy_State perr;
+        if (!tox_group_founder_set_privacy_state(g_tox, g_demo_group, TOX_GROUP_PRIVACY_STATE_PUBLIC, &perr)) {
+            return;
+        }
+        log_line("demo group switched to public");
+        g_dirty = true;
+    }
+    Tox_Err_Group_Topic_Set terr;
+    if (!tox_group_set_topic(g_tox, g_demo_group, (const uint8_t *)GROUP_TOPIC, strlen(GROUP_TOPIC), &terr) &&
+        terr != TOX_ERR_GROUP_TOPIC_SET_PERMISSIONS) {
+        return;
+    }
+    g_group_configured = true;
 }
 
 static void foreign_group_add(uint32_t gn)
@@ -2580,7 +2605,7 @@ int main(int argc, char **argv)
     bootstrap();
 
     uint64_t last_bootstrap = mono_ms();
-    uint64_t last_topic_try = 0;
+    uint64_t last_group_setup_try = 0;
     uint64_t last_minute = mono_ms();
     uint64_t last_hour = mono_ms();
     while (g_running) {
@@ -2594,14 +2619,10 @@ int main(int argc, char **argv)
             bootstrap();
             last_bootstrap = now;
         }
-        if (!g_topic_set && g_demo_group != UINT32_MAX && g_self_conn != TOX_CONNECTION_NONE &&
-            now - last_topic_try > 5000) {
-            last_topic_try = now;
-            Tox_Err_Group_Topic_Set terr;
-            if (tox_group_set_topic(g_tox, g_demo_group, (const uint8_t *)GROUP_TOPIC, strlen(GROUP_TOPIC), &terr) ||
-                terr == TOX_ERR_GROUP_TOPIC_SET_PERMISSIONS) {
-                g_topic_set = true;
-            }
+        if (!g_group_configured && g_demo_group != UINT32_MAX && g_self_conn != TOX_CONNECTION_NONE &&
+            now - last_group_setup_try > 5000) {
+            last_group_setup_try = now;
+            configure_demo_group();
         }
         if (now - last_minute > 60000) {
             stale_transfers(now);

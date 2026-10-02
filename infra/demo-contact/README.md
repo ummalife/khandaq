@@ -42,6 +42,12 @@ toxav generation the iPhone still runs. Building from the same sources means the
 behaves on the wire exactly like a second phone. The wire formats in `khandaq_demo.c` are the ones
 `OCTTox.m` parses.
 
+The demo group is a *public* NGC group. toxcore never announces a private group to the DHT, so a
+joiner whose invite handshake is lost (a UDP/TCP switch at the wrong moment is enough) has no other
+way to find the founder and stays at "connecting" for good; with a private group that happened in one
+of four probe runs. A public group is announced, and the joiner finds the founder there. It is not
+discoverable by strangers: Tox has no group directory, and joining needs the 32-byte chat id.
+
 The messages it sends carry msgV3 ids, so the app treats it as a full Khandaq peer (reactions, edit
 and delete work on its messages). It ACKs every msgV3 message it receives, as the clients do, and it
 keeps its own unacknowledged messages and resends them, with the original ids, when a contact

@@ -25,7 +25,8 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MS
 public final class HelperCall
 {
     public static final int REQUEST_CALL_PERMISSIONS = 4401;
-    private static final int LOCAL_CALL_LOG_RESEND_COUNT = 99;
+    // Marks the local call-log lines ("Missed call", ...) that logCallEvent writes as our own text rows.
+    static final int LOCAL_CALL_LOG_RESEND_COUNT = 99;
 
     private HelperCall()
     {

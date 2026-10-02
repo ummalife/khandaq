@@ -343,6 +343,43 @@ final class ChatBubbleUiHelper
             ((ImageView) preview).setScaleType(ImageView.ScaleType.FIT_CENTER);
             ((ImageView) preview).setAdjustViewBounds(true);
         }
+        release_fixed_frame_size(preview);
+    }
+
+    /**
+     * ChatFileBubbleHelper.ensureMediaPreviewFrame and ChatTransferProgressHelper.wrapPreviewWithOverlay
+     * move the preview into an id-less FrameLayout — a group video gets both, one inside the other — and
+     * each frame takes over the layout params of what it wraps as they were at that moment; nothing
+     * resizes the frames afterwards. A row recycled from a video to a photo therefore kept the video's
+     * box: since apply_video_thumb_box a fixed 300dp width (the photo pinned to the left edge of an empty
+     * frame, review of QA 02.10), and from before that a fixed 180dp height that shrank the photo. A photo
+     * hugs its bitmap, so every wrapper frame gets its fixed size released.
+     */
+    private static void release_fixed_frame_size(final View preview)
+    {
+        View child = preview;
+        while (child.getParent() instanceof android.widget.FrameLayout)
+        {
+            final View frame = (View) child.getParent();
+            if (frame.getId() != View.NO_ID)
+            {
+                return;
+            }
+            final ViewGroup.LayoutParams lp = frame.getLayoutParams();
+            if ((lp != null) && ((lp.width > 0) || (lp.height > 0)))
+            {
+                if (lp.width > 0)
+                {
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                }
+                if (lp.height > 0)
+                {
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                }
+                frame.setLayoutParams(lp);
+            }
+            child = frame;
+        }
     }
 
     static void apply_message_text_style(final EmojiTextViewLinks textView, final boolean outgoing)

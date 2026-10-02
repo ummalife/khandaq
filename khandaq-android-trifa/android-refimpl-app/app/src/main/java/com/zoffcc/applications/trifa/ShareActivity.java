@@ -530,7 +530,15 @@ public class ShareActivity extends AppCompatActivity
                 }
             }
             HelperGeneric.logI(TAG, "handleSaveFilesToFavorites:saved=" + saved + " of " + safeUris.size());
+            final int saved_final = saved;
             runOnUiThread(() -> {
+                if (saved_final < safeUris.size())
+                {
+                    // a provider that hides the size, a copy that failed: say so instead of opening
+                    // Favorites as if everything had arrived
+                    android.widget.Toast.makeText(app, app.getString(R.string.share_favorites_failed,
+                            safeUris.size() - saved_final, safeUris.size()), android.widget.Toast.LENGTH_LONG).show();
+                }
                 if (isFinishing() || isDestroyed())
                 {
                     return;

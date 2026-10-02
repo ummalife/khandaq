@@ -71,6 +71,30 @@ public class ChatEditBlockReasonTest
     }
 
     @Test
+    public void an_old_message_still_in_the_queue_is_too_old_not_waiting()
+    {
+        // "after delivery" would be a promise that never comes true once the window has passed
+        assertEquals(R.string.chat_edit_blocked_too_old, directEditBlockReason(own("hello", "", false, EDIT_WINDOW_MS), NOW));
+        assertEquals(R.string.chat_edit_blocked_too_old, groupEditBlockReason(ownGroup("00000000", EDIT_WINDOW_MS), NOW));
+    }
+
+    @Test
+    public void call_log_lines_are_not_messages()
+    {
+        // HelperCall.logCallEvent writes "Missed call" and friends as our own text rows; Edit is not
+        // offered on them at all (isOwnSingleTextSelection), instead of blaming the contact's app.
+        final Message log = own("Missed call", "", true, 60_000);
+        log.message_id = -1;
+        log.resend_count = HelperCall.LOCAL_CALL_LOG_RESEND_COUNT;
+        assertEquals(true, HelperMessageEdit.isLocalCallLogRow(log));
+
+        final Message queued = own("hello", "", false, 60_000);
+        queued.message_id = -1;
+        queued.resend_count = 0;
+        assertEquals(false, HelperMessageEdit.isLocalCallLogRow(queued));
+    }
+
+    @Test
     public void a_reply_is_not_editable_whatever_else_holds()
     {
         final String reply = "[KQ|17|C397E117|1790954870517|Khandaq Demo]quoted text[KQ/end]my answer";

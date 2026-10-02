@@ -443,6 +443,10 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             final int insertPos = GroupMessageLayoutHelper.sortedInsertIndex(this.messagelistitems, new_item);
             this.messagelistitems.add(insertPos, new_item);
             this.notifyItemInserted(insertPos);
+            // A caption that arrives after its media collapses into the media row above it, which an
+            // insert alone does not redraw: the caption was invisible until the chat was scrolled.
+            notify_caption_state(insertPos - 1);
+            notify_caption_state(insertPos + 1);
             // HelperGeneric.logI(TAG, "add_item:002:" + this.messagelistitems.size());
         }
         catch (Exception e)
@@ -457,58 +461,61 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
                                  @NonNull java.util.List payloads)
     {
-        // KHANDAQ (#181): light-path bind for transfer-progress payloads (no preview reload)
-        boolean progressOnly = !payloads.isEmpty();
+        // Same scheme as MessagelistAdapter: progress (#181), selection (user video 17.08) and caption
+        // (QA 02.10) payloads each touch one self-contained part of the row, so any mix of them is
+        // applied piece by piece; only an unknown payload, or none, takes the full bind.
+        boolean progress = false;
+        boolean selection = false;
+        boolean caption = false;
+        boolean partial = !payloads.isEmpty();
         for (Object p : payloads)
         {
-            if (p != MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS)
+            if (p == MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS)
             {
-                progressOnly = false;
+                progress = true;
+            }
+            else if (p == MessagelistAdapter.PAYLOAD_SELECTION)
+            {
+                selection = true;
+            }
+            else if (p == MessagelistAdapter.PAYLOAD_CAPTION)
+            {
+                caption = true;
+            }
+            else
+            {
+                partial = false;
                 break;
             }
         }
 
-        if (progressOnly)
+        if (partial)
         {
             try
             {
                 final GroupMessage m = (GroupMessage) this.messagelistitems.get(position);
-                ChatTransferProgressHelper.applyGroup(context, holder.itemView, m, m.direction == 1);
-                return;
-            }
-            catch (Exception ignored)
-            {
-                // fall through to the full bind
-            }
-        }
-
-        // KHANDAQ (user video 17.08): same cheap path for cancelling a selection in a group chat.
-        boolean selectionOnly = !payloads.isEmpty();
-        for (Object p : payloads)
-        {
-            if (p != MessagelistAdapter.PAYLOAD_SELECTION)
-            {
-                selectionOnly = false;
-                break;
-            }
-        }
-
-        if (selectionOnly)
-        {
-            try
-            {
-                final GroupMessage m = (GroupMessage) this.messagelistitems.get(position);
-                final View container = holder.itemView.findViewById(R.id.layout_message_container);
-                if (container != null)
+                if (progress)
                 {
-                    if (MainActivity.selected_messages.contains(m.id))
+                    ChatTransferProgressHelper.applyGroup(context, holder.itemView, m, m.direction == 1);
+                }
+                if (selection)
+                {
+                    final View container = holder.itemView.findViewById(R.id.layout_message_container);
+                    if (container != null)
                     {
-                        container.setBackgroundResource(R.drawable.bg_message_selection);
+                        if (MainActivity.selected_messages.contains(m.id))
+                        {
+                            container.setBackgroundResource(R.drawable.bg_message_selection);
+                        }
+                        else
+                        {
+                            container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                        }
                     }
-                    else
-                    {
-                        container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    }
+                }
+                if (caption)
+                {
+                    ChatCaptionHelper.apply_group_caption_state(context, this.messagelistitems, position, holder);
                 }
                 return;
             }
@@ -516,23 +523,6 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             {
                 // fall through to the full bind
             }
-        }
-
-        // KHANDAQ (QA 02.10): caption-merge-only refresh after a NEIGHBOUR row changed.
-        boolean captionOnly = !payloads.isEmpty();
-        for (Object p : payloads)
-        {
-            if (p != MessagelistAdapter.PAYLOAD_CAPTION)
-            {
-                captionOnly = false;
-                break;
-            }
-        }
-
-        if (captionOnly)
-        {
-            ChatCaptionHelper.apply_group_caption_state(context, this.messagelistitems, position, holder);
-            return;
         }
 
         super.onBindViewHolder(holder, position, payloads);

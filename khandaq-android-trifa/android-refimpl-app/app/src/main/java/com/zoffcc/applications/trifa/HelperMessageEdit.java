@@ -536,7 +536,13 @@ public class HelperMessageEdit
         {
             return R.string.chat_edit_blocked_reply;
         }
-        // network edit needs the msgv3 hash to address the original + the 48h window
+        // the 48h window first: past it nothing else matters, and "after delivery" would be a promise
+        // that never comes true for an old message still waiting in the queue
+        if ((nowMs - m.sent_timestamp) >= EDIT_WINDOW_MS)
+        {
+            return R.string.chat_edit_blocked_too_old;
+        }
+        // network edit needs the msgv3 hash to address the original
         if (m.msg_idv3_hash == null || m.msg_idv3_hash.length() < 64)
         {
             if (m.text != null && MessageChunker.shouldChunk(m.text))
@@ -547,11 +553,13 @@ public class HelperMessageEdit
             // that only speaks plain Tox messages
             return m.read ? R.string.chat_edit_blocked_unsupported : R.string.chat_edit_blocked_not_delivered;
         }
-        if ((nowMs - m.sent_timestamp) >= EDIT_WINDOW_MS)
-        {
-            return R.string.chat_edit_blocked_too_old;
-        }
         return 0;
+    }
+
+    /** The "Missed call" style lines HelperCall.logCallEvent writes as our own text rows — not messages. */
+    static boolean isLocalCallLogRow(final Message m)
+    {
+        return (m.resend_count == HelperCall.LOCAL_CALL_LOG_RESEND_COUNT) && (m.message_id == -1);
     }
 
     static int groupEditBlockReason(final GroupMessage gm, final long nowMs)
@@ -561,14 +569,14 @@ public class HelperMessageEdit
         {
             return R.string.chat_edit_blocked_reply;
         }
+        if ((nowMs - gm.sent_timestamp) >= EDIT_WINDOW_MS)
+        {
+            return R.string.chat_edit_blocked_too_old;
+        }
         if (gm.message_id_tox == null || gm.message_id_tox.length() != 8
             || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
         {
             return R.string.chat_edit_blocked_not_delivered;
-        }
-        if ((nowMs - gm.sent_timestamp) >= EDIT_WINDOW_MS)
-        {
-            return R.string.chat_edit_blocked_too_old;
         }
         return 0;
     }
@@ -582,7 +590,8 @@ public class HelperMessageEdit
             {
                 final long id = MainActivity.selected_messages.iterator().next();
                 final List<Message> rows = orma.selectFromMessage().idEq(id).toList();
-                if (rows != null && !rows.isEmpty() && rows.get(0).direction == 1)
+                if (rows != null && !rows.isEmpty() && rows.get(0).direction == 1
+                    && !isLocalCallLogRow(rows.get(0)))
                 {
                     return rows.get(0);
                 }

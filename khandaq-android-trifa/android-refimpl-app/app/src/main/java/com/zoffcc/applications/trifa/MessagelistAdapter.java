@@ -624,60 +624,67 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
                                  @NonNull java.util.List payloads)
     {
-        boolean progressOnly = !payloads.isEmpty();
+        // Each payload this adapter emits refreshes one self-contained part of a row: byte counters
+        // (#181), the selection highlight (user video 17.08) or the media-caption merge (QA 02.10).
+        // Any mix of them is applied piece by piece — a neighbour's caption refresh landing in the same
+        // frame as a progress tick used to fall through to the full bind and blink the preview (#172).
+        // Only an unknown payload, or none, takes the full bind.
+        boolean progress = false;
+        boolean selection = false;
+        boolean caption = false;
+        boolean partial = !payloads.isEmpty();
         for (Object p : payloads)
         {
-            if (p != PAYLOAD_TRANSFER_PROGRESS)
+            if (p == PAYLOAD_TRANSFER_PROGRESS)
             {
-                progressOnly = false;
+                progress = true;
+            }
+            else if (p == PAYLOAD_SELECTION)
+            {
+                selection = true;
+            }
+            else if (p == PAYLOAD_CAPTION)
+            {
+                caption = true;
+            }
+            else
+            {
+                partial = false;
                 break;
             }
         }
 
-        if (progressOnly)
+        if (partial)
         {
             try
             {
                 final Message m = (Message) this.messagelistitems.get(position);
-                ChatTransferProgressHelper.applyDirect(context, holder.itemView, m, m.direction == 1);
-                return;
-            }
-            catch (Exception ignored)
-            {
-                // fall through to the full bind
-            }
-        }
-
-        boolean selectionOnly = !payloads.isEmpty();
-        for (Object p : payloads)
-        {
-            if (p != PAYLOAD_SELECTION)
-            {
-                selectionOnly = false;
-                break;
-            }
-        }
-
-        if (selectionOnly)
-        {
-            try
-            {
-                final Message m = (Message) this.messagelistitems.get(position);
-                // Only the background of the row container — deliberately nothing that would make
-                // Glide re-evaluate an ImageView. R.id.layout_message_container exists in every 1:1
-                // row layout (text, self-text, incoming file, outgoing file, both compact variants
-                // and the paging rows), so this covers the whole list.
-                final View container = holder.itemView.findViewById(R.id.layout_message_container);
-                if (container != null)
+                if (progress)
                 {
-                    if (MainActivity.selected_messages.contains(m.id))
+                    ChatTransferProgressHelper.applyDirect(context, holder.itemView, m, m.direction == 1);
+                }
+                if (selection)
+                {
+                    // Only the background of the row container — deliberately nothing that would make
+                    // Glide re-evaluate an ImageView. R.id.layout_message_container exists in every 1:1
+                    // row layout (text, self-text, incoming file, outgoing file, both compact variants
+                    // and the paging rows), so this covers the whole list.
+                    final View container = holder.itemView.findViewById(R.id.layout_message_container);
+                    if (container != null)
                     {
-                        container.setBackgroundResource(R.drawable.bg_message_selection);
+                        if (MainActivity.selected_messages.contains(m.id))
+                        {
+                            container.setBackgroundResource(R.drawable.bg_message_selection);
+                        }
+                        else
+                        {
+                            container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                        }
                     }
-                    else
-                    {
-                        container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    }
+                }
+                if (caption)
+                {
+                    ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
                 }
                 return;
             }
@@ -685,22 +692,6 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             {
                 // fall through to the full bind
             }
-        }
-
-        boolean captionOnly = !payloads.isEmpty();
-        for (Object p : payloads)
-        {
-            if (p != PAYLOAD_CAPTION)
-            {
-                captionOnly = false;
-                break;
-            }
-        }
-
-        if (captionOnly)
-        {
-            ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
-            return;
         }
 
         super.onBindViewHolder(holder, position, payloads);

@@ -1633,6 +1633,29 @@ static bool is_one_of(const char *s, const char *const *words)
     return false;
 }
 
+/* Khandaq sends a swipe-reply as "[KQ|<meta>]<quoted preview>[KQ/end]<answer>" (MessageReplyHelper on
+ * Android, the same header on iOS). Only the answer is something the person typed: echoing the header
+ * put "[KQ|17|C397E117|...]" walls into the chat, and a reply of "help" was not recognised as a command.
+ * Same parse as MessageReplyHelper.parse: header prefix, first ']', footer after it. */
+static const char *reply_body(const char *text, bool *is_reply)
+{
+    *is_reply = false;
+    if (strncmp(text, "[KQ|", 4) != 0) {
+        return text;
+    }
+    const char *header_end = strchr(text + 4, ']');
+    const char *footer = strstr(text, "[KQ/end]");
+    if (header_end == NULL || footer == NULL || footer < header_end) {
+        return text;
+    }
+    const char *body = footer + strlen("[KQ/end]");
+    while (*body == ' ' || *body == '\n' || *body == '\r' || *body == '\t') {
+        body++;
+    }
+    *is_reply = true;
+    return body;
+}
+
 static void handle_text(uint32_t fn, const uint8_t *pk, const char *text, const uint8_t *id)
 {
     static const char *const help[] = {"help", "/help", "/start", "start", "menu", "commands", "?", NULL};
@@ -1649,6 +1672,12 @@ static void handle_text(uint32_t fn, const uint8_t *pk, const char *text, const 
     static const char *const edit[] = {"edit", "edit message", NULL};
     static const char *const del[] = {"delete", "unsend", "delete message", NULL};
     static const char *const react[] = {"react", "reaction", "like", NULL};
+
+    bool is_reply = false;
+    text = reply_body(text, &is_reply);
+    if (is_reply && *text == '\0') {
+        return; /* a reply with nothing typed under the quote */
+    }
 
     char cmd[64];
     normalize(text, cmd, sizeof cmd);
@@ -1726,13 +1755,14 @@ static void handle_text(uint32_t fn, const uint8_t *pk, const char *text, const 
     Friend_State *st = fstate(fn);
     char reply[700];
     const size_t qlen = utf8_cut(text, strlen(text), 300);
+    const char *said = is_reply ? "You replied" : "You wrote";
     if (st->echo_count < 2) {
         snprintf(reply, sizeof reply,
-                 "You wrote: “%.*s”\nI'm the demo contact, so I repeat what you send. Type “help” to see "
+                 "%s: “%.*s”\nI'm the demo contact, so I repeat what you send. Type “help” to see "
                  "everything I can do.",
-                 (int)qlen, text);
+                 said, (int)qlen, text);
     } else {
-        snprintf(reply, sizeof reply, "You wrote: “%.*s” ✓", (int)qlen, text);
+        snprintf(reply, sizeof reply, "%s: “%.*s” ✓", said, (int)qlen, text);
     }
     st->echo_count++;
     set_typing(fn, true);

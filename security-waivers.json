@@ -14,7 +14,19 @@
     "проверялся ничем, и первый же прогон нашёл 114 advisory, включая критическую CVE-2024-5197 в",
     "libvpx 1.8.0, который едет в каждом APK. Даты по Android намеренно короче остальных."
   ],
-  "waivers": [],
+  "waivers": [
+    {
+      "id": "GHSA-47m2-wp7j-p9vc",
+      "package": "pkg:gem/rubyzip@2.4.1",
+      "aliases": [
+        "CVE-2026-85396"
+      ],
+      "severity": "HIGH",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-10-02; owner to confirm",
+      "exploitability": "Path traversal in Zip::Entry#extract when extracting an attacker-crafted archive. rubyzip is only part of the iOS release tooling (fastlane, from khandaq-ios/Gemfile.lock) that runs on the maintainer's Mac; it is not in the app. That tooling extracts only archives produced by Xcode and App Store Connect for our own builds, never third-party archives. The fix (3.4.0) cannot be taken until fastlane accepts rubyzip 3.x: fastlane pins rubyzip (>= 2.0.0, < 3.0.0).",
+      "expires": "2026-11-20"
+    }
+  ],
   "scope_waivers": {
     "build-only": {
       "owner": "Isa (repository owner)",
@@ -1295,6 +1307,32 @@
       "first_seen": "2026-08-23",
       "reviewer": "Isa (repository owner)",
       "rationale": "Затронут G3413CTRBlockCipher — режим CTR шифра ГОСТ 28147-2015: счётчик инкрементирует только последний байт, после 255 блоков поток ключа повторяется. В Khandaq ГОСТ-шифры не используются нигде: транспорт — NaCl из toxcore, база — SQLCipher (AES). Сам bcprov в releaseRuntimeClasspath отсутствует, то есть в APK не попадает — это артефакт сборочной цепочки. Остаточный риск ограничен сборочной средой и не касается устройств пользователей.",
+      "expires": "2026-11-20"
+    },
+    {
+      "id": "GHSA-c4c3-7fpv-j4q5",
+      "package": "io.netty:netty-handler",
+      "version": "4.1.93.Final",
+      "aliases": [
+        "CVE-2026-75595"
+      ],
+      "severity": "CRITICAL",
+      "first_seen": "2026-10-02",
+      "reviewer": "Claude (AI assistant) on the repository owner's instruction of 2026-10-02; owner to confirm",
+      "rationale": "Server-side flaw: SslClientHelloHandler falls back to the default SslContext on a fragmented ClientHello, which bypasses mTLS only where per-SNI SslContext selection is the sole gate. Netty reaches Khandaq only through the Android Gradle build tooling, which uses it as a client; nothing in the build runs an SNI-routed TLS server. It is not in releaseRuntimeClasspath (checked 2026-10-02: no netty artifact in :app:dependencies --configuration releaseRuntimeClasspath), so it never ships in the APK. Residual risk is limited to the build environment.",
+      "expires": "2026-11-20"
+    },
+    {
+      "id": "GHSA-9pwp-9qqc-pr26",
+      "package": "org.bouncycastle:bcprov-jdk18on",
+      "version": "1.77",
+      "aliases": [
+        "CVE-2026-8763"
+      ],
+      "severity": "CRITICAL",
+      "first_seen": "2026-10-02",
+      "reviewer": "Claude (AI assistant) on the repository owner's instruction of 2026-10-02; owner to confirm",
+      "rationale": "Name Constraints bypass through a trailing dot in rfc822Name/URI during certificate path validation. In the build Bouncy Castle serves the signing tooling, which signs with our own keys and validates no third-party certificate chain carrying name constraints. It is not in releaseRuntimeClasspath (checked 2026-10-02), so it never ships in the APK; on devices TLS is the platform's and the Tox transport is NaCl. Residual risk is limited to the build environment.",
       "expires": "2026-11-20"
     }
   ]

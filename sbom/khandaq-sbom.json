@@ -6339,23 +6339,23 @@
     {
       "group": "pypi",
       "name": "charset-normalizer",
-      "purl": "pkg:pypi/charset-normalizer@3.5.1",
+      "purl": "pkg:pypi/charset-normalizer@3.5.2",
       "type": "library",
-      "version": "3.5.1"
+      "version": "3.5.2"
     },
     {
       "group": "pypi",
       "name": "click",
-      "purl": "pkg:pypi/click@8.4.2",
+      "purl": "pkg:pypi/click@8.5.0",
       "type": "library",
-      "version": "8.4.2"
+      "version": "8.5.0"
     },
     {
       "group": "pypi",
       "name": "cryptography",
-      "purl": "pkg:pypi/cryptography@50.0.0",
+      "purl": "pkg:pypi/cryptography@50.0.2",
       "type": "library",
-      "version": "50.0.0"
+      "version": "50.0.2"
     },
     {
       "group": "pypi",
@@ -6381,9 +6381,9 @@
     {
       "group": "pypi",
       "name": "idna",
-      "purl": "pkg:pypi/idna@3.19",
+      "purl": "pkg:pypi/idna@3.20",
       "type": "library",
-      "version": "3.19"
+      "version": "3.20"
     },
     {
       "group": "pypi",
@@ -6437,16 +6437,16 @@
     {
       "group": "pypi",
       "name": "urllib3",
-      "purl": "pkg:pypi/urllib3@2.7.0",
+      "purl": "pkg:pypi/urllib3@2.8.0",
       "type": "library",
-      "version": "2.7.0"
+      "version": "2.8.0"
     },
     {
       "group": "pypi",
       "name": "werkzeug",
-      "purl": "pkg:pypi/werkzeug@3.1.8",
+      "purl": "pkg:pypi/werkzeug@3.1.9",
       "type": "library",
-      "version": "3.1.8"
+      "version": "3.1.9"
     }
   ],
   "metadata": {

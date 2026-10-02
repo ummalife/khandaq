@@ -518,7 +518,33 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             }
         }
 
+        // KHANDAQ (QA 02.10): caption-merge-only refresh after a NEIGHBOUR row changed.
+        boolean captionOnly = !payloads.isEmpty();
+        for (Object p : payloads)
+        {
+            if (p != MessagelistAdapter.PAYLOAD_CAPTION)
+            {
+                captionOnly = false;
+                break;
+            }
+        }
+
+        if (captionOnly)
+        {
+            ChatCaptionHelper.apply_group_caption_state(context, this.messagelistitems, position, holder);
+            return;
+        }
+
         super.onBindViewHolder(holder, position, payloads);
+    }
+
+    /** Same as MessagelistAdapter.notify_caption_state: a media row and its caption depend on each other. */
+    private void notify_caption_state(final int pos)
+    {
+        if ((pos >= 0) && (pos < this.messagelistitems.size()))
+        {
+            this.notifyItemChanged(pos, MessagelistAdapter.PAYLOAD_CAPTION);
+        }
     }
 
     synchronized public boolean update_item(final GroupMessage new_item)
@@ -577,14 +603,13 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     {
                         this.notifyItemChanged(pos);
                     }
-                    // KHANDAQ (captions): a FILE state change (e.g. media downloaded) can turn the
-                    // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
-                    // Only on an actual content flip, not on every progress tick (#172 flicker).
-                    if ((pos + 1) < this.messagelistitems.size()
-                            && ((old_item.filename_fullpath == null) != (new_item.filename_fullpath == null)
-                                || old_item.TRIFA_MESSAGE_TYPE != new_item.TRIFA_MESSAGE_TYPE))
+                    // KHANDAQ (captions): a change to this row can merge/unmerge it with a neighbour
+                    // (media arriving under the NEXT text, an edit of a text under the media ABOVE
+                    // it). Progress ticks change neither, so they leave the neighbours alone (#172).
+                    if (!progressOnly)
                     {
-                        this.notifyItemChanged(pos + 1);
+                        notify_caption_state(pos - 1);
+                        notify_caption_state(pos + 1);
                     }
                     break;
                 }
@@ -642,6 +667,8 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                 {
                     this.messagelistitems.remove(pos);
                     this.notifyItemRemoved(pos);
+                    notify_caption_state(pos - 1);
+                    notify_caption_state(pos);
                     return;
                 }
             }
@@ -666,6 +693,9 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     int pos = this.messagelistitems.indexOf(m2);
                     this.messagelistitems.remove(pos);
                     this.notifyItemRemoved(pos);
+                    // the rows now meeting at pos may pair up (or lose their pair) as media + caption
+                    notify_caption_state(pos - 1);
+                    notify_caption_state(pos);
                     break;
                 }
             }

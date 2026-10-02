@@ -37,15 +37,24 @@ public class ChatCaptionHelper
     // sender clocks and receive clocks must not be mixed: an incoming msgV3 TEXT can carry the
     // sender's timestamp while the FILE row carries receive time (or vice versa). Accept the pair
     // if EITHER metric places the text 0..5s after the file.
-    private static boolean within_window(final long file_ts, final long text_ts)
+    // KHANDAQ (QA 02.10): 0 means "not set" and must never match. An outgoing FILE row never gets a
+    // rcvd_timestamp and an outgoing TEXT keeps 0 until the peer's receipt, so ANY text sent after a
+    // photo (a minute later, say) counted as "0 s apart" and was folded into the photo as its caption.
+    // The receipt then set the text's timestamp, the text row re-rendered on its own, and the photo
+    // above still showed it — the same text twice until the chat was reopened.
+    static boolean within_window(final long file_ts, final long text_ts)
     {
+        if ((file_ts <= 0) || (text_ts <= 0))
+        {
+            return false;
+        }
         final long delta = text_ts - file_ts;
         return (delta >= 0) && (delta <= CAPTION_WINDOW_MS);
     }
 
     // ---------------------------------- 1:1 chats ----------------------------------
 
-    private static boolean is_caption_pair(final Message file_msg, final Message text_msg)
+    static boolean is_caption_pair(final Message file_msg, final Message text_msg)
     {
         if ((file_msg == null) || (text_msg == null))
         {
@@ -77,8 +86,14 @@ public class ChatCaptionHelper
         {
             return false;
         }
-        return within_window(file_msg.sent_timestamp, text_msg.sent_timestamp)
-               || within_window(file_msg.rcvd_timestamp, text_msg.rcvd_timestamp);
+        if (within_window(file_msg.sent_timestamp, text_msg.sent_timestamp))
+        {
+            return true;
+        }
+        // On an OUTGOING 1:1 row rcvd_timestamp is the peer's receipt time (never set on a FILE, and
+        // stored in seconds in Favorites), not when the row was written — a caption we send is paired
+        // by sent_timestamp alone, only incoming rows may fall back to the receive clock.
+        return (file_msg.direction == 0) && within_window(file_msg.rcvd_timestamp, text_msg.rcvd_timestamp);
     }
 
     private static boolean file_shows_inline_media(final Context c, final Message m)

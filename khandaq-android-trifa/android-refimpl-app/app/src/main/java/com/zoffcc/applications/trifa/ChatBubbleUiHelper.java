@@ -296,6 +296,34 @@ final class ChatBubbleUiHelper
         return (int) (context.getResources().getDisplayMetrics().density * MEDIA_THUMB_MAX_H_DP);
     }
 
+    /**
+     * Give a video thumbnail a definite box: {@code heightPx} tall, the media width cap wide (never
+     * wider than the screen leaves room for).
+     *
+     * KHANDAQ (QA 02.10): an outgoing media bubble is right-aligned with a WRAP_CONTENT width
+     * (align_outgoing_media_bubble), while ft_preview_image is MATCH_PARENT in XML. Before a bitmap
+     * arrives the pair measures to width 0, and Glide waits for a non-zero width that never comes —
+     * so a sent video vanished the moment its upload finished, leaving only the time and the ticks.
+     * Photos never hit this because their load carries an explicit override size.
+     */
+    static void apply_video_thumb_box(final View preview, final int heightPx)
+    {
+        if (preview == null)
+        {
+            return;
+        }
+        final ViewGroup.LayoutParams lp = preview.getLayoutParams();
+        if (lp == null)
+        {
+            return;
+        }
+        final android.util.DisplayMetrics dm = preview.getContext().getResources().getDisplayMetrics();
+        final int sideRoomPx = (int) (dm.density * 60);
+        lp.width = Math.max(1, Math.min(media_thumb_max_w_px(preview.getContext()), dm.widthPixels - sideRoomPx));
+        lp.height = heightPx;
+        preview.setLayoutParams(lp);
+    }
+
     /** Make a media preview hug its bitmap (wrap_content + FitCenter), not the full row width. */
     static void apply_media_thumb_wrap(final View preview)
     {

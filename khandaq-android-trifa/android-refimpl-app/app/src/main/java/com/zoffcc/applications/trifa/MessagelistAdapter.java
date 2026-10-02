@@ -615,6 +615,9 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
     static final Object PAYLOAD_TRANSFER_PROGRESS = new Object();
     // KHANDAQ (user video 17.08): payload marker for selection-highlight-only updates.
     static final Object PAYLOAD_SELECTION = new Object();
+    // KHANDAQ (QA 02.10): payload marker for re-applying only the media-caption merge of a row
+    // (ChatCaptionHelper) after its NEIGHBOUR changed — touches no ImageView, so no Glide reload.
+    static final Object PAYLOAD_CAPTION = new Object();
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -684,7 +687,39 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
             }
         }
 
+        boolean captionOnly = !payloads.isEmpty();
+        for (Object p : payloads)
+        {
+            if (p != PAYLOAD_CAPTION)
+            {
+                captionOnly = false;
+                break;
+            }
+        }
+
+        if (captionOnly)
+        {
+            ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
+            return;
+        }
+
         super.onBindViewHolder(holder, position, payloads);
+    }
+
+    /**
+     * KHANDAQ (QA 02.10): a FILE row and the TEXT right after it can render as ONE bubble (the text
+     * becomes the media caption, see ChatCaptionHelper), so each of the two rows depends on the other.
+     * Whenever a row changes or disappears, its neighbours re-apply just that merge. Before this only
+     * a FILE state flip refreshed the row below it: a delivery receipt on a text, an edit of it, or
+     * deleting either row left the other one rendered against the old state (the same text shown
+     * twice, or a caption that vanished until the chat was reopened).
+     */
+    private void notify_caption_state(final int pos)
+    {
+        if ((pos >= 0) && (pos < this.messagelistitems.size()))
+        {
+            this.notifyItemChanged(pos, PAYLOAD_CAPTION);
+        }
     }
 
     public void add_item(Message new_item)
@@ -793,14 +828,14 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     {
                         this.notifyItemChanged(pos);
                     }
-                    // KHANDAQ (captions): a FILE state change (e.g. download finished) can turn the
-                    // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
-                    // Only on an actual state/filedb flip: rebinding on every progress tick made the
-                    // neighbour row (and its Glide preview) flicker through the whole transfer (#172).
-                    if ((pos + 1) < this.messagelistitems.size()
-                            && (old_item.state != new_item.state || old_item.filedb_id != new_item.filedb_id))
+                    // KHANDAQ (captions): a change to this row can merge/unmerge it with a neighbour
+                    // (a finished download turns the NEXT text into a caption, a receipt or an edit on
+                    // a text changes the media row ABOVE it). A progress tick changes neither state nor
+                    // filedb_id, so it skips this and the neighbours stay untouched (#172 flicker).
+                    if (!progressOnly)
                     {
-                        this.notifyItemChanged(pos + 1);
+                        notify_caption_state(pos - 1);
+                        notify_caption_state(pos + 1);
                     }
                     break;
                 }
@@ -831,6 +866,9 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     int pos = this.messagelistitems.indexOf(m2);
                     this.messagelistitems.remove(pos);
                     this.notifyItemRemoved(pos);
+                    // the rows now meeting at pos may pair up (or lose their pair) as media + caption
+                    notify_caption_state(pos - 1);
+                    notify_caption_state(pos);
                     break;
                 }
             }

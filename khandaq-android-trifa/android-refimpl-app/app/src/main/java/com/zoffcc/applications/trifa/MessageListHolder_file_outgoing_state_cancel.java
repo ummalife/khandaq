@@ -376,9 +376,9 @@ public class MessageListHolder_file_outgoing_state_cancel extends RecyclerView.V
                 final ViewGroup.LayoutParams previewLp = ft_preview_container.getLayoutParams();
                 previewLp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 ft_preview_container.setLayoutParams(previewLp);
-                final ViewGroup.LayoutParams imageLp = ft_preview_image.getLayoutParams();
-                imageLp.height = (int) dp2px(180);
-                ft_preview_image.setLayoutParams(imageLp);
+                // a definite width too: the right-aligned outgoing bubble wraps its content, and a
+                // MATCH_PARENT thumb inside it measured to 0 — the sent video vanished (QA 02.10)
+                ChatBubbleUiHelper.apply_video_thumb_box(ft_preview_image, (int) dp2px(180));
 
                 ChatMediaHelper.bindVideoPreview(context, message, null, ft_preview_image);
                 ft_preview_image.setOnTouchListener(ChatMediaHelper.gestureMediaOpenTouchListener(context,

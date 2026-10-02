@@ -135,6 +135,16 @@ final class FavoritesChatHelper
 
     static void openChat(final Context context)
     {
+        openChat(context, null);
+    }
+
+    /**
+     * Opens Favorites with {@code fillOutText} pre-filled in the input field (shared text). Not via
+     * MessageListActivity.show_messagelist_for_friend: that resolves the pubkey through the native
+     * friend lookup, which parses 64 hex characters out of the much shorter CHAT_ID.
+     */
+    static void openChat(final Context context, final String fillOutText)
+    {
         final Intent intent = new Intent(context, MessageListActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         // KHANDAQ (crash fix): openChat is also called from NON-Activity contexts — e.g. add_friend_real
@@ -145,6 +155,10 @@ final class FavoritesChatHelper
         if (!(context instanceof android.app.Activity))
         {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        if (!TextUtils.isEmpty(fillOutText))
+        {
+            intent.putExtra("fillouttext", fillOutText);
         }
         intent.putExtra("friendnum", -1L);
         intent.putExtra("friend_pubkey", CHAT_ID);

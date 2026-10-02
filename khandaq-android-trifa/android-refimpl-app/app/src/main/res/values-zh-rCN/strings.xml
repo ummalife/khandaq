@@ -1039,4 +1039,12 @@
          when relayed history names an author whose signing key is stale and the relaying
          peer is somebody else. The row is kept; the identity is not asserted. -->
     <string name="group_msg_relayed_unattributed">转发的历史记录 — 作者未验证</string>
+    <!-- KHANDAQ (QA 02.10): call-waiting screen, share to Favorites, why a message cannot be edited -->
+    <string name="call_waiting_title_top">正在等待</string>
+    <string name="call_waiting_title_bottom">上线…</string>
+    <string name="share_saving_to_favorites">正在保存到收藏…</string>
+    <string name="chat_edit_blocked_not_delivered">消息送达后才能编辑</string>
+    <string name="chat_edit_blocked_unsupported">对方的应用无法接收编辑，请让对方更新 Khandaq</string>
+    <string name="chat_edit_blocked_reply">暂不支持编辑回复</string>
+    <string name="chat_edit_blocked_too_old">消息发送后 48 小时内可以编辑</string>
 </resources>

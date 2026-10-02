@@ -296,6 +296,34 @@ final class ChatBubbleUiHelper
         return (int) (context.getResources().getDisplayMetrics().density * MEDIA_THUMB_MAX_H_DP);
     }
 
+    /**
+     * Give a video thumbnail a definite box: {@code heightPx} tall, the media width cap wide (never
+     * wider than the screen leaves room for).
+     *
+     * KHANDAQ (QA 02.10): an outgoing media bubble is right-aligned with a WRAP_CONTENT width
+     * (align_outgoing_media_bubble), while ft_preview_image is MATCH_PARENT in XML. Before a bitmap
+     * arrives the pair measures to width 0, and Glide waits for a non-zero width that never comes —
+     * so a sent video vanished the moment its upload finished, leaving only the time and the ticks.
+     * Photos never hit this because their load carries an explicit override size.
+     */
+    static void apply_video_thumb_box(final View preview, final int heightPx)
+    {
+        if (preview == null)
+        {
+            return;
+        }
+        final ViewGroup.LayoutParams lp = preview.getLayoutParams();
+        if (lp == null)
+        {
+            return;
+        }
+        final android.util.DisplayMetrics dm = preview.getContext().getResources().getDisplayMetrics();
+        final int sideRoomPx = (int) (dm.density * 60);
+        lp.width = Math.max(1, Math.min(media_thumb_max_w_px(preview.getContext()), dm.widthPixels - sideRoomPx));
+        lp.height = heightPx;
+        preview.setLayoutParams(lp);
+    }
+
     /** Make a media preview hug its bitmap (wrap_content + FitCenter), not the full row width. */
     static void apply_media_thumb_wrap(final View preview)
     {
@@ -314,6 +342,43 @@ final class ChatBubbleUiHelper
         {
             ((ImageView) preview).setScaleType(ImageView.ScaleType.FIT_CENTER);
             ((ImageView) preview).setAdjustViewBounds(true);
+        }
+        release_fixed_frame_size(preview);
+    }
+
+    /**
+     * ChatFileBubbleHelper.ensureMediaPreviewFrame and ChatTransferProgressHelper.wrapPreviewWithOverlay
+     * move the preview into an id-less FrameLayout — a group video gets both, one inside the other — and
+     * each frame takes over the layout params of what it wraps as they were at that moment; nothing
+     * resizes the frames afterwards. A row recycled from a video to a photo therefore kept the video's
+     * box: since apply_video_thumb_box a fixed 300dp width (the photo pinned to the left edge of an empty
+     * frame, review of QA 02.10), and from before that a fixed 180dp height that shrank the photo. A photo
+     * hugs its bitmap, so every wrapper frame gets its fixed size released.
+     */
+    private static void release_fixed_frame_size(final View preview)
+    {
+        View child = preview;
+        while (child.getParent() instanceof android.widget.FrameLayout)
+        {
+            final View frame = (View) child.getParent();
+            if (frame.getId() != View.NO_ID)
+            {
+                return;
+            }
+            final ViewGroup.LayoutParams lp = frame.getLayoutParams();
+            if ((lp != null) && ((lp.width > 0) || (lp.height > 0)))
+            {
+                if (lp.width > 0)
+                {
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                }
+                if (lp.height > 0)
+                {
+                    lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                }
+                frame.setLayoutParams(lp);
+            }
+            child = frame;
         }
     }
 

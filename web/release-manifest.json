@@ -15,7 +15,7 @@
     "releaseTag": "v0.2.12"
   },
   "ios": {
-    "buildNumber": "142989",
+    "buildNumber": "142990",
     "bundleId": "org.khandaq.messenger",
     "marketingVersion": "1.4.33"
   },

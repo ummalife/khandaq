@@ -17,8 +17,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var backgroundTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
     // KHANDAQ (#164): when the app entered background, to decide if the DHT is stale on return.
     private var enteredBackgroundAt: Date?
-    var gps_was_stopped_by_forground: Bool = false
-    static var lastStartGpsTS: Int64 = 0
     static var location_sharing_contact_pubkey: String = "-1"
 
     class var shared: AppDelegate {
@@ -71,15 +69,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         enteredBackgroundAt = nil
 
         coordinator?.processPendingShareIfNeeded()
-
-        gps_was_stopped_by_forground = true
-        let gps = LocationManager.shared
-        if !gps.isHasAccess() {
-            os_log("AppDelegate:applicationWillEnterForeground:gps:no_access")
-        } else if gps.state == .Monitoring {
-            os_log("AppDelegate:applicationWillEnterForeground:gps:STOP")
-            gps.stopMonitoring()
-        }
 
         os_log("AppDelegate:applicationWillEnterForeground:DidEnterBackground:2:END")
     }
@@ -205,46 +194,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
         }
 
-        gps_was_stopped_by_forground = false
-        let gps = LocationManager.shared
-        // KHANDAQ (#14): the background location keepalive must only run when the user explicitly
-        // enabled "Longer Background Mode" (same gate as sendOwnPush above). Otherwise location started
-        // on every background once permission was ever granted and the status-bar location indicator
-        // stayed on / never turned off.
-        if UserDefaultsManager().LongerbgMode == true && gps.isHasAccess() {
-            AppDelegate.lastStartGpsTS = Date().millisecondsSince1970
-            gps.startMonitoring()
-            os_log("AppDelegate:applicationDidEnterBackground:gps:START")
-            DispatchQueue.main.asyncAfter(wallDeadline: DispatchWallTime.now() + (3 * 60)) {
-                os_log("AppDelegate:applicationDidEnterBackground:4:gps:finishing")
-                let gps = LocationManager.shared
-                if !gps.isHasAccess() {
-                    os_log("AppDelegate:applicationDidEnterBackground:4:gps:no_access")
-                } else if gps.state == .Monitoring {
-                    if (self.gps_was_stopped_by_forground == false) {
-
-                        let diffTime = Date().millisecondsSince1970 - AppDelegate.lastStartGpsTS
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:Tlast=%ld", AppDelegate.lastStartGpsTS)
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:Tnow=%ld", Date().millisecondsSince1970)
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:Tdiff=%ld", diffTime)
-
-                        if (diffTime > (((3 * 60) - 4) * 1000))
-                        {
-                            os_log("AppDelegate:applicationDidEnterBackground:4:gps:STOP")
-                            gps.stopMonitoring()
-                        } else {
-                            os_log("AppDelegate:applicationDidEnterBackground:4:gps:STOP skipped, must be an old timer")
-                        }
-                    } else {
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:was stopped by forground, skipping")
-                    }
-                } else {
-                    os_log("AppDelegate:applicationDidEnterBackground:4:gps:STOP skipped, gps was stopped already")
-                }
-            }
-        } else {
-            os_log("AppDelegate:applicationDidEnterBackground:gps:no_access")
-        }
+        // KHANDAQ (App Review 2.5.4, 2026-09-17): upstream Antidote kept the app alive here by running
+        // background location updates for three minutes. App Review rejects "location" in
+        // UIBackgroundModes for anything that is not a persistent-location feature, so that keepalive
+        // is gone for good; Longer Background Mode relies on the self-push above.
 
         DispatchQueue.main.asyncAfter(wallDeadline: DispatchWallTime.now() + 25) {
             UIApplication.shared.endBackgroundTask(self.backgroundTask)

@@ -82,6 +82,22 @@ public class ShareActivity extends AppCompatActivity
             return;
         }
 
+        // KHANDAQ (QA 02.10): a share that arrives before the profile is unlocked (cold start after a
+        // reboot or a force-stop) has no database behind it: the target list came up empty, and the
+        // Favorites row led to a chat whose send silently did nothing. Start the app the normal way
+        // (password screen included) and ask to share again once it is open.
+        if ((Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action))
+            && (TrifaToxService.orma == null))
+        {
+            HelperGeneric.logI(TAG, "onCreate:profile not open yet, starting the app first");
+            android.widget.Toast.makeText(this, R.string.share_open_app_first, android.widget.Toast.LENGTH_LONG).show();
+            final Intent start_app = new Intent(this, StartMainActivityWrapper.class);
+            start_app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(start_app);
+            finish();
+            return;
+        }
+
         try
         {
             if (Intent.ACTION_SEARCH.equals(action))
@@ -96,6 +112,7 @@ public class ShareActivity extends AppCompatActivity
                     Intent intent_friend_selection = new Intent(this, FriendSelectSingleActivity.class);
                     intent_friend_selection.putExtra("offline", 1);
                     intent_friend_selection.putExtra("ngc_groups", 1);
+                    intent_friend_selection.putExtra("favorites", 1);
                     startActivityForResult(intent_friend_selection, SelectFriendSingleActivity_ID);
                 }
                 else
@@ -103,6 +120,7 @@ public class ShareActivity extends AppCompatActivity
                     Intent intent_friend_selection = new Intent(this, FriendSelectSingleActivity.class);
                     intent_friend_selection.putExtra("offline", 1);
                     intent_friend_selection.putExtra("ngc_groups", 1);
+                    intent_friend_selection.putExtra("favorites", 1);
                     startActivityForResult(intent_friend_selection, SelectFriendSingleActivity_ID);
                 }
             }
@@ -113,6 +131,7 @@ public class ShareActivity extends AppCompatActivity
                     Intent intent_friend_selection = new Intent(this, FriendSelectSingleActivity.class);
                     intent_friend_selection.putExtra("offline", 1);
                     intent_friend_selection.putExtra("ngc_groups", 1);
+                    intent_friend_selection.putExtra("favorites", 1);
                     startActivityForResult(intent_friend_selection, SelectFriendSingleActivity_ID);
                 }
                 else
@@ -120,6 +139,7 @@ public class ShareActivity extends AppCompatActivity
                     Intent intent_friend_selection = new Intent(this, FriendSelectSingleActivity.class);
                     intent_friend_selection.putExtra("offline", 1);
                     intent_friend_selection.putExtra("ngc_groups", 1);
+                    intent_friend_selection.putExtra("favorites", 1);
                     startActivityForResult(intent_friend_selection, SelectFriendSingleActivity_ID);
                 }
             }
@@ -215,6 +235,12 @@ public class ShareActivity extends AppCompatActivity
         HelperGeneric.logI(TAG, "onActivityResult:intent=" + data);
         if (requestCode == SelectFriendSingleActivity_ID)
         {
+            if (resultCode != RESULT_OK)
+            {
+                // backing out of the target list used to leave this placeholder screen behind
+                this.finish();
+                return;
+            }
             if (resultCode == RESULT_OK)
             {
                 try
@@ -267,6 +293,40 @@ public class ShareActivity extends AppCompatActivity
                                 {
                                     HelperGeneric.logI(TAG,"handle:004");
                                     handleSendMultipleImages(intent, item_id, 0);
+                                }
+                                return;
+                            }
+                        }
+                        else if ((item_type == FriendSelectSingle.TYPE_FAVORITES)
+                                 && FavoritesChatHelper.isFavoritesChat(item_id))
+                        {
+                            if (Intent.ACTION_SEND.equals(action) && type != null)
+                            {
+                                if (("text/plain".equals(type)) && (intent.getStringExtra(Intent.EXTRA_TEXT) != null))
+                                {
+                                    handleSendTextToFavorites(intent);
+                                }
+                                else
+                                {
+                                    final ArrayList<Uri> single = new ArrayList<>();
+                                    final Uri uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                                    if (uri != null)
+                                    {
+                                        single.add(uri);
+                                    }
+                                    handleSaveFilesToFavorites(single);
+                                }
+                                return;
+                            }
+                            else if (Intent.ACTION_SEND_MULTIPLE.equals(action) && type != null)
+                            {
+                                if ("text/plain".equals(type))
+                                {
+                                    handleSendTextToFavorites(intent);
+                                }
+                                else
+                                {
+                                    handleSaveFilesToFavorites(intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM));
                                 }
                                 return;
                             }
@@ -412,6 +472,81 @@ public class ShareActivity extends AppCompatActivity
             GroupMessageListActivity.show_messagelist_for_id(this, group_id, sharedText);
             this.finish();
         }
+    }
+
+    // KHANDAQ (QA 02.10): shared text lands in the Favorites input field, like a contact's chat.
+    void handleSendTextToFavorites(Intent intent)
+    {
+        final String sharedText = collect_shared_text_from_intent(intent);
+        if (sharedText != null)
+        {
+            FavoritesChatHelper.openChat(this, sharedText);
+            this.finish();
+        }
+    }
+
+    // KHANDAQ (QA 02.10): shared files are saved straight into Favorites (a local copy, nothing is
+    // sent anywhere). The copy runs off the main thread — a long video would otherwise freeze the
+    // share screen — and this activity stays alive until it is done, since the read grant on the
+    // shared URIs ends with it.
+    void handleSaveFilesToFavorites(final ArrayList<Uri> uris)
+    {
+        final ArrayList<Uri> safeUris = new ArrayList<>();
+        if (uris != null)
+        {
+            for (Uri u : uris)
+            {
+                // KHANDAQ (audit A27): same rule as the contact and group paths.
+                if (!isUnsafeShareUri(u))
+                {
+                    safeUris.add(u);
+                }
+            }
+        }
+        if (safeUris.isEmpty())
+        {
+            this.finish();
+            return;
+        }
+
+        t1.setText(R.string.share_saving_to_favorites);
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            int saved = 0;
+            for (Uri u : safeUris)
+            {
+                try
+                {
+                    final String name = HelperFiletransfer.resolve_attachment_display_name(app, u, null);
+                    if ((name != null)
+                        && (FavoritesChatHelper.sendLocalOutgoingFile(app, u.toString(), name, -1L, false) > 0))
+                    {
+                        saved++;
+                    }
+                }
+                catch (Exception e)
+                {
+                    HelperGeneric.logI(TAG, "handleSaveFilesToFavorites:EE:" + e.getMessage());
+                }
+            }
+            HelperGeneric.logI(TAG, "handleSaveFilesToFavorites:saved=" + saved + " of " + safeUris.size());
+            final int saved_final = saved;
+            runOnUiThread(() -> {
+                if (saved_final < safeUris.size())
+                {
+                    // a provider that hides the size, a copy that failed: say so instead of opening
+                    // Favorites as if everything had arrived
+                    android.widget.Toast.makeText(app, app.getString(R.string.share_favorites_failed,
+                            safeUris.size() - saved_final, safeUris.size()), android.widget.Toast.LENGTH_LONG).show();
+                }
+                if (isFinishing() || isDestroyed())
+                {
+                    return;
+                }
+                FavoritesChatHelper.openChat(ShareActivity.this);
+                ShareActivity.this.finish();
+            });
+        }, "ShareToFavorites").start();
     }
 
     // KHANDAQ (audit A27): a malicious app can ACTION_SEND us a URI pointing at OUR OWN private files

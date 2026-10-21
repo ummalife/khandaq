@@ -69,6 +69,14 @@ public class FriendSelectSingleActivity extends ListActivity
         }
         Log.i(TAG, "onCreate:also_ngc_groups=" + also_ngc_groups);
 
+        // KHANDAQ (QA 02.10): sharing from the gallery offered only contacts — the share sheet asks for
+        // the local Favorites chat as a target too. Off unless the caller asks (group invites etc.).
+        int also_favorites = 0;
+        if (extras != null)
+        {
+            also_favorites = extras.getInt("favorites", 0);
+        }
+
         String exclude_group_id = null;
         if (extras != null)
         {
@@ -190,6 +198,13 @@ public class FriendSelectSingleActivity extends ListActivity
         {
             friends_list = new ArrayList<>();
 
+            if (also_favorites == 1)
+            {
+                friends_list.add(new FriendSelectSingle(FavoritesChatHelper.displayName(this),
+                                                        FavoritesChatHelper.CHAT_ID,
+                                                        FriendSelectSingle.TYPE_FAVORITES));
+            }
+
             for (FriendList f : fl)
             {
                 if ((f.tox_public_key_string != null) &&
@@ -254,6 +269,10 @@ public class FriendSelectSingleActivity extends ListActivity
                         {
                             String return_ngc_id = "2:" + friends_list.get((int) id).pubkey;
                             data.setData(Uri.parse(return_ngc_id));
+                        }
+                        else if (friends_list.get((int) id).getType() == FriendSelectSingle.TYPE_FAVORITES)
+                        {
+                            data.setData(Uri.parse(FriendSelectSingle.TYPE_FAVORITES + ":" + FavoritesChatHelper.CHAT_ID));
                         }
                         setResult(RESULT_OK, data);
                     }

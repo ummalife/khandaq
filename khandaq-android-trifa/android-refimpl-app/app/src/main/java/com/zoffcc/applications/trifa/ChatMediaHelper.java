@@ -626,6 +626,13 @@ public final class ChatMediaHelper
                     composed = composeVideoThumb(frame, durationMs);
                     video_thumb_cache.put(vfsPath, composed);
                 }
+                else
+                {
+                    // KHANDAQ (QA 02.10): no decodable frame (a codec this device cannot decode, a
+                    // damaged file) — still draw a video tile, not the bare white glyph that was
+                    // invisible on the light wallpaper. Not cached: the next bind tries the file again.
+                    composed = composeVideoThumb(videoPlaceholderFrame(), durationMs);
+                }
 
                 final Bitmap frameFinal = composed;
                 new Handler(Looper.getMainLooper()).post(new Runnable()
@@ -1088,13 +1095,29 @@ public final class ChatMediaHelper
         throw new Exception("no local playback path");
     }
 
+    /** A dark 16:9 tile for composeVideoThumb when the video yields no frame. */
+    private static Bitmap videoPlaceholderFrame()
+    {
+        final Bitmap tile = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888);
+        tile.eraseColor(android.graphics.Color.parseColor("#FF2E3B38"));
+        return tile;
+    }
+
     private static Bitmap extractVideoFrame(String localPath)
     {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try
         {
             retriever.setDataSource(localPath);
-            return retriever.getFrameAtTime(0);
+            final Bitmap first = retriever.getFrameAtTime(0);
+            if (first != null)
+            {
+                return first;
+            }
+            // Some encoders put no sync frame at 0 (screen recorders, trimmed clips): take the sync
+            // frame nearest to 1 s, then whatever frame the extractor considers representative.
+            final Bitmap nearSecond = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            return (nearSecond != null) ? nearSecond : retriever.getFrameAtTime();
         }
         catch (Exception e)
         {

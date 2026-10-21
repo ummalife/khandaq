@@ -21,6 +21,9 @@ package com.zoffcc.applications.trifa;
 
 public class FriendSelectSingle
 {
+    /** KHANDAQ (QA 02.10): the local "Favorites" (Saved Messages) chat as a share target. */
+    static final int TYPE_FAVORITES = 3;
+
     String name;
     String pubkey;
     int type;
@@ -29,7 +32,7 @@ public class FriendSelectSingle
     {
         this.name = name;
         this.pubkey = pubkey;
-        this.type = type; // 0 -> friend, 2 -> ngc group
+        this.type = type; // 0 -> friend, 2 -> ngc group, 3 -> Favorites (TYPE_FAVORITES)
     }
 
     public FriendSelectSingle(String name, String pubkey)

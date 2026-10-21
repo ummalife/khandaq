@@ -104,11 +104,13 @@ public class ToolbarActionMode implements ActionMode.Callback
             replyItem.setVisible(HelperReply.canReplyToCurrentSelection());
         }
 
-        // KHANDAQ (#9): "Изменить" — exactly one OWN text message, addressable, inside the window
+        // KHANDAQ (#9): Edit — exactly one OWN text message. QA 02.10: offered even when this
+        // message cannot be edited (queued, too old, ...); the tap then says why instead of the item
+        // silently missing, which read as "editing does not exist on my phone".
         final MenuItem editItem = menu.findItem(R.id.action_edit);
         if (editItem != null)
         {
-            editItem.setVisible(HelperMessageEdit.canEditCurrentSelection());
+            editItem.setVisible(HelperMessageEdit.isOwnSingleTextSelection());
         }
 
         // KHANDAQ (#192): "Реакция" — exactly one message that can hold a reaction
@@ -222,7 +224,12 @@ public class ToolbarActionMode implements ActionMode.Callback
             case R.id.action_edit:
                 // KHANDAQ (#9): prefill the input with the old text; the send button saves the edit
                 action_active = true;
-                if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
+                final int editBlockReason = HelperMessageEdit.editBlockReasonForCurrentSelection();
+                if (editBlockReason != 0)
+                {
+                    android.widget.Toast.makeText(context, editBlockReason, android.widget.Toast.LENGTH_LONG).show();
+                }
+                else if ((selected_group_messages.isEmpty()) && (MainActivity.group_message_list_activity == null))
                 {
                     HelperMessageEdit.editSelectedDirectMessage(context);
                 }

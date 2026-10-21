@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "KHANDAQ (re-review v2 2026-08-22, RR2-01/RR2-02) — the state of the production push",
+    "relay at the moment this release was cut. Written by",
+    "scripts/record-push-release-evidence.py from the relay's own /health/detail.",
+    "Not a plan and not a design statement: a measurement. Immutable once committed —",
+    "a later release gets a new file, it never edits this one."
+  ],
+  "measured_at": "2026-10-02T17:00:24+00:00",
+  "commit": "7c57abe6d9f05550a533a41444c128f633a55fea",
+  "base_commit": "9c3c35fe15185b3d1cc3690e23d844dc715c2ed2",
+  "release": {
+    "android": {
+      "versionName": "0.2.45",
+      "versionCode": 10440
+    },
+    "ios": {
+      "marketingVersion": "1.4.33",
+      "buildNumber": "142989"
+    }
+  },
+  "relay": {
+    "auth_mode": "soft",
+    "enforce_by": "2026-11-19",
+    "enforce_overdue": false,
+    "fcm_mode": "v1",
+    "break_glass": null
+  },
+  "capabilities": {
+    "mode": "auto",
+    "devices_registered": 15,
+    "capabilities_registered": 16,
+    "grace_days": 14,
+    "grace_still_used": 0
+  },
+  "emission": {
+    "legacy_mode": "serve",
+    "legacy_pct": 13.51,
+    "retire_target": "2026-11-20 (step to 410); see docs/PUSH-COMPATIBILITY.md",
+    "counts": {
+      "json_post": 32,
+      "legacy_get": 5
+    }
+  },
+  "auth_adoption": {
+    "window_signed_pct": 37.39,
+    "window_outcomes": {
+      "badmac": 0,
+      "malformed_ts": 0,
+      "missing": 190,
+      "ok": 249,
+      "replay": 65,
+      "stale": 15,
+      "store_error": 0
+    }
+  }
+}

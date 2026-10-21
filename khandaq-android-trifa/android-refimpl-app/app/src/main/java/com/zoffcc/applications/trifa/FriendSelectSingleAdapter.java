@@ -185,6 +185,20 @@ public class FriendSelectSingleAdapter extends ArrayAdapter<FriendSelectSingle>
             }
             textViewName.setText(friend_entry.getName());
         }
+        else if (friend_entry.getType() == FriendSelectSingle.TYPE_FAVORITES)
+        {
+            // same avatar and subtitle as the pinned row in the chat list
+            f_status_icon.setVisibility(View.INVISIBLE);
+            f_relay_icon.setVisibility(View.INVISIBLE);
+            textViewName.setText(friend_entry.getName());
+            FavoritesChatHelper.bindListAvatar(avatar);
+            if (textViewStatus != null)
+            {
+                textViewStatus.setText(R.string.favorites_chat_subtitle);
+                textViewStatus.setTextColor(context.getResources().getColor(R.color.tg_chat_preview));
+                textViewStatus.setVisibility(View.VISIBLE);
+            }
+        }
 
         return view;
     }

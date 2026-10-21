@@ -261,6 +261,8 @@ public class GroupMessageListHolder_file_outgoing_state_cancel extends RecyclerV
             textView.setVisibility(View.GONE);
 
             ChatFileBubbleHelper.showMediaPreview(itemView, (int) dp2px(180));
+            // same zero-width trap as the 1:1 row: the outgoing bubble wraps its content (QA 02.10)
+            ChatBubbleUiHelper.apply_video_thumb_box(ft_preview_image, (int) dp2px(180));
 
             if (!previewAlreadyBuilt)
             {

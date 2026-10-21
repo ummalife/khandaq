@@ -615,66 +615,76 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
     static final Object PAYLOAD_TRANSFER_PROGRESS = new Object();
     // KHANDAQ (user video 17.08): payload marker for selection-highlight-only updates.
     static final Object PAYLOAD_SELECTION = new Object();
+    // KHANDAQ (QA 02.10): payload marker for re-applying only the media-caption merge of a row
+    // (ChatCaptionHelper) after its NEIGHBOUR changed — touches no ImageView, so no Glide reload.
+    static final Object PAYLOAD_CAPTION = new Object();
 
     @Override
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,
                                  @NonNull java.util.List payloads)
     {
-        boolean progressOnly = !payloads.isEmpty();
+        // Each payload this adapter emits refreshes one self-contained part of a row: byte counters
+        // (#181), the selection highlight (user video 17.08) or the media-caption merge (QA 02.10).
+        // Any mix of them is applied piece by piece — a neighbour's caption refresh landing in the same
+        // frame as a progress tick used to fall through to the full bind and blink the preview (#172).
+        // Only an unknown payload, or none, takes the full bind.
+        boolean progress = false;
+        boolean selection = false;
+        boolean caption = false;
+        boolean partial = !payloads.isEmpty();
         for (Object p : payloads)
         {
-            if (p != PAYLOAD_TRANSFER_PROGRESS)
+            if (p == PAYLOAD_TRANSFER_PROGRESS)
             {
-                progressOnly = false;
+                progress = true;
+            }
+            else if (p == PAYLOAD_SELECTION)
+            {
+                selection = true;
+            }
+            else if (p == PAYLOAD_CAPTION)
+            {
+                caption = true;
+            }
+            else
+            {
+                partial = false;
                 break;
             }
         }
 
-        if (progressOnly)
+        if (partial)
         {
             try
             {
                 final Message m = (Message) this.messagelistitems.get(position);
-                ChatTransferProgressHelper.applyDirect(context, holder.itemView, m, m.direction == 1);
-                return;
-            }
-            catch (Exception ignored)
-            {
-                // fall through to the full bind
-            }
-        }
-
-        boolean selectionOnly = !payloads.isEmpty();
-        for (Object p : payloads)
-        {
-            if (p != PAYLOAD_SELECTION)
-            {
-                selectionOnly = false;
-                break;
-            }
-        }
-
-        if (selectionOnly)
-        {
-            try
-            {
-                final Message m = (Message) this.messagelistitems.get(position);
-                // Only the background of the row container — deliberately nothing that would make
-                // Glide re-evaluate an ImageView. R.id.layout_message_container exists in every 1:1
-                // row layout (text, self-text, incoming file, outgoing file, both compact variants
-                // and the paging rows), so this covers the whole list.
-                final View container = holder.itemView.findViewById(R.id.layout_message_container);
-                if (container != null)
+                if (progress)
                 {
-                    if (MainActivity.selected_messages.contains(m.id))
+                    ChatTransferProgressHelper.applyDirect(context, holder.itemView, m, m.direction == 1);
+                }
+                if (selection)
+                {
+                    // Only the background of the row container — deliberately nothing that would make
+                    // Glide re-evaluate an ImageView. R.id.layout_message_container exists in every 1:1
+                    // row layout (text, self-text, incoming file, outgoing file, both compact variants
+                    // and the paging rows), so this covers the whole list.
+                    final View container = holder.itemView.findViewById(R.id.layout_message_container);
+                    if (container != null)
                     {
-                        container.setBackgroundResource(R.drawable.bg_message_selection);
+                        if (MainActivity.selected_messages.contains(m.id))
+                        {
+                            container.setBackgroundResource(R.drawable.bg_message_selection);
+                        }
+                        else
+                        {
+                            container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                        }
                     }
-                    else
-                    {
-                        container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                    }
+                }
+                if (caption)
+                {
+                    ChatCaptionHelper.apply_caption_state(context, this.messagelistitems, position, holder);
                 }
                 return;
             }
@@ -685,6 +695,22 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
         }
 
         super.onBindViewHolder(holder, position, payloads);
+    }
+
+    /**
+     * KHANDAQ (QA 02.10): a FILE row and the TEXT right after it can render as ONE bubble (the text
+     * becomes the media caption, see ChatCaptionHelper), so each of the two rows depends on the other.
+     * Whenever a row changes or disappears, its neighbours re-apply just that merge. Before this only
+     * a FILE state flip refreshed the row below it: a delivery receipt on a text, an edit of it, or
+     * deleting either row left the other one rendered against the old state (the same text shown
+     * twice, or a caption that vanished until the chat was reopened).
+     */
+    private void notify_caption_state(final int pos)
+    {
+        if ((pos >= 0) && (pos < this.messagelistitems.size()))
+        {
+            this.notifyItemChanged(pos, PAYLOAD_CAPTION);
+        }
     }
 
     public void add_item(Message new_item)
@@ -793,14 +819,14 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     {
                         this.notifyItemChanged(pos);
                     }
-                    // KHANDAQ (captions): a FILE state change (e.g. download finished) can turn the
-                    // NEXT row into a merged caption — rebind it too so it collapses/expands in sync.
-                    // Only on an actual state/filedb flip: rebinding on every progress tick made the
-                    // neighbour row (and its Glide preview) flicker through the whole transfer (#172).
-                    if ((pos + 1) < this.messagelistitems.size()
-                            && (old_item.state != new_item.state || old_item.filedb_id != new_item.filedb_id))
+                    // KHANDAQ (captions): a change to this row can merge/unmerge it with a neighbour
+                    // (a finished download turns the NEXT text into a caption, a receipt or an edit on
+                    // a text changes the media row ABOVE it). A progress tick changes neither state nor
+                    // filedb_id, so it skips this and the neighbours stay untouched (#172 flicker).
+                    if (!progressOnly)
                     {
-                        this.notifyItemChanged(pos + 1);
+                        notify_caption_state(pos - 1);
+                        notify_caption_state(pos + 1);
                     }
                     break;
                 }
@@ -831,6 +857,9 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     int pos = this.messagelistitems.indexOf(m2);
                     this.messagelistitems.remove(pos);
                     this.notifyItemRemoved(pos);
+                    // the rows now meeting at pos may pair up (or lose their pair) as media + caption
+                    notify_caption_state(pos - 1);
+                    notify_caption_state(pos);
                     break;
                 }
             }

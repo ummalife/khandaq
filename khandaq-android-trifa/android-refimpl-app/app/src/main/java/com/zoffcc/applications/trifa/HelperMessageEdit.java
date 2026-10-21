@@ -5,6 +5,8 @@ import android.util.Log;
 import com.zoffcc.applications.sorm.GroupMessage;
 import com.zoffcc.applications.sorm.Message;
 
+import org.khandaq.messenger.R;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -485,8 +487,101 @@ public class HelperMessageEdit
     // selection-toolbar entry points (mirror HelperReply)
     // =============================================================================================
 
-    /** Gate for the "Изменить" menu item: exactly one OWN, addressable text message in the window. */
+    /** Gate for actually starting an edit: exactly one OWN, addressable text message in the window. */
     static boolean canEditCurrentSelection()
+    {
+        return isOwnSingleTextSelection() && (editBlockReasonForCurrentSelection() == 0);
+    }
+
+    /**
+     * Whether the Edit action is offered at all: exactly one OWN text message is selected.
+     *
+     * KHANDAQ (QA 02.10, "not everyone can edit", Galaxy A55): the item used to be hidden whenever the
+     * edit could not be sent — a message queued while the contact was offline, one sent to a client
+     * without msgV3, a long message that went out in chunks, a reply, or one older than 48 h. To the
+     * user that looked like the feature missing on their phone. It is now shown for every own text,
+     * and tapping it explains why this particular message cannot be changed
+     * ({@link #editBlockReasonForCurrentSelection}).
+     */
+    static boolean isOwnSingleTextSelection()
+    {
+        return (selectedOwnDirectText() != null) || (selectedOwnGroupText() != null);
+    }
+
+    /** 0 when the selected own text can be edited now, otherwise the string resource saying why not. */
+    static int editBlockReasonForCurrentSelection()
+    {
+        final Message m = selectedOwnDirectText();
+        if (m != null)
+        {
+            return directEditBlockReason(m, System.currentTimeMillis());
+        }
+        final GroupMessage gm = selectedOwnGroupText();
+        if (gm != null)
+        {
+            return groupEditBlockReason(gm, System.currentTimeMillis());
+        }
+        return R.string.chat_edit_failed;
+    }
+
+    static int directEditBlockReason(final Message m, final long nowMs)
+    {
+        // Saved Messages: purely local edit, always allowed
+        if (FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey))
+        {
+            return 0;
+        }
+        // v1: replies are not editable — the edit would destroy the [KQ|...] quote header
+        if (m.text != null && !m.text.equals(MessageReplyHelper.parse(m.text).bodyText))
+        {
+            return R.string.chat_edit_blocked_reply;
+        }
+        // the 48h window first: past it nothing else matters, and "after delivery" would be a promise
+        // that never comes true for an old message still waiting in the queue
+        if ((nowMs - m.sent_timestamp) >= EDIT_WINDOW_MS)
+        {
+            return R.string.chat_edit_blocked_too_old;
+        }
+        // network edit needs the msgv3 hash to address the original
+        if (m.msg_idv3_hash == null || m.msg_idv3_hash.length() < 64)
+        {
+            if (m.text != null && MessageChunker.shouldChunk(m.text))
+            {
+                return R.string.chat_edit_too_long; // went out in chunks, there is no single original
+            }
+            // still queued (the hash is assigned when it is actually sent), or delivered to a client
+            // that only speaks plain Tox messages
+            return m.read ? R.string.chat_edit_blocked_unsupported : R.string.chat_edit_blocked_not_delivered;
+        }
+        return 0;
+    }
+
+    /** The "Missed call" style lines HelperCall.logCallEvent writes as our own text rows — not messages. */
+    static boolean isLocalCallLogRow(final Message m)
+    {
+        return (m.resend_count == HelperCall.LOCAL_CALL_LOG_RESEND_COUNT) && (m.message_id == -1);
+    }
+
+    static int groupEditBlockReason(final GroupMessage gm, final long nowMs)
+    {
+        // v1: replies/mentions-encoded messages are not editable (would destroy the header)
+        if (gm.text != null && !gm.text.equals(MessageReplyHelper.parse(gm.text).bodyText))
+        {
+            return R.string.chat_edit_blocked_reply;
+        }
+        if ((nowMs - gm.sent_timestamp) >= EDIT_WINDOW_MS)
+        {
+            return R.string.chat_edit_blocked_too_old;
+        }
+        if (gm.message_id_tox == null || gm.message_id_tox.length() != 8
+            || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
+        {
+            return R.string.chat_edit_blocked_not_delivered;
+        }
+        return 0;
+    }
+
+    private static Message selectedOwnDirectText()
     {
         try
         {
@@ -495,64 +590,39 @@ public class HelperMessageEdit
             {
                 final long id = MainActivity.selected_messages.iterator().next();
                 final List<Message> rows = orma.selectFromMessage().idEq(id).toList();
-                if (rows == null || rows.isEmpty())
+                if (rows != null && !rows.isEmpty() && rows.get(0).direction == 1
+                    && !isLocalCallLogRow(rows.get(0)))
                 {
-                    return false;
+                    return rows.get(0);
                 }
-                final Message m = rows.get(0);
-                if (m.direction != 1)
-                {
-                    return false;
-                }
-                // Saved Messages: purely local edit, always allowed
-                if (FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey))
-                {
-                    return true;
-                }
-                // v1: replies are not editable — the edit would destroy the [KQ|...] quote header
-                if (m.text != null && !m.text.equals(MessageReplyHelper.parse(m.text).bodyText))
-                {
-                    return false;
-                }
-                // network edit needs the msgv3 hash to address the original + the 48h window
-                if (m.msg_idv3_hash == null || m.msg_idv3_hash.length() < 64)
-                {
-                    return false;
-                }
-                return (System.currentTimeMillis() - m.sent_timestamp) < EDIT_WINDOW_MS;
-            }
-
-            if (MainActivity.selected_group_messages.size() == 1
-                && MainActivity.selected_group_messages_text_only.size() == 1)
-            {
-                final long id = MainActivity.selected_group_messages.iterator().next();
-                final List<GroupMessage> rows = orma.selectFromGroupMessage().idEq(id).toList();
-                if (rows == null || rows.isEmpty())
-                {
-                    return false;
-                }
-                final GroupMessage gm = rows.get(0);
-                if (gm.direction != 1 || gm.private_message != 0)
-                {
-                    return false;
-                }
-                // v1: replies/mentions-encoded messages are not editable (would destroy the header)
-                if (gm.text != null && !gm.text.equals(MessageReplyHelper.parse(gm.text).bodyText))
-                {
-                    return false;
-                }
-                if (gm.message_id_tox == null || gm.message_id_tox.length() != 8
-                    || HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX.equals(gm.message_id_tox))
-                {
-                    return false;
-                }
-                return (System.currentTimeMillis() - gm.sent_timestamp) < EDIT_WINDOW_MS;
             }
         }
         catch (Exception ignored)
         {
         }
-        return false;
+        return null;
+    }
+
+    private static GroupMessage selectedOwnGroupText()
+    {
+        try
+        {
+            if (MainActivity.selected_group_messages.size() == 1
+                && MainActivity.selected_group_messages_text_only.size() == 1)
+            {
+                final long id = MainActivity.selected_group_messages.iterator().next();
+                final List<GroupMessage> rows = orma.selectFromGroupMessage().idEq(id).toList();
+                if (rows != null && !rows.isEmpty() && rows.get(0).direction == 1
+                    && rows.get(0).private_message == 0)
+                {
+                    return rows.get(0);
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return null;
     }
 
     static void editSelectedDirectMessage(final android.content.Context context)

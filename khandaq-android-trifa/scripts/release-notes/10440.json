@@ -1,0 +1,4 @@
+{
+  "en-US": "Fixes from tester reports. A sent video no longer vanishes once uploaded. Text sent after a photo no longer shows up twice. Enter starts a new line instead of sending. Favorites is now in the share list, and a photo shared to a contact no longer lands in Favorites by mistake. Your caption on a group photo now shows up for you too. Edit is always offered for your own messages and says when an edit is not possible. The call waiting screen is translated.",
+  "ru-RU": "Исправления по отзывам тестировщиков. Отправленное видео больше не пропадает после загрузки. Текст, отправленный после фото, не дублируется. Enter переносит строку, а не отправляет. «Избранное» появилось в списке «Поделиться», а фото для контакта больше не попадает в «Избранное» по ошибке. Ваша подпись к фото в группе теперь видна и вам. «Изменить» всегда доступно для своих сообщений и объясняет, когда правка невозможна. Экран ожидания звонка переведён."
+}

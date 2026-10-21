@@ -376,7 +376,12 @@ public final class MediaSendPreviewHelper
 
             final long group_num = HelperGroup.tox_group_by_groupid__wrapper(groupId);
             final long message_id = HelperGroup.send_group_text_message_resilient(groupId, group_num, msg);
-            if (message_id == HelperGroup.GROUP_SEND_QUEUE_WHEN_UNCONNECTED)
+            final boolean queued = (message_id == HelperGroup.GROUP_SEND_QUEUE_WHEN_UNCONNECTED);
+            // KHANDAQ (QA 02.10): record the caption on this side whether it went out now or was queued.
+            // Only the queued case used to be written down, so a caption sent straight away reached the
+            // group but never appeared in the sender's own chat, not even after reopening it (the group
+            // activity's own send path has always recorded both).
+            if (queued || (message_id >= 0))
             {
                 final com.zoffcc.applications.sorm.GroupMessage m = new com.zoffcc.applications.sorm.GroupMessage();
                 m.is_new = false;
@@ -393,9 +398,17 @@ public final class MediaSendPreviewHelper
                 m.text = msg;
                 m.was_synced = false;
                 m.TRIFA_SYNC_TYPE = TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NONE.value;
-                m.message_id_tox = HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX;
+                m.message_id_tox = queued ? HelperGroup.PENDING_GROUP_MESSAGE_ID_TOX
+                                          : HelperGeneric.fourbytes_of_long_to_hex(message_id);
                 HelperGroup.insert_into_group_message_db(m, true);
-                HelperGroup.schedule_pending_group_message_flush(groupId);
+                if (queued)
+                {
+                    HelperGroup.schedule_pending_group_message_flush(groupId);
+                }
+            }
+            else
+            {
+                Log.i(TAG, "sendGroupCaption:not sent res=" + message_id);
             }
         }
         catch (Exception e)

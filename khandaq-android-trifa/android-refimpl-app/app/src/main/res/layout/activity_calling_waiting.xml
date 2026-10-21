@@ -17,10 +17,9 @@
         android:layout_weight="3"
         android:background="@android:color/transparent"
         android:gravity="center_horizontal|center_vertical"
-        android:text="waiting for friend"
+        android:text="@string/call_waiting_title_top"
         android:textColor="@color/md_grey_600"
-        android:textSize="25sp"
-        tools:ignore="HardcodedText" />
+        android:textSize="25sp" />
 
     <TextView
         android:id="@+id/call_waiting_friend_name"
@@ -40,10 +39,9 @@
         android:layout_weight="3"
         android:background="@android:color/transparent"
         android:gravity="center_horizontal|center_vertical"
-        android:text="to come online ..."
+        android:text="@string/call_waiting_title_bottom"
         android:textColor="@color/md_grey_600"
-        android:textSize="25sp"
-        tools:ignore="HardcodedText" />
+        android:textSize="25sp" />
 
     <LinearLayout
         android:layout_width="match_parent"

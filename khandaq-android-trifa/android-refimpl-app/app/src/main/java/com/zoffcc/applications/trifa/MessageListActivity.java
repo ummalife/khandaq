@@ -2030,19 +2030,12 @@ public class MessageListActivity extends AppCompatActivity
     @Override
     public boolean dispatchKeyEvent(KeyEvent event)
     {
-        if (event.getAction() == KeyEvent.ACTION_DOWN)
+        // Only a physical keyboard's Enter (or the IME's explicit send action) sends; the soft
+        // keyboard's Enter falls through to the multi-line field as a line break.
+        if (ChatInputBarHelper.isSendKeyEvent(event))
         {
-            switch (event.getKeyCode())
-            {
-                case KeyEvent.KEYCODE_ENTER:
-                case KeyEvent.KEYCODE_NUMPAD_ENTER:
-                    if (!event.isShiftPressed())
-                    {
-                        // HelperGeneric.logI(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
-                        send_message_onclick(null);
-                        return true;
-                    }
-            }
+            send_message_onclick(null);
+            return true;
         }
         return super.dispatchKeyEvent(event);
     }
@@ -2825,7 +2818,10 @@ public class MessageListActivity extends AppCompatActivity
             HelperGeneric.logI(TAG, "add_outgoing_file:favorites_size:EE:" + e.getMessage());
         }
 
-        if (FavoritesChatHelper.isFavoritesChat(resolve_outgoing_file_chat_pubkey()))
+        // KHANDAQ (QA 02.10): only a send that names no friend may fall back to the chat on screen.
+        // Sharing from the gallery passes the contact picked in the share list; with Favorites left
+        // open in the background, the file was quietly saved to Favorites and never sent.
+        if ((friendnum < 0) && FavoritesChatHelper.isFavoritesChat(resolve_outgoing_file_chat_pubkey()))
         {
             if (file_size < 1L && uri != null)
             {
@@ -3752,7 +3748,7 @@ public class MessageListActivity extends AppCompatActivity
                 {
                     if (amode != null)
                     {
-                        amode.setTitle("" + selected_messages.size() + " selected");
+                        amode.setTitle(String.valueOf(selected_messages.size()));
                     }
                 }
             }
@@ -3796,7 +3792,7 @@ public class MessageListActivity extends AppCompatActivity
 
                     if (amode != null)
                     {
-                        amode.setTitle("" + selected_messages.size() + " selected");
+                        amode.setTitle(String.valueOf(selected_messages.size()));
                     }
                 }
             }
@@ -3882,7 +3878,7 @@ public class MessageListActivity extends AppCompatActivity
 
                         if (amode != null)
                         {
-                            amode.setTitle("" + selected_messages.size() + " selected");
+                            amode.setTitle(String.valueOf(selected_messages.size()));
                             // KHANDAQ (tester): startSupportActionMode() ran onPrepareActionMode BEFORE the
                             // message was added to selected_messages, so canReplyToCurrentSelection() was
                             // evaluated on an empty selection and the "Reply" icon stayed hidden until the

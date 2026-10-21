@@ -693,19 +693,12 @@ public class ConferenceMessageListActivity extends AppCompatActivity
     @Override
     public boolean dispatchKeyEvent(KeyEvent event)
     {
-        if (event.getAction() == KeyEvent.ACTION_DOWN)
+        // Only a physical keyboard's Enter (or the IME's explicit send action) sends; the soft
+        // keyboard's Enter falls through to the multi-line field as a line break.
+        if (ChatInputBarHelper.isSendKeyEvent(event))
         {
-            switch (event.getKeyCode())
-            {
-                case KeyEvent.KEYCODE_ENTER:
-                case KeyEvent.KEYCODE_NUMPAD_ENTER:
-                    if (!event.isShiftPressed())
-                    {
-                        // Log.i(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
-                        send_message_onclick(null);
-                        return true;
-                    }
-            }
+            send_message_onclick(null);
+            return true;
         }
         return super.dispatchKeyEvent(event);
     }
@@ -838,7 +831,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
                 {
                     if (amode != null)
                     {
-                        amode.setTitle("" + selected_conference_messages.size() + " selected");
+                        amode.setTitle(String.valueOf(selected_conference_messages.size()));
                     }
                 }
             }
@@ -861,7 +854,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
                     if (amode != null)
                     {
-                        amode.setTitle("" + selected_conference_messages.size() + " selected");
+                        amode.setTitle(String.valueOf(selected_conference_messages.size()));
                     }
                 }
             }
@@ -913,7 +906,7 @@ public class ConferenceMessageListActivity extends AppCompatActivity
 
                         if (amode != null)
                         {
-                            amode.setTitle("" + selected_conference_messages.size() + " selected");
+                            amode.setTitle(String.valueOf(selected_conference_messages.size()));
                         }
                         ret.ret_value = true;
                         return ret;

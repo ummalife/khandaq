@@ -1082,4 +1082,14 @@
          when relayed history names an author whose signing key is stale and the relaying
          peer is somebody else. The row is kept; the identity is not asserted. -->
     <string name="group_msg_relayed_unattributed">Пересланная история — автор не подтверждён</string>
+    <!-- KHANDAQ (QA 02.10): call-waiting screen, share to Favorites, why a message cannot be edited -->
+    <string name="call_waiting_title_top">Ждём, пока</string>
+    <string name="call_waiting_title_bottom">появится в сети…</string>
+    <string name="share_saving_to_favorites">Сохраняем в «Избранное»…</string>
+    <string name="share_open_app_first">Khandaq запускается. Когда он откроется, поделитесь ещё раз</string>
+    <string name="share_favorites_failed">Не удалось сохранить в «Избранное» файлов: %1$d из %2$d</string>
+    <string name="chat_edit_blocked_not_delivered">Сообщение можно будет изменить после доставки</string>
+    <string name="chat_edit_blocked_unsupported">Приложение собеседника не принимает правки. Попросите его обновить Khandaq</string>
+    <string name="chat_edit_blocked_reply">Ответы пока нельзя изменять</string>
+    <string name="chat_edit_blocked_too_old">Сообщение можно изменить в течение 48 часов после отправки</string>
 </resources>

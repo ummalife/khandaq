@@ -9,6 +9,9 @@ import android.graphics.drawable.shapes.OvalShape;
 import android.util.TypedValue;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.InputDevice;
+import android.view.KeyCharacterMap;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -102,6 +105,57 @@ final class ChatInputBarHelper
                 return false; // never consume — let the Editor handle selection/caret/paste
             }
         });
+    }
+
+    /**
+     * Whether an Enter key event should send the message instead of reaching the input field.
+     *
+     * KHANDAQ (QA 02.10): the chat activities treated every Enter as "send", so on Samsung Keyboard
+     * (which delivers its Enter key as a KEYCODE_ENTER event rather than committing a line break)
+     * a message could not be split into lines at all. The field is multi-line, so the soft keyboard
+     * shows a newline key and that is what it must do. Enter still sends from a physical keyboard,
+     * and an explicit IME action ("Send" key, FLAG_EDITOR_ACTION) still sends; Shift+Enter is a
+     * line break everywhere.
+     */
+    static boolean isSendKeyEvent(final KeyEvent event)
+    {
+        if (event == null || event.getAction() != KeyEvent.ACTION_DOWN)
+        {
+            return false;
+        }
+
+        final InputDevice device = event.getDevice();
+        final boolean physicalKeyboard = device != null && !device.isVirtual()
+                                         && device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC;
+        return isSendKey(event.getKeyCode(), event.isShiftPressed(), event.getFlags(), event.getDeviceId(),
+                         physicalKeyboard);
+    }
+
+    /** The decision behind {@link #isSendKeyEvent}, on plain values so it can be unit tested. */
+    static boolean isSendKey(final int keyCode, final boolean shiftPressed, final int flags, final int deviceId,
+                             final boolean physicalKeyboard)
+    {
+        if (keyCode != KeyEvent.KEYCODE_ENTER && keyCode != KeyEvent.KEYCODE_NUMPAD_ENTER)
+        {
+            return false;
+        }
+
+        if (shiftPressed)
+        {
+            return false;
+        }
+
+        if ((flags & KeyEvent.FLAG_EDITOR_ACTION) != 0)
+        {
+            return true;
+        }
+
+        if ((flags & KeyEvent.FLAG_SOFT_KEYBOARD) != 0 || deviceId == KeyCharacterMap.VIRTUAL_KEYBOARD)
+        {
+            return false;
+        }
+
+        return physicalKeyboard;
     }
 
     static void setupAttachButton(final ImageButton attachButton,

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-26T00:37:35Z",
+  "generated_at": "2026-10-02T17:00:02Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,87 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.45",
+      "date": "2026-10-02",
+      "title": "Six problems testers ran into in everyday chats",
+      "summary": "Testers sent us six reports in one afternoon: a video that vanished once it was sent, a message that showed up twice, an Enter key that sent half-written text, a share sheet without Favorites, an English screen in the middle of a call, and an Edit action some people never saw. Each one was reproduced on a real phone before it was fixed, and checking the fixes turned up two more: a photo shared to a contact could quietly land in Favorites instead, and a caption written for a group photo never appeared in the sender's own chat.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "A video you send no longer disappears once it has gone out",
+          "description": "While a video was uploading it showed a progress bubble; the moment the upload finished, that bubble was replaced by one with no width at all, so only the time and the ticks were left. The other person received the video normally. The finished video now always gets a proper preview, and a video whose first frame cannot be decoded on the phone shows a dark tile with a play button instead of nothing.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Text sent after a photo no longer appears twice",
+          "description": "Khandaq shows a text sent right after a photo as that photo's caption. It decided this partly by when each message was received, and for your own messages that time is empty until the other side confirms delivery, so any text sent after a photo — even minutes later — counted as its caption. When the confirmation arrived the text became a separate message again, but the photo kept showing it too, until the chat was reopened. Your own captions are now matched only by when they were sent, and the photo and the text below it are always redrawn together, including when one of them is edited or deleted.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "A photo shared to a contact could be saved to Favorites instead of being sent",
+          "description": "When a photo was shared from the gallery to a contact while Favorites was the chat last opened in Khandaq, the app looked at the open chat rather than at the contact you picked, saved the photo to Favorites and never sent it. The contact you pick now always gets the file.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Your caption on a group photo now shows up for you too",
+          "description": "A caption typed under a photo or video sent to a group is sent once the file has gone out. When it went out straight away it reached everyone in the group but was never written down on the sender's own phone, so the sender never saw their own caption, not even after reopening the chat. It is now kept like any other message and shown inside the photo it belongs to.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Enter starts a new line",
+          "description": "On Samsung Keyboard, and on any other keyboard that sends Enter as a key press, the Enter key sent the message, so a message could not be split into lines. Enter on the on-screen keyboard now starts a new line; the send button sends. A physical keyboard keeps Enter to send and Shift+Enter for a new line.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Favorites in the share sheet",
+          "description": "Sharing from the gallery or another app listed only contacts and groups. Favorites is now first in that list: files are saved straight into it and shared text opens there ready to send. Backing out of the list now closes it instead of leaving an empty screen behind, and a share that arrives before Khandaq is unlocked opens the app instead of an empty list.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Edit is always there for your own messages",
+          "description": "The Edit action was hidden whenever a particular message could not be edited — still waiting to be delivered, sent to an app without edit support, a long message sent in parts, a reply, or older than 48 hours — which looked as if editing did not exist on some phones. It is now a pencil in the selection bar for every message of yours, and when an edit is not possible it says why. Call entries in the chat are not messages and do not offer it. The selection bar shows just the number of selected messages instead of English text.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "The call waiting screen is translated",
+          "description": "Calling a contact who is offline showed \"waiting for friend … to come online\" in English whatever the app language. It now reads in Russian, Arabic and Chinese as well.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Two more waits on the audio engine have a time limit",
+          "description": "The 0.2.44 freeze fix bounded the wait for the device's audio engine in the recording path. Two other places waited for the same signal with no limit at all; they now share the same deadline. Nothing changes when the audio engine starts normally.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.44",
       "date": "2026-08-26",

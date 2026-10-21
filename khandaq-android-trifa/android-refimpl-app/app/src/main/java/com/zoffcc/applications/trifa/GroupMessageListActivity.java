@@ -2296,19 +2296,12 @@ public class GroupMessageListActivity extends AppCompatActivity
     @Override
     public boolean dispatchKeyEvent(KeyEvent event)
     {
-        if (event.getAction() == KeyEvent.ACTION_DOWN)
+        // Only a physical keyboard's Enter (or the IME's explicit send action) sends; the soft
+        // keyboard's Enter falls through to the multi-line field as a line break.
+        if (ChatInputBarHelper.isSendKeyEvent(event))
         {
-            switch (event.getKeyCode())
-            {
-                case KeyEvent.KEYCODE_ENTER:
-                case KeyEvent.KEYCODE_NUMPAD_ENTER:
-                    if (!event.isShiftPressed())
-                    {
-                        // HelperGeneric.logI(TAG, "dispatchKeyEvent:KEYCODE_ENTER");
-                        send_message_onclick(null);
-                        return true;
-                    }
-            }
+            send_message_onclick(null);
+            return true;
         }
         return super.dispatchKeyEvent(event);
     }
@@ -3249,7 +3242,7 @@ public class GroupMessageListActivity extends AppCompatActivity
                 {
                     if (amode != null)
                     {
-                        amode.setTitle("" + selected_group_messages.size() + " selected");
+                        amode.setTitle(String.valueOf(selected_group_messages.size()));
                     }
                 }
             }
@@ -3295,7 +3288,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                     if (amode != null)
                     {
-                        amode.setTitle("" + selected_group_messages.size() + " selected");
+                        amode.setTitle(String.valueOf(selected_group_messages.size()));
                     }
                 }
             }
@@ -3382,7 +3375,7 @@ public class GroupMessageListActivity extends AppCompatActivity
 
                         if (amode != null)
                         {
-                            amode.setTitle("" + selected_group_messages.size() + " selected");
+                            amode.setTitle(String.valueOf(selected_group_messages.size()));
                             // KHANDAQ (tester): action mode was started BEFORE the message was added to
                             // the selection, so onPrepareActionMode hid "Reply" (empty selection) until
                             // the overflow re-prepared it. Re-prepare now that the selection is set.

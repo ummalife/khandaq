@@ -12,6 +12,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let gcmMessageIDKey = "gcm.message_id"
     var coordinator: AppCoordinator!
     private var pendingOpenURL: URL?
+    // Launch options kept from didFinishLaunching until the window scene connects.
+    private var pendingLaunchOptions: [UIApplicationLaunchOptionsKey: Any]?
     let callManager = CallManager()
     lazy var providerDelegate: ProviderDelegate = ProviderDelegate(callManager: self.callManager)
     var backgroundTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
@@ -82,21 +84,42 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // is already in the right language and layout direction.
         AppLanguage.applyAtLaunch()
 
-        window = UIWindow(frame: UIScreen.main.bounds)
-        window?.backgroundColor = ThemeAppearance.placeholderBackgroundColor
+        // KHANDAQ (App Review 2.1(a), 2026-10-21): iOS 27 terminates an app built with the current SDK
+        // at launch unless it adopts the scene lifecycle (EXC_BREAKPOINT in
+        // _UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption). The window is therefore
+        // created on the window scene, in attachWindow(to:connectionOptions:) called by SceneDelegate.
+        pendingLaunchOptions = launchOptions
+        return true
+    }
+
+    /// Creates the app window on its window scene and finishes the launch, as didFinishLaunching
+    /// did before the scene lifecycle. Under scenes the URL and the notification of a cold launch
+    /// arrive in the connection options, so they are handed to the same code paths as before.
+    func attachWindow(to windowScene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
+        let window = UIWindow(windowScene: windowScene)
+        window.backgroundColor = ThemeAppearance.placeholderBackgroundColor
 
         let launchPlaceholder = UIStoryboard(name: "LaunchPlaceholderBoard", bundle: Bundle.main)
             .instantiateViewController(withIdentifier: "LaunchPlaceholderController")
-        window?.rootViewController = launchPlaceholder
-        window?.makeKeyAndVisible()
+        window.rootViewController = launchPlaceholder
+        window.makeKeyAndVisible()
+        self.window = window
 
-        // iOS keeps the launch screen until this method returns — defer heavy init
+        var launchOptions = pendingLaunchOptions ?? [:]
+        pendingLaunchOptions = nil
+        if let url = connectionOptions.urlContexts.first?.url {
+            pendingOpenURL = url
+        }
+        if let response = connectionOptions.notificationResponse {
+            launchOptions[.remoteNotification] = response.notification.request.content.userInfo
+        }
+
+        // iOS keeps the launch screen until the scene connects — defer heavy init
         // so the placeholder (logo + spinner) appears immediately.
+        let application = UIApplication.shared
         DispatchQueue.main.async { [weak self] in
             self?.finishApplicationLaunch(application, launchOptions: launchOptions)
         }
-
-        return true
     }
 
     private func finishApplicationLaunch(_ application: UIApplication,
@@ -457,5 +480,43 @@ extension Date {
 
     init(milliseconds: Int64) {
         self = Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
+    }
+}
+
+/// KHANDAQ (App Review 2.1(a), 2026-10-21): the app's single window scene (declared in the
+/// UIApplicationSceneManifest of Antidote-Info.plist). Once scenes are adopted UIKit stops calling
+/// the UIApplicationDelegate lifecycle and open-URL callbacks, so they are forwarded to AppDelegate
+/// unchanged.
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+    // The pre-scene lifecycle never called applicationWillEnterForeground on a cold launch,
+    // while sceneWillEnterForeground also fires for the first appearance.
+    private var hasEnteredBackground = false
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        AppDelegate.shared.attachWindow(to: windowScene, connectionOptions: connectionOptions)
+        window = AppDelegate.shared.window
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        guard hasEnteredBackground else { return }
+        hasEnteredBackground = false
+        AppDelegate.shared.applicationWillEnterForeground(UIApplication.shared)
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        AppDelegate.shared.applicationDidBecomeActive(UIApplication.shared)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        hasEnteredBackground = true
+        AppDelegate.shared.applicationDidEnterBackground(UIApplication.shared)
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts {
+            _ = AppDelegate.shared.application(UIApplication.shared, open: context.url, options: [:])
+        }
     }
 }

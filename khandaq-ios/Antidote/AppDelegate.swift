@@ -12,13 +12,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let gcmMessageIDKey = "gcm.message_id"
     var coordinator: AppCoordinator!
     private var pendingOpenURL: URL?
+    // Launch options kept from didFinishLaunching until the window scene connects.
+    private var pendingLaunchOptions: [UIApplicationLaunchOptionsKey: Any]?
     let callManager = CallManager()
     lazy var providerDelegate: ProviderDelegate = ProviderDelegate(callManager: self.callManager)
     var backgroundTask: UIBackgroundTaskIdentifier = UIBackgroundTaskInvalid
     // KHANDAQ (#164): when the app entered background, to decide if the DHT is stale on return.
     private var enteredBackgroundAt: Date?
-    var gps_was_stopped_by_forground: Bool = false
-    static var lastStartGpsTS: Int64 = 0
     static var location_sharing_contact_pubkey: String = "-1"
 
     class var shared: AppDelegate {
@@ -72,15 +72,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         coordinator?.processPendingShareIfNeeded()
 
-        gps_was_stopped_by_forground = true
-        let gps = LocationManager.shared
-        if !gps.isHasAccess() {
-            os_log("AppDelegate:applicationWillEnterForeground:gps:no_access")
-        } else if gps.state == .Monitoring {
-            os_log("AppDelegate:applicationWillEnterForeground:gps:STOP")
-            gps.stopMonitoring()
-        }
-
         os_log("AppDelegate:applicationWillEnterForeground:DidEnterBackground:2:END")
     }
 
@@ -93,21 +84,42 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // is already in the right language and layout direction.
         AppLanguage.applyAtLaunch()
 
-        window = UIWindow(frame: UIScreen.main.bounds)
-        window?.backgroundColor = ThemeAppearance.placeholderBackgroundColor
+        // KHANDAQ (App Review 2.1(a), 2026-10-21): iOS 27 terminates an app built with the current SDK
+        // at launch unless it adopts the scene lifecycle (EXC_BREAKPOINT in
+        // _UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption). The window is therefore
+        // created on the window scene, in attachWindow(to:connectionOptions:) called by SceneDelegate.
+        pendingLaunchOptions = launchOptions
+        return true
+    }
+
+    /// Creates the app window on its window scene and finishes the launch, as didFinishLaunching
+    /// did before the scene lifecycle. Under scenes the URL and the notification of a cold launch
+    /// arrive in the connection options, so they are handed to the same code paths as before.
+    func attachWindow(to windowScene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
+        let window = UIWindow(windowScene: windowScene)
+        window.backgroundColor = ThemeAppearance.placeholderBackgroundColor
 
         let launchPlaceholder = UIStoryboard(name: "LaunchPlaceholderBoard", bundle: Bundle.main)
             .instantiateViewController(withIdentifier: "LaunchPlaceholderController")
-        window?.rootViewController = launchPlaceholder
-        window?.makeKeyAndVisible()
+        window.rootViewController = launchPlaceholder
+        window.makeKeyAndVisible()
+        self.window = window
 
-        // iOS keeps the launch screen until this method returns — defer heavy init
+        var launchOptions = pendingLaunchOptions ?? [:]
+        pendingLaunchOptions = nil
+        if let url = connectionOptions.urlContexts.first?.url {
+            pendingOpenURL = url
+        }
+        if let response = connectionOptions.notificationResponse {
+            launchOptions[.remoteNotification] = response.notification.request.content.userInfo
+        }
+
+        // iOS keeps the launch screen until the scene connects — defer heavy init
         // so the placeholder (logo + spinner) appears immediately.
+        let application = UIApplication.shared
         DispatchQueue.main.async { [weak self] in
             self?.finishApplicationLaunch(application, launchOptions: launchOptions)
         }
-
-        return true
     }
 
     private func finishApplicationLaunch(_ application: UIApplication,
@@ -205,46 +217,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
         }
 
-        gps_was_stopped_by_forground = false
-        let gps = LocationManager.shared
-        // KHANDAQ (#14): the background location keepalive must only run when the user explicitly
-        // enabled "Longer Background Mode" (same gate as sendOwnPush above). Otherwise location started
-        // on every background once permission was ever granted and the status-bar location indicator
-        // stayed on / never turned off.
-        if UserDefaultsManager().LongerbgMode == true && gps.isHasAccess() {
-            AppDelegate.lastStartGpsTS = Date().millisecondsSince1970
-            gps.startMonitoring()
-            os_log("AppDelegate:applicationDidEnterBackground:gps:START")
-            DispatchQueue.main.asyncAfter(wallDeadline: DispatchWallTime.now() + (3 * 60)) {
-                os_log("AppDelegate:applicationDidEnterBackground:4:gps:finishing")
-                let gps = LocationManager.shared
-                if !gps.isHasAccess() {
-                    os_log("AppDelegate:applicationDidEnterBackground:4:gps:no_access")
-                } else if gps.state == .Monitoring {
-                    if (self.gps_was_stopped_by_forground == false) {
-
-                        let diffTime = Date().millisecondsSince1970 - AppDelegate.lastStartGpsTS
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:Tlast=%ld", AppDelegate.lastStartGpsTS)
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:Tnow=%ld", Date().millisecondsSince1970)
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:Tdiff=%ld", diffTime)
-
-                        if (diffTime > (((3 * 60) - 4) * 1000))
-                        {
-                            os_log("AppDelegate:applicationDidEnterBackground:4:gps:STOP")
-                            gps.stopMonitoring()
-                        } else {
-                            os_log("AppDelegate:applicationDidEnterBackground:4:gps:STOP skipped, must be an old timer")
-                        }
-                    } else {
-                        os_log("AppDelegate:applicationDidEnterBackground:4:gps:was stopped by forground, skipping")
-                    }
-                } else {
-                    os_log("AppDelegate:applicationDidEnterBackground:4:gps:STOP skipped, gps was stopped already")
-                }
-            }
-        } else {
-            os_log("AppDelegate:applicationDidEnterBackground:gps:no_access")
-        }
+        // KHANDAQ (App Review 2.5.4, 2026-09-17): upstream Antidote kept the app alive here by running
+        // background location updates for three minutes. App Review rejects "location" in
+        // UIBackgroundModes for anything that is not a persistent-location feature, so that keepalive
+        // is gone for good; Longer Background Mode relies on the self-push above.
 
         DispatchQueue.main.asyncAfter(wallDeadline: DispatchWallTime.now() + 25) {
             UIApplication.shared.endBackgroundTask(self.backgroundTask)
@@ -504,5 +480,43 @@ extension Date {
 
     init(milliseconds: Int64) {
         self = Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
+    }
+}
+
+/// KHANDAQ (App Review 2.1(a), 2026-10-21): the app's single window scene (declared in the
+/// UIApplicationSceneManifest of Antidote-Info.plist). Once scenes are adopted UIKit stops calling
+/// the UIApplicationDelegate lifecycle and open-URL callbacks, so they are forwarded to AppDelegate
+/// unchanged.
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+    // The pre-scene lifecycle never called applicationWillEnterForeground on a cold launch,
+    // while sceneWillEnterForeground also fires for the first appearance.
+    private var hasEnteredBackground = false
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        AppDelegate.shared.attachWindow(to: windowScene, connectionOptions: connectionOptions)
+        window = AppDelegate.shared.window
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        guard hasEnteredBackground else { return }
+        hasEnteredBackground = false
+        AppDelegate.shared.applicationWillEnterForeground(UIApplication.shared)
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        AppDelegate.shared.applicationDidBecomeActive(UIApplication.shared)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        hasEnteredBackground = true
+        AppDelegate.shared.applicationDidEnterBackground(UIApplication.shared)
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts {
+            _ = AppDelegate.shared.application(UIApplication.shared, open: context.url, options: [:])
+        }
     }
 }

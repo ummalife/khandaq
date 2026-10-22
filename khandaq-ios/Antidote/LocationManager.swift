@@ -60,13 +60,13 @@ private extension LocationManager {
             manager.desiredAccuracy = kCLLocationAccuracyBest
         }
         manager?.delegate = self
-        manager?.allowsBackgroundLocationUpdates = true
-        manager?.pausesLocationUpdatesAutomatically = false
-        manager?.distanceFilter = kCLDistanceFilterNone
+        // KHANDAQ (App Review 2.5.4, 2026-09-17): this manager only answers "may the user share a
+        // location right now" for the explicit share action and never streams updates.
+        // allowsBackgroundLocationUpdates must stay off: it throws at runtime unless "location" is in
+        // UIBackgroundModes, and App Review allows that mode only for persistent-location features.
     }
     
     func teardown() {
-        self.stopMonitoring()
         self.manager.delegate = nil
         self.manager = nil
     }
@@ -133,50 +133,6 @@ extension LocationManager {
 
         return CLLocationManager.authorizationStatus() == .authorizedAlways
             || CLLocationManager.authorizationStatus() == .authorizedWhenInUse
-    }
-    
-    func startMonitoring() {
-        guard self.isHasAccess() else {
-            print("WARN: App Doesnt have access to CoreLocation, please call LocationManager.shared.isHasAccess() first")
-            return
-        }
-        guard self.state == .Idle else {
-            print("WARN: LocationManager already running")
-            return
-        }
-        
-        // sned to global queue
-        DispatchQueue.global().async {
-            // Guard has location services
-            guard CLLocationManager.locationServicesEnabled() else {
-                DispatchQueue.main.async {
-                    AppDelegate
-                        .shared
-                        .alert("Error", "Location Services Must be enbaled, got to Settings -> Privacy -> Location Services to enable")
-                }
-                return
-            }
-            self._state = .Monitoring
-            self.manager?.startUpdatingLocation()
-            /// Optional:
-            /// Only work if app has .authorizedAlways access,
-            /// shows the blue indicator in the status bar,
-            /// if app has .authorizedWhenInUse, the blue indicator on by default
-            /// so we manually turn it on in any case to inform
-            /// the user that we are working in the background
-            self.manager.showsBackgroundLocationIndicator = true
-        }
-    }
-    
-    func stopMonitoring() {
-        guard self.state != .Idle else {
-            print("WARN: LocationManager already stopped")
-            return
-        }
-        self.manager?.stopUpdatingLocation()
-        self._state = .Idle
-        /// turn off blue indicator
-        self.manager.showsBackgroundLocationIndicator = false
     }
 }
 

@@ -60,7 +60,7 @@ class PinAuthorizationCoordinator: NSObject {
 
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects, lockOnStartup: Bool) {
         self.theme = theme
-        self.window = UIWindow(frame: UIScreen.main.bounds)
+        self.window = PinAuthorizationCoordinator.makeLockWindow()
         self.submanagerObjects = submanagerObjects
         self.state = .unlocked
 
@@ -94,6 +94,18 @@ class PinAuthorizationCoordinator: NSObject {
     deinit {
         NotificationCenter.default.removeObserver(self)
         lockoutTimer?.invalidate()
+    }
+
+    /// KHANDAQ (App Review 2.1(a), 2026-10-21): under the scene lifecycle a window built from a frame
+    /// belongs to no scene and is never shown, which would leave the chats on screen without the PIN.
+    /// The lock window joins the app's window scene.
+    private static func makeLockWindow() -> UIWindow {
+        let scene = AppDelegate.shared.window?.windowScene
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        if let scene = scene {
+            return UIWindow(windowScene: scene)
+        }
+        return UIWindow(frame: UIScreen.main.bounds)
     }
 
     /// KHANDAQ (Figma): the lock screen now uses theme backgrounds/keys (no more fixed teal

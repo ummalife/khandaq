@@ -6325,9 +6325,9 @@
     {
       "group": "pypi",
       "name": "certifi",
-      "purl": "pkg:pypi/certifi@2026.7.22",
+      "purl": "pkg:pypi/certifi@2026.10.19",
       "type": "library",
-      "version": "2026.7.22"
+      "version": "2026.10.19"
     },
     {
       "group": "pypi",
@@ -6402,9 +6402,9 @@
     {
       "group": "pypi",
       "name": "markupsafe",
-      "purl": "pkg:pypi/markupsafe@3.0.3",
+      "purl": "pkg:pypi/markupsafe@3.0.4",
       "type": "library",
-      "version": "3.0.3"
+      "version": "3.0.4"
     },
     {
       "group": "pypi",
@@ -6423,9 +6423,9 @@
     {
       "group": "pypi",
       "name": "pycparser",
-      "purl": "pkg:pypi/pycparser@3.0",
+      "purl": "pkg:pypi/pycparser@3.11",
       "type": "library",
-      "version": "3.0"
+      "version": "3.11"
     },
     {
       "group": "pypi",

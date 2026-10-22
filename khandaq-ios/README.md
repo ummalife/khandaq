@@ -1,33 +1,28 @@
-# Attention:
-## all Versions of Antidote 1.5 and above on the AppStore are NOT coming from this repository. the source is not known to us.</b>
-<br><br><br>
+# Khandaq for iOS
 
-# Reboot of the Tox Messenger for the IPhone
+The iOS client of [Khandaq Messenger](https://khandaq.org): private, peer-to-peer messaging on the open
+Tox network. There are no accounts, phone numbers or message servers — the identity is a key pair
+created on the device, and contacts are added by Tox ID or QR code.
 
-<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/Antidote/appstore.png" width=100>&nbsp;&nbsp;<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/Antidote/old_antidote_logo_with_text.png" width=100>
+## Built on Antidote
 
-Tox client for iOS (Khandaq fork)
+This client started from [Antidote](https://github.com/Zoxcore/Antidote), the open-source Tox client for
+iOS, and keeps its Mozilla Public License 2.0. Since June 2026 Khandaq has added:
 
-[![Release](https://img.shields.io/github/v/release/Zoxcore/Antidote.svg)](https://github.com/Zoxcore/Antidote/releases/latest/)
-[![Translations](https://hosted.weblate.org/widgets/antidote/-/svg-badge.svg)](https://hosted.weblate.org/engage/antidote/)
-[![License: GPL v3](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](https://opensource.org/licenses/MPL-2.0)
-[![Android CI](https://github.com/Zoxcore/Antidote/workflows/Nightly/badge.svg)](https://github.com/Zoxcore/Antidote/actions?query=workflow%3A%22Nightly%22)
-[![Android CI](https://github.com/Zoxcore/Antidote/workflows/PullRequest/badge.svg)](https://github.com/Zoxcore/Antidote/actions?query=workflow%3A%22PullRequest%22)
+- group chats on Tox NGC — member list, @mentions, private messages to a member, group voice messages,
+  inviting several contacts at once;
+- replies with quotes, edit and delete for both sides and reactions — Khandaq extensions to the Tox
+  message protocol, shared with Khandaq for Android;
+- pinned messages, forwarding and Saved Messages;
+- voice messages, a media gallery, captions and a photo editor before sending;
+- a share extension for sending photos, files and text from other apps;
+- signed group history sync;
+- a call audio engine with echo cancellation and automatic gain control;
+- the Khandaq push wake relay, which carries no message content;
+- a delivery watchdog, reconnect back-off, network diagnostics and launch recovery;
+- a new design for every screen and a first-launch onboarding.
 
-## FAQ
-
-See [FAQ](FAQ/en.md).
-
-
-<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/docs/app001.png" height="200px">&nbsp;<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/docs/app003.png" height="200px">&nbsp;<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/docs/app004.png" height="200px">&nbsp;<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/docs/app002.png" height="200px">&nbsp;<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/docs/applewatch_push.jpg" height="200px">
-
-## Help Translate the App in your Language
-
-Use Weblate:
-https://hosted.weblate.org/engage/antidote/
-
-## Get in touch
-* <a href="https://matrix.to/#/#antidote:libera.chat">Join discussion on Matrix</a><br>
+Notable changes per release are in the project changelog: [khandaq.org/changelog.html](https://khandaq.org/changelog.html).
 
 ## Usage
 
@@ -60,37 +55,23 @@ bundle exec pod install
 env NSUnbufferedIO=YES xcodebuild -workspace ./Antidote.xcworkspace -scheme Antidote -destination 'platform=iOS Simulator,id=EAB9614F-3485-4A6D-8EFB-FC2B5EFB0243'
 ```
 
-## Features
+The Xcode project and module keep Antidote's names (`Antidote.xcworkspace`, scheme `Antidote`) so that
+upstream fixes can still be merged; the app itself is Khandaq.
 
-See [CHANGELOG](CHANGELOG.md) for list of notable changes (unreleased, current and previous versions).
+## Reporting problems
 
--  one to one conversations
--  typing notification
--  emoticons
--  spell check
--  reading/scanning Tox ID via QR code
--  file transfer
--  read receipts
--  push message support (via Apple Push Notification) / Push in <a href="https://github.com/Zoxcore/qTox_enhanced/releases">qTox</a>.
--  multiple profiles
--  tox_save import/export
--  avatars
--  audio calls
--  video calls
-
-## Send Crashreports
-
-https://developer.apple.com/documentation/xcode/acquiring-crash-reports-and-diagnostic-logs<br><b>please first check that the crashreport does NOT contain any private data!</b><br>send to zoff@zoxcore.org
-
-<img src="https://raw.githubusercontent.com/Zoxcore/Antidote/develop/docs/iphone_send_crashreports.png" height="350px">
+Write to support@khandaq.org. If you attach a crash report
+([how to get one](https://developer.apple.com/documentation/xcode/acquiring-crash-reports-and-diagnostic-logs)),
+check first that it contains no private data.
 
 ## License
 
-Antidote is available under Mozilla Public License Version 2.0. See the [LICENSE](LICENSE) file for more info.
+Khandaq for iOS is available under the Mozilla Public License 2.0, like Antidote, on which it is based.
+See the [LICENSE](LICENSE) file for more info. The history of the upstream project up to Antidote 1.4.25
+is kept in [CHANGELOG.md](CHANGELOG.md).
 
 ## Links
 
 - [icons8](http://icons8.com/) - icons used in app
 - new icon https://icons8.com/icon/jQvC2IpxYkR6/key
-
-
+- [Material Symbols](https://github.com/google/material-design-icons) (Apache 2.0) - chat header, tab bar and message action icons

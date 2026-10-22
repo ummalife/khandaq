@@ -1,6 +1,6 @@
 # Khandaq Messenger
 
-Open-source, decentralized messenger built on the Tox protocol. Khandaq adds branded clients, optional Khandaq-owned bootstrap nodes, and a privacy-preserving push wake relay — without replacing the public Tox network.
+Open-source, decentralized messenger built on the Tox protocol: no accounts, no phone numbers and no message servers. Khandaq builds its iOS, Android and desktop clients on open-source Tox clients and adds group chats, replies, edits, reactions, voice messages and a privacy-preserving push wake relay — without replacing the public Tox network.
 
 **Repository:** https://github.com/ummalife/khandaq  
 **Website:** https://khandaq.org  
@@ -96,7 +96,7 @@ cd khandaq-ios && bundle install && bundle exec pod install
 
 ## Upstream projects
 
-Khandaq is a fork/rebrand. Core protocol and libraries:
+Khandaq's clients started from these open-source projects. Everything Khandaq adds on top — group chats, message edit/delete and reactions, voice messages, signed group history, the push wake relay and the new design — is developed in this repository. Core protocol and libraries:
 
 - **c-toxcore** — Tox protocol implementation
 - **qTox** — desktop base

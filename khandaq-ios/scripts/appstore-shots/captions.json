@@ -1,0 +1,94 @@
+{
+  "frames": [
+    {
+      "name": "chat",
+      "file": "chat.png",
+      "captions": {
+        "en-US": {
+          "title": "Private chats, no\u00a0phone number",
+          "subtitle": "Reply with a quote, react, edit or delete on both sides"
+        },
+        "ru": {
+          "title": "Приватные чаты без номера",
+          "subtitle": "Ответ с цитатой, реакции, правка и удаление у обоих"
+        },
+        "ar-SA": {
+          "title": "محادثات خاصة بلا رقم هاتف",
+          "subtitle": "رد مع اقتباس وتفاعل وتعديل وحذف لدى الطرفين"
+        }
+      }
+    },
+    {
+      "name": "group",
+      "file": "group.png",
+      "captions": {
+        "en-US": {
+          "title": "Group chats",
+          "subtitle": "Member roles, replies, reactions and pinned messages"
+        },
+        "ru": {
+          "title": "Групповые чаты",
+          "subtitle": "Роли участников, ответы, реакции и закреплённые сообщения"
+        },
+        "ar-SA": {
+          "title": "محادثات جماعية",
+          "subtitle": "أدوار الأعضاء والردود والتفاعلات والرسائل المثبّتة"
+        }
+      }
+    },
+    {
+      "name": "menu",
+      "file": "menu.png",
+      "captions": {
+        "en-US": {
+          "title": "Everything in one tap",
+          "subtitle": "Reply, pin, forward, copy or react with emoji"
+        },
+        "ru": {
+          "title": "Всё в одно касание",
+          "subtitle": "Ответить, закрепить, переслать, скопировать или поставить реакцию"
+        },
+        "ar-SA": {
+          "title": "كل شيء بلمسة واحدة",
+          "subtitle": "رد أو ثبّت أو أعد التوجيه أو انسخ أو تفاعل برمز تعبيري"
+        }
+      }
+    },
+    {
+      "name": "forward",
+      "file": "forward.png",
+      "captions": {
+        "en-US": {
+          "title": "Voice, photos, forwarding",
+          "subtitle": "Forward several messages at once. Light or dark theme"
+        },
+        "ru": {
+          "title": "Голосовые, фото, пересылка",
+          "subtitle": "Пересылайте сразу несколько сообщений. Светлая или тёмная тема"
+        },
+        "ar-SA": {
+          "title": "صوت وصور وإعادة توجيه",
+          "subtitle": "أعد توجيه عدة رسائل دفعة واحدة، بمظهر فاتح أو داكن"
+        }
+      }
+    },
+    {
+      "name": "preview",
+      "file": "preview.png",
+      "captions": {
+        "en-US": {
+          "title": "Caption before you send",
+          "subtitle": "Preview, crop and rotate photos in the built-in editor"
+        },
+        "ru": {
+          "title": "Подпись перед отправкой",
+          "subtitle": "Просмотр, обрезка и поворот фото во встроенном редакторе"
+        },
+        "ar-SA": {
+          "title": "أضف تعليقًا قبل الإرسال",
+          "subtitle": "عاين الصور وقصّها ودوّرها في المحرر المدمج"
+        }
+      }
+    }
+  ]
+}

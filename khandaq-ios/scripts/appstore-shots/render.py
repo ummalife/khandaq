@@ -45,8 +45,8 @@ def inline_fonts(css_path):
     """The site's fonts.css with each url() turned into a data URI: Chrome refuses file:// fonts across files."""
     css = css_path.read_text(encoding="utf-8")
 
-    def to_data_uri(match):
-        font = css_path.parent / match.group(1).rsplit("/", 1)[-1]
+    def to_data_uri(m):
+        font = css_path.parent / m.group(1).rsplit("/", 1)[-1]
         return "url(data:font/woff2;base64," + base64.b64encode(font.read_bytes()).decode("ascii") + ")"
 
     return re.sub(r"url\(([^)]+\.woff2)\)", to_data_uri, css)

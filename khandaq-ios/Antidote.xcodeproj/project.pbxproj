@@ -57,6 +57,9 @@
 		113F03191CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */; };
 		113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */; };
 		B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */; };
+		KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000002 /* LocalizationTest.swift */; };
+		KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000004 /* MessageForwarderTest.swift */; };
+		KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */; };
 		113F031D1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */; };
 		113F031F1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */; };
 		113F03211CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */; };
@@ -78,6 +81,7 @@
 		1156A4871C10D122005AC8C6 /* StaticTableAvatarCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1156A4861C10D122005AC8C6 /* StaticTableAvatarCell.swift */; };
 		1156A4891C15FB2B005AC8C6 /* AvatarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1156A4881C15FB2B005AC8C6 /* AvatarManager.swift */; };
 		115C3BD61DC6D2B900903A47 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9C7475C01BC698110098B1A4 /* Localizable.strings */; };
+		KHPLURALS000000000000006 /* Localizable.stringsdict in Resources */ = {isa = PBXBuildFile; fileRef = KHPLURALS000000000000001 /* Localizable.stringsdict */; };
 		115CE3E81EB06F54001C08A0 /* ChatBottomStatusViewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115CE3E71EB06F54001C08A0 /* ChatBottomStatusViewManager.swift */; };
 		115DFB8A1C177F5C00F18DB5 /* StaticTableDefaultCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DFB891C177F5C00F18DB5 /* StaticTableDefaultCell.swift */; };
 		115DFB961C177F6500F18DB5 /* StaticTableDefaultCellModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DFB951C177F6500F18DB5 /* StaticTableDefaultCellModel.swift */; };
@@ -248,6 +252,7 @@
 		9C2EF37A1C4E2DDE006E7AB1 /* ChatListTableManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2EF3791C4E2DDE006E7AB1 /* ChatListTableManager.swift */; };
 		9C3271871D79C19C00347490 /* PinAuthorizationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C3271861D79C19C00347490 /* PinAuthorizationCoordinator.swift */; };
 		9C7475BE1BC698110098B1A4 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9C7475C01BC698110098B1A4 /* Localizable.strings */; };
+		KHPLURALS000000000000005 /* Localizable.stringsdict in Resources */ = {isa = PBXBuildFile; fileRef = KHPLURALS000000000000001 /* Localizable.stringsdict */; };
 		9C7475C51BC698510098B1A4 /* StringExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7475C41BC698510098B1A4 /* StringExtension.swift */; };
 		9C9A07011BE793BA0003D6C7 /* ProfileMainController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C9A07001BE793BA0003D6C7 /* ProfileMainController.swift */; };
 		9CB1F9511D58CA4000105858 /* RunningCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CB1F9501D58CA4000105858 /* RunningCoordinator.swift */; };
@@ -519,6 +524,9 @@
 		113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatIncomingTextCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCellSnapshotTest.swift; sourceTree = "<group>"; };
 		B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListSwipeNavigationTest.swift; sourceTree = "<group>"; };
+		KHLOCTEST000000000000002 /* LocalizationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LocalizationTest.swift; sourceTree = "<group>"; };
+		KHLOCTEST000000000000004 /* MessageForwarderTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageForwarderTest.swift; sourceTree = "<group>"; };
+		KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KhandaqBrandingTest.swift; sourceTree = "<group>"; };
 		113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatMovableDateCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingCallCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingFileCellSnapshotTest.swift; sourceTree = "<group>"; };
@@ -740,6 +748,9 @@
 		9C2EF3791C4E2DDE006E7AB1 /* ChatListTableManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListTableManager.swift; sourceTree = "<group>"; };
 		9C3271861D79C19C00347490 /* PinAuthorizationCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PinAuthorizationCoordinator.swift; sourceTree = "<group>"; };
 		9C7475BF1BC698110098B1A4 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		KHPLURALS000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = en; path = en.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
+		KHPLURALS000000000000003 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = ru; path = ru.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
+		KHPLURALS000000000000004 /* ar */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = ar; path = ar.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
 		9C7475C41BC698510098B1A4 /* StringExtension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StringExtension.swift; sourceTree = "<group>"; };
 		9C89D83C1DDB36770040C67B /* Antidote.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Antidote.entitlements; sourceTree = "<group>"; };
 		9C9A07001BE793BA0003D6C7 /* ProfileMainController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProfileMainController.swift; sourceTree = "<group>"; };
@@ -926,6 +937,9 @@
 				113F03181CAFDB0D0009ABE1 /* ChatIncomingTextCellSnapshotTest.swift */,
 				113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */,
 				B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */,
+				KHLOCTEST000000000000002 /* LocalizationTest.swift */,
+				KHLOCTEST000000000000004 /* MessageForwarderTest.swift */,
+				KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */,
 				113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */,
 				113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */,
 				113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */,
@@ -1431,6 +1445,7 @@
 				1173F0711BC5D9DA00B88B7B /* default-theme.yaml */,
 				1173F0791BC5D9DA00B88B7B /* dark-theme.yaml */,
 				9C7475C01BC698110098B1A4 /* Localizable.strings */,
+				KHPLURALS000000000000001 /* Localizable.stringsdict */,
 				113E96461E4BB302000282FC /* AppStoreLocalizable.strings */,
 				116634CE1C70E46C0072C980 /* Launch Screen.storyboard */,
 			);
@@ -1711,6 +1726,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				115C3BD61DC6D2B900903A47 /* Localizable.strings in Resources */,
+				KHPLURALS000000000000006 /* Localizable.stringsdict in Resources */,
 				11F08D151DE0610B00F80F5F /* InfoPlist.strings in Resources */,
 				11D17CDD1DD11E58006B2910 /* Images.xcassets in Resources */,
 				1143E4331DCE1A5600BE7250 /* import-profile.html in Resources */,
@@ -1732,6 +1748,7 @@
 				11DDEAFD1D5FD9FE0000E2BE /* LaunchPlaceholderBoard.storyboard in Resources */,
 				11B253531C4AD9CF0068F47C /* isotoxin_Ringtone.aac in Resources */,
 				9C7475BE1BC698110098B1A4 /* Localizable.strings in Resources */,
+				KHPLURALS000000000000005 /* Localizable.stringsdict in Resources */,
 				9CEA6A1F1D957EFC0045F000 /* antidote-acknowledgements.html in Resources */,
 				AFA024022753CC9000FBFCC0 /* GoogleService-Info.plist in Resources */,
 				1173F0721BC5D9DA00B88B7B /* default-theme.yaml in Resources */,
@@ -2201,6 +2218,9 @@
 				11C33AC41DC961DC008DBC49 /* LoginChoiceViewSnapshotTest.swift in Sources */,
 				113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */,
 				B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */,
+				KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */,
+				KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */,
+				KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2344,6 +2364,16 @@
 				AF6AB24129156F1C00019362 /* el */,
 			);
 			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		KHPLURALS000000000000001 /* Localizable.stringsdict */ = {
+			isa = PBXVariantGroup;
+			children = (
+				KHPLURALS000000000000002 /* en */,
+				KHPLURALS000000000000003 /* ru */,
+				KHPLURALS000000000000004 /* ar */,
+			);
+			name = Localizable.stringsdict;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

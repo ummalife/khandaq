@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>group_member_count_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@members@</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d عضو</string>
+			<key>one</key>
+			<string>%d عضو</string>
+			<key>two</key>
+			<string>%d عضوان</string>
+			<key>few</key>
+			<string>%d أعضاء</string>
+			<key>many</key>
+			<string>%d عضوًا</string>
+			<key>other</key>
+			<string>%d عضو</string>
+		</dict>
+	</dict>
+	<key>group_member_online_count_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@members@ · %2$d متصل</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%1$d عضو</string>
+			<key>one</key>
+			<string>%1$d عضو</string>
+			<key>two</key>
+			<string>%1$d عضوان</string>
+			<key>few</key>
+			<string>%1$d أعضاء</string>
+			<key>many</key>
+			<string>%1$d عضوًا</string>
+			<key>other</key>
+			<string>%1$d عضو</string>
+		</dict>
+	</dict>
+	<key>group_delete_system_msgs_count_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>zero</key>
+			<string>%ld رسالة</string>
+			<key>one</key>
+			<string>%ld رسالة</string>
+			<key>two</key>
+			<string>%ld رسالتان</string>
+			<key>few</key>
+			<string>%ld رسائل</string>
+			<key>many</key>
+			<string>%ld رسالة</string>
+			<key>other</key>
+			<string>%ld رسالة</string>
+		</dict>
+	</dict>
+	<key>group_danger_footer_with_system_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>مسح السجل يحذف الرسائل محليا. يمكن حذف %#@messages@ بشكل منفصل.</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>zero</key>
+			<string>%ld رسالة نظام</string>
+			<key>one</key>
+			<string>%ld رسالة نظام</string>
+			<key>two</key>
+			<string>%ld رسالتي نظام</string>
+			<key>few</key>
+			<string>%ld رسائل نظام</string>
+			<key>many</key>
+			<string>%ld رسالة نظام</string>
+			<key>other</key>
+			<string>%ld رسالة نظام</string>
+		</dict>
+	</dict>
+	<key>group_chat_list_private_unread_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+			<key>one</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+			<key>two</key>
+			<string>%d رسالتان خاصتان غير مقروءتين</string>
+			<key>few</key>
+			<string>%d رسائل خاصة غير مقروءة</string>
+			<key>many</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+			<key>other</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+		</dict>
+	</dict>
+	<key>group_peer_private_unread_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@messages@</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+			<key>one</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+			<key>two</key>
+			<string>%d رسالتان خاصتان غير مقروءتين</string>
+			<key>few</key>
+			<string>%d رسائل خاصة غير مقروءة</string>
+			<key>many</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+			<key>other</key>
+			<string>%d رسالة خاصة غير مقروءة</string>
+		</dict>
+	</dict>
+	<key>status_last_seen_minutes_ago</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>آخر اتصال قبل %#@minutes@</string>
+		<key>minutes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d دقيقة</string>
+			<key>one</key>
+			<string>%d دقيقة</string>
+			<key>two</key>
+			<string>%d دقيقتين</string>
+			<key>few</key>
+			<string>%d دقائق</string>
+			<key>many</key>
+			<string>%d دقيقة</string>
+			<key>other</key>
+			<string>%d دقيقة</string>
+		</dict>
+	</dict>
+	<key>status_last_seen_hours_ago</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>آخر اتصال قبل %#@hours@</string>
+		<key>hours</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d ساعة</string>
+			<key>one</key>
+			<string>%d ساعة</string>
+			<key>two</key>
+			<string>%d ساعتين</string>
+			<key>few</key>
+			<string>%d ساعات</string>
+			<key>many</key>
+			<string>%d ساعة</string>
+			<key>other</key>
+			<string>%d ساعة</string>
+		</dict>
+	</dict>
+	<key>group_member_last_seen_minutes_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>آخر ظهور قبل %#@minutes@</string>
+		<key>minutes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d دقيقة</string>
+			<key>one</key>
+			<string>%d دقيقة</string>
+			<key>two</key>
+			<string>%d دقيقتين</string>
+			<key>few</key>
+			<string>%d دقائق</string>
+			<key>many</key>
+			<string>%d دقيقة</string>
+			<key>other</key>
+			<string>%d دقيقة</string>
+		</dict>
+	</dict>
+	<key>group_member_last_seen_hours_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>آخر ظهور قبل %#@hours@</string>
+		<key>hours</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>zero</key>
+			<string>%d ساعة</string>
+			<key>one</key>
+			<string>%d ساعة</string>
+			<key>two</key>
+			<string>%d ساعتين</string>
+			<key>few</key>
+			<string>%d ساعات</string>
+			<key>many</key>
+			<string>%d ساعة</string>
+			<key>other</key>
+			<string>%d ساعة</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

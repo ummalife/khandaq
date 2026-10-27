@@ -5,7 +5,16 @@
 import Foundation
 
 enum KhandaqBranding {
-    static let defaultStatusMessage = "Khandaq is Tox"
+    /// What older builds wrote into every new profile's status. New profiles now start with an empty
+    /// status, as on Android, and profiles still carrying this untouched text are cleared on login.
+    static let legacyDefaultStatusMessage = "Khandaq is Tox"
+
+    static func clearLegacyDefaultStatus(of user: OCTSubmanagerUser) {
+        guard user.userStatusMessage() == legacyDefaultStatusMessage else {
+            return
+        }
+        _ = try? user.setUserStatusMessage("")
+    }
 }
 
 private func isHexString(_ string: String, length: Int) -> Bool {

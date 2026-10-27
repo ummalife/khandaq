@@ -49,6 +49,7 @@ class ChatGroupController: PortraitChatController {
     // controller has no floating-date pill, so it owns its own formatter).
     fileprivate lazy var daySeparatorFormatter: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.locale = AppLanguage.locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         formatter.doesRelativeDateFormatting = true
@@ -425,7 +426,7 @@ class ChatGroupController: PortraitChatController {
         accent.backgroundColor = theme.colorForType(.LinkText)
 
         let title = UILabel()
-        title.text = String(localized: "chat_pin_action")
+        title.text = String(localized: "chat_pinned_banner_title")
         title.font = UIFont.systemFont(ofSize: 11.0, weight: .semibold)
         title.textColor = theme.colorForType(.LinkText)
 
@@ -534,6 +535,12 @@ class ChatGroupController: PortraitChatController {
     }
 
     func updateGroupInfoBarButton() {
+        // While messages are being selected the right side holds their Cancel button; the 2-second
+        // video poll calls this too and used to swap it back for the header icons at once.
+        guard tableView?.isEditing != true else {
+            return
+        }
+
         let infoItem: UIBarButtonItem
         if #available(iOS 13.0, *) {
             infoItem = UIBarButtonItem(

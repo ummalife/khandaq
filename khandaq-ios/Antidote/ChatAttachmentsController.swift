@@ -203,6 +203,7 @@ private extension ChatAttachmentsController {
         }
         let size = ByteCountFormatter.string(fromByteCount: Int64(file.fileSize), countStyle: .file)
         let formatter = DateFormatter()
+        formatter.locale = AppLanguage.locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return "\(size) · \(formatter.string(from: message.date()))"

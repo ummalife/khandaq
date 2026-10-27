@@ -16,7 +16,7 @@ import UIKit
     /// recognises it spelled in someone else's.
     @objc static let nativeNames = ["English", "Русский", "العربية", "中文"]
 
-    private static let storageKey = "khandaq_app_language"
+    static let storageKey = "khandaq_app_language"
 
     /// The language in effect: the user's pick, or the phone's language when we speak it, English
     /// otherwise (matching the Android side).
@@ -34,6 +34,30 @@ import UIKit
 
     @objc static var isRightToLeft: Bool {
         return current == "ar"
+    }
+
+    /// Locale for formatting what the user reads: dates ("Today", "Yesterday", month names) and the
+    /// plural forms in Localizable.stringsdict. Foundation takes both from the phone's locale and the
+    /// process language — not ours when the language was picked in the app (until the next launch) or
+    /// when the phone's language is one we don't ship. Keeps the phone's region, and Western digits for
+    /// Arabic, as everywhere else in the app.
+    static var locale: Locale {
+        return locale(forLanguage: current, system: Locale.current)
+    }
+
+    static func locale(forLanguage language: String, system: Locale) -> Locale {
+        let components = NSLocale.components(fromLocaleIdentifier: system.identifier)
+        if components[NSLocale.Key.languageCode.rawValue] == language {
+            return system
+        }
+        var identifier = language
+        if let region = components[NSLocale.Key.countryCode.rawValue] {
+            identifier += "_" + region
+        }
+        if language == "ar" {
+            identifier += "@numbers=latn"
+        }
+        return Locale(identifier: identifier)
     }
 
     /// Nearest shipped language for the phone's preferred languages, English if none match.

@@ -270,7 +270,7 @@ private extension QRScannerController {
     }
 
     func createBarButtonItems() {
-        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(QRScannerController.cancelButtonPressed))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: String(localized: "alert_cancel"), style: .plain, target: self, action: #selector(QRScannerController.cancelButtonPressed))
     }
 
     func createViewsAndLayers() {

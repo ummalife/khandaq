@@ -344,7 +344,6 @@ private extension LoginCoordinator {
             if let name = username, !name.isEmpty {
                 _ = try? manager.user.setUserName(name)
             }
-            _ = try? manager.user.setUserStatusMessage(KhandaqBranding.defaultStatusMessage)
         } : nil
 
         loginWithProfile(profileName, password: password, configurationClosure: configureNewProfile, errorClosure: { error in

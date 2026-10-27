@@ -509,7 +509,7 @@
 "status_last_seen_long_ago" = "很久没上线了";
 "settings_website" = "官网";
 "settings_longer_bg_mode" = "延长后台运行";
-"settings_longer_bg_mode_description" = "开启后，应用会在后台运行更久，以便把消息发完，但也会暴露更多与你有关的元数据：你的 IP 地址会和你的 PUSH 令牌关联起来。这是便利与元数据隐私之间的取舍。\n\n你可以使用 MyCitadel VPN 来避免这一点。\n\n详见 https://mycitadel.vip\n\n以及\n\nhttps://t.me/MyCitadelBot";
+"settings_longer_bg_mode_description" = "开启后，应用会在后台运行更久，以便把消息发完，但也会暴露更多与你有关的元数据：你的 IP 地址会和你的 PUSH 令牌关联起来。这是便利与元数据隐私之间的取舍。\n\n你可以使用 VPN 来避免这一点。";
 "settings_profile_backup_description" = "导出或导入你的 Tox 资料（.tox）。其中只包含你的 Tox ID 和联系人，聊天记录不会一起转移。";
 "settings_import_profile_invalid_file" = "所选文件不是有效的 Tox 资料（.tox）。";
 "settings_dark_theme" = "深色主题";
@@ -621,6 +621,7 @@
 "chat_reply_action" = "回复";
 "chat_forward_action" = "转发";
 "chat_pin_action" = "置顶";
+"chat_pinned_banner_title" = "置顶消息";
 "chat_copy_action" = "复制";
 "chat_select_action" = "选择";
 "chat_forwarded_from_format" = "↪ 转发自%@";

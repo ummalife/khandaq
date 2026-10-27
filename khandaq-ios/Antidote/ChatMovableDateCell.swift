@@ -526,7 +526,7 @@ enum MessageForwarder {
         }
 
         // Copy to a temp path so sendFile(moveToUploads:) doesn't move the source message's file away.
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent((path as NSString).lastPathComponent)
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(forwardFileName(for: file, diskPath: path))
         try? FileManager.default.removeItem(at: tempURL)
         guard (try? FileManager.default.copyItem(atPath: path, toPath: tempURL.path)) != nil else {
             return
@@ -538,6 +538,18 @@ enum MessageForwarder {
         else {
             manager.files.sendFile(atPath: tempURL.path, moveToUploads: true, to: chat) { _ in }
         }
+    }
+
+    /// The name a forwarded file goes out under: the one it was sent or received with, not the on-disk
+    /// one. The file store appends " 2" to keep disk names unique, so a voice note stored as
+    /// "voice.file 2.m4a" lost its ".file.m4a" marker and arrived as a plain file. That name came from
+    /// a peer, so one that could step out of the temp directory falls back to the disk name.
+    static func forwardFileName(for file: OCTMessageFile, diskPath: String) -> String {
+        guard let name = file.fileName, !name.isEmpty, name != ".",
+              !name.contains("/"), !name.contains("\\"), !name.contains("..") else {
+            return (diskPath as NSString).lastPathComponent
+        }
+        return name
     }
 
     /// Persistent directory for files stored in Saved Messages (Tox never transfers these).

@@ -509,7 +509,7 @@
 "status_last_seen_long_ago" = "آخر اتصال منذ زمن بعيد";
 "settings_website" = "الموقع الإلكتروني";
 "settings_longer_bg_mode" = "وضع الخلفية الممتد";
-"settings_longer_bg_mode_description" = "سيبقي هذا التطبيق يعمل في الخلفية لفترة أطول لإكمال إرسال الرسائل، لكنه سيكشف أيضا المزيد من البيانات الوصفية عنك. سيربط عنوان IP الخاص بك برمز PUSH. إنها موازنة بين الراحة وخصوصية البيانات الوصفية.\n\nيمكنك استخدام MyCitadel VPN لمنع ذلك.\n\nانظر https://mycitadel.vip\n\nو\n\nhttps://t.me/MyCitadelBot";
+"settings_longer_bg_mode_description" = "سيبقي هذا التطبيق يعمل في الخلفية لفترة أطول لإكمال إرسال الرسائل، لكنه سيكشف أيضا المزيد من البيانات الوصفية عنك. سيربط عنوان IP الخاص بك برمز PUSH. إنها موازنة بين الراحة وخصوصية البيانات الوصفية.\n\nيمكنك استخدام VPN لمنع ذلك.";
 "settings_profile_backup_description" = "قم بتصدير ملف Tox الشخصي (.tox) أو استيراده. يشمل ذلك Tox ID وجهات الاتصال فقط؛ لا يتم نقل سجل المحادثات.";
 "settings_import_profile_invalid_file" = "الملف المحدد ليس ملف Tox شخصيا صالحا (.tox).";
 "settings_dark_theme" = "المظهر الداكن";
@@ -621,6 +621,7 @@
 "chat_reply_action" = "رد";
 "chat_forward_action" = "إعادة توجيه";
 "chat_pin_action" = "تثبيت";
+"chat_pinned_banner_title" = "رسالة مثبّتة";
 "chat_copy_action" = "نسخ";
 "chat_select_action" = "تحديد";
 "chat_forwarded_from_format" = "↪ معاد توجيهها من %@";

@@ -142,7 +142,8 @@ extension FriendSelectController: UITableViewDelegate {
 private extension FriendSelectController {
     func addNavigationButtons() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .cancel,
+                title: String(localized: "alert_cancel"),
+                style: .plain,
                 target: self,
                 action: #selector(FriendSelectController.cancelButtonPressed))
     }

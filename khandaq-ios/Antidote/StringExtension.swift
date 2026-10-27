@@ -26,12 +26,20 @@ extension String {
 
     init(localized: String, _ arguments: CVarArg...) {
         let format = NSLocalizedString(localized, tableName: nil, bundle: Bundle.main, value: "", comment: "")
-        self.init(format: format, arguments: arguments)
+        self.init(format: format, locale: String.pluralLocale(for: format), arguments: arguments)
     }
 
     init(localized: String, comment: String, _ arguments: CVarArg...) {
         let format = NSLocalizedString(localized, tableName: nil, bundle: Bundle.main, value: "", comment: comment)
-        self.init(format: format, arguments: arguments)
+        self.init(format: format, locale: String.pluralLocale(for: format), arguments: arguments)
+    }
+
+    /// A format from Localizable.stringsdict ("%#@members@", or "%1$#@members@" when it has several
+    /// numbers) picks its plural form by the locale it is formatted with; without one Foundation uses
+    /// the process language, which an in-app language switch does not change, so Russian got the
+    /// English rule. Every other string formats without a locale, as before.
+    private static func pluralLocale(for format: String) -> Locale? {
+        return format.contains("#@") ? AppLanguage.locale : nil
     }
 
     func substringToByteLength(_ length: Int, encoding: String.Encoding) -> String {

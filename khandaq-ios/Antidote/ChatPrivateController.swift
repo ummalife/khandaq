@@ -106,9 +106,10 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var presenceRefreshTimer: Timer?
     fileprivate lazy var floatingDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.locale = AppLanguage.locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        // Yields locale-aware "Сегодня"/"Вчера" for recent days, full date otherwise — no string keys.
+        // Yields locale-aware "Today"/"Yesterday" for recent days, full date otherwise — no string keys.
         formatter.doesRelativeDateFormatting = true
         return formatter
     }()
@@ -1604,12 +1605,10 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell) {
         toggleTableViewEditing(true, animated: true)
 
-        // TODO select row
-        // guard let indexPath = tableView?.indexPathForCell(cell) else {
-        //     return
-        // }
-
-        // tableView?.selectRowAtIndexPath(indexPath, animated: false, scrollPosition: .None)
+        // "Select" starts with the message it was picked on already checked.
+        if let indexPath = tableView?.indexPath(for: cell) {
+            tableView?.selectRow(at: indexPath, animated: false, scrollPosition: .none)
+        }
     }
 
     func chatMovableDateCellReplyPressed(_ cell: ChatMovableDateCell) {
@@ -1713,7 +1712,7 @@ extension ChatPrivateController: ChatMovableDateCellDelegate {
         accent.layer.cornerRadius = 1.5
 
         let title = UILabel()
-        title.text = String(localized: "chat_pin_action")
+        title.text = String(localized: "chat_pinned_banner_title")
         title.font = UIFont.systemFont(ofSize: 11.0, weight: .semibold)
         title.textColor = theme.colorForType(.LinkText)
 
@@ -3024,7 +3023,8 @@ private extension ChatPrivateController {
                 action: #selector(ChatPrivateController.deleteAllMessagesButtonPressed(_:)))]
 
             navigationItem.rightBarButtonItems = [UIBarButtonItem(
-                    barButtonSystemItem: .cancel,
+                    title: String(localized: "alert_cancel"),
+                    style: .plain,
                     target: self,
                     action: #selector(ChatPrivateController.cancelEditingButtonPressed))]
         }

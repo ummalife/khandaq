@@ -8320,7 +8320,9 @@ public class HelperGroup
                 }
                 last_invite_request_ms.put(rate_key, now);
                 final int res = MainActivity.tox_friend_send_lossless_packet(friend_number, packet, packet.length);
-                if (res == 0)
+                // KHANDAQ (join by ID): the JNI send returns 1 on success and a negative value on error
+                // (see HelperMessageDelete). Testing for 0 logged "sent=0" for requests that arrived.
+                if (res == 1)
                 {
                     sent++;
                 }

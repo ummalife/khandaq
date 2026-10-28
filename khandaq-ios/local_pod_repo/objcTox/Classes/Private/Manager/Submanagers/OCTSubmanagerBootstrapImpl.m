@@ -31,6 +31,10 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
 @property (assign, nonatomic) NSUInteger nodesPerIteration;
 @property (assign, nonatomic) NSTimeInterval lastUrgentRebootstrapTime;
 
+// KHANDAQ (bootstrap loops): each bootstrap loop carries the generation it was started in, and only
+// the loop of the current generation runs on. Guarded by bootstrappingLock.
+@property (assign, nonatomic) NSUInteger bootstrapGeneration;
+
 @end
 
 @implementation OCTSubmanagerBootstrapImpl
@@ -222,9 +226,16 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     self.lastUrgentRebootstrapTime = now;
     OCTLogInfo(@"rebootstrapOnNetworkChange: urgent reconnect");
 
+    // KHANDAQ (bootstrap loops): this used to set bootstrappingCancelled and clear it again a few lines
+    // later, before the running loop ever looked, so that loop carried on beside the new one. Every
+    // network change added a loop; a simulator was seen running 14 at once, each bootstrapping every
+    // node every second. A new generation retires the running loop instead.
+    NSUInteger generation;
+
     @synchronized(self.bootstrappingLock) {
-        self.bootstrappingCancelled = YES;
-        self.isBootstrapping = NO;
+        generation = ++self.bootstrapGeneration;
+        self.bootstrappingCancelled = NO;
+        self.isBootstrapping = YES;
     }
 
     [self reloadPredefinedNodes];
@@ -234,14 +245,9 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     self.didConnectDelay = 0;
     self.nodesPerIteration = kUrgentNodesPerIteration;
 
-    @synchronized(self.bootstrappingLock) {
-        self.bootstrappingCancelled = NO;
-        self.isBootstrapping = YES;
-    }
-
     [[self.dataSource managerGetTox] resetOfflineRebootstrapTimer];
     [self performKhandaqBootstrapBurst];
-    [self tryToBootstrap];
+    [self tryToBootstrapInGeneration:generation];
 
     __weak OCTSubmanagerBootstrapImpl *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -258,12 +264,15 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
 
 - (void)bootstrap
 {
+    NSUInteger generation;
+
     @synchronized(self.bootstrappingLock) {
         if (self.isBootstrapping) {
             OCTLogWarn(@"bootstrap method called while already bootstrapping");
             return;
         }
         self.isBootstrapping = YES;
+        generation = ++self.bootstrapGeneration;
     }
 
     OCTLogVerbose(@"bootstrapping with %lu nodes", (unsigned long)self.addedNodes.count);
@@ -276,10 +285,10 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     // connected right now; otherwise bootstrap immediately.
     if (realmManager.settingsStorage.bootstrapDidConnect && [self.dataSource managerIsToxConnected]) {
         OCTLogVerbose(@"did connect before, waiting %g seconds", self.didConnectDelay);
-        [self tryToBootstrapAfter:self.didConnectDelay];
+        [self tryToBootstrapAfter:self.didConnectDelay generation:generation];
     }
     else {
-        [self tryToBootstrap];
+        [self tryToBootstrapInGeneration:generation];
     }
 }
 
@@ -292,7 +301,21 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     }
 }
 
-- (void)tryToBootstrapAfter:(NSTimeInterval)after
+- (BOOL)shouldContinueBootstrappingInGeneration:(NSUInteger)generation
+{
+    @synchronized(self.bootstrappingLock) {
+        return self.isBootstrapping && !self.bootstrappingCancelled && generation == self.bootstrapGeneration;
+    }
+}
+
+- (BOOL)isRetiredBootstrapGeneration:(NSUInteger)generation
+{
+    @synchronized(self.bootstrappingLock) {
+        return generation != self.bootstrapGeneration;
+    }
+}
+
+- (void)tryToBootstrapAfter:(NSTimeInterval)after generation:(NSUInteger)generation
 {
     __weak OCTSubmanagerBootstrapImpl *weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, after * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
@@ -303,18 +326,18 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
             return;
         }
 
-        if (! [strongSelf shouldContinueBootstrapping]) {
-            [strongSelf finishBootstrapping];
-            return;
-        }
-
-        [strongSelf tryToBootstrap];
+        [strongSelf tryToBootstrapInGeneration:generation];
     });
 }
 
-- (void)tryToBootstrap
+- (void)tryToBootstrapInGeneration:(NSUInteger)generation
 {
-    if (! [self shouldContinueBootstrapping]) {
+    // A retired loop just stops: finishing would clear isBootstrapping under the loop that replaced it.
+    if ([self isRetiredBootstrapGeneration:generation]) {
+        return;
+    }
+
+    if (! [self shouldContinueBootstrappingInGeneration:generation]) {
         [self finishBootstrapping];
         return;
     }
@@ -329,8 +352,6 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     }
 
     if (! selectedNodes.count) {
-        OCTLogInfo(@"trying to bootstrap... no nodes left, exiting");
-
         if (toxConnected || urgent) {
             OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
             [realmManager updateObject:realmManager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
@@ -339,13 +360,21 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
         }
 
         if (urgent) {
+            // KHANDAQ (bootstrap loops): the urgent pass has tried every node once, which is where it
+            // ends. Its "rebootstrap completed" signal is the one -rebootstrapOnNetworkChange posts after
+            // 3 s; a second one from here would make an offline client schedule a second backoff retry.
             self.urgentNetworkRebootstrap = NO;
             self.iterationTime = kIterationTime;
             self.nodesPerIteration = kNodesPerIteration;
-            [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTNetworkRebootstrapCompletedNotification
-                                                                        object:nil];
+
+            if (! toxConnected) {
+                OCTLogInfo(@"trying to bootstrap... urgent pass done, still offline, going on at the normal pace");
+                [self tryToBootstrapAfter:self.iterationTime generation:generation];
+                return;
+            }
         }
 
+        OCTLogInfo(@"trying to bootstrap... no nodes left, exiting");
         [self finishBootstrapping];
         return;
     }
@@ -356,12 +385,12 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     [[self.dataSource managerGetTox] performBlockOnToxQueue:^{
         __strong OCTSubmanagerBootstrapImpl *strongSelf = weakSelf;
 
-        if (! strongSelf || ! [strongSelf shouldContinueBootstrapping]) {
+        if (! strongSelf || ! [strongSelf shouldContinueBootstrappingInGeneration:generation]) {
             return;
         }
 
         for (OCTNode *node in selectedNodes) {
-            if (! [strongSelf shouldContinueBootstrapping]) {
+            if (! [strongSelf shouldContinueBootstrappingInGeneration:generation]) {
                 break;
             }
 
@@ -379,7 +408,7 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
         dispatch_async(dispatch_get_main_queue(), ^{
             __strong OCTSubmanagerBootstrapImpl *mainSelf = weakSelf;
 
-            if (! mainSelf || ! [mainSelf shouldContinueBootstrapping]) {
+            if (! mainSelf || ! [mainSelf shouldContinueBootstrappingInGeneration:generation]) {
                 return;
             }
 
@@ -392,7 +421,7 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
                 return;
             }
 
-            [mainSelf tryToBootstrapAfter:mainSelf.iterationTime];
+            [mainSelf tryToBootstrapAfter:mainSelf.iterationTime generation:generation];
         });
     }];
 }
@@ -436,11 +465,13 @@ static const NSUInteger kUrgentNodesPerIteration = 30;
     // bootstrap gave up ~7s into launch (a big first-connect gap after an update). Re-seed the predefined
     // nodes when the working set empties so bootstrap keeps cycling the full reliable list until actually
     // connected. (The iterate loop only calls this while trying to connect, so it can't spin once online.)
+    // KHANDAQ (bootstrap loops): except in an urgent pass, which ends by running out of nodes. Re-seeding
+    // it kept the pass bootstrapping every node every second for as long as the app ran, online or not.
     BOOL empty;
     @synchronized(self.addedNodes) {
         empty = (self.addedNodes.count == 0);
     }
-    if (empty) {
+    if (empty && ! self.urgentNetworkRebootstrap) {
         [self reloadPredefinedNodes];
     }
 

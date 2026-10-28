@@ -18,7 +18,7 @@ final class ReconnectBackoffCoordinator {
     private static let maxDelay: TimeInterval = 30
     private static let maxAttempts = 12
 
-    private var attempt = 0
+    private(set) var attempt = 0
     private var pendingWork: DispatchWorkItem?
 
     private init() {}
@@ -75,20 +75,24 @@ final class ReconnectBackoffCoordinator {
     }
 
     func scheduleRetryIfStillOffline(reason: Reason) {
+        // KHANDAQ: a failed attempt is reported twice, by "rebootstrap completed" (posted 3 s into the
+        // rebootstrap) and by the 4 s check in executeReconnect. A reconnect already scheduled answers
+        // both. Each report used to count as an attempt and start a retry of its own, never cancelling
+        // the one before, so the backoff gave up after half its attempts.
+        if pendingWork != nil {
+            return
+        }
+
         attempt += 1
         if attempt >= Self.maxAttempts {
             NetworkDiagnosticsLog.log("reconnect_give_up", detail: "max=\(Self.maxAttempts)")
             return
         }
 
-        let delay = Self.computeDelay(attemptIndex: attempt)
-        NetworkDiagnosticsLog.log("reconnect_retry_scheduled", detail: "next=\(attempt) delay=\(delay)")
-
-        let work = DispatchWorkItem { [weak self] in
-            self?.scheduleReconnect(reason: reason, urgent: false)
-        }
-        pendingWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        // As on Android, the retry is the next reconnect, delayed once by the backoff. It used to wait
+        // the backoff and then schedule a reconnect that waited it again.
+        NetworkDiagnosticsLog.log("reconnect_retry_scheduled", detail: "next=\(attempt)")
+        scheduleReconnect(reason: reason, urgent: false)
     }
 
     private static func computeDelay(attemptIndex: Int) -> TimeInterval {

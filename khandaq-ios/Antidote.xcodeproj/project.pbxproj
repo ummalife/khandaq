@@ -60,6 +60,7 @@
 		KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000002 /* LocalizationTest.swift */; };
 		KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000004 /* MessageForwarderTest.swift */; };
 		KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */; };
+		KHLOCTEST000000000000007 /* ReconnectBackoffCoordinatorTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000008 /* ReconnectBackoffCoordinatorTest.swift */; };
 		113F031D1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */; };
 		113F031F1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */; };
 		113F03211CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */; };
@@ -527,6 +528,7 @@
 		KHLOCTEST000000000000002 /* LocalizationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LocalizationTest.swift; sourceTree = "<group>"; };
 		KHLOCTEST000000000000004 /* MessageForwarderTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MessageForwarderTest.swift; sourceTree = "<group>"; };
 		KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KhandaqBrandingTest.swift; sourceTree = "<group>"; };
+		KHLOCTEST000000000000008 /* ReconnectBackoffCoordinatorTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ReconnectBackoffCoordinatorTest.swift; sourceTree = "<group>"; };
 		113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatMovableDateCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingCallCellSnapshotTest.swift; sourceTree = "<group>"; };
 		113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatOutgoingFileCellSnapshotTest.swift; sourceTree = "<group>"; };
@@ -940,6 +942,7 @@
 				KHLOCTEST000000000000002 /* LocalizationTest.swift */,
 				KHLOCTEST000000000000004 /* MessageForwarderTest.swift */,
 				KHLOCTEST000000000000006 /* KhandaqBrandingTest.swift */,
+				KHLOCTEST000000000000008 /* ReconnectBackoffCoordinatorTest.swift */,
 				113F031C1CAFE0DE0009ABE1 /* ChatMovableDateCellSnapshotTest.swift */,
 				113F031E1CAFE2130009ABE1 /* ChatOutgoingCallCellSnapshotTest.swift */,
 				113F03201CAFE2B50009ABE1 /* ChatOutgoingFileCellSnapshotTest.swift */,
@@ -2221,6 +2224,7 @@
 				KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */,
 				KHLOCTEST000000000000003 /* MessageForwarderTest.swift in Sources */,
 				KHLOCTEST000000000000005 /* KhandaqBrandingTest.swift in Sources */,
+				KHLOCTEST000000000000007 /* ReconnectBackoffCoordinatorTest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

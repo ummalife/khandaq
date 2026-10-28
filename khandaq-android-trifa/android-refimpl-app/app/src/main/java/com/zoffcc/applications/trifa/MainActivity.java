@@ -9184,6 +9184,14 @@ public class MainActivity extends AppCompatActivity
         {
             final String incoming_chat_id = bytes_to_hex(
                     Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH)).toLowerCase();
+            // KHANDAQ (join by ID): several friends answer one invite request. Take the first invite and
+            // drop the rest for a minute: toxcore replaces a chat no peer has answered yet, so every
+            // accept would start the join over.
+            if (GroupInviteAcceptPolicy.recentlyAccepted(incoming_chat_id, System.currentTimeMillis()))
+            {
+                HelperGeneric.logI(TAG, "group_invite_cb:an invite to this group was taken less than a minute ago, ignoring");
+                return;
+            }
             final long existing_gn = HelperGroup.tox_group_by_groupid__wrapper(incoming_chat_id);
             if (existing_gn >= 0)
             {
@@ -9222,6 +9230,7 @@ public class MainActivity extends AppCompatActivity
             // TODO: get real group_identifier and privacy_state, get it via API call
             String group_identifier = bytes_to_hex(Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH));
             HelperGroup.clear_pending_friend_assisted_join(group_identifier);
+            GroupInviteAcceptPolicy.noteAccepted(group_identifier, System.currentTimeMillis());
             HelperGroup.add_group_wrapper(friend_number, new_group_num, group_identifier, 0);
             final int new_privacy_state = tox_group_get_privacy_state(new_group_num);
             HelperGeneric.logI(TAG, "group_invite_cb:fn=" + friend_number + " got invited to group num=" + new_group_num +

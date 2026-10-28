@@ -72,6 +72,10 @@ jobs:
           f2_sites=$(grep -c apply_khandaq_toxav_ngc_chroma.py /root/work/circle_scripts/deps.sh)
           echo "wired at $f2_sites site(s)"
           [ "$f2_sites" -eq 4 ]
+          echo "=== confirm the join-by-ID invite patch is wired into deps.sh (4 ABIs) ==="
+          join_sites=$(grep -c apply_khandaq_join_by_id.py /root/work/circle_scripts/deps.sh)
+          echo "wired at $join_sites site(s)"
+          [ "$join_sites" -eq 4 ]
 
       - name: build native deps + patched toxcore + libjni-c-toxcore.so (deps.sh)
         id: build
@@ -100,7 +104,7 @@ jobs:
           path: |
             /root/work/artefacts/android/libs/**/libjni-c-toxcore.so
 
-      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard
+      - name: fail the job unless arm64 .so was produced AND the patched trees carry the audit-F2 guard and the join-by-ID patch
         if: always()
         run: |
           rc=0
@@ -124,6 +128,15 @@ jobs:
               echo "ERROR: audit-F2 chroma guard MISSING in $f -- .so would ship the overflow"
               rc=1
             fi
+            tree=${f%/toxav/toxav.c}
+            for g in toxcore/Messenger.c toxcore/group_chats.c; do
+              if grep -q 'KHANDAQ (join by ID)' "$tree/$g"; then
+                echo "join-by-ID invite patch present in $tree/$g"
+              else
+                echo "ERROR: join-by-ID invite patch MISSING in $tree/$g -- a friend's invite would still be dropped"
+                rc=1
+              fi
+            done
           done
           echo "checked $trees patched toxcore tree(s)"
           if [ "$trees" -eq 0 ]; then

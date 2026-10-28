@@ -92,6 +92,11 @@ import UIKit
             ?? Bundle.main.path(forResource: "en", ofType: "lproj")
         Bundle.setLanguageBundle(path.flatMap(Bundle.init(path:)))
 
+        // The search bar's Cancel is UIKit's own string, which follows the language the app was
+        // launched in. The appearance proxy reaches the bar button item of every search bar built from
+        // here on, and a language switch rebuilds the session, so its search bars come up new.
+        UIBarButtonItem.appearance(whenContainedInInstancesOf: [UISearchBar.self]).title = String(localized: "alert_cancel")
+
         let direction: UISemanticContentAttribute = (code == "ar") ? .forceRightToLeft : .forceLeftToRight
         UIView.appearance().semanticContentAttribute = direction
         UINavigationBar.appearance().semanticContentAttribute = direction

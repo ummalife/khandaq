@@ -499,7 +499,7 @@
 "add_contact_already_friend" = "该联系人已在你的列表中。";
 "add_contact_request_already_pending" = "已向该联系人发送过好友请求，正在等待对方确认。";
 "add_contact_public_key_only_hint" = "你只输入了公钥。请求会使用 nospam=0，除非对方正好使用这个 ID，否则可能收不到。建议使用对方资料里完整的 76 位 MyID。";
-"qr_screen_title" = "扫描 QR 码";
+"qr_screen_title" = "我的二维码";
 "qr_my_id_heading" = "你账号的 MyID";
 "qr_my_id_subtitle" = "好友扫描你的 QR 码就能给你发消息";
 "chat_draft_prefix" = "草稿：%@";

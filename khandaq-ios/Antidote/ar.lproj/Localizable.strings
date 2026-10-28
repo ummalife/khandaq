@@ -499,7 +499,7 @@
 "add_contact_already_friend" = "جهة الاتصال هذه موجودة في قائمتك بالفعل.";
 "add_contact_request_already_pending" = "هناك طلب صداقة معلق بالفعل إلى جهة الاتصال هذه.";
 "add_contact_public_key_only_hint" = "تم إدخال المفتاح العام فقط. سيستخدم الطلب nospam=0 وقد لا يصل إلى جهة الاتصال إلا إذا كانت تستخدم المعرف نفسه تماما. يفضل استخدام MyID الكامل المكون من 76 حرفا من ملفها الشخصي.";
-"qr_screen_title" = "مسح رمز QR";
+"qr_screen_title" = "رمز QR الخاص بي";
 "qr_my_id_heading" = "MyID الخاص بحسابك";
 "qr_my_id_subtitle" = "يمكن لأصدقائك مراسلتك بمسح رمز QR الخاص بك";
 "chat_draft_prefix" = "مسودة: %@";

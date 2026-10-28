@@ -57,6 +57,17 @@ echo
 echo "NOTE: toxav/ is not synced (different API generation - see the comment above)."
 echo "      Diff it against ${DESKTOP_TOXCORE}/toxav/ by hand and port security fixes across."
 
+# KHANDAQ — iOS-ONLY PATCHES THAT THE SYNC ABOVE OVERWRITES.
+#
+# The desktop copy does not carry these, so rsync --delete removes them. Re-apply them after every
+# sync; `grep -rn KHANDAQ toxcore/toxcore` finds them in the current tree:
+#   - Messenger.h: TOX_CAPABILITIES_CURRENT without the H264/H265 bits (this toxav decodes VP8 only).
+#   - Messenger.m, group_chats.h, group_chats.m: gc_group_known_only_by_id(), so a friend's invite
+#     reaches a group joined by its ID that no peer has answered yet.
+#   - group_chats.m: gc_accept_invite() deletes the chat with the invite's ID that it replaces (one
+#     joined by ID that no peer answered, or one being left), which would otherwise take the join.
+echo "NOTE: re-apply the iOS-only KHANDAQ patches listed in this script (Messenger.h, Messenger.m, group_chats.*)."
+
 echo "Changing .c files to .m (Xcode / CocoaPods)"
 find "${TOXCORE_SRC}" "${OUTPUT}/toxutil" -name '*.c' -print0 | while IFS= read -r -d '' file; do
     mv -v "$file" "${file%.c}.m"

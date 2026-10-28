@@ -38,6 +38,10 @@ static const NSTimeInterval kOCTGroupFriendFallbackAfterSec = 10.0;
 static const NSTimeInterval kOCTGroupInviteRequestResendSec = 30.0;
 static const NSTimeInterval kOCTGroupInviteReplyMinIntervalSec = 60.0;
 static const NSTimeInterval kOCTGroupInviteRequestTTLSec = 600.0;
+// KHANDAQ (join by ID): after we take an invite to a group, further invites to it are dropped for this
+// long. Several friends answer one request, and taking each would leave the half-joined group and start
+// the join over. Same length as the reply interval on the inviting side.
+static const NSTimeInterval kOCTGroupInviteAcceptQuietSec = 60.0;
 static const NSTimeInterval kOCTGroupMaintenanceInviteIntervalSec = 15.0;
 static const NSTimeInterval kOCTGroupReconnectSuppressSec = 300.0;
 // KHANDAQ (#25): opening a group chat forces an immediate reconnect of a stalled group instead of
@@ -72,6 +76,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryCancelled;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupJoinAttemptByKey;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *pendingFriendAssistedJoins;
+// KHANDAQ (join by ID): chat id (lowercase) -> when we last took an invite to it (ms).
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupInviteAcceptedMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupAloneSinceMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupConnectStartedMs;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *lastInviteRequestMs;
@@ -187,6 +193,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     self.groupJoinRetryCancelled = [NSMutableSet set];
     self.groupJoinAttemptByKey = [NSMutableDictionary dictionary];
     self.pendingFriendAssistedJoins = [NSMutableDictionary dictionary];
+    self.groupInviteAcceptedMs = [NSMutableDictionary dictionary];
     self.groupAloneSinceMs = [NSMutableDictionary dictionary];
     self.groupConnectStartedMs = [NSMutableDictionary dictionary];
     self.lastInviteRequestMs = [NSMutableDictionary dictionary];
@@ -401,6 +408,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                       error:(NSError **)error
 {
     OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
+    NSString *chatIdHex = chat.groupChatIdHex;
 
     if (chat) {
         [self cancelGroupJoinRetryForChat:chat];
@@ -410,6 +418,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     __block NSError *localError = nil;
 
     [self performSyncOnToxQueue:^(OCTTox *tox) {
+        // KHANDAQ (join by ID): stop asking friends to let us into a group we are leaving, so a late
+        // answer cannot join it again, and let a new invite to it ask the user again.
+        [self clearPendingFriendAssistedJoinForChatIdHex:chatIdHex];
+        [self forgetGroupInviteAcceptedForChatIdHex:chatIdHex];
+
         result = [tox groupLeaveWithGroupNumber:groupNumber
                                     partMessage:partMessage
                                           error:&localError];
@@ -707,6 +720,21 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                password:(NSString *)password
                                                   error:(NSError **)error
 {
+    return [self acceptGroupInviteFromFriendNumber:friendNumber
+                                        inviteData:inviteData
+                                         groupName:groupName
+                                          password:password
+                                      announceJoin:YES
+                                             error:error];
+}
+
+- (nullable OCTChat *)acceptGroupInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
+                                             inviteData:(NSData *)inviteData
+                                              groupName:(NSString *)groupName
+                                               password:(NSString *)password
+                                           announceJoin:(BOOL)announceJoin
+                                                  error:(NSError **)error
+{
     NSParameterAssert(inviteData);
 
     if (inviteData.length < TOX_GROUP_CHAT_ID_SIZE) {
@@ -752,6 +780,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         if (groupNumber == kOCTToxGroupNumberFailure) {
             return;
         }
+
+        [self noteGroupInviteAcceptedForChatIdHex:chatIdHex];
 
         NSString *fromTox = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
 
@@ -799,7 +829,10 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     [self bootstrapGroupConnectionForChat:chat groupNumber:groupNumber];
     [self refreshPeersForChat:chat];
-    [self addGroupSystemMessageWithFormatKey:@"group_system_you_joined" argument:nil toChat:chat];
+
+    if (announceJoin) {
+        [self addGroupSystemMessageWithFormatKey:@"group_system_you_joined" argument:nil toChat:chat];
+    }
 
     return chat;
 }
@@ -2462,8 +2495,25 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
-    OCTLogInfo(@"NGC group invite friend=%d groupName=%@ bytes=%lu",
-               friendNumber, groupName, (unsigned long)inviteData.length);
+    NSString *chatIdHex = [self chatIdHexFromInviteData:inviteData].lowercaseString;
+
+    if ([self groupInviteAcceptedRecentlyForChatIdHex:chatIdHex]) {
+        OCTLogInfo(@"NGC group invite ignored, one was just taken friend=%d chatId=%@", friendNumber, chatIdHex);
+        return;
+    }
+
+    // KHANDAQ (join by ID): an invite to a group we asked our friends to let us into is the answer that
+    // join was waiting for, so take it without asking. The group itself cannot be looked up here: tox
+    // lists a group only once a peer has answered. Invites arrive serially on this queue, so noting it
+    // here keeps a second friend's answer from being taken as well.
+    const BOOL autoAccept = [self isFriendAssistedJoinPendingForChatIdHex:chatIdHex];
+
+    if (autoAccept) {
+        [self noteGroupInviteAcceptedForChatIdHex:chatIdHex];
+    }
+
+    OCTLogInfo(@"NGC group invite friend=%d groupName=%@ bytes=%lu autoAccept=%d",
+               friendNumber, groupName, (unsigned long)inviteData.length, autoAccept);
 
     __weak typeof(self) weakSelf = self;
 
@@ -2471,6 +2521,14 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         __strong typeof(weakSelf) self = weakSelf;
 
         if (! self) {
+            return;
+        }
+
+        if (autoAccept) {
+            [self acceptFriendAssistedInviteFromFriendNumber:friendNumber
+                                                  inviteData:inviteData
+                                                   groupName:groupName
+                                                   chatIdHex:chatIdHex];
             return;
         }
 
@@ -5569,6 +5627,85 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     [self.groupAloneSinceMs removeObjectForKey:key];
     [self.groupConnectStartedMs removeObjectForKey:key];
+}
+
+- (BOOL)isFriendAssistedJoinPendingForChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return NO;
+    }
+
+    @synchronized (self.pendingFriendAssistedJoins) {
+        return self.pendingFriendAssistedJoins[chatIdHex.lowercaseString] != nil;
+    }
+}
+
+- (BOOL)groupInviteAcceptedRecentlyForChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return NO;
+    }
+
+    NSTimeInterval nowMs = [[NSDate date] timeIntervalSince1970] * 1000.0;
+
+    @synchronized (self.groupInviteAcceptedMs) {
+        NSTimeInterval acceptedMs = [self.groupInviteAcceptedMs[chatIdHex.lowercaseString] doubleValue];
+
+        return acceptedMs > 0 && (nowMs - acceptedMs) < (kOCTGroupInviteAcceptQuietSec * 1000.0);
+    }
+}
+
+- (void)noteGroupInviteAcceptedForChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return;
+    }
+
+    @synchronized (self.groupInviteAcceptedMs) {
+        self.groupInviteAcceptedMs[chatIdHex.lowercaseString] = @([[NSDate date] timeIntervalSince1970] * 1000.0);
+    }
+}
+
+- (void)forgetGroupInviteAcceptedForChatIdHex:(NSString *)chatIdHex
+{
+    if (chatIdHex.length == 0) {
+        return;
+    }
+
+    @synchronized (self.groupInviteAcceptedMs) {
+        [self.groupInviteAcceptedMs removeObjectForKey:chatIdHex.lowercaseString];
+    }
+}
+
+- (void)acceptFriendAssistedInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
+                                        inviteData:(NSData *)inviteData
+                                         groupName:(NSString *)groupName
+                                         chatIdHex:(NSString *)chatIdHex
+{
+    // The chat is already in the list: the join by ID made it, said "you joined" and kept the password
+    // typed for it. Taking the invite only replaces the group nobody had answered yet.
+    OCTChat *storedChat = [[self.dataSource managerGetRealmManager] chatWithGroupChatIdHex:chatIdHex];
+
+    if (! storedChat) {
+        // Deleted while the friends were still being asked: do not bring it back.
+        [self performSyncOnToxQueue:^(OCTTox *tox) {
+            [self clearPendingFriendAssistedJoinForChatIdHex:chatIdHex];
+        }];
+        OCTLogInfo(@"NGC friend-assisted join dropped, the chat is gone friend=%d chatId=%@", friendNumber, chatIdHex);
+        return;
+    }
+
+    NSString *password = storedChat.groupPassword.length > 0 ? storedChat.groupPassword : nil;
+    NSError *error = nil;
+    OCTChat *chat = [self acceptGroupInviteFromFriendNumber:friendNumber
+                                                 inviteData:inviteData
+                                                  groupName:groupName
+                                                   password:password
+                                               announceJoin:NO
+                                                      error:&error];
+
+    OCTLogInfo(@"NGC friend-assisted join accepted friend=%d chatId=%@ ok=%d error=%@",
+               friendNumber, chatIdHex, chat != nil, error);
 }
 
 - (void)startGroupsMaintenanceTimer

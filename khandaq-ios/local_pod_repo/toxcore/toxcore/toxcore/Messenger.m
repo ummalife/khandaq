@@ -2891,7 +2891,10 @@ static int m_handle_packet(void *object, int i, const uint8_t *temp, uint16_t le
             const uint32_t join_data_len = data_length - 2;
 
             if (m->group_invite != nullptr && data[1] == GROUP_INVITE && data_length != 2 + GC_JOIN_DATA_LENGTH) {
-                if (group_not_added(m->group_handler, join_data, join_data_len)) {
+                // KHANDAQ (join by ID): also pass an invite to a group we know only by its ID, see
+                // gc_group_known_only_by_id().
+                if (group_not_added(m->group_handler, join_data, join_data_len)
+                        || gc_group_known_only_by_id(m->group_handler, join_data, join_data_len)) {
                     m->group_invite(m, i, join_data, GC_JOIN_DATA_LENGTH,
                                     join_data + GC_JOIN_DATA_LENGTH, join_data_len - GC_JOIN_DATA_LENGTH, userdata);
                 }

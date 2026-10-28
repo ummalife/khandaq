@@ -7845,6 +7845,32 @@ bool group_not_added(const GC_Session *c, const uint8_t *chat_id, uint32_t lengt
     return !group_exists(c, chat_id);
 }
 
+bool gc_group_known_only_by_id(const GC_Session *c, const uint8_t *chat_id, uint32_t length)
+{
+    if (length < CHAT_ID_SIZE) {
+        return false;
+    }
+
+    static const uint8_t no_founder[EXT_PUBLIC_KEY_SIZE] = {0};
+
+    for (uint32_t i = 0; i < c->chats_index; ++i) {
+        const GC_Chat *chat = &c->chats[i];
+
+        if (chat->connection_state == CS_NONE) {
+            continue;
+        }
+
+        if (memcmp(get_chat_id(chat->chat_public_key), chat_id, CHAT_ID_SIZE) != 0) {
+            continue;
+        }
+
+        return chat->shared_state.version == 0
+               && memeq(chat->shared_state.founder_public_key, EXT_PUBLIC_KEY_SIZE, no_founder, EXT_PUBLIC_KEY_SIZE);
+    }
+
+    return false;
+}
+
 int gc_invite_friend(const GC_Session *c, GC_Chat *chat, int32_t friend_number,
                      gc_send_group_invite_packet_cb *callback)
 {
@@ -8179,6 +8205,16 @@ int gc_accept_invite(GC_Session *c, int32_t friend_number, const uint8_t *data, 
 
     const uint8_t *chat_id = data;
     const uint8_t *invite_chat_pk = data + CHAT_ID_SIZE;
+
+    // KHANDAQ (join by ID): packets for the group find their chat by its ID, and the first chat with
+    // that ID wins. A chat we just left is only deleted on the next do_gc(), and one we joined by its ID
+    // that no peer has answered yet stays; either would take the inviter's confirmation and drop it, so
+    // the join never completed. Neither has anything worth keeping. iOS-only patch: see install-tox-ngc.sh.
+    GC_Chat *stale_chat = gc_get_group_by_public_key(c, chat_id);
+
+    if (stale_chat != nullptr && (stale_chat->flag_exit || !gc_group_is_valid(stale_chat))) {
+        group_delete(c, stale_chat);
+    }
 
     const int group_number = create_new_group(c, nick, nick_length, false, GI_PUBLIC);
 

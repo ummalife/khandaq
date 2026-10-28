@@ -469,7 +469,9 @@ public class FriendInfoActivity extends AppCompatActivity
                     return;
                 }
 
-                final String count_text = getString(R.string.friend_info_message_count, count);
+                final String count_text = getResources().getQuantityString(R.plurals.friend_info_message_count,
+                                                                           (int) Math.min(count, Integer.MAX_VALUE),
+                                                                           count);
                 if (main_handler_s != null)
                 {
                     main_handler_s.post(() ->

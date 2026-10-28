@@ -810,6 +810,9 @@
     <string name="chat_presence_last_seen_at_time">最后在线 %1$s</string>
     <string name="chat_presence_last_seen_on_date">最后在线 %1$s</string>
     <string name="chat_presence_last_seen_unknown">最近在线</string>
+    <plurals name="chat_presence_last_seen_minutes">
+        <item quantity="other">%d 分钟前在线</item>
+    </plurals>
     <string name="contact_list_presence_recently">最近在线</string>
     <string name="notification_media_file">📎 文件</string>
     <string name="notification_media_photo">📷 照片</string>
@@ -827,12 +830,16 @@
     <string name="group_open_group_info">打开群组信息</string>
     <string name="group_open_member_list">成员</string>
     <string name="group_member_list_title">成员</string>
-    <string name="group_header_member_count">%1$d 名成员 · %2$d 人在线</string>
+    <plurals name="group_header_member_count">
+        <item quantity="other">%1$d 名成员 · %2$d 人在线</item>
+    </plurals>
     <string name="group_header_discovering_peers">正在查找成员…</string>
     <string name="group_header_connecting_attempt">连接中…（第 %1$d/%2$d 次尝试）</string>
     <string name="group_header_reconnecting_peers">正在重新连接…</string>
     <string name="friend_info_status_unknown">未保存状态</string>
-    <string name="friend_info_message_count">%1$d 条消息</string>
+    <plurals name="friend_info_message_count">
+        <item quantity="other">%1$d 条消息</item>
+    </plurals>
     <string name="friend_info_send_message">发消息</string>
     <string name="chat_list_search_hint">搜索</string>
     <string name="global_search_hint">搜索所有聊天和消息</string>
@@ -869,6 +876,12 @@
     <string name="group_info_member_offline">离线</string>
     <string name="group_member_last_seen_just_now">刚刚在线</string>
     <string name="group_member_last_seen_long_ago">很久没上线了</string>
+    <plurals name="group_member_last_seen_minutes">
+        <item quantity="other">%d 分钟前在线</item>
+    </plurals>
+    <plurals name="group_member_last_seen_hours">
+        <item quantity="other">%d 小时前在线</item>
+    </plurals>
     <string name="group_info_member_you">你</string>
     <string name="group_info_connection_connected">已连接</string>
     <string name="group_info_connection_connecting">连接中…</string>

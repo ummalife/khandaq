@@ -145,8 +145,8 @@ com.google.firebase:firebase-installations-interop:17.1.1
 com.google.firebase:firebase-installations:18.0.0
 com.google.firebase:firebase-measurement-connector:19.0.0
 com.google.firebase:firebase-messaging:24.1.0
-com.google.guava:failureaccess:1.0.2
-com.google.guava:guava:33.0.0-android
+com.google.guava:failureaccess:1.0.3
+com.google.guava:guava:33.7.2-android
 com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
 com.google.mlkit:barcode-scanning-common:17.0.0
 com.google.mlkit:barcode-scanning:17.3.0
@@ -187,5 +187,5 @@ org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.7.3
 org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3
 org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3
 org.jetbrains:annotations:23.0.0
-org.jspecify:jspecify:1.0.0
+org.jspecify:jspecify:1.0.1
 org.reactivestreams:reactive-streams:1.0.2

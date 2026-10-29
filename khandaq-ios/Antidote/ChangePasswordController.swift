@@ -147,7 +147,8 @@ extension ChangePasswordController: ExtendedTextFieldDelegate {
 private extension ChangePasswordController {
     func addNavigationButtons() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .cancel,
+                title: String(localized: "alert_cancel"),
+                style: .plain,
                 target: self,
                 action: #selector(ChangePasswordController.cancelButtonPressed))
     }

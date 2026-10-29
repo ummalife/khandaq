@@ -782,6 +782,19 @@ bool handle_gc_invite_accepted_packet(const GC_Session *c, int friend_number, co
 non_null()
 bool group_not_added(const GC_Session *c, const uint8_t *chat_id, uint32_t length);
 
+/** @brief Return true if `chat_id` belongs to a group we know only by its ID.
+ *
+ * KHANDAQ (join by ID): tox_group_join() adds the group before any peer has answered, so a friend's
+ * invite to it was dropped as "already added" and a join the DHT announce never completed could not
+ * be finished by a friend either. Such a group has no shared state yet (version 0) and no founder
+ * key, so taking an invite in its place loses nothing. A group with any shared state, or one we
+ * founded, is not matched and its invites stay filtered. iOS-only patch: see install-tox-ngc.sh.
+ *
+ * `length` must be at least CHAT_ID_SIZE bytes in length.
+ */
+non_null()
+bool gc_group_known_only_by_id(const GC_Session *c, const uint8_t *chat_id, uint32_t length);
+
 /** @brief Handles an invite confirmed packet.
  *
  * Return 0 on success.

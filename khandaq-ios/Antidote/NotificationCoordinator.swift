@@ -56,6 +56,12 @@ class NotificationCoordinator: NSObject {
     // (the user was already push-notified). We suppress the new-message sound briefly after this.
     fileprivate var lastBecameActiveDate: Date = .distantPast
 
+    // KHANDAQ: the number last put on the app icon. Every change to an unread chat lands in
+    // updateBadges(), and setting the icon to the number it already shows is still a request to
+    // SpringBoard each time: a simulator set the same number up to 28 times in a quarter of a second,
+    // in bursts every 30 s or so.
+    fileprivate var appIconBadgeNumber: Int?
+
     init(theme: Theme, submanagerObjects: OCTSubmanagerObjects) {
         self.theme = theme
         self.notificationWindow = NotificationWindow(theme: theme)
@@ -524,7 +530,11 @@ private extension NotificationCoordinator {
         delegate?.notificationCoordinator(self, updateChatsBadge: chatsCount)
         delegate?.notificationCoordinator(self, updateFriendsBadge: requestsCount)
 
-        UIApplication.shared.applicationIconBadgeNumber = chatsCount + requestsCount
+        let badgeNumber = chatsCount + requestsCount
+        if badgeNumber != appIconBadgeNumber {
+            appIconBadgeNumber = badgeNumber
+            UIApplication.shared.applicationIconBadgeNumber = badgeNumber
+        }
     }
 
     func areNotificationsMuted(for message: OCTMessageAbstract) -> Bool {

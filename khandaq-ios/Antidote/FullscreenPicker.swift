@@ -125,7 +125,7 @@ private extension FullscreenPicker {
         toolbar.items = [
             deleteItem,
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: self, action: nil),
-            UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(FullscreenPicker.doneButtonPressed))
+            UIBarButtonItem(title: String(localized: "change_password_done"), style: .done, target: self, action: #selector(FullscreenPicker.doneButtonPressed))
         ]
         addSubview(toolbar)
 

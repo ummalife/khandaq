@@ -499,7 +499,7 @@
 "add_contact_already_friend" = "جهة الاتصال هذه موجودة في قائمتك بالفعل.";
 "add_contact_request_already_pending" = "هناك طلب صداقة معلق بالفعل إلى جهة الاتصال هذه.";
 "add_contact_public_key_only_hint" = "تم إدخال المفتاح العام فقط. سيستخدم الطلب nospam=0 وقد لا يصل إلى جهة الاتصال إلا إذا كانت تستخدم المعرف نفسه تماما. يفضل استخدام MyID الكامل المكون من 76 حرفا من ملفها الشخصي.";
-"qr_screen_title" = "مسح رمز QR";
+"qr_screen_title" = "رمز QR الخاص بي";
 "qr_my_id_heading" = "MyID الخاص بحسابك";
 "qr_my_id_subtitle" = "يمكن لأصدقائك مراسلتك بمسح رمز QR الخاص بك";
 "chat_draft_prefix" = "مسودة: %@";
@@ -509,7 +509,7 @@
 "status_last_seen_long_ago" = "آخر اتصال منذ زمن بعيد";
 "settings_website" = "الموقع الإلكتروني";
 "settings_longer_bg_mode" = "وضع الخلفية الممتد";
-"settings_longer_bg_mode_description" = "سيبقي هذا التطبيق يعمل في الخلفية لفترة أطول لإكمال إرسال الرسائل، لكنه سيكشف أيضا المزيد من البيانات الوصفية عنك. سيربط عنوان IP الخاص بك برمز PUSH. إنها موازنة بين الراحة وخصوصية البيانات الوصفية.\n\nيمكنك استخدام MyCitadel VPN لمنع ذلك.\n\nانظر https://mycitadel.vip\n\nو\n\nhttps://t.me/MyCitadelBot";
+"settings_longer_bg_mode_description" = "سيبقي هذا التطبيق يعمل في الخلفية لفترة أطول لإكمال إرسال الرسائل، لكنه سيكشف أيضا المزيد من البيانات الوصفية عنك. سيربط عنوان IP الخاص بك برمز PUSH. إنها موازنة بين الراحة وخصوصية البيانات الوصفية.\n\nيمكنك استخدام VPN لمنع ذلك.";
 "settings_profile_backup_description" = "قم بتصدير ملف Tox الشخصي (.tox) أو استيراده. يشمل ذلك Tox ID وجهات الاتصال فقط؛ لا يتم نقل سجل المحادثات.";
 "settings_import_profile_invalid_file" = "الملف المحدد ليس ملف Tox شخصيا صالحا (.tox).";
 "settings_dark_theme" = "المظهر الداكن";
@@ -621,6 +621,7 @@
 "chat_reply_action" = "رد";
 "chat_forward_action" = "إعادة توجيه";
 "chat_pin_action" = "تثبيت";
+"chat_pinned_banner_title" = "رسالة مثبّتة";
 "chat_copy_action" = "نسخ";
 "chat_select_action" = "تحديد";
 "chat_forwarded_from_format" = "↪ معاد توجيهها من %@";

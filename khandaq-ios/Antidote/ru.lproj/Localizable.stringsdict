@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>group_member_count_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@members@</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d участник</string>
+			<key>few</key>
+			<string>%d участника</string>
+			<key>many</key>
+			<string>%d участников</string>
+			<key>other</key>
+			<string>%d участника</string>
+		</dict>
+	</dict>
+	<key>group_member_online_count_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@members@ · %2$d онлайн</string>
+		<key>members</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%1$d участник</string>
+			<key>few</key>
+			<string>%1$d участника</string>
+			<key>many</key>
+			<string>%1$d участников</string>
+			<key>other</key>
+			<string>%1$d участника</string>
+		</dict>
+	</dict>
+	<key>group_danger_footer_with_system_format</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>Очистка истории удаляет сообщения локально. Можно отдельно удалить %#@messages@.</string>
+		<key>messages</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>ld</string>
+			<key>one</key>
+			<string>%ld системное сообщение</string>
+			<key>few</key>
+			<string>%ld системных сообщения</string>
+			<key>many</key>
+			<string>%ld системных сообщений</string>
+			<key>other</key>
+			<string>%ld системного сообщения</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

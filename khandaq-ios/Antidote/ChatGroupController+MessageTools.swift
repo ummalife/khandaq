@@ -111,10 +111,11 @@ extension ChatGroupController {
         if editing {
             closeMembersDrawer(animated: false)
             _ = chatInputView.resignFirstResponder()
-            navigationItem.rightBarButtonItem = UIBarButtonItem(
-                    barButtonSystemItem: .cancel,
+            navigationItem.rightBarButtonItems = [UIBarButtonItem(
+                    title: String(localized: "alert_cancel"),
+                    style: .plain,
                     target: self,
-                    action: #selector(ChatGroupController.cancelEditingButtonPressed))
+                    action: #selector(ChatGroupController.cancelEditingButtonPressed))]
         }
         else {
             updateGroupInfoBarButton()
@@ -232,6 +233,11 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
 
     func chatMovableDateCellMorePressed(_ cell: ChatMovableDateCell) {
         toggleTableViewEditing(true, animated: true)
+
+        // "Select" starts with the message it was picked on already checked.
+        if let indexPath = tableView.indexPath(for: cell) {
+            tableView.selectRow(at: indexPath, animated: false, scrollPosition: .none)
+        }
     }
 
     func chatMovableDateCellReplyPressed(_ cell: ChatMovableDateCell) {
@@ -347,7 +353,7 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
             ChatPinStore.setPinned(messageId: id, forChat: self.chat.uniqueIdentifier)
             self.refreshPinnedBanner()
         })
-        actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.toggleTableViewEditing(true, animated: true) })
+        actions.append(ChatContextMenuAction(title: String(localized: "group_messages_select_action"), systemImageName: "checkmark.circle") { [weak self] in self?.chatMovableDateCellMorePressed(cell) })
 
         let editable = cell as? ChatEditable
         let bubbleRectInCell = editable?.menuTargetRect() ?? cell.bounds

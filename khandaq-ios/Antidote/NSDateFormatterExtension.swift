@@ -15,6 +15,10 @@ extension DateFormatter {
     convenience init(type: FormatterType) {
         self.init()
 
+        if type != .time {
+            locale = AppLanguage.locale
+        }
+
         switch type {
             case .time:
                 dateFormat = "H:mm"

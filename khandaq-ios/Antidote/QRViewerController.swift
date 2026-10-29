@@ -72,7 +72,8 @@ extension QRViewerController {
 private extension QRViewerController {
     func installNavigationItems() {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .done,
+                title: String(localized: "change_password_done"),
+                style: .done,
                 target: self,
                 action: #selector(QRViewerController.closeButtonPressed))
     }

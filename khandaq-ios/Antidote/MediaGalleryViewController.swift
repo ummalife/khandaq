@@ -302,10 +302,12 @@ extension MediaGalleryViewController: UICollectionViewDataSource, UICollectionVi
 }
 
 private extension DateFormatter {
-    static let galleryFormatter: DateFormatter = {
+    // Built per use, not cached: the app language can change while the process lives.
+    static var galleryFormatter: DateFormatter {
         let f = DateFormatter()
+        f.locale = AppLanguage.locale
         f.dateStyle = .medium
         f.timeStyle = .short
         return f
-    }()
+    }
 }

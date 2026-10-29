@@ -11,6 +11,9 @@
 static const NSTimeInterval kDHTConnectTimeout = 90.0;
 static const NSTimeInterval kGroupMeshTimeout = 120.0;
 static const NSTimeInterval kMessageTimeout = 60.0;
+static const NSTimeInterval kFriendOnlineTimeout = 180.0;
+static const NSTimeInterval kInviteTimeout = 60.0;
+static const NSTimeInterval kNoInviteWindow = 15.0;
 
 @interface OCTGroupDualTestPeer : NSObject <OCTToxDelegate>
 
@@ -19,10 +22,14 @@ static const NSTimeInterval kMessageTimeout = 60.0;
 @property (strong, nonatomic) XCTestExpectation *groupConnectedExpectation;
 @property (strong, nonatomic) XCTestExpectation *peerJoinExpectation;
 @property (strong, nonatomic) XCTestExpectation *messageExpectation;
+@property (strong, nonatomic) XCTestExpectation *friendOnlineExpectation;
+@property (strong, nonatomic) XCTestExpectation *groupInviteExpectation;
 
 @property (assign, nonatomic) int32_t lastGroupConnectionStatus;
 @property (copy, nonatomic) NSString *receivedMessage;
 @property (assign, nonatomic) uint32_t receivedMessageId;
+@property (strong, nonatomic) NSData *pendingInviteData;
+@property (assign, nonatomic) OCTToxFriendNumber pendingInviteFriendNumber;
 
 @end
 
@@ -33,6 +40,31 @@ static const NSTimeInterval kMessageTimeout = 60.0;
     if (connectionStatus != OCTToxConnectionStatusNone && self.dhtConnectedExpectation) {
         [self.dhtConnectedExpectation fulfill];
         self.dhtConnectedExpectation = nil;
+    }
+}
+
+- (void)tox:(OCTTox *)tox friendConnectionStatusChanged:(OCTToxConnectionStatus)status friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    NSLog(@"NGC_QA [%@] friend_conn friend=%u status=%ld", self.label, friendNumber, (long)status);
+
+    if (status != OCTToxConnectionStatusNone && self.friendOnlineExpectation) {
+        [self.friendOnlineExpectation fulfill];
+        self.friendOnlineExpectation = nil;
+    }
+}
+
+- (void)tox:(OCTTox *)tox groupInviteFromFriendNumber:(OCTToxFriendNumber)friendNumber
+ inviteData:(NSData *)inviteData
+  groupName:(NSString *)groupName
+{
+    NSLog(@"NGC_QA [%@] group_invite friend=%u name=%@", self.label, friendNumber, groupName);
+
+    self.pendingInviteData = inviteData;
+    self.pendingInviteFriendNumber = friendNumber;
+
+    if (self.groupInviteExpectation) {
+        [self.groupInviteExpectation fulfill];
+        self.groupInviteExpectation = nil;
     }
 }
 
@@ -275,6 +307,156 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
     [self.founderTox groupLeaveWithGroupNumber:groupNumber partMessage:nil error:&error];
     [self.joinerTox groupLeaveWithGroupNumber:joinGroupNumber partMessage:nil error:&error];
+}
+
+/**
+ * KHANDAQ (join by ID): tox_group_join() adds the group locally before any peer has answered, and
+ * Messenger dropped every friend invite to a group it already had. So a join by ID that the DHT
+ * announce never completed could not be finished by a friend either. The invite must now reach a
+ * group known only by its ID, taking it in place of the stuck join must reach the founder, and once
+ * the group has state from a peer a further invite must be filtered as before.
+ *
+ * objcTox takes the invite with the stuck join still in place: tox does not list a group no peer has
+ * answered, so there is nothing for it to leave first.
+ */
+- (void)testFriendInviteReachesAGroupJoinedOnlyById
+{
+    [self runFriendInviteToGroupJoinedOnlyByIdLeavingItFirst:NO];
+}
+
+/**
+ * The same with the stuck join left just before the invite is taken, in one pass on the tox queue, as
+ * the app replaces a group it already has with the invited one (OCTSubmanagerGroupsImpl). A left chat
+ * lingers until the next iteration and must not take the join either.
+ */
+- (void)testFriendInviteTakenRightAfterLeavingTheStuckJoin
+{
+    [self runFriendInviteToGroupJoinedOnlyByIdLeavingItFirst:YES];
+}
+
+- (void)runFriendInviteToGroupJoinedOnlyByIdLeavingItFirst:(BOOL)leaveFirst
+{
+    if (! self.founderTox) {
+        return;
+    }
+
+    // XCTAssert does not stop an ObjC test method, and every step below needs the one before it.
+    self.continueAfterFailure = NO;
+
+    [self waitForDHTOnPeers];
+
+    NSError *error = nil;
+    NSString *ts = [NSString stringWithFormat:@"%lu", (unsigned long)[[NSDate date] timeIntervalSince1970]];
+    NSString *groupName = [NSString stringWithFormat:@"iOSQA_byid_%@", ts];
+    NSString *joinerName = [NSString stringWithFormat:@"J_%@", ts];
+
+    NSString *founderPub = [[self.founderTox userAddress] substringToIndex:kOCTToxPublicKeyLength];
+    NSString *joinerPub = [[self.joinerTox userAddress] substringToIndex:kOCTToxPublicKeyLength];
+    OCTToxFriendNumber founderSideFriend = [self.founderTox addFriendWithNoRequestWithPublicKey:joinerPub error:&error];
+    XCTAssertNotEqual(founderSideFriend, kOCTToxFriendNumberFailure, @"founder could not add the joiner: %@", error);
+    OCTToxFriendNumber joinerSideFriend = [self.joinerTox addFriendWithNoRequestWithPublicKey:founderPub error:&error];
+    XCTAssertNotEqual(joinerSideFriend, kOCTToxFriendNumberFailure, @"joiner could not add the founder: %@", error);
+
+    self.founderPeer.friendOnlineExpectation = [self expectationWithDescription:@"founder sees the joiner online"];
+    self.joinerPeer.friendOnlineExpectation = [self expectationWithDescription:@"joiner sees the founder online"];
+    [self waitForExpectationsWithTimeout:kFriendOnlineTimeout handler:nil];
+
+    // The group calls below run on the instance's tox queue, as the app makes them (OCTSubmanagerGroupsImpl
+    // -performSyncOnToxQueue:). toxcore is not thread-safe, and a join or an accept resizes the lists that
+    // tox_iterate walks on that queue.
+    __block OCTToxGroupNumber founderGroup = kOCTToxGroupNumberFailure;
+    __block NSString *chatId = nil;
+    __block NSError *queueError = nil;
+    [self.founderTox performSyncBlockOnToxQueue:^{
+        NSError *blockError = nil;
+        founderGroup = [self.founderTox groupNewWithPrivacyState:OCTToxGroupPrivacyStatePublic
+                                                       groupName:groupName
+                                                        peerName:[@"F_" stringByAppendingString:ts]
+                                                           error:&blockError];
+        chatId = [self.founderTox groupChatIdHexForGroupNumber:founderGroup error:nil];
+        queueError = blockError;
+    }];
+    XCTAssertNotEqual(founderGroup, kOCTToxGroupNumberFailure, @"groupNew failed: %@", queueError);
+    XCTAssertEqual(chatId.length, kOCTToxGroupChatIdHexLength);
+
+    // The joiner now knows the group only by its ID: added locally, nothing from any peer yet.
+    __block OCTToxGroupNumber stuckGroup = kOCTToxGroupNumberFailure;
+    [self.joinerTox performSyncBlockOnToxQueue:^{
+        NSError *blockError = nil;
+        stuckGroup = [self.joinerTox groupJoinWithChatIdHex:chatId peerName:joinerName password:nil error:&blockError];
+        queueError = blockError;
+    }];
+    XCTAssertNotEqual(stuckGroup, kOCTToxGroupNumberFailure, @"groupJoin failed: %@", queueError);
+
+    self.joinerPeer.groupInviteExpectation = [self expectationWithDescription:@"joiner received the invite"];
+    XCTAssertTrue([self inviteJoinerToFounderGroup:founderGroup friendNumber:founderSideFriend], @"group invite failed");
+    [self waitForExpectationsWithTimeout:kInviteTimeout handler:nil];
+    XCTAssertNotNil(self.joinerPeer.pendingInviteData, @"the invite to a group known only by its ID was dropped");
+
+    __block BOOL leftStuckGroup = NO;
+    __block OCTToxGroupNumber joinerGroup = kOCTToxGroupNumberFailure;
+    [self.joinerTox performSyncBlockOnToxQueue:^{
+        if (leaveFirst) {
+            leftStuckGroup = [self.joinerTox groupLeaveWithGroupNumber:stuckGroup partMessage:nil error:nil];
+        }
+
+        NSError *blockError = nil;
+        joinerGroup = [self.joinerTox groupInviteAcceptWithFriendNumber:self.joinerPeer.pendingInviteFriendNumber
+                                                             inviteData:self.joinerPeer.pendingInviteData
+                                                               peerName:joinerName
+                                                               password:nil
+                                                                  error:&blockError];
+        queueError = blockError;
+    }];
+    XCTAssertTrue(! leaveFirst || leftStuckGroup, @"leaving the stuck join failed");
+    XCTAssertNotEqual(joinerGroup, kOCTToxGroupNumberFailure, @"accepting the invite failed: %@", queueError);
+
+    self.founderPeer.peerJoinExpectation = [self expectationWithDescription:@"founder saw the joiner"];
+    [self waitForExpectationsWithTimeout:kGroupMeshTimeout handler:nil];
+
+    // The group name lives in the shared state, so reading it back means the joiner holds real state.
+    __block NSString *joinerGroupName = nil;
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:kInviteTimeout];
+    while (YES) {
+        [self.joinerTox performSyncBlockOnToxQueue:^{
+            joinerGroupName = [self.joinerTox groupNameForGroupNumber:joinerGroup error:nil];
+        }];
+
+        if ([joinerGroupName isEqualToString:groupName] || [deadline timeIntervalSinceNow] <= 0) {
+            break;
+        }
+
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+    }
+    XCTAssertEqualObjects(joinerGroupName, groupName, @"the joiner never received the group's shared state");
+
+    // A group with state stays filtered: a second invite to it does not surface.
+    self.joinerPeer.pendingInviteData = nil;
+    XCTestExpectation *noInvite = [self expectationWithDescription:@"no invite for a group with state"];
+    noInvite.inverted = YES;
+    self.joinerPeer.groupInviteExpectation = noInvite;
+    XCTAssertTrue([self inviteJoinerToFounderGroup:founderGroup friendNumber:founderSideFriend], @"second group invite failed");
+    [self waitForExpectationsWithTimeout:kNoInviteWindow handler:nil];
+    XCTAssertNil(self.joinerPeer.pendingInviteData, @"an invite to a group with state was surfaced");
+
+    NSLog(@"NGC_QA PASS join-by-id invite leaveFirst=%d stuckGroup=%u joinerGroup=%u chatId=%@",
+          leaveFirst, stuckGroup, joinerGroup, chatId);
+
+    [self.founderTox performSyncBlockOnToxQueue:^{
+        [self.founderTox groupLeaveWithGroupNumber:founderGroup partMessage:nil error:nil];
+    }];
+    [self.joinerTox performSyncBlockOnToxQueue:^{
+        [self.joinerTox groupLeaveWithGroupNumber:joinerGroup partMessage:nil error:nil];
+    }];
+}
+
+- (BOOL)inviteJoinerToFounderGroup:(OCTToxGroupNumber)founderGroup friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    __block BOOL invited = NO;
+    [self.founderTox performSyncBlockOnToxQueue:^{
+        invited = [self.founderTox groupInviteFriendWithGroupNumber:founderGroup friendNumber:friendNumber error:nil];
+    }];
+    return invited;
 }
 
 @end

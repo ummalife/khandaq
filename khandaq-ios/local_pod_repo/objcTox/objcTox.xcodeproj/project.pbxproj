@@ -267,6 +267,7 @@
 		B2NGCSIG0000004 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */; };
 		B2NGCDUAL000005 /* OCTToxGroupDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */; };
 		B2NGCSIG0000005 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */; };
+		B2BOOTNET000002 /* OCTSubmanagerBootstrapNetworkChangeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B2BOOTNET000001 /* OCTSubmanagerBootstrapNetworkChangeTests.m */; };
 		E1A2B3C4D5E6789012340004 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340005 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
 		E1A2B3C4D5E6789012340006 /* OCTSubmanagerGroupsImpl.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6789012340003 /* OCTSubmanagerGroupsImpl.m */; };
@@ -548,6 +549,7 @@
 		B08EB0152D5B2993766DD654578C3493 /* OCTTox.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTTox.m; sourceTree = "<group>"; };
 		B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTToxGroupDualIntegrationTests.m; sourceTree = "<group>"; };
 		B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTNgcSignedHistoryDualIntegrationTests.m; sourceTree = "<group>"; };
+		B2BOOTNET000001 /* OCTSubmanagerBootstrapNetworkChangeTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerBootstrapNetworkChangeTests.m; sourceTree = "<group>"; };
 		B6D6D28CCB11A29144A37A53 /* libPods-iOSDemo.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-iOSDemo.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2F358725E9EF3F392D73A1ABBDD3DAB /* OCTSubmanagerUserImpl.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTSubmanagerUserImpl.m; sourceTree = "<group>"; };
 		CE5DBC12869590BEAD637C9DF06567EF /* OCTManagerConstants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCTManagerConstants.m; sourceTree = "<group>"; };
@@ -1025,6 +1027,7 @@
 				9CB44CAF1B84DF46007FA7B6 /* OCTToxTests.m */,
 				B2NGCDUAL000003 /* OCTToxGroupDualIntegrationTests.m */,
 				B2NGCSIG0000003 /* OCTNgcSignedHistoryDualIntegrationTests.m */,
+				B2BOOTNET000001 /* OCTSubmanagerBootstrapNetworkChangeTests.m */,
 				11D6512E1B89238F00C3DD23 /* OCTVideoEngineTests.m */,
 				F5BC99BC1C2A171D00425CE3 /* YUVPlanes */,
 			);
@@ -1468,6 +1471,7 @@
 				9CB44C0F1B84DBA3007FA7B6 /* OCTMessageFile.m in Sources */,
 				B2NGCDUAL000004 /* OCTToxGroupDualIntegrationTests.m in Sources */,
 				B2NGCSIG0000004 /* OCTNgcSignedHistoryDualIntegrationTests.m in Sources */,
+				B2BOOTNET000002 /* OCTSubmanagerBootstrapNetworkChangeTests.m in Sources */,
 				11D650E71B89227300C3DD23 /* OCTMessageCall.m in Sources */,
 				11BB6EAF1CC3930A00A531A8 /* OCTFileTools.m in Sources */,
 				9CB44C131B84DBA3007FA7B6 /* OCTRealmManager.m in Sources */,

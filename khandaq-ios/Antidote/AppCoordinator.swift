@@ -360,6 +360,9 @@ private extension AppCoordinator {
     func createRunningCoordinatorWithManager(_ manager: OCTManager,
                                              options: CoordinatorOptions?,
                                              skipAuthorizationChallenge: Bool) -> RunningCoordinator {
+        // Both manual login and auto-login end up here.
+        KhandaqBranding.clearLegacyDefaultStatus(of: manager.user)
+
         let coordinator = RunningCoordinator(theme: theme,
                                              window: window,
                                              toxManager: manager,

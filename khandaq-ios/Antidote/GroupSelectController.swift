@@ -91,7 +91,8 @@ extension GroupSelectController: UITableViewDelegate {
 private extension GroupSelectController {
     func addNavigationButtons() {
         navigationItem.leftBarButtonItem = UIBarButtonItem(
-                barButtonSystemItem: .cancel,
+                title: String(localized: "alert_cancel"),
+                style: .plain,
                 target: self,
                 action: #selector(GroupSelectController.cancelButtonPressed))
     }

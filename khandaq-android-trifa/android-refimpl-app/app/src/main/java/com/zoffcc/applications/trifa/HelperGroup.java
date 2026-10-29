@@ -1750,7 +1750,9 @@ public class HelperGroup
                                                      final long offline_count)
     {
         final long total = Math.max(0L, online_count) + Math.max(0L, offline_count);
-        return context.getString(R.string.group_header_member_count, total, Math.max(0L, online_count));
+        return context.getResources().getQuantityString(R.plurals.group_header_member_count,
+                                                        (int) Math.min(total, Integer.MAX_VALUE), total,
+                                                        Math.max(0L, online_count));
     }
 
     static String format_group_list_status_subtitle(final Context context, final String group_identifier)

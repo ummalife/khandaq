@@ -800,12 +800,18 @@
     <string name="group_open_group_info">Open group info</string>
     <string name="group_open_member_list">Members</string>
     <string name="group_member_list_title">Members</string>
-    <string name="group_header_member_count">%1$d members · %2$d online</string>
+    <plurals name="group_header_member_count">
+        <item quantity="one">%1$d member · %2$d online</item>
+        <item quantity="other">%1$d members · %2$d online</item>
+    </plurals>
     <string name="group_header_discovering_peers">Discovering members…</string>
     <string name="group_header_connecting_attempt">Connecting… (attempt %1$d/%2$d)</string>
     <string name="group_header_reconnecting_peers">Reconnecting to peers…</string>
     <string name="friend_info_status_unknown">No status saved</string>
-    <string name="friend_info_message_count">%1$d messages</string>
+    <plurals name="friend_info_message_count">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
     <string name="friend_info_send_message">Send message</string>
     <string name="chat_list_search_hint">Search</string>
     <string name="global_search_hint">Search all chats and messages</string>

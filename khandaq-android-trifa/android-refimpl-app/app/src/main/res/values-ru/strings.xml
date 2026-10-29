@@ -144,11 +144,21 @@
     <string name="group_open_group_info">Открыть информацию о группе</string>
     <string name="group_open_member_list">Участники</string>
     <string name="group_member_list_title">Участники</string>
-    <string name="group_header_member_count">%1$d участников · %2$d онлайн</string>
+    <plurals name="group_header_member_count">
+        <item quantity="one">%1$d участник · %2$d онлайн</item>
+        <item quantity="few">%1$d участника · %2$d онлайн</item>
+        <item quantity="many">%1$d участников · %2$d онлайн</item>
+        <item quantity="other">%1$d участника · %2$d онлайн</item>
+    </plurals>
     <string name="group_header_discovering_peers">Поиск участников…</string>
     <string name="group_header_connecting_attempt">Подключение… (попытка %1$d/%2$d)</string>
     <string name="friend_info_status_unknown">Статус не сохранён</string>
-    <string name="friend_info_message_count">%1$d сообщений</string>
+    <plurals name="friend_info_message_count">
+        <item quantity="one">%1$d сообщение</item>
+        <item quantity="few">%1$d сообщения</item>
+        <item quantity="many">%1$d сообщений</item>
+        <item quantity="other">%1$d сообщения</item>
+    </plurals>
     <string name="friend_info_send_message">Написать сообщение</string>
     <string name="chat_list_search_hint">Поиск</string>
     <string name="global_search_hint">Поиск по всем чатам и сообщениям</string>

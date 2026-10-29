@@ -485,6 +485,14 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer:$media3_version"
     implementation "androidx.media3:media3-ui:$media3_version"
     implementation "androidx.media3:media3-common:$media3_version"
+    // KHANDAQ (GHSA-xxph-c9ww-hj94): media3 1.4.1 brings guava 33.0.0-android, whose CompactHashMap,
+    // CompactHashSet and MapMakerInternalMap size their arrays from an unchecked count when they are
+    // deserialized. Raise only guava to the fixed release; media3 stays where it is.
+    constraints {
+        implementation('com.google.guava:guava:33.7.2-android') {
+            because 'GHSA-xxph-c9ww-hj94 is fixed in 33.7.2'
+        }
+    }
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.daimajia.numberprogressbar:library:1.4@aar'
     implementation 'com.github.lawloretienne:discreteslider:0.0.9'

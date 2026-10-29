@@ -8322,9 +8322,9 @@ public class HelperGroup
                 }
                 last_invite_request_ms.put(rate_key, now);
                 final int res = MainActivity.tox_friend_send_lossless_packet(friend_number, packet, packet.length);
-                // KHANDAQ (join by ID): the JNI send returns 1 on success and a negative value on error
-                // (see HelperMessageDelete). Testing for 0 logged "sent=0" for requests that arrived.
-                if (res == 1)
+                // KHANDAQ (join by ID): the JNI send returns 1 on success and a negative value on error.
+                // Testing for 0 logged "sent=0" for requests that arrived.
+                if (HelperFriend.is_friend_lossless_packet_send_ok(res))
                 {
                     sent++;
                 }
@@ -9954,7 +9954,7 @@ public class HelperGroup
             data_buf.rewind();
             data_buf.get(data);
             final int result = tox_group_send_custom_private_packet(group_num, peer_id, 1, data, data_length);
-            return result == 0;
+            return is_ngc_custom_packet_send_ok(result);
         }
         catch (Exception e)
         {

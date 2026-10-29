@@ -11,16 +11,26 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static com.zoffcc.applications.trifa.MainActivity.tox_friend_send_lossless_packet;
 import static com.zoffcc.applications.trifa.ToxVars.MAX_CRYPTO_DATA_SIZE;
+import static com.zoffcc.applications.trifa.ToxVars.TOX_HASH_LENGTH;
 import static com.zoffcc.applications.trifa.ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH;
 
 /**
  * Chunked text delivery over lossless packets (182=data, 183=ack) for weak networks / long messages.
+ *
+ * KHANDAQ: the reassembled payload is [msgV3 hash 32][sent unix seconds u32 BE][text UTF-8], and the 8-byte
+ * message id in every chunk header is the first 8 bytes of that hash. The receiver takes it in as an
+ * ordinary msgV3 text: a copy that arrives twice (the sender resends until acked) is dropped, the receiver
+ * acks it so the sender marks it delivered, and reactions and deletes can address it. Earlier senders put
+ * the bare text there under SHA-256(text)[0..8]; such a payload never starts with its own id.
  */
 public final class MessageChunker
 {
     static final int PKT_CHUNK = 182;
     static final int PKT_CHUNK_ACK = 183;
     private static final int HEADER_BYTES = 1 + 8 + 2 + 2;
+    private static final int MSG_ID_BYTES = 8;
+    /** msgV3 hash + sent time in front of the text. */
+    static final int TEXT_PAYLOAD_PREFIX_BYTES = TOX_HASH_LENGTH + 4;
     private static final int CHUNK_SEND_MAX_RETRIES = 3;
     private static final long CHUNK_RETRY_DELAY_MS = 200L;
 
@@ -82,11 +92,32 @@ public final class MessageChunker
         return bytes.length > limit;
     }
 
-    static boolean sendChunked(final long friendNumber, final String text)
+    /** KHANDAQ: one msgV3 message cannot carry this text, so it goes out (and is resent) only in chunks. */
+    static boolean needsChunks(final String text)
+    {
+        return text != null && text.getBytes(StandardCharsets.UTF_8).length > TOX_MSGV3_MAX_MESSAGE_LENGTH;
+    }
+
+    /**
+     * KHANDAQ: whether this friend puts chunks back together and keeps the text. iOS, desktop and other
+     * Tox clients drop 182/183, and Khandaq for Android builds before the keepalive flag lost the
+     * reassembled text, so to all of them a chunked text would show as sent and never arrive.
+     */
+    static boolean canReassemble(final long friendNumber)
+    {
+        return ConnectionHealthMonitor.reassemblesChunks(friendNumber);
+    }
+
+    /**
+     * @param msgV3hash        32-byte msgV3 id the sender's row keeps; a resend passes the same one
+     * @param timestampSeconds sent time, as a msgV3 message carries it
+     */
+    static boolean sendChunked(final long friendNumber, final String text, final byte[] msgV3hash,
+                               final long timestampSeconds)
     {
         try
         {
-            final byte[] payload = text.getBytes(StandardCharsets.UTF_8);
+            final byte[] payload = encodeTextPayload(msgV3hash, timestampSeconds, text);
             // KHANDAQ (audit2 #3): never emit what the receiver now refuses to assemble, and never let
             // `total` wrap the u16 header field (that produced a message that could never complete).
             if (payload.length > MAX_MESSAGE_BYTES)
@@ -94,7 +125,7 @@ public final class MessageChunker
                 NetworkDiagnosticsLog.log("chunk_send_too_big", "bytes=" + payload.length + " max=" + MAX_MESSAGE_BYTES);
                 return false;
             }
-            final byte[] msgId = messageId8(payload);
+            final byte[] msgId = Arrays.copyOf(msgV3hash, MSG_ID_BYTES);
             final int chunkPayload = ConnectionQualityMonitor.get().getAdaptiveChunkPayloadBytes();
             final int total = (payload.length + chunkPayload - 1) / chunkPayload;
 
@@ -104,13 +135,13 @@ public final class MessageChunker
                 final int len = Math.min(chunkPayload, payload.length - offset);
                 final byte[] packet = new byte[HEADER_BYTES + len];
                 packet[0] = (byte) PKT_CHUNK;
-                System.arraycopy(msgId, 0, packet, 1, 8);
+                System.arraycopy(msgId, 0, packet, 1, MSG_ID_BYTES);
                 putU16(packet, 9, seq);
                 putU16(packet, 11, total);
                 System.arraycopy(payload, offset, packet, HEADER_BYTES, len);
 
                 final int res = sendChunkWithRetry(friendNumber, packet);
-                if (res != 0)
+                if (!HelperFriend.is_friend_lossless_packet_send_ok(res))
                 {
                     NetworkDiagnosticsLog.log("chunk_send_fail", "seq=" + seq + " res=" + res);
                     return false;
@@ -126,14 +157,17 @@ public final class MessageChunker
         }
     }
 
+    /** @return the last tox_friend_send_lossless_packet result (positive once the chunk is sent) */
     private static int sendChunkWithRetry(final long friendNumber, final byte[] packet)
     {
         for (int attempt = 0; attempt < CHUNK_SEND_MAX_RETRIES; attempt++)
         {
             final int res = tox_friend_send_lossless_packet(friendNumber, packet, packet.length);
-            if (res == 0)
+            // KHANDAQ: the send returns 1 on success. Testing for 0 sent the first chunk three times, then
+            // gave up on the message: no long text to an online friend has ever arrived this way.
+            if (HelperFriend.is_friend_lossless_packet_send_ok(res))
             {
-                return 0;
+                return res;
             }
             if (attempt + 1 < CHUNK_SEND_MAX_RETRIES)
             {
@@ -263,9 +297,62 @@ public final class MessageChunker
 
         if (complete != null)
         {
-            final String message = new String(complete.join(), StandardCharsets.UTF_8);
-            HelperGeneric.receive_incoming_message(1, 0, friendNumber, message, null, 0, null, null, 0);
-            NetworkDiagnosticsLog.log("chunk_recv_ok", "chunks=" + total);
+            try
+            {
+                final ChunkedText text = decodeTextPayload(msgId, complete.join());
+                // KHANDAQ: a msgV1 text with its msgV3 hash, as a msgV3 message arrives. It went in as msgV2
+                // with no raw bytes, which threw inside receive_incoming_message and lost every reassembled text.
+                HelperGeneric.receive_incoming_message(0, 0, friendNumber, text.text, null, 0, null,
+                                                       text.msgV3hash, text.timestampSeconds);
+                NetworkDiagnosticsLog.log("chunk_recv_ok", "chunks=" + total);
+            }
+            catch (Exception e)
+            {
+                NetworkDiagnosticsLog.log("chunk_recv_error", e.getMessage());
+            }
+        }
+    }
+
+    static byte[] encodeTextPayload(final byte[] msgV3hash, final long timestampSeconds, final String text)
+    {
+        final byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
+        final byte[] payload = new byte[TEXT_PAYLOAD_PREFIX_BYTES + textBytes.length];
+        System.arraycopy(msgV3hash, 0, payload, 0, TOX_HASH_LENGTH);
+        ByteBuffer.wrap(payload, TOX_HASH_LENGTH, 4).order(ByteOrder.BIG_ENDIAN).putInt((int) timestampSeconds);
+        System.arraycopy(textBytes, 0, payload, TEXT_PAYLOAD_PREFIX_BYTES, textBytes.length);
+        return payload;
+    }
+
+    static ChunkedText decodeTextPayload(final byte[] msgId, final byte[] payload) throws Exception
+    {
+        if (payload.length >= TEXT_PAYLOAD_PREFIX_BYTES
+            && Arrays.equals(Arrays.copyOf(payload, MSG_ID_BYTES), msgId))
+        {
+            final long timestampSeconds =
+                    ByteBuffer.wrap(payload, TOX_HASH_LENGTH, 4).order(ByteOrder.BIG_ENDIAN).getInt() & 0xFFFFFFFFL;
+            return new ChunkedText(Arrays.copyOf(payload, TOX_HASH_LENGTH), timestampSeconds,
+                                   new String(payload, TEXT_PAYLOAD_PREFIX_BYTES,
+                                              payload.length - TEXT_PAYLOAD_PREFIX_BYTES, StandardCharsets.UTF_8));
+        }
+        // An earlier sender's bare text. It still gets a hash, derived from what arrived, so that it lands as
+        // a msgV3 text too: a hashless msgV1 text would mark this friend as not speaking msgV3.
+        final MessageDigest md = MessageDigest.getInstance("SHA-256");
+        md.update(msgId);
+        md.update(payload);
+        return new ChunkedText(md.digest(), 0L, new String(payload, StandardCharsets.UTF_8));
+    }
+
+    static final class ChunkedText
+    {
+        final byte[] msgV3hash;
+        final long timestampSeconds;
+        final String text;
+
+        ChunkedText(final byte[] msgV3hash, final long timestampSeconds, final String text)
+        {
+            this.msgV3hash = msgV3hash;
+            this.timestampSeconds = timestampSeconds;
+            this.text = text;
         }
     }
 
@@ -372,13 +459,6 @@ public final class MessageChunker
         putU16(packet, 9, seq);
         putU16(packet, 11, seq);
         tox_friend_send_lossless_packet(friendNumber, packet, packet.length);
-    }
-
-    private static byte[] messageId8(final byte[] payload) throws Exception
-    {
-        final MessageDigest md = MessageDigest.getInstance("SHA-256");
-        final byte[] hash = md.digest(payload);
-        return Arrays.copyOf(hash, 8);
     }
 
     private static void putU16(final byte[] buf, final int offset, final int value)

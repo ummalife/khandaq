@@ -177,4 +177,62 @@ public class MessageChunkerTest
         assertFalse(asm.put(0, new byte[4], 5_000L));
         assertEquals(5_000L, asm.lastChunkTs);
     }
+
+    // ---------------------------------------------------------------- reassembled payload
+
+    private static byte[] hash(final int seed)
+    {
+        final byte[] h = new byte[ToxVars.TOX_HASH_LENGTH];
+        for (int i = 0; i < h.length; i++)
+        {
+            h[i] = (byte) (seed + i);
+        }
+        return h;
+    }
+
+    private static byte[] firstEight(final byte[] b)
+    {
+        return java.util.Arrays.copyOf(b, 8);
+    }
+
+    /**
+     * The receiver takes the text in as a msgV3 message under the sender's hash: that hash is what its ack
+     * carries back to mark the sender's row delivered, and what drops a resent copy.
+     */
+    @Test
+    public void aChunkedTextCarriesTheSendersMsgV3HashAndTime() throws Exception
+    {
+        final byte[] h = hash(1);
+        final String text = "السلام long text ж";
+        final byte[] payload = MessageChunker.encodeTextPayload(h, 1_790_000_123L, text);
+
+        final MessageChunker.ChunkedText got = MessageChunker.decodeTextPayload(firstEight(h), payload);
+        assertArrayEquals(h, got.msgV3hash);
+        assertEquals(1_790_000_123L, got.timestampSeconds);
+        assertEquals(text, got.text);
+    }
+
+    @Test
+    public void aSentTimePast2038StillReadsBackUnsigned() throws Exception
+    {
+        final byte[] h = hash(2);
+        final byte[] payload = MessageChunker.encodeTextPayload(h, 3_000_000_000L, "x");
+        assertEquals(3_000_000_000L, MessageChunker.decodeTextPayload(firstEight(h), payload).timestampSeconds);
+    }
+
+    /** An earlier sender's bare text under SHA-256(text)[0..8]: still a text, still under a msgV3 hash. */
+    @Test
+    public void anEarlierSendersBareTextLandsUnderAHashOfItsOwn() throws Exception
+    {
+        final byte[] text = "a text from a build before the msgV3 hash in the payload, longer than 36 bytes"
+                .getBytes(StandardCharsets.UTF_8);
+        final byte[] msgId = firstEight(java.security.MessageDigest.getInstance("SHA-256").digest(text));
+
+        final MessageChunker.ChunkedText got = MessageChunker.decodeTextPayload(msgId, text);
+        assertEquals(new String(text, StandardCharsets.UTF_8), got.text);
+        assertEquals(ToxVars.TOX_HASH_LENGTH, got.msgV3hash.length);
+        assertEquals(0L, got.timestampSeconds);
+        // the same arrival twice is the same message
+        assertArrayEquals(got.msgV3hash, MessageChunker.decodeTextPayload(msgId, text).msgV3hash);
+    }
 }

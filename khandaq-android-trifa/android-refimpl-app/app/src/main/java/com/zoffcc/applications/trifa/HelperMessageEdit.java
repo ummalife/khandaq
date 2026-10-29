@@ -259,12 +259,12 @@ public class HelperMessageEdit
                 return;
             }
             final int res = MainActivity.tox_friend_send_lossless_packet(friend_number, pkt, pkt.length);
-            if (res == 0)
+            if (HelperFriend.is_friend_lossless_packet_send_ok(res))
             {
                 orma.updateMessage().idEq(m.id).edit_pending(false).execute();
                 m.edit_pending = false;
             }
-            // res != 0 (offline / temporary failure): edit_pending stays set → reconnect flush
+            // not sent (offline / temporary failure): edit_pending stays set → reconnect flush
         }
         catch (Exception e)
         {
@@ -438,7 +438,7 @@ public class HelperMessageEdit
             if (pkt != null)
             {
                 final int res = MainActivity.tox_group_send_custom_packet(group_number, 1, pkt, pkt.length);
-                if (res == 0)
+                if (HelperGroup.is_ngc_custom_packet_send_ok(res))
                 {
                     orma.updateGroupMessage().idEq(gm.id).edit_pending(false).execute();
                     gm.edit_pending = false;
@@ -541,6 +541,12 @@ public class HelperMessageEdit
         if ((nowMs - m.sent_timestamp) >= EDIT_WINDOW_MS)
         {
             return R.string.chat_edit_blocked_too_old;
+        }
+        // too long for one msgV3 message: it went out in chunks under a hash, but an edit carries at most
+        // MAX_EDIT_TEXT_BYTES of text
+        if (MessageChunker.needsChunks(m.text))
+        {
+            return R.string.chat_edit_too_long;
         }
         // network edit needs the msgv3 hash to address the original
         if (m.msg_idv3_hash == null || m.msg_idv3_hash.length() < 64)

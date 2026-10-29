@@ -150,7 +150,7 @@ public class HelperMessageDelete
             // KHANDAQ (#193): the JNI send returns 1 on success and a negative value on error
             // (friend offline / temporary failure). Only stash for the reconnect flush on failure —
             // the old `res != 0` check fired on EVERY successful send and double-queued the packet.
-            if (res <= 0)
+            if (!HelperFriend.is_friend_lossless_packet_send_ok(res))
             {
                 // offline / temporary failure — queue for the reconnect flush (file entries tagged "F:")
                 stashPendingDelete(m.tox_friendpubkey, isFile ? ("F:" + anchorHex) : anchorHex);
@@ -341,7 +341,9 @@ public class HelperMessageDelete
                 {
                     continue;
                 }
-                if (MainActivity.tox_friend_send_lossless_packet(friend_number, pkt, pkt.length) != 0)
+                // KHANDAQ: same rule as sendOwnFriendDelete (#193) — `!= 0` kept every sent delete queued
+                if (!HelperFriend.is_friend_lossless_packet_send_ok(
+                        MainActivity.tox_friend_send_lossless_packet(friend_number, pkt, pkt.length)))
                 {
                     remaining.add(hash);
                 }

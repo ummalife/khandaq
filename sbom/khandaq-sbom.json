@@ -4150,6 +4150,20 @@
       "hashes": [
         {
           "alg": "SHA-256",
+          "content": "4667724877f1d37a689202da191e23efa7657c62eef93ccdac406eccfe5cdd0a"
+        }
+      ],
+      "name": "com.google.errorprone:error_prone_annotations",
+      "purl": "pkg:maven/com.google.errorprone/error_prone_annotations@2.50.0",
+      "scope": "excluded",
+      "type": "library",
+      "version": "2.50.0"
+    },
+    {
+      "group": "maven",
+      "hashes": [
+        {
+          "alg": "SHA-256",
           "content": "46f6d5dfdd2ccf3c40de897a14bd9779314c3319f44bfd31e7e0a20d935a5e3e"
         }
       ],
@@ -4346,14 +4360,14 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8a8f81cf9b359e3f6dfa691a1e776985c061ef2f223c9b2c80753e1b458e8064"
+          "content": "cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb"
         }
       ],
       "name": "com.google.guava:failureaccess",
-      "purl": "pkg:maven/com.google.guava/failureaccess@1.0.2",
+      "purl": "pkg:maven/com.google.guava/failureaccess@1.0.3",
       "scope": "required",
       "type": "library",
-      "version": "1.0.2"
+      "version": "1.0.3"
     },
     {
       "group": "maven",
@@ -4402,14 +4416,14 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "640535014a304c50221abad19d6b22a096f13119c7c447a655cc1e009a32208d"
+          "content": "b949fe975a32421c1a2633c07a4f1578b462f2f467668aa0a4023c5ff7c4a808"
         }
       ],
       "name": "com.google.guava:guava",
-      "purl": "pkg:maven/com.google.guava/guava@33.0.0-android",
+      "purl": "pkg:maven/com.google.guava/guava@33.7.2-android",
       "scope": "required",
       "type": "library",
-      "version": "33.0.0-android"
+      "version": "33.7.2-android"
     },
     {
       "group": "maven",
@@ -4466,6 +4480,20 @@
       "scope": "excluded",
       "type": "library",
       "version": "2.8"
+    },
+    {
+      "group": "maven",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "84d3a150518485f8140ea99b8a985656749629f6433c92b80c75b36aba3b099b"
+        }
+      ],
+      "name": "com.google.j2objc:j2objc-annotations",
+      "purl": "pkg:maven/com.google.j2objc/j2objc-annotations@3.1",
+      "scope": "excluded",
+      "type": "library",
+      "version": "3.1"
     },
     {
       "group": "maven",
@@ -5452,20 +5480,6 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2f9f245bf68e4259d610894f2406dc1f6363dc639302bd566e8272e4f4541172"
-        }
-      ],
-      "name": "org.checkerframework:checker-qual",
-      "purl": "pkg:maven/org.checkerframework/checker-qual@3.41.0",
-      "scope": "excluded",
-      "type": "library",
-      "version": "3.41.0"
-    },
-    {
-      "group": "maven",
-      "hashes": [
-        {
-          "alg": "SHA-256",
           "content": "47f05852b48ee9baefef80fa3d8cea60efa4753c0013121dd7fe5eef2e5c729d"
         }
       ],
@@ -6026,14 +6040,14 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
+          "content": "070d75f261fe4c5b8202508366715f7f2d4660f88c8ef7e6d3575e48c9683b66"
         }
       ],
       "name": "org.jspecify:jspecify",
-      "purl": "pkg:maven/org.jspecify/jspecify@1.0.0",
+      "purl": "pkg:maven/org.jspecify/jspecify@1.0.1",
       "scope": "required",
       "type": "library",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "group": "maven",

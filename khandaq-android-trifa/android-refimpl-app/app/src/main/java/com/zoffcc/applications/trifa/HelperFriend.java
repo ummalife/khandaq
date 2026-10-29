@@ -2784,6 +2784,17 @@ public class HelperFriend
         return message_id > 0L;
     }
 
+    /**
+     * KHANDAQ: tox_friend_send_lossless_packet success. The JNI wrapper returns toxcore's bool as 1 when
+     * the packet is sent, -99 on a toxcore error and -9991 when Tox is not running. Several callers tested
+     * for 0 and treated every sent packet as a failure (HelperGroup.is_ngc_custom_packet_send_ok is the
+     * same rule for NGC custom packets).
+     */
+    static boolean is_friend_lossless_packet_send_ok(final int result)
+    {
+        return result > 0;
+    }
+
     static boolean is_dm_friend_connected_for_send(@Nullable final String friend_pubkey)
     {
         if (friend_pubkey == null || friend_pubkey.isEmpty())

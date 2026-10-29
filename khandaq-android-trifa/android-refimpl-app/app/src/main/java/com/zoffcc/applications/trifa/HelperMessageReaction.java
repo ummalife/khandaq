@@ -317,12 +317,12 @@ public class HelperMessageReaction
                 return;
             }
             final int res = MainActivity.tox_friend_send_lossless_packet(friend_number, pkt, pkt.length);
-            if (res == 0)
+            if (HelperFriend.is_friend_lossless_packet_send_ok(res))
             {
                 orma.updateMessage().idEq(m.id).reactions_pending(false).execute();
                 m.reactions_pending = false;
             }
-            // res != 0 (offline / temporary): reactions_pending stays set → reconnect flush
+            // not sent (offline / temporary): reactions_pending stays set → reconnect flush
         }
         catch (Exception e)
         {

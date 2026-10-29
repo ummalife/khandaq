@@ -2188,12 +2188,15 @@ public class MessageListActivity extends AppCompatActivity
         // friend is sent in FULL and split into lossless-packet chunks by MessageChunker (reassembled
         // on the other side, same gate as the send path); otherwise fall back to one length-capped Tox
         // message. Long messages used to arrive truncated because they were trimmed here before the
-        // chunker ever saw them.
+        // chunker ever saw them. Only a friend whose keepalive says it reassembles chunks gets them
+        // (MessageChunker.canReassemble): iOS, desktop and older Android builds get the length-capped
+        // message, as an offline friend does.
         final long chunkFriendNum = tox_friend_by_public_key__wrapper(friend_pubkey);
         final boolean friendOnline = (chunkFriendNum >= 0) &&
                 (MainActivity.tox_friend_get_connection_status(chunkFriendNum)
                         != ToxVars.TOX_CONNECTION.TOX_CONNECTION_NONE.value);
-        final String msg = (MessageChunker.shouldChunk(fullText) && friendOnline)
+        final String msg = (MessageChunker.shouldChunk(fullText) && friendOnline
+                            && MessageChunker.canReassemble(chunkFriendNum))
                 ? fullText
                 : trim_to_utf8_length_bytes(fullText, TOX_MSGV3_MAX_MESSAGE_LENGTH);
         if ((msg == null) || msg.isEmpty())

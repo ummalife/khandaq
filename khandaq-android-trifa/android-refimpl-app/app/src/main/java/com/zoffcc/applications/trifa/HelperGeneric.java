@@ -3631,10 +3631,27 @@ public class HelperGeneric
             update_message_in_db_resend_count(m);
             return false;
         }
-        ByteBuffer hash_bytes = hexstring_to_bytebuffer(m.msg_idv3_hash);
-        long res = MainActivity.tox_messagev3_friend_send_message(tox_friend_by_public_key__wrapper(m.tox_friendpubkey),
-                                                                  TRIFA_MSG_TYPE_TEXT.value, m.text, hash_bytes,
-                                                                  (m.sent_timestamp / 1000));
+        final long friendnum = tox_friend_by_public_key__wrapper(m.tox_friendpubkey);
+        long res;
+        if (MessageChunker.needsChunks(m.text))
+        {
+            // KHANDAQ: it went out in chunks and goes out in chunks again, under its hash, so the receiver
+            // drops a copy it already has and acks it. Until the friend's keepalive says it reassembles
+            // chunks (the first one after it comes online), nothing is sent and no attempt is spent.
+            if ((friendnum < 0) || (m.msg_idv3_hash.length() != TOX_HASH_LENGTH * 2) ||
+                !MessageChunker.canReassemble(friendnum))
+            {
+                return false;
+            }
+            res = MessageChunker.sendChunked(friendnum, m.text, hex_to_bytes(m.msg_idv3_hash),
+                                             (m.sent_timestamp / 1000)) ? 1L : -3L;
+        }
+        else
+        {
+            ByteBuffer hash_bytes = hexstring_to_bytebuffer(m.msg_idv3_hash);
+            res = MainActivity.tox_messagev3_friend_send_message(friendnum, TRIFA_MSG_TYPE_TEXT.value, m.text,
+                                                                 hash_bytes, (m.sent_timestamp / 1000));
+        }
 
         m.resend_count++;
         m.message_id = res;
@@ -3732,14 +3749,22 @@ public class HelperGeneric
         }
 
         if (MessageChunker.shouldChunk(message) && friendnum_to_use >= 0
-                && live_conn != TOX_CONNECTION_NONE.value)
+                && live_conn != TOX_CONNECTION_NONE.value && MessageChunker.canReassemble(friendnum_to_use))
         {
             final MainActivity.send_message_result result = new MainActivity.send_message_result();
             result.msg_v2 = false;
             result.msg_hash_hex = "";
-            result.msg_hash_v3_hex = "";
             result.raw_message_buf_hex = "";
-            result.msg_num = MessageChunker.sendChunked(friendnum_to_use, message) ? 1L : -3L;
+            // KHANDAQ: a msgV3 hash as any msgV3 text gets, carried inside the chunks: the receiver acks it
+            // (delivered) and drops a resent copy. A failed send keeps no hash, as an offline one: the row
+            // waits as unsent (message_id -1) and goes out whole again.
+            final ByteBuffer hash_bytes = ByteBuffer.allocateDirect(TOX_HASH_LENGTH);
+            MainActivity.tox_messagev3_get_new_message_id(hash_bytes);
+            final boolean sent = MessageChunker.sendChunked(friendnum_to_use, message,
+                                                            bytebuffer_to_bytearray(hash_bytes),
+                                                            timestamp_unixtime_seconds);
+            result.msg_num = sent ? 1L : -3L;
+            result.msg_hash_v3_hex = sent ? bytebuffer_to_hexstring(hash_bytes, true) : "";
             return result;
         }
 

@@ -2,6 +2,7 @@ package com.zoffcc.applications.trifa;
 
 import android.util.Log;
 
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.zoffcc.applications.trifa.HelperFriend.is_friend_online_real;
@@ -21,6 +22,12 @@ public final class ConnectionHealthMonitor
 
     /** Lossless packet id in custom range 160..191 (184 = group invite). */
     public static final int PKT_CONN_KEEPALIVE = 185;
+    /**
+     * KHANDAQ: flag in the second keepalive byte: this build reassembles chunked texts (MessageChunker).
+     * Earlier builds send the bare 1-byte packet, and every build reads only data[0], so the extra byte is
+     * ignored there. Those builds reassemble chunks and then lose the text, so they must not get any.
+     */
+    static final int KEEPALIVE_FLAG_REASSEMBLES_CHUNKS = 0x01;
 
     static final long TICK_INTERVAL_MS = 5_000L;
     static final long FRIEND_KEEPALIVE_INTERVAL_MS = 30_000L;
@@ -31,6 +38,15 @@ public final class ConnectionHealthMonitor
     private static final ConcurrentHashMap<Long, Long> friendLastKeepaliveSentMs = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, Integer> friendMissedKeepalives = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, Integer> friendLastLoggedConn = new ConcurrentHashMap<>();
+    /**
+     * KHANDAQ: friends that sent us a keepalive since they last came online. Only Khandaq for Android sends
+     * PKT_CONN_KEEPALIVE; iOS, desktop and other Tox clients never do, so their silence says nothing about
+     * the link. Counting it anyway scheduled an urgent rebootstrap every 15 s for as long as such a friend
+     * stayed online (an emulator with two iOS friends logged one per friend every 15 s).
+     */
+    private static final Set<Long> friendsSendingKeepalives = ConcurrentHashMap.newKeySet();
+    /** KHANDAQ: friends whose last keepalive carried {@link #KEEPALIVE_FLAG_REASSEMBLES_CHUNKS}. */
+    private static final Set<Long> friendsReassemblingChunks = ConcurrentHashMap.newKeySet();
 
     private static long lastTickMs = 0L;
 
@@ -54,7 +70,7 @@ public final class ConnectionHealthMonitor
         }
         else
         {
-            friendMissedKeepalives.remove(friendNumber);
+            noteFriendOffline(friendNumber);
         }
     }
 
@@ -63,10 +79,49 @@ public final class ConnectionHealthMonitor
         noteFriendActivity(friendNumber);
     }
 
-    static void onKeepaliveReceived(final long friendNumber)
+    static void onKeepaliveReceived(final long friendNumber, final byte[] data, final int length)
     {
+        friendsSendingKeepalives.add(friendNumber);
+        if (data != null && length >= 2 && data.length >= 2 && (data[1] & KEEPALIVE_FLAG_REASSEMBLES_CHUNKS) != 0)
+        {
+            friendsReassemblingChunks.add(friendNumber);
+        }
+        else
+        {
+            friendsReassemblingChunks.remove(friendNumber);
+        }
         noteFriendActivity(friendNumber);
         friendMissedKeepalives.put(friendNumber, 0);
+    }
+
+    /** Whether this friend runs Khandaq for Android: it sent us a keepalive since it last came online. */
+    static boolean sendsKeepalives(final long friendNumber)
+    {
+        return friendsSendingKeepalives.contains(friendNumber);
+    }
+
+    /**
+     * Whether this friend reassembles chunked texts: its keepalive since it last came online carried
+     * {@link #KEEPALIVE_FLAG_REASSEMBLES_CHUNKS}. iOS, desktop and other Tox clients drop chunks, and Khandaq
+     * for Android builds before the flag lose the reassembled text.
+     */
+    static boolean reassemblesChunks(final long friendNumber)
+    {
+        return friendsReassemblingChunks.contains(friendNumber);
+    }
+
+    /**
+     * A friend that sends keepalives and has been quiet for {@link #FRIEND_SILENT_PROBE_MS}. A friend that
+     * never sends them is never silent: it just does not speak this packet.
+     */
+    static boolean isSilent(final long friendNumber, final long now)
+    {
+        if (!sendsKeepalives(friendNumber))
+        {
+            return false;
+        }
+        final long lastActivity = friendLastActivityMs.getOrDefault(friendNumber, now);
+        return (now - lastActivity) >= FRIEND_SILENT_PROBE_MS;
     }
 
     static void tick()
@@ -97,6 +152,17 @@ public final class ConnectionHealthMonitor
         friendMissedKeepalives.put(friendNumber, 0);
     }
 
+    static void noteFriendOffline(final long friendNumber)
+    {
+        friendMissedKeepalives.remove(friendNumber);
+        // the friend number may come back as another client (a deleted friend's number is reused)
+        friendsSendingKeepalives.remove(friendNumber);
+        friendsReassemblingChunks.remove(friendNumber);
+        // the first tick after it comes back sends our keepalive at once instead of up to 30 s later: each
+        // side learns within a tick whether the other reassembles chunks
+        friendLastKeepaliveSentMs.remove(friendNumber);
+    }
+
     private static void tickFriendKeepalives(final long now)
     {
         final long[] friendNumbers;
@@ -121,10 +187,9 @@ public final class ConnectionHealthMonitor
                 continue;
             }
 
-            final long lastActivity = friendLastActivityMs.getOrDefault(fn, now);
             final long lastSent = friendLastKeepaliveSentMs.getOrDefault(fn, 0L);
             final boolean dueForPing = (now - lastSent) >= FRIEND_KEEPALIVE_INTERVAL_MS;
-            final boolean silentTooLong = (now - lastActivity) >= FRIEND_SILENT_PROBE_MS;
+            final boolean silentTooLong = isSilent(fn, now);
 
             if (!dueForPing && !silentTooLong)
             {
@@ -156,9 +221,11 @@ public final class ConnectionHealthMonitor
     {
         try
         {
-            final byte[] packet = new byte[]{(byte) PKT_CONN_KEEPALIVE};
+            final byte[] packet = new byte[]{(byte) PKT_CONN_KEEPALIVE, (byte) KEEPALIVE_FLAG_REASSEMBLES_CHUNKS};
             final int res = tox_friend_send_lossless_packet(friendNumber, packet, packet.length);
-            return res == 0;
+            // KHANDAQ: 1 = sent. Testing for 0 never recorded a sent keepalive, so every friend got one on
+            // every 5 s tick instead of every 30 s.
+            return HelperFriend.is_friend_lossless_packet_send_ok(res);
         }
         catch (Exception e)
         {

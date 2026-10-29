@@ -95,6 +95,18 @@ public class ChatEditBlockReasonTest
     }
 
     @Test
+    public void a_text_that_only_chunks_can_carry_is_too_long_to_edit_even_with_its_hash()
+    {
+        // chunked texts now carry a msgV3 hash; an edit still carries at most MAX_EDIT_TEXT_BYTES
+        final StringBuilder longText = new StringBuilder();
+        while (longText.length() <= ToxVars.TOX_MSGV3_MAX_MESSAGE_LENGTH)
+        {
+            longText.append("long text ");
+        }
+        assertEquals(R.string.chat_edit_too_long, directEditBlockReason(own(longText.toString(), HASH, true, 60_000), NOW));
+    }
+
+    @Test
     public void a_reply_is_not_editable_whatever_else_holds()
     {
         final String reply = "[KQ|17|C397E117|1790954870517|Khandaq Demo]quoted text[KQ/end]my answer";

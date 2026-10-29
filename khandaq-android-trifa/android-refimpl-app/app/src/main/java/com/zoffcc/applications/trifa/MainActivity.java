@@ -7071,7 +7071,7 @@ public class MainActivity extends AppCompatActivity
             }
             else if (data[0] == (byte) ConnectionHealthMonitor.PKT_CONN_KEEPALIVE)
             {
-                ConnectionHealthMonitor.onKeepaliveReceived(friend_number);
+                ConnectionHealthMonitor.onKeepaliveReceived(friend_number, data, (int) length);
             }
             else if (data[0] == (byte) HelperMessageEdit.PKT_MSG_EDIT)
             {

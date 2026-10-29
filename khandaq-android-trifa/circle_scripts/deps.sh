@@ -541,6 +541,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_toxav_ngc_chroma
 # the libvpx CVE backport is applied here rather than committed. Fail-fast: a silent skip means an
 # .so built without the fix while the build reports success.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py toxav/audio.c || exit 1 ; cd "$_s_"
+# KHANDAQ (join by ID): a friend's invite can finish a join by group ID — Messenger.c stops dropping it,
+# and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
+# same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1140,6 +1144,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_toxav_ngc_chroma
 # the libvpx CVE backport is applied here rather than committed. Fail-fast: a silent skip means an
 # .so built without the fix while the build reports success.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py toxav/audio.c || exit 1 ; cd "$_s_"
+# KHANDAQ (join by ID): a friend's invite can finish a join by group ID — Messenger.c stops dropping it,
+# and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
+# same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -1740,6 +1748,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_toxav_ngc_chroma
 # the libvpx CVE backport is applied here rather than committed. Fail-fast: a silent skip means an
 # .so built without the fix while the build reports success.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py toxav/audio.c || exit 1 ; cd "$_s_"
+# KHANDAQ (join by ID): a friend's invite can finish a join by group ID — Messenger.c stops dropping it,
+# and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
+# same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------
@@ -2186,6 +2198,10 @@ cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_toxav_ngc_chroma
 # the libvpx CVE backport is applied here rather than committed. Fail-fast: a silent skip means an
 # .so built without the fix while the build reports success.
 cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_audio_length.py toxav/audio.c || exit 1 ; cd "$_s_"
+# KHANDAQ (join by ID): a friend's invite can finish a join by group ID — Messenger.c stops dropping it,
+# and gc_accept_invite() replaces the chat no peer has answered. The iOS copy of toxcore carries the
+# same change. Fail-fast, like the patches above.
+cd "$_s_"/c-toxcore && python3 /root/work/patches/apply_khandaq_join_by_id.py toxcore || exit 1 ; cd "$_s_"
 cd "$_s_"/c-toxcore && if [ -n "$KHQ201_INSTRUMENT" ]; then python3 /root/work/patches/apply_khandaq_201_instrument.py toxcore/group_connection.c || exit 1; fi ; cd "$_s_"
 
 # ------ set c-toxcore git commit hash ------

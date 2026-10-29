@@ -414,6 +414,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     {
                         tox_group_leave(group_num, "left");
                     }
+                    GroupInviteAcceptPolicy.forget(f2.group_identifier);
                     HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): group already left in live tox; persist off-thread
                     set_group_group_we_left(f2.group_identifier);
                     set_group_inactive(f2.group_identifier);
@@ -487,6 +488,7 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                 {
                     final long group_num = tox_group_by_groupid__wrapper(f2.group_identifier);
                     tox_group_leave(group_num, "bye");
+                    GroupInviteAcceptPolicy.forget(f2.group_identifier);
                     HelperGeneric.update_savedata_file_wrapper_async(); // KHANDAQ (ANR): already left in live tox; persist off-thread
                 }
 

@@ -128,8 +128,6 @@ public class BootstrapNodeEntryDB extends com.zoffcc.applications.sorm.Bootstrap
         n = BootstrapNodeEntryDB_(true, num_, "43.198.227.166",33445,"AD13AB0D434BCE6C83FE2649237183964AE3341D0AFB3BE1694B18505E4E135E");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "95.181.230.108",33445,"B5FFECB4E4C26409EBB88DB35793E7B39BFA3BA12AC04C096950CB842E3E130A");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "2a03:c980:db:5d::",33445,"B5FFECB4E4C26409EBB88DB35793E7B39BFA3BA12AC04C096950CB842E3E130A");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(true, num_, "tox.hidemybits.com",443,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(true, num_, "tox.hidemybits.com",443,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "tox4.mf-net.eu",33445,"DCD342A0D5E2AA8E35C2BD2C7988F906EEB631B35100170A7F30E77D7F596442");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "tox4.mf-net.eu",33445,"DCD342A0D5E2AA8E35C2BD2C7988F906EEB631B35100170A7F30E77D7F596442");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(true, num_, "188.245.84.166",33445,"96B66D300BA2B59B98FC42DB1325E7092388F0379593E680ABDBEA03B9C9CE03");insert_node_into_db_real(n);num_++;
@@ -193,12 +191,6 @@ public class BootstrapNodeEntryDB extends com.zoffcc.applications.sorm.Bootstrap
         n = BootstrapNodeEntryDB_(false, num_, "95.181.230.108",33445,"B5FFECB4E4C26409EBB88DB35793E7B39BFA3BA12AC04C096950CB842E3E130A");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "2a03:c980:db:5d::",3389,"B5FFECB4E4C26409EBB88DB35793E7B39BFA3BA12AC04C096950CB842E3E130A");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "2a03:c980:db:5d::",33445,"B5FFECB4E4C26409EBB88DB35793E7B39BFA3BA12AC04C096950CB842E3E130A");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "tox.hidemybits.com",443,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "tox.hidemybits.com",3389,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "tox.hidemybits.com",33445,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "tox.hidemybits.com",443,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "tox.hidemybits.com",3389,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
-        n = BootstrapNodeEntryDB_(false, num_, "tox.hidemybits.com",33445,"5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "tox4.mf-net.eu",3389,"DCD342A0D5E2AA8E35C2BD2C7988F906EEB631B35100170A7F30E77D7F596442");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "tox4.mf-net.eu",33445,"DCD342A0D5E2AA8E35C2BD2C7988F906EEB631B35100170A7F30E77D7F596442");insert_node_into_db_real(n);num_++;
         n = BootstrapNodeEntryDB_(false, num_, "tox4.mf-net.eu",3389,"DCD342A0D5E2AA8E35C2BD2C7988F906EEB631B35100170A7F30E77D7F596442");insert_node_into_db_real(n);num_++;

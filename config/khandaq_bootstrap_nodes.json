@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-01T00:00:00Z",
+  "updated_at": "2026-10-28T00:00:00Z",
   "description": "Khandaq bootstrap registry. Clients bootstrap from the public Tox DHT. The self-hosted khandaq-owned nodes below were retired (see README) and are kept here for reference only, marked status=retired.",
   "sources": {
     "public_registry": "https://nodes.tox.chat/json",
@@ -314,24 +314,6 @@
       "status_udp": true,
       "status_tcp": true,
       "version": "1000002020",
-      "motd": "tox-bootstrapd",
-      "last_ping": 1780882539
-    },
-    {
-      "ipv4": "tox.hidemybits.com",
-      "ipv6": "tox.hidemybits.com",
-      "port": 443,
-      "tcp_ports": [
-        443,
-        3389,
-        33445
-      ],
-      "public_key": "5D57B95EE4A7F37BA031DAD0CBD9510A9C96FFE09C1CE24A9C33746F39817D6E",
-      "maintainer": "john8675309",
-      "location": "US",
-      "status_udp": true,
-      "status_tcp": true,
-      "version": "1000002019",
       "motd": "tox-bootstrapd",
       "last_ping": 1780882539
     },

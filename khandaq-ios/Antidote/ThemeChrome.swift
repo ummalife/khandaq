@@ -146,6 +146,15 @@ enum ThemeChrome {
             return
         }
 
+        // KHANDAQ (30.10.2026, blank tabs on iOS 27): nor into UIKit's private views. iOS 27 ignores
+        // UIDesignRequiresCompatibility, so the app gets the iOS 26 design there, and every
+        // UINavigationController view then holds a full-screen _UIFloatingBarContainerView above its
+        // content. Painting its clear background turned it into an opaque sheet over the whole tab,
+        // navigation bar included. The app's own views and public UIKit containers are themed as before.
+        if isUIKitPrivateView(view) {
+            return
+        }
+
         if let tableView = view as? UITableView {
             let isGrouped = tableView.style == .grouped
             tableView.backgroundColor = isGrouped
@@ -170,6 +179,18 @@ enum ThemeChrome {
         for subview in view.subviews {
             apply(to: subview, theme: theme)
         }
+    }
+
+    /// A view class UIKit keeps to itself: named with a leading underscore (`_UIFloatingBarContainerView`,
+    /// mangled Swift `_TtGC5UIKit…`) or `UIKit.…`, and not defined by the app.
+    static func isUIKitPrivateView(_ view: UIView) -> Bool {
+        let viewClass: AnyClass = type(of: view)
+        if Bundle(for: viewClass) == Bundle.main {
+            return false
+        }
+
+        let name = NSStringFromClass(viewClass)
+        return name.hasPrefix("_") || name.hasPrefix("UIKit.")
     }
 
     // KHANDAQ design (Figma): navigation-bar action buttons sit in a soft grey capsule (iOS 26

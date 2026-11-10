@@ -184,10 +184,10 @@
       "eol": "2023-09-11",
       "eol_source": "OpenSSL Project — the 1.1.1 branch reached End Of Life on 11 Sep 2023; 1.1.1w is its final release.",
       "waiver": {
-        "reason": "Qt 5.12 cannot link against OpenSSL 3. The only exit is the Qt 6 migration scoped in DESIGN-qt6-openssl3-migration-scope.md; bumping OpenSSL alone would break the Qt build and the runtime-DLL allowlist in khandaq-desktop/windows/cross-compile/build.sh, which hard-codes the 1_1 SONAME.",
+        "reason": "Qt 5.12 cannot link against OpenSSL 3. The only exit is the Qt 6 migration scoped in DESIGN-qt6-openssl3-migration-scope.md; bumping OpenSSL alone would break the Qt build and the runtime-DLL allowlist in khandaq-desktop/windows/cross-compile/build.sh, which hard-codes the 1_1 SONAME. Renewed 2026-11-10 (first opened 2026-08-21): the migration is still at the scoping stage, so the case is unchanged.",
         "owner": "Isa (repository owner)",
-        "opened": "2026-08-21",
-        "expires": "2026-11-19",
+        "opened": "2026-11-10",
+        "expires": "2027-02-08",
         "tracking": "DESIGN-qt6-openssl3-migration-scope.md"
       },
       "pin_governs": [
@@ -238,10 +238,10 @@
       "eol": "2021-12-05",
       "eol_source": "Qt 5.12 LTS: standard support ended 2020-12-05, extended commercial LTS ended 2021-12-05.",
       "waiver": {
-        "reason": "Migrating to Qt 6 is a scoped project, not a version bump — see DESIGN-qt6-openssl3-migration-scope.md. It is also the blocker on retiring OpenSSL 1.1.1.",
+        "reason": "Migrating to Qt 6 is a scoped project, not a version bump — see DESIGN-qt6-openssl3-migration-scope.md. It is also the blocker on retiring OpenSSL 1.1.1. Renewed 2026-11-10 (first opened 2026-08-21): the migration is still at the scoping stage, so the case is unchanged.",
         "owner": "Isa (repository owner)",
-        "opened": "2026-08-21",
-        "expires": "2026-11-19",
+        "opened": "2026-11-10",
+        "expires": "2027-02-08",
         "tracking": "DESIGN-qt6-openssl3-migration-scope.md"
       },
       "pin_governs": [

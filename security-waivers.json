@@ -12,27 +12,27 @@
     "native_waivers — то же самое для вендоренных C-библиотек, которые OSV не индексирует; их",
     "спрашивает scripts/check-native-advisories.py у NVD по CPE. До 22.08.2026 этот слой не",
     "проверялся ничем, и первый же прогон нашёл 114 advisory, включая критическую CVE-2024-5197 в",
-    "libvpx 1.8.0, который едет в каждом APK. Даты по Android намеренно короче остальных."
+    "libvpx 1.8.0, который едет в каждом APK. Даты по Android намеренно короче остальных.",
+    "",
+    "2026-11-10, renewal (Claude on the repository owner's instruction). Everything that expired on",
+    "2026-11-19/20 was renewed: versions and build flags are unchanged since the August review, the Qt 6",
+    "/ OpenSSL 3 migration is still at the scoping stage, and check-ffmpeg-surface.py passes on the",
+    "release slices pinned in nativelibs/SHA256SUMS.txt. Desktop and build-only entries now run to",
+    "2027-02-08 (the 90-day limit of the bundled-deps EOL waivers they share a cause with); Android to",
+    "2027-01-11, kept shorter as above. The rubyzip waiver was closed instead of renewed: fastlane",
+    "2.241.2 accepts rubyzip 3.x, and the lockfile now has 3.7.0. 58 native advisories that NVD attached",
+    "to openssl 1.1.1w, ffmpeg 4.4.8/6.0 and libexpat 2.8.3 since August (seven are 2024-2025 CVEs that",
+    "the August scan did not get for 1.1.1w; NVD updated them on 2026-11-06..09) were triaged one by one",
+    "and added below. One is reachable — CVE-2026-35189, memory pressure from a crafted server",
+    "certificate — and none can corrupt memory in the messenger itself."
   ],
-  "waivers": [
-    {
-      "id": "GHSA-47m2-wp7j-p9vc",
-      "package": "pkg:gem/rubyzip@2.4.1",
-      "aliases": [
-        "CVE-2026-85396"
-      ],
-      "severity": "HIGH",
-      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-10-02; owner to confirm",
-      "exploitability": "Path traversal in Zip::Entry#extract when extracting an attacker-crafted archive. rubyzip is only part of the iOS release tooling (fastlane, from khandaq-ios/Gemfile.lock) that runs on the maintainer's Mac; it is not in the app. That tooling extracts only archives produced by Xcode and App Store Connect for our own builds, never third-party archives. The fix (3.4.0) cannot be taken until fastlane accepts rubyzip 3.x: fastlane pins rubyzip (>= 2.0.0, < 3.0.0).",
-      "expires": "2026-11-20"
-    }
-  ],
+  "waivers": [],
   "scope_waivers": {
     "build-only": {
       "owner": "Isa (repository owner)",
       "exploitability": "Не попадает пользователю. Это артефакты, которые витнесс-файл закрепляет для аннотейшн-процессоров, линта и тестовых раннеров; в releaseRuntimeClasspath их нет, значит в APK они не входят (проверено: sbom/android-release-runtime.txt, guava в поставке 33.0.0-android — без advisory). Остаточный риск — компрометация цепочки сборки, а не устройства пользователя; его закрывают закреплённые sha256 в witness.gradle и провенанс SLSA на релизной сборке.",
-      "expires": "2026-11-20",
-      "review_note": "Снимать вместе с обновлением инструментов сборки в том же цикле, что и K-04 (Qt 6 / OpenSSL 3, waiver до 2026-11-19) — оба про поддерживаемость, и держать их на разных датах смысла нет.",
+      "expires": "2027-02-08",
+      "review_note": "Снимать вместе с обновлением инструментов сборки в том же цикле, что и K-04 (Qt 6 / OpenSSL 3, waiver до 2027-02-08) — оба про поддерживаемость, и держать их на разных датах смысла нет.",
       "packages": [
         "io.netty:netty-codec-http",
         "io.netty:netty-codec-http2",
@@ -59,7 +59,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -70,7 +70,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -81,7 +81,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -92,7 +92,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/hls.c (HLS demuxer) + libavformat data: URI protocol handling — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -103,7 +103,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -114,7 +114,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/tty.c (TTY/ANSI-art демуксер), эксплуатируется через HLS-плейлист — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -125,7 +125,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -136,7 +136,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/hls.c (разбор HLS-плейлиста, NULL-разыменование при инициализации) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -147,7 +147,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -158,7 +158,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/xbin.c (XBIN-демуксер), эксплуатируется через HLS — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят. Отдельно проверено: совпадение по strings — это статическая таблица имён codec ID (libavcodec/codec_desc.c), исполняемого кода за ней нет.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -169,7 +169,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -180,7 +180,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/dashdec.c (DASH-демуксер) + HTTP-протокол libavformat/http.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -191,7 +191,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -202,7 +202,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavutil/hwcontext.c (av_hwframe_ctx_init), провоцируется отказом vulkan_frames_init в libavutil/hwcontext_vulkan.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -213,7 +213,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -224,7 +224,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/avf_showspectrum.c (фильтры showspectrum/showspectrumpic) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -235,7 +235,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/cafdec.c (демуксер CAF, Apple Core Audio Format) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -246,7 +246,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/pnmdec.c (декодер PNM/PGM/PPM/PBM/PAM, функция pnm_decode_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -257,7 +257,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -268,7 +268,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/af_firequalizer.c (аудиофильтр firequalizer, config_input) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -279,7 +279,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -290,7 +290,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mov.c (демуксер MOV/MP4, функция mov_read_trak) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -301,7 +301,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -312,7 +312,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/aacenc_tns.c (AAC-энкодер, функция ff_aac_search_for_tns) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -323,7 +323,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -334,7 +334,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mux.c (ff_interleave_add_packet) + fftools/ffmpeg_mux.c; libavutil/mem.c указан лишь как точка av_malloc — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -345,7 +345,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -356,7 +356,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/iamf_parse.c (param_parse / mix_presentation_obu) и libavformat/iamfdec.c; аллокация в libavutil/iamf.c:av_iamf_param_definition_alloc — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -367,7 +367,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -378,7 +378,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/av1dec.c, функция read_global_param() (декодер AV1) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -389,7 +389,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -400,7 +400,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — tools/zmqsend.c — отдельная утилита из каталога tools/, не часть библиотек — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -411,7 +411,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -422,7 +422,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026, ВЕРДИКТ С ОГОВОРКОЙ — единственная из 32, по которой недостижимость НЕ доказана. Функция av_bprint_finalize в бинарнике ПРИСУТСТВУЕТ (проверено nm), и advisory называет именно её, а не tools/zmqsend.c из ссылок. Разбор дизассемблера показывает восемь вызывающих: av_escape, av_opt_serialize, bsf_list_item_name, av_strireplace, av_dict_get_string, av_log_format_line, av_log_format_line2, av_log_default_callback — то есть единственный путь от недоверенных данных лежит через логирование ошибок разбора H.264. Уровень логов в поставляемом Android-бинарнике = AV_LOG_ERROR (в vc_new_h264 инструкция orr w0, wzr, #0x10 = 16); ветка с AV_LOG_TRACE закрыта #ifdef NGC___TRIFA_CODEC_DECODER_, а сам define закомментирован (toxav.c:2797) — то есть не компилируется. Первоисточник репортёра озаглавлен «Memory Leak», NVD переформулировал как heap buffer overflow; воспроизведение шло через утилиту zmqsend, которой в сборке нет (--disable-programs). ЧТО НЕ СДЕЛАНО: не установлено, может ли содержимое H.264-потока довести bprint-буфер до состояния, в котором дефект проявляется. Пересмотреть при обновлении ffmpeg.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -433,7 +433,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -444,7 +444,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mov.c (обработка CENC subsample, MP4/ISOBMFF-демуксер) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -455,7 +455,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -466,7 +466,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/mpeg.c (демуксер субтитров VobSub) + ff_subtitles_queue_insert из libavformat/subtitles.c — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -477,7 +477,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -488,7 +488,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/nvdec.c (аппаратный декодер NVIDIA NVDEC, ff_nvdec_start_frame_sep_ref / nvdec_fdd_priv_free) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -499,7 +499,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -510,7 +510,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/spdifenc.c (S/PDIF мультиплексор, функция spdif_header_dts4) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -521,7 +521,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -532,7 +532,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/rtpdec_asf.c (RTP/ASF демуксер, функция rtp_asf_fix_header) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -543,7 +543,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -554,7 +554,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/adxdec.c (аудиодекодер ADX/AAX, функция adx_decode_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят. Отдельно проверено: совпадение по strings — это статическая таблица имён codec ID (libavcodec/codec_desc.c), исполняемого кода за ней нет.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -565,7 +565,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -576,7 +576,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/tdsc.c (видеодекодер TDSC, функции tdsc_parse_tdsf/tdsc_blit/tdsc_yuv2rgb) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -587,7 +587,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -598,7 +598,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/tydemux.c (TY demuxer, demux_audio) + libavcodec/shorten.c (Shorten decoder, shorten_decode_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -609,7 +609,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -620,7 +620,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_floodfill.c (filter_frame/config_input) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -631,7 +631,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -642,7 +642,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_swaprect.c (filter_frame) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -653,7 +653,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -664,7 +664,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavfilter/vf_hqdn3d.c (config_input/denoise_spatial) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -675,7 +675,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -686,7 +686,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavformat/iamf_parse.c — IAMF demuxer, mix_presentation_obu() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -697,7 +697,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -708,7 +708,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/lcldec.c — LCL/ZLIB (MSZH/ZLIB) видеодекодер, zlib_decomp() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -719,7 +719,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -730,7 +730,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/mace.c — MACE6 аудиодекодер, mace_decode_frame() (вход — CAF-демуксер libavformat/cafdec.c) — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -741,7 +741,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -752,7 +752,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "РАЗОБРАНО ПОИМЁННО 23.08.2026. Затронутый компонент — libavcodec/pngenc.c — нативные PNG/APNG ЭНКОДЕРЫ, add_exif_profile_size()/png_write_chunk() — ФИЗИЧЕСКИ ОТСУТСТВУЕТ в поставляемом бинарнике. Измерено через nm по обоим поставляемым ABI (arm64-v8a, armeabi-v7a) файла app/nativelibs/*/libjni-c-toxcore.so: из всего ffmpeg слинкован ровно ОДИН декодер — ff_h264_decoder; демуксеров, муксеров, протоколов, фильтров, hwaccel и энкодеров ноль; avformat/avfilter/swscale/swresample отсутствуют целиком (avformat_open_input, av_read_frame, sws_scale, swr_convert, avfilter_graph_alloc — 0 символов). Сборка: --disable-everything --disable-network --enable-parser=h264 --enable-decoder=h264 (circle_scripts/deps.sh). Недоверенный вход — сырой поток H.264 от собеседника по toxav; контейнеры, плейлисты, URL и файлы через ffmpeg не проходят.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "6.0"
     },
     {
@@ -763,7 +763,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "ffmpeg 4.4.8 в кросс-сборке Windows. Та же поверхность, что на Android, но десктоп обновляется вместе с миграцией Qt 6 / OpenSSL 3 — держим на её дате, чтобы переобосновывать один раз.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "4.4.8"
     },
     {
@@ -774,7 +774,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "gmp 6.2.1, транзитивная зависимость сборки. Обновляется в том же цикле.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "6.2.1"
     },
     {
@@ -785,7 +785,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "libexif 0.6.24 читает EXIF присланных изображений на десктопе. Обновляется вместе с остальным bundled-стеком в цикле миграции Qt 6.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "0.6.24"
     },
     {
@@ -796,7 +796,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "libexif 0.6.24 читает EXIF присланных изображений на десктопе. Обновляется вместе с остальным bundled-стеком в цикле миграции Qt 6.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "0.6.24"
     },
     {
@@ -807,7 +807,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "libexif 0.6.24 читает EXIF присланных изображений на десктопе. Обновляется вместе с остальным bundled-стеком в цикле миграции Qt 6.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "0.6.24"
     },
     {
@@ -818,7 +818,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -829,7 +829,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -840,7 +840,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -851,7 +851,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -862,7 +862,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -873,7 +873,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -884,7 +884,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -895,7 +895,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -906,7 +906,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -917,7 +917,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -928,7 +928,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -939,7 +939,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -950,7 +950,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -961,7 +961,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -972,7 +972,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -983,7 +983,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -994,7 +994,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1005,7 +1005,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1016,7 +1016,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1027,7 +1027,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1038,7 +1038,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1049,7 +1049,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1060,7 +1060,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "OpenSSL 1.1.1w EOL. Уже покрыто RR2-06/KQ-04: связано с миграцией на Qt 6, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "1.1.1w"
     },
     {
@@ -1071,7 +1071,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1082,7 +1082,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1093,7 +1093,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1104,7 +1104,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1115,7 +1115,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1126,7 +1126,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1137,7 +1137,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1148,7 +1148,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1159,7 +1159,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1170,7 +1170,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1181,7 +1181,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1192,7 +1192,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1203,7 +1203,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1214,7 +1214,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1225,7 +1225,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1236,7 +1236,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1247,7 +1247,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1258,7 +1258,7 @@
       "platform": "desktop",
       "owner": "Isa (repository owner)",
       "exploitability": "Qt 5.12.12 EOL. Уже покрыто RR2-06/KQ-04: миграция на Qt 6 запланирована, дата та же.",
-      "expires": "2026-11-19",
+      "expires": "2027-02-08",
       "version": "5.12.12"
     },
     {
@@ -1269,7 +1269,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "ЭНКОДЕР VP9, не декодер. NVD: «mishandles widths, leading to a crash related to encoding». Достижимо только тем, кто задаёт размеры кодируемого кадра. В Khandaq они приходят с локальной камеры: toxav_video_send_frame(av, call, frame.width, frame.height, …) вызывается клиентом (coreav.cpp:429), а энкодер переконфигурируется под эти же размеры перед кодированием (toxav.c:1607). Удалённый собеседник на них не влияет. Тот же класс, что CVE-2023-5217, которая по этой же причине намеренно не бэкпортируется. Пересмотреть, если появится путь, где размеры кодирования задаются удалённой стороной.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "1.8.0"
     },
     {
@@ -1280,7 +1280,7 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "ЭНКОДЕР VP8: переполнение кучи при смене конфигурации посреди кодирования. Энкодер toxav работает по локально заданной конфигурации, удалённый собеседник её не задаёт. Осознанно НЕ бэкпортируется — правка энкодера добавила бы риск без выигрыша; аргумент записан в circle_scripts/deps.sh.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "1.8.0"
     },
     {
@@ -1291,8 +1291,646 @@
       "platform": "android",
       "owner": "Isa (repository owner)",
       "exploitability": "ЭНКОДЕР VP9, не декодер. Описание: «Encoding a frame that has larger dimensions than the originally configured size with VP9 may result in a heap overflow». В Khandaq энкодер переконфигурируется под размеры каждого отправляемого кадра до кодирования, а сами размеры берутся с локального захвата, поэтому состояние «кадр больше сконфигурированного» не возникает и не задаётся снаружи. См. разбор в CVE-2023-44488.",
-      "expires": "2026-11-19",
+      "expires": "2027-01-11",
       "version": "1.8.0"
+    },
+    {
+      "id": "CVE-2024-2511",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Server-side only: unbounded session-cache growth in a TLS 1.3 server that sets SSL_OP_NO_TICKET. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2024-9143",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Low-level GF(2^m) EC APIs fed untrusted explicit field polynomials. Qt 5.12.12 resolves no such function (qsslsocket_openssl_symbols.cpp at v5.12.12), and per OpenSSL's analysis the X9.62 encoding through which explicit binary curves reach a TLS client in a certificate cannot carry the problematic values. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2024-4741",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "CRITICAL",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Use-after-free that needs the application to call SSL_free_buffers. Qt 5.12.12 neither resolves nor calls it (checked in qsslsocket_openssl_symbols.cpp at v5.12.12), and nothing else links libssl. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2024-13176",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Timing leak in ECDSA signing (mainly P-521). Nothing here signs with ECDSA through OpenSSL: a TLS client without a client certificate never signs, SQLCipher does not, and Tox identities are Ed25519 in libsodium. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2025-9230",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "CRITICAL",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Out-of-bounds read/write when decrypting password-based (PWRI) CMS messages. No CMS anywhere: Qt 5.12.12 resolves no CMS_* function and SQLCipher does not use CMS. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2025-9231",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "SM2 signing timing leak on 64-bit ARM. The pinned 1.1.1w is the x86 Windows build, and nothing uses SM2. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2025-9232",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in OpenSSL's own HTTP client (OCSP/CMP) with no_proxy and an IPv6 host. Qt Network has its own HTTP stack, and Qt 5.12.12 resolves no OCSP or HTTP-client function. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-54874",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "DTLS only: memory amplification from future-epoch records during a DTLS handshake. The desktop never creates a DTLS endpoint; Tox runs over UDP with libsodium, not DTLS. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-35189",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "REACHABLE in principle, impact limited to memory pressure: a server, or anyone able to intercept the two background HTTPS requests, can present a certificate with many nameRelativeToCRLIssuer CRL distribution points and make X.509 extension caching allocate hundreds of MiB during the handshake. No memory corruption; the worst case is the desktop client running out of memory, and an on-path attacker can already block those requests outright. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-54872",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Nonce timing leak in ECDSA/SM2 signing on curves without a dedicated implementation. Nothing here signs with ECDSA or SM2 through OpenSSL (TLS client, no client certificate). Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-75806",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "DTLS 1.2 only: one unauthenticated short datagram tears down an AEAD association. There is no DTLS in the desktop. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-77696",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "SM2 signing timing leak. SM2 is not used anywhere. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-84782",
+      "package": "openssl",
+      "purl": "pkg:generic/openssl@1.1.1w",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "DTLS only: over-read when retransmitting a partially written handshake message. There is no DTLS in the desktop. Khandaq desktop uses OpenSSL only through Qt Network, as a TLS client of two background requests (src/net/bootstrapnodeupdater.cpp, src/net/updatecheck.cpp), and through SQLCipher's libcrypto (AES, HMAC, PBKDF2); src/ has no direct OpenSSL call, no TLS server, no QDtls and no client key. The fix exists only in 3.x or paid 1.1.1 support, so the exit is the Qt 6 / OpenSSL 3 migration (DESIGN-qt6-openssl3-migration-scope.md), same as the rest of K-04.",
+      "expires": "2027-02-08",
+      "version": "1.1.1w"
+    },
+    {
+      "id": "CVE-2026-70628",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "HIGH",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Signed overflow in the DVB subtitle parser (dvbsub_parser.c), fed by a WTV file. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-70629",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised read in the RSCC decoder (rscc.c). Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-70630",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised read in the Screenpresso decoder (screenpresso.c). Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-70631",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised read in the TIFF decoder (tiff.c, zlib strips). Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-70632",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "HIGH",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Heap write in the CineForm HD decoder (cfhd). Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-52295",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "LOW",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in the IAMF muxer (libavformat/iamf_writer.c); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-30754",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "HIGH",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Negative memcpy in the RTP H.264/HEVC muxer (rtpenc_h264_hevc.c); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-52296",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "LOW",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in the WMA encoder (wmaenc.c). Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-52297",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "LOW",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in the MOV demuxer (mov_read_iacb); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-96611",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Signed overflow in the MOV/HEIF demuxer (mov_read_ispe); there is no libavformat at all. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107660",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (tls_mbedtls.c); no protocols, no network, no mbedTLS. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107675",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "No host-key check in the libssh sftp protocol; no protocols, no libssh. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107676",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "LOW",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35(), a writer used when remuxing/transcoding HDR10+ metadata. FFmpeg 6.0 does not have this function (absent from n6.0 libavutil/hdr_dynamic_metadata.h), and nm finds no av_dynamic_hdr_plus_* symbol in the shipped library. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107677",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Infinite loop in the DASH demuxer. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107678",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Stack exhaustion freeing AVEncryptionInitInfo lists built by the MOV demuxer (mov_read_pssh); there is no MOV demuxer, and nm finds no av_encryption_init_info_* symbol in the shipped library. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107695",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Infinite loop in the HLS demuxer. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107696",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect); no RTSP, no network. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107697",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "HLS demuxer protocol whitelist bypass. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-107698",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@6.0?platform=android",
+      "severity": "MEDIUM",
+      "platform": "android",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "SSRF through RTSP redirects (ff_rtsp_connect); no RTSP, no network. Not in the shipped binary: the Android libjni-c-toxcore.so is built by circle_scripts/deps.sh with --disable-everything --disable-network plus only --enable-parser=h264 --enable-decoder=h264, and check-ffmpeg-surface.py fails the build if a demuxer, muxer, protocol, filter, hwaccel, encoder or second decoder appears (re-run 2026-11-10 on both release slices pinned in nativelibs/SHA256SUMS.txt: clean). The argument covers that library only: the prebuilt one inside pkgs_ToxAndroidRefImpl, which a build with an empty nativelibs/ silently falls back to, also carries HEVC and MediaCodec decoders; release-provenance.yml and nativelibs/SHA256SUMS.txt keep it out of releases.",
+      "expires": "2027-01-11",
+      "version": "6.0"
+    },
+    {
+      "id": "CVE-2026-70628",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Signed overflow in the DVB subtitle parser (dvbsub_parser.c), fed by a WTV file; neither the dvbsub parser nor the WTV demuxer is built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-70629",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised read in the RSCC decoder (rscc.c), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-70630",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised read in the Screenpresso decoder (screenpresso.c), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-70631",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised read in the TIFF decoder's zlib strip path (tiff.c); the TIFF decoder is not built, and zlib is disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-70632",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Heap write in the CineForm HD decoder (cfhd), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-52295",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in the IAMF muxer (iamf_writer.c); muxers are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-30754",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Negative memcpy in the RTP H.264/HEVC muxer (rtpenc_h264_hevc.c); muxers and network are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-52296",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in the WMA encoder (wmaenc.c); encoders are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-52297",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Over-read in the MOV demuxer (mov_read_iacb), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-96611",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Signed overflow in the MOV/HEIF demuxer (mov_read_ispe), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107660",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Hostname check skipped in the mbedTLS TLS protocol (tls_mbedtls.c); protocols and network are disabled and mbedTLS is not linked. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107675",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "No host-key check in the libssh sftp protocol; protocols are disabled and libssh is not linked. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107676",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "LOW",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Uninitialised bytes from av_dynamic_hdr_plus_to_t35(), a writer used when remuxing/transcoding HDR10+ metadata. FFmpeg 4.4.8 does not have this function (absent from n4.4.8 libavutil/hdr_dynamic_metadata.h), and muxers are disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107677",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Infinite loop in the DASH demuxer, which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107678",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Stack exhaustion freeing AVEncryptionInitInfo lists; libavutil ships, but the only producer of such lists is the MOV demuxer's mov_read_pssh(), which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107695",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Infinite loop in the HLS demuxer, which is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107696",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Unbounded RTSP redirects (ff_rtsp_connect); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107697",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "HLS demuxer protocol whitelist bypass; the HLS demuxer is not built. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-107698",
+      "package": "ffmpeg",
+      "purl": "pkg:generic/ffmpeg@4.4.8",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "SSRF through RTSP redirects (ff_rtsp_connect); the RTSP demuxer is not built and network is disabled. Not in the Windows build: build_ffmpeg.sh disables all encoders, muxers, protocols, network, filters, bsfs and zlib, and enables only the h264/mjpeg demuxers and parsers and the h264/mjpeg/rawvideo decoders. macOS takes ffmpeg from Homebrew and is not covered by this pin (platform_sources in bundled-deps.json).",
+      "expires": "2027-02-08",
+      "version": "4.4.8"
+    },
+    {
+      "id": "CVE-2026-66046",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Quadratic CPU in storeAtts() on many non-normalised attributes. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
+    },
+    {
+      "id": "CVE-2026-76956",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "getentropy() return code misread, weakening the hash salt (hash-flooding DoS); fixed in 2.8.4. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
+    },
+    {
+      "id": "CVE-2026-76957",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Use-after-free with custom encoding callbacks; fixed in 2.8.4. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
+    },
+    {
+      "id": "CVE-2026-113351",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "XML_ParserReset keeps stale allocation accounting, so a reused parser fails with NO_MEMORY. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
+    },
+    {
+      "id": "CVE-2026-115506",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "HIGH",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Billion-laughs protection triggers too late, costing seconds of CPU per parse. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
+    },
+    {
+      "id": "CVE-2026-117610",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "NULL dereference in an external-entity subparser after an empty non-final first chunk. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
+    },
+    {
+      "id": "CVE-2026-118370",
+      "package": "libexpat",
+      "purl": "pkg:generic/libexpat@2.8.3",
+      "severity": "MEDIUM",
+      "platform": "desktop",
+      "owner": "Claude (AI assistant) on the repository owner's instruction of 2026-11-10; owner to confirm",
+      "exploitability": "Integer overflow in storeAtts() with more than 2^30 attributes in a multi-gigabyte document. libexpat is a static library consumed only by the bundled gdb (XML target descriptions, debug packaging); it is its own Docker layer built right before gdb and linked into nothing else, so the messenger never parses XML with it (bundled-deps.json). NVD lists four of these seven as affecting every release through 2.9.0, so a version bump alone would not retire them.",
+      "expires": "2027-02-08",
+      "version": "2.8.3"
     }
   ],
   "build_only_reviewed": [
@@ -1307,7 +1945,7 @@
       "first_seen": "2026-08-23",
       "reviewer": "Isa (repository owner)",
       "rationale": "Затронут G3413CTRBlockCipher — режим CTR шифра ГОСТ 28147-2015: счётчик инкрементирует только последний байт, после 255 блоков поток ключа повторяется. В Khandaq ГОСТ-шифры не используются нигде: транспорт — NaCl из toxcore, база — SQLCipher (AES). Сам bcprov в releaseRuntimeClasspath отсутствует, то есть в APK не попадает — это артефакт сборочной цепочки. Остаточный риск ограничен сборочной средой и не касается устройств пользователей.",
-      "expires": "2026-11-20"
+      "expires": "2027-02-08"
     },
     {
       "id": "GHSA-c4c3-7fpv-j4q5",
@@ -1320,7 +1958,7 @@
       "first_seen": "2026-10-02",
       "reviewer": "Claude (AI assistant) on the repository owner's instruction of 2026-10-02; owner to confirm",
       "rationale": "Server-side flaw: SslClientHelloHandler falls back to the default SslContext on a fragmented ClientHello, which bypasses mTLS only where per-SNI SslContext selection is the sole gate. Netty reaches Khandaq only through the Android Gradle build tooling, which uses it as a client; nothing in the build runs an SNI-routed TLS server. It is not in releaseRuntimeClasspath (checked 2026-10-02: no netty artifact in :app:dependencies --configuration releaseRuntimeClasspath), so it never ships in the APK. Residual risk is limited to the build environment.",
-      "expires": "2026-11-20"
+      "expires": "2027-02-08"
     },
     {
       "id": "GHSA-9pwp-9qqc-pr26",
@@ -1333,7 +1971,7 @@
       "first_seen": "2026-10-02",
       "reviewer": "Claude (AI assistant) on the repository owner's instruction of 2026-10-02; owner to confirm",
       "rationale": "Name Constraints bypass through a trailing dot in rfc822Name/URI during certificate path validation. In the build Bouncy Castle serves the signing tooling, which signs with our own keys and validates no third-party certificate chain carrying name constraints. It is not in releaseRuntimeClasspath (checked 2026-10-02), so it never ships in the APK; on devices TLS is the platform's and the Tox transport is NaCl. Residual risk is limited to the build environment.",
-      "expires": "2026-11-20"
+      "expires": "2027-02-08"
     }
   ]
 }

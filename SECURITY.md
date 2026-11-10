@@ -91,8 +91,8 @@ re-argued. The same script also verifies the inventory against the actual `downl
 the version list cannot drift from the build the way the prose comment in `windows-build.yaml` had,
 and emits the CycloneDX SBOM that ships with the release artifacts.
 
-Currently waived, both expiring 2026-11-19: **OpenSSL 1.1.1w** and **Qt 5.12.12**, blocked on the
-Qt 6 migration.
+Currently waived, both expiring 2027-02-08 (renewed 2026-11-10): **OpenSSL 1.1.1w** and
+**Qt 5.12.12**, blocked on the Qt 6 migration.
 
 The third waiver is gone. **libexpat** was bumped 2.4.1 → 2.8.3 on 2026-08-21 in response to the
 re-audit, clearing the CVE-2024-8176 floor unwaived. Nothing structural had blocked it: expat is its

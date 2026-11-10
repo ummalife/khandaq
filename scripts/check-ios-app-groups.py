@@ -34,7 +34,7 @@ KNOWN_GAPS = {
                 "Действие владельца: Developer portal -> Identifiers -> App Groups -> создать "
                 "group.org.khandaq.messenger и включить у org.khandaq.messenger и "
                 "org.khandaq.messenger.shareextension, затем вернуть entitlement обоим таргетам."),
-        "expires": "2026-11-20",
+        "expires": "2027-02-08",
     },
 }
 

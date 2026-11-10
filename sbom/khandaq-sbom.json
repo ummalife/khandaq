@@ -570,6 +570,13 @@
     },
     {
       "group": "gem",
+      "name": "cgi",
+      "purl": "pkg:gem/cgi@0.5.2",
+      "type": "library",
+      "version": "0.5.2"
+    },
+    {
+      "group": "gem",
       "name": "claide",
       "purl": "pkg:gem/claide@1.1.0",
       "type": "library",
@@ -717,6 +724,13 @@
     },
     {
       "group": "gem",
+      "name": "erb",
+      "purl": "pkg:gem/erb@6.0.7",
+      "type": "library",
+      "version": "6.0.7"
+    },
+    {
+      "group": "gem",
       "name": "escape",
       "purl": "pkg:gem/escape@0.0.4",
       "type": "library",
@@ -739,9 +753,9 @@
     {
       "group": "gem",
       "name": "faraday",
-      "purl": "pkg:gem/faraday@1.10.6",
+      "purl": "pkg:gem/faraday@2.15.1",
       "type": "library",
-      "version": "1.10.6"
+      "version": "2.15.1"
     },
     {
       "group": "gem",
@@ -752,31 +766,10 @@
     },
     {
       "group": "gem",
-      "name": "faraday-em_http",
-      "purl": "pkg:gem/faraday-em_http@1.0.0",
+      "name": "faraday-follow_redirects",
+      "purl": "pkg:gem/faraday-follow_redirects@0.5.0",
       "type": "library",
-      "version": "1.0.0"
-    },
-    {
-      "group": "gem",
-      "name": "faraday-em_synchrony",
-      "purl": "pkg:gem/faraday-em_synchrony@1.0.1",
-      "type": "library",
-      "version": "1.0.1"
-    },
-    {
-      "group": "gem",
-      "name": "faraday-excon",
-      "purl": "pkg:gem/faraday-excon@1.1.0",
-      "type": "library",
-      "version": "1.1.0"
-    },
-    {
-      "group": "gem",
-      "name": "faraday-httpclient",
-      "purl": "pkg:gem/faraday-httpclient@1.0.1",
-      "type": "library",
-      "version": "1.0.1"
+      "version": "0.5.0"
     },
     {
       "group": "gem",
@@ -788,44 +781,16 @@
     {
       "group": "gem",
       "name": "faraday-net_http",
-      "purl": "pkg:gem/faraday-net_http@1.0.2",
+      "purl": "pkg:gem/faraday-net_http@3.5.0",
       "type": "library",
-      "version": "1.0.2"
-    },
-    {
-      "group": "gem",
-      "name": "faraday-net_http_persistent",
-      "purl": "pkg:gem/faraday-net_http_persistent@1.2.0",
-      "type": "library",
-      "version": "1.2.0"
-    },
-    {
-      "group": "gem",
-      "name": "faraday-patron",
-      "purl": "pkg:gem/faraday-patron@1.0.0",
-      "type": "library",
-      "version": "1.0.0"
-    },
-    {
-      "group": "gem",
-      "name": "faraday-rack",
-      "purl": "pkg:gem/faraday-rack@1.0.0",
-      "type": "library",
-      "version": "1.0.0"
+      "version": "3.5.0"
     },
     {
       "group": "gem",
       "name": "faraday-retry",
-      "purl": "pkg:gem/faraday-retry@1.0.4",
+      "purl": "pkg:gem/faraday-retry@2.4.0",
       "type": "library",
-      "version": "1.0.4"
-    },
-    {
-      "group": "gem",
-      "name": "faraday_middleware",
-      "purl": "pkg:gem/faraday_middleware@1.2.1",
-      "type": "library",
-      "version": "1.2.1"
+      "version": "2.4.0"
     },
     {
       "group": "gem",
@@ -837,9 +802,9 @@
     {
       "group": "gem",
       "name": "fastlane",
-      "purl": "pkg:gem/fastlane@2.237.0",
+      "purl": "pkg:gem/fastlane@2.241.2",
       "type": "library",
-      "version": "2.237.0"
+      "version": "2.241.2"
     },
     {
       "group": "gem",
@@ -1053,6 +1018,20 @@
     },
     {
       "group": "gem",
+      "name": "io-console",
+      "purl": "pkg:gem/io-console@0.9.5",
+      "type": "library",
+      "version": "0.9.5"
+    },
+    {
+      "group": "gem",
+      "name": "irb",
+      "purl": "pkg:gem/irb@1.19.0",
+      "type": "library",
+      "version": "1.19.0"
+    },
+    {
+      "group": "gem",
       "name": "jmespath",
       "purl": "pkg:gem/jmespath@1.6.2",
       "type": "library",
@@ -1151,6 +1130,20 @@
     },
     {
       "group": "gem",
+      "name": "net-http",
+      "purl": "pkg:gem/net-http@0.10.0",
+      "type": "library",
+      "version": "0.10.0"
+    },
+    {
+      "group": "gem",
+      "name": "net-protocol",
+      "purl": "pkg:gem/net-protocol@0.4.0",
+      "type": "library",
+      "version": "0.4.0"
+    },
+    {
+      "group": "gem",
       "name": "netrc",
       "purl": "pkg:gem/netrc@0.11.0",
       "type": "library",
@@ -1193,6 +1186,83 @@
     },
     {
       "group": "gem",
+      "name": "pp",
+      "purl": "pkg:gem/pp@0.6.4",
+      "type": "library",
+      "version": "0.6.4"
+    },
+    {
+      "group": "gem",
+      "name": "prettyprint",
+      "purl": "pkg:gem/prettyprint@0.2.1",
+      "type": "library",
+      "version": "0.2.1"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0",
+      "type": "library",
+      "version": "2.1.0"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-aarch64-linux-gnu",
+      "type": "library",
+      "version": "2.1.0-aarch64-linux-gnu"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-aarch64-linux-musl",
+      "type": "library",
+      "version": "2.1.0-aarch64-linux-musl"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-arm-linux-gnu",
+      "type": "library",
+      "version": "2.1.0-arm-linux-gnu"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-arm-linux-musl",
+      "type": "library",
+      "version": "2.1.0-arm-linux-musl"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-arm64-darwin",
+      "type": "library",
+      "version": "2.1.0-arm64-darwin"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-x86_64-darwin",
+      "type": "library",
+      "version": "2.1.0-x86_64-darwin"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-x86_64-linux-gnu",
+      "type": "library",
+      "version": "2.1.0-x86_64-linux-gnu"
+    },
+    {
+      "group": "gem",
+      "name": "prism",
+      "purl": "pkg:gem/prism@2.1.0-x86_64-linux-musl",
+      "type": "library",
+      "version": "2.1.0-x86_64-linux-musl"
+    },
+    {
+      "group": "gem",
       "name": "pstore",
       "purl": "pkg:gem/pstore@0.2.1",
       "type": "library",
@@ -1211,6 +1281,27 @@
       "purl": "pkg:gem/rake@13.4.2",
       "type": "library",
       "version": "13.4.2"
+    },
+    {
+      "group": "gem",
+      "name": "rbs",
+      "purl": "pkg:gem/rbs@4.2.0",
+      "type": "library",
+      "version": "4.2.0"
+    },
+    {
+      "group": "gem",
+      "name": "rdoc",
+      "purl": "pkg:gem/rdoc@8.1.0",
+      "type": "library",
+      "version": "8.1.0"
+    },
+    {
+      "group": "gem",
+      "name": "reline",
+      "purl": "pkg:gem/reline@0.7.0",
+      "type": "library",
+      "version": "0.7.0"
     },
     {
       "group": "gem",
@@ -1249,17 +1340,10 @@
     },
     {
       "group": "gem",
-      "name": "ruby2_keywords",
-      "purl": "pkg:gem/ruby2_keywords@0.0.5",
-      "type": "library",
-      "version": "0.0.5"
-    },
-    {
-      "group": "gem",
       "name": "rubyzip",
-      "purl": "pkg:gem/rubyzip@2.4.1",
+      "purl": "pkg:gem/rubyzip@3.7.0",
       "type": "library",
-      "version": "2.4.1"
+      "version": "3.7.0"
     },
     {
       "group": "gem",
@@ -1271,9 +1355,9 @@
     {
       "group": "gem",
       "name": "security",
-      "purl": "pkg:gem/security@0.1.5",
+      "purl": "pkg:gem/security@0.4.0",
       "type": "library",
-      "version": "0.1.5"
+      "version": "0.4.0"
     },
     {
       "group": "gem",
@@ -1292,16 +1376,23 @@
     {
       "group": "gem",
       "name": "terminal-notifier",
-      "purl": "pkg:gem/terminal-notifier@2.0.0",
+      "purl": "pkg:gem/terminal-notifier@3.1.0",
       "type": "library",
-      "version": "2.0.0"
+      "version": "3.1.0"
     },
     {
       "group": "gem",
       "name": "terminal-table",
-      "purl": "pkg:gem/terminal-table@3.0.2",
+      "purl": "pkg:gem/terminal-table@4.0.0",
       "type": "library",
-      "version": "3.0.2"
+      "version": "4.0.0"
+    },
+    {
+      "group": "gem",
+      "name": "timeout",
+      "purl": "pkg:gem/timeout@0.6.1",
+      "type": "library",
+      "version": "0.6.1"
     },
     {
       "group": "gem",
@@ -1309,6 +1400,13 @@
       "purl": "pkg:gem/trailblazer-option@0.1.2",
       "type": "library",
       "version": "0.1.2"
+    },
+    {
+      "group": "gem",
+      "name": "tsort",
+      "purl": "pkg:gem/tsort@0.2.0",
+      "type": "library",
+      "version": "0.2.0"
     },
     {
       "group": "gem",
@@ -1358,6 +1456,13 @@
       "purl": "pkg:gem/unicode-display_width@2.6.0",
       "type": "library",
       "version": "2.6.0"
+    },
+    {
+      "group": "gem",
+      "name": "uri",
+      "purl": "pkg:gem/uri@1.1.2",
+      "type": "library",
+      "version": "1.1.2"
     },
     {
       "group": "gem",

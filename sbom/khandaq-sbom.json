@@ -6339,9 +6339,9 @@
     {
       "group": "pypi",
       "name": "certifi",
-      "purl": "pkg:pypi/certifi@2026.10.19",
+      "purl": "pkg:pypi/certifi@2026.10.23",
       "type": "library",
-      "version": "2026.10.19"
+      "version": "2026.10.23"
     },
     {
       "group": "pypi",
@@ -6360,9 +6360,9 @@
     {
       "group": "pypi",
       "name": "click",
-      "purl": "pkg:pypi/click@8.5.0",
+      "purl": "pkg:pypi/click@8.5.1",
       "type": "library",
-      "version": "8.5.0"
+      "version": "8.5.1"
     },
     {
       "group": "pypi",
@@ -6423,9 +6423,9 @@
     {
       "group": "pypi",
       "name": "pyasn1",
-      "purl": "pkg:pypi/pyasn1@0.6.4",
+      "purl": "pkg:pypi/pyasn1@0.6.5",
       "type": "library",
-      "version": "0.6.4"
+      "version": "0.6.5"
     },
     {
       "group": "pypi",
@@ -6437,9 +6437,9 @@
     {
       "group": "pypi",
       "name": "pycparser",
-      "purl": "pkg:pypi/pycparser@3.11",
+      "purl": "pkg:pypi/pycparser@3.12",
       "type": "library",
-      "version": "3.11"
+      "version": "3.12"
     },
     {
       "group": "pypi",

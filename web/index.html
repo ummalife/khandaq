@@ -579,9 +579,18 @@
     (function () {
       var release = 'v0.2.12';
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
+      // The files a release publishes. A link names its file in data-asset, and only a name on this list
+      // becomes a GitHub address, so nothing read from the page goes into an href as it is.
+      var files = ['khandaq-windows-x86_64.zip', 'khandaq-macos.zip', 'khandaq-messenger_amd64.deb',
+        'khandaq-linux-x86_64-portable.tar.gz', 'SHA256SUMS.txt'];
       var links = document.querySelectorAll('[data-asset]');
       for (var i = 0; i < links.length; i++) {
-        links[i].href = gh + links[i].getAttribute('data-asset');
+        var wanted = links[i].getAttribute('data-asset');
+        for (var j = 0; j < files.length; j++) {
+          if (files[j] === wanted) {
+            links[i].href = gh + files[j];
+          }
+        }
       }
     })();
   </script>

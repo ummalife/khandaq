@@ -398,6 +398,8 @@ def main() -> int:
     for host in TLS_HOSTS:
         try:
             ctx = ssl.create_default_context()
+            # Every host here serves TLS 1.2 or later; refuse anything older instead of reading its certificate.
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
             with socket.create_connection((host, 443), timeout=15) as sock:
                 with ctx.wrap_socket(sock, server_hostname=host) as tls:
                     cert = tls.getpeercert()

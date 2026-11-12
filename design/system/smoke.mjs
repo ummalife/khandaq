@@ -98,7 +98,11 @@ async function overview(page, view, theme) {
     page.problem(`the page scrolls sideways by ${sideways} px`);
   }
   await expect(page, "every contrast pair to pass", "!document.querySelector('#pairs .is-low') && document.querySelectorAll('#pairs tr').length > 40");
-  await expect(page, "swatch values of the emulated theme", `document.querySelector('[data-swatch="bg"]').textContent === (${JSON.stringify(theme)} === "dark" ? "#0c0f13" : "#f3f4f6")`);
+  // The expected value is chosen here rather than spliced into the page's code.
+  const swatch = await page.evaluate(`document.querySelector('[data-swatch="bg"]')?.textContent ?? ""`);
+  if (swatch !== (theme === "dark" ? "#0c0f13" : "#f3f4f6")) {
+    page.problem("expected swatch values of the emulated theme");
+  }
   await fullShot(page, `system-${view}-${theme}`, view);
 }
 

@@ -28,6 +28,18 @@ ARG WINEARCH
 ENV WINEARCH=${WINEARCH}
 ARG SCRIPT_ARCH=${WINEARCH}
 
+# KHANDAQ (2026-11-12): Debian 11 left LTS on 2026-08-31 and now lives on archive.debian.org. The
+# regular mirrors still publish a bullseye-security index but answer 404 for its packages, so the
+# first apt-get install below failed and no Windows build could be made. Read all three bullseye
+# suites from the archive instead. The archived Release files carry no Valid-Until and are signed
+# with the Debian archive keys the base image already trusts, so apt checks them as before. Plain
+# http on purpose: the slim image has no ca-certificates yet, and apt verifies the signatures anyway.
+RUN printf '%s\n' \
+      'deb http://archive.debian.org/debian bullseye main' \
+      'deb http://archive.debian.org/debian bullseye-updates main' \
+      'deb http://archive.debian.org/debian-security bullseye-security main' \
+      > /etc/apt/sources.list
+
 RUN dpkg --add-architecture i386 && \
     apt-get update && apt-get install -y --no-install-recommends \
                    autoconf \
